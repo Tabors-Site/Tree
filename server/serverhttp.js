@@ -5,31 +5,14 @@ const fs = require("fs");
 
 require("dotenv").config();
 require("./db/config"); // Initialize DB connection
-
+const rootFrontEnd = process.env.ROOT_FRONTEND_DOMAIN;
+const treeFrontEnd = process.env.TREE_FRONTEND_DOMAIN;
 const app = express();
+
 // Middleware
 app.use(
   cors({
-    origin: (origin, callback) => {
-      const baseUrl = process.env.BASE_URL; // e.g. "tabors.site"
-
-      if (!baseUrl) {
-        return callback(new Error("BASE_URL not configured in env"));
-      }
-
-      // Allow requests with no origin (like curl, postman, server-to-server)
-      if (!origin) return callback(null, true);
-
-      const allowedBase = `.${baseUrl}`;
-      if (
-        origin === `http://${baseUrl}` ||
-        (origin.endsWith(allowedBase) && origin.startsWith("http://"))
-      ) {
-        return callback(null, true);
-      }
-
-      return callback(new Error("Not allowed by CORS"));
-    },
+    origin: [rootFrontEnd, treeFrontEnd],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -40,7 +23,7 @@ app.options("*", cors());
 app.use(express.static("public"));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
-app.set('trust proxy', 1);
+app.set("trust proxy", 1);
 
 // Routes
 app.use("/", require("./routes/ai"));

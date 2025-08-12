@@ -3,22 +3,26 @@ const cors = require("cors");
 const https = require("https");
 const fs = require("fs");
 
-require('dotenv').config();
+require("dotenv").config();
 require("./db/config"); // Initialize DB connection
+
+const rootFrontEnd = process.env.ROOT_FRONTEND_DOMAIN;
+const treeFrontEnd = process.env.TREE_FRONTEND_DOMAIN;
 
 const app = express();
 // Middleware
-app.use(cors({
-  origin: process.env.WEBSITE_URL, 
-  methods: ['GET', 'POST', 'OPTIONS'],   
-  allowedHeaders: ['Content-Type', 'Authorization'],  
-  credentials: true,             
-}));
-app.options('*', cors());
+app.use(
+  cors({
+    origin: [rootFrontEnd, treeFrontEnd],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+app.options("*", cors());
 app.use(express.static("public"));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
-
 
 // Routes
 app.use("/", require("./routes/ai"));
@@ -41,4 +45,6 @@ const credentials = {
 const server = https.createServer(credentials, app);
 const PORT = process.env.PORT || 443;
 
-server.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, "0.0.0.0", () =>
+  console.log(`Server running on port ${PORT}`)
+);

@@ -60,10 +60,11 @@ const login = async (req, res) => {
     });
 
     res.cookie("token", token, {
-      httpOnly: false,
-      secure: false,
-      sameSite: "None",
-      maxAge: 604800000, // 7 days in milliseconds
+      httpOnly: true,
+      secure: false, // true if HTTPS
+      sameSite: "None", // required for cross-site cookies in modern browsers
+      domain: ".tabors.site", // note leading dot to allow all subdomains
+      maxAge: 604800000,
     });
 
     res
