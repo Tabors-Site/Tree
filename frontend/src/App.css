@@ -1,0 +1,199 @@
+/* General layout container */
+.app-container {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 2fr;
+  grid-template-rows: auto 1fr 1fr;
+  border-top: none;
+  height: 100vh;
+  /* Full height on desktop */
+}
+
+/* Background color for body */
+body {
+  background-color: #E5E7EB;
+  /* Slate Blue for earthy, grounded feel */
+  font-family: 'Courier New', Courier, monospace;
+  /* Retro font style */
+  margin: 1px;
+  height: 100vh;
+  /* Ensure full height */
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Header styling */
+.header {
+  grid-column: 1 / 4;
+  grid-row: 1 / 2;
+  display: flex;
+  justify-content: flex-end;
+  /* Push AccountTab to the right */
+  align-items: center;
+  max-height: 0px;
+  /* Limit header height */
+  overflow: hidden;
+  /* Prevent overflow */
+}
+
+
+
+/* Tree View Section */
+.tree-view,
+.tree-view-directory {
+  grid-column: 1 / 2;
+  grid-row: 2 / 4;
+  border-right: 1px solid #ccc;
+  max-height: 100vh;
+  /* Ensures it stretches to fill available height */
+}
+
+.tree-view {
+  background-color: #A3BFFA;
+  /* Soft Moss Green for a fresh, natural feel */
+}
+
+/* Filters Section */
+.filters {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 10px;
+  z-index: 1000;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 10px;
+  border-radius: 5px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.filters label {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  padding: 5px;
+  cursor: pointer;
+}
+
+.filters label:hover {
+  background-color: #f0f0f0;
+}
+
+/* Main Content Section */
+.main-content {
+  grid-column: 2 / 3;
+  grid-row: 2 / 4;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+/* Node Data Section */
+.node-data {
+  border-bottom: 1px solid #ccc;
+  padding: 10px;
+  overflow: auto;
+  background-color: #EDE9FE;
+}
+
+.transaction {
+  background-color: black;
+}
+
+/* Notes Section */
+.notes {
+  padding: 10px;
+  overflow: auto;
+  background-color: #F3F4F6;
+}
+
+/* Schedule Section */
+.schedule {
+  background-color: #F9FAFB;
+  overflow: auto;
+}
+
+/* Side Content Section */
+.side-content {
+  grid-column: 3 / 4;
+  grid-row: 2 / 4;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+/* Transaction and Schedule sections */
+.transaction,
+.schedule {
+  padding: 10px;
+  overflow-y: auto;
+}
+
+h3 {
+  margin: 0;
+  font-weight: bolder;
+  text-decoration: underline;
+}
+
+/* Mobile Responsive Layout */
+@media (max-width: 1190px),
+(max-height: 500px) {
+  .app-container {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
+    /* Header, tree view, main content, side content */
+    height: auto;
+    /* Allow container to grow with content */
+    min-height: 100vh;
+    /* Ensure it at least fills viewport */
+    overflow-y: auto;
+    /* Scroll the entire container */
+  }
+
+  .header {
+    grid-row: 1 / 2;
+    max-height: 50px;
+  }
+
+  .tree-view,
+  .tree-view-directory {
+    grid-row: 2 / 3;
+    border-right: none;
+    overflow-y: auto;
+    max-height: none;
+    /* Remove height restriction */
+  }
+
+  .main-content {
+    grid-row: 3 / 4;
+    /* Explicit row assignment */
+    grid-column: 1 / 2;
+    overflow-y: auto;
+    max-height: none;
+    /* Let it expand naturally */
+    border-bottom: 5px solid #ccc;
+  }
+
+  .side-content {
+    grid-row: 4 / 5;
+    /* Explicit row assignment */
+    grid-column: 1 / 2;
+    overflow-y: auto;
+    max-height: none;
+    /* Let it expand naturally */
+    border-bottom: 5px solid #ccc;
+  }
+
+  .tree-view-toggle-btn {
+    position: fixed;
+    top: 5px;
+    left: 150px;
+    background-color: gold;
+    z-index: 1000;
+  }
+}

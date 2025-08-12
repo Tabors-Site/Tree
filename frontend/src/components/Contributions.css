@@ -1,0 +1,56 @@
+.contributions {
+    height: 100vh; /* Ensure the container takes up full viewport height */
+    overflow: hidden; /* Prevent the entire contributions area from scrolling */
+  background-color: #2C4F56 
+
+;
+  }
+  
+  .contributions h3 {
+    text-align: center;
+    font-size: 2rem;
+    color: #00ff00;
+    margin-bottom: 1rem;
+  }
+  
+  .contributions .scrollable-list {
+    display: flex; /* Flexbox layout to stack items vertically */
+    flex-direction: column-reverse; /* Make new items appear at the bottom */
+    padding: 0;
+    margin: 0;
+    height: 100%; /* Full height of the container */
+    overflow: hidden; /* Prevent the container from scrolling */
+  }
+  
+  .contributions li {
+    margin: 10px;
+    padding: 15px;
+    border: 1px solid #00ff00;
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+    animation: matrixFlow 10s linear infinite; /* Uniform duration */
+    animation-delay: 0s; /* Optional: ensure no delay */
+    color: #00ff00;
+    width: 100%;
+  }
+  
+  
+  .contributions li:hover {
+    background-color: rgba(0, 255, 0, 0.1);
+  }
+  
+  .contributions li p {
+    margin: 5px 0;
+    font-size: 1rem;
+  }
+  
+  .contributions strong {
+    color: #00ff00;
+  }
+  
+  .contributions p::before {
+    content: "🔹 ";
+    color: #00ff00;
+  }
+  

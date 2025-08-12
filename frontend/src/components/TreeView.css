@@ -1,0 +1,57 @@
+/* Container for the arrow buttons placed around the Cytoscape container */
+.edge-buttons {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20000;  /* Ensure buttons are above other elements */
+    pointer-events: none;  /* Prevent this container from blocking interaction with Cytoscape */
+    opacity: .5;
+  }
+  
+  /* Style for individual arrow buttons */
+  .arrow-btn {
+    position: absolute;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    padding: 10px;
+    cursor: pointer;
+    z-index: 10;
+    pointer-events: all;  /* Ensure buttons are clickable */
+  }
+  
+  /* Up Arrow Button (top edge) */
+  .up-btn {
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  /* Down Arrow Button (bottom edge) */
+  .down-btn {
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  /* Left Arrow Button (left edge) */
+  .left-btn {
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  
+  /* Right Arrow Button (right edge) */
+  .right-btn {
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  
+  /* Optional: TreeViewMenu position if needed */
+  .treeview-menu {
+    position: relative;
+    z-index: 5; /* Ensure TreeViewMenu is under the buttons */
+  }
+  

@@ -1,0 +1,30 @@
+/* Make the entire content scrollable */
+.schedule-container {
+    overflow-y: auto;
+    border-bottom: 2px solid #ccc; /* Optional: add a bottom border to the scrollable container */
+  }
+  
+  /* Add lines between sections */
+  h4 {
+    border-top: 2px solid #ccc;  /* Line at the top of each section */
+    padding-top: 10px;
+    margin-top: 20px;
+  }
+  
+  /* Style the table for consistent look */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+  }
+  
+  th, td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;  /* Adds lines between rows */
+  }
+  
+  th {
+    background-color: #f4f4f4;
+  }
+  

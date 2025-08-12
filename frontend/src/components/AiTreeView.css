@@ -1,0 +1,53 @@
+/* Modal Styles */
+.modal {
+  position: fixed; /* Fixed positioning relative to the viewport */
+  top: 0;
+  left: 0;
+  width: 100vw; /* Full width of the viewport */
+  height: 100vh; /* Full height of the viewport */
+  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+  display: flex; /* Flexbox for centering content */
+  justify-content: center; /* Center horizontally */
+  align-items: center; /* Center vertically */
+  z-index: 1000; /* Ensure the modal is on top */
+}
+
+/* Modal Content Styles */
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 80%; /* Adjust width as needed */
+  max-width: 900px; /* Max width to prevent large content */
+  position: relative;
+  overflow: hidden; /* Hide overflow to prevent scrollbars */
+}
+
+.button-container {
+  display: flex;
+  justify-content: flex-end;
+ 
+}
+
+
+.close {
+  font-size: 24px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+button {
+  margin-left: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 16px;
+  background-color: #61bffc;
+  color: black;
+  border: none;
+  border-radius: 4px;
+}
+
+button:hover {
+  background-color: #4a9dbd;
+}

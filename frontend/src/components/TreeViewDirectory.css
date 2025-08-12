@@ -1,0 +1,90 @@
+
+  
+.tree-view-directory {
+    font-family: "Courier New", monospace; /* Retro font */
+    width: 100%;
+    height: 100vh; /* Full height */
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    background-color: black;
+    color: #00FF00;
+  
+
+    display: flex;
+    flex-direction: column;  /* Ensure content flows correctly */
+
+  }
+  
+  /* Flex Layout for Parent and Children Nodes */
+  .parent-and-children {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    height: 80%;
+    overflow-y: auto; /* Scroll vertically if needed */
+  }
+  
+  /* Parent Node Styling */
+  .parent-node {
+    margin-bottom: 10px;
+    font-weight: bold;
+    text-transform: uppercase; /* Retro touch */
+    letter-spacing: 1px; /* Add space between letters */
+    overflow: hidden;
+  }
+  
+  /* Retro Line Below Parent Node */
+  .parent-node:after {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 1px;
+    background-color: #00FF00;
+    margin-top: 5px;
+  }
+  
+  /* Children Node Styling */
+  .nodes-list {
+    height: 70%;
+    overflow-y: auto; /* Vertical scroll if needed */
+    max-height: 80vh; /* Limit height to 80% of viewport height */
+  }
+  
+  .children-nodes ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .children-nodes li {
+    margin-bottom: 8px;
+    font-size: 16px; /* Retro text size */
+    line-height: 1.5; /* Line height for readability */
+    text-transform: uppercase; /* Retro touch */
+    letter-spacing: 1px;
+    color: #00FF00;
+  }
+  
+  /* Retro "Selected Node" Display */
+  .selected-node {
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    color: #1E90FF;
+    text-transform: uppercase;
+    overflow: hidden;
+  }
+  
+  /* Add cursor style to mimic old computer UI interaction */
+  span {
+    cursor: pointer; /* Change cursor to pointer on hover */
+    text-decoration: underline; /* Underline links for retro clickability */
+  }
+  
+  /* Ensure no horizontal scrollbars */
+  * {
+    box-sizing: border-box;
+
+  }
+  
