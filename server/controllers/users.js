@@ -2,15 +2,20 @@ const User = require("../db/models/user");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+const USER_REGISTRATION_KEY = process.env.USER_REGISTRATION_KEY;
 
 const register = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, registrationKey } = req.body;
 
-    if (!username || !password) {
-      return res
-        .status(400)
-        .json({ message: "Username and password are required" });
+    if (!username || !password || !registrationKey) {
+      return res.status(400).json({
+        message: "Username, password and registration key are required",
+      });
+    }
+
+    if (registrationKey !== USER_REGISTRATION_KEY) {
+      return res.status(400).json({ message: "Registration key is invalid" });
     }
 
     // Check if username (case-insensitive) is already taken
@@ -21,7 +26,6 @@ const register = async (req, res) => {
       return res.status(400).json({ message: "Username already taken" });
     }
 
-    // Save username with original casing
     const newUser = new User({ username, password });
 
     await newUser.save();
