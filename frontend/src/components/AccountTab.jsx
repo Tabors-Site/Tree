@@ -3,7 +3,7 @@ import RootNodesForm from "./RootNodesForm"; // Ensure the path is correct
 import Invites from "./Invites"; // Import the new Invites component
 import "./AccountTab.css";
 import Cookies from "js-cookie";
-const apiUrl = import.meta.env.VITE_API_URL;
+const apiUrl = import.meta.env.VITE_TREE_API_URL;
 const token = Cookies.get("token");
 
 const AccountTab = ({
@@ -83,7 +83,7 @@ const AccountTab = ({
         {isHovered ? (
           <div>
             <p>Username: {username}</p>
-            <button onClick={handleLogoutClick}>Logout</button>
+            <button onClick={handleLogoutClick}>Back to home</button>
             <button onClick={toggleRootsForm}>
               {showRoots ? "Hide Roots" : "Show Roots"}
             </button>

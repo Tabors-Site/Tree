@@ -5,8 +5,7 @@ const Invites = () => {
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const apiUrl = import.meta.env.VITE_API_URL;
-  const token = Cookies.get("token");
+const apiUrl = import.meta.env.VITE_TREE_API_URL;  const token = Cookies.get("token");
 
   // Fetch the pending invites from the server
   useEffect(() => {

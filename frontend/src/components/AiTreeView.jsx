@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
 import "./AiTreeView.css";
 import Cookies from "js-cookie";
-const apiUrl = import.meta.env.VITE_API_URL;
+const apiUrl = import.meta.env.VITE_TREE_API_URL;
 
 const AiTreeViewModal = ({ jsonObject, onAddNode, onReshuffle, nodeSelected, onClose }) => {
   const cyRef = useRef(null);

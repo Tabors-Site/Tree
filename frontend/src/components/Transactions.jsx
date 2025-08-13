@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Cookies from "js-cookie";
 
-const apiUrl = import.meta.env.VITE_API_URL;
-const token = Cookies.get("token");
+const apiUrl = import.meta.env.VITE_TREE_API_URL;const token = Cookies.get("token");
 
 const Transactions = ({
   tree,

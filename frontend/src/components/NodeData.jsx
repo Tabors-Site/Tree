@@ -14,8 +14,7 @@ const NodeData = ({ nodeSelected, nodeVersion, setNodeVersion, getTree, rootSele
   const [isEditingName, setIsEditingName] = useState(false);  // New state to handle name editing
   const [newName, setNewName] = useState("");  // New state to store the new name
 
-  const apiUrl = import.meta.env.VITE_API_URL;
-
+const apiUrl = import.meta.env.VITE_TREE_API_URL;
   useEffect(() => {
     if (nodeSelected && nodeVersion !== null) {
       const version = nodeSelected.versions[nodeVersion];

@@ -6,7 +6,7 @@ const CompleteNodeForm = ({ nodeSelected, nodeVersion, onComplete }) => {
   const [status, setStatus] = useState(null); // Store the selected status
   const [loading, setLoading] = useState(false); // Indicate request in progress
   const [isInherited, setIsInherited] = useState(true); // State for checkbox (defaults to true)
-  const apiUrl = import.meta.env.VITE_API_URL;
+const apiUrl = import.meta.env.VITE_TREE_API_URL;
   // Handle the action when a status is chosen
   const handleStatusChange = async (selectedStatus) => {
     setStatus(selectedStatus); // Store the selected status

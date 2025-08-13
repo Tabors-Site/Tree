@@ -10,7 +10,7 @@ const RootNodesForm = ({ setRootSelected, rootSelected, rootNodes, setRootNodes,
   const [responseMessage, setResponseMessage] = useState(''); // State to hold the response message
   const [loading, setLoading] = useState(false); // Loading state for async operations
   const token = Cookies.get('token');
-  const apiUrl = import.meta.env.VITE_API_URL;
+const apiUrl = import.meta.env.VITE_TREE_API_URL;
   // Helper function to handle errors and display messages
   const handleError = (error, actionType) => {
     setResponseMessage(`Error during ${actionType}: ${error.message || error}`);

@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http"); // Change https to http
 const fs = require("fs");
+const cookieParser = require("cookie-parser");
 
 require("dotenv").config();
 require("./db/config"); // Initialize DB connection
@@ -18,6 +19,7 @@ app.use(
     credentials: true,
   })
 );
+app.use(cookieParser());
 
 app.options("*", cors());
 app.use(express.static("public"));

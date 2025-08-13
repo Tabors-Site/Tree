@@ -32,25 +32,45 @@ const App = () => {
   const [treeViewModeMobile, setTreeViewModeMobile] = useState(true);
 
   const views = [TreeView, TreeViewDirectory];
-  const apiUrl = import.meta.env.VITE_API_URL;
+  const apiUrl = import.meta.env.VITE_TREE_API_URL;
 
-  useEffect(() => {
-    const storedUsername = Cookies.get("username");
-    const storedUserId = Cookies.get("userId");
-    const loggedIn = Cookies.get("loggedIn");
+useEffect(() => {
+    const token = Cookies.get("token");
 
-    if (loggedIn) {
+    const rootApi = import.meta.env.VITE_ROOT_API;
+
+
+  // Verify token and get user info from backend
+  fetch(`${apiUrl}/verify-token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,  // pass token in auth header
+     
+    },
+     credentials: "include",
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error("Invalid token");
+      return res.json();
+    })
+    .then((data) => {
+      // Save user info to cookies and state
+      Cookies.set("username", data.username, { expires: 7 });
+      Cookies.set("userId", data.userId, { expires: 7 });
+      Cookies.set("loggedIn", true, { expires: 7});
+
       setIsLoggedIn(true);
-      setUsername(storedUsername || "");
-      setUserId(storedUserId || "");
-    } else {
-      // Redirect if not logged in
-      const rootApi = import.meta.env.VITE_ROOT_API;
+      setUsername(data.username);
+      setUserId(data.userId);
+    })
+  .catch((error) => {
+      console.error("Token verification failed:", error);
       if (rootApi) {
         window.location.href = rootApi;
       }
-    }
-  }, []);
+    });
+}, []);
 
   useEffect(() => {
     setNodeSelected(null);
@@ -121,7 +141,6 @@ const App = () => {
     setUsername("");
     setUserId("");
     setRootSelected(null);
-    setNodeSelected(null);
     setRootNodes([]);
     Cookies.remove("username");
     Cookies.remove("userId");

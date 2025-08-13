@@ -2,8 +2,7 @@ import React, { useState } from "react";
 import Cookies from "js-cookie";
 
 const DeleteNodeForm = ({ nodeSelected, tree, onComplete, setNodeSelected, rootSelected }) => {
-  const apiUrl = import.meta.env.VITE_API_URL;
-
+const apiUrl = import.meta.env.VITE_TREE_API_URL;
   // Handle form submission for manual creation
   const handleSubmit = async (e) => {
     e.preventDefault();

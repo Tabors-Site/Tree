@@ -3,8 +3,7 @@ import Cookies from "js-cookie";
 
 const UpdateParentForm = ({ nodeSelected, tree, onComplete, setNodeSelected, rootSelected }) => {
   const [nodeNewParent, setNodeNewParent] = useState(null); // Store the new parent
-  const apiUrl = import.meta.env.VITE_API_URL;
-
+const apiUrl = import.meta.env.VITE_TREE_API_URL;
 
 
   // Extract all nodes except nodeSelected and its descendants

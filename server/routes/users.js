@@ -9,7 +9,7 @@ router.post("/login", login);
 
 //check if token is accurate for log in check when entering site
 router.post("/verify-token", authenticate, (req, res) => {
-  res.json({ userId: req.userId, username: req.username });
+  res.json({ userId: req.userId, username: req.username, bob:"hi"});
 });
 
 module.exports = router;

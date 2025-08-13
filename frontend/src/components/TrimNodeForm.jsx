@@ -4,8 +4,7 @@ import Cookies from 'js-cookie';
 const TrimNodeForm = ({ nodeSelected, nodeVersion, onComplete }) => {
   const [showMenu, setShowMenu] = useState(true); // To control the visibility of the menu
   const [confirmation, setConfirmation] = useState(null); // Store user confirmation (Yes/No)
-  const apiUrl = import.meta.env.VITE_API_URL;
-  // Handle the action on menu confirmation
+const apiUrl = import.meta.env.VITE_TREE_API_URL;  // Handle the action on menu confirmation
   const handleConfirmation = async (confirm) => {
     setConfirmation(confirm); // Store user confirmation (Yes/No)
 

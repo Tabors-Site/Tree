@@ -21,7 +21,7 @@ const AiCreate = ({ nodeSelected }) => {
   const [treeBranch, setTreeBranch] = useState([]);
   const [explanation, setExplanation] = useState("");
   const [jsonObject, setJsonObject] = useState(null);
-  const apiUrl = import.meta.env.VITE_API_URL;
+ const apiUrl = import.meta.env.VITE_TREE_API_URL;
 
   const fetchFromServer = async () => {
     setLoading(true);

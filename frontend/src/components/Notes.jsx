@@ -24,8 +24,7 @@ const Notes = ({ nodeSelected, userId, nodeVersion }) => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const notesEndRef = useRef(null);
-  const apiUrl = import.meta.env.VITE_API_URL;
-
+const apiUrl = import.meta.env.VITE_TREE_API_URL;
   const token = Cookies.get("token");
 
   // Function to fetch notes
