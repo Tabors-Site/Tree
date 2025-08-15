@@ -1,7 +1,6 @@
 const mongoose = require("mongoose");
 const { v4: uuidv4 } = require("uuid");
 
-
 const NodeSchema = new mongoose.Schema({
   _id: {
     type: String,
@@ -22,6 +21,15 @@ const NodeSchema = new mongoose.Schema({
       goals: { type: Map, of: Number, default: {} },
     },
   ],
+  scripts: {
+    type: [
+      {
+        name: { type: String, required: true },
+        script: { type: String, required: true },
+      },
+    ],
+    default: [],
+  },
   children: [{ type: String, ref: "Node" }],
   parent: { type: String, ref: "Node", default: null },
 
@@ -177,14 +185,11 @@ NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
   const Node = mongoose.model("Node");
 
   try {
-
-
     // Step 1: Collect all child nodes of the current node
     const children = await Node.find({ parent: this._id });
 
     // Step 2: Delete all child nodes (separately in a loop)
     for (const child of children) {
-
       await child.deleteOne();
     }
 
@@ -192,7 +197,6 @@ NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
     if (this.parent) {
       const parentNode = await Node.findById(this.parent);
       if (parentNode) {
-    
         parentNode.children = parentNode.children.filter(
           (childId) => childId !== this._id
         );
@@ -208,7 +212,6 @@ NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
     if (this.parent) {
       const parentNode = await Node.findById(this.parent);
       if (parentNode) {
-      
         await parentNode.updateGlobalValues();
 
         await parentNode.save(); // Persist the changes

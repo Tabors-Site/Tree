@@ -59,15 +59,19 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ userId: user._id, username: user.username }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      { userId: user._id, username: user.username },
+      JWT_SECRET,
+      {
+        expiresIn: "7d",
+      }
+    );
 
     res.cookie("token", token, {
       httpOnly: false,
       secure: true, // true if HTTPS
       sameSite: "None", // required for cross-site cookies in modern browsers
-      domain: ".tabors.site", // note leading dot to allow all subdomains
+      //domain: ".tabors.site", // note leading dot to allow all subdomains
       maxAge: 604800000,
     });
 

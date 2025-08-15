@@ -39,6 +39,7 @@ app.use("/", require("./routes/treeDataFetching"));
 app.use("/", require("./routes/users"));
 app.use("/", require("./routes/values"));
 app.use("/", require("./routes/statuses"));
+app.use("/", require("./routes/scripts"));
 
 const server = http.createServer(app); // Use http.createServer instead of https.createServer
 const PORT = process.env.PORT || 80; // Default HTTP port is 80
