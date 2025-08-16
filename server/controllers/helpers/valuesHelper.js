@@ -1,0 +1,82 @@
+const { findNodeById, logContribution } = require("../../db/utils");
+
+async function setValueForNodeHelper({ nodeId, key, value, version, userId }) {
+  const versionIndex = version.toString();
+  const numericValue = Number(value);
+
+  if (isNaN(numericValue) || value === "e") {
+    throw new Error("Value must be a valid number");
+  }
+
+  const node = await findNodeById(nodeId);
+  if (!node) throw new Error("Node not found");
+
+  if (node.versions[versionIndex] === undefined) {
+    throw new Error("Version index does not exist");
+  }
+
+  const currentVersion = node.versions[versionIndex];
+
+  if (currentVersion) {
+    currentVersion.values.set(key, value);
+  } else {
+    currentVersion.values = new Map();
+    currentVersion.values.set(key, value);
+  }
+
+  await node.save();
+  await logContribution({
+    userId,
+    nodeId,
+    action: "editValue",
+    status: null,
+    valueEdited: { [key]: value },
+    nodeVersion: versionIndex,
+    tradeId: null,
+  });
+
+  return { message: "Value updated successfully." };
+}
+
+async function setGoalForNodeHelper({ nodeId, key, goal, version, userId }) {
+  const versionIndex = version.toString();
+  const numericGoal = Number(goal);
+
+  if (isNaN(numericGoal)) {
+    throw new Error("Goal must be a valid number");
+  }
+
+  const node = await findNodeById(nodeId);
+  if (!node) throw new Error("Node not found");
+
+  if (node.versions[versionIndex] === undefined) {
+    throw new Error("Version index does not exist");
+  }
+
+  const currentVersion = node.versions[versionIndex];
+
+  if (currentVersion) {
+    currentVersion.goals.set(key, goal);
+  } else {
+    currentVersion.goals = new Map();
+    currentVersion.goals.set(key, goal);
+  }
+
+  await node.save();
+  await logContribution({
+    userId,
+    nodeId,
+    action: "editGoal",
+    status: null,
+    goalEdited: { [key]: goal },
+    nodeVersion: versionIndex,
+    tradeId: null,
+  });
+
+  return { message: "Goal updated successfully." };
+}
+
+module.exports = {
+  setValueForNodeHelper,
+  setGoalForNodeHelper,
+};

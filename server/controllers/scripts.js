@@ -1,6 +1,6 @@
 const Node = require("../db/models/node");
 const { VM } = require("vm2");
-const { getApi } = require("../controllers/scriptFunctions/safeFunctions");
+const { makeSafeFunctions } = require("./scriptsFunctions/safeFunctions");
 
 const updateScript = async (req, res) => {
   try {
@@ -47,7 +47,12 @@ const updateScript = async (req, res) => {
 
 const executeScript = async (req, res) => {
   try {
-    const { nodeId, scriptName } = req.body;
+    const { nodeId, scriptName, userId } = req.body;
+
+    // Validate input
+    if (!nodeId || !scriptName || !userId) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
     // 1. Find node
     const node = await Node.findById(nodeId);
@@ -62,41 +67,35 @@ const executeScript = async (req, res) => {
     }
 
     // 3. Prepare sandbox
-    const sandboxNode = JSON.parse(JSON.stringify(node)); // deep copy
+    const sandboxNode = JSON.parse(JSON.stringify(node)); // Deep copy
+    const {
+      getApi,
+      setValueForNode,
+      setGoalForNode,
+      editStatusForNode,
+      addPrestigeForNode,
+    } = makeSafeFunctions(userId);
+
     const vm = new VM({
-      timeout: 1000, // prevent infinite loops
+      timeout: 3000, // Prevent infinite loops
       sandbox: {
         node: sandboxNode,
-        getApi, // inject your restricted API call function
+        getApi,
+        setValueForNode,
+        setGoalForNode,
+        editStatusForNode,
+        addPrestigeForNode,
       },
     });
 
-    // 4. Wrap script in async IIFE for await support
-    const asyncScript = `(async () => { ${scriptObj.script} })()`;
+    // 5. Execute script
+    await vm.run(scriptObj.script);
 
-    try {
-      await vm.run(asyncScript);
-    } catch (err) {
-      return res
-        .status(400)
-        .json({ error: `Script execution failed: ${err.message}` });
-    }
-
-    // 5. Validate structure (example: prestige must be number)
-    if (typeof sandboxNode.prestige !== "number") {
-      return res
-        .status(400)
-        .json({ error: "Invalid prestige type after execution" });
-    }
-
-    // 6. Save to DB
-    Object.assign(node, sandboxNode);
-    await node.save();
-
+    // 6. Return success response
     res.json({ message: "Script executed successfully", node });
   } catch (err) {
     console.error("Error executing script:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: `Server error: ${err.message}` });
   }
 };
 
