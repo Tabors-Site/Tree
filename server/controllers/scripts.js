@@ -47,8 +47,8 @@ const updateScript = async (req, res) => {
 
 const executeScript = async (req, res) => {
   try {
-    const { nodeId, scriptName, userId } = req.body; //update this to req.userId when in production
-
+    const { nodeId, scriptName } = req.body;
+    const userId = req.userId;
     // Validate input
     if (!nodeId || !scriptName || !userId) {
       return res.status(400).json({ error: "Missing required fields" });
