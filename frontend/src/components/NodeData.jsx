@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Cookies from "js-cookie";
+import ScriptMenu from "./ScriptMenu.jsx";
 import "./NodeData.css";
 
 const NodeData = ({
@@ -287,6 +288,12 @@ const NodeData = ({
                 </button>
               </div>
             </div>
+            {/* Scripts */}
+            <ScriptMenu
+              nodeSelected={nodeSelected}
+              getTree={getTree}
+              rootSelected={rootSelected}
+            />
           </div>
 
           {/* Top Right Section */}
