@@ -4,7 +4,7 @@ async function setValueForNodeHelper({ nodeId, key, value, version, userId }) {
   const versionIndex = Number(version);
   const numericValue = Number(value);
 
-  if (isNaN(numericValue) || value === "e") {
+  if (isNaN(numericValue) || value.includes("e")) {
     throw new Error("Value must be a valid number");
   }
 
@@ -42,7 +42,7 @@ async function setGoalForNodeHelper({ nodeId, key, goal, version, userId }) {
   const versionIndex = version.toString();
   const numericGoal = Number(goal);
 
-  if (isNaN(numericGoal)) {
+  if (isNaN(numericGoal) || goal.includes("e")) {
     throw new Error("Goal must be a valid number");
   }
 
