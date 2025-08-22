@@ -47,7 +47,7 @@ const updateScript = async (req, res) => {
 
 const executeScript = async (req, res) => {
   try {
-    const { nodeId, scriptName, userId } = req.body;
+    const { nodeId, scriptName, userId } = req.body; //update this to req.userId when in production
 
     // Validate input
     if (!nodeId || !scriptName || !userId) {
@@ -74,6 +74,7 @@ const executeScript = async (req, res) => {
       setGoalForNode,
       editStatusForNode,
       addPrestigeForNode,
+      updateScheduleForNode,
     } = makeSafeFunctions(userId);
 
     const vm = new VM({
@@ -85,11 +86,17 @@ const executeScript = async (req, res) => {
         setGoalForNode,
         editStatusForNode,
         addPrestigeForNode,
+        updateScheduleForNode,
       },
     });
+    const wrappedScript = `
+  (async () => {
+    ${scriptObj.script}
+  })()
+`;
 
     // 5. Execute script
-    await vm.run(scriptObj.script);
+    await vm.run(wrappedScript);
 
     // 6. Return success response
     res.json({ message: "Script executed successfully", node });

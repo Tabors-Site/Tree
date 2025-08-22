@@ -114,7 +114,8 @@ async function addPrestigeToNode(node) {
   const newValues = new Map();
   for (const [key, value] of valuesMap) {
     node.globalValues[key] = (node.globalValues[key] || 0) + value;
-    newValues.set(key, 0);
+    // Instead of setting to 0, preserve the current value or set to a default
+    newValues.set(key, value); // Or whatever logic you need
   }
 
   const newVersion = {

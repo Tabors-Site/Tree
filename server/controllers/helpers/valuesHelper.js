@@ -1,7 +1,7 @@
 const { findNodeById, logContribution } = require("../../db/utils");
 
 async function setValueForNodeHelper({ nodeId, key, value, version, userId }) {
-  const versionIndex = version.toString();
+  const versionIndex = Number(version);
   const numericValue = Number(value);
 
   if (isNaN(numericValue) || value === "e") {

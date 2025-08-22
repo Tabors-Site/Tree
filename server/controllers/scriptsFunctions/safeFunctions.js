@@ -7,6 +7,7 @@ const {
   editStatusHelper,
   addPrestigeHelper,
 } = require("../helpers/statusesHelper");
+const { updateScheduleHelper } = require("../helpers/schedulesHelper");
 
 async function getApi(url) {
   const blockedHosts = [
@@ -26,20 +27,55 @@ async function getApi(url) {
   return res.data;
 }
 
+// ---------------- Queue system ----------------
+const nodeQueues = new Map(); // Map<nodeId, Promise>
+
+function enqueue(nodeId, fn) {
+  const last = nodeQueues.get(nodeId) || Promise.resolve();
+  const next = last.then(() => fn());
+  // store the next promise in the queue
+  nodeQueues.set(
+    nodeId,
+    next.catch(() => {})
+  );
+  return next; // return promise so it can still be awaited if desired
+}
+
 /**
  * Factory to build safe functions bound to a specific userId
  */
 function makeSafeFunctions(userId) {
   return {
     getApi,
-    setValueForNode: ({ nodeId, key, value, version }) =>
-      setValueForNodeHelper({ nodeId, key, value, version, userId }),
-    setGoalForNode: ({ nodeId, key, goal, version }) =>
-      setGoalForNodeHelper({ nodeId, key, goal, version, userId }),
-    editStatusForNode: (
-      { nodeId, status, version, isInherited } //look into what isinherited does
-    ) => editStatusHelper({ nodeId, status, version, isInherited, userId }),
-    addPrestigeForNode: ({ nodeId }) => addPrestigeHelper({ nodeId, userId }),
+
+    setValueForNode: (nodeId, key, value, version) =>
+      enqueue(nodeId, () =>
+        setValueForNodeHelper({ nodeId, key, value, version, userId })
+      ),
+
+    setGoalForNode: (nodeId, key, goal, version) =>
+      enqueue(nodeId, () =>
+        setGoalForNodeHelper({ nodeId, key, goal, version, userId })
+      ),
+
+    editStatusForNode: (nodeId, status, version, isInherited) =>
+      enqueue(nodeId, () =>
+        editStatusHelper({ nodeId, status, version, isInherited, userId })
+      ),
+
+    addPrestigeForNode: (nodeId) =>
+      enqueue(nodeId, () => addPrestigeHelper({ nodeId, userId })),
+
+    updateScheduleForNode: (nodeId, versionIndex, newSchedule, reeffectTime) =>
+      enqueue(nodeId, () =>
+        updateScheduleHelper({
+          nodeId,
+          versionIndex,
+          newSchedule,
+          reeffectTime,
+          userId,
+        })
+      ),
   };
 }
 
