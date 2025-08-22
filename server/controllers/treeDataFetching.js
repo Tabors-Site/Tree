@@ -93,26 +93,27 @@ async function getParents(req, res) {
   }
 }
 
-async function getRootNodeIds(userId) {
+// Updated helper: fetch full root node info for a user
+async function getRootNodesForUser(userId) {
   try {
-    const user = await User.findById(userId);
-    if (!user) {
-      return null;
+    const user = await User.findById(userId).populate("roots", "name _id");
+    if (!user || !user.roots || user.roots.length === 0) {
+      return [];
     }
-    return user.roots;
+
+    return user.roots.map((node) => ({
+      _id: node._id,
+      name: node.name,
+    }));
   } catch (error) {
     throw error;
   }
 }
 
-// Fetches root node IDs for a user
 async function getRootNodes(req, res) {
   try {
-    const rootNodes = await getRootNodeIds(req.userId);
-    if (!rootNodes || rootNodes.length === 0) {
-      return res.json({ roots: [] });
-    }
-    res.json({ roots: rootNodes });
+    const roots = await getRootNodesForUser(req.userId);
+    res.json({ roots });
   } catch (error) {
     console.error("Error fetching root nodes:", error);
     res.status(500).json({ message: "Server error" });
