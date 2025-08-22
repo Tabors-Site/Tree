@@ -71,7 +71,7 @@ const login = async (req, res) => {
       httpOnly: false,
       secure: true, // true if HTTPS
       sameSite: "None", // required for cross-site cookies in modern browsers
-      //domain: ".tabors.site", // note leading dot to allow all subdomains
+      domain: ".tabors.site", // note leading dot to allow all subdomains
       maxAge: 604800000,
     });
 
