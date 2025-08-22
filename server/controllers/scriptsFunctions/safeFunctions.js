@@ -36,9 +36,9 @@ function enqueue(nodeId, fn) {
   // store the next promise in the queue
   nodeQueues.set(
     nodeId,
-    next.catch(() => {})
+    next.catch(() => {}) //if a script fails, it does not send error. need to fix
   );
-  return next; // return promise so it can still be awaited if desired
+  return next;
 }
 
 /**
