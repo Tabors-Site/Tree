@@ -4,7 +4,7 @@ const router = express.Router();
 const authenticate = require("../middleware/authenticate");
 const { updateScript, executeScript } = require("../controllers/scripts");
 
-router.post("/updateScript", updateScript);
-router.post("/executeScript", executeScript);
+router.post("/updateScript", authenticate, updateScript);
+router.post("/executeScript", authenticate, executeScript);
 
 module.exports = router;

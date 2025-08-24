@@ -57,13 +57,13 @@ const Schedule = ({
   const [reeffectTime, setReeffectTime] = useState(
     nodeSelected?.versions?.[nodeVersion]?.reeffectTime || 0
   );
-const apiUrl = import.meta.env.VITE_TREE_API_URL;
+  const apiUrl = import.meta.env.VITE_TREE_API_URL;
   useEffect(() => {
     if (nodeSelected && nodeSelected.versions?.length > 0) {
       setScheduleSelected(nodeSelected.versions[nodeVersion].schedule);
       setReeffectTime(nodeSelected.versions[nodeVersion]?.reeffectTime || 0); // Set initial reeffectTime
     }
-  }, [nodeSelected, nodeVersion]);
+  }, [nodeSelected, nodeVersion, tree]);
 
   const chopTree = (node, nodeId) => {
     if (node._id === nodeId._id) {

@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from "react";
 import Cookies from "js-cookie";
-import './NodeData.css'; 
+import ScriptMenu from "./ScriptMenu.jsx";
+import "./NodeData.css";
 
-const NodeData = ({ nodeSelected, nodeVersion, setNodeVersion, getTree, rootSelected}) => {
+const NodeData = ({
+  nodeSelected,
+  nodeVersion,
+  setNodeVersion,
+  getTree,
+  rootSelected,
+}) => {
   const [keyValuePairs, setKeyValuePairs] = useState([]);
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
@@ -11,10 +18,10 @@ const NodeData = ({ nodeSelected, nodeVersion, setNodeVersion, getTree, rootSele
   const [goals, setGoals] = useState({});
   const [editingGoal, setEditingGoal] = useState(null);
   const [goalInput, setGoalInput] = useState("");
-  const [isEditingName, setIsEditingName] = useState(false);  // New state to handle name editing
-  const [newName, setNewName] = useState("");  // New state to store the new name
+  const [isEditingName, setIsEditingName] = useState(false); // New state to handle name editing
+  const [newName, setNewName] = useState(""); // New state to store the new name
 
-const apiUrl = import.meta.env.VITE_TREE_API_URL;
+  const apiUrl = import.meta.env.VITE_TREE_API_URL;
   useEffect(() => {
     if (nodeSelected && nodeVersion !== null) {
       const version = nodeSelected.versions[nodeVersion];
@@ -39,13 +46,12 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
       setKeyValuePairs([]);
       setGoals({});
     }
-   
   }, [nodeVersion, nodeSelected]);
 
-  useEffect(()=>{
-    setNewKey("")
-    setNewValue("")
-  }, [nodeSelected])
+  useEffect(() => {
+    setNewKey("");
+    setNewValue("");
+  }, [nodeSelected]);
 
   const handleGenerationChange = (e) => {
     const selectedIndex = e.target.value;
@@ -69,7 +75,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
         body: JSON.stringify({
           nodeId: nodeSelected._id,
         }),
-        credentials: 'include',
+        credentials: "include",
       });
       if (response.ok) {
         const data = await response.json();
@@ -112,7 +118,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
           goal,
           version: nodeVersion,
         }),
-        credentials: 'include',
+        credentials: "include",
       });
 
       if (response.ok) {
@@ -149,7 +155,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
           value,
           version: nodeVersion,
         }),
-        credentials: 'include',
+        credentials: "include",
       });
 
       if (response.ok) {
@@ -179,7 +185,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
   // New functions for editing the name
   const handleNameClick = () => {
     setIsEditingName(true);
-    setNewName(nodeSelected.name);  // Set the current name as the initial value
+    setNewName(nodeSelected.name); // Set the current name as the initial value
   };
 
   const handleNameChange = (e) => {
@@ -187,10 +193,10 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
   };
 
   const handleNameSave = async () => {
-    if(newName.trim() == ""){
-      setNewName(nodeSelected.name)
+    if (newName.trim() == "") {
+      setNewName(nodeSelected.name);
       setIsEditingName(false);
-      return
+      return;
     }
     const token = Cookies.get("token");
     if (!token) {
@@ -209,13 +215,13 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
           nodeId: nodeSelected._id,
           newName,
         }),
-        credentials: 'include',
+        credentials: "include",
       });
 
       if (response.ok) {
-        nodeSelected.name = newName;  // Update the node name locally
+        nodeSelected.name = newName; // Update the node name locally
         setIsEditingName(false);
-        getTree(rootSelected);  // Refresh the tree
+        getTree(rootSelected); // Refresh the tree
       } else {
         console.error("Failed to save name:", await response.text());
       }
@@ -233,7 +239,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
           {/* Top Left Section */}
           <div className="topLeft">
             <p>
-              <strong>Name:</strong> 
+              <strong>Name:</strong>
               {isEditingName ? (
                 <div>
                   <input
@@ -245,14 +251,18 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
                   <button onClick={handleNameSave}>Save</button>
                 </div>
               ) : (
-                <span onClick={handleNameClick} style={{ cursor: "pointer", textDecoration: "underline" }}>
+                <span
+                  onClick={handleNameClick}
+                  style={{ cursor: "pointer", textDecoration: "underline" }}
+                >
                   {nodeSelected.name}
                 </span>
               )}
             </p>
 
             <p>
-              <strong>Status:</strong> {nodeSelected.versions[nodeVersion].status}
+              <strong>Status:</strong>{" "}
+              {nodeSelected.versions[nodeVersion].status}
             </p>
             {/* Generation Selector */}
             <div>
@@ -270,13 +280,22 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
               </select>
               {/* Prestige Button */}
               <div style={{ marginTop: "10px" }}>
-                <button onClick={handlePrestige} style={{ backgroundColor: "#32CD32 " }}>
+                <button
+                  onClick={handlePrestige}
+                  style={{ backgroundColor: "#32CD32 " }}
+                >
                   Add Prestige
                 </button>
               </div>
             </div>
+            {/* Scripts */}
+            <ScriptMenu
+              nodeSelected={nodeSelected}
+              getTree={getTree}
+              rootSelected={rootSelected}
+            />
           </div>
-  
+
           {/* Top Right Section */}
           <div className="topRight">
             <h5>Global Values</h5>
@@ -338,7 +357,9 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
                             placeholder="Edit value"
                             autoFocus
                           />
-                          <button onClick={() => handleSaveValue(key, editingValue)}>
+                          <button
+                            onClick={() => handleSaveValue(key, editingValue)}
+                          >
                             Save
                           </button>
                         </div>
@@ -355,7 +376,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
                       {editingGoal === key ? (
                         <div>
                           <input
-                            type="number"
+                            type="text"
                             value={goalInput}
                             onChange={handleGoalChange}
                             placeholder="Enter goal"
@@ -369,7 +390,9 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
                           onClick={() => handleGoalClick(key)}
                           style={{ cursor: "pointer" }}
                         >
-                          {goals[key] !== undefined ? goals[key] : "No goal set"}
+                          {goals[key] !== undefined
+                            ? goals[key]
+                            : "No goal set"}
                         </span>
                       )}
                     </td>
@@ -386,7 +409,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
                   </td>
                   <td>
                     <input
-                      type="number"
+                      type="text"
                       placeholder="New Value"
                       value={newValue}
                       onChange={(e) => setNewValue(e.target.value)}

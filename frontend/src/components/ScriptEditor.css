@@ -1,0 +1,51 @@
+/* Full-screen semi-transparent overlay */
+.script-editor-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+/* Editor container */
+.script-editor-container {
+    background: #fff;
+    padding: 20px;
+    width: 80%;
+    max-width: 900px;
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Name input section */
+.script-name-section input {
+    width: 100%;
+    padding: 8px;
+    font-size: 16px;
+    margin-bottom: 15px;
+}
+
+/* Buttons */
+.script-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+/* Script textarea */
+.script-textarea {
+    width: 100%;
+    height: 400px;
+    /* Make it bigger */
+    padding: 10px;
+    font-size: 16px;
+    font-family: monospace;
+    resize: vertical;
+}
