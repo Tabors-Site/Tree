@@ -180,8 +180,6 @@ async function getAllData(req, res) {
             version: i,
             contentType: "text",
           })
-            .sort({ createdAt: -1 })
-            .limit(7)
             .populate("userId", "username -_id")
             .lean()
             .exec();
