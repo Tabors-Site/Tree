@@ -29,6 +29,7 @@ function buildTree(nodes) {
       reeffectTime: version?.reeffectTime ?? null,
       values: node.globalValues ?? null,
       goals: version?.goals ?? null,
+      notes: version?.notes ?? [],
       children: node.children?.length
         ? node.children
           .map(childId => transformBranch(map[childId]))
@@ -68,6 +69,7 @@ const AiCreate = ({ nodeSelected }) => {
       ? buildTree(branchData)
       : buildTree([branchData]);
 
+    console.log(transformedBranch)
 
 
 

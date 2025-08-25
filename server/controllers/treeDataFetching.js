@@ -60,6 +60,8 @@ async function getTree(req, res) {
   }
 }
 
+
+
 // Fetches all parent nodes for a given child node
 async function getParents(req, res) {
   const { childId } = req.body;
@@ -70,10 +72,37 @@ async function getParents(req, res) {
 
   try {
     const getParentsRecursive = async (nodeId, parents = []) => {
-      const currentNode = await Node.findById(nodeId).exec();
+      const currentNode = await Node.findById(nodeId).lean().exec(); // lean + exec
 
       if (!currentNode) {
         return parents;
+      }
+
+      // only attach notes for the *last* version
+      if (currentNode.versions && currentNode.versions.length > 0) {
+        const lastVersion =
+          currentNode.prestige;
+
+        const notes = await Note.find({
+          nodeId: currentNode._id,
+          version: lastVersion,
+          contentType: "text",
+        })
+          .sort({ createdAt: -1 }) // newest first
+          .limit(7)                // only last 7
+          .select("content -_id")
+          .lean()
+          .exec();
+
+        // flatten into array of strings
+        const noteContents = notes.map((n) => n.content);
+
+        currentNode.versions = [
+          {
+            ...lastVersion,
+            notes: noteContents,
+          },
+        ];
       }
 
       parents.push(currentNode);
@@ -92,6 +121,8 @@ async function getParents(req, res) {
     res.status(500).json({ message: "Server error" });
   }
 }
+
+
 
 // Updated helper: fetch full root node info for a user
 async function getRootNodesForUser(userId) {
@@ -120,6 +151,8 @@ async function getRootNodes(req, res) {
   }
 }
 
+
+
 async function getAllData(req, res) {
   const { rootId } = req.body;
 
@@ -128,39 +161,95 @@ async function getAllData(req, res) {
   }
 
   try {
-    const rootNode = await Node.findById(rootId).populate("children").exec();
+    const populateNodeRecursive = async (nodeId) => {
+      const node = await Node.findById(nodeId).populate("children").lean().exec();
+      if (!node) return null;
 
+      // Fetch contributions
+      const contributions = await Contribution.find({ nodeId: node._id }).exec();
+      node.contributions = contributions;
+
+      // Loop through all versions and fetch notes for each
+      if (node.versions && node.versions.length > 0) {
+        const versionsWithNotes = [];
+        for (let i = 0; i < node.versions.length; i++) {
+          const version = node.versions[i];
+
+          const notes = await Note.find({
+            nodeId: node._id,
+            version: i,
+            contentType: "text",
+          })
+            .sort({ createdAt: -1 })
+            .limit(7)
+            .populate("userId", "username -_id")
+            .lean()
+            .exec();
+
+          const noteContents = notes.map((n) => ({
+            username: n.userId?.username || "Unknown",
+            content: n.content,
+          }));
+
+          versionsWithNotes.push({
+            ...version,
+            notes: noteContents,
+          });
+        }
+        node.versions = versionsWithNotes;
+      }
+
+      // Recursively populate children
+      if (node.children && node.children.length > 0) {
+        const populatedChildren = [];
+        for (const child of node.children) {
+          const childData = await populateNodeRecursive(child._id);
+          if (childData) populatedChildren.push(childData);
+        }
+        node.children = populatedChildren;
+      }
+
+      return node;
+    };
+
+    const rootNode = await populateNodeRecursive(rootId);
     if (!rootNode) {
       return res.status(404).json({ message: "Node not found" });
     }
 
-    const populateNodeDetailsRecursive = async (node) => {
-      const [notes, contributions] = await Promise.all([
-        Note.find({ nodeId: node._id }),
-        Contribution.find({ nodeId: node._id }),
-      ]);
-
-      node.notes = notes;
-      node.contributions = contributions;
-
-      if (node.children && node.children.length > 0) {
-        node.children = await Node.populate(node.children, {
-          path: "children",
-        });
-        for (const child of node.children) {
-          await populateNodeDetailsRecursive(child);
-        }
-      }
-    };
-
-    await populateNodeDetailsRecursive(rootNode);
-
     res.json(rootNode);
   } catch (error) {
-    console.error("Error fetching node details with contributions:", error);
+    console.error("Error fetching node details:", error);
     res.status(500).json({ message: "Server error" });
   }
 }
+
+function removeNullFields(obj) {
+  if (obj === null || obj === undefined) {
+    return undefined; // This will cause the field to be omitted
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(removeNullFields).filter(item => item !== undefined);
+  }
+
+  if (typeof obj === 'object') {
+    const cleaned = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const cleanedValue = removeNullFields(value);
+      if (cleanedValue !== undefined) {
+        cleaned[key] = cleanedValue;
+      }
+    }
+    return cleaned;
+  }
+
+  return obj;
+}
+
+
+
+
 
 module.exports = {
   getRootNodes,
