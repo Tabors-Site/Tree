@@ -7,26 +7,39 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
 const AiTreeViewModal = ({ jsonObject, onAddNode, onReshuffle, nodeSelected, onClose }) => {
   const cyRef = useRef(null);
   const tooltipRef = useRef(null);
-  const [tooltipContent, setTooltipContent] = useState(""); 
+  const [tooltipContent, setTooltipContent] = useState("");
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
+  let nodeCounter = 0;
+
   const addNodesAndEdges = (node, cyInstance, parentId = null) => {
+    const nodeId = `${node.name}-${nodeCounter++}`;
+
     cyInstance.add({
       group: "nodes",
-      data: { id: node.name, label: node.name, details: node },
+      data: {
+        id: nodeId,
+        label: node.name,
+        details: node,
+      },
     });
 
     if (parentId) {
       cyInstance.add({
         group: "edges",
-        data: { id: `${parentId}-${node.name}`, source: parentId, target: node.name },
+        data: {
+          id: `${parentId}-${nodeId}`,
+          source: parentId,
+          target: nodeId
+        },
       });
     }
 
     if (node.children && Array.isArray(node.children)) {
-      node.children.forEach((child) => addNodesAndEdges(child, cyInstance, node.name));
+      node.children.forEach((child) => addNodesAndEdges(child, cyInstance, nodeId));
     }
   };
+
 
   useEffect(() => {
     cyRef.current = cytoscape({
@@ -93,9 +106,9 @@ const AiTreeViewModal = ({ jsonObject, onAddNode, onReshuffle, nodeSelected, onC
         Values: ${JSON.stringify(nodeData.values, null, 2)}
         Goals: ${JSON.stringify(nodeData.goals, null, 2)}
       `;
-    
+
       const position = node.renderedPosition();
-    
+
       setTooltipContent(formattedData);
       setTooltipPosition({
         x: position.x,
@@ -213,4 +226,3 @@ const AiTreeView = ({ jsonObject, nodeSelected, fetchFromServer }) => {
 };
 
 export default AiTreeView;
- 
