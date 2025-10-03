@@ -8,12 +8,13 @@ require("dotenv").config();
 require("./db/config"); // Initialize DB connection
 const rootFrontEnd = process.env.ROOT_FRONTEND_DOMAIN;
 const treeFrontEnd = process.env.TREE_FRONTEND_DOMAIN;
+const beFrontEnd = process.env.BE_FRONTEND_DOMAIN;
 const app = express();
 
 // Middleware
 app.use(
   cors({
-    origin: [rootFrontEnd, treeFrontEnd],
+    origin: [rootFrontEnd, treeFrontEnd, beFrontEnd],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
