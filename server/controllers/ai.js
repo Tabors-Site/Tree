@@ -1,125 +1,98 @@
-
 import OpenAI from "openai";
-import { z } from "zod";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const openai = new OpenAI({
-  baseURL: "http://localhost:11434/v1",
+  baseURL: "http://localhost:11434/v1", // Ollama endpoint
   apiKey: "ollama",
 });
 
-const NodeSchema = z.object({
-  name: z.string(),
-  schedule: z.string().datetime().nullable(),
-  reeffectTime: z.number().nullable(),
-  values: z.record(z.number()).nullable(),
-  goals: z.record(z.number()).nullable(),
+// === MCP Client Setup ===
+const mcp = new Client({ name: "tree-helper-client", version: "1.0.0" });
+let tools = [];
 
-  children: z.array(z.lazy(() => NodeSchema)).nullable(),
-});
+// ✅ Connect to MCP Server via HTTP Streamable
+export async function connectToMCP(serverUrl = "http://127.0.0.1:3005/mcp") {
+  console.log(`Connecting to MCP HTTP server at ${serverUrl}...`);
 
-// Helper to extract JSON from ```json``` block
-const extractJsonBlock = (text) => {
-  const regex = /```json\s*([\s\S]+?)```/;
-  const match = regex.exec(text);
-  if (match) return match[1].trim();
-  return text.trim(); // fallback to raw text
-};
+  const transport = new StreamableHTTPClientTransport(serverUrl);
+  await mcp.connect(transport);
 
+  const toolsResult = await mcp.listTools();
+  tools = toolsResult.tools.map((t) => ({
+    name: t.name,
+    description: t.description,
+    parameters: t.inputSchema,
+  }));
+
+  console.log("✅ Connected to MCP HTTP server with tools:", tools.map((t) => t.name));
+}
+
+// === Main Function ===
 export const getAiResponse = async (req, res) => {
-  const { treeBranchString, planDescription, depth, presentMoment } = req.body;
+  const { message, rootId } = req.body;
 
-  if (!treeBranchString || !planDescription || !depth || !presentMoment) {
+  if (!message || !rootId) {
     return res.status(400).json({
       success: false,
-      error: "Missing required fields: treeBranchString, planDescription, depth, presentMoment",
+      error: "Missing required fields: question and rootId",
     });
   }
 
-  const messages = [
-    {
-      role: "system", content: `
-    You must understand the users request, and then generate
-    a hierarchical nested node tree using the NodeSchema
-    json structure to fulfill it:
-
-    The json tree branch you generate will be placed onto an existing tree.
-    Here is the parents data (to the root) from the current node to orient
-    your generated json tree and gather context to help complete the users request.`
-    },
-    {
-      role: "system", content: `
-      Previous nodes for context. You are building off of the deepest child that has
-      no children in its array.
-      Parent branches: ${treeBranchString}`
-    },
-    {
-      role: "user",
-      content: `
-    Request:
-    ${planDescription}.
-    
-     
-    `
-    },
-    {
-      role: "system", content: `
-    Now use this NodeSchema JSON structure to generate the new tree branch:
-
-    Quick rules for nodes:
-
-    Schedule is only needed if a node requires timing,
-    and if schedule =  null = reeffectTime.
-    Present moment = $${presentMoment}
-
-
-
-    Goals are linked to values and can not exist on their own.
-    If a value has a goal, the keys must match.
-    Typically, a value would be 0 if it has a goal.
-    Create values carefully!
-
-    Set the number of children and sub-children proportionally to ${depth}/100 to scale detail.
-
-    const NodeSchema = z.object({
-      name: z.string(),
-      schedule: z.string().datetime().nullable(),
-      reeffectTime: z.number(), //time in hrs ahead that schedule is set to once completed from current schedule 
-      values: z.record(z.number()).nullable(),
-      goals: z.record(z.number()).nullable(),
-
-      children: z.array(z.lazy(() => NodeSchema)),
+  try {
+    console.log(`🛠 Fetching tree data for rootId: ${rootId}...`);
+    const treeResult = await mcp.callTool({
+      name: "ask-tree-question",
+      arguments: { question: message, rootId },
     });
 
-  ONLY output a single JSON block wrapped in triple backticks with 'json'.`
-    },
-  ];
+    const treeData = treeResult.content?.[0]?.text || "No data returned.";
+  console.log(treeData)
 
-  try {
+    // === Now feed it into the model and ask the question ===
+    const messages = [
+      {
+        role: "system",
+        content: `
+          You are a reasoning assistant that helps answer questions about hierarchical tree data.
+          The user will ask a question about the data, and you should answer based only on it.
+        `,
+      },
+      {
+        role: "system",
+        content: `Tree data:\n${treeData}`,
+        
+      },
+      {
+        role: "user",
+        content: message,
+      },
+    ];
+
     const response = await openai.chat.completions.create({
       model: "gpt-oss:20b",
       messages,
     });
 
-    const rawContent = response.choices[0].message.content;
-    console.log("Raw AI Response:", rawContent);
+    const answer = response.choices?.[0]?.message?.content || "No response generated.";
+    console.log("🧠 AI Answer:", answer);
 
-    const jsonString = extractJsonBlock(rawContent);
-    console.log("Extracted JSON:", jsonString);
-
-    try {
-      const parsed = NodeSchema.parse(JSON.parse(jsonString));
-      res.json({ success: true, data: parsed });
-    } catch (parseError) {
-      console.error("JSON Parsing or Schema Validation Error:", parseError.message);
-      res.status(500).json({
-        success: false,
-        error: "Failed to parse or validate JSON",
-        rawContent,
-        extractedContent: jsonString,
-      });
-    }
-  } catch (error) {
-    console.error("API Error:", error.message);
-    res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, answer });
+  } catch (err) {
+    console.error("❌ Error:", err.message);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// === Auto-connect MCP once when server starts ===
+(async () => {
+  try {
+    await connectToMCP("http://127.0.0.1:3005/mcp");
+    console.log("🌐 MCP auto-connect complete.");
+  } catch (err) {
+    console.error("❌ Failed to connect to MCP server:", err.message);
+  }
+})();

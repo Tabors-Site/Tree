@@ -60,6 +60,55 @@ async function getTree(req, res) {
   }
 }
 
+// Fetches a simplified tree for AI use — only includes: name, versions, and id
+async function getTreeForAi(req, res) {
+  const { rootId } = req.body;
+
+  if (!rootId) {
+    return res.status(400).json({ message: "Root node ID is required" });
+  }
+
+  try {
+    // Find root and populate one level to start
+    const rootNode = await Node.findById(rootId).populate("children").exec();
+
+    if (!rootNode) {
+      return res.status(404).json({ message: "Node not found" });
+    }
+
+    // Recursive helper: keep only name, versions, and id
+    const simplifyNode = async (node) => {
+      // Base node structure
+      const simplified = {
+        id: node._id.toString(),
+        name: node.name,
+        versions: node.versions || [],
+      };
+
+      // Recursively process children if present
+      if (node.children && node.children.length > 0) {
+        // Populate deeper levels
+        const populatedChildren = await Node.populate(node.children, { path: "children" });
+        simplified.children = [];
+        for (const child of populatedChildren) {
+          const simplifiedChild = await simplifyNode(child);
+          simplified.children.push(simplifiedChild);
+        }
+      }
+
+      return simplified;
+    };
+
+    const aiTree = await simplifyNode(rootNode);
+
+    res.json(aiTree);
+  } catch (error) {
+    console.error("Error fetching AI tree:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+}
+
+
 
 
 // Fetches all parent nodes for a given child node
@@ -253,6 +302,7 @@ module.exports = {
   getRootNodes,
   getRootDetails,
   getTree,
+  getTreeForAi,
   getParents,
   getAllData,
 };

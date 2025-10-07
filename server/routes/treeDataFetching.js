@@ -4,6 +4,7 @@ const {
   getTree,
   getParents,
   getRootNodes,
+  getTreeForAi,
   getAllData,
 } = require("../controllers/treeDataFetching");
 const authenticate = require("../middleware/authenticate");
@@ -17,6 +18,8 @@ router.post("/get-root-details", getRootDetails);
 
 // Endpoint to fetch a tree of nodes
 router.post("/get-tree", getTree);
+// Endpoint to fetch a tree of nodes
+router.post("/get-tree-ai", getTreeForAi);
 
 // Endpoint to fetch parent nodes
 router.post("/get-parents", getParents);
