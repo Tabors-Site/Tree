@@ -1,10 +1,10 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const {  getContributions } = require('../controllers/contributions');
+import { getContributions } from '../controllers/contributions.js';
 
 
 // Route for getting contributions
 router.post('/get-contributions', getContributions);
 
 // Export the router
-module.exports = router;
+export default router;

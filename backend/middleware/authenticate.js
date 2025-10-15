@@ -1,9 +1,11 @@
-const jwt = require("jsonwebtoken");
-require("dotenv").config();
+import jwt from 'jsonwebtoken';
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-module.exports = (req, res, next) => {
+export default (req, res, next) => {
   // Read token from the cookie named 'token'
   const token = req.cookies?.token;
 

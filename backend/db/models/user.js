@@ -1,6 +1,6 @@
-const mongoose = require("mongoose");
-const bcrypt = require("bcrypt"); // To securely hash passwords
-const { v4: uuidv4 } = require("uuid");
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt'; // To securely hash passwords
+import { v4 as uuidv4 } from 'uuid';
 
 const UserSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
@@ -26,4 +26,4 @@ UserSchema.methods.comparePassword = async function (candidatePassword) {
 
 // Create the User model
 const User = mongoose.model("User", UserSchema);
-module.exports = User;
+export default User;

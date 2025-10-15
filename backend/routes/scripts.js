@@ -1,10 +1,10 @@
-const express = require("express");
+import express from 'express';
 
 const router = express.Router();
-const authenticate = require("../middleware/authenticate");
-const { updateScript, executeScript } = require("../controllers/scripts");
+import authenticate from '../middleware/authenticate.js';
+import { updateScript, executeScript } from '../controllers/scripts.js';
 
 router.post("/updateScript", authenticate, updateScript);
 router.post("/executeScript", authenticate, executeScript);
 
-module.exports = router;
+export default router;

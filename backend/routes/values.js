@@ -1,6 +1,6 @@
-const express = require("express");
-const { setValueForNode, setGoalForNode } = require("../controllers/values");
-const authenticate  = require("../middleware/authenticate");
+import express from 'express';
+import { setValueForNode, setGoalForNode } from '../controllers/values.js';
+import authenticate from '../middleware/authenticate.js';
 
 const router = express.Router();
 
@@ -10,4 +10,4 @@ router.post("/edit-value", authenticate, setValueForNode);
 // Route to edit the goal for a node
 router.post("/edit-goal", authenticate, setGoalForNode);
 
-module.exports = router;
+export default router;

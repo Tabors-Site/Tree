@@ -1,5 +1,5 @@
-const mongoose = require("mongoose");
-const { v4: uuidv4 } = require("uuid");
+import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
 const NodeSchema = new mongoose.Schema({
   _id: {
@@ -247,4 +247,4 @@ NodeSchema.pre("findOneAndDelete", async function (next) {
 });
 
 const Node = mongoose.model("Node", NodeSchema);
-module.exports = Node;
+export default Node;

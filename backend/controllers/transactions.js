@@ -1,6 +1,6 @@
-const Node = require("../db/models/node");
-const Transaction = require("../db/models/transaction");
-const { logContribution } = require("../db/utils");
+import Node from '../db/models/node.js';
+import Transaction from '../db/models/transaction.js';
+import { logContribution } from '../db/utils.js';
 
 const getTransactions = async (req, res) => {
   const { nodeId } = req.body;
@@ -114,4 +114,4 @@ const tradeValues = async (req, res) => {
   }
 };
 
-module.exports = { getTransactions, tradeValues };
+export { getTransactions, tradeValues };

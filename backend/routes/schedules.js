@@ -1,9 +1,9 @@
-const express = require("express");
+import express from 'express';
 const router = express.Router();
-const authenticate  = require("../middleware/authenticate");
-const { updateSchedule } = require("../controllers/schedules");
+import authenticate from '../middleware/authenticate.js';
+import { updateSchedule } from '../controllers/schedules.js';
 
 // Route to update schedule
 router.post("/update-schedule", authenticate, updateSchedule);
 
-module.exports = router;
+export default router;

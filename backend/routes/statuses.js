@@ -1,7 +1,8 @@
 // routes/statusRouter.js
-const express = require("express");
-const { editStatus, addPrestige } = require("../controllers/statuses");
-const authenticate  = require("../middleware/authenticate");
+import express from 'express';
+
+import { editStatus, addPrestige } from '../controllers/statuses.js';
+import authenticate from '../middleware/authenticate.js';
 
 const router = express.Router();
 
@@ -11,4 +12,4 @@ router.post("/edit-status", authenticate, editStatus);
 // Route to add prestige to a node
 router.post("/add-prestige", authenticate, addPrestige);
 
-module.exports = router;
+export default router;

@@ -1,7 +1,7 @@
-const Node = require("../db/models/node");
-const User = require("../db/models/user");
-const Invite = require("../db/models/invite");
-const { logContribution } = require("../db/utils");
+import Node from '../db/models/node.js';
+import User from '../db/models/user.js';
+import Invite from '../db/models/invite.js';
+import { logContribution } from '../db/utils.js';
 
 const invite = async (req, res) => {
   const { userReceiving, isToBeOwner, isUninviting, rootId } = req.body;
@@ -117,7 +117,7 @@ const invite = async (req, res) => {
         nodeId: node.id,
         action: "invite",
         inviteAction: inviteAction,
-        nodeVersion: node.prestige, 
+        nodeVersion: node.prestige,
       });
 
       return res.status(200).json({
@@ -359,7 +359,7 @@ const getPendingInvites = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   invite,
   inviteAccept,
   getPendingInvites,

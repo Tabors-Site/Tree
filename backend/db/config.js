@@ -1,5 +1,7 @@
-const mongoose = require("mongoose");
-require("dotenv").config();
+import mongoose from 'mongoose';
+import dotenv from "dotenv";
+
+dotenv.config();
 const mongooseUri = process.env.MONGODB_URI;
 
 mongoose
@@ -7,4 +9,4 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
-module.exports = mongoose;
+export default mongoose;

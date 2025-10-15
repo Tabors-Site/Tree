@@ -1,8 +1,4 @@
-const {
-  logContribution,
-  findNodeById,
-  handleSchedule,
-} = require("../../db/utils");
+import { logContribution, findNodeById, handleSchedule } from '../../db/utils.js';
 
 async function editStatusHelper({
   nodeId,
@@ -35,9 +31,8 @@ async function editStatusHelper({
   }
 
   return {
-    message: `Status updated to ${status} for node version ${version}${
-      isInherited ? " and its children" : ""
-    }`,
+    message: `Status updated to ${status} for node version ${version}${isInherited ? " and its children" : ""
+      }`,
   };
 }
 
@@ -132,7 +127,7 @@ async function addPrestigeToNode(node) {
   await node.save();
 }
 
-module.exports = {
+export {
   editStatusHelper,
   addPrestigeHelper,
 };

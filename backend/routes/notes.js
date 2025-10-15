@@ -1,9 +1,10 @@
 // routes/notesRouter.js
 
-const express = require("express");
+import express from 'express';
+
 const router = express.Router();
-const  authenticate  = require("../middleware/authenticate");
-const { upload, createNote, getNotes, getFile, deleteNoteAndFile } = require("../controllers/notes");
+import authenticate from '../middleware/authenticate.js';
+import { upload, createNote, getNotes, getFile, deleteNoteAndFile } from '../controllers/notes.js';
 
 // Route to create a note
 router.post("/create-Note", authenticate, upload.single("file"), createNote);
@@ -15,4 +16,4 @@ router.post("/get-Notes", authenticate, getNotes);
 
 router.post("/delete-note", authenticate, deleteNoteAndFile);
 
-module.exports = router;
+export default router;

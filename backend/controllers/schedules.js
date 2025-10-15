@@ -1,4 +1,4 @@
-const { updateScheduleHelper } = require("./helpers/schedulesHelper");
+import { updateScheduleHelper } from './helpers/schedulesHelper.js';
 
 const updateSchedule = async (req, res) => {
   try {
@@ -15,4 +15,4 @@ const updateSchedule = async (req, res) => {
   }
 };
 
-module.exports = { updateSchedule };
+export { updateSchedule };

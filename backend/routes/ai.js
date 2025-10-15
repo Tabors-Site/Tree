@@ -1,8 +1,7 @@
-const express = require("express");
-const { getAiResponse } = require("../controllers/oldAI");
-
-const { handleMcpRequest } = require("../controllers/mcp/server");
-const { getMCPResponse } = require("../controllers/mcp/client");
+import express from 'express';
+import { getAiResponse } from '../controllers/oldAI.js';
+import { handleMcpRequest } from '../controllers/mcp/server.js';
+import { getMCPResponse } from '../controllers/mcp/client.js';
 
 const router = express.Router();
 
@@ -11,4 +10,4 @@ router.post("/mcp", handleMcpRequest);
 router.post("/getMCPResponse", getMCPResponse);
 
 
-module.exports = router;
+export default router;

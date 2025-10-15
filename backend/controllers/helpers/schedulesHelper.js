@@ -1,5 +1,5 @@
-const Node = require("../../db/models/node");
-const { logContribution } = require("../../db/utils");
+import Node from '../../db/models/node.js';
+import { logContribution } from '../../db/utils.js';
 
 async function updateScheduleHelper({
   nodeId,
@@ -70,4 +70,4 @@ async function updateScheduleHelper({
   };
 }
 
-module.exports = { updateScheduleHelper };
+export { updateScheduleHelper };

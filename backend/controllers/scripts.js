@@ -1,6 +1,6 @@
-const Node = require("../db/models/node");
-const { VM } = require("vm2");
-const { makeSafeFunctions } = require("./scriptsFunctions/safeFunctions");
+import Node from '../db/models/node.js';
+import { VM } from 'vm2';
+import { makeSafeFunctions } from './scriptsFunctions/safeFunctions.js';
 
 const updateScript = async (req, res) => {
   try {
@@ -106,4 +106,4 @@ const executeScript = async (req, res) => {
   }
 };
 
-module.exports = { updateScript, executeScript };
+export { updateScript, executeScript };

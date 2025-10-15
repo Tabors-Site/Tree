@@ -1,5 +1,5 @@
-const mongoose = require("mongoose");
-const { v4: uuidv4 } = require("uuid");
+import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
 // Define the Contribution schema
 const ContributionSchema = new mongoose.Schema({
@@ -101,4 +101,4 @@ const ContributionSchema = new mongoose.Schema({
 
 const Contribution = mongoose.model("Contribution", ContributionSchema);
 
-module.exports = Contribution;
+export default Contribution;

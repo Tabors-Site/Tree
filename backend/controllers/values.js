@@ -1,8 +1,5 @@
 // nodeControllers.js
-const {
-  setValueForNodeHelper,
-  setGoalForNodeHelper,
-} = require("./helpers/valuesHelper");
+import { setValueForNodeHelper, setGoalForNodeHelper } from './helpers/valuesHelper.js';
 
 async function setValueForNode(req, res) {
   try {
@@ -34,7 +31,7 @@ async function setGoalForNode(req, res) {
   }
 }
 
-module.exports = {
+export {
   setValueForNode,
   setGoalForNode,
 };

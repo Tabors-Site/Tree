@@ -1,7 +1,11 @@
-const path = require("path");
-const fs = require("fs");
-const multer = require("multer");
-const Note = require("../db/models/notes");
+import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
+import { fileURLToPath } from 'url';
+import Note from '../db/models/notes.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const uploadsFolder = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadsFolder)) {
@@ -88,7 +92,7 @@ const getNotes = async (req, res) => {
       query.version = version; // Only fetch notes for the specific version if it's not "all"
     }
 
-    
+
     const notes = await Note.find(query)
       .populate("userId", "username") // Only populate the username field
       .populate("nodeId");
@@ -167,4 +171,4 @@ const deleteNoteAndFile = async (req, res) => {
 };
 
 
-module.exports = { upload, createNote, getNotes, getFile, deleteNoteAndFile };
+export { upload, createNote, getNotes, getFile, deleteNoteAndFile };

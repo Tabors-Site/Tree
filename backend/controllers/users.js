@@ -1,6 +1,6 @@
-const User = require("../db/models/user");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+import User from '../db/models/user.js';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 const USER_REGISTRATION_KEY = process.env.USER_REGISTRATION_KEY;
 
@@ -84,4 +84,4 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { register, login };
+export { register, login };

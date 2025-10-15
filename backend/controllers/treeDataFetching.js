@@ -1,7 +1,7 @@
-const Node = require("../db/models/node");
-const User = require("../db/models/user");
-const Contribution = require("../db/models/contribution");
-const Note = require("../db/models/notes");
+import Node from '../db/models/node.js';
+import User from '../db/models/user.js';
+import Contribution from '../db/models/contribution.js';
+import Note from '../db/models/notes.js';
 
 async function getRootDetails(req, res) {
   const { id } = req.body;
@@ -60,53 +60,97 @@ async function getTree(req, res) {
   }
 }
 
-// Fetches a simplified tree for AI use — only includes: name, versions, and id
-async function getTreeForAi(req, res) {
-  const { rootId } = req.body;
 
+async function getNodeForAi(nodeId) {
+  if (!nodeId) throw new Error("Node ID is required");
+
+  try {
+    // ✅ Use .lean() to get a plain JS object
+    const node = await Node.findById(nodeId).lean().exec();
+    if (!node) throw new Error(`Node ${nodeId} not found`);
+
+    // Attach notes per version
+    if (node.versions && node.versions.length > 0) {
+      const versionsWithNotes = [];
+      for (let i = 0; i < node.versions.length; i++) {
+        const version = node.versions[i];
+
+        const notes = await Note.find({
+          nodeId: node._id,
+          version: i,
+          contentType: "text",
+        })
+          .populate("userId", "username -_id")
+          .lean()
+          .exec();
+
+        const noteContents = notes.map((n) => ({
+          username: n.userId?.username || "Unknown",
+          content: n.content,
+        }));
+
+        versionsWithNotes.push({
+          ...version,
+          notes: noteContents,
+        });
+      }
+      node.versions = versionsWithNotes;
+    }
+
+    return {
+      id: node._id.toString(),
+      name: node.name,
+      versions: node.versions || [],
+      scripts: node.scripts || [],
+    };
+  } catch (error) {
+    console.error("Error fetching AI node:", error);
+    throw new Error("Server error while fetching node");
+  }
+}
+
+
+async function getTreeForAi(rootId) {
   if (!rootId) {
-    return res.status(400).json({ message: "Root node ID is required" });
+    throw new Error("Root node ID is required");
   }
 
   try {
-    // Find root and populate one level to start
     const rootNode = await Node.findById(rootId).populate("children").exec();
-
     if (!rootNode) {
-      return res.status(404).json({ message: "Node not found" });
+      throw new Error("Node not found");
     }
 
-    // Recursive helper: keep only name, versions, and id
     const simplifyNode = async (node) => {
-      // Base node structure
       const simplified = {
         id: node._id.toString(),
-        name: node.name,
-        versions: node.versions || [],
+        name: node.name?.replace(/\s+/g, " ").trim(),
+        versions: node.versions[node.prestige] || [],
       };
 
-      // Recursively process children if present
-      if (node.children && node.children.length > 0) {
-        // Populate deeper levels
+      if (node.children?.length > 0) {
         const populatedChildren = await Node.populate(node.children, { path: "children" });
         simplified.children = [];
+
         for (const child of populatedChildren) {
-          const simplifiedChild = await simplifyNode(child);
-          simplified.children.push(simplifiedChild);
+          simplified.children.push(await simplifyNode(child));
         }
       }
 
       return simplified;
     };
 
-    const aiTree = await simplifyNode(rootNode);
+    const tree = await simplifyNode(rootNode);
 
-    res.json(aiTree);
+    // Clean strings but keep structure intact
+    return JSON.stringify(tree);
   } catch (error) {
     console.error("Error fetching AI tree:", error);
-    res.status(500).json({ message: "Server error" });
+    throw new Error("Server error while fetching tree");
   }
 }
+
+
 
 
 
@@ -298,11 +342,12 @@ function removeNullFields(obj) {
 
 
 
-module.exports = {
+export {
   getRootNodes,
   getRootDetails,
   getTree,
   getTreeForAi,
+  getNodeForAi,
   getParents,
   getAllData,
 };

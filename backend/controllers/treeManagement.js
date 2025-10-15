@@ -1,6 +1,6 @@
-const Node = require("../db/models/node");
-const User = require("../db/models/user");
-const { findNodeById, logContribution } = require("../db/utils");
+import Node from '../db/models/node.js';
+import User from '../db/models/user.js';
+import { findNodeById, logContribution } from '../db/utils.js';
 
 async function createNewNode(
   name,
@@ -116,43 +116,43 @@ async function addNodesTree(req, res) {
         .json({ success: false, message: "Parent node not found" });
     }
 
-      // Validate nodeTree structure
-      const isValidNode = (node) => {
-        return (
-          (typeof node.name === "string" || node.name === null) &&
-          (typeof node.schedule === "string" || node.schedule === null) &&
-          (node.schedule === null || !isNaN(Date.parse(node.schedule))) && // Allow null but ensure valid date string
-          (typeof node.reeffectTime === "number" || node.reeffectTime === null || 
-           typeof node.effectTime === "number" || node.effectTime === null) && // Allow null time values
-          (typeof node.values === "object" || node.values === null) &&
-          (typeof node.goals === "object" || node.goals === null) &&
-          (Array.isArray(node.children) || node.children === null)  
-        );
-      };
-      
+    // Validate nodeTree structure
+    const isValidNode = (node) => {
+      return (
+        (typeof node.name === "string" || node.name === null) &&
+        (typeof node.schedule === "string" || node.schedule === null) &&
+        (node.schedule === null || !isNaN(Date.parse(node.schedule))) && // Allow null but ensure valid date string
+        (typeof node.reeffectTime === "number" || node.reeffectTime === null ||
+          typeof node.effectTime === "number" || node.effectTime === null) && // Allow null time values
+        (typeof node.values === "object" || node.values === null) &&
+        (typeof node.goals === "object" || node.goals === null) &&
+        (Array.isArray(node.children) || node.children === null)
+      );
+    };
 
-  if (!isValidNode(nodeTree)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid nodeTree structure. Ensure it contains name, schedule, at least one of reeffectTime/effectTime, values, goals, and children."
-    });
-  }
+
+    if (!isValidNode(nodeTree)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid nodeTree structure. Ensure it contains name, schedule, at least one of reeffectTime/effectTime, values, goals, and children."
+      });
+    }
 
     async function createNodesRecursive(nodeData, parentId) {
-      const { 
-        name, 
-        schedule, 
-        values, 
-        goals, 
-        children = [], 
-        reeffectTime, 
-        effectTime 
+      const {
+        name,
+        schedule,
+        values,
+        goals,
+        children = [],
+        reeffectTime,
+        effectTime
       } = nodeData;
-      
+
       // Use reeffectTime if it's available, otherwise fall back to effectTime
       const timeToUse = reeffectTime !== undefined ? reeffectTime : effectTime;
-      
-      
+
+
       // Create the new node and link it to the parent
       const newNode = await createNewNode(
         name,
@@ -177,7 +177,7 @@ async function addNodesTree(req, res) {
 
     // Start recursion with the root of the new subtree
     const newChildId = await createNodesRecursive(nodeTree, parentId);
-    
+
     // Add the newly created child node to the parent's children
     parentNode.children.push(newChildId);
     await parentNode.save();
@@ -341,7 +341,7 @@ async function updateNodeParent(req, res) {
 
 
 
-module.exports = {
+export {
   addNode,
   addNodesTree,
   deleteNode,

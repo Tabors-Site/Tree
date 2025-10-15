@@ -1,5 +1,5 @@
-const mongoose = require("mongoose");
-const { v4: uuidv4 } = require("uuid");
+import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
 const NoteSchema = new mongoose.Schema({
   _id: {
@@ -40,4 +40,4 @@ const NoteSchema = new mongoose.Schema({
 });
 
 const Note = mongoose.model("Note", NoteSchema);
-module.exports = Note;
+export default Note;

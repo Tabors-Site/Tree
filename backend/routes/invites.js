@@ -1,11 +1,7 @@
-const express = require("express");
+import express from 'express';
 const router = express.Router();
-const authenticate = require("../middleware/authenticate");
-const {
-  invite,
-  inviteAccept,
-  getPendingInvites,
-} = require("../controllers/invites");
+import authenticate from '../middleware/authenticate.js';
+import { invite, inviteAccept, getPendingInvites } from '../controllers/invites.js';
 
 router.post("/invite", authenticate, invite);
 
@@ -14,4 +10,4 @@ router.post("/invite/accept", authenticate, inviteAccept);
 router.post("/pending-invites", authenticate, getPendingInvites);
 
 // Export the router
-module.exports = router;
+export default router;

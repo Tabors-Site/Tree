@@ -1,10 +1,10 @@
-const { findNodeById, logContribution } = require("../../db/utils");
+import { findNodeById, logContribution } from '../../db/utils.js';
 
 async function setValueForNodeHelper({ nodeId, key, value, version, userId }) {
   const versionIndex = Number(version);
   const numericValue = Number(value);
 
-if (isNaN(numericValue) || (typeof value === "string" && value.includes("e"))) {
+  if (isNaN(numericValue) || (typeof value === "string" && value.includes("e"))) {
 
     throw new Error("Value must be a valid number");
   }
@@ -77,7 +77,7 @@ async function setGoalForNodeHelper({ nodeId, key, goal, version, userId }) {
   return { message: "Goal updated successfully." };
 }
 
-module.exports = {
+export {
   setValueForNodeHelper,
   setGoalForNodeHelper,
 };

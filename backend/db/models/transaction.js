@@ -1,5 +1,5 @@
-const mongoose = require("mongoose");
-const { v4: uuidv4 } = require("uuid");
+import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
 const TransactionSchema = new mongoose.Schema({
     _id: {
@@ -16,6 +16,6 @@ const TransactionSchema = new mongoose.Schema({
     },
     date: { type: Date, default: Date.now }, 
   });
-  
-  const Transaction = mongoose.model("Transaction", TransactionSchema);
-  module.exports = Transaction;
+
+const Transaction = mongoose.model("Transaction", TransactionSchema);
+export default Transaction;

@@ -1,5 +1,5 @@
-const Contribution = require("../db/models/contribution");
-const Transaction = require("../db/models/transaction");
+import Contribution from '../db/models/contribution.js';
+import Transaction from '../db/models/transaction.js';
 
 const getContributions = async (req, res) => {
   const { nodeId } = req.body;
@@ -32,11 +32,11 @@ const getContributions = async (req, res) => {
           additionalInfo = {
             inviteAction: contribution.inviteAction
               ? {
-                  action: contribution.inviteAction.action,
-                  receivingUsername: contribution.inviteAction.receivingId
-                    ? contribution.inviteAction.receivingId.username
-                    : null,
-                }
+                action: contribution.inviteAction.action,
+                receivingUsername: contribution.inviteAction.receivingId
+                  ? contribution.inviteAction.receivingId.username
+                  : null,
+              }
               : null,
           };
           break;
@@ -49,17 +49,17 @@ const getContributions = async (req, res) => {
         case "transaction":
           additionalInfo = contribution.tradeId
             ? {
-                nodeA: {
-                  name: contribution.tradeId.nodeAId.name, // Node A's name
-                  versionIndex: contribution.tradeId.versionAIndex, // Node A's version
-                  valuesSent: contribution.tradeId.valuesTraded.nodeA, // Values sent by Node A
-                },
-                nodeB: {
-                  name: contribution.tradeId.nodeBId.name, // Node B's name
-                  versionIndex: contribution.tradeId.versionBIndex, // Node B's version
-                  valuesSent: contribution.tradeId.valuesTraded.nodeB, // Values sent by Node B
-                },
-              }
+              nodeA: {
+                name: contribution.tradeId.nodeAId.name, // Node A's name
+                versionIndex: contribution.tradeId.versionAIndex, // Node A's version
+                valuesSent: contribution.tradeId.valuesTraded.nodeA, // Values sent by Node A
+              },
+              nodeB: {
+                name: contribution.tradeId.nodeBId.name, // Node B's name
+                versionIndex: contribution.tradeId.versionBIndex, // Node B's version
+                valuesSent: contribution.tradeId.valuesTraded.nodeB, // Values sent by Node B
+              },
+            }
             : null;
           break;
         default:
@@ -83,6 +83,6 @@ const getContributions = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   getContributions,
 };

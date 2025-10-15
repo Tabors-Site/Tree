@@ -1,14 +1,10 @@
-const axios = require("axios"); // Commo
+import axios from 'axios'; // Commo
+
 //prebuilt functions to use in scripts
-const {
-  setValueForNodeHelper,
-  setGoalForNodeHelper,
-} = require("../helpers/valuesHelper");
-const {
-  editStatusHelper,
-  addPrestigeHelper,
-} = require("../helpers/statusesHelper");
-const { updateScheduleHelper } = require("../helpers/schedulesHelper");
+import { setValueForNodeHelper, setGoalForNodeHelper } from '../helpers/valuesHelper.js';
+
+import { editStatusHelper, addPrestigeHelper } from '../helpers/statusesHelper.js';
+import { updateScheduleHelper } from '../helpers/schedulesHelper.js';
 
 async function getApi(url) {
   const blockedHosts = [
@@ -37,7 +33,7 @@ function enqueue(nodeId, fn) {
   // store the next promise in the queue
   nodeQueues.set(
     nodeId,
-    next.catch(() => {}) //if a script fails, it does not send error. need to fix
+    next.catch(() => { }) //if a script fails, it does not send error. need to fix
   );
   return next;
 }
@@ -80,4 +76,4 @@ function makeSafeFunctions(userId) {
   };
 }
 
-module.exports = { makeSafeFunctions };
+export { makeSafeFunctions };

@@ -1,7 +1,4 @@
-const {
-  editStatusHelper,
-  addPrestigeHelper,
-} = require("./helpers/statusesHelper");
+import { editStatusHelper, addPrestigeHelper } from './helpers/statusesHelper.js';
 
 async function editStatus(req, res) {
   try {
@@ -30,7 +27,7 @@ async function addPrestige(req, res) {
   }
 }
 
-module.exports = {
+export {
   editStatus,
   addPrestige,
 };
