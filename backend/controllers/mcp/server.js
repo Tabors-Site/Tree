@@ -1,4 +1,24 @@
 import { z } from "zod";
+import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  setValueForNodeHelper,
+  setGoalForNodeHelper,
+} from '../helpers/valuesHelper.js'
+import {
+  updateScheduleHelper
+} from "../helpers/schedulesHelper.js"
+
+import {
+  editStatusHelper,
+  addPrestigeHelper,
+} from "../helpers/statusesHelper.js"
+import { createNoteHelper, getNotesHelper, deleteNoteAndFileHelper } from "../helpers/notesHelper.js";
+import {
+  createNewNode,
+  createNodesRecursive,
+  deleteNodeBranch,
+  updateParentRelationship,
+} from "../helpers/treeManagementHelper.js";
 
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 
@@ -7,7 +27,7 @@ import { getTreeForAi, getNodeForAi } from '../treeDataFetching.js'; // import f
 
 // Create and configure the MCP server
 function getMcpServer() {
-  
+
   const server = new McpServer({
     name: "tree-helper", version: "1.0.0", capabilities: {
       resources: {},
@@ -19,99 +39,424 @@ function getMcpServer() {
 
   server.resource(
     "tree",
-    new ResourceTemplate("tree://{rootId}", {
-      async list() {
-        return {
-          resources: [
-            { uri: "tree://91b8c878-3008-4a27-bd43-d93babf077b8", name: "Demo Tree" },
-            { uri: "tree://example", name: "Example Tree" },
-          ]
-        };
-      },
-    }),
+    new ResourceTemplate("tree://{rootId}", { list: undefined }),
     {
-      title: "Tree Resource",
-      description: "Full hierarchical structure of nodes starting from a root.",
+      description: "Get a trees structure from the database",
+      title: "Tree Data",
       mimeType: "application/json",
     },
     async (uri, { rootId }) => {
       const treeData = await getTreeForAi(rootId);
-      if (!treeData) {
+
+      if (treeData == null) {
         return {
-          contents: [{
-            uri: uri.href,
-            mimeType: "application/json",
-            text: JSON.stringify({ error: "Tree not found", rootId }),
-          }]
+          contents: [
+            {
+              uri: uri.href,
+              text: JSON.stringify({ error: "Tree not found", rootId }),
+              mimeType: "application/json",
+            },
+          ],
         };
       }
+
       return {
-        contents: [{
-          uri: uri.href,
-          mimeType: "application/json",
-          text: JSON.stringify(treeData, null, 2),
-        }]
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify(treeData, null, 2),
+            mimeType: "application/json",
+          },
+        ],
       };
     }
   );
 
-  server.resource(
-    "tree-node",
-    new ResourceTemplate("tree://{rootId}/node/{nodeId}", {
-      async list() {
-        // Optional: You could list a few demo nodes for discovery
-        return {
-          resources: [
-            { uri: "tree://91b8c878-3008-4a27-bd43-d93babf077b8/node/1234", name: "Demo Node 1234" },
-          ],
-        };
+  /*
+    server.tool(
+      "node-edit-pipeline",
+      "Edit or annotate a node. If nodeId is not given, routes to add-note, edit-value, or edit-goal.",
+      {
+        prompt: z.string(),
+        nodeId: z.string(),
       },
-    }),
+      {
+        title: "Node Edit",
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      async params => {
+        let { prompt, nodeId } = params
+        console.log("🛠 node-edit called with:", params)
+  
+        if (!prompt || typeof prompt !== "string") {
+          return {
+            content: [{ type: "text", text: "❌ Error: Missing or invalid prompt." }],
+            isError: true,
+          }
+        }
+  
+        // Infer action from the prompt
+        let action = "add-note"
+        const lower = prompt.toLowerCase()
+        if (lower.includes("value")) action = "edit-value"
+        else if (lower.includes("goal")) action = "edit-goal"
+        else {
+          try {
+            const res = await server.server.request(
+              {
+                method: "sampling/createMessage",
+                params: {
+                  messages: [
+                    {
+                      role: "user",
+                      content: {
+                        type: "text",
+                        text: `Given this user request: "${prompt}", determine which function to call.
+                        add-note = if they want to add a string property
+                        edit-value = if they want to add or edit a number property
+                        edit-goal = if they want to edit a number property attached to a value
+                        edit-schedule if they want to edit time value
+                        Return exactly the name of one function key`,
+                      },
+                    },
+                  ],
+                  maxTokens: 400,
+                },
+              },
+              CreateMessageResultSchema
+            )
+  
+            if (res?.content?.type === "text") {
+              const val = res.content.text.trim().toLowerCase()
+              if (["add-note", "edit-value", "edit-goal"].includes(val)) action = val
+            }
+          } catch (err) {
+            console.error("⚠️ decideAction failed:", err)
+          }
+        }
+  
+        const message = `use ${action} on node ${nodeId} based on: "${prompt}"`
+        console.log("✅ node-edit result:", { nodeId, action, message })
+  
+        return {
+          content: [
+            {
+              type: "resource_link",
+              uri: `node://${nodeId}`,
+              name: `Node ${nodeId}`,
+              mimeType: "application/json",
+              description: `Node involved in ${action}`,
+            },
+            { type: "text", text: message },
+  
+          ],
+          structuredContent: { nodeId, action, message },
+        }
+      }
+    ) */
+
+
+
+  server.tool(
+    "edit-node-version-value",
+    "Calls setValueForNodeHelper() to update a node value.",
     {
-      title: "Tree Node Resource",
-      description: "Fetch a specific node (with notes and versions) within a tree.",
+      nodeId: z.string().describe("The unique ID of the node to edit."),
+      key: z.string().describe("The key of the value you want to modify on the node."),
+      value: z.number().describe("The numeric value to assign to the given key."),
+      prestige: z.number().describe("Prestige value in largest node version."),
+      userId: z.string().describe("The ID of the user performing the edit. Used for contribution logging."),
+    },
+    async ({ nodeId, key, value, prestige, userId }) => {
+      const result = await setValueForNodeHelper({
+        nodeId,
+        key,
+        value,
+        version: prestige,
+        userId,
+      });
+
+      return {
+        content: [{ type: "text", text: result.message }],
+        structuredContent: result,
+      };
+    }
+  );
+
+  server.tool(
+    "edit-node-version-goal",
+    "Calls setGoalForNodeHelper() to update a node goal. Goal must correspond to existing value.",
+    {
+      nodeId: z.string().describe("The unique ID of the node to edit."),
+      key: z.string().describe("The key of the goal you want to modify on the node."),
+      goal: z.number().describe("The numeric goal value to assign to the given key."),
+      prestige: z.number().describe("Prestige value representing the node version."),
+      userId: z.string().describe("The ID of the user performing the goal edit (for logging)."),
+    },
+    async ({ nodeId, key, goal, prestige, userId }) => {
+      try {
+        const result = await setGoalForNodeHelper({
+          nodeId,
+          key,
+          goal,
+          version: prestige,
+          userId,
+        });
+
+        return {
+          content: [{ type: "text", text: result.message }],
+          structuredContent: result,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to update goal: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "edit-node-or-branch-status",
+    "Calls editStatusHelper() to update a node's status (optionally recursively).",
+    {
+      nodeId: z.string().describe("The unique ID of the node whose status will be edited."),
+      status: z.enum(["active", "trimmed", "completed"]).describe(
+        "The new status to set for the node."
+      ),
+      prestige: z.number().describe("Prestige version number of the node to modify."),
+      isInherited: z
+        .boolean()
+        .describe(
+          "If true, propagate the status to child nodes recursively. Typically true unless otherwise specified."
+        ),
+      userId: z.string().describe("ID of the user making the status edit (for contribution logging)."),
+    },
+    async ({ nodeId, status, prestige, isInherited, userId }) => {
+      try {
+        const result = await editStatusHelper({
+          nodeId,
+          status,
+          version: prestige,
+          isInherited,
+          userId,
+        });
+
+        return {
+          content: [{ type: "text", text: result.message }],
+          structuredContent: result,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to update status: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+
+  // 🧠 Tool: Create Note (text-only)
+  server.tool(
+    "create-node-version-note",
+    "Creates a new text note for a node.",
+    {
+      content: z.string().describe("The text content of the note."),
+      userId: z.string().describe("The ID of the user creating the note."),
+      nodeId: z.string().describe("The ID of the node the note belongs to."),
+      prestige: z.number().optional().describe("The prestige version of the node"),
+      isReflection: z
+        .union([z.boolean(), z.string()])
+        .optional()
+        .describe("Whether the note is a reflection. Typically false unless note is applied on a completed version."),
+    },
+    async ({ content, userId, nodeId, prestige, isReflection }) => {
+      try {
+        const result = await createNoteHelper({
+          contentType: "text",
+          content,
+          userId,
+          nodeId,
+          version: prestige,
+          isReflection,
+        });
+
+        return {
+          content: [{ type: "text", text: result.message }],
+          structuredContent: result,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to create note: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  // 📜 Tool: Get Notes
+  server.tool(
+    "get-node-notes",
+    "Retrieves notes associated with a specific node (and prestige version if provided).",
+    {
+      nodeId: z.string().describe("The ID of the node to fetch notes for."),
+      prestige: z
+        .union([z.string(), z.literal("all")])
+        .optional()
+        .describe("Specific version to filter by, or 'all' for all versions."),
+    },
+    async ({ nodeId, prestige }) => {
+      try {
+        const result = await getNotesHelper({ nodeId, version: prestige });
+
+        return {
+          content: [{ type: "text", text: result.message }],
+          structuredContent: result,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to fetch notes: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  // 🗑️ Tool: Delete Note
+  server.tool(
+    "delete-node-note",
+    "Deletes a text note by its ID.",
+    {
+      noteId: z.string().describe("The ID of the note to delete."),
+    },
+    async ({ noteId }) => {
+      try {
+        const result = await deleteNoteAndFileHelper({ noteId });
+
+        return {
+          content: [{ type: "text", text: result.message }],
+          structuredContent: result,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to delete note: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "add-node-prestige",
+    "Calls addPrestigeHelper() to increment a node's prestige level and create a new version.",
+    {
+      nodeId: z.string().describe("The unique ID of the node to add prestige to."),
+      userId: z.string().describe("The ID of the user performing the prestige action (for logging)."),
+    },
+    async ({ nodeId, userId }) => {
+      try {
+        const result = await addPrestigeHelper({ nodeId, userId });
+
+        return {
+          content: [{ type: "text", text: result.message }],
+          structuredContent: result,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to add prestige: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "edit-node-version-schedule",
+    "Calls updateScheduleHelper() to modify a node version's schedule and reeffect time for a specific version.",
+    {
+      nodeId: z.string().describe("The unique ID of the node whose schedule should be updated."),
+      prestige: z.number().describe(
+        "The prestige of the version to update within the node's version history."
+      ),
+      newSchedule: z.string().describe("The new schedule date/time (in ISO 8601 format)."),
+      reeffectTime: z
+        .number()
+        .describe(
+          "The reeffect time in hours (must be below 1,000,000). Added to schedule when prestiging for new version."
+        ),
+      userId: z.string().describe("The ID of the user making the schedule update (for contribution logging)."),
+    },
+    async ({ nodeId, prestige, newSchedule, reeffectTime, userId }) => {
+      try {
+        const result = await updateScheduleHelper({
+          nodeId,
+          versionIndex: prestige,
+          newSchedule,
+          reeffectTime,
+          userId,
+        });
+
+        return {
+          content: [{ type: "text", text: result.message }],
+          structuredContent: result,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to update schedule: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  server.resource(
+    "node",
+    new ResourceTemplate("node://{nodeId}", { list: undefined }),
+    {
+      description: "Fetch a specific node (with notes and versions) within a tree for more context.",
+      title: "Node Resource",
       mimeType: "application/json",
     },
-    async (uri, { rootId, nodeId }) => {
+    async (uri, { nodeId }) => {
       try {
         const nodeData = await getNodeForAi(nodeId);
-        if (!nodeData) {
+
+        if (nodeData == null) {
           return {
             contents: [
               {
                 uri: uri.href,
+                text: JSON.stringify({ error: "Node not found", nodeId }),
                 mimeType: "application/json",
-                text: JSON.stringify({ error: "Node not found", rootId, nodeId }),
               },
             ],
           };
         }
 
-        // Return node data
         return {
           contents: [
             {
               uri: uri.href,
+              text: JSON.stringify(nodeData, null, 2),
               mimeType: "application/json",
-              text: JSON.stringify(
-                {
-                  rootId,
-                  ...nodeData,
-                },
-                null,
-                2
-              ),
             },
           ],
         };
       } catch (error) {
-        console.error("Error fetching tree-node resource:", error);
+        console.error("Error fetching node resource:", error);
+
         return {
           contents: [
             {
               uri: uri.href,
+              text: JSON.stringify({
+                error: "Server error while fetching node",
+                nodeId,
+              }),
               mimeType: "application/json",
-              text: JSON.stringify({ error: "Server error while fetching node", rootId, nodeId }),
             },
           ],
         };
@@ -121,133 +466,182 @@ function getMcpServer() {
 
 
 
-  /*
-    server.tool(
-      "ask-tree-question",
-      "Ask a question about the user's tree",
-      {
-        question: { type: "string" },
-        rootId: { type: "string" },
-      },
-      async (args) => {
-        const { question, rootId } = args;
-        const treeData = await getTreeForAi(rootId);
-  
-        if (!treeData) {
-          return {
-            content: [{ type: "text", text: "❌ Could not fetch tree data." }],
-          };
-        }
-  
-        return { content: [{ type: "text", text: JSON.stringify(treeData) }] };
+
+
+  // 🧩 Create a single new node
+  server.tool(
+    "create-new-node",
+    "Creates a new node in the tree and logs a contribution entry.",
+    {
+      name: z.string().describe("Name of the new node."),
+      schedule: z.date().nullable().optional().describe("Optional date for node scheduling."),
+      reeffectTime: z.number().optional().describe("Time interval before reeschedule on prestife."),
+      parentNodeID: z.string().describe("Parent node ID ."),
+      userId: z.string().describe("The ID of the user creating the node."),
+      values: z.record(z.number()).default({}).nullable().optional().describe("Key-value pairs representing node number values."),
+      goals: z.record(z.number()).default({}).nullable().optional().describe("Key-value pairs representing node number goals attached to values."),
+    },
+    async ({ name, schedule, reeffectTime, parentNodeID, userId, values, goals }) => {
+      try {
+        const node = await createNewNode(
+          name,
+          schedule,
+          reeffectTime,
+          parentNodeID,
+          false,
+          userId,
+          values,
+          goals
+        );
+
+        return {
+          content: [{ type: "text", text: `✅ Node '${name}' created successfully.` }],
+          structuredContent: node,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to create node: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
       }
-    ); */
+    }
+  );
+
+
+
+  const NodeSchema = z.lazy(() =>
+    z.object({
+      name: z.string().describe("Node name."),
+      schedule: z.string().datetime().nullable().optional()
+        .describe("Optional date for node scheduling."),
+      reeffectTime: z.number().nullable().optional()
+        .describe("Reeffect time in hours."),
+      values: z.record(z.number()).nullable().optional()
+        .describe("Numeric key-value pairs for node values."),
+      goals: z.record(z.number()).nullable().optional()
+        .describe("Goal key-value pairs for the node."),
+      children: z.array(NodeSchema).nullable().optional()
+        .describe("List of child nodes."),
+    })
+  );
+
+  // 🌳 Create a full recursive node tree
+  server.tool(
+    "create-new-node-branch",
+    "Used to create new node branch off a current node to extend its structure",
+    {
+      nodeData: NodeSchema.describe("JSON structure of the node branch to create."),
+      parentId: z.string().nullable().optional().describe("Parent node ID for the root of this subtree."),
+      userId: z.string().describe("ID of the user creating the nodes."),
+    },
+    async ({ nodeData, parentId, userId }) => {
+      try {
+        const rootId = await createNodesRecursive(nodeData, parentId, userId);
+        return {
+          content: [{ type: "text", text: `✅ Recursive nodes created. Root ID: ${rootId}` }],
+          structuredContent: { rootId },
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to create recursive nodes: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+
+
+  // 🔁 Update a node’s parent relationship
+  server.tool(
+    "update-node-branch-parent-relationship",
+    "Moves a node to a new parent within the tree hierarchy.",
+    {
+      nodeChildId: z.string().describe("The ID of the child node to move."),
+      nodeNewParentId: z.string().describe("The ID of the new parent node."),
+      userId: z.string().describe("The user performing the operation (optional)."),
+    },
+    async ({ nodeChildId, nodeNewParentId, userId }) => {
+      try {
+        const { nodeChild, nodeNewParent } = await updateParentRelationship(
+          nodeChildId,
+          nodeNewParentId,
+          userId
+        );
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ Node '${nodeChild.name}' successfully moved under '${nodeNewParent.name}'.`,
+            },
+          ],
+          structuredContent: { nodeChild, nodeNewParent },
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to update parent: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  /*
+  // 🗑️ Delete a node branch
+  server.tool(
+    "delete-node-branch",
+    "Deletes a node and removes all references from its parent and children.",
+    {
+      nodeId: z.string().describe("The ID of the node to delete."),
+      userId: z.string().optional().describe("The user performing the deletion (optional)."),
+    },
+    async ({ nodeId, userId }) => {
+      try {
+        const deleted = await deleteNodeBranch(nodeId, userId);
+        return {
+          content: [{ type: "text", text: `🗑️ Node '${deleted.name}' deleted successfully.` }],
+          structuredContent: deleted,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Failed to delete node: ${err.message}` }],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+*/
+
 
   server.prompt(
     "root-workflow",
-    "Main workflow for root perspective operations (Treefficiency MCP)",
+    "Main workflow for root perspective operations",
     {
-      user_request: z.string().describe("The user's natural language request"),
-      //username: z.string(),
-      // tokenId: z.string(),
       rootId: z.string(),
     },
-    ({ user_request, /*username, tokenId, */rootId }) => ({
+    ({ rootId }) => ({
       resources: [
         `tree://${rootId}`,              // main root tree
       ],
       messages: [
         {
-          role: "user",
+          role: "assistant",
           content: {
             type: "text",
-            text: `You are the **Tree-Builder**, a workflow orchestrator that manages a user's hierarchical knowledge and project structure called a "Tree".
-
-You work by reading and manipulating **resources** within the tree namespace.
-
-
-
----
-
-### 🧠 Your Role
-You will receive user input like:
-> "Show me my progress on the climbing branch"  
-> "What’s next on my focus plan?"
-
-
-
-### 🌲 Input Context
-
+            text: `
 - **Root ID:** ${rootId}
 
 Now, handle this request:
 `,
           },
         },
-        {
-          role: "user",
-          content: {
-            type: "text",
-            text: `${user_request}`,
-          },
-        },
+
       ],
     })
   );
 
-  server.prompt(
-    "node-workflow",
-    "Workflow for managing a specific node",
-    {
-      nodeId: z.string(),
-      user_request: z.string(),
-      rootId: z.string(),
-    },
-    ({ nodeId, user_request, rootId }) => ({
-      messages: [
-        {
-          role: "system",
-          content: {
-            type: "text",
-            text: `You are editing a single node in the tree (nodeId: ${nodeId}).
 
-### Available Node Resources:
-- Direct lineage → \`tree://\${rootId}/node/${nodeId}/directLineage\`
-- Siblings → \`tree://\${rootId}/node/${nodeId}/siblings\`
-- Notes → \`tree://\${rootId}/node/${nodeId}/notes\`
-- Contributions → \`tree://\${rootId}/node/${nodeId}/contributions\`
-
-### Available Tools:
-- \`editValue(nodeId, key, value)\` — update numerical or text values
-- \`addChat(nodeId, text)\` — add user reflections or comments
-- \`editSchedule(nodeId, schedule)\` — adjust timing
-- \`addPrestige(nodeId)\` — prestige this node for mastery
-- \`editStatus(nodeId, status)\` — complete or reactivate nodes
-- \`createBranch(nodeId, name)\` — generate new branches under this node
-
----
-
-### Decision Logic
-1. fetch data using \`tree://\${rootId}/node/${nodeId}\`
-2. If user asks to update, add, or complete → call relevant edit or add tool.
-3. If the request relates to ** creating new detail or sub- branch or futher planning **, use \`create-branch-chain\` with node context.
-4. If the request feels unrelated to this node, escalate back to **root-workflow**.
-
----
-
-Interpret the user’s intent and perform the correct operation or reasoning.`,
-          },
-        },
-        {
-          role: "user",
-          content: {
-            type: "text",
-            text: `${user_request}`,
-          },
-        },
-      ],
-    })
-  );
 
 
 

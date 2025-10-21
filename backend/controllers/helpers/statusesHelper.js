@@ -76,9 +76,9 @@ async function updateNodeStatusRecursively(node, status, version, userId) {
 }
 
 async function addPrestigeHelper({ nodeId, userId }) {
+  console.log(nodeId)
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
-
   const targetNodeIndex = node.prestige;
   await addPrestigeToNode(node);
 

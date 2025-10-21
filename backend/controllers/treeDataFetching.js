@@ -125,7 +125,6 @@ async function getTreeForAi(rootId) {
       const simplified = {
         id: node._id.toString(),
         name: node.name?.replace(/\s+/g, " ").trim(),
-        versions: node.versions[node.prestige] || [],
       };
 
       if (node.children?.length > 0) {
