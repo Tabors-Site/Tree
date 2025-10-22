@@ -1,5 +1,7 @@
 import Node from "../../db/models/node.js";
 import { findNodeById, logContribution } from "../../db/utils.js";
+import User from "../../db/models/user.js"; 
+
 
 export async function createNewNode(
     name,

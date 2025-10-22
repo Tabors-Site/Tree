@@ -153,7 +153,7 @@ const RootNodesForm = ({
     const afterLeaveCleanup = () => {
       // Remove the node from state
       setRootNodes((prev) =>
-        prev.filter((rootNode) => rootNode !== rootSelected)
+        prev.filter((rootNode) => rootNode._id !== rootSelected)
       );
       setRootSelected(null);
       setNodeDetails(null);
@@ -173,13 +173,9 @@ const RootNodesForm = ({
           isToBeOwner: false,
           isUninviting: true,
           rootId: rootSelected,
-        }).then(() => {
-          setRootNodes((prev) =>
-            prev.filter((rootNode) => rootNode !== rootSelected)
-          );
-          setRootSelected(null);
-          setNodeDetails(null);
-        });
+        })
+          .then(afterLeaveCleanup)
+          .catch((err) => console.error("Leave (owner) failed:", err));
       }
     } else {
       handleInviteAction("leave", {
@@ -187,13 +183,9 @@ const RootNodesForm = ({
         isToBeOwner: false,
         isUninviting: true,
         rootId: rootSelected,
-      }).then(() => {
-        setRootNodes((prev) =>
-          prev.filter((rootNode) => rootNode !== rootSelected)
-        );
-        setRootSelected(null);
-        setNodeDetails(null);
-      });
+      })
+        .then(afterLeaveCleanup)
+        .catch((err) => console.error("Leave (contributor) failed:", err));
     }
   };
 
