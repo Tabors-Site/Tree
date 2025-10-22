@@ -20,10 +20,17 @@ const AccountTab = ({
   const [showRoots, setShowRoots] = useState(false); // State to toggle RootNodesForm visibility
   const [showInvites, setShowInvites] = useState(false); // State to toggle Invites visibility
 
-  useEffect(() => {
-    setIsHovered(false);
-    setShowRoots((prev) => !prev);
-  }, [rootSelected]);
+useEffect(() => {
+  setIsHovered(false);
+
+  if (!rootSelected) {
+    // If no root selected → show the form
+    setShowRoots(true);
+  } else {
+    // If a root is selected (even from cookies) → hide the form
+    setShowRoots(false);
+  }
+}, [rootSelected]);
 
   const handleLogoutClick = () => {
     if (onLogout) {

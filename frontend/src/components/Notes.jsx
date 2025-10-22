@@ -65,10 +65,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
     fetchNotes();
   }, [nodeSelected, nodeVersion, token]);
 
-  // Scroll to the bottom of the notes box when notes update
-  useEffect(() => {
-    notesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [notes]);
+
 
   // Function to render note content (either text or file)
   const renderNoteContent = (note) => {
