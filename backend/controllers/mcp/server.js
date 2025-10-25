@@ -20,6 +20,10 @@ import {
   updateParentRelationship,
 } from "../helpers/treeManagementHelper.js";
 
+import {
+  executeScriptHelper,
+} from "../helpers/scriptsHelper.js"
+
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -27,6 +31,7 @@ import { getTreeForAi, getNodeForAi } from '../treeDataFetching.js'; // import f
 
 // Create and configure the MCP server
 function getMcpServer() {
+
 
   const server = new McpServer({
     name: "tree-helper", version: "1.0.0", capabilities: {
@@ -72,6 +77,47 @@ function getMcpServer() {
     }
   );
 
+  server.resource(
+    "node-notes",
+    new ResourceTemplate("node://{nodeId}/{prestige}", { list: undefined }),
+    {
+      description:
+        "Retrieves notes associated with a specific node and prestige version.",
+      title: "Node Notes",
+      mimeType: "application/json",
+    },
+    async (uri, { nodeId, prestige }) => {
+      try {
+        const result = await getNotesHelper({ nodeId, version: prestige });
+
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              text: JSON.stringify(result, null, 2),
+              mimeType: "application/json",
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              text: JSON.stringify(
+                { error: `❌ Failed to fetch notes: ${err.message}`, nodeId, prestige },
+                null,
+                2
+              ),
+              mimeType: "application/json",
+            },
+          ],
+        };
+      }
+    }
+  );
+
+
   /*
     server.tool(
       "node-edit-pipeline",
@@ -90,14 +136,14 @@ function getMcpServer() {
       async params => {
         let { prompt, nodeId } = params
         console.log("🛠 node-edit called with:", params)
-  
+   
         if (!prompt || typeof prompt !== "string") {
           return {
             content: [{ type: "text", text: "❌ Error: Missing or invalid prompt." }],
             isError: true,
           }
         }
-  
+   
         // Infer action from the prompt
         let action = "add-note"
         const lower = prompt.toLowerCase()
@@ -128,7 +174,7 @@ function getMcpServer() {
               },
               CreateMessageResultSchema
             )
-  
+   
             if (res?.content?.type === "text") {
               const val = res.content.text.trim().toLowerCase()
               if (["add-note", "edit-value", "edit-goal"].includes(val)) action = val
@@ -137,10 +183,10 @@ function getMcpServer() {
             console.error("⚠️ decideAction failed:", err)
           }
         }
-  
+   
         const message = `use ${action} on node ${nodeId} based on: "${prompt}"`
         console.log("✅ node-edit result:", { nodeId, action, message })
-  
+   
         return {
           content: [
             {
@@ -151,12 +197,36 @@ function getMcpServer() {
               description: `Node involved in ${action}`,
             },
             { type: "text", text: message },
-  
+   
           ],
           structuredContent: { nodeId, action, message },
         }
       }
     ) */
+
+
+  server.tool(
+    "execute-node-script",
+    "Executes a stored script attached to a specific node using the secure sandbox system.",
+    {
+      nodeId: z.string().describe("The ID of the node containing the script."),
+      scriptName: z.string().describe("The name of the script to execute. Found inside of get-node"),
+      userId: z.string().describe("The ID of the user executing the script."),
+    },
+    async ({ nodeId, scriptName, userId }) => {
+      const result = await executeScriptHelper({
+        nodeId,
+        scriptName,
+        userId,
+      });
+
+
+      return {
+        content: [{ type: "text", text: result.message }],
+        structuredContent: result,
+      };
+    }
+  );
 
 
 
@@ -303,10 +373,7 @@ function getMcpServer() {
     "Retrieves notes associated with a specific node (and prestige version if provided).",
     {
       nodeId: z.string().describe("The ID of the node to fetch notes for."),
-      prestige: z
-        .union([z.string(), z.literal("all")])
-        .optional()
-        .describe("Specific version to filter by, or 'all' for all versions."),
+      prestige: z.string().describe("Specific number prestige version to filter by"),
     },
     async ({ nodeId, prestige }) => {
       try {
@@ -611,7 +678,7 @@ function getMcpServer() {
       }
     }
   );
-*/
+  */
 
 
   server.prompt(

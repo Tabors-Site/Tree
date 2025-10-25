@@ -153,10 +153,14 @@ Maintain the correct hierarchy — never add or modify data arbitrarily.
 Once the correct node is identified, call the appropriate structured tool to perform the operation.
 
 [Awareness]
-- You can fetch a branchs names/id's with get_tree_branch
-- You can fetch node data with get_tree_node
+- You can fetch a branchs names/id's (hierarchical structure) with get-tree-branch
+- You can fetch a nodes data (details) with get-node
 - If you don’t know a node's version's values, goals, schedule, or notes, fetch the node details
 - When calling create-new-node-branch, always include a 'name' field in nodeData.
+- If any tool or resource fails (e.g., system message includes ⚠️), tell the user what went wrong and suggest what to do next.”
+- Tree (sometimes branch if not rootId) refers to a branch from a nodeId
+- Node refers to a single node object on the Tree
+- Nodes placement in the tree should be used for systematic building, while the data inside the node is the details
 
 
 [Data Presentation Policy]
@@ -172,6 +176,8 @@ Once the correct node is identified, call the appropriate structured tool to per
 - Use concise, natural, human-like sentences.
 - Avoid code or JSON formatting unless explicitly asked.
 - Focus on clarity and comprehension for non-technical users.
+- Always double check with the user before executing a script or creating new branches
+
 
 [User Info]
 username = ${username}
@@ -245,7 +251,7 @@ userId = ${userId}
           {
             type: "function",
             function: {
-              name: "get_tree_node",
+              name: "get-node",
               description: "Fetch a node’s data to extract version or structure.",
               parameters: {
                 type: "object",
@@ -257,12 +263,24 @@ userId = ${userId}
           {
             type: "function",
             function: {
-              name: "get_tree_branch",
+              name: "get-tree-branch",
               description: "Fetch a tree branch to see hierarchy. Provides names, _ids, and children.",
               parameters: {
                 type: "object",
                 properties: { nodeId: { type: "string" } },
                 required: ["nodeId"],
+              },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "get-node-notes",
+              description: "Fetch a tree branch to see hierarchy. Provides names, _ids, and children.",
+              parameters: {
+                type: "object",
+                properties: { nodeId: { type: "string" }, prestige: { type: "number" }, },
+                required: ["nodeId", "prestige"],
               },
             },
           },
@@ -360,6 +378,25 @@ userId = ${userId}
           {
             type: "function",
             function: {
+              name: "execute-node-script",
+              description: "Executes a stored script attached to a specific node using the secure sandbox system.",
+              parameters: {
+                type: "object",
+                properties: {
+                  nodeId: { type: "string" },
+                  scriptName: {
+                    type: "string", description: "specific name. found inside get-node scripts[]",
+                  },
+                  userId: { type: "string" },
+
+                },
+                required: ["nodeId", "scriptName", "userId"],
+              },
+            },
+          },
+          {
+            type: "function",
+            function: {
               name: "edit-node-version-schedule",
               description: "Update a node’s schedule and reeffect time for a specific version.",
               parameters: {
@@ -405,24 +442,7 @@ userId = ${userId}
               },
             },
           },
-          {
-            type: "function",
-            function: {
-              name: "get-node-notes",
-              description: "Retrieves notes associated with a specific node (and prestige version if provided).",
-              parameters: {
-                type: "object",
-                properties: {
-                  nodeId: { type: "string", description: "The ID of the node to fetch notes for." },
-                  prestige: {
-                    type: ["string"],
-                    description: "Specific version to filter by, or 'all' for all versions.",
-                  },
-                },
-                required: ["nodeId", "version"],
-              },
-            },
-          },
+
           {
             type: "function",
             function: {
@@ -568,15 +588,8 @@ userId = ${userId}
         console.log(`\n🧰 [TOOL ${fn}] args:`, args);
 
         try {
-          if (fn === "get_tree_node") {
-            const uri = `node://${args.nodeId}`;
-            const nodeResource = await mcp.readResource({ uri });
-            const nodeText = nodeResource.contents[0].text;
-            console.log(`📗 Loaded node resource ${uri}`);
-            conversation.push({ role: "system", content: `Resource [${uri}]:\n${nodeText}` });
-            keepLooping = true;
-          }
-          if (fn === "get_tree_branch") {
+
+          if (fn === "get-tree-branch") {
             const uri = `tree://${args.nodeId}`;
             const treeResource = await mcp.readResource({ uri });
             const treeText = treeResource.contents[0].text;
@@ -584,34 +597,21 @@ userId = ${userId}
             conversation.push({ role: "system", content: `Resource [${uri}]:\n${treeText}` });
             keepLooping = true;
           }
-          /*
-          if (fn === "node-edit-pipeline") {
-            const result = await mcp.callTool({ name: "node-edit-pipeline", arguments: args });
-            console.log(`✅ node-edit-pipeline result:`, result);
-            conversation.push({
-              role: "system",
-              content:
-                result?.structuredContent?.message ||
-                `Tool [node-edit-pipeline] result:\n${JSON.stringify(result, null, 2)}`,
-            });
 
-            const msg = result?.structuredContent?.message || "";
-            const match = msg.match(/use ([\w-]+) on node ([\w-]+)/);
-            if (match) {
-              const [, nextTool, nodeId] = match;
-              conversation.push({
-                role: "user",
-                content: `Use ${nextTool} on node ${nodeId} based on: "${args.prompt}"`,
-              });
-              keepLooping = true;
-            }
-          }
-*/
-          if (fn === "get_tree_node") {
+          if (fn === "get-node") {
             const uri = `node://${args.nodeId}`;
             const nodeResource = await mcp.readResource({ uri });
             const nodeText = nodeResource.contents[0].text;
             console.log(`📗 Loaded node resource ${uri}`);
+            conversation.push({ role: "system", content: `Resource [${uri}]:\n${nodeText}` });
+            keepLooping = true;
+            continue;
+          }
+          if (fn === "get-node-notes") {
+            const uri = `node://${args.nodeId}/${args.prestige}`;
+            const nodeResource = await mcp.readResource({ uri });
+            const nodeText = nodeResource.contents[0].text;
+            console.log(`📗 Loaded node notes resource ${uri}`);
             conversation.push({ role: "system", content: `Resource [${uri}]:\n${nodeText}` });
             keepLooping = true;
             continue;
@@ -625,6 +625,7 @@ userId = ${userId}
             "add-node-prestige",
             "edit-node-version-schedule",
             "create-node-version-note",
+            "execute-node-script",
             "get-node-notes",
             "delete-node-note",
             "update-node-branch-parent-relationship",
@@ -651,25 +652,7 @@ userId = ${userId}
               keepLooping = true;
             }
           }
-          if (fn === "edit-value") {
-            const result = await mcp.callTool({ name: "edit-value", arguments: args });
-            console.log(`✅ edit-value result:`, result);
-            conversation.push({
-              role: "system",
-              content:
-                result?.structuredContent?.message ||
-                `Tool [edit-value] result:\n${JSON.stringify(result, null, 2)}`,
-            });
 
-            if (/version/i.test(result?.content?.[0]?.text || "")) {
-              console.log("🔁 Missing version detected — fetching node again...");
-              conversation.push({
-                role: "user",
-                content: `Fetch node ${args.nodeId} to get version before editing again.`,
-              });
-              keepLooping = true;
-            }
-          }
         } catch (err) {
           console.error(`❌ Tool ${fn} failed:`, err);
           conversation.push({
