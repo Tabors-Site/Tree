@@ -45,36 +45,53 @@ async function createNoteHelper({ contentType, content, userId, nodeId, version,
 }
 
 async function getNotesHelper({ nodeId, version }) {
-    let query = { nodeId };
+    try {
+        if (!nodeId) {
+            throw new Error("Missing required parameter: nodeId");
+        }
 
-    if (version && version !== "all") {
-        query.version = version;
+        if (typeof version !== "number" || isNaN(version)) {
+            throw new Error("Invalid or missing version: must be a number");
+        }
+
+        const query = { nodeId, version };
+
+        const notes = await Note.find(query)
+            .populate("userId", "username")
+            .populate("nodeId")
+            .lean();
+
+        if (!notes || notes.length === 0) {
+            return {
+                message: `No notes found for node ${nodeId} (version ${version})`,
+                notes: [],
+            };
+        }
+
+        const notesWithUsername = notes.map((note) => ({
+            _id: note._id,
+            contentType: note.contentType,
+            content: note.content,
+            username: note.userId ? note.userId.username : null,
+            nodeId: note.nodeId?._id,
+            version: note.version,
+            isReflection: note.isReflection,
+            createdAt: note.createdAt,
+        }));
+
+        return {
+            message: "Notes retrieved successfully",
+            notes: notesWithUsername,
+        };
+    } catch (err) {
+        console.error("Error in getNotesHelper:", err);
+
+        throw new Error(
+            err.message || "Database error occurred while retrieving notes."
+        );
     }
-
-    const notes = await Note.find(query)
-        .populate("userId", "username")
-        .populate("nodeId");
-
-    if (!notes || notes.length === 0) {
-        throw new Error("No notes found for this node");
-    }
-
-    const notesWithUsername = notes.map((note) => ({
-        _id: note._id,
-        contentType: note.contentType,
-        content: note.content,
-        username: note.userId ? note.userId.username : null,
-        nodeId: note.nodeId._id,
-        version: note.version,
-        isReflection: note.isReflection,
-        createdAt: note.createdAt,
-    }));
-
-    return {
-        message: "Notes retrieved successfully",
-        notes: notesWithUsername,
-    };
 }
+
 
 async function deleteNoteAndFileHelper({ noteId }) {
     const note = await Note.findById(noteId);
