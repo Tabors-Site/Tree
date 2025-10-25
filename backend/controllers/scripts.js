@@ -1,6 +1,6 @@
 import Node from '../db/models/node.js';
-import { VM } from 'vm2';
-import { makeSafeFunctions } from './scriptsFunctions/safeFunctions.js';
+import { executeScriptHelper } from "./helpers/scriptsHelper.js";
+
 
 const updateScript = async (req, res) => {
   try {
@@ -45,65 +45,19 @@ const updateScript = async (req, res) => {
   }
 };
 
+
 const executeScript = async (req, res) => {
   try {
     const { nodeId, scriptName } = req.body;
     const userId = req.userId;
-    // Validate input
-    if (!nodeId || !scriptName || !userId) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
 
-    // 1. Find node
-    const node = await Node.findById(nodeId);
-    if (!node) {
-      return res.status(404).json({ error: "Node not found" });
-    }
-
-    // 2. Find script by name
-    const scriptObj = node.scripts.find((s) => s.name === scriptName);
-    if (!scriptObj) {
-      return res.status(404).json({ error: "Script not found" });
-    }
-
-    // 3. Prepare sandbox
-    const sandboxNode = JSON.parse(JSON.stringify(node)); // Deep copy
-    const {
-      getApi,
-      setValueForNode,
-      setGoalForNode,
-      editStatusForNode,
-      addPrestigeForNode,
-      updateScheduleForNode,
-    } = makeSafeFunctions(userId);
-
-    const vm = new VM({
-      timeout: 3000, // Prevent infinite loops
-      sandbox: {
-        node: sandboxNode,
-        getApi,
-        setValueForNode,
-        setGoalForNode,
-        editStatusForNode,
-        addPrestigeForNode,
-        updateScheduleForNode,
-      },
-    });
-    const wrappedScript = `
-  (async () => {
-    ${scriptObj.script}
-  })()
-`;
-
-    // 5. Execute script
-    await vm.run(wrappedScript);
-
-    // 6. Return success response
-    res.json({ message: "Script executed successfully", node });
+    const result = await executeScriptHelper({ nodeId, scriptName, userId });
+    res.json(result);
   } catch (err) {
     console.error("Error executing script:", err);
-    res.status(500).json({ error: `Server error: ${err.message}` });
+    res.status(500).json({ error: err.message });
   }
 };
+
 
 export { updateScript, executeScript };
