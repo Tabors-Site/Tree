@@ -1,6 +1,6 @@
 import Node from "../../db/models/node.js";
 import { findNodeById, logContribution } from "../../db/utils.js";
-import User from "../../db/models/user.js"; 
+import User from "../../db/models/user.js";
 
 
 export async function createNewNode(
@@ -93,16 +93,8 @@ export async function createNodesRecursive(nodeData, parentId, userId) {
     }
 
 
-    await newNode.save();
 
 
-    // 5️⃣ Log creation
-    await logContribution({
-        userId,
-        nodeId: newNode._id,
-        action: "create",
-        nodeVersion: "0",
-    });
 
     // 6️⃣ Return this node’s id so parent can link it later
     return newNode._id;

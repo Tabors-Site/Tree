@@ -122,13 +122,56 @@ export async function getMCPResponse(req, res) {
 You are the Tree Helper — an evolving AI that tends, grows, and edits the Tree.
 
 [Purpose]
-Interpret user intent, find the correct node, and call the right structured tool (e.g., node-edit-pipeline, edit-value).
+Your goal is to interpret the user’s intent, locate the correct node within the hierarchy, and call the appropriate structured tool.
+
+You are helping the user build and organize a hierarchical tree of data. Each node in the tree has the following structure:
+
+name: the main title of the node
+
+contributions: a record of all actions made on this node
+
+versions[]: an array of node versions, where each version contains:
+
+values/goals: numeric data. A goal must correspond to an existing value.
+
+notes: textual data
+
+schedule: time-related data
+
+status: one of active, trimmed, or completed. Usually only highest prestige version is active, while rest are completed.
+
+trimmed means the branch has been cut or pruned.
+
+When processing a user request:
+
+Interpret the intent behind the request.
+
+Search the existing tree to find the most relevant node or branch, and get further context as needed.
+
+Maintain the correct hierarchy — never add or modify data arbitrarily.
+
+Once the correct node is identified, call the appropriate structured tool to perform the operation.
 
 [Awareness]
+- You can fetch a branchs names/id's with get_tree_branch
 - You can fetch node data with get_tree_node
-- You can edit nodes
-- Most of the 
-- If you don’t know a version or values or goals, fetch the node before calling ea function
+- If you don’t know a node's version's values, goals, schedule, or notes, fetch the node details
+- When calling create-new-node-branch, always include a 'name' field in nodeData.
+
+
+[Data Presentation Policy]
+- Treat all "_id" fields as **backend identifiers only** — keep them internal and never expose them directly to the user.
+- When presenting data to the user, do not not raw JSON.
+- Convert JSON objects into **natural language explanations** suitable for an average person.
+    - Example: Instead of showing {"status": "active", "schedule": "2025-05-01"}, say “This branch is active and scheduled for May 2025.”
+- Use human-readable formatting for arrays and nested objects (e.g., bullet points or short sentences).
+- When describing nodes, emphasize meaning and hierarchy rather than JSON structure.
+- Only include identifiers like "_id" if explicitly requested by the system or developer, not by the user.
+
+[Output Style]
+- Use concise, natural, human-like sentences.
+- Avoid code or JSON formatting unless explicitly asked.
+- Focus on clarity and comprehension for non-technical users.
 
 [User Info]
 username = ${username}
@@ -204,6 +247,18 @@ userId = ${userId}
             function: {
               name: "get_tree_node",
               description: "Fetch a node’s data to extract version or structure.",
+              parameters: {
+                type: "object",
+                properties: { nodeId: { type: "string" } },
+                required: ["nodeId"],
+              },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "get_tree_branch",
+              description: "Fetch a tree branch to see hierarchy. Provides names, _ids, and children.",
               parameters: {
                 type: "object",
                 properties: { nodeId: { type: "string" } },
@@ -382,6 +437,7 @@ userId = ${userId}
               },
             },
           },
+          /*
           {
             type: "function",
             function: {
@@ -418,7 +474,7 @@ userId = ${userId}
                 required: ["name", "userId", "parentNodeId"],
               },
             },
-          },
+          }, */
           {
             type: "function",
             function: {
@@ -520,6 +576,14 @@ userId = ${userId}
             conversation.push({ role: "system", content: `Resource [${uri}]:\n${nodeText}` });
             keepLooping = true;
           }
+          if (fn === "get_tree_branch") {
+            const uri = `tree://${args.nodeId}`;
+            const treeResource = await mcp.readResource({ uri });
+            const treeText = treeResource.contents[0].text;
+            console.log(`📗 Loaded tree resource ${uri}`);
+            conversation.push({ role: "system", content: `Resource [${uri}]:\n${treeText}` });
+            keepLooping = true;
+          }
           /*
           if (fn === "node-edit-pipeline") {
             const result = await mcp.callTool({ name: "node-edit-pipeline", arguments: args });
@@ -576,6 +640,7 @@ userId = ${userId}
                 result?.structuredContent?.message ||
                 `Tool [${fn}] result:\n${JSON.stringify(result, null, 2)}`,
             });
+            keepLooping = true;  // ADD THIS LINE
 
             // 🌀 loop again if model needs another step
             if (/version/i.test(result?.content?.[0]?.text || "")) {

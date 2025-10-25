@@ -512,8 +512,8 @@ function getMcpServer() {
   const NodeSchema = z.lazy(() =>
     z.object({
       name: z.string().describe("Node name."),
-      schedule: z.string().datetime().nullable().optional()
-        .describe("Optional date for node scheduling."),
+      schedule: z.string().nullable().optional()
+        .describe("Optional scheduling date/time (in ISO 8601 format)."),
       reeffectTime: z.number().nullable().optional()
         .describe("Reeffect time in hours."),
       values: z.record(z.number()).nullable().optional()
