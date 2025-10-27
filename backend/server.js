@@ -7,7 +7,7 @@ import registerRoutes from "./routes/routesHandler.js";
 import { connectToMCP } from "./mcp/client.js";
 import { initWebSocketServer } from "./ws/websocket.js";
 
-import "./db/config.js";
+import "./db/config.js"; // Initialize DB connection
 
 import dotenv from "dotenv";
 
@@ -38,7 +38,7 @@ app.set("trust proxy", 1);
 registerRoutes(app);
 
 const server = http.createServer(app);
-initWebSocketServer(server);
+initWebSocketServer(server, [rootFrontEnd, treeFrontEnd, beFrontEnd]);
 
 const PORT = process.env.PORT || 80; //
 
