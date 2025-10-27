@@ -1,7 +1,7 @@
 import {
   editStatus as coreEditStatus,
   addPrestige as coreAddPrestige,
-} from '../core/statuses.js';
+} from "../core/statuses.js";
 
 async function editStatus(req, res) {
   try {
@@ -30,7 +30,4 @@ async function addPrestige(req, res) {
   }
 }
 
-export {
-  editStatus,
-  addPrestige,
-};
+export { editStatus, addPrestige };

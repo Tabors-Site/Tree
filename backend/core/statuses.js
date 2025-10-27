@@ -1,12 +1,6 @@
-import { logContribution, findNodeById, handleSchedule } from '../db/utils.js';
+import { logContribution, findNodeById, handleSchedule } from "../db/utils.js";
 
-async function editStatus({
-  nodeId,
-  status,
-  version,
-  isInherited,
-  userId,
-}) {
+async function editStatus({ nodeId, status, version, isInherited, userId }) {
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
 
@@ -31,8 +25,9 @@ async function editStatus({
   }
 
   return {
-    message: `Status updated to ${status} for node version ${version}${isInherited ? " and its children" : ""
-      }`,
+    message: `Status updated to ${status} for node version ${version}${
+      isInherited ? " and its children" : ""
+    }`,
   };
 }
 
@@ -76,7 +71,7 @@ async function updateNodeStatusRecursively(node, status, version, userId) {
 }
 
 async function addPrestige({ nodeId, userId }) {
-  console.log(nodeId)
+  console.log(nodeId);
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
   const targetNodeIndex = node.prestige;
@@ -127,7 +122,4 @@ async function addPrestigeToNode(node) {
   await node.save();
 }
 
-export {
-  editStatus,
-  addPrestige,
-};
+export { editStatus, addPrestige };

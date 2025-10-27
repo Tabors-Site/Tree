@@ -1,6 +1,5 @@
-import Node from '../db/models/node.js';
+import Node from "../db/models/node.js";
 import { executeScript as coreExecuteScript } from "../core/scripts.js";
-
 
 const updateScript = async (req, res) => {
   try {
@@ -39,7 +38,6 @@ const updateScript = async (req, res) => {
   }
 };
 
-
 const executeScript = async (req, res) => {
   try {
     const { nodeId, scriptName } = req.body;
@@ -52,6 +50,5 @@ const executeScript = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 
 export { updateScript, executeScript };

@@ -1,4 +1,4 @@
-import { updateSchedule as coreUpdateSchedule } from '../core/schedules.js';
+import { updateSchedule as coreUpdateSchedule } from "../core/schedules.js";
 
 const updateSchedule = async (req, res) => {
   try {

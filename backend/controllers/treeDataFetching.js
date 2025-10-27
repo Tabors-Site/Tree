@@ -1,7 +1,7 @@
-import Node from '../db/models/node.js';
-import User from '../db/models/user.js';
-import Contribution from '../db/models/contribution.js';
-import Note from '../db/models/notes.js';
+import Node from "../db/models/node.js";
+import User from "../db/models/user.js";
+import Contribution from "../db/models/contribution.js";
+import Note from "../db/models/notes.js";
 
 async function getRootDetails(req, res) {
   const { id } = req.body;
@@ -59,7 +59,6 @@ async function getTree(req, res) {
   }
 }
 
-
 async function getNodeForAi(nodeId) {
   if (!nodeId) throw new Error("Node ID is required");
 
@@ -106,7 +105,6 @@ async function getNodeForAi(nodeId) {
   }
 }
 
-
 async function getTreeForAi(rootId) {
   if (!rootId) {
     throw new Error("Root node ID is required");
@@ -125,7 +123,9 @@ async function getTreeForAi(rootId) {
       };
 
       if (node.children?.length > 0) {
-        const populatedChildren = await Node.populate(node.children, { path: "children" });
+        const populatedChildren = await Node.populate(node.children, {
+          path: "children",
+        });
         simplified.children = [];
 
         for (const child of populatedChildren) {
@@ -145,11 +145,6 @@ async function getTreeForAi(rootId) {
   }
 }
 
-
-
-
-
-
 async function getParents(req, res) {
   const { childId } = req.body;
 
@@ -167,8 +162,7 @@ async function getParents(req, res) {
 
       // only attach notes for the *last* version
       if (currentNode.versions && currentNode.versions.length > 0) {
-        const lastVersion =
-          currentNode.prestige;
+        const lastVersion = currentNode.prestige;
 
         const notes = await Note.find({
           nodeId: currentNode._id,
@@ -176,7 +170,7 @@ async function getParents(req, res) {
           contentType: "text",
         })
           .sort({ createdAt: -1 }) // newest first
-          .limit(7)                // only last 7
+          .limit(7) // only last 7
           .select("content -_id")
           .lean()
           .exec();
@@ -209,8 +203,6 @@ async function getParents(req, res) {
   }
 }
 
-
-
 async function getRootNodesForUser(userId) {
   try {
     const user = await User.findById(userId).populate("roots", "name _id");
@@ -237,8 +229,6 @@ async function getRootNodes(req, res) {
   }
 }
 
-
-
 async function getAllData(req, res) {
   const { rootId } = req.body;
 
@@ -248,10 +238,15 @@ async function getAllData(req, res) {
 
   try {
     const populateNodeRecursive = async (nodeId) => {
-      const node = await Node.findById(nodeId).populate("children").lean().exec();
+      const node = await Node.findById(nodeId)
+        .populate("children")
+        .lean()
+        .exec();
       if (!node) return null;
 
-      const contributions = await Contribution.find({ nodeId: node._id }).exec();
+      const contributions = await Contribution.find({
+        nodeId: node._id,
+      }).exec();
       node.contributions = contributions;
 
       // Loop through all versions and fetch notes for each
@@ -313,10 +308,10 @@ function removeNullFields(obj) {
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(removeNullFields).filter(item => item !== undefined);
+    return obj.map(removeNullFields).filter((item) => item !== undefined);
   }
 
-  if (typeof obj === 'object') {
+  if (typeof obj === "object") {
     const cleaned = {};
     for (const [key, value] of Object.entries(obj)) {
       const cleanedValue = removeNullFields(value);
@@ -329,10 +324,6 @@ function removeNullFields(obj) {
 
   return obj;
 }
-
-
-
-
 
 export {
   getRootNodes,

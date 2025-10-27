@@ -1,23 +1,21 @@
-import express from 'express';
-import cors from 'cors';
-import http from 'http';
-import cookieParser from 'cookie-parser';
+import express from "express";
+import cors from "cors";
+import http from "http";
+import cookieParser from "cookie-parser";
 import registerRoutes from "./routes/routesHandler.js";
 
-import { connectToMCP } from './mcp/client.js';
-import { initWebSocketServer } from './ws/websocket.js';
+import { connectToMCP } from "./mcp/client.js";
+import { initWebSocketServer } from "./ws/websocket.js";
 
+import "./db/config.js";
 
 import dotenv from "dotenv";
-
-import './db/config.js'; // Initialize DB connection
 
 dotenv.config();
 
 const rootFrontEnd = process.env.ROOT_FRONTEND_DOMAIN;
 const treeFrontEnd = process.env.TREE_FRONTEND_DOMAIN;
 const beFrontEnd = process.env.BE_FRONTEND_DOMAIN;
-
 
 const app = express();
 
@@ -36,7 +34,6 @@ app.use(express.static("public"));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.set("trust proxy", 1);
-
 
 registerRoutes(app);
 
@@ -57,4 +54,3 @@ server.listen(PORT, "0.0.0.0", async () => {
     console.error("Failed to connect to MCP server:", err.message);
   }
 });
-

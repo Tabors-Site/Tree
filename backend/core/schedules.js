@@ -1,5 +1,5 @@
-import Node from '../db/models/node.js';
-import { logContribution } from '../db/utils.js';
+import Node from "../db/models/node.js";
+import { logContribution } from "../db/utils.js";
 
 async function updateSchedule({
   nodeId,

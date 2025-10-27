@@ -5,18 +5,12 @@ import dotenv from "dotenv";
 
 import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-
-
-
-
 async function handleServerMessagePrompt(message) {
   // Ensure message is text
-  console.log(message, "gi")
+  console.log(message, "gi");
   if (message.content.type !== "text") return;
 
   console.log(message.content.text);
-
-
 
   // Generate text using OpenAI
   const completion = await openai.chat.completions.create({
@@ -30,8 +24,6 @@ async function handleServerMessagePrompt(message) {
   const text = completion.choices[0]?.message?.content || "(no output)";
   return text;
 }
-
-
 
 dotenv.config();
 
@@ -54,11 +46,11 @@ let resources = [];
 let prompts = [];
 let resourceTemplates = [];
 
-mcp.setRequestHandler(CreateMessageRequestSchema, async request => {
-  const texts = []
+mcp.setRequestHandler(CreateMessageRequestSchema, async (request) => {
+  const texts = [];
   for (const message of request.params.messages) {
-    const text = await handleServerMessagePrompt(message)
-    if (text != null) texts.push(text)
+    const text = await handleServerMessagePrompt(message);
+    if (text != null) texts.push(text);
   }
 
   return {
@@ -69,8 +61,8 @@ mcp.setRequestHandler(CreateMessageRequestSchema, async request => {
       type: "text",
       text: texts.join("\n"),
     },
-  }
-})
+  };
+});
 
 // Connect to the local Express MCP endpoint
 export async function connectToMCP(serverUrl) {
@@ -92,7 +84,10 @@ export async function connectToMCP(serverUrl) {
   resources = resourcesResult.resources || [];
   resourceTemplates = templatesResult.resourceTemplates || [];
 
-  console.log("Connected to MCP HTTP server with tools:", tools.map((t) => t.name));
+  console.log(
+    "Connected to MCP HTTP server with tools:",
+    tools.map((t) => t.name)
+  );
   console.log(
     "Available MCP resources:",
     resources.map((r) => r.uri)
@@ -113,7 +108,9 @@ const MAX_MESSAGES = 20; // when reached, restart conversation
 export async function getMCPResponse(req, res) {
   const { message, rootId, username, userId } = req.body;
   if (!message || !rootId)
-    return res.status(400).json({ success: false, error: "Missing message or rootId" });
+    return res
+      .status(400)
+      .json({ success: false, error: "Missing message or rootId" });
 
   try {
     let conversation = conversations.get(rootId) || [];
@@ -198,7 +195,10 @@ userId = ${userId}
     // First setup
     if (conversation.length === 0) {
       conversation.push({ role: "system", content: TREEBUILDER_PROMPT });
-      const promptResult = await mcp.getPrompt({ name: "root-workflow", arguments: { rootId } });
+      const promptResult = await mcp.getPrompt({
+        name: "root-workflow",
+        arguments: { rootId },
+      });
       let introMessages = promptResult.messages || [];
 
       if (promptResult.resources?.length) {
@@ -217,7 +217,10 @@ userId = ${userId}
 
       introMessages = introMessages.map((m) => ({
         role: m.role,
-        content: typeof m.content === "string" ? m.content : m.content?.text || JSON.stringify(m.content),
+        content:
+          typeof m.content === "string"
+            ? m.content
+            : m.content?.text || JSON.stringify(m.content),
       }));
 
       conversation.push(...introMessages);
@@ -232,7 +235,9 @@ userId = ${userId}
 
     while (keepLooping) {
       iteration++;
-      console.log(`\n🌀 [LOOP ${iteration}] Sending conversation (${conversation.length} messages)`);
+      console.log(
+        `\n🌀 [LOOP ${iteration}] Sending conversation (${conversation.length} messages)`
+      );
       console.log(
         conversation
           .map((m, i) => {
@@ -240,7 +245,9 @@ userId = ${userId}
             if (typeof m.content === "string") {
               summary = m.content.slice(0, 120);
             } else if (m.tool_calls) {
-              summary = `[Tool call → ${m.tool_calls.map(t => t.function.name).join(", ")}]`;
+              summary = `[Tool call → ${m.tool_calls
+                .map((t) => t.function.name)
+                .join(", ")}]`;
             } else {
               summary = "(no text)";
             }
@@ -257,7 +264,8 @@ userId = ${userId}
             type: "function",
             function: {
               name: "get-node",
-              description: "Fetch a node’s data to extract version or structure.",
+              description:
+                "Fetch a node’s data to extract version or structure.",
               parameters: {
                 type: "object",
                 properties: { nodeId: { type: "string" } },
@@ -269,7 +277,8 @@ userId = ${userId}
             type: "function",
             function: {
               name: "get-tree-branch",
-              description: "Fetch a tree branch to see hierarchy. Provides names, _ids, and children.",
+              description:
+                "Fetch a tree branch to see hierarchy. Provides names, _ids, and children.",
               parameters: {
                 type: "object",
                 properties: { nodeId: { type: "string" } },
@@ -281,10 +290,14 @@ userId = ${userId}
             type: "function",
             function: {
               name: "get-node-notes",
-              description: "Fetch a tree branch to see hierarchy. Provides names, _ids, and children.",
+              description:
+                "Fetch a tree branch to see hierarchy. Provides names, _ids, and children.",
               parameters: {
                 type: "object",
-                properties: { nodeId: { type: "string" }, prestige: { type: "number" }, },
+                properties: {
+                  nodeId: { type: "string" },
+                  prestige: { type: "number" },
+                },
                 required: ["nodeId", "prestige"],
               },
             },
@@ -308,7 +321,8 @@ userId = ${userId}
             type: "function",
             function: {
               name: "edit-node-version-value",
-              description: "Set or update a node’s property using setValueForNodeHelper.",
+              description:
+                "Set or update a node’s property using setValueForNodeHelper.",
               parameters: {
                 type: "object",
                 properties: {
@@ -326,7 +340,8 @@ userId = ${userId}
             type: "function",
             function: {
               name: "edit-node-version-goal",
-              description: "Set or update a node’s goal using setGoalForNodeHelper.",
+              description:
+                "Set or update a node’s goal using setGoalForNodeHelper.",
               parameters: {
                 type: "object",
                 properties: {
@@ -344,7 +359,8 @@ userId = ${userId}
             type: "function",
             function: {
               name: "edit-node-or-branch-status",
-              description: "Update a node or branch’s status (e.g., active, trimmed, completed).",
+              description:
+                "Update a node or branch’s status (e.g., active, trimmed, completed).",
               parameters: {
                 type: "object",
                 properties: {
@@ -357,7 +373,8 @@ userId = ${userId}
                   prestige: { type: "number" },
                   isInherited: {
                     type: "boolean",
-                    description: "If true, cascade the status change to child nodes.",
+                    description:
+                      "If true, cascade the status change to child nodes.",
                   },
                   userId: { type: "string" },
                 },
@@ -369,7 +386,8 @@ userId = ${userId}
             type: "function",
             function: {
               name: "add-node-prestige",
-              description: "Increment a node’s prestige level and create a new version using addPrestigeHelper.",
+              description:
+                "Increment a node’s prestige level and create a new version using addPrestigeHelper.",
               parameters: {
                 type: "object",
                 properties: {
@@ -384,16 +402,18 @@ userId = ${userId}
             type: "function",
             function: {
               name: "execute-node-script",
-              description: "Executes a stored script attached to a specific node using the secure sandbox system.",
+              description:
+                "Executes a stored script attached to a specific node using the secure sandbox system.",
               parameters: {
                 type: "object",
                 properties: {
                   nodeId: { type: "string" },
                   scriptName: {
-                    type: "string", description: "specific name. found inside get-node scripts[]",
+                    type: "string",
+                    description:
+                      "specific name. found inside get-node scripts[]",
                   },
                   userId: { type: "string" },
-
                 },
                 required: ["nodeId", "scriptName", "userId"],
               },
@@ -403,7 +423,8 @@ userId = ${userId}
             type: "function",
             function: {
               name: "edit-node-version-schedule",
-              description: "Update a node’s schedule and reeffect time for a specific version.",
+              description:
+                "Update a node’s schedule and reeffect time for a specific version.",
               parameters: {
                 type: "object",
                 properties: {
@@ -419,7 +440,13 @@ userId = ${userId}
                   },
                   userId: { type: "string" },
                 },
-                required: ["nodeId", "prestige", "newSchedule", "reeffectTime", "userId"],
+                required: [
+                  "nodeId",
+                  "prestige",
+                  "newSchedule",
+                  "reeffectTime",
+                  "userId",
+                ],
               },
             },
           },
@@ -431,19 +458,35 @@ userId = ${userId}
               parameters: {
                 type: "object",
                 properties: {
-                  content: { type: "string", description: "The text content of the note." },
-                  userId: { type: "string", description: "The ID of the user creating the note." },
-                  nodeId: { type: "string", description: "The ID of the node the note belongs to." },
+                  content: {
+                    type: "string",
+                    description: "The text content of the note.",
+                  },
+                  userId: {
+                    type: "string",
+                    description: "The ID of the user creating the note.",
+                  },
+                  nodeId: {
+                    type: "string",
+                    description: "The ID of the node the note belongs to.",
+                  },
                   prestige: {
                     type: "number",
                     description: "The prestige version of the node",
                   },
                   isReflection: {
                     type: ["boolean", "string"],
-                    description: "Whether the note is a reflection. Typically false unless note is applied on a completed version.",
+                    description:
+                      "Whether the note is a reflection. Typically false unless note is applied on a completed version.",
                   },
                 },
-                required: ["content", "userId", "nodeId", "prestige", "isReflection"],
+                required: [
+                  "content",
+                  "userId",
+                  "nodeId",
+                  "prestige",
+                  "isReflection",
+                ],
               },
             },
           },
@@ -456,7 +499,10 @@ userId = ${userId}
               parameters: {
                 type: "object",
                 properties: {
-                  noteId: { type: "string", description: "The ID of the note to delete." },
+                  noteId: {
+                    type: "string",
+                    description: "The ID of the note to delete.",
+                  },
                 },
                 required: ["noteId"],
               },
@@ -504,7 +550,8 @@ userId = ${userId}
             type: "function",
             function: {
               name: "create-new-node-branch",
-              description: "Creates a recursive branch of nodes starting from a parent node",
+              description:
+                "Creates a recursive branch of nodes starting from a parent node",
               parameters: {
                 type: "object",
                 properties: {
@@ -515,68 +562,76 @@ userId = ${userId}
                       name: { type: "string", description: "Node name." },
                       note: {
                         type: ["string", "null"],
-                        description: "Optional note included on node creation"
+                        description: "Optional note included on node creation",
                       },
                       schedule: {
                         type: ["string", "null"],
-                        description: "Optional date for node scheduling (ISO 8601 string)."
+                        description:
+                          "Optional date for node scheduling (ISO 8601 string).",
                       },
                       reeffectTime: {
                         type: ["number", "null"],
-                        description: "Reeffect time in hours."
+                        description: "Reeffect time in hours.",
                       },
                       values: {
                         type: ["object", "null"],
                         additionalProperties: { type: "number" },
-                        description: "Numeric key-value pairs for node values."
+                        description: "Numeric key-value pairs for node values.",
                       },
                       goals: {
                         type: ["object", "null"],
                         additionalProperties: { type: "number" },
-                        description: "Goal key-value pairs for the node."
+                        description: "Goal key-value pairs for the node.",
                       },
-                    
+
                       children: {
                         type: ["array", "null"],
                         description: "List of child nodes.",
-                        items: { $ref: "#/components/schemas/NodeSchema" } 
-                      }
+                        items: { $ref: "#/components/schemas/NodeSchema" },
+                      },
                     },
-                    required: ["name"]
+                    required: ["name"],
                   },
                   parentId: {
                     type: "string",
-                    description: "Parent node ID for the root of this subtree."
+                    description: "Parent node ID for the root of this subtree.",
                   },
                   userId: {
                     type: "string",
-                    description: "ID of the user creating the nodes."
-                  }
+                    description: "ID of the user creating the nodes.",
+                  },
                 },
-                required: ["nodeData", "parentId", "userId"]
-              }
-            }
+                required: ["nodeData", "parentId", "userId"],
+              },
+            },
           },
           {
             type: "function",
             function: {
               name: "update-node-branch-parent-relationship",
-              description: "Moves a node to a new parent within the tree hierarchy.",
+              description:
+                "Moves a node to a new parent within the tree hierarchy.",
               parameters: {
                 type: "object",
                 properties: {
-                  nodeChildId: { type: "string", description: "The ID of the child node to move." },
-                  nodeNewParentId: { type: "string", description: "The ID of the new parent node." },
-                  userId: { type: "string", description: "The user performing the operation." },
+                  nodeChildId: {
+                    type: "string",
+                    description: "The ID of the child node to move.",
+                  },
+                  nodeNewParentId: {
+                    type: "string",
+                    description: "The ID of the new parent node.",
+                  },
+                  userId: {
+                    type: "string",
+                    description: "The user performing the operation.",
+                  },
                 },
                 required: ["nodeChildId", "nodeNewParentId", "userId"],
               },
             },
           },
-
         ],
-
-
       });
 
       const choice = response.choices?.[0];
@@ -598,13 +653,15 @@ userId = ${userId}
         console.log(`\n🧰 [TOOL ${fn}] args:`, args);
 
         try {
-
           if (fn === "get-tree-branch") {
             const uri = `tree://${args.nodeId}`;
             const treeResource = await mcp.readResource({ uri });
             const treeText = treeResource.contents[0].text;
             console.log(`📗 Loaded tree resource ${uri}`);
-            conversation.push({ role: "system", content: `Resource [${uri}]:\n${treeText}` });
+            conversation.push({
+              role: "system",
+              content: `Resource [${uri}]:\n${treeText}`,
+            });
             keepLooping = true;
           }
 
@@ -613,7 +670,10 @@ userId = ${userId}
             const nodeResource = await mcp.readResource({ uri });
             const nodeText = nodeResource.contents[0].text;
             console.log(`📗 Loaded node resource ${uri}`);
-            conversation.push({ role: "system", content: `Resource [${uri}]:\n${nodeText}` });
+            conversation.push({
+              role: "system",
+              content: `Resource [${uri}]:\n${nodeText}`,
+            });
             keepLooping = true;
             continue;
           }
@@ -622,26 +682,31 @@ userId = ${userId}
             const nodeResource = await mcp.readResource({ uri });
             const nodeText = nodeResource.contents[0].text;
             console.log(`📗 Loaded node notes resource ${uri}`);
-            conversation.push({ role: "system", content: `Resource [${uri}]:\n${nodeText}` });
+            conversation.push({
+              role: "system",
+              content: `Resource [${uri}]:\n${nodeText}`,
+            });
             keepLooping = true;
             continue;
           }
 
           // === Core edit tools ===
-          if ([
-            "edit-node-version-value",
-            "edit-node-version-goal",
-            "edit-node-or-branch-status",
-            "add-node-prestige",
-            "edit-node-version-schedule",
-            "create-node-version-note",
-            "execute-node-script",
-            "get-node-notes",
-            "delete-node-note",
-            "update-node-branch-parent-relationship",
-            "create-new-node-branch",
-            "create-new-node",
-          ].includes(fn)) {
+          if (
+            [
+              "edit-node-version-value",
+              "edit-node-version-goal",
+              "edit-node-or-branch-status",
+              "add-node-prestige",
+              "edit-node-version-schedule",
+              "create-node-version-note",
+              "execute-node-script",
+              "get-node-notes",
+              "delete-node-note",
+              "update-node-branch-parent-relationship",
+              "create-new-node-branch",
+              "create-new-node",
+            ].includes(fn)
+          ) {
             const result = await mcp.callTool({ name: fn, arguments: args });
             console.log(`✅ ${fn} result:`, result);
 
@@ -651,7 +716,7 @@ userId = ${userId}
                 result?.structuredContent?.message ||
                 `Tool [${fn}] result:\n${JSON.stringify(result, null, 2)}`,
             });
-            keepLooping = true;  // ADD THIS LINE
+            keepLooping = true; // ADD THIS LINE
 
             // 🌀 loop again if model needs another step
             if (/version/i.test(result?.content?.[0]?.text || "")) {
@@ -662,7 +727,6 @@ userId = ${userId}
               keepLooping = true;
             }
           }
-
         } catch (err) {
           console.error(`❌ Tool ${fn} failed:`, err);
           conversation.push({
@@ -679,7 +743,8 @@ userId = ${userId}
         messages: conversation,
       });
 
-      const finalMessage = finalResponse.choices?.[0]?.message?.content || "Done.";
+      const finalMessage =
+        finalResponse.choices?.[0]?.message?.content || "Done.";
       conversation.push({ role: "assistant", content: finalMessage });
       conversations.set(rootId, conversation);
 
@@ -687,7 +752,9 @@ userId = ${userId}
       return res.json({ success: true, answer: finalMessage, rootId });
     }
 
-    const finalAnswer = response?.choices?.[0]?.message?.content || "(Waiting for user-facing reply)";
+    const finalAnswer =
+      response?.choices?.[0]?.message?.content ||
+      "(Waiting for user-facing reply)";
     conversation.push({ role: "assistant", content: finalAnswer });
     conversations.set(rootId, conversation);
 
@@ -700,4 +767,3 @@ userId = ${userId}
     res.status(500).json({ success: false, error: err.message });
   }
 }
-

@@ -1,4 +1,3 @@
-
 import OpenAI from "openai/index.js";
 import { z } from "zod";
 
@@ -30,26 +29,29 @@ export const getAiResponse = async (req, res) => {
   if (!treeBranchString || !planDescription || !depth || !presentMoment) {
     return res.status(400).json({
       success: false,
-      error: "Missing required fields: treeBranchString, planDescription, depth, presentMoment",
+      error:
+        "Missing required fields: treeBranchString, planDescription, depth, presentMoment",
     });
   }
 
   const messages = [
     {
-      role: "system", content: `
+      role: "system",
+      content: `
     You must understand the users request, and then generate
     a hierarchical nested node tree using the NodeSchema
     json structure to fulfill it:
 
     The json tree branch you generate will be placed onto an existing tree.
     Here is the parents data (to the root) from the current node to orient
-    your generated json tree and gather context to help complete the users request.`
+    your generated json tree and gather context to help complete the users request.`,
     },
     {
-      role: "system", content: `
+      role: "system",
+      content: `
       Previous nodes for context. You are building off of the deepest child that has
       no children in its array.
-      Parent branches: ${treeBranchString}`
+      Parent branches: ${treeBranchString}`,
     },
     {
       role: "user",
@@ -58,10 +60,11 @@ export const getAiResponse = async (req, res) => {
     ${planDescription}.
     
      
-    `
+    `,
     },
     {
-      role: "system", content: `
+      role: "system",
+      content: `
     Now use this NodeSchema JSON structure to generate the new tree branch:
 
     Quick rules for nodes:
@@ -89,7 +92,7 @@ export const getAiResponse = async (req, res) => {
       children: z.array(z.lazy(() => NodeSchema)),
     });
 
-  ONLY output a single JSON block wrapped in triple backticks with 'json'.`
+  ONLY output a single JSON block wrapped in triple backticks with 'json'.`,
     },
   ];
 
@@ -109,7 +112,10 @@ export const getAiResponse = async (req, res) => {
       const parsed = NodeSchema.parse(JSON.parse(jsonString));
       res.json({ success: true, data: parsed });
     } catch (parseError) {
-      console.error("JSON Parsing or Schema Validation Error:", parseError.message);
+      console.error(
+        "JSON Parsing or Schema Validation Error:",
+        parseError.message
+      );
       res.status(500).json({
         success: false,
         error: "Failed to parse or validate JSON",

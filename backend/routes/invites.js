@@ -1,6 +1,10 @@
-import express from 'express';
-import authenticate from '../middleware/authenticate.js';
-import { invite, inviteAccept, getPendingInvites } from '../controllers/invites.js';
+import express from "express";
+import authenticate from "../middleware/authenticate.js";
+import {
+  invite,
+  inviteAccept,
+  getPendingInvites,
+} from "../controllers/invites.js";
 
 const router = express.Router();
 

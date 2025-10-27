@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
+import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 
 const NodeSchema = new mongoose.Schema({
   _id: {
@@ -52,7 +52,6 @@ NodeSchema.methods.addContributor = function (userId, removerId) {
 };
 
 NodeSchema.methods.removeContributor = function (userId, removerId) {
-
   if (
     this.rootOwner.toString() !== removerId &&
     !this.contributors.includes(removerId)
@@ -65,7 +64,6 @@ NodeSchema.methods.removeContributor = function (userId, removerId) {
     (contributor) => contributor !== userId
   );
 };
-
 
 NodeSchema.methods.transferOwnership = function (newOwnerId, removerId) {
   if (this.rootOwner.toString() !== removerId) {
@@ -158,7 +156,6 @@ NodeSchema.methods.updateGlobalValues = async function () {
     parentNode.globalValues = newParentValues;
     await parentNode.save();
 
-
     // Prepare the changes for the next parent
     currentNode = parentNode;
   }
@@ -190,7 +187,6 @@ NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
       }
     }
 
-
     await this.deleteOne();
 
     if (this.parent) {
@@ -218,7 +214,6 @@ NodeSchema.pre("findOneAndDelete", async function (next) {
   const node = await Node.findById(nodeId);
 
   if (node) {
-
     await node.deleteWithChildrenBottomUp();
   }
 

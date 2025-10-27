@@ -1,18 +1,10 @@
 import { z } from "zod";
 import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
-import {
-  setValueForNode,
-  setGoalForNode,
-} from "../core/values.js"
+import { setValueForNode, setGoalForNode } from "../core/values.js";
 
-import {
-  updateSchedule
-} from "../core/schedules.js"
+import { updateSchedule } from "../core/schedules.js";
 
-import {
-  editStatus,
-  addPrestige,
-} from "../core/statuses.js"
+import { editStatus, addPrestige } from "../core/statuses.js";
 import { createNote, getNotes, deleteNoteAndFile } from "../core/notes.js";
 import {
   createNewNode,
@@ -21,27 +13,27 @@ import {
   updateParentRelationship,
 } from "../core/treeManagement.js";
 
+import { executeScript } from "../core/scripts.js";
+
 import {
-  executeScript,
-} from "../core/scripts.js"
+  McpServer,
+  ResourceTemplate,
+} from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
-
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { getTreeForAi, getNodeForAi } from '../controllers/treeDataFetching.js'; // import from your real backend
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { getTreeForAi, getNodeForAi } from "../controllers/treeDataFetching.js"; // import from your real backend
 
 // Create and configure the MCP server
 function getMcpServer() {
-
-
   const server = new McpServer({
-    name: "tree-helper", version: "1.0.0", capabilities: {
+    name: "tree-helper",
+    version: "1.0.0",
+    capabilities: {
       resources: {},
       tools: {},
       prompts: {},
-    }
+    },
   });
-
 
   server.resource(
     "tree",
@@ -106,7 +98,11 @@ function getMcpServer() {
             {
               uri: uri.href,
               text: JSON.stringify(
-                { error: `❌ Failed to fetch notes: ${err.message}`, nodeId, prestige },
+                {
+                  error: `❌ Failed to fetch notes: ${err.message}`,
+                  nodeId,
+                  prestige,
+                },
                 null,
                 2
               ),
@@ -117,7 +113,6 @@ function getMcpServer() {
       }
     }
   );
-
 
   /*
     server.tool(
@@ -205,13 +200,16 @@ function getMcpServer() {
       }
     ) */
 
-
   server.tool(
     "execute-node-script",
     "Executes a stored script attached to a specific node using the secure sandbox system.",
     {
       nodeId: z.string().describe("The ID of the node containing the script."),
-      scriptName: z.string().describe("The name of the script to execute. Found inside of get-node"),
+      scriptName: z
+        .string()
+        .describe(
+          "The name of the script to execute. Found inside of get-node"
+        ),
       userId: z.string().describe("The ID of the user executing the script."),
     },
     async ({ nodeId, scriptName, userId }) => {
@@ -221,7 +219,6 @@ function getMcpServer() {
         userId,
       });
 
-
       return {
         content: [{ type: "text", text: result.message }],
         structuredContent: result,
@@ -229,17 +226,23 @@ function getMcpServer() {
     }
   );
 
-
-
   server.tool(
     "edit-node-version-value",
     "Calls setValueForNode() to update a node value.",
     {
       nodeId: z.string().describe("The unique ID of the node to edit."),
-      key: z.string().describe("The key of the value you want to modify on the node."),
-      value: z.number().describe("The numeric value to assign to the given key."),
+      key: z
+        .string()
+        .describe("The key of the value you want to modify on the node."),
+      value: z
+        .number()
+        .describe("The numeric value to assign to the given key."),
       prestige: z.number().describe("Prestige value in largest node version."),
-      userId: z.string().describe("The ID of the user performing the edit. Used for contribution logging."),
+      userId: z
+        .string()
+        .describe(
+          "The ID of the user performing the edit. Used for contribution logging."
+        ),
     },
     async ({ nodeId, key, value, prestige, userId }) => {
       const result = await setValueForNode({
@@ -262,10 +265,18 @@ function getMcpServer() {
     "Calls setGoalForNode() to update a node goal. Goal must correspond to existing value.",
     {
       nodeId: z.string().describe("The unique ID of the node to edit."),
-      key: z.string().describe("The key of the goal you want to modify on the node."),
-      goal: z.number().describe("The numeric goal value to assign to the given key."),
-      prestige: z.number().describe("Prestige value representing the node version."),
-      userId: z.string().describe("The ID of the user performing the goal edit (for logging)."),
+      key: z
+        .string()
+        .describe("The key of the goal you want to modify on the node."),
+      goal: z
+        .number()
+        .describe("The numeric goal value to assign to the given key."),
+      prestige: z
+        .number()
+        .describe("Prestige value representing the node version."),
+      userId: z
+        .string()
+        .describe("The ID of the user performing the goal edit (for logging)."),
     },
     async ({ nodeId, key, goal, prestige, userId }) => {
       try {
@@ -283,7 +294,9 @@ function getMcpServer() {
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to update goal: ${err.message}` }],
+          content: [
+            { type: "text", text: `❌ Failed to update goal: ${err.message}` },
+          ],
           structuredContent: { error: err.message },
         };
       }
@@ -294,17 +307,25 @@ function getMcpServer() {
     "edit-node-or-branch-status",
     "Calls editStatus() to update a node's status (optionally recursively).",
     {
-      nodeId: z.string().describe("The unique ID of the node whose status will be edited."),
-      status: z.enum(["active", "trimmed", "completed"]).describe(
-        "The new status to set for the node."
-      ),
-      prestige: z.number().describe("Prestige version number of the node to modify."),
+      nodeId: z
+        .string()
+        .describe("The unique ID of the node whose status will be edited."),
+      status: z
+        .enum(["active", "trimmed", "completed"])
+        .describe("The new status to set for the node."),
+      prestige: z
+        .number()
+        .describe("Prestige version number of the node to modify."),
       isInherited: z
         .boolean()
         .describe(
           "If true, propagate the status to child nodes recursively. Typically true unless otherwise specified."
         ),
-      userId: z.string().describe("ID of the user making the status edit (for contribution logging)."),
+      userId: z
+        .string()
+        .describe(
+          "ID of the user making the status edit (for contribution logging)."
+        ),
     },
     async ({ nodeId, status, prestige, isInherited, userId }) => {
       try {
@@ -322,13 +343,17 @@ function getMcpServer() {
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to update status: ${err.message}` }],
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to update status: ${err.message}`,
+            },
+          ],
           structuredContent: { error: err.message },
         };
       }
     }
   );
-
 
   // 🧠 Tool: Create Note (text-only)
   server.tool(
@@ -338,11 +363,16 @@ function getMcpServer() {
       content: z.string().describe("The text content of the note."),
       userId: z.string().describe("The ID of the user creating the note."),
       nodeId: z.string().describe("The ID of the node the note belongs to."),
-      prestige: z.number().optional().describe("The prestige version of the node"),
+      prestige: z
+        .number()
+        .optional()
+        .describe("The prestige version of the node"),
       isReflection: z
         .union([z.boolean(), z.string()])
         .optional()
-        .describe("Whether the note is a reflection. Typically false unless note is applied on a completed version."),
+        .describe(
+          "Whether the note is a reflection. Typically false unless note is applied on a completed version."
+        ),
     },
     async ({ content, userId, nodeId, prestige, isReflection }) => {
       try {
@@ -361,7 +391,9 @@ function getMcpServer() {
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to create note: ${err.message}` }],
+          content: [
+            { type: "text", text: `❌ Failed to create note: ${err.message}` },
+          ],
           structuredContent: { error: err.message },
         };
       }
@@ -374,7 +406,9 @@ function getMcpServer() {
     "Retrieves notes associated with a specific node (and prestige version if provided).",
     {
       nodeId: z.string().describe("The ID of the node to fetch notes for."),
-      prestige: z.string().describe("Specific number prestige version to filter by"),
+      prestige: z
+        .string()
+        .describe("Specific number prestige version to filter by"),
     },
     async ({ nodeId, prestige }) => {
       try {
@@ -386,7 +420,9 @@ function getMcpServer() {
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to fetch notes: ${err.message}` }],
+          content: [
+            { type: "text", text: `❌ Failed to fetch notes: ${err.message}` },
+          ],
           structuredContent: { error: err.message },
         };
       }
@@ -410,7 +446,9 @@ function getMcpServer() {
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to delete note: ${err.message}` }],
+          content: [
+            { type: "text", text: `❌ Failed to delete note: ${err.message}` },
+          ],
           structuredContent: { error: err.message },
         };
       }
@@ -421,8 +459,14 @@ function getMcpServer() {
     "add-node-prestige",
     "Calls addPrestige() to increment a node's prestige level and create a new version.",
     {
-      nodeId: z.string().describe("The unique ID of the node to add prestige to."),
-      userId: z.string().describe("The ID of the user performing the prestige action (for logging)."),
+      nodeId: z
+        .string()
+        .describe("The unique ID of the node to add prestige to."),
+      userId: z
+        .string()
+        .describe(
+          "The ID of the user performing the prestige action (for logging)."
+        ),
     },
     async ({ nodeId, userId }) => {
       try {
@@ -434,7 +478,9 @@ function getMcpServer() {
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to add prestige: ${err.message}` }],
+          content: [
+            { type: "text", text: `❌ Failed to add prestige: ${err.message}` },
+          ],
           structuredContent: { error: err.message },
         };
       }
@@ -445,17 +491,29 @@ function getMcpServer() {
     "edit-node-version-schedule",
     "Calls updateSchedule() to modify a node version's schedule and reeffect time for a specific version.",
     {
-      nodeId: z.string().describe("The unique ID of the node whose schedule should be updated."),
-      prestige: z.number().describe(
-        "The prestige of the version to update within the node's version history."
-      ),
-      newSchedule: z.string().describe("The new schedule date/time (in ISO 8601 format)."),
+      nodeId: z
+        .string()
+        .describe(
+          "The unique ID of the node whose schedule should be updated."
+        ),
+      prestige: z
+        .number()
+        .describe(
+          "The prestige of the version to update within the node's version history."
+        ),
+      newSchedule: z
+        .string()
+        .describe("The new schedule date/time (in ISO 8601 format)."),
       reeffectTime: z
         .number()
         .describe(
           "The reeffect time in hours (must be below 1,000,000). Added to schedule when prestiging for new version."
         ),
-      userId: z.string().describe("The ID of the user making the schedule update (for contribution logging)."),
+      userId: z
+        .string()
+        .describe(
+          "The ID of the user making the schedule update (for contribution logging)."
+        ),
     },
     async ({ nodeId, prestige, newSchedule, reeffectTime, userId }) => {
       try {
@@ -473,7 +531,12 @@ function getMcpServer() {
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to update schedule: ${err.message}` }],
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to update schedule: ${err.message}`,
+            },
+          ],
           structuredContent: { error: err.message },
         };
       }
@@ -484,7 +547,8 @@ function getMcpServer() {
     "node",
     new ResourceTemplate("node://{nodeId}", { list: undefined }),
     {
-      description: "Fetch a specific node (with notes and versions) within a tree for more context.",
+      description:
+        "Fetch a specific node (with notes and versions) within a tree for more context.",
       title: "Node Resource",
       mimeType: "application/json",
     },
@@ -532,26 +596,51 @@ function getMcpServer() {
     }
   );
 
-
-
-
-
   // 🧩 Create a single new node
   server.tool(
     "create-new-node",
     "Creates a new node in the tree and logs a contribution entry.",
     {
       name: z.string().describe("Name of the new node."),
-      schedule: z.date().nullable().optional().describe("Optional date for node scheduling."),
-      reeffectTime: z.number().optional().describe("Time interval before reeschedule on prestife."),
+      schedule: z
+        .date()
+        .nullable()
+        .optional()
+        .describe("Optional date for node scheduling."),
+      reeffectTime: z
+        .number()
+        .optional()
+        .describe("Time interval before reeschedule on prestife."),
       parentNodeID: z.string().describe("Parent node ID ."),
       userId: z.string().describe("The ID of the user creating the node."),
-      values: z.record(z.number()).default({}).nullable().optional().describe("Key-value pairs representing node number values."),
-      goals: z.record(z.number()).default({}).nullable().optional().describe("Key-value pairs representing node number goals attached to values."),
-      note: z.string().optional().describe("The text content of the optional note."),
-
+      values: z
+        .record(z.number())
+        .default({})
+        .nullable()
+        .optional()
+        .describe("Key-value pairs representing node number values."),
+      goals: z
+        .record(z.number())
+        .default({})
+        .nullable()
+        .optional()
+        .describe(
+          "Key-value pairs representing node number goals attached to values."
+        ),
+      note: z
+        .string()
+        .optional()
+        .describe("The text content of the optional note."),
     },
-    async ({ name, schedule, reeffectTime, parentNodeID, userId, values, goals }) => {
+    async ({
+      name,
+      schedule,
+      reeffectTime,
+      parentNodeID,
+      userId,
+      values,
+      goals,
+    }) => {
       try {
         const node = await createNewNode(
           name,
@@ -566,34 +655,54 @@ function getMcpServer() {
         );
 
         return {
-          content: [{ type: "text", text: `✅ Node '${name}' created successfully.` }],
+          content: [
+            { type: "text", text: `✅ Node '${name}' created successfully.` },
+          ],
           structuredContent: node,
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to create node: ${err.message}` }],
+          content: [
+            { type: "text", text: `❌ Failed to create node: ${err.message}` },
+          ],
           structuredContent: { error: err.message },
         };
       }
     }
   );
 
-
-
   const NodeSchema = z.lazy(() =>
     z.object({
       name: z.string().describe("Node name."),
-      schedule: z.string().nullable().optional()
+      schedule: z
+        .string()
+        .nullable()
+        .optional()
         .describe("Optional scheduling date/time (in ISO 8601 format)."),
-      reeffectTime: z.number().nullable().optional()
+      reeffectTime: z
+        .number()
+        .nullable()
+        .optional()
         .describe("Reeffect time in hours."),
-      values: z.record(z.number()).nullable().optional()
+      values: z
+        .record(z.number())
+        .nullable()
+        .optional()
         .describe("Numeric key-value pairs for node values."),
-      goals: z.record(z.number()).nullable().optional()
+      goals: z
+        .record(z.number())
+        .nullable()
+        .optional()
         .describe("Goal key-value pairs for the node."),
-      note: z.string().nullable().optional()
+      note: z
+        .string()
+        .nullable()
+        .optional()
         .describe("Optional note for new node made on creation."),
-      children: z.array(NodeSchema).nullable().optional()
+      children: z
+        .array(NodeSchema)
+        .nullable()
+        .optional()
         .describe("List of child nodes."),
     })
   );
@@ -603,27 +712,41 @@ function getMcpServer() {
     "create-new-node-branch",
     "Used to create new node branch off a current node to extend its structure",
     {
-      nodeData: NodeSchema.describe("JSON structure of the node branch to create."),
-      parentId: z.string().nullable().optional().describe("Parent node ID for the root of this subtree."),
+      nodeData: NodeSchema.describe(
+        "JSON structure of the node branch to create."
+      ),
+      parentId: z
+        .string()
+        .nullable()
+        .optional()
+        .describe("Parent node ID for the root of this subtree."),
       userId: z.string().describe("ID of the user creating the nodes."),
     },
     async ({ nodeData, parentId, userId }) => {
       try {
         const rootId = await createNodesRecursive(nodeData, parentId, userId);
         return {
-          content: [{ type: "text", text: `✅ Recursive nodes created. Root ID: ${rootId}` }],
+          content: [
+            {
+              type: "text",
+              text: `✅ Recursive nodes created. Root ID: ${rootId}`,
+            },
+          ],
           structuredContent: { rootId },
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to create recursive nodes: ${err.message}` }],
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to create recursive nodes: ${err.message}`,
+            },
+          ],
           structuredContent: { error: err.message },
         };
       }
     }
   );
-
-
 
   // 🔁 Update a node’s parent relationship
   server.tool(
@@ -632,7 +755,9 @@ function getMcpServer() {
     {
       nodeChildId: z.string().describe("The ID of the child node to move."),
       nodeNewParentId: z.string().describe("The ID of the new parent node."),
-      userId: z.string().describe("The user performing the operation (optional)."),
+      userId: z
+        .string()
+        .describe("The user performing the operation (optional)."),
     },
     async ({ nodeChildId, nodeNewParentId, userId }) => {
       try {
@@ -653,7 +778,12 @@ function getMcpServer() {
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `❌ Failed to update parent: ${err.message}` }],
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to update parent: ${err.message}`,
+            },
+          ],
           structuredContent: { error: err.message },
         };
       }
@@ -686,7 +816,6 @@ function getMcpServer() {
   );
   */
 
-
   server.prompt(
     "root-workflow",
     "Main workflow for root perspective operations",
@@ -695,7 +824,7 @@ function getMcpServer() {
     },
     ({ rootId }) => ({
       resources: [
-        `tree://${rootId}`,              // main root tree
+        `tree://${rootId}`, // main root tree
       ],
       messages: [
         {
@@ -709,21 +838,12 @@ Now, handle this request:
 `,
           },
         },
-
       ],
     })
   );
 
-
-
-
-
   return server;
 }
-
-
-
-
 
 // Main handler that Express can mount
 async function handleMcpRequest(req, res) {
@@ -734,7 +854,6 @@ async function handleMcpRequest(req, res) {
     });
 
     await server.connect(transport);
-
 
     res.on("close", () => {
       transport.close();

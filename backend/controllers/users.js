@@ -1,6 +1,6 @@
-import User from '../db/models/user.js';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import User from "../db/models/user.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 const USER_REGISTRATION_KEY = process.env.USER_REGISTRATION_KEY;
 

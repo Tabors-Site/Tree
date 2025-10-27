@@ -1,9 +1,9 @@
-import axios from 'axios';
+import axios from "axios";
 
-import { setValueForNode, setGoalForNode } from '../values.js';
+import { setValueForNode, setGoalForNode } from "../values.js";
 
-import { editStatus, addPrestige } from '../statuses.js';
-import { updateSchedule } from '../schedules.js';
+import { editStatus, addPrestige } from "../statuses.js";
+import { updateSchedule } from "../schedules.js";
 
 async function getApi(url) {
   const blockedHosts = [
@@ -32,11 +32,10 @@ function enqueue(nodeId, fn) {
   // store the next promise in the queue
   nodeQueues.set(
     nodeId,
-    next.catch(() => { }) //if a script fails, it does not send error. need to fix
+    next.catch(() => {}) //if a script fails, it does not send error. need to fix
   );
   return next;
 }
-
 
 //bound to user id
 function makeSafeFunctions(userId) {

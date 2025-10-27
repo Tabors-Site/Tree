@@ -1,6 +1,12 @@
-import express from 'express';
-import { addNode, addNodesTree, deleteNode, editNodeName, updateNodeParent } from '../controllers/treeManagement.js';
-import authenticate from '../middleware/authenticate.js';
+import express from "express";
+import {
+  addNode,
+  addNodesTree,
+  deleteNode,
+  editNodeName,
+  updateNodeParent,
+} from "../controllers/treeManagement.js";
+import authenticate from "../middleware/authenticate.js";
 
 const router = express.Router();
 

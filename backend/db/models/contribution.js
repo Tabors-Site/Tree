@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
+import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 
 const ContributionSchema = new mongoose.Schema({
   _id: {
@@ -28,7 +28,7 @@ const ContributionSchema = new mongoose.Schema({
       "invite",
       "editSchedule",
       "editGoal",
-      "transaction"
+      "transaction",
     ],
     required: true,
   },
@@ -96,7 +96,6 @@ const ContributionSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
-
 
 const Contribution = mongoose.model("Contribution", ContributionSchema);
 

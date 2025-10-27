@@ -1,4 +1,4 @@
-import Contribution from '../db/models/contribution.js';
+import Contribution from "../db/models/contribution.js";
 
 const getContributions = async (req, res) => {
   const { nodeId } = req.body;
@@ -31,11 +31,11 @@ const getContributions = async (req, res) => {
           additionalInfo = {
             inviteAction: contribution.inviteAction
               ? {
-                action: contribution.inviteAction.action,
-                receivingUsername: contribution.inviteAction.receivingId
-                  ? contribution.inviteAction.receivingId.username
-                  : null,
-              }
+                  action: contribution.inviteAction.action,
+                  receivingUsername: contribution.inviteAction.receivingId
+                    ? contribution.inviteAction.receivingId.username
+                    : null,
+                }
               : null,
           };
           break;
@@ -48,17 +48,17 @@ const getContributions = async (req, res) => {
         case "transaction":
           additionalInfo = contribution.tradeId
             ? {
-              nodeA: {
-                name: contribution.tradeId.nodeAId.name,
-                versionIndex: contribution.tradeId.versionAIndex,
-                valuesSent: contribution.tradeId.valuesTraded.nodeA,
-              },
-              nodeB: {
-                name: contribution.tradeId.nodeBId.name,
-                versionIndex: contribution.tradeId.versionBIndex,
-                valuesSent: contribution.tradeId.valuesTraded.nodeB,
-              },
-            }
+                nodeA: {
+                  name: contribution.tradeId.nodeAId.name,
+                  versionIndex: contribution.tradeId.versionAIndex,
+                  valuesSent: contribution.tradeId.valuesTraded.nodeA,
+                },
+                nodeB: {
+                  name: contribution.tradeId.nodeBId.name,
+                  versionIndex: contribution.tradeId.versionBIndex,
+                  valuesSent: contribution.tradeId.valuesTraded.nodeB,
+                },
+              }
             : null;
           break;
         default:
@@ -82,6 +82,4 @@ const getContributions = async (req, res) => {
   }
 };
 
-export {
-  getContributions,
-};
+export { getContributions };

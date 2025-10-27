@@ -1,8 +1,8 @@
 // nodeControllers.js
 import {
   setValueForNode as coreSetValueForNode,
-  setGoalForNode as coreSetGoalForNode
-} from '../core/values.js';
+  setGoalForNode as coreSetGoalForNode,
+} from "../core/values.js";
 
 async function setValueForNode(req, res) {
   try {
@@ -34,7 +34,4 @@ async function setGoalForNode(req, res) {
   }
 }
 
-export {
-  setValueForNode,
-  setGoalForNode,
-};
+export { setValueForNode, setGoalForNode };

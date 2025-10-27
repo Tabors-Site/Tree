@@ -1,5 +1,5 @@
-import Contribution from './models/contribution.js';
-import Node from './models/node.js';
+import Contribution from "./models/contribution.js";
+import Node from "./models/node.js";
 
 async function handleSchedule(nodeVersion) {
   if (nodeVersion.schedule === null) {
@@ -81,8 +81,4 @@ const logContribution = async ({
   }
 };
 
-export {
-  findNodeById,
-  logContribution,
-  handleSchedule,
-};
+export { findNodeById, logContribution, handleSchedule };

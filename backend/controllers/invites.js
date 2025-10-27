@@ -1,7 +1,7 @@
-import Node from '../db/models/node.js';
-import User from '../db/models/user.js';
-import Invite from '../db/models/invite.js';
-import { logContribution } from '../db/utils.js';
+import Node from "../db/models/node.js";
+import User from "../db/models/user.js";
+import Invite from "../db/models/invite.js";
+import { logContribution } from "../db/utils.js";
 
 const invite = async (req, res) => {
   const { userReceiving, isToBeOwner, isUninviting, rootId } = req.body;
@@ -105,7 +105,6 @@ const invite = async (req, res) => {
       node.contributors.push(invitingUser);
 
       await node.save();
-
 
       invite.status = "accepted";
       await invite.save();
@@ -359,8 +358,4 @@ const getPendingInvites = async (req, res) => {
   }
 };
 
-export {
-  invite,
-  inviteAccept,
-  getPendingInvites,
-};
+export { invite, inviteAccept, getPendingInvites };

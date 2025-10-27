@@ -1,11 +1,13 @@
-import { findNodeById, logContribution } from '../db/utils.js';
+import { findNodeById, logContribution } from "../db/utils.js";
 
 async function setValueForNode({ nodeId, key, value, version, userId }) {
   const versionIndex = Number(version);
   const numericValue = Number(value);
 
-  if (isNaN(numericValue) || (typeof value === "string" && value.includes("e"))) {
-
+  if (
+    isNaN(numericValue) ||
+    (typeof value === "string" && value.includes("e"))
+  ) {
     throw new Error("Value must be a valid number");
   }
 
@@ -77,7 +79,4 @@ async function setGoalForNode({ nodeId, key, goal, version, userId }) {
   return { message: "Goal updated successfully." };
 }
 
-export {
-  setValueForNode,
-  setGoalForNode,
-};
+export { setValueForNode, setGoalForNode };
