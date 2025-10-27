@@ -1,18 +1,18 @@
-import User from "../db/models/user.js";
 import { findNodeById } from "../db/utils.js";
 import {
-  createNewNode,
-  createNodesRecursive,
-  deleteNodeBranch,
-  updateParentRelationship,
-} from "./helpers/treeManagementHelper.js";
+  createNewNode as coreCreateNewNode,
+  createNodesRecursive as coreCreateNodesRecursive,
+  deleteNodeBranch as coreDeleteNodeBranch,
+  updateParentRelationship as coreUpdateParentRelationships,
+} from "../core/treeManagement.js";
+
 
 export async function addNode(req, res) {
   const { parentId, name, schedule, reeffectTime, isRoot } = req.body;
   const userId = req.userId;
 
   try {
-    const newNode = await createNewNode(
+    const newNode = await coreCreateNewNode(
       name,
       schedule,
       reeffectTime,
@@ -43,7 +43,7 @@ export async function addNodesTree(req, res) {
   }
 
   try {
-    const result = await createNodesRecursive(nodeTree, parentId, req.userId);
+    const result = await coreCreateNodesRecursive(nodeTree, parentId, req.userId);
     res.json({
       success: true,
       message: "Nodes added successfully",
@@ -63,7 +63,7 @@ export async function addNodesTree(req, res) {
 export async function deleteNode(req, res) {
   const { nodeId } = req.body;
   try {
-    await deleteNodeBranch(nodeId, req.userId);
+    await coreDeleteNodeBranch(nodeId, req.userId);
     res.json({ success: true, message: "Node branch deleted and removed from parent children" });
   } catch (err) {
     res.status(500).json({ success: false, message: "Error deleting node", error: err.message });
@@ -93,7 +93,7 @@ export async function editNodeName(req, res) {
 export async function updateNodeParent(req, res) {
   const { nodeChildId, nodeNewParentId } = req.body;
   try {
-    const { nodeChild, nodeNewParent } = await updateParentRelationship(
+    const { nodeChild, nodeNewParent } = await coreUpdateParentRelationships(
       nodeChildId,
       nodeNewParentId,
       req.userId

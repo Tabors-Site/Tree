@@ -1,5 +1,4 @@
 import Contribution from '../db/models/contribution.js';
-import Transaction from '../db/models/transaction.js';
 
 const getContributions = async (req, res) => {
   const { nodeId } = req.body;
@@ -50,14 +49,14 @@ const getContributions = async (req, res) => {
           additionalInfo = contribution.tradeId
             ? {
               nodeA: {
-                name: contribution.tradeId.nodeAId.name, // Node A's name
-                versionIndex: contribution.tradeId.versionAIndex, // Node A's version
-                valuesSent: contribution.tradeId.valuesTraded.nodeA, // Values sent by Node A
+                name: contribution.tradeId.nodeAId.name,
+                versionIndex: contribution.tradeId.versionAIndex,
+                valuesSent: contribution.tradeId.valuesTraded.nodeA,
               },
               nodeB: {
-                name: contribution.tradeId.nodeBId.name, // Node B's name
-                versionIndex: contribution.tradeId.versionBIndex, // Node B's version
-                valuesSent: contribution.tradeId.valuesTraded.nodeB, // Values sent by Node B
+                name: contribution.tradeId.nodeBId.name,
+                versionIndex: contribution.tradeId.versionBIndex,
+                valuesSent: contribution.tradeId.valuesTraded.nodeB,
               },
             }
             : null;

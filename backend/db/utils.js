@@ -17,12 +17,12 @@ async function findNodeById(nodeId) {
   try {
     const node = await Node.findOne({ _id: nodeId }).populate("children");
     if (!node) {
-      return null; // Return null if the node is not found
+      return null;
     }
     return node;
   } catch (error) {
     console.error("Error finding node by UUID:", error);
-    throw error; // Re-throw for unexpected errors
+    throw error;
   }
 }
 

@@ -25,7 +25,6 @@ async function getRootDetails(req, res) {
   }
 }
 
-// Fetches a complete tree starting from a root node
 async function getTree(req, res) {
   const { rootId } = req.body;
 
@@ -65,11 +64,9 @@ async function getNodeForAi(nodeId) {
   if (!nodeId) throw new Error("Node ID is required");
 
   try {
-    // ✅ Use .lean() to get a plain JS object
     const node = await Node.findById(nodeId).lean().exec();
     if (!node) throw new Error(`Node ${nodeId} not found`);
 
-    // Attach notes per version
     if (node.versions && node.versions.length > 0) {
       const versionsWithNotes = [];
       for (let i = 0; i < node.versions.length; i++) {
@@ -141,7 +138,6 @@ async function getTreeForAi(rootId) {
 
     const tree = await simplifyNode(rootNode);
 
-    // Clean strings but keep structure intact
     return JSON.stringify(tree);
   } catch (error) {
     console.error("Error fetching AI tree:", error);
@@ -154,7 +150,6 @@ async function getTreeForAi(rootId) {
 
 
 
-// Fetches all parent nodes for a given child node
 async function getParents(req, res) {
   const { childId } = req.body;
 
@@ -216,7 +211,6 @@ async function getParents(req, res) {
 
 
 
-// Updated helper: fetch full root node info for a user
 async function getRootNodesForUser(userId) {
   try {
     const user = await User.findById(userId).populate("roots", "name _id");
@@ -257,7 +251,6 @@ async function getAllData(req, res) {
       const node = await Node.findById(nodeId).populate("children").lean().exec();
       if (!node) return null;
 
-      // Fetch contributions
       const contributions = await Contribution.find({ nodeId: node._id }).exec();
       node.contributions = contributions;
 
@@ -316,7 +309,7 @@ async function getAllData(req, res) {
 
 function removeNullFields(obj) {
   if (obj === null || obj === undefined) {
-    return undefined; // This will cause the field to be omitted
+    return undefined;
   }
 
   if (Array.isArray(obj)) {

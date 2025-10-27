@@ -1,6 +1,6 @@
-import { logContribution, findNodeById, handleSchedule } from '../../db/utils.js';
+import { logContribution, findNodeById, handleSchedule } from '../db/utils.js';
 
-async function editStatusHelper({
+async function editStatus({
   nodeId,
   status,
   version,
@@ -75,7 +75,7 @@ async function updateNodeStatusRecursively(node, status, version, userId) {
   }
 }
 
-async function addPrestigeHelper({ nodeId, userId }) {
+async function addPrestige({ nodeId, userId }) {
   console.log(nodeId)
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
@@ -128,6 +128,6 @@ async function addPrestigeToNode(node) {
 }
 
 export {
-  editStatusHelper,
-  addPrestigeHelper,
+  editStatus,
+  addPrestige,
 };

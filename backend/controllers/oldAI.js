@@ -17,7 +17,6 @@ const NodeSchema = z.object({
   children: z.array(z.lazy(() => NodeSchema)).nullable(),
 });
 
-// Helper to extract JSON from ```json``` block
 const extractJsonBlock = (text) => {
   const regex = /```json\s*([\s\S]+?)```/;
   const match = regex.exec(text);

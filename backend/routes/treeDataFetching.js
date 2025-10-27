@@ -10,6 +10,7 @@ import {
 } from '../controllers/treeDataFetching.js';
 
 import authenticate from '../middleware/authenticate.js';
+
 const router = express.Router();
 
 // Endpoint to fetch root node IDs for user
@@ -18,12 +19,11 @@ router.get("/get-root-nodes", authenticate, getRootNodes);
 // Endpoint to fetch root node details
 router.post("/get-root-details", getRootDetails);
 
-// Endpoint to fetch a tree of nodes
+// Endpoint to fetch the full tree object
 router.post("/get-tree", getTree);
-// Endpoint to fetch a tree of nodes
+
 router.post("/get-tree-ai", getTreeForAi);
 
-// Endpoint to fetch parent nodes
 router.post("/get-parents", getParents);
 
 router.post("/get-all-data", authenticate, getAllData);

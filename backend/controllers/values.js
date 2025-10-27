@@ -1,9 +1,12 @@
 // nodeControllers.js
-import { setValueForNodeHelper, setGoalForNodeHelper } from './helpers/valuesHelper.js';
+import {
+  setValueForNode as coreSetValueForNode,
+  setGoalForNode as coreSetGoalForNode
+} from '../core/values.js';
 
 async function setValueForNode(req, res) {
   try {
-    const result = await setValueForNodeHelper({
+    const result = await coreSetValueForNode({
       nodeId: req.body.nodeId,
       key: req.body.key,
       value: req.body.value,
@@ -18,7 +21,7 @@ async function setValueForNode(req, res) {
 
 async function setGoalForNode(req, res) {
   try {
-    const result = await setGoalForNodeHelper({
+    const result = await coreSetGoalForNode({
       nodeId: req.body.nodeId,
       key: req.body.key,
       goal: req.body.goal,

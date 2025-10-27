@@ -1,8 +1,11 @@
-import { editStatusHelper, addPrestigeHelper } from './helpers/statusesHelper.js';
+import {
+  editStatus as coreEditStatus,
+  addPrestige as coreAddPrestige,
+} from '../core/statuses.js';
 
 async function editStatus(req, res) {
   try {
-    const result = await editStatusHelper({
+    const result = await coreEditStatus({
       nodeId: req.body.nodeId,
       status: req.body.status,
       version: req.body.version,
@@ -17,7 +20,7 @@ async function editStatus(req, res) {
 
 async function addPrestige(req, res) {
   try {
-    const result = await addPrestigeHelper({
+    const result = await coreAddPrestige({
       nodeId: req.body.nodeId,
       userId: req.userId,
     });

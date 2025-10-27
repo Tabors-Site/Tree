@@ -1,28 +1,29 @@
 import { z } from "zod";
 import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import {
-  setValueForNodeHelper,
-  setGoalForNodeHelper,
-} from '../controllers/helpers/valuesHelper.js'
-import {
-  updateScheduleHelper
-} from "../controllers/helpers/schedulesHelper.js"
+  setValueForNode,
+  setGoalForNode,
+} from "../core/values.js"
 
 import {
-  editStatusHelper,
-  addPrestigeHelper,
-} from "../controllers/helpers/statusesHelper.js"
-import { createNoteHelper, getNotesHelper, deleteNoteAndFileHelper } from "../controllers/helpers/notesHelper.js";
+  updateSchedule
+} from "../core/schedules.js"
+
+import {
+  editStatus,
+  addPrestige,
+} from "../core/statuses.js"
+import { createNote, getNotes, deleteNoteAndFile } from "../core/notes.js";
 import {
   createNewNode,
   createNodesRecursive,
   deleteNodeBranch,
   updateParentRelationship,
-} from "../controllers/helpers/treeManagementHelper.js";
+} from "../core/treeManagement.js";
 
 import {
-  executeScriptHelper,
-} from "../controllers/helpers/scriptsHelper.js"
+  executeScript,
+} from "../core/scripts.js"
 
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 
@@ -88,7 +89,7 @@ function getMcpServer() {
     },
     async (uri, { nodeId, prestige }) => {
       try {
-        const result = await getNotesHelper({ nodeId, version: prestige });
+        const result = await getNotes({ nodeId, version: prestige });
 
         return {
           contents: [
@@ -214,7 +215,7 @@ function getMcpServer() {
       userId: z.string().describe("The ID of the user executing the script."),
     },
     async ({ nodeId, scriptName, userId }) => {
-      const result = await executeScriptHelper({
+      const result = await executeScript({
         nodeId,
         scriptName,
         userId,
@@ -232,7 +233,7 @@ function getMcpServer() {
 
   server.tool(
     "edit-node-version-value",
-    "Calls setValueForNodeHelper() to update a node value.",
+    "Calls setValueForNode() to update a node value.",
     {
       nodeId: z.string().describe("The unique ID of the node to edit."),
       key: z.string().describe("The key of the value you want to modify on the node."),
@@ -241,7 +242,7 @@ function getMcpServer() {
       userId: z.string().describe("The ID of the user performing the edit. Used for contribution logging."),
     },
     async ({ nodeId, key, value, prestige, userId }) => {
-      const result = await setValueForNodeHelper({
+      const result = await setValueForNode({
         nodeId,
         key,
         value,
@@ -258,7 +259,7 @@ function getMcpServer() {
 
   server.tool(
     "edit-node-version-goal",
-    "Calls setGoalForNodeHelper() to update a node goal. Goal must correspond to existing value.",
+    "Calls setGoalForNode() to update a node goal. Goal must correspond to existing value.",
     {
       nodeId: z.string().describe("The unique ID of the node to edit."),
       key: z.string().describe("The key of the goal you want to modify on the node."),
@@ -268,7 +269,7 @@ function getMcpServer() {
     },
     async ({ nodeId, key, goal, prestige, userId }) => {
       try {
-        const result = await setGoalForNodeHelper({
+        const result = await setGoalForNode({
           nodeId,
           key,
           goal,
@@ -291,7 +292,7 @@ function getMcpServer() {
 
   server.tool(
     "edit-node-or-branch-status",
-    "Calls editStatusHelper() to update a node's status (optionally recursively).",
+    "Calls editStatus() to update a node's status (optionally recursively).",
     {
       nodeId: z.string().describe("The unique ID of the node whose status will be edited."),
       status: z.enum(["active", "trimmed", "completed"]).describe(
@@ -307,7 +308,7 @@ function getMcpServer() {
     },
     async ({ nodeId, status, prestige, isInherited, userId }) => {
       try {
-        const result = await editStatusHelper({
+        const result = await editStatus({
           nodeId,
           status,
           version: prestige,
@@ -345,7 +346,7 @@ function getMcpServer() {
     },
     async ({ content, userId, nodeId, prestige, isReflection }) => {
       try {
-        const result = await createNoteHelper({
+        const result = await createNote({
           contentType: "text",
           content,
           userId,
@@ -377,7 +378,7 @@ function getMcpServer() {
     },
     async ({ nodeId, prestige }) => {
       try {
-        const result = await getNotesHelper({ nodeId, version: prestige });
+        const result = await getNotes({ nodeId, version: prestige });
 
         return {
           content: [{ type: "text", text: result.message }],
@@ -401,7 +402,7 @@ function getMcpServer() {
     },
     async ({ noteId }) => {
       try {
-        const result = await deleteNoteAndFileHelper({ noteId });
+        const result = await deleteNoteAndFile({ noteId });
 
         return {
           content: [{ type: "text", text: result.message }],
@@ -418,14 +419,14 @@ function getMcpServer() {
 
   server.tool(
     "add-node-prestige",
-    "Calls addPrestigeHelper() to increment a node's prestige level and create a new version.",
+    "Calls addPrestige() to increment a node's prestige level and create a new version.",
     {
       nodeId: z.string().describe("The unique ID of the node to add prestige to."),
       userId: z.string().describe("The ID of the user performing the prestige action (for logging)."),
     },
     async ({ nodeId, userId }) => {
       try {
-        const result = await addPrestigeHelper({ nodeId, userId });
+        const result = await addPrestige({ nodeId, userId });
 
         return {
           content: [{ type: "text", text: result.message }],
@@ -442,7 +443,7 @@ function getMcpServer() {
 
   server.tool(
     "edit-node-version-schedule",
-    "Calls updateScheduleHelper() to modify a node version's schedule and reeffect time for a specific version.",
+    "Calls updateSchedule() to modify a node version's schedule and reeffect time for a specific version.",
     {
       nodeId: z.string().describe("The unique ID of the node whose schedule should be updated."),
       prestige: z.number().describe(
@@ -458,7 +459,7 @@ function getMcpServer() {
     },
     async ({ nodeId, prestige, newSchedule, reeffectTime, userId }) => {
       try {
-        const result = await updateScheduleHelper({
+        const result = await updateSchedule({
           nodeId,
           versionIndex: prestige,
           newSchedule,

@@ -4,10 +4,10 @@ import fs from "fs";
 
 import { fileURLToPath } from "url";
 import {
-  createNoteHelper,
-  getNotesHelper,
-  deleteNoteAndFileHelper,
-} from "./helpers/notesHelper.js";
+  createNote as coreCreateNote,
+  getNotes as coreGetNotes,
+  deleteNoteAndFile as coreDeleteNoteAndFile,
+} from "../core/notes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,7 +30,7 @@ const upload = multer({ storage });
 
 async function createNote(req, res) {
   try {
-    const result = await createNoteHelper({
+    const result = await coreCreateNote({
       contentType: req.body.contentType,
       content: req.body.content,
       userId: req.body.userId,
@@ -47,7 +47,7 @@ async function createNote(req, res) {
 
 async function getNotes(req, res) {
   try {
-    const result = await getNotesHelper({
+    const result = await coreGetNotes({
       nodeId: req.body.nodeId,
       version: req.body.version,
     });
@@ -59,7 +59,7 @@ async function getNotes(req, res) {
 
 async function deleteNoteAndFile(req, res) {
   try {
-    const result = await deleteNoteAndFileHelper({
+    const result = await coreDeleteNoteAndFile({
       noteId: req.body.noteId,
     });
     res.status(200).json({ success: true, ...result });

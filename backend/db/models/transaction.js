@@ -2,20 +2,20 @@ import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 
 const TransactionSchema = new mongoose.Schema({
-    _id: {
-        type: String, 
-        default: uuidv4, 
-      },
-    nodeAId: { type: String, ref: "Node", required: true }, // First node in the transaction
-    nodeBId: { type: String, ref: "Node", required: true }, // Second node in the transaction
-    versionAIndex: { type: Number, required: true }, // Version index of Node A involved in the transaction
-    versionBIndex: { type: Number, required: true }, // Version index of Node B involved in the transaction
-    valuesTraded: { 
-      nodeA: { type: Map, of: Number, required: true }, 
-      nodeB: { type: Map, of: Number, required: true }, 
-    },
-    date: { type: Date, default: Date.now }, 
-  });
+  _id: {
+    type: String,
+    default: uuidv4,
+  },
+  nodeAId: { type: String, ref: "Node", required: true }, // node initiating send
+  nodeBId: { type: String, ref: "Node", required: true }, //node receiving
+  versionAIndex: { type: Number, required: true },
+  versionBIndex: { type: Number, required: true },
+  valuesTraded: {
+    nodeA: { type: Map, of: Number, required: true },
+    nodeB: { type: Map, of: Number, required: true },
+  },
+  date: { type: Date, default: Date.now },
+});
 
 const Transaction = mongoose.model("Transaction", TransactionSchema);
 export default Transaction;

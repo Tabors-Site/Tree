@@ -1,21 +1,20 @@
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 
-// Define the Contribution schema
 const ContributionSchema = new mongoose.Schema({
   _id: {
-    type: String, 
+    type: String,
     default: uuidv4,
   },
   userId: {
     type: String,
     ref: "User",
-    required: true, // Reference to the user contributing
+    required: true,
   },
   nodeId: {
     type: String,
     ref: "Node",
-    required: true, // Reference to the node being contributed to
+    required: true,
   },
   action: {
     type: String,
@@ -31,7 +30,7 @@ const ContributionSchema = new mongoose.Schema({
       "editGoal",
       "transaction"
     ],
-    required: true, 
+    required: true,
   },
   statusEdited: {
     type: String,
@@ -63,38 +62,38 @@ const ContributionSchema = new mongoose.Schema({
       },
       receivingId: {
         type: String,
-        ref: "User", // Reference to the user receiving the invite
-        default: null, 
+        ref: "User",
+        default: null,
       },
     },
-    default: null, 
+    default: null,
   },
   scheduleEdited: {
     type: {
       date: {
         type: Date,
-        default: null, 
+        default: null,
       },
       reeffectTime: {
         type: Number,
-        default: null, 
+        default: null,
       },
     },
-    default: null, 
+    default: null,
   },
   goalEdited: {
     type: Map,
     of: Number,
     default: null,
   },
-  
+
   nodeVersion: {
     type: String,
-    required: true, 
+    required: true,
   },
   date: {
     type: Date,
-    default: Date.now, 
+    default: Date.now,
   },
 });
 

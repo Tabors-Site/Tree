@@ -1,10 +1,8 @@
 import express from 'express';
-const router = express.Router();
 import { getContributions } from '../controllers/contributions.js';
 
+const router = express.Router();
 
-// Route for getting contributions
 router.post('/get-contributions', getContributions);
 
-// Export the router
 export default router;

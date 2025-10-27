@@ -1,6 +1,6 @@
-import { findNodeById, logContribution } from '../../db/utils.js';
+import { findNodeById, logContribution } from '../db/utils.js';
 
-async function setValueForNodeHelper({ nodeId, key, value, version, userId }) {
+async function setValueForNode({ nodeId, key, value, version, userId }) {
   const versionIndex = Number(version);
   const numericValue = Number(value);
 
@@ -39,7 +39,7 @@ async function setValueForNodeHelper({ nodeId, key, value, version, userId }) {
   return { message: "Value updated successfully." };
 }
 
-async function setGoalForNodeHelper({ nodeId, key, goal, version, userId }) {
+async function setGoalForNode({ nodeId, key, goal, version, userId }) {
   const versionIndex = version.toString();
   const numericGoal = Number(goal);
 
@@ -78,6 +78,6 @@ async function setGoalForNodeHelper({ nodeId, key, goal, version, userId }) {
 }
 
 export {
-  setValueForNodeHelper,
-  setGoalForNodeHelper,
+  setValueForNode,
+  setGoalForNode,
 };

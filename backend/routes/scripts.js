@@ -1,8 +1,8 @@
 import express from 'express';
-
-const router = express.Router();
 import authenticate from '../middleware/authenticate.js';
 import { updateScript, executeScript } from '../controllers/scripts.js';
+
+const router = express.Router();
 
 router.post("/updateScript", authenticate, updateScript);
 router.post("/executeScript", authenticate, executeScript);

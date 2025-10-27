@@ -1,10 +1,9 @@
-import axios from 'axios'; // Commo
+import axios from 'axios';
 
-//prebuilt functions to use in scripts
-import { setValueForNodeHelper, setGoalForNodeHelper } from '../valuesHelper.js';
+import { setValueForNode, setGoalForNode } from '../values.js';
 
-import { editStatusHelper, addPrestigeHelper } from '../statusesHelper.js';
-import { updateScheduleHelper } from '../schedulesHelper.js';
+import { editStatus, addPrestige } from '../statuses.js';
+import { updateSchedule } from '../schedules.js';
 
 async function getApi(url) {
   const blockedHosts = [
@@ -38,34 +37,33 @@ function enqueue(nodeId, fn) {
   return next;
 }
 
-/**
- * Factory to build safe functions bound to a specific userId
- */
+
+//bound to user id
 function makeSafeFunctions(userId) {
   return {
     getApi,
 
     setValueForNode: (nodeId, key, value, version) =>
       enqueue(nodeId, () =>
-        setValueForNodeHelper({ nodeId, key, value, version, userId })
+        setValueForNode({ nodeId, key, value, version, userId })
       ),
 
     setGoalForNode: (nodeId, key, goal, version) =>
       enqueue(nodeId, () =>
-        setGoalForNodeHelper({ nodeId, key, goal, version, userId })
+        setGoalForNode({ nodeId, key, goal, version, userId })
       ),
 
     editStatusForNode: (nodeId, status, version, isInherited) =>
       enqueue(nodeId, () =>
-        editStatusHelper({ nodeId, status, version, isInherited, userId })
+        editStatus({ nodeId, status, version, isInherited, userId })
       ),
 
     addPrestigeForNode: (nodeId) =>
-      enqueue(nodeId, () => addPrestigeHelper({ nodeId, userId })),
+      enqueue(nodeId, () => addPrestige({ nodeId, userId })),
 
     updateScheduleForNode: (nodeId, versionIndex, newSchedule, reeffectTime) =>
       enqueue(nodeId, () =>
-        updateScheduleHelper({
+        updateSchedule({
           nodeId,
           versionIndex,
           newSchedule,

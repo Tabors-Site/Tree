@@ -6,7 +6,7 @@ dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
 export default (req, res, next) => {
-  // Read token from the cookie named 'token'
+
   const token = req.cookies?.token;
 
   if (!token) {

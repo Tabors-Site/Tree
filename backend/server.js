@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import http from 'http'; // Change https to http
+import http from 'http';
 import cookieParser from 'cookie-parser';
 import { connectToMCP } from './mcp/client.js';
 import { initWebSocketServer } from './ws/websocket.js';
@@ -22,15 +22,17 @@ import scriptsRoutes from "./routes/scripts.js";
 
 import dotenv from "dotenv";
 
+import './db/config.js'; // Initialize DB connection
+
 dotenv.config();
 
-import './db/config.js'; // Initialize DB connection
 const rootFrontEnd = process.env.ROOT_FRONTEND_DOMAIN;
 const treeFrontEnd = process.env.TREE_FRONTEND_DOMAIN;
 const beFrontEnd = process.env.BE_FRONTEND_DOMAIN;
+
+
 const app = express();
 
-// Middleware
 app.use(
   cors({
     origin: [rootFrontEnd, treeFrontEnd, beFrontEnd],
@@ -46,8 +48,6 @@ app.use(express.static("public"));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.set("trust proxy", 1);
-
-
 
 app.use("/", aiRoutes);
 app.use("/", contributionsRoutes);

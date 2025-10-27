@@ -1,14 +1,13 @@
-import Node from '../../db/models/node.js';
-import { logContribution } from '../../db/utils.js';
+import Node from '../db/models/node.js';
+import { logContribution } from '../db/utils.js';
 
-async function updateScheduleHelper({
+async function updateSchedule({
   nodeId,
   versionIndex,
   newSchedule,
   reeffectTime,
   userId,
 }) {
-  // Validate inputs
   if (
     !nodeId ||
     versionIndex === undefined ||
@@ -28,7 +27,6 @@ async function updateScheduleHelper({
     throw error;
   }
 
-  // Find the node by ID
   const node = await Node.findById(nodeId);
   if (!node) {
     const error = new Error("Node not found.");
@@ -36,26 +34,21 @@ async function updateScheduleHelper({
     throw error;
   }
 
-  // Validate version index
   if (versionIndex < 0 || versionIndex >= node.versions.length) {
     const error = new Error("Invalid version index.");
     error.status = 400;
     throw error;
   }
 
-  // Format the new schedule date
   const formattedDate = new Date(newSchedule);
 
-  // Update the schedule and reEffectTime for the specified version
   node.versions[versionIndex].schedule = formattedDate;
   node.versions[versionIndex].reeffectTime = reeffectTime;
 
-  // Save the updated node
   await node.save();
 
   const scheduleEdited = { date: formattedDate, reeffectTime };
 
-  // Log the contribution
   await logContribution({
     userId,
     nodeId,
@@ -70,4 +63,4 @@ async function updateScheduleHelper({
   };
 }
 
-export { updateScheduleHelper };
+export { updateSchedule };

@@ -1,17 +1,17 @@
 import path from "path";
 import fs from "fs";
-import Note from "../../db/models/notes.js";
+import Note from "../db/models/notes.js";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const uploadsFolder = path.join(__dirname, "../../uploads");
+const uploadsFolder = path.join(__dirname, "../uploads");
 
 if (!fs.existsSync(uploadsFolder)) {
     fs.mkdirSync(uploadsFolder);
 }
 
-async function createNoteHelper({ contentType, content, userId, nodeId, version, isReflection, file }) {
+async function createNote({ contentType, content, userId, nodeId, version, isReflection, file }) {
     if (!contentType || !["file", "text"].includes(contentType)) {
         throw new Error("Invalid content type");
     }
@@ -44,7 +44,7 @@ async function createNoteHelper({ contentType, content, userId, nodeId, version,
     };
 }
 
-async function getNotesHelper({ nodeId, version }) {
+async function getNotes({ nodeId, version }) {
     try {
         if (!nodeId) {
             throw new Error("Missing required parameter: nodeId");
@@ -84,7 +84,7 @@ async function getNotesHelper({ nodeId, version }) {
             notes: notesWithUsername,
         };
     } catch (err) {
-        console.error("Error in getNotesHelper:", err);
+        console.error("Error in getNotes:", err);
 
         throw new Error(
             err.message || "Database error occurred while retrieving notes."
@@ -93,7 +93,7 @@ async function getNotesHelper({ nodeId, version }) {
 }
 
 
-async function deleteNoteAndFileHelper({ noteId }) {
+async function deleteNoteAndFile({ noteId }) {
     const note = await Note.findById(noteId);
     if (!note) throw new Error("Note not found");
 
@@ -112,4 +112,4 @@ async function deleteNoteAndFileHelper({ noteId }) {
     return { message: "Note and associated file deleted successfully" };
 }
 
-export { createNoteHelper, getNotesHelper, deleteNoteAndFileHelper };
+export { createNote, getNotes, deleteNoteAndFile };

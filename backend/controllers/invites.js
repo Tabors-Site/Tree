@@ -5,7 +5,7 @@ import { logContribution } from '../db/utils.js';
 
 const invite = async (req, res) => {
   const { userReceiving, isToBeOwner, isUninviting, rootId } = req.body;
-  const userId = req.userId; // User ID of the person sending the invite
+  const userId = req.userId;
 
   try {
     const node = await Node.findById(rootId).populate("rootOwner contributors");

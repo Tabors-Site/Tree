@@ -1,8 +1,8 @@
-import { updateScheduleHelper } from './helpers/schedulesHelper.js';
+import { updateSchedule as coreUpdateSchedule } from '../core/schedules.js';
 
 const updateSchedule = async (req, res) => {
   try {
-    const result = await updateScheduleHelper({
+    const result = await coreUpdateSchedule({
       nodeId: req.body.nodeId,
       versionIndex: req.body.versionIndex,
       newSchedule: req.body.newSchedule,

@@ -1,7 +1,7 @@
-import Node from "../../db/models/node.js";
-import { findNodeById, logContribution } from "../../db/utils.js";
-import User from "../../db/models/user.js";
-import { createNoteHelper } from "./notesHelper.js"
+import Node from "../db/models/node.js";
+import { logContribution } from "../db/utils.js";
+import User from "../db/models/user.js";
+import { createNote } from "./notes.js"
 
 
 export async function createNewNode(
@@ -58,7 +58,7 @@ export async function createNewNode(
         nodeVersion: "0",
     });
     if (note && note.trim().length > 0) {
-        await createNoteHelper({
+        await createNote({
             contentType: "text",
             content: note,
             userId,
@@ -85,7 +85,6 @@ export async function createNodesRecursive(nodeData, parentId, userId) {
 
     const timeToUse = reeffectTime ?? effectTime;
 
-    // 1️⃣ Create this node and link it to the parent
     const newNode = await createNewNode(
         name,
         schedule,
@@ -99,7 +98,6 @@ export async function createNodesRecursive(nodeData, parentId, userId) {
     );
 
 
-    // 3️⃣ Recursively create all children
     const childIds = [];
     for (const childData of children) {
         const childId = await createNodesRecursive(childData, newNode._id, userId);
@@ -110,7 +108,6 @@ export async function createNodesRecursive(nodeData, parentId, userId) {
 
 
 
-    // 6️⃣ Return this node’s id so parent can link it later
     return newNode._id;
 }
 
