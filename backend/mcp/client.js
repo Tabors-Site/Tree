@@ -513,6 +513,10 @@ userId = ${userId}
                     description: "JSON structure of the node branch to create.",
                     properties: {
                       name: { type: "string", description: "Node name." },
+                      note: {
+                        type: ["string", "null"],
+                        description: "Optional note included on node creation"
+                      },
                       schedule: {
                         type: ["string", "null"],
                         description: "Optional date for node scheduling (ISO 8601 string)."
@@ -531,14 +535,11 @@ userId = ${userId}
                         additionalProperties: { type: "number" },
                         description: "Goal key-value pairs for the node."
                       },
-                      note: {
-                        type: ["string", "null"],
-                        description: "Optional note for extra context for node"
-                      },
+                    
                       children: {
                         type: ["array", "null"],
                         description: "List of child nodes.",
-                        items: { $ref: "#/components/schemas/NodeSchema" } // pseudo-recursive
+                        items: { $ref: "#/components/schemas/NodeSchema" } 
                       }
                     },
                     required: ["name"]

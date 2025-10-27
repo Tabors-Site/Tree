@@ -547,6 +547,8 @@ function getMcpServer() {
       userId: z.string().describe("The ID of the user creating the node."),
       values: z.record(z.number()).default({}).nullable().optional().describe("Key-value pairs representing node number values."),
       goals: z.record(z.number()).default({}).nullable().optional().describe("Key-value pairs representing node number goals attached to values."),
+      note: z.string().optional().describe("The text content of the optional note."),
+
     },
     async ({ name, schedule, reeffectTime, parentNodeID, userId, values, goals }) => {
       try {
@@ -558,7 +560,8 @@ function getMcpServer() {
           false,
           userId,
           values,
-          goals
+          goals,
+          note
         );
 
         return {

@@ -1,6 +1,7 @@
 import Node from "../../db/models/node.js";
 import { findNodeById, logContribution } from "../../db/utils.js";
 import User from "../../db/models/user.js";
+import { createNoteHelper } from "./notesHelper.js"
 
 
 export async function createNewNode(
@@ -11,7 +12,8 @@ export async function createNewNode(
     isRoot = false,
     userId,
     values = {},
-    goals = {}
+    goals = {},
+    note = null
 ) {
 
     values = values && typeof values === "object" ? values : {};
@@ -55,6 +57,16 @@ export async function createNewNode(
         action: "create",
         nodeVersion: "0",
     });
+    if (note && note.trim().length > 0) {
+        await createNoteHelper({
+            contentType: "text",
+            content: note,
+            userId,
+            nodeId: newNode._id,
+            version: 0,
+            isReflection: false,
+        });
+    }
 
     return newNode;
 }
@@ -68,6 +80,7 @@ export async function createNodesRecursive(nodeData, parentId, userId) {
         children = [],
         reeffectTime,
         effectTime,
+        note,
     } = nodeData;
 
     const timeToUse = reeffectTime ?? effectTime;
@@ -81,7 +94,8 @@ export async function createNodesRecursive(nodeData, parentId, userId) {
         false,
         userId,
         values || {},
-        goals || {}
+        goals || {},
+        note || null
     );
 
 
