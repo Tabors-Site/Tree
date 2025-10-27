@@ -3,6 +3,8 @@ import cors from 'cors';
 import http from 'http'; // Change https to http
 import cookieParser from 'cookie-parser';
 import { connectToMCP } from './mcp/client.js';
+import { initWebSocketServer } from './ws/websocket.js';
+
 
 
 import aiRoutes from "./routes/ai.js";
@@ -61,6 +63,8 @@ app.use("/", statusesRoutes);
 app.use("/", scriptsRoutes);
 
 const server = http.createServer(app);
+initWebSocketServer(server);
+
 const PORT = process.env.PORT || 80; //
 
 server.listen(PORT, "0.0.0.0", async () => {
@@ -75,3 +79,4 @@ server.listen(PORT, "0.0.0.0", async () => {
     console.error("Failed to connect to MCP server:", err.message);
   }
 });
+
