@@ -40,13 +40,17 @@ const ScriptMenu = ({ nodeSelected, getTree, rootSelected }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log("Script executed:", data);
+      alert("Script executed succesfully:\n" + JSON.stringify(data, null, 2));
+      console.log("Script executed:", data);
         getTree(rootSelected);
       } else {
-        console.error("Failed to execute script:", await response.text());
+        const errorText = await response.text();
+        console.error("Failed to execute script:", errorText);
+        alert("Error executing script:\n" + errorText);
       }
     } catch (error) {
-      console.error("Error executing script:", error);
+      console.error("🚨 Script execution error:", error);
+      alert("Script execution error:\n" + error.message); // ⚡ show popup
     }
   };
 
