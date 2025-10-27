@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import dotenv from "dotenv";
+import { emitToUserAtRoot } from "../ws/websocket.js";
 
 import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
@@ -658,6 +659,10 @@ userId = ${userId}
             const treeResource = await mcp.readResource({ uri });
             const treeText = treeResource.contents[0].text;
             console.log(`📗 Loaded tree resource ${uri}`);
+            emitToUserAtRoot(rootId, username, "treeResource", {
+              uri,
+              text: treeText,
+            });
             conversation.push({
               role: "system",
               content: `Resource [${uri}]:\n${treeText}`,
@@ -670,6 +675,10 @@ userId = ${userId}
             const nodeResource = await mcp.readResource({ uri });
             const nodeText = nodeResource.contents[0].text;
             console.log(`📗 Loaded node resource ${uri}`);
+            emitToUserAtRoot(rootId, username, "nodeResource", {
+              uri,
+              text: nodeText,
+            });
             conversation.push({
               role: "system",
               content: `Resource [${uri}]:\n${nodeText}`,
@@ -709,6 +718,11 @@ userId = ${userId}
           ) {
             const result = await mcp.callTool({ name: fn, arguments: args });
             console.log(`✅ ${fn} result:`, result);
+            emitToUserAtRoot(rootId, username, "toolCall", {
+              fn,
+              args,
+              result,
+            });
 
             conversation.push({
               role: "system",
