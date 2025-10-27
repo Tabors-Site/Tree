@@ -1,10 +1,10 @@
 import axios from 'axios'; // Commo
 
 //prebuilt functions to use in scripts
-import { setValueForNodeHelper, setGoalForNodeHelper } from '../helpers/valuesHelper.js';
+import { setValueForNodeHelper, setGoalForNodeHelper } from '../valuesHelper.js';
 
-import { editStatusHelper, addPrestigeHelper } from '../helpers/statusesHelper.js';
-import { updateScheduleHelper } from '../helpers/schedulesHelper.js';
+import { editStatusHelper, addPrestigeHelper } from '../statusesHelper.js';
+import { updateScheduleHelper } from '../schedulesHelper.js';
 
 async function getApi(url) {
   const blockedHosts = [

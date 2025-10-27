@@ -1,7 +1,7 @@
 import express from 'express';
 import { getAiResponse } from '../controllers/oldAI.js';
-import { handleMcpRequest } from '../controllers/mcp/server.js';
-import { getMCPResponse } from '../controllers/mcp/client.js';
+import { handleMcpRequest } from '../mcp/server.js';
+import { getMCPResponse } from '../mcp/client.js';
 
 const router = express.Router();
 

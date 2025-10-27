@@ -1,6 +1,6 @@
 import { VM } from "vm2";
 import Node from "../../db/models/node.js";
-import { makeSafeFunctions } from "../scriptsFunctions/safeFunctions.js";
+import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";
 
 export async function executeScriptHelper({ nodeId, scriptName, userId }) {
 

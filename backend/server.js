@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import http from 'http'; // Change https to http
 import cookieParser from 'cookie-parser';
-import { connectToMCP } from './controllers/mcp/client.js';
+import { connectToMCP } from './mcp/client.js';
 
 
 import aiRoutes from "./routes/ai.js";

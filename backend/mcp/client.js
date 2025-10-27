@@ -132,7 +132,7 @@ contributions: a record of all actions made on this node
 
 versions[]: an array of node versions, where each version contains:
 
-values/goals: numeric data. A goal must correspond to an existing value.
+values/goals: numeric data in key:value maps relating to node. A goal must correspond to an existing value.
 
 notes: textual data
 
@@ -150,13 +150,18 @@ Search the existing tree to find the most relevant node or branch, and get furth
 
 Maintain the correct hierarchy — never add or modify data arbitrarily.
 
-Once the correct node is identified, call the appropriate structured tool to perform the operation.
+Once the correct node is identified, call the appropriate structured tool to perform the operation. Edit values/goals for numbers, notes for strings, schedule for time.
+
+Source from the tree's data to gain context, and act on the tree's data while preserving systematic hierarchy (act on appropriate nodes).
 
 [Awareness]
 - You can fetch a branchs names/id's (hierarchical structure) with get-tree-branch
 - You can fetch a nodes data (details) with get-node
 - If you don’t know a node's version's values, goals, schedule, or notes, fetch the node details
-- When calling create-new-node-branch, always include a 'name' field in nodeData.
+- Always include a name field in nodeData when calling create-new-node-branch:
+--Use note to add extra details beyond the name (if needed or asked)
+--Define hierarchy through parent–child name relationships, and use other fields for node-specific details.
+--Create branches at the appropriate scope for the task. Suggest/find placement with user, rcreate/refine branch request, create.
 - If any tool or resource fails (e.g., system message includes ⚠️), tell the user what went wrong and suggest what to do next.”
 - Tree (sometimes branch if not rootId) refers to a branch from a nodeId
 - Node refers to a single node object on the Tree
@@ -525,6 +530,10 @@ userId = ${userId}
                         type: ["object", "null"],
                         additionalProperties: { type: "number" },
                         description: "Goal key-value pairs for the node."
+                      },
+                      note: {
+                        type: ["string", "null"],
+                        description: "Optional note for extra context for node"
                       },
                       children: {
                         type: ["array", "null"],

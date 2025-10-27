@@ -3,31 +3,31 @@ import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import {
   setValueForNodeHelper,
   setGoalForNodeHelper,
-} from '../helpers/valuesHelper.js'
+} from '../controllers/helpers/valuesHelper.js'
 import {
   updateScheduleHelper
-} from "../helpers/schedulesHelper.js"
+} from "../controllers/helpers/schedulesHelper.js"
 
 import {
   editStatusHelper,
   addPrestigeHelper,
-} from "../helpers/statusesHelper.js"
-import { createNoteHelper, getNotesHelper, deleteNoteAndFileHelper } from "../helpers/notesHelper.js";
+} from "../controllers/helpers/statusesHelper.js"
+import { createNoteHelper, getNotesHelper, deleteNoteAndFileHelper } from "../controllers/helpers/notesHelper.js";
 import {
   createNewNode,
   createNodesRecursive,
   deleteNodeBranch,
   updateParentRelationship,
-} from "../helpers/treeManagementHelper.js";
+} from "../controllers/helpers/treeManagementHelper.js";
 
 import {
   executeScriptHelper,
-} from "../helpers/scriptsHelper.js"
+} from "../controllers/helpers/scriptsHelper.js"
 
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { getTreeForAi, getNodeForAi } from '../treeDataFetching.js'; // import from your real backend
+import { getTreeForAi, getNodeForAi } from '../controllers/treeDataFetching.js'; // import from your real backend
 
 // Create and configure the MCP server
 function getMcpServer() {
@@ -587,6 +587,8 @@ function getMcpServer() {
         .describe("Numeric key-value pairs for node values."),
       goals: z.record(z.number()).nullable().optional()
         .describe("Goal key-value pairs for the node."),
+      note: z.string().nullable().optional()
+        .describe("Optional note for new node made on creation."),
       children: z.array(NodeSchema).nullable().optional()
         .describe("List of child nodes."),
     })
