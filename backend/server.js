@@ -2,23 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import cookieParser from 'cookie-parser';
+import registerRoutes from "./routes/routesHandler.js";
+
 import { connectToMCP } from './mcp/client.js';
 import { initWebSocketServer } from './ws/websocket.js';
 
-
-
-import aiRoutes from "./routes/ai.js";
-import contributionsRoutes from "./routes/contributions.js";
-import invitesRoutes from "./routes/invites.js";
-import treeManagementRoutes from "./routes/treeManagement.js";
-import notesRoutes from "./routes/notes.js";
-import schedulesRoutes from "./routes/schedules.js";
-import transactionsRoutes from "./routes/transactions.js";
-import treeDataFetchingRoutes from "./routes/treeDataFetching.js";
-import usersRoutes from "./routes/users.js";
-import valuesRoutes from "./routes/values.js";
-import statusesRoutes from "./routes/statuses.js";
-import scriptsRoutes from "./routes/scripts.js";
 
 import dotenv from "dotenv";
 
@@ -49,18 +37,8 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.set("trust proxy", 1);
 
-app.use("/", aiRoutes);
-app.use("/", contributionsRoutes);
-app.use("/", invitesRoutes);
-app.use("/", treeManagementRoutes);
-app.use("/", notesRoutes);
-app.use("/", schedulesRoutes);
-app.use("/", transactionsRoutes);
-app.use("/", treeDataFetchingRoutes);
-app.use("/", usersRoutes);
-app.use("/", valuesRoutes);
-app.use("/", statusesRoutes);
-app.use("/", scriptsRoutes);
+
+registerRoutes(app);
 
 const server = http.createServer(app);
 initWebSocketServer(server);
