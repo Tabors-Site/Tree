@@ -6,6 +6,8 @@ import { emitToUserAtRoot } from "../ws/websocket.js";
 
 import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
+dotenv.config();
+
 async function handleServerMessagePrompt(message) {
   // Ensure message is text
   console.log(message, "gi");
@@ -26,27 +28,16 @@ async function handleServerMessagePrompt(message) {
   return text;
 }
 
-dotenv.config();
-
-const conversations = new Map();
-
 // === OpenAI/Ollama Setup ===
 const openai = new OpenAI({
   baseURL: "http://localhost:11434/v1",
   apiKey: "ollama",
 });
 
-// === MCP Client Setup ===
-const mcp = new Client(
-  { name: "tree-helper-client", version: "1.0.0" },
-  { capabilities: { sampling: {} } }
-);
+export const conversations = new Map();
+export const mcpClients = new Map(); // key: "rootId:username" → Client instance
 
-let tools = [];
-let resources = [];
-let prompts = [];
-let resourceTemplates = [];
-
+/*
 mcp.setRequestHandler(CreateMessageRequestSchema, async (request) => {
   const texts = [];
   for (const message of request.params.messages) {
@@ -64,44 +55,65 @@ mcp.setRequestHandler(CreateMessageRequestSchema, async (request) => {
     },
   };
 });
+*/
 
-// Connect to the local Express MCP endpoint
-export async function connectToMCP(serverUrl) {
-  console.log(`Connecting to MCP HTTP server at ${serverUrl}...`);
+export async function connectToMCP(serverUrl, rootId, username) {
+  const key = `${rootId}:${username}`;
+
+  // Reuse if already connected
+  if (mcpClients.has(key)) {
+    console.log(`Reusing existing MCP client for ${key}`);
+    return mcpClients.get(key);
+  }
+
+  console.log(`Connecting MCP client for ${key} at ${serverUrl}...`);
 
   const transport = new StreamableHTTPClientTransport(serverUrl);
-  await mcp.connect(transport);
-
-  const [toolsResult, promptsResult, resourcesResult, templatesResult] =
-    await Promise.all([
-      mcp.listTools(),
-      mcp.listPrompts(),
-      mcp.listResources(),
-      mcp.listResourceTemplates(),
-    ]);
-
-  tools = toolsResult.tools || [];
-  prompts = promptsResult.prompts || [];
-  resources = resourcesResult.resources || [];
-  resourceTemplates = templatesResult.resourceTemplates || [];
-
-  console.log(
-    "Connected to MCP HTTP server with tools:",
-    tools.map((t) => t.name)
-  );
-  console.log(
-    "Available MCP resources:",
-    resources.map((r) => r.uri)
-  );
-  console.log(
-    "Prompts:",
-    prompts.map((p) => `${p.name}: ${p.description}`)
+  const client = new Client(
+    { name: `treebuilder-client-${key}`, version: "1.0.0" },
+    { capabilities: { sampling: {} } }
   );
 
-  console.log(
-    "Resource templates:",
-    resourceTemplates.map((rt) => rt.uriTemplate)
-  );
+  await client.connect(transport);
+  console.log(`Connected MCP client for ${key}`);
+
+  /*
+  try {
+    const [toolsRes, promptsRes, resourcesRes, templatesRes] =
+      await Promise.all([
+        client.listTools(),
+        client.listPrompts(),
+        client.listResources(),
+        client.listResourceTemplates(),
+      ]);
+
+    const tools = toolsRes.tools || [];
+    const prompts = promptsRes.prompts || [];
+    const resources = resourcesRes.resources || [];
+    const resourceTemplates = templatesRes.resourceTemplates || [];
+    
+    console.log(
+      `Tools for ${key}:`,
+      tools.map((t) => t.name).join(", ") || "none"
+    );
+    console.log(
+      `Resources for ${key}:`,
+      resources.map((r) => r.uri).join(", ") || "none"
+    );
+    console.log(
+      `Prompts for ${key}:`,
+      prompts.map((p) => `${p.name}: ${p.description}`).join(" | ") || "none"
+    );
+    console.log(
+      `Resource templates for ${key}:`,
+      resourceTemplates.map((rt) => rt.uriTemplate).join(", ") || "none"
+    );
+  } catch (err) {
+    console.warn(`Failed to fetch metadata for ${key}:`, err.message);
+  }*/
+  // Store and return
+  mcpClients.set(key, client);
+  return client;
 }
 
 const MAX_MESSAGES = 20; // when reached, restart conversation
@@ -113,8 +125,15 @@ export async function getMCPResponse(req, res) {
       .status(400)
       .json({ success: false, error: "Missing message or rootId" });
 
+  const key = `${rootId}:${username}`;
+  const mcp = mcpClients.get(key);
+
+  if (!mcp) {
+    return res.status(404).json({ error: "No MCP client found for this user" });
+  }
+
   try {
-    let conversation = conversations.get(rootId) || [];
+    let conversation = conversations.get(key) || [];
     const TREEBUILDER_PROMPT = `
 [System Identity]
 You are the Tree Helper — an evolving AI that tends, grows, and edits the Tree.
@@ -189,7 +208,7 @@ userId = ${userId}
 
     // Reset long convo
     if (conversation.length >= MAX_MESSAGES) {
-      console.log(`🔄 Reset conversation for ${rootId}`);
+      console.log(`🔄 Reset conversation for ${key}`);
       conversation = [];
     }
 
@@ -760,7 +779,7 @@ userId = ${userId}
       const finalMessage =
         finalResponse.choices?.[0]?.message?.content || "Done.";
       conversation.push({ role: "assistant", content: finalMessage });
-      conversations.set(rootId, conversation);
+      conversations.set(key, conversation);
 
       console.log("\n💬 Final user message:", finalMessage);
       return res.json({ success: true, answer: finalMessage, rootId });
@@ -770,7 +789,7 @@ userId = ${userId}
       response?.choices?.[0]?.message?.content ||
       "(Waiting for user-facing reply)";
     conversation.push({ role: "assistant", content: finalAnswer });
-    conversations.set(rootId, conversation);
+    conversations.set(key, conversation);
 
     console.log("\n🧠 Final AI Answer:", finalAnswer);
     console.log("🗒️ Full conversation length:", conversation.length);

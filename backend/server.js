@@ -4,7 +4,6 @@ import http from "http";
 import cookieParser from "cookie-parser";
 import registerRoutes from "./routes/routesHandler.js";
 
-import { connectToMCP } from "./mcp/client.js";
 import { initWebSocketServer } from "./ws/websocket.js";
 
 import "./db/config.js"; // Initialize DB connection
@@ -44,13 +43,4 @@ const PORT = process.env.PORT || 80; //
 
 server.listen(PORT, "0.0.0.0", async () => {
   console.log(`Express server (Tree/MCP coupled) running on port ${PORT}`);
-
-  //connect MCP client to MCP server at initializino
-  const MCP_URL = `http://localhost:${PORT}/mcp`;
-  try {
-    await connectToMCP(MCP_URL);
-    console.log("MCP client auto-connect completed successsfully.");
-  } catch (err) {
-    console.error("Failed to connect to MCP server:", err.message);
-  }
 });
