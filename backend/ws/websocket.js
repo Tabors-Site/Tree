@@ -46,6 +46,30 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       logStats();
     });
 
+    //can be used to close chatrooms after leaving but they auto close when connection ends
+    //and its kind of cool keeping multiple open
+    /*
+    socket.on("unregister", async ({ rootId, username }) => {
+      const key = `${rootId}:${username}`;
+      const id = userSockets.get(key);
+      if (id === socket.id) {
+        userSockets.delete(key);
+        conversations.delete(key);
+        const mcpClient = mcpClients.get(key);
+        if (mcpClient) {
+          try {
+            (await mcpClient.close?.()) || mcpClient.transport?.close?.();
+          } catch (e) {
+            console.warn(`Error closing MCP client for ${key}`, e);
+          }
+          mcpClients.delete(key);
+        }
+        console.log(`🔹 Unregistered (without disconnect) ${key}`);
+        logStats();
+      }
+    });
+    */
+
     socket.on("disconnect", async (reason) => {
       console.log(`Socket disconnected: ${socket.id} (${reason})`);
 
