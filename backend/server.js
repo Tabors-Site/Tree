@@ -3,6 +3,7 @@ import cors from "cors";
 import http from "http";
 import cookieParser from "cookie-parser";
 import registerRoutes from "./routes/routesHandler.js";
+import registerURLRoutes from "./routesURL/routeURLHandler.js";
 
 import { initWebSocketServer } from "./ws/websocket.js";
 
@@ -35,6 +36,7 @@ app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.set("trust proxy", 1);
 
 registerRoutes(app);
+registerURLRoutes(app);
 
 const server = http.createServer(app);
 initWebSocketServer(server, [rootFrontEnd, treeFrontEnd, beFrontEnd]);
