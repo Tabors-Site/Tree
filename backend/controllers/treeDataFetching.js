@@ -240,6 +240,7 @@ async function getAllData(req, res) {
     const populateNodeRecursive = async (nodeId) => {
       const node = await Node.findById(nodeId)
         .populate("children")
+        .populate("parent")
         .lean()
         .exec();
       if (!node) return null;

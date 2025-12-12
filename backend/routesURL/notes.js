@@ -29,6 +29,11 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+/* ------------------------------------------------------------------
+   GET /:nodeId/:version/notes 
+   - JSON (default)
+   - HTML (when ?html is used)
+------------------------------------------------------------------- */
 router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
@@ -38,7 +43,6 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       version: Number(version),
     });
 
-    // Convert file-based notes into URLs
     const notes = result.notes.map((n) => ({
       ...n,
       content:
@@ -47,15 +51,71 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
           : n.content,
     }));
 
-    res.json({ success: true, notes });
+    // ---------- OPTIONAL HTML MODE ----------
+    if (req.query.html !== undefined) {
+      const base = `${req.protocol}://${req.get(
+        "host"
+      )}/api/${nodeId}/${version}`;
+
+      const nodeViewUrl = `${req.protocol}://${req.get(
+        "host"
+      )}/api/${nodeId}?token=${req.query.token ?? ""}&html`;
+
+      let html = `
+<html>
+<head>
+  <title>Notes for ${nodeId} version ${version}</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+    a { color: #0077cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    li { margin-bottom: 16px; }
+    .meta { color: #444; font-size: 0.9em; }
+    .top-links { margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+  <div class="top-links">
+    <a href="${nodeViewUrl}">Node View</a>
+  </div>
+
+  <h1><a href="${base}?token=${
+        req.query.token ?? ""
+      }&html">${nodeId}</a> (v${version}) Notes</h1>
+  <ul>
+`;
+
+      for (const n of notes) {
+        const preview =
+          n.contentType === "text"
+            ? n.content.substring(0, 80)
+            : `[FILE] ${n.content}`;
+
+        html += `
+    <li>
+      <div class="meta"><strong>${n.username ?? "Unknown user"}</strong></div>
+      <a href="${base}/notes/${n._id}?token=${req.query.token ?? ""}&html">
+        ${preview}
+      </a>
+      <div class="meta">${new Date(n.createdAt).toLocaleString()}</div>
+    </li>`;
+      }
+
+      html += `</ul></body></html>`;
+      return res.send(html);
+    }
+
+    // ---------- NORMAL OLD JSON MODE ----------
+    return res.json({ success: true, notes });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    return res.status(400).json({ success: false, error: err.message });
   }
 });
 
-// -------------------------------------------------------------
-// POST /:nodeId/:version/notes   create a text or file note
-// -------------------------------------------------------------
+/* ------------------------------------------------------------------
+   POST /:nodeId/:version/notes
+------------------------------------------------------------------- */
 router.post(
   "/:nodeId/:version/notes",
   urlAuth,
@@ -84,18 +144,73 @@ router.post(
   }
 );
 
-// -------------------------------------------------------------
-// GET /:nodeId/:version/notes/:noteId  download or return text
-// -------------------------------------------------------------
+/* ------------------------------------------------------------------
+   GET /:nodeId/:version/notes/:noteId
+   - JSON (old behavior)
+   - raw file download (old behavior)
+   - HTML viewer (optional)
+------------------------------------------------------------------- */
 router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
   try {
-    const { noteId } = req.params;
+    const { nodeId, version, noteId } = req.params;
 
     const Note = (await import("../db/models/notes.js")).default;
     const note = await Note.findById(noteId).lean();
+    if (!note) return res.status(404).send("Note not found");
 
-    if (!note) return res.status(404).json({ error: "Note not found" });
+    const back = `${req.protocol}://${req.get(
+      "host"
+    )}/api/${nodeId}/${version}/notes?token=${req.query.token ?? ""}&html`;
 
+    const nodeUrl = `${req.protocol}://${req.get("host")}/api/${nodeId}?token=${
+      req.query.token ?? ""
+    }&html`;
+
+    // ---------- IF HTML MODE ----------
+    if (req.query.html !== undefined) {
+      if (note.contentType === "text") {
+        return res.send(`
+<html>
+<head>
+  <title>Note</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    pre { background: #eee; padding: 15px; border-radius: 6px; }
+    .top-links { margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+  <div class="top-links">
+    <a href="${back}">Back to Notes</a> |
+    <a href="${nodeUrl}">Node View</a>
+  </div>
+
+  <h1>Text Note</h1>
+  <pre>${note.content}</pre>
+</body>
+</html>`);
+      }
+
+      const fileUrl = `/uploads/${note.content}`;
+      return res.send(`
+<html>
+<head><title>File Note</title></head>
+<body>
+
+  <div class="top-links">
+    <a href="${back}">← Back to Notes</a> |
+    <a href="${nodeUrl}">🔙 View Node</a>
+  </div>
+
+  <h1>File Note</h1>
+  <a href="${fileUrl}" download>Download file</a>
+  <video src="${fileUrl}" controls style="max-width:100%;"></video>
+</body>
+</html>`);
+    }
+
+    // ---------- OLD BEHAVIOR (NO HTML) ----------
     if (note.contentType === "text") {
       return res.json({ text: note.content });
     }

@@ -20,17 +20,17 @@ const AccountTab = ({
   const [showRoots, setShowRoots] = useState(false); // State to toggle RootNodesForm visibility
   const [showInvites, setShowInvites] = useState(false); // State to toggle Invites visibility
 
-useEffect(() => {
-  setIsHovered(false);
+  useEffect(() => {
+    setIsHovered(false);
 
-  if (!rootSelected) {
-    // If no root selected → show the form
-    setShowRoots(true);
-  } else {
-    // If a root is selected (even from cookies) → hide the form
-    setShowRoots(false);
-  }
-}, [rootSelected]);
+    if (!rootSelected) {
+      // If no root selected → show the form
+      setShowRoots(true);
+    } else {
+      // If a root is selected (even from cookies) → hide the form
+      setShowRoots(false);
+    }
+  }, [rootSelected]);
 
   const handleLogoutClick = () => {
     if (onLogout) {
@@ -96,6 +96,17 @@ useEffect(() => {
             </button>
             <button onClick={toggleInvites}>
               {showInvites ? "Hide Invites" : "Show Invites"}
+            </button>
+            <button
+              onClick={() => {
+                const token = Cookies.get("token");
+                if (!rootSelected || !token) return;
+                const url = `${apiUrl}/root/${rootSelected}?token=${token}&html`;
+                window.open(url, "_blank");
+              }}
+              disabled={!rootSelected}
+            >
+              Open HTML Browser
             </button>
             <button onClick={handleDownloadTree} disabled={!tree}>
               Download Tree
