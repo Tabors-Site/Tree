@@ -128,3 +128,44 @@ export const getAiResponse = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+export const aiUserResponse = async (req, res) => {
+  const { message, username, userId, rootId, conversation = [] } = req.body;
+
+  if (!message) {
+    return res.status(400).json({ success: false, error: "Missing message" });
+  }
+
+  try {
+    // Convert your frontend messages [{role, text}] to OpenAI format
+    const chatMessages = [
+      {
+        role: "system",
+        content: `You are ${
+          username || "a user"
+        } trying to grow and act on their plans for the tree of nodes with the rootId: ${
+          rootId || "(unspecified)"
+        }.
+        Listen and work with the tree-helper who will help you organized, remember, and act on your plans. They are the memory/systemizer, and you are the be-er.`,
+      },
+      ...conversation.map((m) => ({
+        role: m.role === "ai" ? "assistant" : "user",
+        content: m.text,
+      })),
+      { role: "user", content: message }, // include most recent message at the end
+    ];
+
+    console.log(chatMessages);
+    const response = await openai.chat.completions.create({
+      model: "gpt-oss:20b",
+      messages: chatMessages,
+    });
+
+    const output = response.choices?.[0]?.message?.content?.trim() || "";
+
+    res.json({ success: true, output });
+  } catch (error) {
+    console.error("AI User Response Error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

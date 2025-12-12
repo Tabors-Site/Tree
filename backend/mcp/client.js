@@ -116,7 +116,7 @@ export async function connectToMCP(serverUrl, rootId, username) {
   return client;
 }
 
-const MAX_MESSAGES = 20; // when reached, restart conversation
+const MAX_MESSAGES = 30; // when reached, restart conversation
 
 export async function getMCPResponse(req, res) {
   const { message, rootId, username, userId } = req.body;
@@ -193,6 +193,7 @@ Source from the tree's data to gain context, and act on the tree's data while pr
 - Use human-readable formatting for arrays and nested objects (e.g., bullet points or short sentences).
 - When describing nodes, emphasize meaning and hierarchy rather than JSON structure.
 - Only include identifiers like "_id" if explicitly requested by the system or developer, not by the user.
+- Ensure that UTC time is presented as Pacific Time Zone (PST/PDT)
 
 [Output Style]
 - Use concise, natural, human-like sentences.
