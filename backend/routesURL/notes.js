@@ -65,12 +65,11 @@ router.post(
       const { nodeId, version } = req.params;
 
       const contentType = req.file ? "file" : "text";
-
       const isReflection = req.body.isReflection === "true";
 
       const result = await coreCreateNote({
         contentType,
-        content: req.body.content,
+        content: contentType === "file" ? req.file.filename : req.body.content,
         userId: req.userId,
         nodeId,
         version: Number(version),
@@ -106,7 +105,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: "File not found" });
       }
-      return res.download(filePath);
+      return res.sendFile(filePath);
     }
 
     res.status(400).json({ error: "Unknown note type" });
