@@ -250,7 +250,7 @@ async function getAllData(req, res) {
       }).exec();
       node.contributions = contributions;
 
-      // Loop through all versions and fetch notes for each
+      // versions + notes
       if (node.versions && node.versions.length > 0) {
         const versionsWithNotes = [];
         for (let i = 0; i < node.versions.length; i++) {
@@ -265,20 +265,18 @@ async function getAllData(req, res) {
             .lean()
             .exec();
 
-          const noteContents = notes.map((n) => ({
-            username: n.userId?.username || "Unknown",
-            content: n.content,
-          }));
-
           versionsWithNotes.push({
             ...version,
-            notes: noteContents,
+            notes: notes.map((n) => ({
+              username: n.userId?.username || "Unknown",
+              content: n.content,
+            })),
           });
         }
         node.versions = versionsWithNotes;
       }
 
-      // Recursively populate children
+      // recurse children
       if (node.children && node.children.length > 0) {
         const populatedChildren = [];
         for (const child of node.children) {
@@ -295,6 +293,27 @@ async function getAllData(req, res) {
     if (!rootNode) {
       return res.status(404).json({ message: "Node not found" });
     }
+
+    // 🔗 BUILD FULL PARENT CHAIN (leaf → root)
+    const ancestors = [];
+    let currentId = rootNode.parent?._id || rootNode.parent;
+
+    while (currentId) {
+      const parentNode = await Node.findById(currentId)
+        .select("_id name parent")
+        .lean()
+        .exec();
+
+      if (!parentNode) break;
+
+      ancestors.push(parentNode);
+      currentId = parentNode.parent;
+    }
+
+    rootNode.ancestors = ancestors;
+
+    // 🧹 CLEAN NULLS BEFORE SENDING
+    //const cleaned = removeNullFields(rootNode);
 
     res.json(rootNode);
   } catch (error) {

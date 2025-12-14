@@ -62,6 +62,40 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       });
     }
 
+    const renderParents = (chain) => {
+      let html = "";
+      let depth = 0;
+
+      for (const node of chain) {
+        const color = rainbow[depth % rainbow.length];
+
+        html += `
+      <ul>
+        <li style="
+          border-left: 4px solid ${color};
+          padding-left: 12px;
+          margin: 6px 0;
+          font-weight: ${node.isCurrent ? "700" : "500"};
+        ">
+          ${
+            node.isCurrent
+              ? `<span>${node.name}</span>`
+              : `<a href="/api/root/${node._id}${queryString}">
+                  ${node.name}
+                </a>`
+          }
+    `;
+        depth++;
+      }
+
+      // close all opened tags
+      for (let i = 0; i < chain.length; i++) {
+        html += `</li></ul>`;
+      }
+
+      return html;
+    };
+
     // DEPTH-AWARE TREE RENDERING (children only)
     const renderTree = (node, depth = 0) => {
       const color = rainbow[depth % rainbow.length];
@@ -118,22 +152,18 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       </ul>`
       : `<p><em>No contributors</em></p>`;
 
-    // PARENT
-    let parentHtml = "";
-    if (allData.parent) {
-      const pr = allData.parent;
-      parentHtml = `
-        <ul>
-          <li>
-            <a href="/api/root/${pr._id}${queryString}">
-              ${pr.name} <code>${pr._id}</code>
-            </a>
-          </li>
-        </ul>
-      `;
-    } else {
-      parentHtml = `<p><em>No parents</em></p>`;
-    }
+    const ancestors = allData.ancestors || [];
+
+    const parentHtml = ancestors.length
+      ? renderParents([
+          ...ancestors.slice().reverse(), // root → parent
+          {
+            _id: allData._id,
+            name: allData.name,
+            isCurrent: true,
+          },
+        ])
+      : `<p><em>No parents</em></p>`;
 
     // CHILDREN
     const childrenHtml = allData.children?.length
@@ -212,14 +242,16 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 
       <body>
 
-        <h1>${allData.name}</h1>
-         <a href="/api/${allData._id}${queryString}">
-          Look Inside This
-        </a>
+        <h1>
+  <a href="/api/${allData._id}${queryString}">
+    ${allData.name}
+  </a>
+</h1>
+
         <p><code>${allData._id}</code></p>
    
      
-        <h2>Parent</h2>
+        <h2>Parents</h2>
         ${parentHtml}
 
         <h2>Children</h2>
