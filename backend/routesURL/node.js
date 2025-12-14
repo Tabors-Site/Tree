@@ -100,10 +100,11 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
           </style>
         </head>
         <body>
-        <h3>
-          <a href="${rootUrl}">TREE</a>
-</h3>
+       
           <h1>${node.name}</h1>
+           <h3>
+          <a href="${rootUrl}">BACK TO TREE</a>
+          </h3>
           <p><strong>ID:</strong> <code>${node._id}</code></p>
           <p><strong>Type:</strong> ${node.type ?? "<em>None</em>"}</p>
           <p><strong>Prestige:</strong> ${node.prestige}</p>
@@ -197,6 +198,19 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
 <h2>
                <a href="/api/${nodeId}/${version}/notes${qs}">
               Notes
+            </a>
+            <br />
+             <a href="/api/${nodeId}/${version}/values${qs}">
+              Values/Goals
+            </a>
+            <br />
+            
+             <a href="/api/${nodeId}/${version}/contributions${qs}">
+              Contributions
+            </a>
+            <br />
+             <a href="/api/${nodeId}/${version}/transactions${qs}">
+              Transactions
             </a>
             <h2>
 
