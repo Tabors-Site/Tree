@@ -100,9 +100,9 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
           </style>
         </head>
         <body>
-
-          <a href="${rootUrl}" class="button">Root Traversal</a>
-
+        <h3>
+          <a href="${rootUrl}">TREE</a>
+</h3>
           <h1>${node.name}</h1>
           <p><strong>ID:</strong> <code>${node._id}</code></p>
           <p><strong>Type:</strong> ${node.type ?? "<em>None</em>"}</p>
@@ -190,18 +190,21 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
             </style>
           </head>
           <body>
+<h1>
+            <a href="${backUrl}">${node.name}</a>
 
-            <a href="${backUrl}" class="button">Node Home</a>
-
-            <h1>${node.name} — Version ${version}</h1>
+             — Version ${version}</h1>
+<h2>
+               <a href="/api/${nodeId}/${version}/notes${qs}">
+              Notes
+            </a>
+            <h2>
 
             <h2>Data</h2>
             <pre>${JSON.stringify(data, null, 2)}</pre>
 
             
-            <a href="/api/${nodeId}/${version}/notes${qs}">
-              Notes
-            </a>
+          
 
           </body>
         </html>
