@@ -28,7 +28,7 @@
 /* Styles for additional dropdown content */
 .account-tab-content {
   position: absolute;
-  top: 190px; /* Position below the tab */
+  top: 250px; /* Position below the tab */
   right: 0;
   background-color: #444;
   border-radius: 5px;

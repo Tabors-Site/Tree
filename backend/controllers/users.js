@@ -63,7 +63,7 @@ const login = async (req, res) => {
       { userId: user._id, username: user.username },
       JWT_SECRET,
       {
-        expiresIn: "7d",
+        expiresIn: "365d",
       }
     );
 

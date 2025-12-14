@@ -101,20 +101,21 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
         </head>
         <body>
 
-          <a href="${rootUrl}" class="button">Root View</a>
+          <a href="${rootUrl}" class="button">Root Traversal</a>
 
-          <h1>Node: ${node.name}</h1>
+          <h1>${node.name}</h1>
           <p><strong>ID:</strong> <code>${node._id}</code></p>
           <p><strong>Type:</strong> ${node.type ?? "<em>None</em>"}</p>
           <p><strong>Prestige:</strong> ${node.prestige}</p>
+                <h2>Versions</h2>
+          <ul>${versionHtml}</ul>
 
           <h2>Global Values</h2>
           <pre>${JSON.stringify(node.globalValues ?? {}, null, 2)}</pre>
 
          
 
-          <h2>Versions</h2>
-          <ul>${versionHtml}</ul>
+    
 
           <h2>Scripts</h2>
           <ul>${scriptsHtml}</ul>
@@ -125,9 +126,7 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
           <h2>Children</h2>
           <ul>${childrenHtml}</ul>
 
-          <h2>Raw Data</h2>
-          <pre>${JSON.stringify(node, null, 2)}</pre>
-
+          
         </body>
         </html>
       `);
@@ -192,16 +191,16 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
           </head>
           <body>
 
-            <a href="${backUrl}" class="button">Node View</a>
+            <a href="${backUrl}" class="button">Node Home</a>
 
             <h1>${node.name} — Version ${version}</h1>
 
             <h2>Data</h2>
             <pre>${JSON.stringify(data, null, 2)}</pre>
 
-            <h2>Notes</h2>
+            
             <a href="/api/${nodeId}/${version}/notes${qs}">
-              View Notes for This Version
+              Notes
             </a>
 
           </body>

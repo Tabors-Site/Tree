@@ -49,46 +49,76 @@ export async function resolveTreeAccess(nodeId, userId) {
   };
 }
 
-export async function resolveHtmlShareAccess(nodeId, shareToken) {
-  if (!nodeId || !shareToken) {
+export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
+  if (!shareToken) {
+    return { allowed: false, reason: "Missing share token" };
+  }
+
+  // ─────────────────────────────────────
+  // CASE 1: userId-based access
+  // ─────────────────────────────────────
+  if (userId && !nodeId) {
+    const user = await User.findOne({
+      _id: userId,
+      htmlShareToken: shareToken,
+    })
+      .select("_id username")
+      .lean()
+      .exec();
+
+    if (!user) {
+      return { allowed: false, reason: "Invalid share token" };
+    }
+
     return {
-      allowed: false,
-      reason: "Missing nodeId or share token",
+      allowed: true,
+      matchedUserId: user._id,
+      matchedUsername: user.username,
+      scope: "user",
     };
   }
 
-  const rootNode = await resolveRootNode(nodeId);
+  // ─────────────────────────────────────
+  // CASE 2: nodeId-based access
+  // ─────────────────────────────────────
+  if (nodeId) {
+    const rootNode = await resolveRootNode(nodeId);
 
-  const userIds = [rootNode.rootOwner, ...(rootNode.contributors || [])].filter(
-    Boolean
-  );
+    const userIds = [
+      rootNode.rootOwner,
+      ...(rootNode.contributors || []),
+    ].filter(Boolean);
 
-  if (userIds.length === 0) {
+    if (userIds.length === 0) {
+      return { allowed: false, reason: "No users associated with root" };
+    }
+
+    const matchedUser = await User.findOne({
+      _id: { $in: userIds },
+      htmlShareToken: shareToken,
+    })
+      .select("_id username")
+      .lean()
+      .exec();
+
+    if (!matchedUser) {
+      return { allowed: false, reason: "Invalid share token for node" };
+    }
+
     return {
-      allowed: false,
-      reason: "No users associated with root",
+      allowed: true,
+      rootId: rootNode._id.toString(),
+      matchedUserId: matchedUser._id,
+      matchedUsername: matchedUser.username,
+      scope: "node",
     };
   }
 
-  const matchedUser = await User.findOne({
-    _id: { $in: userIds },
-    htmlShareToken: shareToken,
-  })
-    .select("_id username")
-    .lean()
-    .exec();
-
-  if (!matchedUser) {
-    return {
-      allowed: false,
-      reason: "Invalid share token",
-    };
-  }
-
+  // ─────────────────────────────────────
+  // INVALID
+  // ─────────────────────────────────────
   return {
-    allowed: true,
-    rootId: rootNode._id.toString(),
-    matchedUserId: matchedUser._id,
-    matchedUsername: matchedUser.username,
+    allowed: false,
+    reason: "userId or nodeId is required",
   };
 }

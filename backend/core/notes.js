@@ -81,6 +81,7 @@ async function getNotes({ nodeId, version }) {
       contentType: note.contentType,
       content: note.content,
       username: note.userId ? note.userId.username : null,
+      userId: note.userId?._id?.toString(),
       nodeId: note.nodeId?._id,
       version: note.version,
       isReflection: note.isReflection,

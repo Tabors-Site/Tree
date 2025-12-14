@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
+import mime from "mime-types";
 
 import {
   createNote as coreCreateNote,
@@ -9,6 +10,7 @@ import {
 } from "../core/notes.js";
 
 import urlAuth from "../middleware/urlAuth.js";
+import authenticate from "../middleware/authenticate.js";
 
 const router = express.Router();
 
@@ -28,6 +30,32 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
+
+function renderMedia(fileUrl, mimeType) {
+  if (mimeType.startsWith("image/")) {
+    return `<img src="${fileUrl}" style="max-width:100%;" />`;
+  }
+
+  if (mimeType.startsWith("video/")) {
+    return `<video src="${fileUrl}" controls style="max-width:100%;"></video>`;
+  }
+
+  if (mimeType.startsWith("audio/")) {
+    return `<audio src="${fileUrl}" controls></audio>`;
+  }
+
+  if (mimeType === "application/pdf") {
+    return `
+      <iframe
+        src="${fileUrl}"
+        style="width:100%; height:90vh; border:none;"
+      ></iframe>
+    `;
+  }
+
+  // Unknown / non-previewable formats (epub, zip, etc.)
+  return ``;
+}
 
 /* ------------------------------------------------------------------
    GET /:nodeId/:version/notes 
@@ -76,13 +104,11 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
 </head>
 <body>
 
-  <div class="top-links">
-    <a href="${nodeViewUrl}">Node View</a>
-  </div>
+ 
 
   <h1><a href="${base}?token=${
         req.query.token ?? ""
-      }&html">${nodeId}</a> (v${version}) Notes</h1>
+      }&html">${nodeId}</a> (version: ${version}) Notes</h1>
   <ul>
 `;
 
@@ -92,9 +118,17 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
             ? n.content.substring(0, 80)
             : `[FILE] ${n.content}`;
 
+        const userLabel = n.userId
+          ? `<a href="/api/user/${n.userId}?token=${
+              req.query.token ?? ""
+            }&html">
+               ${n.username ?? n.userId}
+             </a>`
+          : n.username ?? "Unknown user";
+
         html += `
     <li>
-      <div class="meta"><strong>${n.username ?? "Unknown user"}</strong></div>
+      <div class="meta"><strong>${userLabel}</strong></div>
       <a href="${base}/notes/${n._id}?token=${req.query.token ?? ""}&html">
         ${preview}
       </a>
@@ -118,7 +152,7 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
 ------------------------------------------------------------------- */
 router.post(
   "/:nodeId/:version/notes",
-  urlAuth,
+  authenticate,
   upload.single("file"),
   async (req, res) => {
     try {
@@ -155,7 +189,10 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     const { nodeId, version, noteId } = req.params;
 
     const Note = (await import("../db/models/notes.js")).default;
-    const note = await Note.findById(noteId).lean();
+    const note = await Note.findById(noteId)
+      .populate("userId", "username")
+      .lean();
+
     if (!note) return res.status(404).send("Note not found");
 
     const back = `${req.protocol}://${req.get(
@@ -166,51 +203,68 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       req.query.token ?? ""
     }&html`;
 
-    // ---------- IF HTML MODE ----------
+    const userLink = note.userId
+      ? `<a href="/api/user/${note.userId._id}?token=${
+          req.query.token ?? ""
+        }&html">
+           ${note.userId.username ?? note.userId}:
+         </a>`
+      : note.username ?? "Unknown user";
+
     if (req.query.html !== undefined) {
       if (note.contentType === "text") {
         return res.send(`
 <html>
+<body>
+  <a href="${back}">Notes</a> | <a href="${nodeUrl}">Node View</a>
+  <div><strong>${userLink}</strong></div>
+  <pre>${note.content}</pre>
+</body>
+</html>
+`);
+      }
+
+      const fileUrl = `/api/uploads/${note.content}`;
+      const filePath = path.join(uploadsFolder, note.content);
+      const mimeType = mime.lookup(filePath) || "application/octet-stream";
+      const mediaHtml = renderMedia(fileUrl, mimeType);
+      const fileName = path.basename(note.content);
+
+      return res.send(`
+<html>
 <head>
-  <title>Note</title>
+  <title>${fileName}</title>
   <style>
     body { font-family: sans-serif; padding: 20px; }
-    pre { background: #eee; padding: 15px; border-radius: 6px; }
-    .top-links { margin-bottom: 20px; }
+    .top-links { margin-bottom: 16px; }
+    .download { margin-bottom: 16px; display: inline-block; }
   </style>
 </head>
 <body>
 
-  <div class="top-links">
-    <a href="${back}">Back to Notes</a> |
-    <a href="${nodeUrl}">Node View</a>
-  </div>
+<div class="top-links">
+  <a href="${back}">← Back to Notes</a> |
+  <a href="${nodeUrl}">Node Home</a>
+</div>
 
-  <h1>Text Note</h1>
-  <pre>${note.content}</pre>
+<div><strong>${userLink}</strong></div>
+
+<h1>${fileName}</h1>
+
+<a class="download" href="${fileUrl}" download>
+  Download file
+</a>
+
+<div class="media">
+  ${mediaHtml}
+</div>
+
 </body>
-</html>`);
-      }
-
-      const fileUrl = `/uploads/${note.content}`;
-      return res.send(`
-<html>
-<head><title>File Note</title></head>
-<body>
-
-  <div class="top-links">
-    <a href="${back}">← Back to Notes</a> |
-    <a href="${nodeUrl}">🔙 View Node</a>
-  </div>
-
-  <h1>File Note</h1>
-  <a href="${fileUrl}" download>Download file</a>
-  <video src="${fileUrl}" controls style="max-width:100%;"></video>
-</body>
-</html>`);
+</html>
+`);
     }
 
-    // ---------- OLD BEHAVIOR (NO HTML) ----------
+    // ---------- DATA BEHAVIOR (NO HTML) ----------
     if (note.contentType === "text") {
       return res.json({ text: note.content });
     }

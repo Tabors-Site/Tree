@@ -1,11 +1,23 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import { getAllData } from "../controllers/treeDataFetching.js";
+import Node from "../db/models/node.js";
 
 const router = express.Router();
 
 // Only allow these params to remain in querystring
 const allowedParams = ["token", "html"];
+
+// Rainbow colors by depth
+const rainbow = [
+  "#ff3b30",
+  "#ff9500",
+  "#ffcc00",
+  "#34c759",
+  "#32ade6",
+  "#5856d6",
+  "#af52de",
+];
 
 router.get("/root/:nodeId", urlAuth, async (req, res) => {
   try {
@@ -32,22 +44,44 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     await getAllData(fakeReq, fakeRes);
     if (!allData) return res.status(500).send("getAllData failed");
 
-    // DEFAULT JSON MODE
-    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-    if (!wantHtml) return res.json(allData);
+    // Load owner + contributors
+    const rootMeta = await Node.findById(nodeId)
+      .populate("rootOwner", "username _id")
+      .populate("contributors", "username _id")
+      .select("rootOwner contributors")
+      .lean()
+      .exec();
 
-    // CHILDREN RENDERING (unchanged)
-    const renderTree = (node) => {
+    // JSON MODE
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+    if (!wantHtml) {
+      return res.json({
+        ...allData,
+        rootOwner: rootMeta?.rootOwner || null,
+        contributors: rootMeta?.contributors || [],
+      });
+    }
+
+    // DEPTH-AWARE TREE RENDERING (children only)
+    const renderTree = (node, depth = 0) => {
+      const color = rainbow[depth % rainbow.length];
+
       let html = `
-        <li>
-          <a href="/api/root/${node._id}${queryString}">
-            ${node.name} (${node._id})
+        <li style="
+          border-left: 4px solid ${color};
+          padding-left: 12px;
+          margin: 6px 0;
+        ">
+          <a href="/api/${node._id}${queryString}">
+            ${node.name} <code>${node._id}</code>
           </a>
       `;
 
       if (node.children && node.children.length > 0) {
         html += `<ul>`;
-        for (const c of node.children) html += renderTree(c);
+        for (const c of node.children) {
+          html += renderTree(c, depth + 1);
+        }
         html += `</ul>`;
       }
 
@@ -55,16 +89,44 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       return html;
     };
 
-    // ONE PARENT (direct from allData.parent)
-    let parentHtml = "";
+    // OWNER + CONTRIBUTORS
+    const ownerHtml = rootMeta?.rootOwner
+      ? `
+    <p>
+      <a href="/api/user/${rootMeta.rootOwner._id}${queryString}">
+        ${rootMeta.rootOwner.username}
+      </a>
+      <code>${rootMeta.rootOwner._id}</code>
+    </p>
+  `
+      : `<p><em>No owner</em></p>`;
 
+    const contributorsHtml = rootMeta?.contributors?.length
+      ? `<ul>
+        ${rootMeta.contributors
+          .map(
+            (u) => `
+              <li>
+                <a href="/api/user/${u._id}${queryString}">
+                  ${u.username}
+                </a>
+                <code>${u._id}</code>
+              </li>
+            `
+          )
+          .join("")}
+      </ul>`
+      : `<p><em>No contributors</em></p>`;
+
+    // PARENT
+    let parentHtml = "";
     if (allData.parent) {
       const pr = allData.parent;
       parentHtml = `
         <ul>
           <li>
             <a href="/api/root/${pr._id}${queryString}">
-              ${pr.name} (${pr._id})
+              ${pr.name} <code>${pr._id}</code>
             </a>
           </li>
         </ul>
@@ -73,14 +135,12 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       parentHtml = `<p><em>No parents</em></p>`;
     }
 
-    // CHILDREN HTML
-    const childrenHtml = `
-      <ul>
-        ${renderTree(allData)}
-      </ul>
-    `;
+    // CHILDREN
+    const childrenHtml = allData.children?.length
+      ? `<ul>${allData.children.map((c) => renderTree(c)).join("")}</ul>`
+      : `<p><em>No children</em></p>`;
 
-    // JSON DUMP (unchanged)
+    // SAFE JSON
     const jsonDump = JSON.stringify(allData, null, 2)
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
@@ -91,11 +151,36 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       <head>
         <title>${allData.name} — Tree</title>
         <style>
-          body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
-          a { color: #0077cc; text-decoration: none; }
+          body {
+            font-family: system-ui, sans-serif;
+            padding: 20px;
+            line-height: 1.6;
+            background: #fafafa;
+          }
+
+          h1 { margin-bottom: 4px; }
+          h2 { margin-top: 32px; }
+
+          a {
+            color: #0077cc;
+            text-decoration: none;
+            font-weight: 500;
+          }
+
           a:hover { text-decoration: underline; }
-          ul { list-style-type: none; padding-left: 20px; }
-          code { background: #eee; padding: 3px 5px; border-radius: 4px; }
+
+          ul {
+            list-style: none;
+            padding-left: 18px;
+            margin: 6px 0;
+          }
+
+          code {
+            background: #eee;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+          }
 
           .json-box {
             margin-top: 40px;
@@ -105,18 +190,18 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
             border-radius: 8px;
             white-space: pre;
             overflow-x: auto;
-            font-size: 14px;
+            font-size: 13px;
           }
 
           .button {
             display: inline-block;
-            padding: 10px 15px;
-            margin-top: 20px;
+            padding: 10px 16px;
+            margin-top: 14px;
             background: #0077cc;
             color: white;
-            border-radius: 6px;
+            border-radius: 8px;
             text-decoration: none;
-            font-weight: bold;
+            font-weight: 600;
           }
 
           .button:hover {
@@ -124,23 +209,38 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
           }
         </style>
       </head>
+
       <body>
 
         <h1>${allData.name}</h1>
-        <p><code>${allData._id}</code></p>
-
-        <a class="button" href="/api/${allData._id}${queryString}">
-          Node View
+         <a href="/api/${allData._id}${queryString}">
+          Look Inside This
         </a>
-
+        <p><code>${allData._id}</code></p>
+   
+     
         <h2>Parent</h2>
         ${parentHtml}
 
         <h2>Children</h2>
         ${childrenHtml}
+           
+      
+       
+             <h2>Owner</h2>
+        ${ownerHtml}
 
-        <h2>Full AllData JSON</h2>
-        <div class="json-box">${jsonDump}</div>
+        <h2>Contributors</h2>
+        ${contributorsHtml}
+        
+
+      
+
+       
+
+    
+
+       
 
       </body>
       </html>
