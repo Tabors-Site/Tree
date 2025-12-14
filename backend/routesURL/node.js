@@ -168,8 +168,18 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
       const queryString = filterQuery(req);
       const qs = queryString ? `?${queryString}` : "";
 
-      // Back URL
       const backUrl = `${req.protocol}://${req.get("host")}/api/${nodeId}${qs}`;
+
+      const createdDate = data.dateCreated
+        ? new Date(data.dateCreated).toLocaleString()
+        : "Unknown";
+
+      const scheduleHtml = data.schedule
+        ? new Date(data.schedule).toLocaleString()
+        : "None";
+
+      const reeffectTime =
+        data.reeffectTime !== undefined ? data.reeffectTime : "<em>None</em>";
 
       return res.send(`
         <html>
@@ -188,44 +198,48 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
                 border-radius: 6px;
               }
               a.button:hover { background: #005fa3; }
+              .meta div { margin-bottom: 6px; }
             </style>
           </head>
           <body>
-<h1>
-            <a href="${backUrl}">${node.name}</a>
 
-             — Version ${version}</h1>
-<h2>
-               <a href="/api/${nodeId}/${version}/notes${qs}">
-              Notes
-            </a>
-            <br />
-             <a href="/api/${nodeId}/${version}/values${qs}">
-              Values/Goals
-            </a>
-            <br />
-            
-             <a href="/api/${nodeId}/${version}/contributions${qs}">
-              Contributions
-            </a>
-            <br />
-             <a href="/api/${nodeId}/${version}/transactions${qs}">
-              Transactions
-            </a>
+            <h1>
+              <a href="${backUrl}">${node.name}</a>
+              — Version ${version}
+            </h1>
+
+            <div class="meta">
+              <div>
+                <strong>Date Created:</strong> ${createdDate}
+              </div>
+   <div>
+                <strong>Scheduled:</strong>
+                ${scheduleHtml}
+              </div>
+              <div>
+                <strong>Repeat Hours:</strong> ${reeffectTime}
+              </div>
+
+           
+            </div>
+
             <h2>
+              <a href="/api/${nodeId}/${version}/notes${qs}">Notes</a><br />
+              <a href="/api/${nodeId}/${version}/values${qs}">Values / Goals</a><br />
+              <a href="/api/${nodeId}/${version}/contributions${qs}">Contributions</a><br />
+              <a href="/api/${nodeId}/${version}/transactions${qs}">Transactions</a>
+            </h2>
 
-            <h2>Data</h2>
-            <pre>${JSON.stringify(data, null, 2)}</pre>
-
-            
-          
+        
 
           </body>
         </html>
       `);
     }
 
+    // ----------------------------
     // JSON MODE
+    // ----------------------------
     res.json({
       id: node._id,
       name: node.name,

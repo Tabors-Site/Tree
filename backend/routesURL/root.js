@@ -81,7 +81,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
          node.isCurrent
            ? `<a href="/api/${node._id}${queryString}">
 <strong><u>${node.name}</u></strong>
-       </a>`
+       </a> (current)`
            : `<a href="/api/root/${node._id}${queryString}">
          ${node.name}
        </a>`
