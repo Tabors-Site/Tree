@@ -6,7 +6,7 @@ const UserSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-
+  htmlShareToken: { type: String, required: false },
   roots: [{ type: String, ref: "Node" }],
 });
 

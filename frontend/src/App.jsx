@@ -57,6 +57,7 @@ const App = () => {
         Cookies.set("username", data.username, { expires: 7 });
         Cookies.set("userId", data.userId, { expires: 7 });
         Cookies.set("loggedIn", true, { expires: 7 });
+        Cookies.set("HTMLShareToken", data.HTMLShareToken, { expires: 7 });
 
         setIsLoggedIn(true);
         setUsername(data.username);
@@ -84,7 +85,7 @@ const App = () => {
     }
   }, [statusFilter, rootSelected]);
 
-  
+
 
   const getTree = async (rootId) => {
     try {
@@ -147,6 +148,8 @@ const App = () => {
     Cookies.remove("loggedIn");
     Cookies.remove("token");
     Cookies.remove("rootSelected");
+    Cookies.remove("HTMLShareToken");
+
     const rootApi = import.meta.env.VITE_ROOT_API;
     if (rootApi) {
       window.location.href = rootApi;

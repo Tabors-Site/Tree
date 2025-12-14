@@ -1,0 +1,28 @@
+.html-token-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal card */
+.html-token-modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  width: 360px;
+  max-width: 90vw;
+
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+/* Buttons row */
+.html-token-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}

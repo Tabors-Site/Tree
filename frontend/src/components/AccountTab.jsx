@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import RootNodesForm from "./RootNodesForm"; // Ensure the path is correct
 import Invites from "./Invites"; // Import the new Invites component
+import HTMLShareTokenEditor from "./HTMLShareTokenEditor";
 import "./AccountTab.css";
 import Cookies from "js-cookie";
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
@@ -19,6 +20,16 @@ const AccountTab = ({
   const [isHovered, setIsHovered] = useState(false);
   const [showRoots, setShowRoots] = useState(false); // State to toggle RootNodesForm visibility
   const [showInvites, setShowInvites] = useState(false); // State to toggle Invites visibility
+
+  const [showTokenEditor, setShowTokenEditor] = useState(false);
+  const [htmlShareToken, setHtmlShareToken] = useState("");
+
+  useEffect(() => {
+    const cookieToken = Cookies.get("HTMLShareToken");
+    if (cookieToken) {
+      setHtmlShareToken(cookieToken);
+    }
+  }, []);
 
   useEffect(() => {
     setIsHovered(false);
@@ -46,39 +57,7 @@ const AccountTab = ({
     setShowInvites((prev) => !prev); // Toggle the Invites visibility
   };
 
-  const handleDownloadTree = async () => {
-    try {
-      const response = await fetch(`${apiUrl}/get-all-data`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          rootId: rootSelected,
-        }),
-        credentials: "include",
-      });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error fetching data:", errorData);
-        return;
-      }
-
-      const data = await response.json();
-      const jsonString = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonString], { type: "application/json" });
-      const link = document.createElement("a");
-      link.download = `${rootSelected}.json`;
-      link.href = URL.createObjectURL(blob);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (error) {
-      console.error("Error fetching data:", error.message);
-    }
-  };
 
   return (
     <div
@@ -97,20 +76,34 @@ const AccountTab = ({
             <button onClick={toggleInvites}>
               {showInvites ? "Hide Invites" : "Show Invites"}
             </button>
+            <button onClick={() => setShowTokenEditor(true)}>
+              HTML Share Token
+            </button>
+
             <button
               onClick={() => {
-                const token = Cookies.get("token");
-                if (!rootSelected || !token) return;
-                const url = `${apiUrl}/root/${rootSelected}?token=${token}&html`;
+                const shareToken = Cookies.get("HTMLShareToken");
+                if (!shareToken || shareToken == "null" || shareToken == "") {
+                  alert("Please set a custom HTML share token first. More unique is better.");
+                  return;
+                }
+
+                const basePath = rootSelected
+                  ? `/root/${rootSelected}`
+                  : `/user/${userId}`;
+
+                const url = `${apiUrl}${basePath}?token=${encodeURIComponent(
+                  shareToken
+                )}&html`;
+
                 window.open(url, "_blank");
               }}
-              disabled={!rootSelected}
+              disabled={!htmlShareToken}
             >
-              Open HTML Browser
+              HTML Browser
             </button>
-            <button onClick={handleDownloadTree} disabled={!tree}>
-              Download Tree
-            </button>
+
+
           </div>
         ) : (
           <p>Profile</p>
@@ -134,6 +127,14 @@ const AccountTab = ({
           <Invites userId={userId} />
         </div>
       )}
+      {showTokenEditor && (
+        <HTMLShareTokenEditor
+          initialValue={htmlShareToken}
+          onSaved={setHtmlShareToken}
+          onClose={() => setShowTokenEditor(false)}
+        />
+      )}
+
     </div>
   );
 };
