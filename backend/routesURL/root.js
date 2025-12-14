@@ -77,13 +77,16 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
           margin: 6px 0;
           font-weight: ${node.isCurrent ? "700" : "500"};
         ">
-          ${
-            node.isCurrent
-              ? `<span>${node.name}</span>`
-              : `<a href="/api/root/${node._id}${queryString}">
-                  ${node.name}
-                </a>`
-          }
+       ${
+         node.isCurrent
+           ? `<a href="/api/${node._id}${queryString}">
+<strong><u>${node.name}</u></strong>
+       </a>`
+           : `<a href="/api/root/${node._id}${queryString}">
+         ${node.name}
+       </a>`
+       }
+
     `;
         depth++;
       }
