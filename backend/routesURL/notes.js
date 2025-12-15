@@ -84,6 +84,7 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       const base = `${req.protocol}://${req.get(
         "host"
       )}/api/${nodeId}/${version}`;
+      const realBase = `${req.protocol}://${req.get("host")}/api/${nodeId}`;
 
       const nodeViewUrl = `${req.protocol}://${req.get(
         "host"
@@ -100,16 +101,64 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
     li { margin-bottom: 16px; }
     .meta { color: #444; font-size: 0.9em; }
     .top-links { margin-bottom: 20px; }
+    form { margin-bottom: 30px; padding: 12px; border: 1px solid #ccc; }
+    textarea { width: 100%; }
   </style>
 </head>
 <body>
 
+
+
+
+
  
 
-  <h1><a href="${base}?token=${
+  <h1><a href="${realBase}?token=${
         req.query.token ?? ""
-      }&html">${nodeId}</a> (version: ${version}) Notes</h1>
-  <ul>
+      }&html">${nodeId}</a> (version: <a href="${base}?token=${
+        req.query.token ?? ""
+      }&html">${version}</a>) Notes</h1>
+ 
+
+  <!-- ✅ CREATE NOTE FORM -->
+<form
+  method="POST"
+  action="/api/${nodeId}/${version}/notes?token=${req.query.token ?? ""}"
+  enctype="multipart/form-data"
+>
+
+
+  <div>
+   
+    <textarea
+      name="content"
+      rows="8"
+      placeholder="Write a note (leave empty if uploading a file)"
+    ></textarea>
+  </div>
+
+  <br />
+
+  <div>
+    <label>Upload File</label><br />
+    <input type="file" name="file" />
+  </div>
+
+  <br />
+
+  <div>
+    <label>
+      <input type="checkbox" name="isReflection" value="true" />
+      Is Reflection
+    </label>
+  </div>
+
+ 
+
+  <button type="submit">Create</button>
+</form>
+
+<ul>
 `;
 
       for (const n of notes) {

@@ -40,8 +40,7 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
       // Versions
       const versionHtml = node.versions
         .map(
-          (_, i) =>
-            `<li><a href="${host}/api/${nodeId}/${i}${qs}">Version ${i}</a></li>`
+          (_, i) => `<a href="${host}/api/${nodeId}/${i}${qs}">Version ${i}</a>`
         )
         .join("");
 
@@ -108,8 +107,8 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
           <p><strong>ID:</strong> <code>${node._id}</code></p>
           <p><strong>Type:</strong> ${node.type ?? "<em>None</em>"}</p>
           <p><strong>Prestige:</strong> ${node.prestige}</p>
-                <h2>Versions</h2>
-          <ul>${versionHtml}</ul>
+               
+          <h1>${versionHtml}</h1>
 
           <h2>Global Values</h2>
           <pre>${JSON.stringify(node.globalValues ?? {}, null, 2)}</pre>
@@ -209,6 +208,9 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
             </h1>
 
             <div class="meta">
+            <div>
+                <strong>Status: </strong> ${data.status}
+              </div>
               <div>
                 <strong>Date Created:</strong> ${createdDate}
               </div>
