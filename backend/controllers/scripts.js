@@ -1,42 +1,33 @@
-import Node from "../db/models/node.js";
-import { executeScript as coreExecuteScript } from "../core/scripts.js";
+import {
+  updateScript as coreUpdateScript,
+  executeScript as coreExecuteScript,
+} from "../core/scripts.js";
 
-const updateScript = async (req, res) => {
+async function updateScript(req, res) {
   try {
     const { nodeId, name, script } = req.body;
 
-    if (!name || !script) {
-      return res
-        .status(400)
-        .json({ error: "Both name and script are required" });
-    }
+    const result = await coreUpdateScript({
+      nodeId,
+      name,
+      script,
+    });
 
-    if (script.length > 2000) {
-      return res
-        .status(400)
-        .json({ error: "Script is too long (max 2000 chars)" });
-    }
-
-    const node = await Node.findById(nodeId);
-    if (!node)
-      return res.status(404).json({ error: "Node not found by that ID" });
-
-    const existingScript = node.scripts.find((s) => s.name === name);
-
-    if (existingScript) {
-      existingScript.script = script;
-    } else {
-      node.scripts.push({ name, script });
-    }
-
-    await node.save();
-
-    return res.json({ message: "Script saved successfully", node });
+    res.json(result);
   } catch (err) {
-    console.error("Error in updateScript:", err);
+    console.error("updateScript error:", err);
+
+    if (err.message.includes("required") || err.message.includes("too long")) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    if (err.message.includes("not found")) {
+      return res.status(404).json({ error: err.message });
+    }
+
     res.status(500).json({ error: "Server error" });
   }
-};
+}
 
 const executeScript = async (req, res) => {
   try {
