@@ -13,7 +13,7 @@ import {
   updateParentRelationship,
 } from "../core/treeManagement.js";
 
-import { executeScript } from "../core/scripts.js";
+import { executeScript, updateScript } from "../core/scripts.js";
 
 import {
   McpServer,
@@ -23,186 +23,323 @@ import {
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { getTreeForAi, getNodeForAi } from "../controllers/treeDataFetching.js"; // import from your real backend
 
-// Create and configure the MCP server
 function getMcpServer() {
   const server = new McpServer({
     name: "tree-helper",
     version: "1.0.0",
     capabilities: {
-      resources: {},
+      resources: { listChanged: true },
       tools: {},
       prompts: {},
     },
   });
 
-  server.resource(
-    "tree",
-    new ResourceTemplate("tree://{rootId}", { list: undefined }),
+  server.tool(
+    "get-tree",
+    "Fetch a branching tree outline (structure only). READ-ONLY.",
     {
-      description: "Get a trees structure from the database",
-      title: "Tree Data",
-      mimeType: "application/json",
+      nodeId: z.string().describe("Node ID to fetch the tree branch from."),
     },
-    async (uri, { rootId }) => {
-      const treeData = await getTreeForAi(rootId);
+    async ({ nodeId }) => {
+      const treeData = await getTreeForAi(nodeId);
 
       if (treeData == null) {
         return {
-          contents: [
+          content: [
             {
-              uri: uri.href,
-              text: JSON.stringify({ error: "Tree not found", rootId }),
-              mimeType: "application/json",
+              type: "text",
+              text: JSON.stringify(
+                { error: "Tree not found", nodeId },
+                null,
+                2
+              ),
             },
           ],
+          isError: true,
         };
       }
 
       return {
-        contents: [
+        content: [
           {
-            uri: uri.href,
+            type: "text",
             text: JSON.stringify(treeData, null, 2),
-            mimeType: "application/json",
+          },
+        ],
+      };
+    },
+    { readOnly: true }
+  );
+
+  server.tool(
+    "get-node",
+    "Fetch detailed information for a specific node. READ-ONLY.",
+    {
+      nodeId: z.string().describe("Node ID to fetch."),
+    },
+    async ({ nodeId }) => {
+      const nodeData = await getNodeForAi(nodeId);
+
+      if (nodeData == null) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                { error: "Node not found", nodeId },
+                null,
+                2
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(nodeData, null, 2),
+          },
+        ],
+      };
+    },
+    { readOnly: true }
+  );
+
+  server.tool(
+    "entry-orchestrator",
+    "Entry point for all tree-helper workflows. Presents available actions and establishes scope. READ-ONLY.",
+    {
+      rootId: z.string().describe("Root tree ID for context grounding."),
+      userId: z.string().describe("User ID performing the operation."),
+    },
+    async ({ rootId, userId }) => {
+      const treeData = await getTreeForAi(rootId);
+
+      const instructions = `Use get-tree(${rootId}) always before get-node(nodeId) to get initial data.
+      Find the nodes for them based on tree, and get-node to get deeper data. Try to not presend id's.
+Wait for the user to choose an intent before proceeding. Do not call any other tools yet.
+
+Here's what I can do. Please choose **one**:
+
+1️⃣ **Create or restructure the tree**
+   - Create a new branch
+   - Add child nodes
+   - Move nodes to a different parent
+   - Discuss plans and proper tree placement
+
+2️⃣ **Modify existing data**
+   - Use get-node(id) to view current data
+   - Usually use latest prestige version unless specified
+   - Edit values or goals
+   - Add or edit notes
+   - Update status or schedule
+   - Add a new prestige/version
+   - Examine tree and offer node suggestions
+
+3️⃣ **Explore or ask about data**
+   - View the tree structure
+   - Inspect a specific node
+   - Understand progress, history, or relationships
+
+4️⃣ **create, edit, or run a node script**
+   - if you call this, run the tool node-script-orchestrator(nodeid)
+
+
+Reply with the number, or describe what you want to do in words.`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: instructions,
           },
         ],
       };
     }
   );
 
-  server.resource(
-    "node-notes",
-    new ResourceTemplate("node://{nodeId}/{prestige}", { list: undefined }),
+  server.tool(
+    "node-script-orchestrator",
+    "Entry point for node script workflows. Establishes intent before any script actions.",
     {
-      description:
-        "Retrieves notes associated with a specific node and prestige version.",
-      title: "Node Notes",
-      mimeType: "application/json",
+      nodeId: z.string().describe("Node ID where scripts are stored."),
+      userId: z.string().describe("User ID performing the operation."),
     },
-    async (uri, { nodeId, prestige }) => {
-      try {
-        const result = await getNotes({ nodeId, version: prestige });
+    async ({ nodeId }) => {
+      const instructions = `
+     
+      Use get-node(${nodeId}) to inspect existing scripts and node state.
+Wait for the user to choose an intent before proceeding.
+Do not call any other tools yet.
 
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              text: JSON.stringify(result, null, 2),
-              mimeType: "application/json",
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              text: JSON.stringify(
-                {
-                  error: `❌ Failed to fetch notes: ${err.message}`,
-                  nodeId,
-                  prestige,
-                },
-                null,
-                2
-              ),
-              mimeType: "application/json",
-            },
-          ],
-        };
-      }
+Here’s what I can help with. Choose **one**:
+
+1️⃣ **Create a new script**
+   - I will ask what behavior you want
+   - I will use node-script-runtime-environment() to learn the functions/tools
+   - I will write the script with you
+   - Then save it using update-node-script
+
+2️⃣ **Modify an existing script**
+   - View current scripts on the node
+   - Revise logic together
+   - Save changes
+
+3️⃣ **Execute a script**
+   - Review what the script will do
+   - Ask for confirmation
+   - Run execute-node-script
+
+Reply with the number, or describe what you want to do.`;
+
+      return {
+        content: [{ type: "text", text: instructions }],
+      };
     }
   );
 
-  /*
-    server.tool(
-      "node-edit-pipeline",
-      "Edit or annotate a node. If nodeId is not given, routes to add-note, edit-value, or edit-goal.",
-      {
-        prompt: z.string(),
-        nodeId: z.string(),
-      },
-      {
-        title: "Node Edit",
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-      async params => {
-        let { prompt, nodeId } = params
-        console.log("🛠 node-edit called with:", params)
-   
-        if (!prompt || typeof prompt !== "string") {
-          return {
-            content: [{ type: "text", text: "❌ Error: Missing or invalid prompt." }],
-            isError: true,
-          }
-        }
-   
-        // Infer action from the prompt
-        let action = "add-note"
-        const lower = prompt.toLowerCase()
-        if (lower.includes("value")) action = "edit-value"
-        else if (lower.includes("goal")) action = "edit-goal"
-        else {
-          try {
-            const res = await server.server.request(
-              {
-                method: "sampling/createMessage",
-                params: {
-                  messages: [
-                    {
-                      role: "user",
-                      content: {
-                        type: "text",
-                        text: `Given this user request: "${prompt}", determine which function to call.
-                        add-note = if they want to add a string property
-                        edit-value = if they want to add or edit a number property
-                        edit-goal = if they want to edit a number property attached to a value
-                        edit-schedule if they want to edit time value
-                        Return exactly the name of one function key`,
-                      },
-                    },
-                  ],
-                  maxTokens: 400,
-                },
-              },
-              CreateMessageResultSchema
-            )
-   
-            if (res?.content?.type === "text") {
-              const val = res.content.text.trim().toLowerCase()
-              if (["add-note", "edit-value", "edit-goal"].includes(val)) action = val
-            }
-          } catch (err) {
-            console.error("⚠️ decideAction failed:", err)
-          }
-        }
-   
-        const message = `use ${action} on node ${nodeId} based on: "${prompt}"`
-        console.log("✅ node-edit result:", { nodeId, action, message })
-   
-        return {
-          content: [
-            {
-              type: "resource_link",
-              uri: `node://${nodeId}`,
-              name: `Node ${nodeId}`,
-              mimeType: "application/json",
-              description: `Node involved in ${action}`,
-            },
-            { type: "text", text: message },
-   
-          ],
-          structuredContent: { nodeId, action, message },
-        }
-      }
-    ) */
+  server.tool(
+    "node-script-runtime-environment",
+    "Returns the execution environment, APIs, and rules for node scripts. READ-ONLY.",
+    {
+      nodeId: z.string().describe("Node ID whose runtime environment applies."),
+    },
+    async ({ nodeId }) => {
+      const runtimeDocs = `
+Node Script Runtime Environment
+
+Node Object (Snapshot)
+
+The \`node\` object represents the node state at script start.
+It does NOT auto-update after mutations.
+You must reason manually about state changes.
+
+Core Properties
+
+node._id
+node.name
+node.type
+node.prestige
+node.globalValues
+
+Versions
+
+node.versions[i]
+
+i = 0 → first generation  
+i = node.prestige → most recent
+
+Version Properties
+
+values
+goals
+schedule (ISO timestamp)
+prestige
+reeffectTime (hours)
+status ("active" | "completed" | "trimmed")
+dateCreated
+
+Structure
+
+node.scripts → [{ name, script }]
+node.children → child node objects
+node.parent → parent node ID or null
+node.rootOwner → root owner ID or null
+
+Built-in Functions
+
+All functions run sequentially.
+Failures do NOT stop later calls.
+
+API
+
+getApi() → Performs a GET request
+
+Node Mutation
+
+setValueForNode(nodeId, key, value, version)
+setGoalForNode(nodeId, key, goal, version)
+editStatusForNode(nodeId, status, version, isInherited)
+addPrestigeForNode(nodeId)
+updateScheduleForNode(nodeId, versionIndex, newSchedule, reeffectTime)
+
+Example Pattern
+
+// Increase wait time each prestige
+let waitTime = node.versions[node.prestige].values.waitTime;
+const newWaitTime = waitTime * 1.05;
+
+addPrestigeForNode(node._id);
+
+const now = new Date();
+const newSchedule = new Date(
+  now.getTime() + waitTime * 3600 * 1000
+);
+
+updateScheduleForNode(
+  node._id,
+  node.prestige + 1,
+  newSchedule,
+  0
+);
+
+setValueForNode(
+  node._id,
+  "waitTime",
+  newWaitTime,
+  node.prestige + 1
+);
+
+Execution Notes
+
+• node reflects initial state only  
+• After addPrestigeForNode, use node.prestige + 1  
+• Time units are hours  
+• Side effects still occur even if earlier calls fail
+`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: runtimeDocs,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "update-node-script",
+    "Creates or updates a script attached to a specific node.",
+    {
+      nodeId: z.string().describe("The ID of the node to update."),
+      name: z.string().describe("The name of the script."),
+      script: z
+        .string()
+        .max(2000)
+        .describe("The script content (max 2000 characters)."),
+    },
+    async ({ nodeId, name, script }) => {
+      const result = await updateScript({
+        nodeId,
+        name,
+        script,
+      });
+
+      return {
+        content: [{ type: "text", text: result.message }],
+        structuredContent: result,
+      };
+    }
+  );
 
   server.tool(
     "execute-node-script",
-    "Executes a stored script attached to a specific node using the secure sandbox system.",
+    "Always run node-script-orchestrator before to initiate. Executes a stored script attached to a specific node using the secure sandbox system.",
     {
       nodeId: z.string().describe("The ID of the node containing the script."),
       scriptName: z
@@ -355,7 +492,6 @@ function getMcpServer() {
     }
   );
 
-  // 🧠 Tool: Create Note (text-only)
   server.tool(
     "create-node-version-note",
     "Creates a new text note for a node.",
@@ -400,7 +536,6 @@ function getMcpServer() {
     }
   );
 
-  // 📜 Tool: Get Notes
   server.tool(
     "get-node-notes",
     "Retrieves notes associated with a specific node (and prestige version if provided).",
@@ -429,7 +564,6 @@ function getMcpServer() {
     }
   );
 
-  // 🗑️ Tool: Delete Note
   server.tool(
     "delete-node-note",
     "Deletes a text note by its ID.",
@@ -543,60 +677,6 @@ function getMcpServer() {
     }
   );
 
-  server.resource(
-    "node",
-    new ResourceTemplate("node://{nodeId}", { list: undefined }),
-    {
-      description:
-        "Fetch a specific node (with notes and versions) within a tree for more context.",
-      title: "Node Resource",
-      mimeType: "application/json",
-    },
-    async (uri, { nodeId }) => {
-      try {
-        const nodeData = await getNodeForAi(nodeId);
-
-        if (nodeData == null) {
-          return {
-            contents: [
-              {
-                uri: uri.href,
-                text: JSON.stringify({ error: "Node not found", nodeId }),
-                mimeType: "application/json",
-              },
-            ],
-          };
-        }
-
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              text: JSON.stringify(nodeData, null, 2),
-              mimeType: "application/json",
-            },
-          ],
-        };
-      } catch (error) {
-        console.error("Error fetching node resource:", error);
-
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              text: JSON.stringify({
-                error: "Server error while fetching node",
-                nodeId,
-              }),
-              mimeType: "application/json",
-            },
-          ],
-        };
-      }
-    }
-  );
-
-  // 🧩 Create a single new node
   server.tool(
     "create-new-node",
     "Creates a new node in the tree and logs a contribution entry.",
@@ -707,7 +787,6 @@ function getMcpServer() {
     })
   );
 
-  // 🌳 Create a full recursive node tree
   server.tool(
     "create-new-node-branch",
     "Used to create new node branch off a current node to extend its structure",
@@ -748,7 +827,6 @@ function getMcpServer() {
     }
   );
 
-  // 🔁 Update a node’s parent relationship
   server.tool(
     "update-node-branch-parent-relationship",
     "Moves a node to a new parent within the tree hierarchy.",
@@ -816,36 +894,9 @@ function getMcpServer() {
   );
   */
 
-  server.prompt(
-    "root-workflow",
-    "Main workflow for root perspective operations",
-    {
-      rootId: z.string(),
-    },
-    ({ rootId }) => ({
-      resources: [
-        `tree://${rootId}`, // main root tree
-      ],
-      messages: [
-        {
-          role: "assistant",
-          content: {
-            type: "text",
-            text: `
-- **Root ID:** ${rootId}
-
-Now, handle this request:
-`,
-          },
-        },
-      ],
-    })
-  );
-
   return server;
 }
 
-// Main handler that Express can mount
 async function handleMcpRequest(req, res) {
   try {
     const server = getMcpServer();
