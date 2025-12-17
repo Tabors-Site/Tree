@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from "react";
 import Cookies from "js-cookie";
-import TreeView from "./components/Legacy/TreeView.jsx";
-import TreeViewDirectory from "./components/Legacy/TreeViewDirectory.jsx";
-import NodeData from "./components/Legacy/NodeData.jsx";
-import Notes from "./components/Legacy/Notes.jsx";
-import Contributions from "./components/Legacy/Contributions.jsx";
-import Schedule from "./components/Legacy/Schedule.jsx";
-import AccountTab from "./components/Legacy/AccountTab.jsx";
-import Login from "./components/Legacy/Login.jsx";
-import Transactions from "./components/Legacy/Transactions.jsx";
+import TreeView from "./TreeView.jsx";
+import TreeViewDirectory from "./TreeViewDirectory.jsx";
+import NodeData from "./NodeData.jsx";
+import Notes from "./Notes.jsx";
+import Contributions from "./Contributions.jsx";
+import Schedule from "./Schedule.jsx";
+import AccountTab from "./AccountTab.jsx";
+import Transactions from "./Transactions.jsx";
 import "./App.css";
 
 const App = () => {
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [authStatus, setAuthStatus] = useState("checking");
     const [username, setUsername] = useState("");
     const [userId, setUserId] = useState("");
@@ -63,7 +61,6 @@ const App = () => {
 
                 setUsername(data.username);
                 setUserId(data.userId);
-                setIsLoggedIn(true);
                 setAuthStatus("authenticated");
             })
             .catch(() => {
@@ -140,7 +137,6 @@ const App = () => {
     };
 
     const handleLogout = () => {
-        setIsLoggedIn(false);
         setUsername("");
         setUserId("");
         setRootSelected(null);
@@ -154,7 +150,7 @@ const App = () => {
 
         const rootApi = import.meta.env.VITE_ROOT_API;
         if (rootApi) {
-            window.location.href = rootApi;
+            window.location.href = "https://tree.tabors.site";
         }
     };
 
