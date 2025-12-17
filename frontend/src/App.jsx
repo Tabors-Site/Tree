@@ -1,12 +1,12 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import WelcomePage from "./components/Welcome/WelcomePage.jsx";
-import LegacyApp from "./LegacyApp.jsx";
+import WelcomeRoutes from "./components/Welcome/WelcomeRoutes.jsx";
+import LegacyApp from "./components/Legacy/App.jsx";
 
 const App = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<WelcomePage />} />
+        <Route path="/*" element={<WelcomeRoutes />} />
         <Route path="/legacy/*" element={<LegacyApp />} />
       </Routes>
     </BrowserRouter>

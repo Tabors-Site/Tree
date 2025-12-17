@@ -1,7 +1,7 @@
 const UsingAllThePiecesSection = () => {
     return (
         <>
-            <h1>Using All the Pieces</h1>
+            <h1>The Three Core Pieces</h1>
 
             <p>
                 There are currently three ways to access and work with your trees. Each

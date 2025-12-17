@@ -11,10 +11,10 @@ const WhatToDoNextSection = () => {
                     <strong>taborgreat@gmail.com</strong>.
                 </li>
                 <li>
-                    Create an account at <strong>tabors.site</strong> and log in.
+                    Create an account at<a href="https://tabors.site"> <strong>https://tabors.site</strong></a> and log in.
                 </li>
                 <li>
-                    Come back here. Once logged in, you’ll see the legacy tree dashboard.
+                    Once logged in, you’ll see your legacy tree dashboard at <a href="https://tree.tabors.site/legacy" target="_blank"><strong>https://tree.tabors.site/legacy</strong></a>.
                 </li>
             </ol>
 
@@ -45,7 +45,7 @@ const WhatToDoNextSection = () => {
 
             <ol>
                 <li>
-                    Go to <strong>chatgpt.com</strong> and make sure you have a{" "}
+                    Go to <a href="https://chatgpt.com" target="_blank"><strong>chatgpt.com</strong></a> and make sure you have a{" "}
                     <strong>ChatGPT Plus</strong> subscription.
                 </li>
                 <li>

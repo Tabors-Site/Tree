@@ -145,3 +145,70 @@
     font-size: 28px;
   }
 }
+.welcome-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+
+.header-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+
+.back-to-site-btn {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.95rem;
+  padding: 8px 16px;
+  border-radius: 6px;
+
+  border: 1px solid rgba(0, 255, 100, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(0, 30, 0, 0.85),
+    rgba(0, 15, 0, 0.95)
+  );
+
+  color: #00ff9d;
+  text-decoration: none;
+  cursor: pointer;
+
+  box-shadow: 0 0 10px rgba(0, 255, 100, 0.6),
+    inset 0 0 6px rgba(0, 255, 100, 0.2);
+
+  transition: background 0.3s ease,
+    transform 0.2s ease,
+    box-shadow 0.3s ease,
+    opacity 0.3s ease;
+
+  opacity: 0.85;
+}
+
+.back-to-site-btn:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 60, 0, 1),
+    rgba(0, 30, 0, 1)
+  );
+
+  transform: scale(1.05);
+  opacity: 1;
+
+  box-shadow: 0 0 20px rgba(0, 255, 120, 0.9),
+    inset 0 0 10px rgba(0, 255, 100, 0.4);
+}
+
+/* Slightly quieter legacy button */
+.back-to-site-btn.legacy {
+  opacity: 0.65;
+}
+
+.back-to-site-btn.legacy:hover {
+  opacity: 0.9;
+}
+
+

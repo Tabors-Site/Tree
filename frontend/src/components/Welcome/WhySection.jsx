@@ -1,59 +1,77 @@
-
-
 const WhySection = () => {
-    return (
-        <>
-            <h1>Why This Exists</h1>
+  return (
+    <>
+      <h1>Why I Made This</h1>
 
-            <p>
-                Most tools slow you down by breaking your work apart.
-                Your notes live in one place, your plans in another, and every time you
-                use AI you have to start from zero.
-            </p>
+      <p>
+        To do meaningful work, everything needs to stay in alignment.
+      </p>
 
-            <p>
-                Context disappears, progress resets, and simple tasks turn into
-                constant cleanup.
-            </p>
+      <p>
+        But most of the time it doesn’t. Some ideas live in one place, others in
+        another, and your attention is constantly being pulled toward different
+        things. It’s hard to hold everything in your head at once.
+      </p>
 
-            <p>
-                At the same time, everything is competing for your attention.
-                Notifications, tabs, half-finished ideas — even good tools pull you
-                away from the thing you were trying to do.
-            </p>
+      <p>
+        Context fades. Progress resets. You find yourself returning to the same
+        starting point again and again, trying to regain direction while feeling
+        scattered and worn down.
+      </p>
 
-            <p>
-                This system was built to fix that.
-            </p>
+      <p>
+        On top of that, modern life makes focus even harder. Notifications interrupt
+        you, tabs pile up, algorithms compete for your attention, and time slips
+        away without you noticing.
+      </p>
 
-            <p>
-                It gives you one place to organize ideas, plans, and projects from a
-                clear root purpose. When everything starts from a single source
-                instead of scattered attempts, it becomes easier to stay focused,
-                avoid duplication, and move forward deliberately.
-            </p>
+      <p>
+        This system was built to fix all of that.
+      </p>
 
-            <p>
-                AI works directly with what you’ve already built — helping you plan,
-                generate ideas when you’re stuck, and summarize what matters —
-                without forcing you to restate context or switch tools.
-            </p>
+      <p>
+        Instead of pulling you in different directions, the system keeps your work
+        anchored in one place.
+      </p>
 
-            <p>
-                Instead of pulling you in different directions, the system keeps your
-                work anchored in one place.
-            </p>
+      <p>
+        It helps you build exactly what you need, then stay inside it as you work.
+        You are not constantly replanning, reorienting, or starting over. The
+        structure carries forward in the data and continues to support you over time.
+      </p>
 
-            <ul>
-                <li>Build systems from a clear starting point</li>
-                <li>Follow step-by-step plans in plain language</li>
-                <li>Stay focused on the task you’re actually working on</li>
-                <li>Get unstuck without breaking your flow</li>
-                <li>Summarize and reference past work instantly</li>
-                <li>Work on the same structure with other people</li>
-            </ul>
-        </>
-    );
+      <p>
+        This allows you to:
+      </p>
+
+      <ul>
+        <li>Build systems from a clear starting point</li>
+        <li>
+          Follow step-by-step plans in plain language while your data is tracked
+          behind the scenes
+        </li>
+        <li>Stay focused on the task you’re actually working on, and be guided through your plans
+            in a way like never before.
+        </li>
+        <li>Summarize and reference past work instantly</li>
+        <li>
+          Work on the same structure with other people without creating redundancy
+        </li>
+        <li>
+          So much more...
+        </li>
+      </ul>
+
+     <p>
+  Ultimately, I want to help people claim their lives back while also being as
+  effective as possible. When your systems work for you, life takes less effort
+  and offers more clarity. As the internet becomes increasingly confusing and
+  artificial, this is my personal attempt to regain ownership of my time,
+  attention, and direction.
+</p>
+
+    </>
+  );
 };
 
 export default WhySection;
