@@ -144,8 +144,12 @@ Here's what I can do. Please choose **one**:
    - Inspect a specific node
    - Understand progress, history, or relationships
 
-4️⃣ **create, edit, or run a node script**
-   - if you call this, run the tool node-script-orchestrator(nodeid)
+4️⃣ **create, edit, or run a node's script**
+   - if you call this, run the tool scripting-orchestrator(nodeid)
+
+   5 **initiate be mode**
+   -be guided through your tree in real time through the leaf nodes
+   - if you call this, run the tool be-mode-orchestrator(nodeid)
 
 
 Reply with the number, or describe what you want to do in words.`;
@@ -162,7 +166,7 @@ Reply with the number, or describe what you want to do in words.`;
   );
 
   server.tool(
-    "node-script-orchestrator",
+    "scripting-orchestrator",
     "Entry point for node script workflows. Establishes intent before any script actions.",
     {
       nodeId: z.string().describe("Node ID where scripts are stored."),
@@ -194,6 +198,60 @@ Here’s what I can help with. Choose **one**:
    - Run execute-node-script
 
 Reply with the number, or describe what you want to do.`;
+
+      return {
+        content: [{ type: "text", text: instructions }],
+      };
+    }
+  );
+
+  server.tool(
+    "be-mode-orchestrator",
+    "Entry point for guided 'be mode' traversal of a node branch.",
+    {
+      nodeId: z.string().describe("Root node ID for the guided branch."),
+      userId: z.string().describe("User ID performing the operation."),
+    },
+    async ({ nodeId }) => {
+      const instructions = `
+You are entering **Be Mode**.
+
+OVERVIEW
+- You will guide the user through a branch of the tree **one leaf node at a time**.
+- The user experiences each node in **first person**.
+
+INITIAL STEP
+1. Use get-tree(${nodeId}) to inspect the full branch structure.
+2. Identify the first **active leaf node** to guide.
+
+FOR EACH NODE (repeat this cycle):
+1. Use get-node(nodeId) to gain full context for the current node, and get-node-notes.
+2. Explain the node's intention and plan to the user in **first-person language**.
+3. Guide the user through *being* the node (reflection, action, embodiment).
+
+OPTIONAL DURING THE NODE
+- If the user asks for:
+  • important wording or realizations → use create-node-version-note
+  • numeric tracking → use values / goals
+- If the user requests more explanation:
+  1) Add more instructions via create-node-version-note, OR
+  2) If deeper structure is needed, use create-node-branch to expand the tree,
+     then continue guiding through the new nodes.
+
+COMPLETION STEP (for the current node)
+4. Upon completion:
+   - Write a brief summary as a reflection note
+     (use isReflection = true unless the node is trivial)
+5. Change the node status to completed.
+
+ADVANCE
+6. Move to the next active node in the branch.
+7. Repeat the cycle until no active nodes remain.
+
+OPTIONAL
+- If the process needs to restart or branch further,
+  re-enter be-mode-orchestrator with a new nodeId or branchId.
+`;
 
       return {
         content: [{ type: "text", text: instructions }],
@@ -339,7 +397,7 @@ Execution Notes
 
   server.tool(
     "execute-node-script",
-    "Always run node-script-orchestrator before to initiate. Executes a stored script attached to a specific node using the secure sandbox system.",
+    "Always run scripting-orchestrator before to initiate. Executes a stored script attached to a specific node using the secure sandbox system.",
     {
       nodeId: z.string().describe("The ID of the node containing the script."),
       scriptName: z
@@ -542,7 +600,7 @@ Execution Notes
     {
       nodeId: z.string().describe("The ID of the node to fetch notes for."),
       prestige: z
-        .string()
+        .number()
         .describe("Specific number prestige version to filter by"),
     },
     async ({ nodeId, prestige }) => {
@@ -720,6 +778,7 @@ Execution Notes
       userId,
       values,
       goals,
+      note,
     }) => {
       try {
         const node = await createNewNode(

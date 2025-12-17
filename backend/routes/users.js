@@ -2,6 +2,7 @@ import express from "express";
 import {
   register,
   login,
+  logout,
   setHtmlShareToken,
   getHtmlShareToken,
 } from "../controllers/users.js";
@@ -13,7 +14,8 @@ router.post("/register", register);
 
 router.post("/login", login);
 
-router.post("/login", login);
+router.post("/logout", authenticate, logout);
+
 
 router.post("/setHTMLShareToken", authenticate, setHtmlShareToken);
 

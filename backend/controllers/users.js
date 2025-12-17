@@ -84,6 +84,23 @@ const login = async (req, res) => {
   }
 };
 
+const logout = async (req, res) => {
+  try {
+    res.clearCookie("token", {
+      httpOnly: false,        
+      secure: true,           
+      sameSite: "None",         
+      domain: ".tabors.site",  
+      path: "/",                
+    });
+
+    return res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    console.error("Error during logout:", error);
+    return res.status(500).json({ message: "Logout failed" });
+  }
+};
+
 const getHtmlShareToken = async (req, res, next) => {
   try {
     const userId = req.userId;
@@ -161,4 +178,4 @@ const setHtmlShareToken = async (req, res) => {
   }
 };
 
-export { register, login, getHtmlShareToken, setHtmlShareToken };
+export { register, login, logout, getHtmlShareToken, setHtmlShareToken };

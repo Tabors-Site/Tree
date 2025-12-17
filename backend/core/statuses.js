@@ -6,6 +6,14 @@ async function editStatus({ nodeId, status, version, isInherited, userId }) {
 
   const targetVersion = node.versions.find((v) => v.prestige === version);
   if (!targetVersion) throw new Error("Version not found");
+  const VALID_STATUSES = ["active", "trimmed", "completed"];
+  if (!VALID_STATUSES.includes(status)) {
+    throw new Error("Invalid Status");
+  }
+
+  if (status === "completed") {
+    isInherited = true;
+  }
 
   // Update status
   targetVersion.status = status;

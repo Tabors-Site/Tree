@@ -1,0 +1,147 @@
+/* --- Intro Layout Base --- */
+.intro-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+  background: #0b0f14;
+  color: #e7eef7;
+}
+
+/* --- Sidebar Nav --- */
+.intro-nav {
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 18px 14px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.intro-nav button,
+.intro-nav a {
+  width: 100%;
+  display: block;
+  text-align: left;
+  padding: 10px 12px;
+  margin: 6px 0;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.2;
+  transition: background 140ms ease, border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.intro-nav button:hover,
+.intro-nav a:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.intro-nav button:active,
+.intro-nav a:active {
+  transform: translateY(1px);
+}
+
+.intro-nav .active {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* --- Main Content --- */
+.intro-content {
+  padding: 28px 32px;
+  max-width: 980px;
+}
+
+.intro-content h1 {
+  font-size: 34px;
+  letter-spacing: -0.02em;
+  margin: 0 0 14px 0;
+}
+
+.intro-content h2 {
+  font-size: 18px;
+  margin: 24px 0 10px 0;
+  color: rgba(231, 238, 247, 0.92);
+}
+
+.intro-content p {
+  margin: 12px 0;
+  max-width: 76ch;
+  line-height: 1.6;
+  color: rgba(231, 238, 247, 0.86);
+}
+
+.intro-content ul,
+.intro-content ol {
+  margin: 12px 0 16px 18px;
+  padding: 0;
+  max-width: 78ch;
+}
+
+.intro-content li {
+  margin: 8px 0;
+  line-height: 1.5;
+  color: rgba(231, 238, 247, 0.86);
+}
+
+/* --- Code Blocks / Pre --- */
+.intro-content pre {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 92ch;
+}
+
+/* --- Placeholder Box --- */
+.intro-placeholder {
+  margin-top: 18px;
+  padding: 16px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* --- Mobile Layout --- */
+@media (max-width: 900px) {
+  .intro-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .intro-nav {
+    position: relative;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    overflow: auto;
+    white-space: nowrap;
+  }
+
+  .intro-nav button,
+  .intro-nav a {
+    width: auto;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .intro-content {
+    padding: 20px 16px 28px;
+  }
+
+  .intro-content h1 {
+    font-size: 28px;
+  }
+}

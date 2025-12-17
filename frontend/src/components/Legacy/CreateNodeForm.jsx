@@ -7,7 +7,7 @@ const CreateNodeForm = ({ nodeSelected, onComplete }) => {
   const [schedule, setSchedule] = useState('');
   const [reeffectTime, setReeffectTime] = useState('');
   const [useAI, setUseAI] = useState(false); // Toggle between manual and AI creation
-const apiUrl = import.meta.env.VITE_TREE_API_URL;
+  const apiUrl = import.meta.env.VITE_TREE_API_URL;
   // Handle form submission for manual creation
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -94,7 +94,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
               style={{ resize: 'none' }}
               required
             />
-            
+
           </div>
           <small>Separate names by commas to create multiple nodes simultaneously.</small>
           <div>
@@ -119,7 +119,7 @@ const apiUrl = import.meta.env.VITE_TREE_API_URL;
         </form>
       ) : (
         /* AI-Assisted Node Creation */
-        <AiCreate nodeSelected={nodeSelected}/>
+        <AiCreate nodeSelected={nodeSelected} />
       )}
     </div>
   );
