@@ -290,8 +290,46 @@ const App = () => {
     }
 
     if (authStatus === "unauthenticated") {
-        window.location.replace("/");
-        return null;
+        return (
+            <div style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100vh",
+                fontFamily: "sans-serif",
+                textAlign: "center",
+                padding: "20px"
+            }}>
+                <h2>You must be logged into tabors.site to access this section</h2>
+
+                <button
+                    style={{
+                        padding: "10px 20px",
+                        marginTop: "20px",
+                        fontSize: "16px",
+                        cursor: "pointer",
+                        borderRadius: "8px",
+                    }}
+                    onClick={() => window.location.href = "https://tabors.site"}
+                >
+                    Go to tabors.site and login
+                </button>
+
+                <button
+                    style={{
+                        padding: "10px 20px",
+                        marginTop: "10px",
+                        fontSize: "16px",
+                        cursor: "pointer",
+                        borderRadius: "8px",
+                    }}
+                    onClick={() => window.location.href = "https://tree.tabors.site"}
+                >
+                    Back to Welcome Page
+                </button>
+            </div>
+        );
     }
 
 
@@ -362,7 +400,7 @@ const App = () => {
             {isMobile && (
                 <button
                     className="tree-view-toggle-btn"
-                    onClick={() => setTreeViewModeMosbile((prev) => !prev)}
+                    onClick={() => setTreeViewModeMobile((prev) => !prev)}
                 >
                     {treeViewModeMobile ? "Show Details" : "Show Tree"}
                 </button>
