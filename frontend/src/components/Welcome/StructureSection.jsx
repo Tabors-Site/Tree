@@ -1,7 +1,7 @@
 const StructureSection = () => {
   return (
     <>
-      <h1>How It’s Structured</h1>
+      <h1>Trees and nodes</h1>
 
       <p>
         Most meaningful work is not linear. It starts with a purpose and naturally
