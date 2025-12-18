@@ -14,7 +14,7 @@ async function getContributions({ nodeId, version }) {
 
     const contributions = await Contribution.find(query)
       .populate("userId", "username")
-      .populate("nodeId")
+      .populate("nodeId", "name")
       .populate("inviteAction.receivingId", "username")
       .populate({
         path: "tradeId",
@@ -90,7 +90,49 @@ async function getContributions({ nodeId, version }) {
               }
             : null;
           break;
+        case "note":
+          additionalInfo = contribution.noteAction
+            ? {
+                action: contribution.noteAction.action, // "add" / "remove"
+                noteId: contribution.noteAction.noteId,
+              }
+            : null;
+          break;
 
+        case "updateParent":
+          additionalInfo = contribution.updateParent
+            ? {
+                oldParentId: contribution.updateParent.oldParentId,
+                newParentId: contribution.updateParent.newParentId,
+              }
+            : null;
+          break;
+
+        case "editScript":
+          additionalInfo = contribution.editScript
+            ? {
+                scriptName: contribution.editScript.scriptName,
+                contents: contribution.editScript.contents,
+              }
+            : null;
+          break;
+
+        case "updateChildNode":
+          additionalInfo = contribution.updateChildNode
+            ? {
+                action: contribution.updateChildNode.action, // "added" / "removed"
+                childId: contribution.updateChildNode.childId,
+              }
+            : null;
+          break;
+        case "editNameNode":
+          additionalInfo = contribution.editNameNode
+            ? {
+                oldName: contribution.editNameNode.oldName,
+                newName: contribution.editNameNode.newName,
+              }
+            : null;
+          break;
         default:
           additionalInfo = null;
       }

@@ -76,88 +76,105 @@ const Contributions = ({ nodeSelected }) => {
                   <strong>Node Version:</strong> {contribution.nodeVersion}
                 </p>
 
-                {/* Conditional rendering based on the action */}
-                {contribution.additionalInfo && (
-                  <div>
-                    {contribution.action === "editValue" && (
-                      <p>
-                        <strong>Edited Value:</strong>{" "}
-                        {JSON.stringify(
-                          contribution.additionalInfo.valueEdited
-                        )}
-                      </p>
-                    )}
-                    {contribution.action === "editStatus" && (
-                      <p>
-                        <strong>Status:</strong> {contribution.statusEdited}
-                      </p>
-                    )}
-                    {contribution.action === "transaction" && (
-                      <div>
-                        <h4>Trade Details</h4>
-                        <p>
-                          <strong>Node A:</strong>{" "}
-                          {contribution.additionalInfo.nodeA.name} (Version{" "}
-                          {contribution.additionalInfo.nodeA.versionIndex})
-                        </p>
-                        <p>
-                          <strong>Values Sent by Node A:</strong>{" "}
-                          {JSON.stringify(
-                            contribution.additionalInfo.nodeA.valuesSent
-                          )}
-                        </p>
-                        <p>
-                          <strong>Node B:</strong>{" "}
-                          {contribution.additionalInfo.nodeB.name} (Version{" "}
-                          {contribution.additionalInfo.nodeB.versionIndex})
-                        </p>
-                        <p>
-                          <strong>Values Sent by Node B:</strong>{" "}
-                          {JSON.stringify(
-                            contribution.additionalInfo.nodeB.valuesSent
-                          )}
-                        </p>
-                      </div>
-                    )}
 
-                    {contribution.action === "invite" &&
-                      contribution.additionalInfo && (
-                        <div>
-                          <p>
-                            <strong>Invite Action:</strong>{" "}
-                            {contribution.additionalInfo.inviteAction.action}
-                          </p>
-                          <p>
-                            <strong>Receiving Username:</strong>{" "}
-                            {contribution.additionalInfo.inviteAction
-                              .receivingUsername || "N/A"}
-                          </p>
-                        </div>
-                      )}
-                    {contribution.action === "editSchedule" &&
-                      contribution.scheduleEdited && (
-                        <p>
-                          <strong>Schedule Edited:</strong>
-                          Date:{" "}
-                          {contribution.scheduleEdited.date &&
-                            new Date(
-                              contribution.scheduleEdited.date
-                            ).toLocaleString()}
-                          , Reeffect Time:{" "}
-                          {contribution.scheduleEdited.reeffectTime}
-                        </p>
-                      )}
-                    {contribution.action === "editGoal" &&
-                      contribution.additionalInfo && (
-                        <p>
-                          <strong>Goal Edited:</strong>{" "}
-                          {JSON.stringify(
-                            contribution.additionalInfo.goalEdited
-                          )}
-                        </p>
-                      )}
+
+                {/* editValue */}
+                {contribution.action === "editValue" && contribution.valueEdited && (
+                  <p>
+                    <strong>Edited Value:</strong>{" "}
+                    {JSON.stringify(contribution.valueEdited)}
+                  </p>
+                )}
+
+                {/* editStatus */}
+                {contribution.action === "editStatus" && contribution.statusEdited && (
+                  <p>
+                    <strong>Status:</strong> {contribution.statusEdited}
+                  </p>
+                )}
+
+                {/* transaction */}
+                {contribution.action === "transaction" && contribution.additionalInfo && (
+                  <div>
+                    <h4>Trade Details</h4>
+                    <p><strong>Node A:</strong> {contribution.additionalInfo.nodeA.name}</p>
+                    <p><strong>Values Sent by A:</strong> {JSON.stringify(contribution.additionalInfo.nodeA.valuesSent)}</p>
+
+                    <p><strong>Node B:</strong> {contribution.additionalInfo.nodeB.name}</p>
+                    <p><strong>Values Sent by B:</strong> {JSON.stringify(contribution.additionalInfo.nodeB.valuesSent)}</p>
                   </div>
                 )}
+
+                {/* invite */}
+                {contribution.action === "invite" && contribution.inviteAction && (
+                  <div>
+                    <p><strong>Invite Action:</strong> {contribution.inviteAction.action}</p>
+                    <p><strong>Receiving User:</strong> {contribution.inviteAction.receivingUsername || "N/A"}</p>
+                  </div>
+                )}
+
+                {/* editSchedule */}
+                {contribution.action === "editSchedule" && contribution.scheduleEdited && (
+                  <p>
+                    <strong>Schedule Edited:</strong>
+                    {contribution.scheduleEdited.date &&
+                      new Date(contribution.scheduleEdited.date).toLocaleString()}
+                    {" — "}
+                    Reeffect: {contribution.scheduleEdited.reeffectTime}
+                  </p>
+                )}
+
+                {/* editGoal */}
+                {contribution.action === "editGoal" && contribution.goalEdited && (
+                  <p>
+                    <strong>Goal Edited:</strong> {JSON.stringify(contribution.goalEdited)}
+                  </p>
+                )}
+
+                {/* editNameNode */}
+                {contribution.action === "editNameNode" && contribution.editNameNode && (
+                  <p>
+                    <strong>Renamed:</strong>{" "}
+                    <code>{contribution.editNameNode.oldName}</code> →{" "}
+                    <code>{contribution.editNameNode.newName}</code>
+                  </p>
+                )}
+
+                {/* updateParent */}
+                {contribution.action === "updateParent" && contribution.updateParent && (
+                  <p>
+                    <strong>Parent changed:</strong>{" "}
+                    <code>{contribution.updateParent.oldParentId}</code> →{" "}
+                    <code>{contribution.updateParent.newParentId}</code>
+                  </p>
+                )}
+
+                {/* updateChildNode */}
+                {contribution.action === "updateChildNode" &&
+                  contribution.updateChildNode && (
+                    <p>
+                      <strong>Child:</strong>{" "}
+                      <code>{contribution.updateChildNode.childId}</code> was{" "}
+                      <code>{contribution.updateChildNode.action}</code>
+                    </p>
+                  )}
+
+                {/* editScript */}
+                {contribution.action === "editScript" && contribution.editScript && (
+                  <p>
+                    <strong>Updated script:</strong>{" "}
+                    <code>{contribution.editScript.scriptName}</code>
+                  </p>
+                )}
+
+                {/* note */}
+                {contribution.action === "note" && contribution.noteAction && (
+                  <p>
+                    <strong>Note {contribution.noteAction.action === "add" ? "added" : "removed"}:</strong>{" "}
+                    <code>{contribution.noteAction.noteId}</code>
+                  </p>
+                )}
+
 
                 <p>
                   <strong>Date:</strong>{" "}

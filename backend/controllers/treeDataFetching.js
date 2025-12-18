@@ -312,7 +312,6 @@ async function getAllData(req, res) {
 
     rootNode.ancestors = ancestors;
 
-    // 🧹 CLEAN NULLS BEFORE SENDING
     //const cleaned = removeNullFields(rootNode);
 
     res.json(rootNode);

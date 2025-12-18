@@ -2,7 +2,6 @@ import { resolveHtmlShareAccess } from "../core/authenticate.js";
 
 export default async function urlAuth(req, res, next) {
   try {
- 
     const shareToken =
       req.query.token ||
       req.params.token ||
@@ -14,21 +13,17 @@ export default async function urlAuth(req, res, next) {
       });
     }
 
-   
     const userId =
       req.params?.userId || req.body?.userId || req.query?.userId || null;
 
     const nodeId =
       req.params?.nodeId || req.body?.nodeId || req.query?.nodeId || null;
 
-  
     if (!userId && !nodeId) {
       return res.status(400).json({
         message: "userId or nodeId is required for shared access",
       });
     }
-
-
 
     const result = await resolveHtmlShareAccess({
       userId,
@@ -41,7 +36,6 @@ export default async function urlAuth(req, res, next) {
         message: "Invalid or unauthorized share token",
       });
     }
-
 
     req.userId = result.matchedUserId;
     req.username = result.matchedUsername;

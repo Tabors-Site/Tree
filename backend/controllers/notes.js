@@ -60,6 +60,7 @@ async function getNotes(req, res) {
 async function deleteNoteAndFile(req, res) {
   try {
     const result = await coreDeleteNoteAndFile({
+      userId: req.userId,
       noteId: req.body.noteId,
     });
     res.status(200).json({ success: true, ...result });

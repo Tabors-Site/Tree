@@ -11,6 +11,7 @@ async function updateScript(req, res) {
       nodeId,
       name,
       script,
+      userId: req.userId,
     });
 
     res.json(result);

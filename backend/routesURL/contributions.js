@@ -49,10 +49,11 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
       <ul>
         ${contributions
           .map((c) => {
-            const isTransaction = c.action === "transaction" && c.tradeId;
+            const user = c.username || "Unknown user";
+            const time = new Date(c.date).toLocaleString();
 
             // --- TRANSACTION RENDER ---
-            if (isTransaction) {
+            if (c.action === "transaction" && c.tradeId) {
               const tradeLink = `/api/${nodeId}/${parsedVersion}/transactions${queryString}`;
 
               const a = c.additionalInfo?.nodeA;
@@ -60,24 +61,24 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
 
               return `
                 <li>
-                  <strong>${c.username || "Unknown user"}</strong>
+                  <strong>${user} </strong>
+                  made a 
                   <a href="${tradeLink}">
                     <code>transaction</code>
                   </a>
                   <br/>
-
-                  <small>${new Date(c.date).toLocaleString()}</small>
+                  <small>${time}</small>
 
                   <div style="margin-top:6px; padding-left:12px;">
                     <div>
                       <strong>${a?.name}</strong>
-                      (v${a?.versionIndex}) →
+                      (${a?.versionIndex}) →
                       <code>${JSON.stringify(a?.valuesSent)}</code>
                     </div>
 
                     <div>
                       <strong>${b?.name}</strong>
-                      (v${b?.versionIndex}) →
+                      (${b?.versionIndex}) →
                       <code>${JSON.stringify(b?.valuesSent)}</code>
                     </div>
                   </div>
@@ -85,13 +86,89 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
               `;
             }
 
-            // --- DEFAULT RENDER ---
+            // --- CUSTOM RENDERS FOR NEW CONTRIBUTIONS ---
+
+            if (c.action === "editNameNode") {
+              const { oldName, newName } = c.editNameNode || {};
+
+              return `
+    <li>
+      <strong>${user}</strong>
+      renamed node
+      <code>${oldName}</code>
+      →
+      <code>${newName}</code>
+      <br/>
+      <small>${time}</small>
+    </li>
+  `;
+            }
+
+            if (c.action === "updateParent") {
+              const { oldParentId, newParentId } = c.updateParent || {};
+              return `
+    <li>
+      <strong>${user}</strong>
+      changed parent:
+      <a href="/api/${oldParentId}${queryString}">
+      <code>${oldParentId}</code></a>
+      →
+      <a href="/api/${newParentId}${queryString}">
+      <code>${newParentId}</code></a>
+      <br/>
+      <small>${time}</small>
+    </li>
+  `;
+            }
+
+            if (c.action === "updateChildNode") {
+              const { action, childId } = c.updateChildNode || {};
+              return `
+    <li>
+      <strong>${user}</strong>
+      <code>${action}</code> child
+      <a href="/api/${childId}${queryString}">
+      <code>${childId}</code></a>
+      <br/>
+      <small>${time}</small>
+    </li>
+  `;
+            }
+
+            if (c.action === "editScript") {
+              const { scriptName } = c.editScript || {};
+              return `
+    <li>
+      <strong>${user}</strong>
+      updated script
+      <code>${scriptName}</code>
+      <br/>
+      <small>${time}</small>
+    </li>
+  `;
+            }
+
+            if (c.action === "note") {
+              const { action, noteId } = c.noteAction || {};
+              return `
+    <li>
+      <strong>${user}</strong>
+      ${action === "add" ? "added" : "removed"} note
+       <a href="/api/${nodeId}/${parsedVersion}/notes/${noteId}${queryString}">
+      <code>${noteId}</code></a>
+      <br/>
+      <small>${time}</small>
+    </li>
+  `;
+            }
+
+            // --- DEFAULT FALLBACK ---
             return `
               <li>
-                <strong>${c.username || "Unknown user"}</strong>
+                <strong>${user}</strong>
                 <code>${c.action}</code>
                 <br/>
-                <small>${new Date(c.date).toLocaleString()}</small>
+                <small>${time}</small>
 
                 ${
                   c.additionalInfo
@@ -149,23 +226,21 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
 
         <body>
 
-       <p>
-  <strong>Node:</strong>
-  <a href="/api/${nodeId}${queryString}">
-    <code>${nodeId}</code>
-  </a>
-  <br/>
+        <p>
+          <strong>Node:</strong>
+          <a href="/api/${nodeId}${queryString}">
+            <code>${nodeId}</code>
+          </a>
+          <br/>
 
-  <strong>Version:</strong>
-  <a href="/api/${nodeId}/${parsedVersion}${queryString}">
-    <code>${parsedVersion}</code>
-  </a>
-</p>
+          <strong>Version:</strong>
+          <a href="/api/${nodeId}/${parsedVersion}${queryString}">
+            <code>${parsedVersion}</code>
+          </a>
+        </p>
 
-          <h2>Contributions</h2>
-          ${contributionsHtml}
-
-         
+        <h2>Contributions</h2>
+        ${contributionsHtml}
 
         </body>
         </html>

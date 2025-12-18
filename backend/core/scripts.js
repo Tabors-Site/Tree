@@ -1,8 +1,10 @@
 import { VM } from "vm2";
 import Node from "../db/models/node.js";
+import { logContribution } from "../db/utils.js";
+
 import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";
 
-export async function updateScript({ nodeId, name, script }) {
+export async function updateScript({ nodeId, name, script, userId }) {
   if (!name || !script) {
     throw new Error("Both name and script are required");
   }
@@ -25,7 +27,16 @@ export async function updateScript({ nodeId, name, script }) {
   }
 
   await node.save();
-
+  await logContribution({
+    userId,
+    nodeId,
+    action: "editScript",
+    nodeVersion: node.prestige.toString(),
+    editScript: {
+      scriptName: name,
+      contents: script,
+    },
+  });
   return {
     message: "Script saved successfully",
     node,

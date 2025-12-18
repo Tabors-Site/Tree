@@ -4,6 +4,7 @@ import {
   createNodesRecursive as coreCreateNodesRecursive,
   deleteNodeBranch as coreDeleteNodeBranch,
   updateParentRelationship as coreUpdateParentRelationships,
+  editNodeName as coreEditNodeName,
 } from "../core/treeManagement.js";
 
 export async function addNode(req, res) {
@@ -79,32 +80,31 @@ export async function deleteNode(req, res) {
 
 export async function editNodeName(req, res) {
   const { nodeId, newName } = req.body;
+  const userId = req.userId;
 
-  if (!newName?.trim())
-    return res
-      .status(400)
-      .json({ success: false, message: "Node name cannot be empty" });
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized: missing user",
+    });
+  }
 
   try {
-    const node = await findNodeById(nodeId);
-    if (!node)
-      return res
-        .status(404)
-        .json({ success: false, message: "Node not found" });
+    const updatedNode = await coreEditNodeName({
+      nodeId,
+      newName,
+      userId,
+    });
 
-    node.name = newName;
-    await node.save();
-
-    res.json({
+    return res.json({
       success: true,
       message: "Node name updated successfully",
-      updatedNode: node,
+      updatedNode,
     });
   } catch (err) {
-    res.status(500).json({
+    return res.status(400).json({
       success: false,
-      message: "Error updating node name",
-      error: err.message,
+      message: err.message || "Error updating node name",
     });
   }
 }

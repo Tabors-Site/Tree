@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs";
 import Note from "../db/models/notes.js";
+import { logContribution } from "../db/utils.js";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -45,7 +46,16 @@ async function createNote({
   });
 
   await newNote.save();
-
+  await logContribution({
+    userId,
+    nodeId,
+    action: "note",
+    nodeVersion: version,
+    noteAction: {
+      action: "add",
+      noteId: newNote._id.toString(),
+    },
+  });
   return {
     message: "Note created successfully",
     Note: newNote,
@@ -101,23 +111,52 @@ async function getNotes({ nodeId, version }) {
   }
 }
 
-async function deleteNoteAndFile({ noteId }) {
+async function deleteNoteAndFile({ noteId, userId }) {
   const note = await Note.findById(noteId);
   if (!note) throw new Error("Note not found");
 
+  const { nodeId, version } = note; // original nodeId for logging
+  let fileDeleted = false;
+
+  // If it's a file, delete it and modify content
   if (note.contentType === "file" && note.content) {
     const filePath = path.join(uploadsFolder, note.content);
+
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
+      fileDeleted = true;
       console.log(`Deleted file: ${filePath}`);
     } else {
       console.log(`File not found: ${filePath}`);
     }
+
+    // update note fields
+    note.content = "File was deleted";
+    note.nodeId = "deleted";
+  } else {
+    // text note: keep content, just move nodeId
+    note.nodeId = "deleted";
   }
 
-  await Note.findByIdAndDelete(noteId);
+  await note.save();
 
-  return { message: "Note and associated file deleted successfully" };
+  await logContribution({
+    userId,
+    nodeId, // original nodeId
+    action: "note",
+    nodeVersion: version,
+    noteAction: {
+      action: "remove",
+      noteId: noteId.toString(),
+      fileDeleted: fileDeleted || undefined,
+    },
+  });
+
+  return {
+    message: fileDeleted
+      ? "File note removed and file deleted."
+      : "Text note removed and moved to deleted.",
+  };
 }
 
 export { createNote, getNotes, deleteNoteAndFile };

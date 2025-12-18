@@ -25,18 +25,22 @@ async function findNodeById(nodeId) {
     throw error;
   }
 }
-
 const logContribution = async ({
   userId,
   nodeId,
   action,
-  statusEdited = null,
-  valueEdited = null,
+  statusEdited,
+  valueEdited,
+  scheduleEdited,
+  inviteAction,
+  noteAction,
+  updateParent,
+  editScript,
+  updateChildNode,
+  editNameNode,
+  goalEdited,
+  tradeId,
   nodeVersion,
-  tradeId = null,
-  goalEdited = null,
-  scheduleEdited = null,
-  inviteAction = null,
 }) => {
   const validActions = [
     "create",
@@ -49,6 +53,11 @@ const logContribution = async ({
     "editSchedule",
     "editGoal",
     "transaction",
+    "note",
+    "updateParent",
+    "editScript",
+    "updateChildNode",
+    "editNameNode",
   ];
 
   if (!validActions.includes(action)) {
@@ -71,6 +80,11 @@ const logContribution = async ({
       goalEdited,
       scheduleEdited,
       inviteAction,
+      noteAction,
+      updateParent,
+      editScript,
+      updateChildNode,
+      editNameNode,
       date: new Date(),
     });
 
