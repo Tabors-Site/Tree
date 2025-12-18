@@ -29,24 +29,27 @@ const ContributionSchema = new mongoose.Schema({
       "editSchedule",
       "editGoal",
       "transaction",
+      "note",
+      "updateParent",
+      "editScript",
+      "updateChildNode",
+      "editNameNode",
     ],
     required: true,
   },
   statusEdited: {
     type: String,
     enum: ["completed", "active", "trimmed", "divider"],
-    default: null,
   },
   valueEdited: {
     type: Map,
     of: Number,
-    default: null,
   },
   tradeId: {
     type: String,
     ref: "Transaction",
-    default: null,
   },
+
   inviteAction: {
     type: {
       action: {
@@ -58,33 +61,70 @@ const ContributionSchema = new mongoose.Schema({
           "removeContributor",
           "switchOwner",
         ],
-        default: null,
       },
       receivingId: {
         type: String,
         ref: "User",
-        default: null,
       },
+      _id: false,
     },
-    default: null,
   },
+
   scheduleEdited: {
     type: {
       date: {
         type: Date,
-        default: null,
       },
       reeffectTime: {
         type: Number,
-        default: null,
       },
+      _id: false,
     },
-    default: null,
   },
+
   goalEdited: {
     type: Map,
     of: Number,
-    default: null,
+  },
+
+  noteAction: {
+    type: {
+      action: { type: String, enum: ["add", "remove"], default: null },
+      noteId: { type: String, ref: "Note", default: null },
+      _id: false,
+    },
+  },
+
+  updateParent: {
+    type: {
+      oldParentId: { type: String, ref: "Node", default: null },
+      newParentId: { type: String, ref: "Node", default: null },
+      _id: false,
+    },
+  },
+
+  editScript: {
+    type: {
+      scriptName: { type: String, default: null },
+      contents: { type: String, default: null },
+      _id: false,
+    },
+  },
+
+  updateChildNode: {
+    type: {
+      action: { type: String, enum: ["added", "removed"], default: null },
+      childId: { type: String, ref: "Node", default: null },
+      _id: false,
+    },
+  },
+
+  editNameNode: {
+    type: {
+      oldName: { type: String, default: null },
+      newName: { type: String, default: null },
+      _id: false,
+    },
   },
 
   nodeVersion: {
