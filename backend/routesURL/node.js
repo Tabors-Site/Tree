@@ -38,11 +38,19 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
       const host = `${req.protocol}://${req.get("host")}`;
 
       // Versions
-      const versionHtml = node.versions
-        .map(
-          (_, i) => `<a href="${host}/api/${nodeId}/${i}${qs}">Version ${i}</a>`
-        )
-        .join("");
+      const versionHtml = `
+  <ul>
+    ${[...node.versions]
+      .reverse()
+      .map(
+        (_, i, arr) =>
+          `<li><a href="${host}/api/${nodeId}/${arr.length - 1 - i}${qs}">
+            Version ${arr.length - 1 - i}
+          </a></li>`
+      )
+      .join("")}
+  </ul>
+`;
 
       // Scripts
       const scriptsHtml =
@@ -109,10 +117,7 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
           <p><strong>Prestige:</strong> ${node.prestige}</p>
                
           <h1>${versionHtml}</h1>
-
-          <h2>Global Values</h2>
-          <pre>${JSON.stringify(node.globalValues ?? {}, null, 2)}</pre>
-
+ 
          
 
     

@@ -12,7 +12,7 @@ const UsingAllThePiecesSection = () => {
 
             <p>
                 The legacy tree app is the original interactive interface, hosted at{" "}
-                <strong>tree.tabors.site</strong> once you are logged in.
+                <strong>tree.tabors.site/legacy</strong> once you are logged in.
             </p>
 
             <p>
@@ -108,7 +108,7 @@ const UsingAllThePiecesSection = () => {
             </p>
 
             <p>
-                Once connected, you simply call the entry tool and talk normally (see Getting Started
+                Once connected, you simply call the entry tool and talk normally (see What to do next
                 or How AI fits in for more detail). The system handles tool usage, context selection, and updates on the
                 backend.
             </p>

@@ -8,6 +8,8 @@ import {
   getNotes,
   getFile,
   deleteNoteAndFile,
+  getAllNotesByUser,
+  getAllTagsForUser,
 } from "../controllers/notes.js";
 
 const router = express.Router();
@@ -17,6 +19,8 @@ router.post("/create-Note", authenticate, upload.single("file"), createNote);
 router.get("/uploads/:fileName", getFile);
 
 router.post("/get-Notes", authenticate, getNotes);
+router.post("/get-notes-user", authenticate, getAllNotesByUser);
+router.post("/get-tags-user", authenticate, getAllTagsForUser);
 
 router.post("/delete-note", authenticate, deleteNoteAndFile);
 

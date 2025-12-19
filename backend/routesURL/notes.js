@@ -71,7 +71,7 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       version: Number(version),
     });
 
-    const notes = result.notes.map((n) => ({
+    const notes = [...result.notes].map((n) => ({
       ...n,
       content:
         n.contentType === "file"
@@ -86,106 +86,142 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       )}/api/${nodeId}/${version}`;
       const realBase = `${req.protocol}://${req.get("host")}/api/${nodeId}`;
 
-      const nodeViewUrl = `${req.protocol}://${req.get(
-        "host"
-      )}/api/${nodeId}?token=${req.query.token ?? ""}&html`;
-
       let html = `
 <html>
 <head>
   <title>Notes for ${nodeId} version ${version}</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
-    a { color: #0077cc; text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    body {
+      font-family: sans-serif;
+      padding: 0;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 20px;
+      border-bottom: 1px solid #ddd;
+      background: white;
+      flex-shrink: 0;
+    }
+
+    .notes-container {
+      padding: 20px;
+      overflow-y: auto;
+      flex-grow: 1;
+    }
+
+    ul { padding-left: 0; list-style: none; }
     li { margin-bottom: 16px; }
     .meta { color: #444; font-size: 0.9em; }
-    .top-links { margin-bottom: 20px; }
-    form { margin-bottom: 30px; padding: 12px; border: 1px solid #ccc; }
+
+    .input-bar {
+      position: sticky;
+      bottom: 0;
+      background: white;
+      padding: 16px;
+      border-top: 1px solid #ccc;
+      flex-shrink: 0;
+    }
+
     textarea { width: 100%; }
   </style>
 </head>
 <body>
 
+<div class="header">
+  <h1 style="margin:0;">
+    <a href="${realBase}?token=${req.query.token ?? ""}&html">${nodeId}</a>
+    (version:
+    <a href="${base}?token=${req.query.token ?? ""}&html">${version}</a>)
+    Notes
+  </h1>
+</div>
 
-
-
-
- 
-
-  <h1><a href="${realBase}?token=${
-        req.query.token ?? ""
-      }&html">${nodeId}</a> (version: <a href="${base}?token=${
-        req.query.token ?? ""
-      }&html">${version}</a>) Notes</h1>
- 
-
-  <!-- ✅ CREATE NOTE FORM -->
-<form
-  method="POST"
-  action="/api/${nodeId}/${version}/notes?token=${req.query.token ?? ""}"
-  enctype="multipart/form-data"
->
-
-
-  <div>
-   
-    <textarea
-      name="content"
-      rows="8"
-      placeholder="Write a note (leave empty if uploading a file)"
-    ></textarea>
-  </div>
-
-  <br />
-
-  <div>
-    <label>Upload File</label><br />
-    <input type="file" name="file" />
-  </div>
-
-  <br />
-
-  <div>
-    <label>
-      <input type="checkbox" name="isReflection" value="true" />
-      Is Reflection
-    </label>
-  </div>
-
- 
-
-  <button type="submit">Create</button>
-</form>
-
-<ul>
+<div class="notes-container">
+  <ul>
 `;
 
       for (const n of notes) {
         const preview =
           n.contentType === "text"
-            ? n.content.substring(0, 80)
+            ? n.content.length > 80
+              ? n.content.substring(0, 80) + "..."
+              : n.content
             : `[FILE] ${n.content}`;
 
         const userLabel = n.userId
           ? `<a href="/api/user/${n.userId}?token=${
               req.query.token ?? ""
             }&html">
-               ${n.username ?? n.userId}
-             </a>`
+         ${n.username ?? n.userId}
+       </a>`
           : n.username ?? "Unknown user";
 
         html += `
     <li>
-      <div class="meta"><strong>${userLabel}</strong></div>
-      <a href="${base}/notes/${n._id}?token=${req.query.token ?? ""}&html">
-        ${preview}
-      </a>
+
+      <div>
+        <strong>${userLabel}:</strong>
+        <a href="${base}/notes/${n._id}?token=${req.query.token ?? ""}&html">
+          ${preview}
+        </a>
+      </div>
+
+      <!-- second line: timestamp -->
       <div class="meta">${new Date(n.createdAt).toLocaleString()}</div>
-    </li>`;
+
+    </li>
+  `;
       }
 
-      html += `</ul></body></html>`;
+      html += `
+  </ul>
+</div>
+
+<div class="input-bar">
+  <form
+    method="POST"
+    action="/api/${nodeId}/${version}/notes?token=${req.query.token ?? ""}"
+    enctype="multipart/form-data"
+  >
+    <div>
+      <textarea
+        name="content"
+        rows="4"
+        placeholder="Write a note or upload a file..."
+      ></textarea>
+    </div>
+
+    <br />
+
+    <div>
+      <input type="file" name="file" />
+    </div>
+
+    <br />
+
+    <div>
+      <label>
+        <input type="checkbox" name="isReflection" value="true" />
+        Is Reflection
+      </label>
+    </div>
+
+    <button type="submit">Create</button>
+  </form>
+</div>
+
+<script>
+  // Scroll notes container to bottom automatically
+  const container = document.querySelector('.notes-container');
+  container.scrollTop = container.scrollHeight;
+</script>
+
+</body>
+</html>`;
       return res.send(html);
     }
 

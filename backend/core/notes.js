@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs";
 import Note from "../db/models/notes.js";
+import User from "../db/models/user.js";
 import { logContribution } from "../db/utils.js";
 import { fileURLToPath } from "url";
 
@@ -10,6 +11,37 @@ const uploadsFolder = path.join(__dirname, "../uploads");
 
 if (!fs.existsSync(uploadsFolder)) {
   fs.mkdirSync(uploadsFolder);
+}
+
+async function extractTaggedUsersAndRewrite(content) {
+  const mentionRegex = /@([\w-]+)/g;
+  const matches = [...content.matchAll(mentionRegex)];
+
+  if (matches.length === 0) {
+    return { tagged: [], rewrittenContent: content };
+  }
+
+  const identifiers = matches.map((m) => m[1]);
+
+  const users = await User.find({
+    $or: [{ username: { $in: identifiers } }, { _id: { $in: identifiers } }],
+  });
+
+  const idToUser = {};
+  users.forEach((u) => {
+    idToUser[u._id] = u;
+    idToUser[u.username] = u;
+  });
+
+  const uniqueTagged = [...new Set(users.map((u) => u._id))];
+
+  const rewrittenContent = content.replace(mentionRegex, (full, ident) => {
+    const user = idToUser[ident];
+    if (!user) return full;
+    return "@" + user.username;
+  });
+
+  return { tagged: uniqueTagged, rewrittenContent };
 }
 
 async function createNote({
@@ -35,14 +67,26 @@ async function createNote({
   }
 
   const isReflectionBool = isReflection === "true" || isReflection === true;
+  let taggedUserIds = [];
+  let finalContent = content;
+
+  if (contentType === "text" && content) {
+    const { tagged, rewrittenContent } = await extractTaggedUsersAndRewrite(
+      content
+    );
+
+    taggedUserIds = tagged;
+    finalContent = rewrittenContent;
+  }
 
   const newNote = new Note({
     contentType,
-    content: contentType === "file" ? filePath : content,
+    content: contentType === "file" ? filePath : finalContent,
     userId,
     nodeId,
     version,
     isReflection: isReflectionBool,
+    tagged: taggedUserIds,
   });
 
   await newNote.save();
@@ -111,6 +155,39 @@ async function getNotes({ nodeId, version }) {
   }
 }
 
+async function getAllNotesByUser(userId) {
+  if (!userId) {
+    throw new Error("Missing required parameter: userId");
+  }
+
+  const notes = await Note.find({ userId: userId })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return {
+    notes,
+  };
+}
+
+async function getAllTagsForUser(userId) {
+  if (!userId) {
+    throw new Error("Missing required parameter: userId");
+  }
+
+  const notes = await Note.find({ tagged: userId })
+    .populate("userId", "username") // author
+    .lean();
+
+  const notesWithTaggedBy = notes.map((n) => ({
+    ...n,
+    authorId: n.userId?._id?.toString(),
+    authorUsername: n.userId?.username,
+    taggedBy: n.userId?._id?.toString(), // user who wrote the note
+  }));
+
+  return { notes: notesWithTaggedBy };
+}
+
 async function deleteNoteAndFile({ noteId, userId }) {
   const note = await Note.findById(noteId);
   if (!note) throw new Error("Note not found");
@@ -159,4 +236,10 @@ async function deleteNoteAndFile({ noteId, userId }) {
   };
 }
 
-export { createNote, getNotes, deleteNoteAndFile };
+export {
+  createNote,
+  getNotes,
+  deleteNoteAndFile,
+  getAllNotesByUser,
+  getAllTagsForUser,
+};

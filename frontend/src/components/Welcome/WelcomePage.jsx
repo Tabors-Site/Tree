@@ -19,16 +19,23 @@ const WelcomePage = () => {
 
           <div className="header-buttons">
             <a
-              href="https://tabors.site"
+              href="https://tree.tabors.site/legacy"
               className="back-to-site-btn"
             >
-              Back to tabors.site
+              Open Browser (coming soon)
             </a>
             <a
               href="https://tree.tabors.site/legacy"
-              className="back-to-site-btn legacy"
+              className="back-to-site-btn"
             >
               Open App
+            </a>
+
+            <a
+              href="https://tabors.site"
+              className="back-to-site-btn legacy"
+            >
+              Back to tabors.site
             </a>
 
 

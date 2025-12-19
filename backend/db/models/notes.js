@@ -33,6 +33,12 @@ const NoteSchema = new mongoose.Schema({
     type: Boolean,
     required: true,
   },
+  tagged: [
+    {
+      type: String,
+      ref: "User",
+    },
+  ],
   createdAt: {
     type: Date,
     default: Date.now,
