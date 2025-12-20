@@ -26,7 +26,7 @@ const UsingAllThePiecesSection = () => {
                 legacy app.
             </p>
 
-            <h2>2. URK browser mode</h2>
+            <h2>2. URL browser mode</h2>
 
             <p>
                 URL browser mode is a newer way to explore your tree using simple,
@@ -67,6 +67,9 @@ const UsingAllThePiecesSection = () => {
                     ?token and ?html are default appended when opening from legacy Tree app and URL Browser button.
                 </li>
                 <li>
+                    You can also append &limit=number to receive only the most recent data on certain endpoints.
+                </li>
+                <li>
                     The only URL's that dont require a token are /nodeid/version/note/noteid.
                     This is intentional so that you can share individual notes without exposing your whole tree.
                 </li>
@@ -94,6 +97,10 @@ const UsingAllThePiecesSection = () => {
             <p>
                 Overall, URL browser mode is currently the best way to read, navigate,
                 and inspect data cleanly.
+            </p>
+
+            <p>
+                Full Example URL: tree.tabors.site/api/nodeId/version/notes?token=YOURTOKEN&html&limit=5
             </p>
 
             <h2>3. ChatGPT connector</h2>

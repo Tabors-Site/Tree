@@ -65,10 +65,20 @@ function renderMedia(fileUrl, mimeType) {
 router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
+    const rawLimit = req.query.limit;
+    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+
+    if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid limit: must be a positive number",
+      });
+    }
 
     const result = await coreGetNotes({
       nodeId,
       version: Number(version),
+      limit,
     });
 
     const notes = [...result.notes].map((n) => ({

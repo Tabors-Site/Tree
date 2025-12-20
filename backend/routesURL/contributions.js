@@ -10,6 +10,16 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
 
+    const rawLimit = req.query.limit;
+    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+
+    if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid limit: must be a positive number",
+      });
+    }
+
     const parsedVersion = Number(version);
     if (isNaN(parsedVersion)) {
       return res.status(400).json({
@@ -27,6 +37,7 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
     const result = await getContributions({
       nodeId,
       version: parsedVersion,
+      limit,
     });
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

@@ -133,7 +133,17 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
 
-    const result = await coreGetAllNotesByUser(userId);
+    const rawLimit = req.query.limit;
+    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+
+    if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid limit: must be a positive number",
+      });
+    }
+
+    const result = await coreGetAllNotesByUser(userId, limit);
 
     const notes = result.notes.map((n) => ({
       ...n,
@@ -255,9 +265,19 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
     const userId = req.params.userId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
-    const result = await coreGetAllTagsForUser(userId);
+    const rawLimit = req.query.limit;
+    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
-    const notes = result.notes.reverse().map((n) => ({
+    if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid limit: must be a positive number",
+      });
+    }
+
+    const result = await coreGetAllTagsForUser(userId, limit);
+
+    const notes = result.notes.map((n) => ({
       ...n,
 
       content:
@@ -398,6 +418,15 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
     const userId = req.params.userId;
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+    const rawLimit = req.query.limit;
+    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+
+    if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid limit: must be a positive number",
+      });
+    }
 
     const filtered = Object.entries(req.query)
       .filter(([key]) => ["token", "html"].includes(key))
@@ -406,7 +435,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
 
     const queryString = filtered ? `?${filtered}` : "";
 
-    const result = await getContributionsByUser(userId);
+    const result = await getContributionsByUser(userId, limit);
     const contributions = result.contributions || [];
 
     // JSON MODE
