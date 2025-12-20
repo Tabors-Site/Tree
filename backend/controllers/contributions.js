@@ -1,5 +1,7 @@
 import Contribution from "../db/models/contribution.js";
 
+import { getContributionsByUser as coreGetContributionsByUser } from "../core/contributions.js";
+
 const getContributions = async (req, res) => {
   const { nodeId } = req.body;
 
@@ -82,4 +84,19 @@ const getContributions = async (req, res) => {
   }
 };
 
-export { getContributions };
+async function getContributionsByUser(req, res) {
+  try {
+    const result = await coreGetContributionsByUser({
+      userId: req.body.userId || req.body.userId,
+    });
+
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err.message,
+    });
+  }
+}
+
+export { getContributions, getContributionsByUser };

@@ -5,6 +5,7 @@ import {
   getAllNotesByUser as coreGetAllNotesByUser,
   getAllTagsForUser as coreGetAllTagsForUser,
 } from "../core/notes.js";
+import { getContributionsByUser } from "../core/contributions.js";
 
 const router = express.Router();
 
@@ -110,7 +111,8 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         </p>
       <ul>
      <li>   <a href="/api/user/${userId}/notes?${filtered}">Notes</a></li>
-     <li> <a href="/api/user/${userId}/tags?${filtered}">Tags</a></li>
+     <li> <a href="/api/user/${userId}/tags?${filtered}">Mail</a></li>
+     <li> <a href="/api/user/${userId}/contributions?${filtered}">Contributions</a></li>
 </ul>
         <h2>Roots</h2>
         ${rootsHtml}
@@ -188,7 +190,8 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     </h1>
 
     <div class="nav">
-      <a href="/api/user/${userId}/tags${tokenQS}">Tags</a>
+      <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
+       <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
     </div>
   </div>
 
@@ -310,7 +313,7 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
 
   <div class="header">
     <h1 style="margin:0;">
-      Tags for <a href="/api/user/${userId}?token=${
+      Mail for <a href="/api/user/${userId}?token=${
       req.query.token ?? ""
     }&html">
         @${user.username}
@@ -322,6 +325,9 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
       <a href="/api/user/${userId}/notes?token=${
       req.query.token ?? ""
     }&html">Notes</a>
+       <a href="/api/user/${userId}/contributions?token=${
+      req.query.token ?? ""
+    }&html">Contributions</a>
     
     </div>
 
@@ -383,6 +389,257 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
     return res.send(html);
   } catch (err) {
     console.error("Error in /user/:userId/tags:", err);
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+
+    const filtered = Object.entries(req.query)
+      .filter(([key]) => ["token", "html"].includes(key))
+      .map(([key, val]) => (val === "" ? key : `${key}=${val}`))
+      .join("&");
+
+    const queryString = filtered ? `?${filtered}` : "";
+
+    const result = await getContributionsByUser(userId);
+    const contributions = result.contributions || [];
+
+    // JSON MODE
+    if (!wantHtml) {
+      return res.json({
+        success: true,
+        contributions,
+      });
+    }
+
+    const user = await User.findById(userId).lean();
+
+    // HTML MODE WITH FULL DETAIL + node/version section
+    const contributionsHtml =
+      contributions.length > 0
+        ? `
+      <ul>
+        ${contributions
+          .map((c) => {
+            const username = c.username ?? "Unknown user";
+            const time = new Date(c.date).toLocaleString();
+            const nodeId = c.nodeId?._id || c.nodeId;
+            const version = c.nodeVersion;
+
+            // Helper for node/version footer
+            const footer = `
+              <div class="meta" style="margin-top:6px;">
+                node 
+                <a href="/api/${nodeId}${queryString}">
+                  <code>${nodeId}</code>
+                </a>
+                ${
+                  version
+                    ? `<a href="/api/${nodeId}/${version}${queryString}">(v${version})</a>`
+                    : ""
+                }
+              </div>
+            `;
+
+            // --------------------------
+            // TRANSACTION
+            // --------------------------
+            if (c.action === "transaction" && c.tradeId) {
+              const a = c.additionalInfo?.nodeA;
+              const b = c.additionalInfo?.nodeB;
+
+              return `
+                <li>
+                  <strong>${username}</strong>
+                  made a <code>transaction</code><br/>
+                  <small>${time}</small>
+
+                  <div style="margin-top:6px; padding-left:12px;">
+                    <div>
+                      <strong>${a?.name}</strong>
+                      (${a?.versionIndex}) →
+                      <code>${JSON.stringify(a?.valuesSent)}</code>
+                    </div>
+
+                    <div>
+                      <strong>${b?.name}</strong>
+                      (${b?.versionIndex}) →
+                      <code>${JSON.stringify(b?.valuesSent)}</code>
+                    </div>
+                  </div>
+
+                  ${footer}
+                </li>
+              `;
+            }
+
+            // --------------------------
+            // EDIT NAME NODE
+            // --------------------------
+            if (c.action === "editNameNode") {
+              const { oldName, newName } = c.additionalInfo || {};
+              return `
+                <li>
+                  <strong>${username}</strong>
+                  renamed node <code>${oldName}</code> → <code>${newName}</code><br/>
+                  <small>${time}</small>
+
+                  ${footer}
+                </li>
+              `;
+            }
+
+            // --------------------------
+            // UPDATE PARENT
+            // --------------------------
+            if (c.action === "updateParent") {
+              const { oldParentId, newParentId } = c.additionalInfo || {};
+              return `
+                <li>
+                  <strong>${username}</strong>
+                  changed parent:
+                  <a href="/api/${oldParentId}${queryString}"><code>${oldParentId}</code></a>
+                  →
+                  <a href="/api/${newParentId}${queryString}"><code>${newParentId}</code></a>
+                  <br/>
+                  <small>${time}</small>
+
+                  ${footer}
+                </li>
+              `;
+            }
+
+            // --------------------------
+            // UPDATE CHILD NODE
+            // --------------------------
+            if (c.action === "updateChildNode") {
+              const { action, childId } = c.additionalInfo || {};
+              return `
+                <li>
+                  <strong>${username}</strong>
+                  <code>${action}</code> child
+                  <a href="/api/${childId}${queryString}"><code>${childId}</code></a>
+                  <br/>
+                  <small>${time}</small>
+
+                  ${footer}
+                </li>
+              `;
+            }
+
+            // --------------------------
+            // EDIT SCRIPT
+            // --------------------------
+            if (c.action === "editScript") {
+              const { scriptName } = c.additionalInfo || {};
+              return `
+                <li>
+                  <strong>${username}</strong>
+                  updated script <code>${scriptName}</code>
+                  <br/>
+                  <small>${time}</small>
+
+                  ${footer}
+                </li>
+              `;
+            }
+
+            // --------------------------
+            // NOTE
+            // --------------------------
+            if (c.action === "note") {
+              const { action, noteId } = c.additionalInfo || {};
+              return `
+                <li>
+                  <strong>${username}</strong>
+                  ${action === "add" ? "added" : "removed"} note
+                  <a href="/api/${nodeId}/${version}/notes/${noteId}${queryString}">
+                    <code>${noteId}</code>
+                  </a>
+                  <br/>
+                  <small>${time}</small>
+
+                  ${footer}
+                </li>
+              `;
+            }
+
+            // --------------------------
+            // DEFAULT
+            // --------------------------
+            return `
+              <li>
+                <strong>${username}</strong>
+                <code>${c.action}</code><br/>
+                <small>${time}</small>
+
+                ${
+                  c.additionalInfo
+                    ? `<div style="margin-top:6px; padding-left:12px;">
+                        <code>${JSON.stringify(c.additionalInfo)}</code>
+                      </div>`
+                    : ""
+                }
+
+                ${footer}
+              </li>
+            `;
+          })
+          .join("")}
+      </ul>
+    `
+        : `<p><em>No contributions found</em></p>`;
+
+    // FINAL HTML response
+    return res.send(`
+<html>
+<head>
+  <title>${user.username} — Contributions</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      padding: 20px;
+      background: #fafafa;
+      line-height: 1.6;
+    }
+    h1 { margin-bottom: 6px; }
+    ul { list-style: none; padding-left: 18px; }
+    li { margin-bottom: 14px; }
+    code {
+      background: #eee;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    small { color: #555; }
+    a { color: #0077cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .nav a { margin-right: 12px; }
+  </style>
+</head>
+
+<body>
+
+  <h1>Contributions by <a href="/api/user/${userId}${queryString}">${user.username}</a></h1>
+
+  <div class="nav">
+    <a href="/api/user/${userId}/notes${queryString}">Notes</a>
+    <a href="/api/user/${userId}/tags${queryString}">Mail</a>
+  </div>
+
+  <h2>Contributions</h2>
+  ${contributionsHtml}
+
+</body>
+</html>
+`);
+  } catch (err) {
+    console.error("Error in /user/:userId/contributions:", err);
     res.status(400).json({ success: false, error: err.message });
   }
 });

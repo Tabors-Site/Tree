@@ -109,7 +109,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
           padding-left: 12px;
           margin: 6px 0;
         ">
-          <a href="/api/${node._id}${queryString}">
+          <a href="/api/${node._id}/${node.prestige}${queryString}">
             ${node.name} <code>${node._id}</code>
           </a>
       `;
@@ -246,12 +246,14 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       <body>
 
         <h1>
-  <a href="/api/${allData._id}${queryString}">
+  <a href="/api/${allData._id}/${allData.prestige}${queryString}">
     ${allData.name}
   </a>
 </h1>
 
         <p><code>${allData._id}</code></p>
+                <h2>Owner</h2>
+        ${ownerHtml}
    
      
         <h2>Parents</h2>
@@ -262,8 +264,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
            
       
        
-             <h2>Owner</h2>
-        ${ownerHtml}
+     
 
         <h2>Contributors</h2>
         ${contributorsHtml}
