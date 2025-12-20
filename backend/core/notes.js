@@ -106,7 +106,7 @@ async function createNote({
   };
 }
 
-async function getNotes({ nodeId, version }) {
+async function getNotes({ nodeId, version, limit }) {
   try {
     if (!nodeId) {
       throw new Error("Missing required parameter: nodeId");
@@ -116,12 +116,23 @@ async function getNotes({ nodeId, version }) {
       throw new Error("Invalid or missing version: must be a number");
     }
 
+    if (limit !== undefined && (typeof limit !== "number" || limit <= 0)) {
+      throw new Error("Invalid limit: must be a positive number");
+    }
+
     const query = { nodeId, version };
 
-    const notes = await Note.find(query)
+    let noteQuery = Note.find(query)
+      .sort({ createdAt: -1 })
       .populate("userId", "username")
       .populate("nodeId")
       .lean();
+
+    if (typeof limit === "number") {
+      noteQuery = noteQuery.limit(limit);
+    }
+
+    const notes = await noteQuery;
 
     if (!notes || notes.length === 0) {
       return {
@@ -155,28 +166,45 @@ async function getNotes({ nodeId, version }) {
   }
 }
 
-async function getAllNotesByUser(userId) {
+async function getAllNotesByUser(userId, limit) {
   if (!userId) {
     throw new Error("Missing required parameter: userId");
   }
 
-  const notes = await Note.find({ userId: userId })
+  if (limit !== undefined && (typeof limit !== "number" || limit <= 0)) {
+    throw new Error("Invalid limit: must be a positive number");
+  }
+
+  let query = Note.find({ userId }).sort({ createdAt: -1 }).lean();
+
+  if (typeof limit === "number") {
+    query = query.limit(limit);
+  }
+
+  const notes = await query;
+
+  return { notes };
+}
+
+async function getAllTagsForUser(userId, limit) {
+  if (!userId) {
+    throw new Error("Missing required parameter: userId");
+  }
+
+  if (limit !== undefined && (typeof limit !== "number" || limit <= 0)) {
+    throw new Error("Invalid limit: must be a positive number");
+  }
+
+  let query = Note.find({ tagged: userId })
+    .populate("userId", "username") // author
     .sort({ createdAt: -1 })
     .lean();
 
-  return {
-    notes,
-  };
-}
-
-async function getAllTagsForUser(userId) {
-  if (!userId) {
-    throw new Error("Missing required parameter: userId");
+  if (typeof limit === "number") {
+    query = query.limit(limit);
   }
 
-  const notes = await Note.find({ tagged: userId })
-    .populate("userId", "username") // author
-    .lean();
+  const notes = await query;
 
   const notesWithTaggedBy = notes.map((n) => ({
     ...n,

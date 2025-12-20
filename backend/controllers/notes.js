@@ -49,9 +49,12 @@ async function createNote(req, res) {
 
 async function getNotes(req, res) {
   try {
+    const limit = Number(req.query.limit ?? req.body.limit);
+
     const result = await coreGetNotes({
       nodeId: req.body.nodeId,
       version: req.body.version,
+      limit,
     });
     res.status(200).json({ success: true, ...result });
   } catch (err) {
@@ -61,8 +64,9 @@ async function getNotes(req, res) {
 async function getAllNotesByUser(req, res) {
   try {
     const userId = req.body.userId || req.params.userId;
+    const limit = Number(req.query.limit ?? req.body.limit);
 
-    const result = await coreGetAllNotesByUser(userId);
+    const result = await coreGetAllNotesByUser(userId, limit);
 
     res.status(200).json({ success: true, ...result });
   } catch (err) {
@@ -72,8 +76,9 @@ async function getAllNotesByUser(req, res) {
 async function getAllTagsForUser(req, res) {
   try {
     const userId = req.body.userId || req.params.userId;
+    const limit = Number(req.query.limit ?? req.body.limit);
 
-    const result = await coreGetAllTagsForUser(userId);
+    const result = await coreGetAllTagsForUser(userId, limit);
 
     res.status(200).json({ success: true, ...result });
   } catch (err) {
