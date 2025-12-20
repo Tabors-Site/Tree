@@ -5,7 +5,13 @@ import { setValueForNode, setGoalForNode } from "../core/values.js";
 import { updateSchedule } from "../core/schedules.js";
 
 import { editStatus, addPrestige } from "../core/statuses.js";
-import { createNote, getNotes, deleteNoteAndFile } from "../core/notes.js";
+import {
+  createNote,
+  getNotes,
+  getAllNotesByUser,
+  getAllTagsForUser,
+  deleteNoteAndFile,
+} from "../core/notes.js";
 import {
   createNewNode,
   createNodesRecursive,
@@ -40,6 +46,12 @@ function getMcpServer() {
     {
       nodeId: z.string().describe("Node ID to fetch the tree branch from."),
     },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ nodeId }) => {
       const treeData = await getTreeForAi(nodeId);
 
@@ -67,8 +79,7 @@ function getMcpServer() {
           },
         ],
       };
-    },
-    { readOnly: true }
+    }
   );
 
   server.tool(
@@ -76,6 +87,12 @@ function getMcpServer() {
     "Fetch detailed information for a specific node. READ-ONLY.",
     {
       nodeId: z.string().describe("Node ID to fetch."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     async ({ nodeId }) => {
       const nodeData = await getNodeForAi(nodeId);
@@ -104,12 +121,11 @@ function getMcpServer() {
           },
         ],
       };
-    },
-    { readOnly: true }
+    }
   );
 
   server.tool(
-    "entry-orchestrator",
+    "root-orchestrator",
     "Entry point for all tree-helper workflows. Presents available actions and establishes scope. READ-ONLY.",
     {
       rootId: z.string().describe("Root tree ID for context grounding."),
@@ -172,6 +188,12 @@ Reply with the number, or describe what you want to do in words.`;
       nodeId: z.string().describe("Node ID where scripts are stored."),
       userId: z.string().describe("User ID performing the operation."),
     },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ nodeId }) => {
       const instructions = `
      
@@ -212,44 +234,49 @@ Reply with the number, or describe what you want to do.`;
       nodeId: z.string().describe("Root node ID for the guided branch."),
       userId: z.string().describe("User ID performing the operation."),
     },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ nodeId }) => {
-      const instructions = `
-You are entering **Be Mode**.
+      const instructions = `You are entering **Be Mode**.
 
 OVERVIEW
-- You will guide the user through a branch of the tree **one leaf node at a time**.
-- The user experiences each node in **first person**.
+- Guide the user through a branch of the tree **one active leaf node at a time**.
+- Present each node clearly so the user can understand its purpose and work with it directly.
 
 INITIAL STEP
-1. Use get-tree(${nodeId}) to inspect the full branch structure.
-2. Identify the first **active leaf node** to guide.
+1. Use get-tree(${nodeId}) to view the full branch structure.
+2. Identify the first **active leaf node** to begin with. Do not present nodes that have a status as completed (skip).
 
 FOR EACH NODE (repeat this cycle):
-1. Use get-node(nodeId) to gain full context for the current node, and get-node-notes.
-2. Explain the node's intention and plan to the user in **first-person language**.
-3. Guide the user through *being* the node (reflection, action, embodiment).
+1. Use get-node(nodeId) to load full context for the current active node.
+2. Explain the node’s intention, purpose, and planned actions in a simple, focused way.
+3. Walk the user through the node so they can clearly see what it represents and what it asks of them.
+4. Use any relevant tools as needed to help them work with or update the node.
 
 OPTIONAL DURING THE NODE
-- If the user asks for:
-  • important wording or realizations → use create-node-version-note
-  • numeric tracking → use values / goals
-- If the user requests more explanation:
-  1) Add more instructions via create-node-version-note, OR
-  2) If deeper structure is needed, use create-node-branch to expand the tree,
-     then continue guiding through the new nodes.
+- If the user expresses something worth recording (you are their data tracker):
+  • important wording or insights → create-node-version-note, and try to copy exact wording or idea without changing 
+  • numerical or measurable details → update values/goals
+- If the user wants to expand or clarify the plan:
+  • use create-node-branch to add deeper steps  
+    then continue guiding through the newly created nodes.
 
 COMPLETION STEP (for the current node)
-4. Upon completion:
-   - Write a brief summary as a reflection note
+5. When the node’s work is complete:
+   - Write a brief summary as a reflection note  and/or ensure you fill all the values/goals data if it has any
      (use isReflection = true unless the node is trivial)
-5. Change the node status to completed.
+6. Mark the node as completed.
 
 ADVANCE
-6. Move to the next active node in the branch.
-7. Repeat the cycle until no active nodes remain.
+7. Move to the next active node in the branch.
+8. Continue until there are no active nodes remaining.
 
 OPTIONAL
-- If the process needs to restart or branch further,
+- If you need to restart or shift direction,
   re-enter be-mode-orchestrator with a new nodeId or branchId.
 `;
 
@@ -264,6 +291,12 @@ OPTIONAL
     "Returns the execution environment, APIs, and rules for node scripts. READ-ONLY.",
     {
       nodeId: z.string().describe("Node ID whose runtime environment applies."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     async ({ nodeId }) => {
       const runtimeDocs = `
@@ -281,7 +314,7 @@ node._id
 node.name
 node.type
 node.prestige
-node.globalValues
+
 
 Versions
 
@@ -457,15 +490,19 @@ Execution Notes
 
   server.tool(
     "edit-node-version-goal",
-    "Calls setGoalForNode() to update a node goal. Goal must correspond to existing value.",
+    "Calls setGoalForNode() to update a nodes goal. A goal represents the number a value needs to reach, and should always copy an exisiting value key.",
     {
       nodeId: z.string().describe("The unique ID of the node to edit."),
       key: z
         .string()
-        .describe("The key of the goal you want to modify on the node."),
+        .describe(
+          "The key of the goal you want to modify on the node. It always matches an existing value in the nodes verion."
+        ),
       goal: z
         .number()
-        .describe("The numeric goal value to assign to the given key."),
+        .describe(
+          "The numeric goal value to assign to the given key. What the corresponding value needs to reach."
+        ),
       prestige: z
         .number()
         .describe("Prestige value representing the node version."),
@@ -552,7 +589,7 @@ Execution Notes
 
   server.tool(
     "create-node-version-note",
-    "Creates a new text note for a node.",
+    "Creates a new text note for a node. Please confirm exact wording of content and do not add anything unless asked",
     {
       content: z.string().describe("The text content of the note."),
       userId: z.string().describe("The ID of the user creating the note."),
@@ -596,16 +633,26 @@ Execution Notes
 
   server.tool(
     "get-node-notes",
-    "Retrieves notes associated with a specific node (and prestige version if provided).",
+    "Retrieves notes associated with a specific node's prestige.",
     {
       nodeId: z.string().describe("The ID of the node to fetch notes for."),
+      limit: z
+        .number()
+        .optional()
+        .describe("Optional limit for the number of most recent notes"),
       prestige: z
         .number()
         .describe("Specific number prestige version to filter by"),
     },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ nodeId, prestige }) => {
       try {
-        const result = await getNotes({ nodeId, version: prestige });
+        const result = await getNotes({ nodeId, version: prestige, limit });
 
         return {
           content: [{ type: "text", text: result.message }],
@@ -615,6 +662,108 @@ Execution Notes
         return {
           content: [
             { type: "text", text: `❌ Failed to fetch notes: ${err.message}` },
+          ],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "get-all-notes-by-user",
+    "Fetches all notes written by a specific user (optionally limited to the most recent N). Recommend to use limit 10 or less",
+    {
+      userId: z.string().describe("The ID of the user whose notes to fetch."),
+      limit: z
+        .number()
+        .optional()
+        .describe("Optional limit: number of most recent notes to return."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ userId, limit }) => {
+      if (typeof limit === "number" && limit > 20) {
+        limit = 20;
+      }
+
+      try {
+        const result = await getAllNotesByUser(userId, limit);
+        const trimmedNotes = result.notes.slice(0, 20);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Fetched ${trimmedNotes.length} note(s) for user ${userId}.`,
+            },
+          ],
+          structuredContent: {
+            ...result,
+            notes: trimmedNotes,
+          },
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to fetch user notes: ${err.message}`,
+            },
+          ],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "get-all-tags-for-user",
+    "Fetches all notes where a specific user was tagged (optionally limited to the most recent N). May be referenced as mail",
+    {
+      userId: z.string().describe("The ID of the user who was tagged."),
+      limit: z
+        .number()
+        .optional()
+        .describe("Optional limit: number of most recent tagged notes."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ userId, limit }) => {
+      if (typeof limit === "number" && limit > 20) {
+        limit = 20;
+      }
+
+      try {
+        const result = await getAllTagsForUser(userId, limit);
+        const trimmedNotes = result.notes.slice(0, 20);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Fetched ${trimmedNotes.length} tagged note(s) for user ${userId}.`,
+            },
+          ],
+          structuredContent: {
+            ...result,
+            notes: trimmedNotes,
+          },
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to fetch tagged notes: ${err.message}`,
+            },
           ],
           structuredContent: { error: err.message },
         };
