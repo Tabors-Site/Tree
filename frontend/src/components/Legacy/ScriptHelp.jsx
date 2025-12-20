@@ -45,15 +45,7 @@ const ScriptHelp = ({ onClose }) => {
                 <td>node.prestige</td>
                 <td>Current highest version index (number)</td>
               </tr>
-              <tr>
-                <td>node.globalValues</td>
-                <td>
-                  <pre>
-                    {`Accumulative values for all versions. Returns object like:
-{ "string": number, "anotherString": number }`}
-                  </pre>
-                </td>
-              </tr>
+
             </tbody>
           </table>
 

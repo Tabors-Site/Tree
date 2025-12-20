@@ -27,7 +27,7 @@ function buildTree(nodes) {
       name: node.name,
       schedule: version?.schedule ?? null,
       reeffectTime: version?.reeffectTime ?? null,
-      values: node.globalValues ?? null,
+      values: version.values ?? null,
       goals: version?.goals ?? null,
       notes: version?.notes ?? [],
       children: node.children?.length

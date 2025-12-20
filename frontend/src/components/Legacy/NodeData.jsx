@@ -296,35 +296,7 @@ const NodeData = ({
             />
           </div>
 
-          {/* Top Right Section */}
-          <div className="topRight">
-            <h5>Global Values</h5>
-            <table
-              style={{
-                width: "100%",
-                border: "1px solid #ddd",
-                borderCollapse: "collapse",
-              }}
-            >
-              <thead>
-                <tr>
-                  <th>Value</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {nodeSelected.globalValues &&
-                  Object.entries(nodeSelected.globalValues).map(
-                    ([key, value], index) => (
-                      <tr key={index}>
-                        <td>{key}</td>
-                        <td>{value}</td>
-                      </tr>
-                    )
-                  )}
-              </tbody>
-            </table>
-          </div>
+
 
           {/* Bottom Half Section */}
           <div className="bottomHalf">

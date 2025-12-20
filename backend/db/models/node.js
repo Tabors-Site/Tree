@@ -9,7 +9,6 @@ const NodeSchema = new mongoose.Schema({
   name: { type: String, required: true },
   type: { type: String, default: null },
   prestige: { type: Number, default: 0 },
-  globalValues: { type: Map, of: Number, default: {} },
   versions: [
     {
       _id: false,
@@ -25,7 +24,10 @@ const NodeSchema = new mongoose.Schema({
   scripts: {
     type: [
       {
-        _id: false,
+        _id: {
+          type: String,
+          default: uuidv4,
+        },
         name: { type: String, required: true },
         script: { type: String, required: true },
       },
@@ -89,84 +91,6 @@ NodeSchema.methods.isAllowedToModify = async function (userId) {
   return false;
 }; */
 
-//update parent values from children when values are modified
-NodeSchema.methods.updateGlobalValues = async function () {
-  const Node = mongoose.model("Node");
-
-  const localValues = new Map();
-  this.versions.forEach((version) => {
-    version.values.forEach((value, key) => {
-      localValues.set(key, (localValues.get(key) || 0) + value);
-    });
-  });
-
-  const children = await Node.find({ parent: this._id });
-  const childValues = new Map();
-  for (const child of children) {
-    child.globalValues.forEach((value, key) => {
-      childValues.set(key, (childValues.get(key) || 0) + value);
-    });
-  }
-
-  const newGlobalValues = new Map(localValues);
-  childValues.forEach((value, key) => {
-    newGlobalValues.set(key, (newGlobalValues.get(key) || 0) + value);
-  });
-
-  const previousGlobalValues = this.globalValues || new Map();
-  this.globalValues = newGlobalValues;
-
-  const netChanges = new Map();
-  newGlobalValues.forEach((value, key) => {
-    const previousValue = previousGlobalValues.get(key) || 0;
-    const diff = value - previousValue;
-    if (diff !== 0) {
-      netChanges.set(key, diff);
-    }
-  });
-  previousGlobalValues.forEach((value, key) => {
-    if (!newGlobalValues.has(key)) {
-      netChanges.set(key, -value);
-    }
-  });
-
-  let currentNetChanges = netChanges;
-  let currentNode = this;
-
-  while (currentNode.parent) {
-    const parentNode = await Node.findById(currentNode.parent);
-
-    if (!parentNode) {
-      console.error(`Parent node not found for node: ${currentNode._id}`);
-      break;
-    }
-
-    const newParentValues = new Map(parentNode.globalValues || new Map());
-    currentNetChanges.forEach((change, key) => {
-      const previousValue = newParentValues.get(key) || 0;
-      const newValue = previousValue + change;
-
-      if (newValue === 0) {
-        newParentValues.delete(key);
-      } else {
-        newParentValues.set(key, newValue);
-      }
-    });
-
-    parentNode.globalValues = newParentValues;
-    await parentNode.save();
-
-    // Prepare the changes for the next parent
-    currentNode = parentNode;
-  }
-};
-NodeSchema.pre("save", async function (next) {
-  if (this.isModified("versions")) {
-    await this.updateGlobalValues();
-  }
-  next();
-});
-
 NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
   const Node = mongoose.model("Node");
 
@@ -192,8 +116,6 @@ NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
     if (this.parent) {
       const parentNode = await Node.findById(this.parent);
       if (parentNode) {
-        await parentNode.updateGlobalValues();
-
         await parentNode.save();
       }
     }
