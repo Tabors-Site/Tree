@@ -2,6 +2,11 @@ import { z } from "zod";
 import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { setValueForNode, setGoalForNode } from "../core/values.js";
 
+import {
+  getContributionsByUser,
+  getContributions
+} from "../core/contributions.js"
+
 import { updateSchedule } from "../core/schedules.js";
 
 import { editStatus, addPrestige } from "../core/statuses.js";
@@ -125,56 +130,116 @@ function getMcpServer() {
   );
 
   server.tool(
-    "root-orchestrator",
-    "Entry point for all tree-helper workflows. Presents available actions and establishes scope. READ-ONLY.",
+    "tree-start",
+    "Entry point for all tree-helper workflows. Loads tree + provides system instructions. READ-ONLY.",
     {
-      rootId: z.string().describe("Root tree ID for context grounding."),
-      userId: z.string().describe("User ID performing the operation."),
+      rootId: z.string(),
+      userId: z.string(),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     async ({ rootId, userId }) => {
-      const treeData = await getTreeForAi(rootId);
+      const systemInstructions = `
+Use get-tree(${rootId}) always before get-node(nodeId) to get initial data.
+Find the nodes for the user request based on the tree, and use get-node when deeper data is needed.
+Avoid presenting raw IDs when possible.
 
-      const instructions = `Use get-tree(${rootId}) always before get-node(nodeId) to get initial data.
-      Find the nodes for them based on tree, and get-node to get deeper data. Try to not presend id's.
-Wait for the user to choose an intent before proceeding. Do not call any other tools yet.
 
-Here's what I can do. Please choose **one**:
+Here are the available actions. 
 
 1️⃣ **Create or restructure the tree**
    - Create a new branch
    - Add child nodes
-   - Move nodes to a different parent
-   - Discuss plans and proper tree placement
+   - Move nodes
+   - Discuss structure or placement
 
 2️⃣ **Modify existing data**
-   - Use get-node(id) to view current data
-   - Usually use latest prestige version unless specified
-   - Edit values or goals
-   - Add or edit notes
-   - Update status or schedule
-   - Add a new prestige/version
-   - Examine tree and offer node suggestions
+   - View node data
+   - Update values, goals, status, notes
+   - Add prestige/version
+   - Suggest nodes or improvements
 
 3️⃣ **Explore or ask about data**
-   - View the tree structure
-   - Inspect a specific node
-   - Understand progress, history, or relationships
+   - View the tree
+   - Inspect nodes
+   - Understand progress or relationships
 
-4️⃣ **create, edit, or run a node's script**
-   - if you call this, run the tool scripting-orchestrator(nodeid)
+4️⃣ **Create, edit, or run a node’s script**
+   - Will trigger scripting-orchestrator(nodeId)
 
-   5 **initiate be mode**
-   -be guided through your tree in real time through the leaf nodes
-   - if you call this, run the tool be-mode-orchestrator(nodeid)
+5 **Examine User Profile**
+   - Check your notes, mail, and contribution history
 
 
-Reply with the number, or describe what you want to do in words.`;
+6 **Initiate BE mode**
+   - Guided real-time traversal of leaf nodes
+   - Will trigger be-mode-orchestrator(nodeId)
 
+
+Call the tool get-tree(id) and tree-actions-menu and then present me the menu with a short paragraphed introductory summary of my tree so far.
+`;
+
+      // IMPORTANT: This tool returns the context,
+      // but does NOT itself call any tool.
+      return {
+        content: [{ type: "text", text: systemInstructions }],
+      };
+    }
+  );
+
+  server.tool(
+    "tree-actions-menu",
+    "Waits for decision on intensions menu. Read-only to decide next choice.",
+    {
+      rootId: z.string(),
+      userId: z.string(),
+      treeData: z.any(),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({}) => {
       return {
         content: [
           {
             type: "text",
-            text: instructions,
+            text: `Ask me what I want to do on Tree menu. Call these functions depending on my intent
+
+              1️⃣ **Create or restructure the tree** = tree-structure-orchestrator
+
+2️⃣ **Modify existing data**
+   - View tree/node data to understand where to place data = combinations of get-tree for structure, get-node for details,
+   - Update values, goals, status, notes = edit-node-version-values, edit-node-version-goals, edit-node-or-branch-status,  create-node-version-note
+   - Add prestige/version = add-node-prestige
+   - Suggest nodes or improvements
+   -(useful tool if you need to undo stuff) = get-node-contributions
+
+3️⃣ **Explore or ask about data**
+   - View the tree = get-tree
+   - Inspect nodes = get-node
+   - Understand progress or relationships
+   - see history of node actions = get-node-contributions
+
+4️⃣ **Create, edit, or run a node’s script** = scripting-orchestrator(nodeId)
+
+5 **Examine User Profile**
+    - ensure you knw which I want
+   - Check your recent notes = get-all-notes-by-user,
+   - check your mail = get-all-tags-by-user,
+   - check your contribution history = get-contributions-by-user
+
+
+6. **Initiate BE mode**
+   - Guided real-time traversal of leaf nodes
+   - Will trigger be-mode-orchestrator(nodeId)
+`,
           },
         ],
       };
@@ -188,6 +253,7 @@ Reply with the number, or describe what you want to do in words.`;
       nodeId: z.string().describe("Node ID where scripts are stored."),
       userId: z.string().describe("User ID performing the operation."),
     },
+
     {
       readOnlyHint: true,
       destructiveHint: false,
@@ -220,6 +286,50 @@ Here’s what I can help with. Choose **one**:
    - Run execute-node-script
 
 Reply with the number, or describe what you want to do.`;
+
+      return {
+        content: [{ type: "text", text: instructions }],
+      };
+    }
+  );
+  server.tool(
+    "tree-structure-orchestrator",
+    "Entry point for creating or modifying hierarchical tree structures.",
+    {
+      rootId: z
+        .string()
+        .describe("The ID of the root or starting node of the tree."),
+      userId: z.string().describe("The user performing the operation."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ rootId }) => {
+      const instructions = `
+Inspect the structure of that tree.
+Ask me what action I want to take.
+
+
+1️⃣ **Create tree branches**
+   - Create new branches (create-node-branch)
+   - Add child nodes (create-node)
+  
+   if it is this one, please ensure I am placing it onto the structure properly, and if it doesn't fit, extend new branches from root nodes or tell me it doesnt fit root.
+      We can discuss placement and branch structure before the tools are called.
+2️⃣ **Move nodes/restructure**
+   - Change parent/child relationships (update-node-branch-parent-relationship)
+   - Reorder hierarchyy
+   - Relocate a subtree
+
+Ask for specifics, or give suggestions if none.
+   just fix up the trees hierarchy so things are in proper logical parent-child order.
+
+
+
+Ask to reply with a number or figure out intent, and then start appropriate tools.`;
 
       return {
         content: [{ type: "text", text: instructions }],
@@ -1101,6 +1211,115 @@ Execution Notes
     }
   );
   */
+
+  server.tool(
+    "get-node-contributions",
+    "Fetches contributions for a specific node and prestige version (optionally limited).",
+    {
+      nodeId: z
+        .string()
+        .describe("The ID of the node to fetch contributions for."),
+      version: z.number().describe("Prestige version of the node."),
+      limit: z
+        .number()
+        .optional()
+        .describe("Optional limit for number of most recent contributions."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ nodeId, version, limit }) => {
+      if (typeof limit === "number" && limit > 30) {
+        limit = 30;
+      }
+
+      try {
+        const result = await getContributions({ nodeId, version, limit });
+
+        const trimmed = result.contributions.slice(0, 20);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Fetched ${trimmed.length} contribution(s) for node ${nodeId}, version ${version}.`,
+            },
+          ],
+          structuredContent: {
+            ...result,
+            contributions: trimmed,
+          },
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to fetch contributions: ${err.message}`,
+            },
+          ],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "get-contributions-by-user",
+    "Fetches contributions made by a specific user (optionally limited).",
+    {
+      userId: z
+        .string()
+        .describe("The ID of the user to fetch contributions for."),
+      limit: z
+        .number()
+        .optional()
+        .describe("Optional limit for number of most recent contributions."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ userId, limit }) => {
+      if (typeof limit === "number" && limit > 30) {
+        limit = 30;
+      }
+
+      try {
+        const result = await getContributionsByUser(userId, limit);
+
+        const trimmed = result.contributions.slice(0, 20);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Fetched ${trimmed.length} contribution(s) for user ${userId}.`,
+            },
+          ],
+          structuredContent: {
+            ...result,
+            contributions: trimmed,
+          },
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to fetch user contributions: ${err.message}`,
+            },
+          ],
+          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
 
   return server;
 }

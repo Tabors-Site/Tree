@@ -1,6 +1,6 @@
 import Contribution from "../db/models/contribution.js";
 
-async function getContributions({ nodeId, version }) {
+async function getContributions({ nodeId, version, limit }) {
   try {
     if (!nodeId) {
       throw new Error("Missing required parameter: nodeId");
@@ -10,9 +10,13 @@ async function getContributions({ nodeId, version }) {
       throw new Error("Invalid or missing version: must be a number");
     }
 
+    if (limit !== undefined && (typeof limit !== "number" || limit <= 0)) {
+      throw new Error("Invalid limit: must be a positive number");
+    }
+
     const query = { nodeId, nodeVersion: version };
 
-    const contributions = await Contribution.find(query)
+    let contributionsQuery = Contribution.find(query)
       .populate("userId", "username")
       .populate("nodeId", "name")
       .populate("inviteAction.receivingId", "username")
@@ -22,6 +26,12 @@ async function getContributions({ nodeId, version }) {
       })
       .sort({ date: -1 })
       .lean();
+
+    if (typeof limit === "number") {
+      contributionsQuery = contributionsQuery.limit(limit);
+    }
+
+    const contributions = await contributionsQuery;
 
     if (!contributions || contributions.length === 0) {
       return {
@@ -35,23 +45,14 @@ async function getContributions({ nodeId, version }) {
 
       switch (contribution.action) {
         case "editValue":
-          additionalInfo = {
-            valueEdited: contribution.valueEdited,
-          };
+          additionalInfo = { valueEdited: contribution.valueEdited };
           break;
-
         case "editStatus":
-          additionalInfo = {
-            statusEdited: contribution.statusEdited,
-          };
+          additionalInfo = { statusEdited: contribution.statusEdited };
           break;
-
         case "trade":
-          additionalInfo = {
-            tradeId: contribution.tradeId,
-          };
+          additionalInfo = { tradeId: contribution.tradeId };
           break;
-
         case "invite":
           additionalInfo = contribution.inviteAction
             ? {
@@ -61,19 +62,12 @@ async function getContributions({ nodeId, version }) {
               }
             : null;
           break;
-
         case "editSchedule":
-          additionalInfo = {
-            scheduleEdited: contribution.scheduleEdited,
-          };
+          additionalInfo = { scheduleEdited: contribution.scheduleEdited };
           break;
-
         case "editGoal":
-          additionalInfo = {
-            goalEdited: contribution.goalEdited,
-          };
+          additionalInfo = { goalEdited: contribution.goalEdited };
           break;
-
         case "transaction":
           additionalInfo = contribution.tradeId
             ? {
@@ -93,12 +87,11 @@ async function getContributions({ nodeId, version }) {
         case "note":
           additionalInfo = contribution.noteAction
             ? {
-                action: contribution.noteAction.action, // "add" / "remove"
+                action: contribution.noteAction.action,
                 noteId: contribution.noteAction.noteId,
               }
             : null;
           break;
-
         case "updateParent":
           additionalInfo = contribution.updateParent
             ? {
@@ -107,7 +100,6 @@ async function getContributions({ nodeId, version }) {
               }
             : null;
           break;
-
         case "editScript":
           additionalInfo = contribution.editScript
             ? {
@@ -116,11 +108,10 @@ async function getContributions({ nodeId, version }) {
               }
             : null;
           break;
-
         case "updateChildNode":
           additionalInfo = contribution.updateChildNode
             ? {
-                action: contribution.updateChildNode.action, // "added" / "removed"
+                action: contribution.updateChildNode.action,
                 childId: contribution.updateChildNode.childId,
               }
             : null;
@@ -133,6 +124,7 @@ async function getContributions({ nodeId, version }) {
               }
             : null;
           break;
+
         default:
           additionalInfo = null;
       }
@@ -154,15 +146,19 @@ async function getContributions({ nodeId, version }) {
   }
 }
 
-async function getContributionsByUser(userId) {
+async function getContributionsByUser(userId, limit) {
   try {
     if (!userId) {
       throw new Error("Missing required parameter: userId");
     }
 
+    if (limit !== undefined && (typeof limit !== "number" || limit <= 0)) {
+      throw new Error("Invalid limit: must be a positive number");
+    }
+
     const query = { userId };
 
-    const contributions = await Contribution.find(query)
+    let contributionsQuery = Contribution.find(query)
       .populate("userId", "username")
       .populate("nodeId", "name")
       .populate("inviteAction.receivingId", "username")
@@ -172,6 +168,12 @@ async function getContributionsByUser(userId) {
       })
       .sort({ date: -1 })
       .lean();
+
+    if (typeof limit === "number") {
+      contributionsQuery = contributionsQuery.limit(limit);
+    }
+
+    const contributions = await contributionsQuery;
 
     if (!contributions || contributions.length === 0) {
       return {
@@ -187,15 +189,12 @@ async function getContributionsByUser(userId) {
         case "editValue":
           additionalInfo = { valueEdited: contribution.valueEdited };
           break;
-
         case "editStatus":
           additionalInfo = { statusEdited: contribution.statusEdited };
           break;
-
         case "trade":
           additionalInfo = { tradeId: contribution.tradeId };
           break;
-
         case "invite":
           additionalInfo = contribution.inviteAction
             ? {
@@ -205,15 +204,12 @@ async function getContributionsByUser(userId) {
               }
             : null;
           break;
-
         case "editSchedule":
           additionalInfo = { scheduleEdited: contribution.scheduleEdited };
           break;
-
         case "editGoal":
           additionalInfo = { goalEdited: contribution.goalEdited };
           break;
-
         case "transaction":
           additionalInfo = contribution.tradeId
             ? {
@@ -230,7 +226,6 @@ async function getContributionsByUser(userId) {
               }
             : null;
           break;
-
         case "note":
           additionalInfo = contribution.noteAction
             ? {
@@ -239,7 +234,6 @@ async function getContributionsByUser(userId) {
               }
             : null;
           break;
-
         case "updateParent":
           additionalInfo = contribution.updateParent
             ? {
@@ -248,7 +242,6 @@ async function getContributionsByUser(userId) {
               }
             : null;
           break;
-
         case "editScript":
           additionalInfo = contribution.editScript
             ? {
@@ -257,7 +250,6 @@ async function getContributionsByUser(userId) {
               }
             : null;
           break;
-
         case "updateChildNode":
           additionalInfo = contribution.updateChildNode
             ? {
@@ -266,7 +258,6 @@ async function getContributionsByUser(userId) {
               }
             : null;
           break;
-
         case "editNameNode":
           additionalInfo = contribution.editNameNode
             ? {
@@ -275,7 +266,6 @@ async function getContributionsByUser(userId) {
               }
             : null;
           break;
-
         default:
           additionalInfo = null;
       }

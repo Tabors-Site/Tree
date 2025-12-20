@@ -86,9 +86,19 @@ const getContributions = async (req, res) => {
 
 async function getContributionsByUser(req, res) {
   try {
-    const result = await coreGetContributionsByUser({
-      userId: req.body.userId || req.body.userId,
-    });
+    const userId = req.body.userId || req.params.userId;
+
+    const limitRaw = req.body.limit ?? req.query.limit;
+    const limit = limitRaw !== undefined ? Number(limitRaw) : undefined;
+
+    if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid limit: must be a positive number",
+      });
+    }
+
+    const result = await coreGetContributionsByUser(userId, limit);
 
     res.status(200).json({ success: true, ...result });
   } catch (err) {
