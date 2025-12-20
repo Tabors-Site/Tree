@@ -154,7 +154,7 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
 // -----------------------------------------------------------------------------
 router.get("/:nodeId/:version", urlAuth, async (req, res) => {
   try {
-    const { nodeId, version } = req.params;
+    const { nodeId, version, parent } = req.params;
     const v = Number(version);
 
     const node = await Node.findById(nodeId).lean();
@@ -173,7 +173,9 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
       const qs = queryString ? `?${queryString}` : "";
 
       const backUrl = `${req.protocol}://${req.get("host")}/api/${nodeId}${qs}`;
-
+      const backTreeUrl = `${req.protocol}://${req.get(
+        "host"
+      )}/api/root/${nodeId}${qs}`;
       const createdDate = data.dateCreated
         ? new Date(data.dateCreated).toLocaleString()
         : "Unknown";
@@ -211,6 +213,10 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
               <a href="${backUrl}">${node.name}</a>
               — Version ${version}
             </h1>
+
+               <h3>
+          <a href="${backTreeUrl}">BACK TO TREE</a>
+          </h3>
 
             <div class="meta">
             <div>

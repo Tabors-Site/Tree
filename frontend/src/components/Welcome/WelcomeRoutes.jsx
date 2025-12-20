@@ -13,7 +13,9 @@ const WelcomeRoutes = () => {
   return (
     <Routes>
 
-      <Route path="/" element={<WelcomePage />} />
+      <Route path="/" element={<WelcomePage />}>
+        <Route index element={<WhySection />} />
+      </Route>
 
 
       <Route path="/welcome" element={<WelcomePage />}>
