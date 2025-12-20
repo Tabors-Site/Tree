@@ -26,10 +26,10 @@ const UsingAllThePiecesSection = () => {
                 legacy app.
             </p>
 
-            <h2>2. HTML browser mode</h2>
+            <h2>2. URK browser mode</h2>
 
             <p>
-                HTML browser mode is a newer way to explore your tree using simple,
+                URL browser mode is a newer way to explore your tree using simple,
                 URL-based navigation and basic HTML.
             </p>
 
@@ -42,12 +42,13 @@ const UsingAllThePiecesSection = () => {
 
             <ul>
                 <li>
-                    To access HTML Browser mode, look in the top right menu of the legacy Tree App.
-                    If a root is selected, it will open a new tab to that tree on HTML mode.
+                    To access URL Browser mode, click the button URL Browser on the top left of this page. It will only appear when logged in.
+                    Alternatively, look in the main menu of the legacy Tree App.
+                    If a root is selected, it will open a new tab to that tree on URL mode.
                     If no root is selected, it will open to your user profile.
                 </li>
                 <li>
-                    You must set an <strong>HTML browser mode token</strong> before using
+                    You must set an <strong>URL browser mode token</strong> before using
                     it. This token appears in the URL as <code>?token=</code> and acts as
                     a password for read-only access.
                 </li>
@@ -63,7 +64,7 @@ const UsingAllThePiecesSection = () => {
                     models.
                 </li>
                 <li>
-                    ?token and ?html are default appended when opening from legacy Tree app.
+                    ?token and ?html are default appended when opening from legacy Tree app and URL Browser button.
                 </li>
                 <li>
                     The only URL's that dont require a token are /nodeid/version/note/noteid.
@@ -78,7 +79,7 @@ const UsingAllThePiecesSection = () => {
                 </li>
 
                 <li>
-                    HTML browser mode is also useful for discovering user IDs and node IDs.
+                    URL browser mode is also useful for discovering user IDs and node IDs.
                     It is still being built out, so some actions may still require the
                     legacy app.
                 </li>
@@ -91,7 +92,7 @@ const UsingAllThePiecesSection = () => {
             </ul>
 
             <p>
-                Overall, HTML browser mode is currently the best way to read, navigate,
+                Overall, URL browser mode is currently the best way to read, navigate,
                 and inspect data cleanly.
             </p>
 

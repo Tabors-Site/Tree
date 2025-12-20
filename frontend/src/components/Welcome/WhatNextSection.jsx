@@ -95,7 +95,7 @@ rootId: default-root-id`}
             </pre>
 
             <p>
-                You can find your <strong>userId</strong> in HTML browser mode. The{" "}
+                You can find your <strong>userId</strong> in URL browser mode. The{" "}
                 <strong>rootId</strong> can be any root node you want to work from.
             </p>
 
