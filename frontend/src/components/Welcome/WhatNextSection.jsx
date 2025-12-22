@@ -1,3 +1,4 @@
+import SectionNav from "./SectionNav";
 const WhatToDoNextSection = () => {
     return (
         <>
@@ -11,10 +12,10 @@ const WhatToDoNextSection = () => {
                     <strong>taborgreat@gmail.com</strong>.
                 </li>
                 <li>
-                    Create an account at<a href="https://tabors.site"> <strong>https://tabors.site</strong></a> and log in.
+                    Create an account at <a href="https://tabors.site"><strong>tabors.site</strong></a> and log in.
                 </li>
                 <li>
-                    Once logged in, you’ll see your legacy tree dashboard at <a href="https://tree.tabors.site/legacy" target="_blank"><strong>https://tree.tabors.site/legacy</strong></a>.
+                    Once logged in, you’ll see your legacy tree dashboard at <a href="https://tree.tabors.site/legacy" target="_blank"><strong>tree.tabors.site/legacy</strong></a>.
                 </li>
             </ol>
 
@@ -150,6 +151,8 @@ rootId: your-root-or-node-id`}
                 This is where the system becomes less about managing data and more about
                 thinking clearly and making progress.
             </p>
+            <SectionNav currentId="next" />
+
         </>
     );
 };

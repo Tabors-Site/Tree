@@ -2,10 +2,12 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Cookies from "js-cookie";
 import "./WelcomePage.css";
+import { useLocation } from "react-router-dom";
+
 
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
 
-const sections = [
+export const sections = [
   { id: "why", label: "Why I Made This" },
   { id: "structure", label: "Trees and nodes" },
   { id: "workflow", label: "How to use it" },
@@ -21,6 +23,11 @@ const WelcomePage = () => {
     const token = Cookies.get("token");
     if (token) setHasToken(true);
   }, []);
+  const location = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [location.pathname]);
 
   const handleOpenBrowser = async () => {
     const token = Cookies.get("token");

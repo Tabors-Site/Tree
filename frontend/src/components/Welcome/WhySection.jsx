@@ -1,3 +1,6 @@
+import SectionNav from "./SectionNav";
+
+
 const WhySection = () => {
   return (
     <>
@@ -51,7 +54,7 @@ const WhySection = () => {
           behind the scenes
         </li>
         <li>Stay focused on the task you’re actually working on, and be guided through your plans
-            in a way like never before.
+          in a way like never before.
         </li>
         <li>Summarize and reference past work instantly</li>
         <li>
@@ -62,13 +65,14 @@ const WhySection = () => {
         </li>
       </ul>
 
-     <p>
-  Ultimately, I want to help people claim their lives back while also being as
-  effective as possible. When your systems work for you, life takes less effort
-  and offers more clarity. As the internet becomes increasingly confusing and
-  artificial, this is my personal attempt to regain ownership of my time,
-  attention, and direction.
-</p>
+      <p>
+        Ultimately, I want to help people claim their lives back while also being as
+        effective as possible. When your systems work for you, life takes less effort
+        and offers more clarity. As the internet becomes increasingly confusing and
+        artificial, this is my personal attempt to regain ownership of my time,
+        attention, and direction.
+      </p>
+      <SectionNav currentId="why" />
 
     </>
   );

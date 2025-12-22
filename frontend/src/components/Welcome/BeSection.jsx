@@ -1,3 +1,4 @@
+import SectionNav from "./SectionNav";
 const BeSection = () => {
   return (
     <>
@@ -31,6 +32,8 @@ const BeSection = () => {
         Once Be mode clicks, the rest of the system fades into the background
         and the work becomes about clarity, direction, and momentum.
       </p>
+      <SectionNav currentId="be" />
+
     </>
   );
 };

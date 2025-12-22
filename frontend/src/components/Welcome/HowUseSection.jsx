@@ -1,3 +1,4 @@
+import SectionNav from "./SectionNav";
 const HowToUseSection = () => {
     return (
         <>
@@ -47,36 +48,36 @@ const HowToUseSection = () => {
 
             <h2>Build with nodes</h2>
 
-      <p>
-    From the root, you add nodes to shape the tree. Each node represents a single
-    idea, decision, question, or piece of work. Nodes act as subsections that break
-    a larger idea into manageable parts.
-</p>
+            <p>
+                From the root, you add nodes to shape the tree. Each node represents a single
+                idea, decision, question, or piece of work. Nodes act as subsections that break
+                a larger idea into manageable parts.
+            </p>
 
-<p>
-    You can think of nodes as a natural hierarchy, similar to chapters in a book,
-    folders on a computer, or branches in a family tree. For example, a book moves
-    from title to chapters, then to sections, paragraphs, sentences, and words.
-</p>
+            <p>
+                You can think of nodes as a natural hierarchy, similar to chapters in a book,
+                folders on a computer, or branches in a family tree. For example, a book moves
+                from title to chapters, then to sections, paragraphs, sentences, and words.
+            </p>
 
 
-<p>
-    Nodes are always created as a child to a parent node(the root node is the origin). Each new node
-    grows from another node, adding detail while keeping everything connected to
-    its original context thus supported.
-</p>
+            <p>
+                Nodes are always created as a child to a parent node(the root node is the origin). Each new node
+                grows from another node, adding detail while keeping everything connected to
+                its original context thus supported.
+            </p>
 
-       <p>
-    You can keep the tree shallow and store more inside each node, or let it grow
-    deeper by breaking ideas into smaller steps across many nodes. Both approaches
-    work and can be mixed freely.
-</p>
+            <p>
+                You can keep the tree shallow and store more inside each node, or let it grow
+                deeper by breaking ideas into smaller steps across many nodes. Both approaches
+                work and can be mixed freely.
+            </p>
 
-<p>
-    Some people think in broader strokes, while others prefer every detail written
-    out. The system is designed to support both without forcing a single way of
-    working.
-</p>
+            <p>
+                Some people think in broader strokes, while others prefer every detail written
+                out. The system is designed to support both without forcing a single way of
+                working.
+            </p>
 
 
             <h2>Versions and change over time</h2>
@@ -156,29 +157,30 @@ const HowToUseSection = () => {
                 to make the work visible and reachable.
             </p>
 
-             
-    
-      <h1>Be Mode</h1>
 
-      <p>
-        The real value of the system appears when you enter <strong>Be mode</strong>.
-      </p>
 
-      <p>
-        In Be mode, you stop managing the tree and start moving through it. You
-        interact in natural language with ChatGPT, focusing only on what needs attention right
-        now.
-      </p>
+            <h1>Be Mode</h1>
 
-   <p>
-    The AI moves through your tree from leaf to leaf, using your plans, progress,
-    and existing data to guide you forward and handle the details along the way.
-</p>
+            <p>
+                The real value of the system appears when you enter <strong>Be mode</strong>.
+            </p>
 
-<p>
-    The structure stays in the background, supporting the work while you focus on
-    what matters most and move toward your root goal.
-</p>
+            <p>
+                In Be mode, you stop managing the tree and start moving through it. You
+                interact in natural language with ChatGPT, focusing only on what needs attention right
+                now.
+            </p>
+
+            <p>
+                The AI moves through your tree from leaf to leaf, using your plans, progress,
+                and existing data to guide you forward and handle the details along the way.
+            </p>
+
+            <p>
+                The structure stays in the background, supporting the work while you focus on
+                what matters most and move toward your root goal.
+            </p>
+            <SectionNav currentId="workflow" />
 
         </>
     );

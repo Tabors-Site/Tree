@@ -1,3 +1,5 @@
+import SectionNav from "./SectionNav";
+
 const StructureSection = () => {
   return (
     <>
@@ -31,6 +33,9 @@ const StructureSection = () => {
         This makes it easy to see how everything connects, and why each step
         exists, without forcing work into lower dimensional structures like lists or timelines.
       </p>
+
+      <SectionNav currentId="structure" />
+
     </>
   );
 };

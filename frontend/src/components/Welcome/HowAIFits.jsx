@@ -1,3 +1,4 @@
+import SectionNav from "./SectionNav";
 const HowAIFitsInSection = () => {
   return (
     <>
@@ -50,11 +51,11 @@ const HowAIFitsInSection = () => {
         context focused and avoids unnecessary noise.
       </p>
 
-     <p>
-  Smaller, well-structured context leads to better results and fewer hallucinations.
-  The AI doesn’t just see the current node, but also the relevant surrounding node at lesser depths,
-  allowing it to understand the broader picture.
-</p>
+      <p>
+        Smaller, well-structured context leads to better results and fewer hallucinations.
+        The AI doesn’t just see the current node, but also the relevant surrounding node at lesser depths,
+        allowing it to understand the broader picture.
+      </p>
 
 
       <h2>How you interact with it</h2>
@@ -89,6 +90,8 @@ const HowAIFitsInSection = () => {
         using words, and they become more useful and more aligned the longer you
         work with them.
       </p>
+      <SectionNav currentId="ai" />
+
     </>
   );
 };

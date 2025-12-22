@@ -1,3 +1,4 @@
+import SectionNav from "./SectionNav";
 const UsingAllThePiecesSection = () => {
     return (
         <>
@@ -126,6 +127,8 @@ const UsingAllThePiecesSection = () => {
                 system begins to feel less like software and more like an extension of
                 your thinking.
             </p>
+            <SectionNav currentId="pieces" />
+
         </>
     );
 };
