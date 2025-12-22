@@ -110,7 +110,20 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 
         <p>
           <strong>${user.username}</strong><br/>
-          <code>${user._id}</code>
+          <p style="display:flex;align-items:center;gap:6px;">
+  <code id="nodeIdCode">${user._id}</code>
+
+  <button id="copyNodeIdBtn" style="
+    background:none;
+    border:none;
+    cursor:pointer;
+    padding:2px;
+    opacity:0.6;
+  " title="Copy ID">
+    📋
+  </button>
+</p>
+
         </p>
       <ul>
      <li>   <a href="/api/user/${userId}/notes?${filtered}">Notes</a></li>
@@ -119,6 +132,17 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 </ul>
         <h2>Roots</h2>
         ${rootsHtml}
+<script>
+  const btn = document.getElementById("copyNodeIdBtn");
+  const code = document.getElementById("nodeIdCode");
+
+  btn.addEventListener("click", () => {
+    navigator.clipboard.writeText(code.textContent).then(() => {
+      btn.textContent = "✔️";
+      setTimeout(() => (btn.textContent = "📋"), 900);
+    });
+  });
+</script>
 
       </body>
       </html>

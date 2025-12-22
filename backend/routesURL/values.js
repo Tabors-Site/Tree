@@ -30,6 +30,9 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
     }
 
     const versionData = node.versions?.[parsedVersion];
+    const nodeName = node.name || nodeId;
+    const nodeVersion = node.prestige || 0;
+
     if (!versionData) {
       return res.status(404).json({
         error: `Version ${parsedVersion} not found`,
@@ -126,18 +129,13 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
 
       <body>
 
-        <h2>
-          <a href="/api/${nodeId}${queryString}">
-            Node: ${nodeId}
+        <h1>
+          <a href="/api/${nodeId}/${nodeVersion}${queryString}">
+            ${nodeName} v${nodeVersion}
           </a>
-        </h2>
+        </h1>
 
-        <h3>
-          Version:
-          <a href="/api/${nodeId}/${parsedVersion}${queryString}">
-            <code>${parsedVersion}</code>
-          </a>
-        </h3>
+        
 
         <h3>Values & Goals</h3>
 

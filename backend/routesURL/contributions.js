@@ -1,6 +1,7 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import { getContributions } from "../core/contributions.js";
+import getNodeName from "./helpers/getNameById.js";
 
 const router = express.Router();
 
@@ -50,7 +51,7 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
         ...result,
       });
     }
-
+    const nodeName = await getNodeName(nodeId);
     // HTML MODE
     const contributions = result.contributions || [];
 
@@ -237,18 +238,14 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
 
         <body>
 
-        <p>
-          <strong>Node:</strong>
-          <a href="/api/${nodeId}${queryString}">
-            <code>${nodeId}</code>
+        <h1>
+          <a href="/api/${nodeId}/${parsedVersion}${queryString}">
+            ${nodeName} v${parsedVersion}
           </a>
+                  </h1>
+
           <br/>
 
-          <strong>Version:</strong>
-          <a href="/api/${nodeId}/${parsedVersion}${queryString}">
-            <code>${parsedVersion}</code>
-          </a>
-        </p>
 
         <h2>Contributions</h2>
         ${contributionsHtml}

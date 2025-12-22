@@ -95,7 +95,6 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       const base = `${req.protocol}://${req.get(
         "host"
       )}/api/${nodeId}/${version}`;
-      const realBase = `${req.protocol}://${req.get("host")}/api/${nodeId}`;
 
       const nodeName = await getNodeName(nodeId);
 
@@ -138,6 +137,11 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       border-top: 1px solid #ccc;
       flex-shrink: 0;
     }
+      .reflection {
+  background: #f3f3f3;   /* slightly darker than white */
+ 
+  border-radius: 6px;
+}
 
     textarea { width: 100%; }
   </style>
@@ -146,9 +150,10 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
 
 <div class="header">
   <h1 style="margin:0;">
-    <a href="${realBase}?token=${req.query.token ?? ""}&html">${nodeName}</a>
-    (version:
-    <a href="${base}?token=${req.query.token ?? ""}&html">${version}</a>)
+   
+    <a href="${base}?token=${
+        req.query.token ?? ""
+      }&html">${nodeName} v${version}</a>
     Notes
   </h1>
 </div>
@@ -174,7 +179,8 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
           : n.username ?? "Unknown user";
 
         html += `
-    <li>
+    <li class="${n.isReflection ? "reflection" : ""}">
+
 
       <div>
         <strong>${userLabel}:</strong>

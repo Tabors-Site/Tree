@@ -117,15 +117,34 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
               text-decoration: none;
             }
             .button:hover { background: #005fa3; }
+            code {
+            background: #eee;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+          }
           </style>
         </head>
         <body>
-       
+                 <h3>
+                 <a href="${rootUrl}">BACK TO TREE</a>
+          </h3>  
+
           <h1>${node.name}</h1>
-           <h3>
-          <a href="${rootUrl}">BACK TO TREE</a>
-          </h3>
-          <p><strong>ID:</strong> <code>${node._id}</code></p>
+         
+<p style="display:flex;align-items:center;gap:6px;">
+  <code id="nodeIdCode">${node._id}</code>
+
+  <button id="copyNodeIdBtn" style="
+    background:none;
+    border:none;
+    cursor:pointer;
+    padding:2px;
+    opacity:0.6;
+  " title="Copy ID">
+    📋
+  </button>
+</p>
           <p><strong>Type:</strong> ${node.type ?? "<em>None</em>"}</p>
           <p><strong>Prestige:</strong> ${node.prestige}</p>
                
@@ -143,6 +162,17 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
 
           <h2>Children</h2>
           <ul>${childrenHtml}</ul>
+<script>
+  const btn = document.getElementById("copyNodeIdBtn");
+  const code = document.getElementById("nodeIdCode");
+
+  btn.addEventListener("click", () => {
+    navigator.clipboard.writeText(code.textContent).then(() => {
+      btn.textContent = "✔️";
+      setTimeout(() => (btn.textContent = "📋"), 900);
+    });
+  });
+</script>
 
           
         </body>
@@ -218,19 +248,38 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
               }
               a.button:hover { background: #005fa3; }
               .meta div { margin-bottom: 6px; }
+              code {
+            background: #eee;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+          }
             </style>
           </head>
           <body>
-
+      <h3>
+          <a href="${backTreeUrl}">BACK TO TREE</a>
+          </h3>
             <h1>
               <a href="${backUrl}">${node.name}</a>
               — Version ${version}
             </h1>
-            <code>${node._id}</code>
+            <p style="display:flex;align-items:center;gap:6px;">
+  <code id="nodeIdCode">${node._id}</code>
 
-               <h3>
-          <a href="${backTreeUrl}">BACK TO TREE</a>
-          </h3>
+  <button id="copyNodeIdBtn" style="
+    background:none;
+    border:none;
+    cursor:pointer;
+    padding:2px;
+    opacity:0.6;
+  " title="Copy ID">
+    📋
+  </button>
+</p>
+
+
+         
 
             <div class="meta">
             <div>
@@ -258,6 +307,17 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
             </h2>
 
         
+<script>
+  const btn = document.getElementById("copyNodeIdBtn");
+  const code = document.getElementById("nodeIdCode");
+
+  btn.addEventListener("click", () => {
+    navigator.clipboard.writeText(code.textContent).then(() => {
+      btn.textContent = "✔️";
+      setTimeout(() => (btn.textContent = "📋"), 900);
+    });
+  });
+</script>
 
           </body>
         </html>

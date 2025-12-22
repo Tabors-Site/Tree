@@ -1,6 +1,7 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import { getTransactions } from "../core/transactions.js";
+import getNodeName from "./helpers/getNameById.js";
 
 const router = express.Router();
 
@@ -9,7 +10,7 @@ const allowedParams = ["token", "html"];
 router.get("/:nodeId/:version/transactions", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
-
+    let nodeName = await getNodeName(nodeId);
     const parsedVersion = Number(version);
     if (isNaN(parsedVersion)) {
       return res.status(400).json({
@@ -156,15 +157,11 @@ router.get("/:nodeId/:version/transactions", urlAuth, async (req, res) => {
         
 
           <p>
-             <h2><a href="/api/${nodeId}${queryString}">
-              Node: ${nodeId}
-            </a></h2>
+             <h1><a href="/api/${nodeId}${queryString}">
+              ${nodeName} v${parsedVersion}
+            </a></h1>
             
 
-           <h2> Version:
-            <a href="/api/${nodeId}/${parsedVersion}${queryString}">
-              <code>${parsedVersion}</code>
-            </a></h2>
           </p>
 
            <h2><strong>Transactions</strong></h2>

@@ -251,7 +251,21 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
   </a>
 </h1>
 
-        <p><code>${allData._id}</code></p>
+    <p style="display:flex;align-items:center;gap:6px;">
+  <code id="nodeIdCode">${allData._id}</code>
+
+  <button id="copyNodeIdBtn" style="
+    background:none;
+    border:none;
+    cursor:pointer;
+    padding:2px;
+    opacity:0.6;
+  " title="Copy ID">
+    📋
+  </button>
+</p>
+
+
                 <h2>Owner</h2>
         ${ownerHtml}
         <h2>Filters</h2>
@@ -325,6 +339,18 @@ const color = isOn ? "#4CAF50" : "#9E9E9E"; // green on, gray off
     
 
        
+<script>
+  const btn = document.getElementById("copyNodeIdBtn");
+  const code = document.getElementById("nodeIdCode");
+
+  btn.addEventListener("click", () => {
+    navigator.clipboard.writeText(code.textContent).then(() => {
+      btn.textContent = "✔️";
+      setTimeout(() => (btn.textContent = "📋"), 900);
+    });
+  });
+</script>
+
 
       </body>
       </html>
