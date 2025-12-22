@@ -313,8 +313,24 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       if (note.contentType === "text") {
         return res.send(`
 <html>
+<head>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+
+    pre {
+      font-size: 20px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-width: 80%;
+      line-height: 1.4;
+    }
+  </style>
+</head>
 <body>
-  <a href="${back}">Notes</a> | <a href="${nodeUrl}">Node View</a>
+  <a href="${back}">Note Log</a> | <a href="${nodeUrl}">Node</a>
   <div><strong>${userLink}</strong></div>
   <pre>${note.content}</pre>
 </body>
@@ -336,13 +352,21 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     body { font-family: sans-serif; padding: 20px; }
     .top-links { margin-bottom: 16px; }
     .download { margin-bottom: 16px; display: inline-block; }
+
+     pre {
+      font-size: 20px;          /* ← Bigger font */
+      white-space: pre-wrap;    /* ← Enables wrapping */
+      word-wrap: break-word;    /* ← Wrap long words */
+      max-width: 80%;           /* ← Wrap at 80% of page */
+      line-height: 1.4;         /* ← Easier to read */
+    }
   </style>
 </head>
 <body>
 
 <div class="top-links">
-  <a href="${back}">← Back to Notes</a> |
-  <a href="${nodeUrl}">Node Home</a>
+  <a href="${back}">← Note Log</a> |
+  <a href="${nodeUrl}">Node</a>
 </div>
 
 <div><strong>${userLink}</strong></div>
