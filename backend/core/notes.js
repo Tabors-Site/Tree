@@ -264,10 +264,80 @@ async function deleteNoteAndFile({ noteId, userId }) {
   };
 }
 
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function wordify(str) {
+  return str
+    .replace(/-/g, " ") // hyphen becomes space
+    .replace(/[^\w\s]/g, "") // remove punctuation
+    .trim();
+}
+
+async function searchNotesByUser({ userId, query, limit }) {
+  if (!userId) throw new Error("Missing required parameter: userId");
+  if (!query || typeof query !== "string") {
+    throw new Error("Query must be a non-empty string");
+  }
+
+  let conditions = [];
+
+  // --- 1. Exact phrase: "some phrase"
+  const phraseMatch = query.match(/"(.*?)"/);
+  if (phraseMatch) {
+    const phrase = escapeRegex(phraseMatch[1]);
+    conditions.push({
+      content: new RegExp(phrase, "i"),
+    });
+  }
+
+  // Remove the phrase part and split rest
+  const cleaned = query.replace(/"(.*?)"/, "").trim();
+  if (cleaned.length > 0) {
+    // --- 2. Hyphen handling ---
+    // Convert hyphens to separate words
+    const processed = wordify(cleaned);
+    const words = processed.split(/\s+/).filter(Boolean);
+
+    for (const w of words) {
+      const wEsc = escapeRegex(w);
+      const regex = new RegExp(`\\b${wEsc}\\b`, "i");
+      conditions.push({ content: regex });
+    }
+  }
+
+  // --- 3. If query has a hyphen, allow exact hyphen match as backup ---
+  if (query.includes("-")) {
+    const escaped = escapeRegex(query);
+    conditions.push({
+      content: new RegExp(escaped, "i"),
+    });
+  }
+
+  const mongoQueryObj = {
+    userId,
+    contentType: "text",
+    $and: conditions,
+  };
+
+  let mongoQuery = Note.find(mongoQueryObj).sort({ createdAt: -1 }).lean();
+
+  if (limit && limit > 0) mongoQuery = mongoQuery.limit(limit);
+
+  const notes = await mongoQuery;
+
+  return {
+    message: "Search completed",
+    notes,
+  };
+}
+
 export {
   createNote,
   getNotes,
   deleteNoteAndFile,
   getAllNotesByUser,
   getAllTagsForUser,
+  searchNotesByUser,
 };

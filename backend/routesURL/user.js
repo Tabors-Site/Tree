@@ -4,6 +4,7 @@ import User from "../db/models/user.js";
 import {
   getAllNotesByUser as coreGetAllNotesByUser,
   getAllTagsForUser as coreGetAllTagsForUser,
+  searchNotesByUser as coreSearchNotesByUser,
 } from "../core/notes.js";
 import { getContributionsByUser } from "../core/contributions.js";
 
@@ -131,6 +132,10 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 router.get("/user/:userId/notes", urlAuth, async (req, res) => {
   try {
     const userId = req.params.userId;
+
+    // NEW: search query
+    const query = req.query.q || "";
+
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
@@ -145,7 +150,13 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
       });
     }
 
-    const result = await coreGetAllNotesByUser(userId, limit);
+    // NEW: If search term exists → run search
+    let result;
+    if (query.trim() !== "") {
+      result = await coreSearchNotesByUser({ userId, query, limit });
+    } else {
+      result = await coreGetAllNotesByUser(userId, limit);
+    }
 
     const notes = result.notes.map((n) => ({
       ...n,
@@ -155,11 +166,46 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
           : n.content,
     }));
 
+    // JSON MODE (no HTML)
     if (!wantHtml) {
-      return res.json({ success: true, notes });
+      return res.json({ success: true, notes, query });
     }
 
+    // HTML MODE
     const user = await User.findById(userId).lean();
+
+    // --- SEARCH BAR HTML ---
+    const searchBoxHtml = `
+      <form method="GET" action="/api/user/${userId}/notes" style="margin-top: 12px;">
+        <input type="hidden" name="token" value="${token}">
+        <input type="hidden" name="html" value="">
+        <input
+          type="text"
+          name="q"
+          placeholder="Search notes..."
+          value="${query}"
+          style="
+            padding: 8px 12px;
+            font-size: 14px;
+            width: 260px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+          "
+        />
+        <button
+          type="submit"
+          style="
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid #999;
+            background: #eee;
+            cursor: pointer;
+          "
+        >
+          Search
+        </button>
+      </form>
+    `;
 
     let html = `
 <html>
@@ -198,12 +244,14 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
 
   <div class="header">
     <h1 style="margin:0;">
-      Notes by   <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
+      Notes by <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
     </h1>
+
+    ${searchBoxHtml}
 
     <div class="nav">
       <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
-       <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+      <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
     </div>
   </div>
 
@@ -218,28 +266,29 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
             ? n.content.substring(0, 120) + "…"
             : n.content
           : `[FILE] ${n.content}`;
+
       const nodeName = await getNodeName(n.nodeId);
+
       html += `
       <li>
         <div>
           <strong>${user.username}:</strong>
-          <a href="/api/${n.nodeId}/${n.version}/notes/${
-        n._id
-      }${tokenQS}">${preview}</a>
+          <a href="/api/${n.nodeId}/${n.version}/notes/${n._id}${tokenQS}">
+            ${preview}
+          </a>
         </div>
 
         <div class="meta">
-        
           ${new Date(n.createdAt).toLocaleString()}<br />
-       
-<a href="/api/${n.nodeId}/${n.version}${tokenQS}">
-  ${nodeName} v${n.version}
-</a>
-<br />
-<a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
-  View Notes
-</a>
 
+          <a href="/api/${n.nodeId}/${n.version}${tokenQS}">
+            ${nodeName} v${n.version}
+          </a>
+          <br />
+
+          <a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
+            View Notes
+          </a>
         </div>
       </li>
 `;
@@ -671,6 +720,96 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
   } catch (err) {
     console.error("Error in /user/:userId/contributions:", err);
     res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.get("/user/reset-password/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpiry: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.send(`
+        <html>
+        <body style="font-family: sans-serif; padding: 20px;">
+          <h2>Reset Link Expired or Invalid</h2>
+          <p>Please request a new password reset.</p>
+        </body>
+        </html>
+      `);
+    }
+
+    // Render reset password form
+    return res.send(`
+      <html>
+      <body style="font-family: sans-serif; padding: 20px;">
+        <h2>Reset Password</h2>
+        <form method="POST" action="/api/user/reset-password/${token}">
+          <input type="password" name="password" placeholder="New Password" style="padding:8px; width:250px;" required />
+          <br/><br/>
+          <input type="password" name="confirm" placeholder="Confirm Password" style="padding:8px; width:250px;" required />
+          <br/><br/>
+          <button type="submit" style="padding:10px 20px;">Reset Password</button>
+        </form>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error("Error loading reset password page:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+/* -----------------------------------------------------------
+   HANDLE RESET PASSWORD FORM POST
+----------------------------------------------------------- */
+router.post("/user/reset-password/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password, confirm } = req.body;
+
+    if (password !== confirm) {
+      return res.send(`
+        <html><body style="font-family:sans-serif; padding:20px;">
+        <h2>Passwords Do Not Match</h2>
+        <p><a href="/api/user/reset-password/${token}">Try Again</a></p>
+        </body></html>
+      `);
+    }
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpiry: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.send(`
+        <html><body style="font-family:sans-serif; padding:20px;">
+        <h2>Reset Link Expired or Invalid</h2>
+        <p>Please request a new password reset.</p>
+        </body></html>
+      `);
+    }
+
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpiry = undefined;
+
+    await user.save();
+
+    return res.send(`
+      <html><body style="font-family:sans-serif; padding:20px;">
+      <h2>Password Reset Successfully</h2>
+      <p>You can now log in with your new password.</p>
+      </body></html>
+    `);
+  } catch (err) {
+    console.error("Error resetting password:", err);
+    res.status(500).send("Server error");
   }
 });
 

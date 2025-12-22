@@ -9,6 +9,7 @@ import {
   deleteNoteAndFile as coreDeleteNoteAndFile,
   getAllNotesByUser as coreGetAllNotesByUser,
   getAllTagsForUser as coreGetAllTagsForUser,
+  searchNotesByUser as coreSearchNotesByUser,
 } from "../core/notes.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -86,6 +87,24 @@ async function getAllTagsForUser(req, res) {
   }
 }
 
+async function searchNotesForUser(req, res) {
+  try {
+    const userId = req.body.userId || req.params.userId;
+    const query = req.query.q || req.body.query;
+    const limit = Number(req.query.limit ?? req.body.limit);
+
+    const result = await coreSearchNotesByUser({
+      userId,
+      query,
+      limit,
+    });
+
+    res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+}
+
 async function deleteNoteAndFile(req, res) {
   try {
     const result = await coreDeleteNoteAndFile({
@@ -114,4 +133,5 @@ export {
   getAllTagsForUser,
   deleteNoteAndFile,
   getFile,
+  searchNotesForUser,
 };
