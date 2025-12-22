@@ -6,7 +6,7 @@ import Node from "../db/models/node.js";
 const router = express.Router();
 
 // Only allow these params to remain in querystring
-const allowedParams = ["token", "html"];
+const allowedParams = ["token", "html", "trimmed", "active", "completed"];
 
 // Rainbow colors by depth
 const rainbow = [
@@ -254,6 +254,54 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
         <p><code>${allData._id}</code></p>
                 <h2>Owner</h2>
         ${ownerHtml}
+        <h2>Filters</h2>
+
+<div id="filterButtons"></div>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+
+  // Default logic: active & completed default to true
+  function paramIsOn(param, current) {
+    if (current === "true") return true;
+    if (current === "false") return false;
+
+    // Defaults:
+    if (param === "active" || param === "completed") return true;
+
+    return false; // trimmed defaults to false
+  }
+
+  function makeToggle(param) {
+    const current = params.get(param);      
+    const isOn = paramIsOn(param, current);   
+    const nextValue = isOn ? "false" : "true";
+
+    const newParams = new URLSearchParams(params);
+    newParams.set(param, nextValue);
+
+    const url = window.location.pathname + "?" + newParams.toString();
+
+const color = isOn ? "#4CAF50" : "#9E9E9E"; // green on, gray off
+
+    return (
+      '<a href="' + url + '" ' +
+      'style="display:inline-block;padding:4px 8px;margin-right:6px;' +
+      'font-size:12px;border-radius:5px;color:white;background:' + color + ';">' +
+        param +
+      '</a>'
+    );
+  }
+
+  document.getElementById("filterButtons").innerHTML =
+   
+    makeToggle("active") +
+    makeToggle("completed") +
+     makeToggle("trimmed");
+</script>
+
+
+
    
      
         <h2>Parents</h2>

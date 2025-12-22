@@ -56,6 +56,16 @@ function getMcpServer() {
     "Fetch a branching tree outline (structure only). READ-ONLY.",
     {
       nodeId: z.string().describe("Node ID to fetch the tree branch from."),
+      filters: z
+        .object({
+          active: z.boolean().optional(),
+          trimmed: z.boolean().optional(),
+          completed: z.boolean().optional(),
+        })
+        .optional()
+        .describe(
+          "Optional filtering: { active, trimmed, completed }.  call others false if only trying for one"
+        ),
     },
     {
       readOnlyHint: true,
@@ -63,8 +73,20 @@ function getMcpServer() {
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId }) => {
-      const treeData = await getTreeForAi(nodeId);
+    async ({ nodeId, filters }) => {
+      const mergedFilter = !filters
+        ? {
+            active: true,
+            trimmed: false,
+            completed: true,
+          }
+        : {
+            active: !!filters.active,
+            trimmed: !!filters.trimmed,
+            completed: !!filters.completed,
+          };
+
+      const treeData = await getTreeForAi(nodeId, mergedFilter);
 
       if (treeData == null) {
         return {

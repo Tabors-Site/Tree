@@ -3,6 +3,42 @@ import User from "../db/models/user.js";
 import Contribution from "../db/models/contribution.js";
 import Note from "../db/models/notes.js";
 
+function filterTreeByStatus(node, filters) {
+  if (!node) return null;
+
+  const allowedStatuses = [];
+  if (filters.active === true) allowedStatuses.push("active");
+  if (filters.trimmed === true) allowedStatuses.push("trimmed");
+  if (filters.completed === true) allowedStatuses.push("completed");
+
+  const filteringEnabled = allowedStatuses.length > 0;
+
+  const currentVersion = node.versions?.find(
+    (v) => v.prestige === node.prestige
+  );
+  const status = currentVersion?.status;
+
+  const filteredChildren =
+    node.children
+      ?.map((child) => filterTreeByStatus(child, filters))
+      .filter(Boolean) || [];
+
+  if (!filteringEnabled) {
+    return { ...node, children: filteredChildren };
+  }
+
+  const nodeMatches = allowedStatuses.includes(status);
+
+  if (!nodeMatches && filteredChildren.length === 0) {
+    return null;
+  }
+
+  return {
+    ...node,
+    children: filteredChildren,
+  };
+}
+
 async function getRootDetails(req, res) {
   const { id } = req.body;
 
@@ -52,7 +88,23 @@ async function getTree(req, res) {
 
     await populateChildrenRecursive(rootNode);
 
-    res.json(rootNode);
+    const filters = {
+      active:
+        req.query.active === undefined ? true : req.query.active === "true",
+      trimmed:
+        req.query.trimmed === undefined ? false : req.query.trimmed === "true",
+      completed:
+        req.query.completed === undefined
+          ? true
+          : req.query.completed === "true",
+    };
+
+    const filtered = filterTreeByStatus(
+      rootNode.toObject ? rootNode.toObject() : rootNode,
+      filters
+    );
+
+    return res.json(filtered ?? {});
   } catch (error) {
     console.error("Error fetching tree:", error);
     res.status(500).json({ message: "Server error" });
@@ -105,7 +157,7 @@ async function getNodeForAi(nodeId) {
   }
 }
 
-async function getTreeForAi(rootId) {
+async function getTreeForAi(rootId, filter = null) {
   if (!rootId) {
     throw new Error("Root node ID is required");
   }
@@ -116,6 +168,40 @@ async function getTreeForAi(rootId) {
       throw new Error("Node not found");
     }
 
+    const filters = !filter
+      ? {
+          active: true,
+          trimmed: false,
+          completed: true,
+        }
+      : {
+          active: !!filter.active,
+          trimmed: !!filter.trimmed,
+          completed: !!filter.completed,
+        };
+
+    // populate all children fully
+    const populateChildrenRecursive = async (node) => {
+      if (node.children?.length > 0) {
+        node.children = await Node.populate(node.children, {
+          path: "children",
+        });
+
+        for (const child of node.children) {
+          await populateChildrenRecursive(child);
+        }
+      }
+    };
+
+    await populateChildrenRecursive(rootNode);
+
+    const filtered = filterTreeByStatus(
+      rootNode.toObject ? rootNode.toObject() : rootNode,
+      filters
+    );
+
+    if (!filtered) return JSON.stringify({});
+
     const simplifyNode = async (node) => {
       const simplified = {
         id: node._id.toString(),
@@ -123,12 +209,8 @@ async function getTreeForAi(rootId) {
       };
 
       if (node.children?.length > 0) {
-        const populatedChildren = await Node.populate(node.children, {
-          path: "children",
-        });
         simplified.children = [];
-
-        for (const child of populatedChildren) {
+        for (const child of node.children) {
           simplified.children.push(await simplifyNode(child));
         }
       }
@@ -136,12 +218,11 @@ async function getTreeForAi(rootId) {
       return simplified;
     };
 
-    const tree = await simplifyNode(rootNode);
-
+    const tree = await simplifyNode(filtered);
     return JSON.stringify(tree);
   } catch (error) {
     console.error("Error fetching AI tree:", error);
-    throw new Error("Server error while fetching tree");
+    throw new Error("Server error while fetching tree for AI");
   }
 }
 
@@ -312,9 +393,22 @@ async function getAllData(req, res) {
 
     rootNode.ancestors = ancestors;
 
+    const filters = {
+      active:
+        req.query.active === undefined ? true : req.query.active === "true",
+      trimmed:
+        req.query.trimmed === undefined ? false : req.query.trimmed === "true",
+      completed:
+        req.query.completed === undefined
+          ? true
+          : req.query.completed === "true",
+    };
+
+    const filtered = filterTreeByStatus(rootNode, filters);
+
     //const cleaned = removeNullFields(rootNode);
 
-    res.json(rootNode);
+    return res.json(filtered ?? {});
   } catch (error) {
     console.error("Error fetching node details:", error);
     res.status(500).json({ message: "Server error" });

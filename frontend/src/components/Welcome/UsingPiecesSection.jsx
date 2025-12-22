@@ -71,6 +71,14 @@ const UsingAllThePiecesSection = () => {
                     You can also append &limit=number to receive only the most recent data on certain endpoints.
                 </li>
                 <li>
+                    Active and completed nodes are shown by default. You can explicitly set
+                    <code>active=true/false</code>, <code>completed=true/false</code>, and <code>trimmed=true/false</code> on supported endpoints
+                    to filter what you want returned.
+                </li>
+                <li>
+                    On user notes, you can use <code>&q=""</code> to search within notes by text.
+                </li>
+                <li>
                     The only URL's that dont require a token are /nodeid/version/note/noteid.
                     This is intentional so that you can share individual notes without exposing your whole tree.
                 </li>
