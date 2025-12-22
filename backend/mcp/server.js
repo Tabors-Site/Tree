@@ -4,8 +4,8 @@ import { setValueForNode, setGoalForNode } from "../core/values.js";
 
 import {
   getContributionsByUser,
-  getContributions
-} from "../core/contributions.js"
+  getContributions,
+} from "../core/contributions.js";
 
 import { updateSchedule } from "../core/schedules.js";
 
@@ -16,12 +16,14 @@ import {
   getAllNotesByUser,
   getAllTagsForUser,
   deleteNoteAndFile,
+  searchNotesByUser,
 } from "../core/notes.js";
 import {
   createNewNode,
   createNodesRecursive,
   deleteNodeBranch,
   updateParentRelationship,
+  editNodeName,
 } from "../core/treeManagement.js";
 
 import { executeScript, updateScript } from "../core/scripts.js";
@@ -34,6 +36,10 @@ import {
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { getTreeForAi, getNodeForAi } from "../controllers/treeDataFetching.js"; // import from your real backend
 
+const server = getMcpServer();
+const transport = new StreamableHTTPServerTransport({
+  sessionIdGenerator: undefined,
+});
 function getMcpServer() {
   const server = new McpServer({
     name: "tree-helper",
@@ -158,6 +164,7 @@ Here are the available actions.
    - Discuss structure or placement
 
 2️⃣ **Modify existing data**
+  - Change Node Names
    - View node data
    - Update values, goals, status, notes
    - Add prestige/version
@@ -218,6 +225,7 @@ Call the tool get-tree(id) and tree-actions-menu and then present me the menu wi
    - View tree/node data to understand where to place data = combinations of get-tree for structure, get-node for details,
    - Update values, goals, status, notes = edit-node-version-values, edit-node-version-goals, edit-node-or-branch-status,  create-node-version-note
    - Add prestige/version = add-node-prestige
+   - Change a nods name = edit-node-name
    - Suggest nodes or improvements
    -(useful tool if you need to undo stuff) = get-node-contributions
 
@@ -231,7 +239,8 @@ Call the tool get-tree(id) and tree-actions-menu and then present me the menu wi
 
 5 **Examine User Profile**
     - ensure you knw which I want
-   - Check your recent notes = get-all-notes-by-user,
+   - Check your recent notes = get-unsearched-notes-by-user,
+   - search for notes based on content = get-searched-notes-by-user
    - check your mail = get-all-tags-by-user,
    - check your contribution history = get-contributions-by-user
 
@@ -524,6 +533,12 @@ Execution Notes
         .max(2000)
         .describe("The script content (max 2000 characters)."),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ nodeId, name, script }) => {
       const result = await updateScript({
         nodeId,
@@ -532,8 +547,7 @@ Execution Notes
       });
 
       return {
-        content: [{ type: "text", text: result.message }],
-        structuredContent: result,
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     }
   );
@@ -550,6 +564,12 @@ Execution Notes
         ),
       userId: z.string().describe("The ID of the user executing the script."),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     async ({ nodeId, scriptName, userId }) => {
       const result = await executeScript({
         nodeId,
@@ -558,8 +578,7 @@ Execution Notes
       });
 
       return {
-        content: [{ type: "text", text: result.message }],
-        structuredContent: result,
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     }
   );
@@ -582,6 +601,12 @@ Execution Notes
           "The ID of the user performing the edit. Used for contribution logging."
         ),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ nodeId, key, value, prestige, userId }) => {
       const result = await setValueForNode({
         nodeId,
@@ -592,8 +617,7 @@ Execution Notes
       });
 
       return {
-        content: [{ type: "text", text: result.message }],
-        structuredContent: result,
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     }
   );
@@ -620,6 +644,12 @@ Execution Notes
         .string()
         .describe("The ID of the user performing the goal edit (for logging)."),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ nodeId, key, goal, prestige, userId }) => {
       try {
         const result = await setGoalForNode({
@@ -631,15 +661,13 @@ Execution Notes
         });
 
         return {
-          content: [{ type: "text", text: result.message }],
-          structuredContent: result,
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
           content: [
             { type: "text", text: `❌ Failed to update goal: ${err.message}` },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -669,6 +697,12 @@ Execution Notes
           "ID of the user making the status edit (for contribution logging)."
         ),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ nodeId, status, prestige, isInherited, userId }) => {
       try {
         const result = await editStatus({
@@ -680,8 +714,7 @@ Execution Notes
         });
 
         return {
-          content: [{ type: "text", text: result.message }],
-          structuredContent: result,
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
@@ -691,7 +724,6 @@ Execution Notes
               text: `❌ Failed to update status: ${err.message}`,
             },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -708,14 +740,14 @@ Execution Notes
         .number()
         .optional()
         .describe("The prestige version of the node"),
-      isReflection: z
-        .union([z.boolean(), z.string()])
-        .optional()
-        .describe(
-          "Whether the note is a reflection. Typically false unless note is applied on a completed version."
-        ),
     },
-    async ({ content, userId, nodeId, prestige, isReflection }) => {
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ content, userId, nodeId, prestige }) => {
       try {
         const result = await createNote({
           contentType: "text",
@@ -723,19 +755,17 @@ Execution Notes
           userId,
           nodeId,
           version: prestige,
-          isReflection,
+          isReflection: true, // 🔥 Always included, always true, backend safe
         });
 
         return {
-          content: [{ type: "text", text: result.message }],
-          structuredContent: result,
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
           content: [
-            { type: "text", text: `❌ Failed to create note: ${err.message}` },
+            { type: "text", text: `Failed to create note: ${err.message}` },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -765,23 +795,21 @@ Execution Notes
         const result = await getNotes({ nodeId, version: prestige, limit });
 
         return {
-          content: [{ type: "text", text: result.message }],
-          structuredContent: result,
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
           content: [
             { type: "text", text: `❌ Failed to fetch notes: ${err.message}` },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
   );
 
   server.tool(
-    "get-all-notes-by-user",
-    "Fetches all notes written by a specific user (optionally limited to the most recent N). Recommend to use limit 10 or less",
+    "get-unsearched-notes-by-user",
+    "Fetches all notes written by a specific user (optionally limited to the most recent N). Recommend to use limit 10 or less. Use get-searched-notes-by-user... if looking for specifics.",
     {
       userId: z.string().describe("The ID of the user whose notes to fetch."),
       limit: z
@@ -806,15 +834,8 @@ Execution Notes
 
         return {
           content: [
-            {
-              type: "text",
-              text: `Fetched ${trimmedNotes.length} note(s) for user ${userId}.`,
-            },
+            { type: "text", text: JSON.stringify(trimmedNotes, null, 2) },
           ],
-          structuredContent: {
-            ...result,
-            notes: trimmedNotes,
-          },
         };
       } catch (err) {
         return {
@@ -824,7 +845,6 @@ Execution Notes
               text: `❌ Failed to fetch user notes: ${err.message}`,
             },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -856,16 +876,7 @@ Execution Notes
         const trimmedNotes = result.notes.slice(0, 20);
 
         return {
-          content: [
-            {
-              type: "text",
-              text: `Fetched ${trimmedNotes.length} tagged note(s) for user ${userId}.`,
-            },
-          ],
-          structuredContent: {
-            ...result,
-            notes: trimmedNotes,
-          },
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
@@ -875,7 +886,6 @@ Execution Notes
               text: `❌ Failed to fetch tagged notes: ${err.message}`,
             },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -887,20 +897,24 @@ Execution Notes
     {
       noteId: z.string().describe("The ID of the note to delete."),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     async ({ noteId }) => {
       try {
         const result = await deleteNoteAndFile({ noteId });
 
         return {
-          content: [{ type: "text", text: result.message }],
-          structuredContent: result,
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
           content: [
             { type: "text", text: `❌ Failed to delete note: ${err.message}` },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -919,20 +933,24 @@ Execution Notes
           "The ID of the user performing the prestige action (for logging)."
         ),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     async ({ nodeId, userId }) => {
       try {
         const result = await addPrestige({ nodeId, userId });
 
         return {
-          content: [{ type: "text", text: result.message }],
-          structuredContent: result,
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
           content: [
             { type: "text", text: `❌ Failed to add prestige: ${err.message}` },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -966,6 +984,12 @@ Execution Notes
           "The ID of the user making the schedule update (for contribution logging)."
         ),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     async ({ nodeId, prestige, newSchedule, reeffectTime, userId }) => {
       try {
         const result = await updateSchedule({
@@ -977,8 +1001,7 @@ Execution Notes
         });
 
         return {
-          content: [{ type: "text", text: result.message }],
-          structuredContent: result,
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
@@ -988,7 +1011,6 @@ Execution Notes
               text: `❌ Failed to update schedule: ${err.message}`,
             },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -1029,6 +1051,12 @@ Execution Notes
         .optional()
         .describe("The text content of the optional note."),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     async ({
       name,
       schedule,
@@ -1053,17 +1081,13 @@ Execution Notes
         );
 
         return {
-          content: [
-            { type: "text", text: `✅ Node '${name}' created successfully.` },
-          ],
-          structuredContent: node,
+          content: [{ type: "text", text: JSON.stringify(node, null, 2) }],
         };
       } catch (err) {
         return {
           content: [
             { type: "text", text: `❌ Failed to create node: ${err.message}` },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -1119,17 +1143,17 @@ Execution Notes
         .describe("Parent node ID for the root of this subtree."),
       userId: z.string().describe("ID of the user creating the nodes."),
     },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     async ({ nodeData, parentId, userId }) => {
       try {
         const rootId = await createNodesRecursive(nodeData, parentId, userId);
         return {
-          content: [
-            {
-              type: "text",
-              text: `✅ Recursive nodes created. Root ID: ${rootId}`,
-            },
-          ],
-          structuredContent: { rootId },
+          content: [{ type: "text", text: JSON.stringify(rootId, null, 2) }],
         };
       } catch (err) {
         return {
@@ -1139,7 +1163,40 @@ Execution Notes
               text: `❌ Failed to create recursive nodes: ${err.message}`,
             },
           ],
-          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "edit-node-name",
+    "Renames an existing node and logs the name change.",
+    {
+      nodeId: z.string().describe("The ID of the node being renamed."),
+      newName: z.string().describe("The new name to assign to the node."),
+      userId: z.string().describe("The ID of the user performing the edit."),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ nodeId, newName, userId }) => {
+      try {
+        const updatedNode = await editNodeName({ nodeId, newName, userId });
+
+        return {
+          content: [{ type: "text", text: updatedNode }],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to rename node: ${err.message}`,
+            },
+          ],
         };
       }
     }
@@ -1154,6 +1211,12 @@ Execution Notes
       userId: z
         .string()
         .describe("The user performing the operation (optional)."),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     async ({ nodeChildId, nodeNewParentId, userId }) => {
       try {
@@ -1170,7 +1233,6 @@ Execution Notes
               text: `✅ Node '${nodeChild.name}' successfully moved under '${nodeNewParent.name}'.`,
             },
           ],
-          structuredContent: { nodeChild, nodeNewParent },
         };
       } catch (err) {
         return {
@@ -1180,7 +1242,6 @@ Execution Notes
               text: `❌ Failed to update parent: ${err.message}`,
             },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -1200,12 +1261,10 @@ Execution Notes
         const deleted = await deleteNodeBranch(nodeId, userId);
         return {
           content: [{ type: "text", text: `🗑️ Node '${deleted.name}' deleted successfully.` }],
-          structuredContent: deleted,
         };
       } catch (err) {
         return {
           content: [{ type: "text", text: `❌ Failed to delete node: ${err.message}` }],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -1242,16 +1301,7 @@ Execution Notes
         const trimmed = result.contributions.slice(0, 20);
 
         return {
-          content: [
-            {
-              type: "text",
-              text: `Fetched ${trimmed.length} contribution(s) for node ${nodeId}, version ${version}.`,
-            },
-          ],
-          structuredContent: {
-            ...result,
-            contributions: trimmed,
-          },
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
@@ -1261,7 +1311,6 @@ Execution Notes
               text: `❌ Failed to fetch contributions: ${err.message}`,
             },
           ],
-          structuredContent: { error: err.message },
         };
       }
     }
@@ -1292,20 +1341,10 @@ Execution Notes
 
       try {
         const result = await getContributionsByUser(userId, limit);
-
-        const trimmed = result.contributions.slice(0, 20);
+        const trimmed = result.contributions.slice(0, limit);
 
         return {
-          content: [
-            {
-              type: "text",
-              text: `Fetched ${trimmed.length} contribution(s) for user ${userId}.`,
-            },
-          ],
-          structuredContent: {
-            ...result,
-            contributions: trimmed,
-          },
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       } catch (err) {
         return {
@@ -1315,7 +1354,50 @@ Execution Notes
               text: `❌ Failed to fetch user contributions: ${err.message}`,
             },
           ],
-          structuredContent: { error: err.message },
+        };
+      }
+    }
+  );
+
+  // =====================================================================
+  // 🔍 search-notes-by-user
+  // =====================================================================
+  server.tool(
+    "get-searched-notes-by-user",
+    "Search text notes by a user based on text matching.",
+    {
+      userId: z.string().describe("User whose notes should be searched."),
+      query: z.string().describe("Search query string."),
+      limit: z
+        .number()
+        .optional()
+        .describe("Optional limit for returned notes."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ userId, query, limit }) => {
+      try {
+        if (typeof limit === "number" && limit > 40) {
+          limit = 40;
+        }
+
+        const result = await searchNotesByUser({
+          userId,
+          query,
+          limit,
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `❌ Search failed: ${err.message}` }],
+          isError: true,
         };
       }
     }
@@ -1324,19 +1406,12 @@ Execution Notes
   return server;
 }
 
+await server.connect(transport);
+
 async function handleMcpRequest(req, res) {
   try {
-    const server = getMcpServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-    });
-
-    await server.connect(transport);
-
-    res.on("close", () => {
-      transport.close();
-      server.close();
-    });
+    console.log("\n===== INCOMING MCP REQUEST =====");
+    console.log(JSON.stringify(req.body, null, 2));
 
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
