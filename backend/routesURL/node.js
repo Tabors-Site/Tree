@@ -4,6 +4,8 @@ import Node from "../db/models/node.js";
 
 const router = express.Router();
 
+import getNodeName from "./helpers/getNameById.js";
+
 // Allowed query params for HTML mode
 const allowedParams = ["token", "html"];
 
@@ -66,16 +68,27 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
               .join("")
           : `<li><em>No scripts</em></li>`;
 
+      const parentName = node.parent
+        ? (await Node.findById(node.parent, "name").lean())?.name
+        : null;
       // Parent link
       const parentHtml = node.parent
-        ? `<a href="${host}/api/${node.parent}${qs}">${node.parent}</a>`
+        ? `<a href="${host}/api/${node.parent}${qs}">${parentName}</a>`
         : `<em>None</em>`;
 
-      // Children list
+      const children = await Node.find({ _id: { $in: node.children } })
+        .select("name _id")
+        .lean();
+
       const childrenHtml =
         node.children && node.children.length
           ? node.children
-              .map((c) => `<li><a href="${host}/api/${c}${qs}">${c}</a></li>`)
+              .map((c) => {
+                const child = children.find((child) => child._id === c);
+                const name = child ? child.name : c; // fallback to raw ID if missing
+
+                return `<li><a href="${host}/api/${c}${qs}">${name}</a></li>`;
+              })
               .join("")
           : `<li><em>No children</em></li>`;
 
@@ -213,6 +226,7 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
               <a href="${backUrl}">${node.name}</a>
               — Version ${version}
             </h1>
+            <code>${node._id}</code>
 
                <h3>
           <a href="${backTreeUrl}">BACK TO TREE</a>

@@ -10,6 +10,7 @@ import {
 } from "../core/notes.js";
 
 import urlAuth from "../middleware/urlAuth.js";
+import getNodeName from "./helpers/getNameById.js";
 import authenticate from "../middleware/authenticate.js";
 
 const router = express.Router();
@@ -81,7 +82,7 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       limit,
     });
 
-    const notes = [...result.notes].map((n) => ({
+    const notes = [...result.notes].reverse().map((n) => ({
       ...n,
       content:
         n.contentType === "file"
@@ -95,6 +96,8 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
         "host"
       )}/api/${nodeId}/${version}`;
       const realBase = `${req.protocol}://${req.get("host")}/api/${nodeId}`;
+
+      const nodeName = await getNodeName(nodeId);
 
       let html = `
 <html>
@@ -143,7 +146,7 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
 
 <div class="header">
   <h1 style="margin:0;">
-    <a href="${realBase}?token=${req.query.token ?? ""}&html">${nodeId}</a>
+    <a href="${realBase}?token=${req.query.token ?? ""}&html">${nodeName}</a>
     (version:
     <a href="${base}?token=${req.query.token ?? ""}&html">${version}</a>)
     Notes

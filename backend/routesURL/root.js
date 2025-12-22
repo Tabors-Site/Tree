@@ -110,7 +110,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
           margin: 6px 0;
         ">
           <a href="/api/${node._id}/${node.prestige}${queryString}">
-            ${node.name} <code>${node._id}</code>
+            ${node.name}
           </a>
       `;
 
@@ -133,7 +133,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       <a href="/api/user/${rootMeta.rootOwner._id}${queryString}">
         ${rootMeta.rootOwner.username}
       </a>
-      <code>${rootMeta.rootOwner._id}</code>
+
     </p>
   `
       : `<p><em>No owner</em></p>`;
@@ -147,7 +147,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
                 <a href="/api/user/${u._id}${queryString}">
                   ${u.username}
                 </a>
-                <code>${u._id}</code>
+              
               </li>
             `
           )

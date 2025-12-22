@@ -158,6 +158,9 @@ export async function updateParentRelationship(
   const nodeChild = await Node.findById(nodeChildId);
   if (!nodeChild) throw new Error("Child node not found");
   if (nodeChild.parent == null) throw new Error("Cannot change root's parent");
+  if (nodeChild.parent.toString() === nodeNewParentId.toString()) {
+    throw new Error("Node already has this parent");
+  }
 
   const oldParentId = nodeChild.parent; // ✅ safe
   const oldParent = oldParentId ? await Node.findById(oldParentId) : null;

@@ -7,6 +7,8 @@ import {
 } from "../core/notes.js";
 import { getContributionsByUser } from "../core/contributions.js";
 
+import getNodeName from "./helpers/getNameById.js";
+
 const router = express.Router();
 
 const allowedParams = ["token", "html"];
@@ -53,7 +55,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
                 (r) => `
               <li>
                 <a href="/api/root/${r._id}${queryString}">
-                  ${r.name || "Untitled"} <code>${r._id}</code>
+                  ${r.name || "Untitled"} 
                 </a>
               </li>
             `
@@ -216,7 +218,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
             ? n.content.substring(0, 120) + "…"
             : n.content
           : `[FILE] ${n.content}`;
-
+      const nodeName = await getNodeName(n.nodeId);
       html += `
       <li>
         <div>
@@ -229,13 +231,15 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
         <div class="meta">
         
           ${new Date(n.createdAt).toLocaleString()}<br />
-          node 
-          <a href="/api/${n.nodeId}${tokenQS}">
-            <code>${n.nodeId}</code>
-          </a> 
-          <a href="/api/${n.nodeId}/${n.version}${tokenQS}">
-            (${n.version})
-          </a>
+       
+<a href="/api/${n.nodeId}/${n.version}${tokenQS}">
+  ${nodeName} v${n.version}
+</a>
+<br />
+<a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
+  View Notes
+</a>
+
         </div>
       </li>
 `;
@@ -265,6 +269,8 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
     const userId = req.params.userId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
     const rawLimit = req.query.limit;
     const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
@@ -359,6 +365,7 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
 `;
 
     for (const n of notes) {
+      const nodeName = await getNodeName(n.nodeId);
       const preview =
         n.contentType === "text"
           ? n.content.length > 120
@@ -369,33 +376,33 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
       const author = n.userId.username || n.userId._id;
 
       html += `
-      <li>
-        <div>
-          <a href="/api/user/${n.userId._id}?token=${
-        req.query.token ?? ""
-      }&html">
-            <strong>${author}:</strong>
-          </a>
-          <a href="/api/${n.nodeId}/${n.version}/notes/${n._id}?token=${
-        req.query.token ?? ""
-      }&html">
-            ${preview}
-          </a>
-        </div>
+<li>
+  <div>
+    <a href="/api/user/${n.userId._id}?token=${req.query.token ?? ""}&html">
+      <strong>${author}:</strong>
+    </a>
 
-        <div class="meta">
-          ${new Date(n.createdAt).toLocaleString()}<br />
-          node 
-          <a href="/api/${n.nodeId}?token=${req.query.token ?? ""}&html">
-            <code>${n.nodeId}</code>
-          </a>
-          <a href="/api/${n.nodeId}/${n.version}?token=${
+    <a href="/api/${n.nodeId}/${n.version}/notes/${n._id}?token=${
         req.query.token ?? ""
       }&html">
-            (v${n.version})
-          </a>
-        </div>
-      </li>
+      ${preview}
+    </a>
+  </div>
+
+  <div class="meta">
+    ${new Date(n.createdAt).toLocaleString()}<br/>
+
+    <a href="/api/${n.nodeId}/${n.version}?token=${req.query.token ?? ""}&html">
+      ${nodeName} v${n.version}
+    </a>
+
+    <br/>
+
+    <a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
+      View Notes
+    </a>
+  </div>
+</li>
 `;
     }
 
@@ -448,180 +455,174 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
 
     const user = await User.findById(userId).lean();
 
-    // HTML MODE WITH FULL DETAIL + node/version section
+    // FIX: async map + Promise.all
+    const processed = await Promise.all(
+      contributions.map(async (c) => {
+        const username = c.username ?? "Unknown user";
+        const time = new Date(c.date).toLocaleString();
+        const nodeId = c.nodeId?._id || c.nodeId;
+        const version = c.nodeVersion;
+        const nodeName = await getNodeName(nodeId);
+
+        // Helper for node/version footer
+        const footer = `
+  <div class="meta" style="margin-top:6px;">
+    <a href="/api/${nodeId}/${version ?? 0}${queryString}">
+      ${nodeName}${version !== undefined ? ` v${version}` : ""}
+    </a>
+  </div>
+`;
+
+        // --------------------------
+        // TRANSACTION
+        // --------------------------
+        if (c.action === "transaction" && c.tradeId) {
+          const a = c.additionalInfo?.nodeA;
+          const b = c.additionalInfo?.nodeB;
+
+          return `
+<li>
+  <strong>${username}</strong>
+  made a <code>transaction</code><br/>
+  <small>${time}</small>
+
+  <div style="margin-top:6px; padding-left:12px;">
+    <div>
+      <strong>${a?.name}</strong>
+      (${a?.versionIndex}) →
+      <code>${JSON.stringify(a?.valuesSent)}</code>
+    </div>
+
+    <div>
+      <strong>${b?.name}</strong>
+      (${b?.versionIndex}) →
+      <code>${JSON.stringify(b?.valuesSent)}</code>
+    </div>
+  </div>
+
+  ${footer}
+</li>
+`;
+        }
+
+        // --------------------------
+        // EDIT NAME NODE
+        // --------------------------
+        if (c.action === "editNameNode") {
+          const { oldName, newName } = c.additionalInfo || {};
+          return `
+<li>
+  <strong>${username}</strong>
+  renamed node <code>${oldName}</code> → <code>${newName}</code><br/>
+  <small>${time}</small>
+  ${footer}
+</li>
+`;
+        }
+
+        // --------------------------
+        // UPDATE PARENT
+        // --------------------------
+        if (c.action === "updateParent") {
+          const { oldParentId, newParentId } = c.additionalInfo || {};
+          return `
+<li>
+  <strong>${username}</strong>
+  changed parent:
+  <a href="/api/${oldParentId}${queryString}">
+    ${await getNodeName(oldParentId)}
+  </a>
+  →
+  <a href="/api/${newParentId}${queryString}">
+    ${await getNodeName(newParentId)}
+  </a>
+  <br/>
+  <small>${time}</small>
+  ${footer}
+</li>
+`;
+        }
+
+        // --------------------------
+        // UPDATE CHILD NODE
+        // --------------------------
+        if (c.action === "updateChildNode") {
+          const { action, childId } = c.additionalInfo || {};
+          return `
+<li>
+  <strong>${username}</strong>
+  <code>${action}</code> child
+  <a href="/api/${childId}${queryString}">
+    ${await getNodeName(childId)}
+  </a>
+  <br/>
+  <small>${time}</small>
+  ${footer}
+</li>
+`;
+        }
+
+        // --------------------------
+        // EDIT SCRIPT
+        // --------------------------
+        if (c.action === "editScript") {
+          const { scriptName } = c.additionalInfo || {};
+          return `
+<li>
+  <strong>${username}</strong>
+  updated script <code>${scriptName}</code>
+  <br/>
+  <small>${time}</small>
+  ${footer}
+</li>
+`;
+        }
+
+        // --------------------------
+        // NOTE
+        // --------------------------
+        if (c.action === "note") {
+          const { action, noteId } = c.additionalInfo || {};
+          return `
+<li>
+  <strong>${username}</strong>
+  ${action === "add" ? "added" : "removed"} note
+  <a href="/api/${nodeId}/${version}/notes/${noteId}${queryString}">
+    <code>${noteId}</code>
+  </a>
+  <br/>
+  <small>${time}</small>
+  ${footer}
+</li>
+`;
+        }
+
+        // --------------------------
+        // DEFAULT
+        // --------------------------
+        return `
+<li>
+  <strong>${username}</strong>
+  <code>${c.action}</code><br/>
+  <small>${time}</small>
+
+  ${
+    c.additionalInfo
+      ? `<div style="margin-top:6px; padding-left:12px;">
+          <code>${JSON.stringify(c.additionalInfo)}</code>
+         </div>`
+      : ""
+  }
+
+  ${footer}
+</li>
+`;
+      })
+    );
+
     const contributionsHtml =
-      contributions.length > 0
-        ? `
-      <ul>
-        ${contributions
-          .map((c) => {
-            const username = c.username ?? "Unknown user";
-            const time = new Date(c.date).toLocaleString();
-            const nodeId = c.nodeId?._id || c.nodeId;
-            const version = c.nodeVersion;
-
-            // Helper for node/version footer
-            const footer = `
-              <div class="meta" style="margin-top:6px;">
-                node 
-                <a href="/api/${nodeId}${queryString}">
-                  <code>${nodeId}</code>
-                </a>
-                ${
-                  version
-                    ? `<a href="/api/${nodeId}/${version}${queryString}">(v${version})</a>`
-                    : ""
-                }
-              </div>
-            `;
-
-            // --------------------------
-            // TRANSACTION
-            // --------------------------
-            if (c.action === "transaction" && c.tradeId) {
-              const a = c.additionalInfo?.nodeA;
-              const b = c.additionalInfo?.nodeB;
-
-              return `
-                <li>
-                  <strong>${username}</strong>
-                  made a <code>transaction</code><br/>
-                  <small>${time}</small>
-
-                  <div style="margin-top:6px; padding-left:12px;">
-                    <div>
-                      <strong>${a?.name}</strong>
-                      (${a?.versionIndex}) →
-                      <code>${JSON.stringify(a?.valuesSent)}</code>
-                    </div>
-
-                    <div>
-                      <strong>${b?.name}</strong>
-                      (${b?.versionIndex}) →
-                      <code>${JSON.stringify(b?.valuesSent)}</code>
-                    </div>
-                  </div>
-
-                  ${footer}
-                </li>
-              `;
-            }
-
-            // --------------------------
-            // EDIT NAME NODE
-            // --------------------------
-            if (c.action === "editNameNode") {
-              const { oldName, newName } = c.additionalInfo || {};
-              return `
-                <li>
-                  <strong>${username}</strong>
-                  renamed node <code>${oldName}</code> → <code>${newName}</code><br/>
-                  <small>${time}</small>
-
-                  ${footer}
-                </li>
-              `;
-            }
-
-            // --------------------------
-            // UPDATE PARENT
-            // --------------------------
-            if (c.action === "updateParent") {
-              const { oldParentId, newParentId } = c.additionalInfo || {};
-              return `
-                <li>
-                  <strong>${username}</strong>
-                  changed parent:
-                  <a href="/api/${oldParentId}${queryString}"><code>${oldParentId}</code></a>
-                  →
-                  <a href="/api/${newParentId}${queryString}"><code>${newParentId}</code></a>
-                  <br/>
-                  <small>${time}</small>
-
-                  ${footer}
-                </li>
-              `;
-            }
-
-            // --------------------------
-            // UPDATE CHILD NODE
-            // --------------------------
-            if (c.action === "updateChildNode") {
-              const { action, childId } = c.additionalInfo || {};
-              return `
-                <li>
-                  <strong>${username}</strong>
-                  <code>${action}</code> child
-                  <a href="/api/${childId}${queryString}"><code>${childId}</code></a>
-                  <br/>
-                  <small>${time}</small>
-
-                  ${footer}
-                </li>
-              `;
-            }
-
-            // --------------------------
-            // EDIT SCRIPT
-            // --------------------------
-            if (c.action === "editScript") {
-              const { scriptName } = c.additionalInfo || {};
-              return `
-                <li>
-                  <strong>${username}</strong>
-                  updated script <code>${scriptName}</code>
-                  <br/>
-                  <small>${time}</small>
-
-                  ${footer}
-                </li>
-              `;
-            }
-
-            // --------------------------
-            // NOTE
-            // --------------------------
-            if (c.action === "note") {
-              const { action, noteId } = c.additionalInfo || {};
-              return `
-                <li>
-                  <strong>${username}</strong>
-                  ${action === "add" ? "added" : "removed"} note
-                  <a href="/api/${nodeId}/${version}/notes/${noteId}${queryString}">
-                    <code>${noteId}</code>
-                  </a>
-                  <br/>
-                  <small>${time}</small>
-
-                  ${footer}
-                </li>
-              `;
-            }
-
-            // --------------------------
-            // DEFAULT
-            // --------------------------
-            return `
-              <li>
-                <strong>${username}</strong>
-                <code>${c.action}</code><br/>
-                <small>${time}</small>
-
-                ${
-                  c.additionalInfo
-                    ? `<div style="margin-top:6px; padding-left:12px;">
-                        <code>${JSON.stringify(c.additionalInfo)}</code>
-                      </div>`
-                    : ""
-                }
-
-                ${footer}
-              </li>
-            `;
-          })
-          .join("")}
-      </ul>
-    `
+      processed.length > 0
+        ? `<ul>${processed.join("")}</ul>`
         : `<p><em>No contributions found</em></p>`;
 
     // FINAL HTML response
