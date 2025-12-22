@@ -111,7 +111,7 @@ rootId: default-root-id`}
                 Then type:
             </p>
 
-            <pre>begin root-orchestrator</pre>
+            <pre>start tree</pre>
 
             <p>
                 This command is the entry point for the system. Call it whenever you
@@ -124,7 +124,7 @@ rootId: default-root-id`}
             </p>
 
             <pre>
-                {`begin root-orchestrator
+                {`start tree
 userId: your-user-id
 rootId: your-root-or-node-id`}
             </pre>

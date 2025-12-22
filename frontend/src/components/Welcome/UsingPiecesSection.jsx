@@ -54,30 +54,44 @@ const UsingAllThePiecesSection = () => {
                     a password for read-only access.
                 </li>
                 <li>
+                    To set your URL browser token, go to the main menu inside of the legacy Tree app.
+                    URL Browser mode WILL NOT WORK on new accounts until this is changed from 'null'.
+                </li>
+                <li>
                     You can change this token at any time to invalidate old links.
                 </li>
-                <li>
-                    Adding <code>?html</code> to a URL enables HTML viewing mode.
-                </li>
-                <li>
-                    Removing <code>?html</code> returns the raw JSON for that page, which
-                    is useful for copying data directly into other tools or language
-                    models.
-                </li>
-                <li>
-                    ?token and ?html are default appended when opening from legacy Tree app and URL Browser button.
-                </li>
-                <li>
-                    You can also append &limit=number to receive only the most recent data on certain endpoints.
-                </li>
-                <li>
-                    Active and completed nodes are shown by default. You can explicitly set
-                    <code>active=true/false</code>, <code>completed=true/false</code>, and <code>trimmed=true/false</code> on supported endpoints
-                    to filter what you want returned.
-                </li>
-                <li>
-                    On user notes, you can use <code>&q=""</code> to search within notes by text.
-                </li>
+                <h4>Full Parameter Details</h4>
+                <ul>
+                    <li>
+                        <code>?token=YOURSHARETOKEN</code> — required for authenticated URL Browser read access.
+                    </li>
+                    <li>
+                        <code>?html</code> — enables HTML viewing mode.
+                    </li>
+
+                    <li>
+                        <code>&limit=NUMBER</code> — limits the number of returned items by most recent.
+                    </li>
+                    <li>
+                        <code> &q="SEARCH"</code> allows searching for text within user notes.
+                    </li>
+                    <li>
+                        <code>&active=true/false</code>, <code>&completed=true/false</code>,{" "}
+                        <code>&trimmed=true/false</code> — filters what nodes are included.
+                    </li>
+                    <li>
+                        Removing <code>?html</code> returns raw JSON instead of HTML.
+                    </li>
+                    <li>
+                        The legacy app automatically appends <code>?token</code> and <code>?html</code>
+                        when opening URL Browser pages from the app.
+                    </li>
+                    <li>
+                        By default, active and completed are always shown unless implictly changed.
+                    </li>
+
+                </ul>
+
                 <li>
                     The only URL's that dont require a token are /nodeid/version/note/noteid.
                     This is intentional so that you can share individual notes without exposing your whole tree.
@@ -101,7 +115,7 @@ const UsingAllThePiecesSection = () => {
                     This allows the tree to act as an API for transferring data from other systems,
                     and unifying it into one.
                 </li>
-            </ul>
+            </ul >
 
             <p>
                 Overall, URL browser mode is currently the best way to read, navigate,

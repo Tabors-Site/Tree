@@ -67,7 +67,7 @@ const HowAIFitsInSection = () => {
 
       <p>
         The only setup step is adding the connector and calling the{" "}
-        <strong>root orchestrator</strong>. This initializes the system and gives
+        <code>start tree</code>. This initializes the system and gives
         the AI permission to work with your tree. You can learn more about setup in
         the “What to Do Next” section.
       </p>
