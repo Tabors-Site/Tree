@@ -1,16 +1,22 @@
 import User from "../db/models/user.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
+
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 const USER_REGISTRATION_KEY = process.env.USER_REGISTRATION_KEY;
 
+/* ===========================
+    REGISTER
+=========================== */
 const register = async (req, res) => {
   try {
-    const { username, password, registrationKey } = req.body;
+    const { username, password, email, registrationKey } = req.body;
 
-    if (!username || !password || !registrationKey) {
+    if (!username || !password || !email || !registrationKey) {
       return res.status(400).json({
-        message: "Username, password and registration key are required",
+        message: "Username, email, password and registration key are required",
       });
     }
 
@@ -18,7 +24,7 @@ const register = async (req, res) => {
       return res.status(400).json({ message: "Registration key is invalid" });
     }
 
-    // Check if username (case-insensitive) is already taken
+    // Check username case-insensitive
     const existingUser = await User.findOne({
       username: { $regex: `^${username}$`, $options: "i" },
     });
@@ -26,9 +32,15 @@ const register = async (req, res) => {
       return res.status(400).json({ message: "Username already taken" });
     }
 
-    const newUser = new User({ username, password });
+    // Check email uniqueness
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
 
+    const newUser = new User({ username, password, email });
     await newUser.save();
+
     res.status(201).json({ message: "User registered successfully" });
   } catch (error) {
     console.error("Error during registration:", error);
@@ -36,6 +48,9 @@ const register = async (req, res) => {
   }
 };
 
+/* ===========================
+    LOGIN
+=========================== */
 const login = async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -46,7 +61,6 @@ const login = async (req, res) => {
         .json({ message: "Username and password are required" });
     }
 
-    // Find user case-insensitively
     const user = await User.findOne({
       username: { $regex: `^${username}$`, $options: "i" },
     });
@@ -62,36 +76,39 @@ const login = async (req, res) => {
     const token = jwt.sign(
       { userId: user._id, username: user.username },
       JWT_SECRET,
-      {
-        expiresIn: "365d",
-      }
+      { expiresIn: "365d" }
     );
 
     res.cookie("token", token, {
       httpOnly: false,
-      secure: true, // true if HTTPS
-      sameSite: "None", // required for cross-site cookies in modern browsers
-      domain: ".tabors.site", // note leading dot to allow all subdomains
+      secure: true,
+      sameSite: "None",
+      domain: ".tabors.site",
       maxAge: 604800000,
     });
 
-    res
-      .status(200)
-      .json({ message: "Login successful", token, userId: user.id });
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      userId: user._id.toString(),
+    });
   } catch (error) {
     console.error("Error during login:", error);
     res.status(500).json({ message: "Server is down" });
   }
 };
 
+/* ===========================
+    LOGOUT
+=========================== */
 const logout = async (req, res) => {
   try {
     res.clearCookie("token", {
-      httpOnly: false,        
-      secure: true,           
-      sameSite: "None",         
-      domain: ".tabors.site",  
-      path: "/",                
+      httpOnly: false,
+      secure: true,
+      sameSite: "None",
+      domain: ".tabors.site",
+      path: "/",
     });
 
     return res.status(200).json({ message: "Logged out successfully" });
@@ -101,6 +118,9 @@ const logout = async (req, res) => {
   }
 };
 
+/* ===========================
+    GET HTML SHARE TOKEN
+=========================== */
 const getHtmlShareToken = async (req, res, next) => {
   try {
     const userId = req.userId;
@@ -115,7 +135,6 @@ const getHtmlShareToken = async (req, res, next) => {
     }
 
     req.HTMLShareToken = user.htmlShareToken ?? null;
-
     next();
   } catch (err) {
     console.error("[getHtmlShareToken]", err);
@@ -125,6 +144,9 @@ const getHtmlShareToken = async (req, res, next) => {
 
 const URL_SAFE_REGEX = /^[A-Za-z0-9\-_.~]+$/;
 
+/* ===========================
+    SET HTML SHARE TOKEN
+=========================== */
 const setHtmlShareToken = async (req, res) => {
   try {
     const userId = req.userId;
@@ -150,7 +172,7 @@ const setHtmlShareToken = async (req, res) => {
       });
     }
 
-    if (!URL_SAFE_REGEX.test(htmlShareToken) && htmlShareToken.length > 0) {
+    if (!URL_SAFE_REGEX.test(htmlShareToken)) {
       return res.status(400).json({
         message:
           "htmlShareToken may only contain URL-safe characters (A–Z a–z 0–9 - _ . ~)",
@@ -178,4 +200,92 @@ const setHtmlShareToken = async (req, res) => {
   }
 };
 
-export { register, login, logout, getHtmlShareToken, setHtmlShareToken };
+/* ==========================================================
+     PASSWORD RESET LOGIC  — Placed at bottom as requested
+========================================================== */
+
+/* ---- SEND EMAIL FUNCTION ---- */
+async function sendResetEmail(to, link) {
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS, // Google App Password
+    },
+  });
+
+  await transporter.sendMail({
+    from: `<${process.env.EMAIL_USER}>`,
+    to,
+    subject: "Password Reset",
+    html: `
+      <p>You requested a password reset.</p>
+      <p>Click the link below to reset your password:</p>
+      <a href="${link}">${link}</a>
+      <p>This link expires in 15 minutes.</p>
+
+      <p>Sincerely,</p>
+      <p>Tree Helper</p>
+
+    `,
+  });
+}
+
+/* ---- FORGOT PASSWORD ---- */
+const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.json({
+      message: "Reset link sent if email exists",
+    });
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+
+  user.resetPasswordToken = token;
+  user.resetPasswordExpiry = Date.now() + 1000 * 60 * 15; // 15 min
+  await user.save();
+
+  const resetURL = `https://tree.tabors.site/api/user/reset-password/${token}`;
+
+  await sendResetEmail(user.email, resetURL);
+
+  res.json({ message: "Reset link sent if email exists" });
+};
+
+/* ---- RESET PASSWORD ---- */
+const resetPassword = async (req, res) => {
+  const { token, password } = req.body;
+
+  const user = await User.findOne({
+    resetPasswordToken: token,
+    resetPasswordExpiry: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    return res.status(400).json({ message: "Invalid or expired token" });
+  }
+
+  user.password = password; // Automatically hashed
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpiry = undefined;
+
+  await user.save();
+
+  res.json({ message: "Password has been reset successfully" });
+};
+
+/* ===========================
+    EXPORT CONTROLLERS
+=========================== */
+export {
+  register,
+  login,
+  logout,
+  getHtmlShareToken,
+  setHtmlShareToken,
+  forgotPassword,
+  resetPassword,
+};

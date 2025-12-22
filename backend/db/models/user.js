@@ -5,8 +5,14 @@ import { v4 as uuidv4 } from "uuid";
 const UserSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
   username: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+
   htmlShareToken: { type: String, required: false },
+
+  resetPasswordToken: { type: String, required: false },
+  resetPasswordExpiry: { type: Date, required: false },
+
   roots: [{ type: String, ref: "Node" }],
 });
 
