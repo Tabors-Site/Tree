@@ -100,6 +100,8 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
       return res.send(`
         <html>
         <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
           <title>Node ${node.name}</title>
           <style>
             body { font-family: sans-serif; padding: 20px; }
@@ -233,6 +235,8 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
       return res.send(`
         <html>
           <head>
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
             <title>${node.name} v${version}</title>
             <style>
               body { font-family: sans-serif; padding: 20px; }

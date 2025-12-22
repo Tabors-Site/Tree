@@ -202,6 +202,8 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
     return res.send(`
         <html>
         <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
           <title>Contributions</title>
           <style>
             body {

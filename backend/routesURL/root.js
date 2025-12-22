@@ -183,6 +183,8 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     return res.send(`
       <html>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
         <title>${allData.name} — Tree</title>
         <style>
           body {

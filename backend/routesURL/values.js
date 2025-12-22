@@ -80,6 +80,8 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
     return res.send(`
       <html>
       <head>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
         <title>Node Values</title>
         <style>
           body {

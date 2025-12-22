@@ -69,6 +69,8 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     return res.send(`
       <html>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
         <title>User — ${user.username}</title>
         <style>
           body {
@@ -101,6 +103,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
             border-radius: 4px;
             font-size: 12px;
           }
+            
         </style>
       </head>
 
@@ -234,34 +237,217 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     let html = `
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>${user.username} — Notes</title>
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      background: #fafafa;
-    }
+  body {
+    margin: 0;
+    padding: 0;
+    background: #f5f6f7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+    
+
+  .header {
+    padding: 20px;
+    border-bottom: 1px solid #ddd;
+    background: white;
+    flex-shrink: 0;
+  }
+
+  .header h1 {
+    margin: 0 0 12px 0;
+    font-size: 24px;
+    font-weight: 600;
+  }
+
+  .header a {
+    color: #5865f2;
+    text-decoration: none;
+  }
+
+  .header a:hover {
+    text-decoration: underline;
+  }
+
+  .nav {
+    margin-top: 12px;
+  }
+
+  .nav a {
+    color: #5865f2;
+    text-decoration: none;
+    margin-right: 16px;
+    font-size: 14px;
+  }
+
+  .nav a:hover {
+    text-decoration: underline;
+  }
+
+  .container {
+    padding: 20px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex-grow: 1;
+  }
+
+  .user-id-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0;
+  }
+
+  .user-id-box code {
+    background: #eee;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  .user-id-box button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.6;
+    font-size: 16px;
+  }
+
+  .user-id-box button:hover {
+    opacity: 1;
+  }
+
+  .search-form {
+    margin-top: 12px;
+  }
+
+  .search-form input[type="text"] {
+    padding: 8px 12px;
+    font-size: 14px;
+    width: 260px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    font-family: inherit;
+  }
+
+  .search-form button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    margin-left: 6px;
+  }
+
+  .search-form button:hover {
+    background: #f5f6f7;
+  }
+
+  ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+
+  li {
+    margin-bottom: 16px;
+    padding: 14px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    border: 1px solid #e3e5e8;
+  }
+
+  li a {
+    color: #5865f2;
+    text-decoration: none;
+  }
+
+  li a:hover {
+    text-decoration: underline;
+  }
+
+  .meta {
+    color: #666;
+    font-size: 13px;
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 600px) {
     .header {
-      padding: 20px;
-      border-bottom: 1px solid #ddd;
-      background: white;
+      padding: 16px;
     }
+
     .container {
-      padding: 20px;
-      overflow-y: auto;
-      flex-grow: 1;
+      padding: 16px;
     }
-    ul { list-style: none; padding-left: 0; }
-    li { margin-bottom: 20px; }
-    .meta { color: #555; font-size: 0.9em; }
-    a { color: #0077cc; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .nav a { margin-right: 12px; }
-  </style>
+
+    .search-form input[type="text"] {
+      width: 200px;
+      font-size: 16px;
+    }
+
+    .search-form button {
+      font-size: 16px;
+    }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body {
+      background: #2f3136;
+      color: #e3e5e8;
+    }
+
+    .header {
+      background: #36393f;
+      border-bottom-color: #3a3c40;
+    }
+
+    .header a,
+    .nav a,
+    li a {
+      color: #7289da;
+    }
+
+    .user-id-box code {
+      background: #40444b;
+      color: #e3e5e8;
+    }
+
+    .search-form input[type="text"] {
+      background: #40444b;
+      color: #e3e5e8;
+      border-color: #3a3c40;
+    }
+
+    .search-form button {
+      background: #40444b;
+      color: #e3e5e8;
+      border-color: #3a3c40;
+    }
+
+    .search-form button:hover {
+      background: #4f545c;
+    }
+
+    li {
+      background: #36393f;
+      border-color: #3a3c40;
+    }
+
+    .meta {
+      color: #b9bbbe;
+    }
+  }
+</style>
 </head>
 
 <body>
@@ -378,34 +564,215 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
     let html = `
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>${user.username} — Tagged Notes</title>
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      background: #fafafa;
-    }
+  body {
+    margin: 0;
+    padding: 0;
+    background: #f5f6f7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .header {
+    padding: 20px;
+    border-bottom: 1px solid #ddd;
+    background: white;
+    flex-shrink: 0;
+  }
+
+  .header h1 {
+    margin: 0 0 12px 0;
+    font-size: 24px;
+    font-weight: 600;
+  }
+
+  .header a {
+    color: #5865f2;
+    text-decoration: none;
+  }
+
+  .header a:hover {
+    text-decoration: underline;
+  }
+
+  .nav {
+    margin-top: 12px;
+  }
+
+  .nav a {
+    color: #5865f2;
+    text-decoration: none;
+    margin-right: 16px;
+    font-size: 14px;
+  }
+
+  .nav a:hover {
+    text-decoration: underline;
+  }
+
+  .container {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+  }
+
+  .user-id-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0;
+  }
+
+  .user-id-box code {
+    background: #eee;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  .user-id-box button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.6;
+    font-size: 16px;
+  }
+
+  .user-id-box button:hover {
+    opacity: 1;
+  }
+
+  .search-form {
+    margin-top: 12px;
+  }
+
+  .search-form input[type="text"] {
+    padding: 8px 12px;
+    font-size: 14px;
+    width: 260px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    font-family: inherit;
+  }
+
+  .search-form button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    margin-left: 6px;
+  }
+
+  .search-form button:hover {
+    background: #f5f6f7;
+  }
+
+  ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+
+  li {
+    margin-bottom: 16px;
+    padding: 14px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    border: 1px solid #e3e5e8;
+  }
+
+  li a {
+    color: #5865f2;
+    text-decoration: none;
+  }
+
+  li a:hover {
+    text-decoration: underline;
+  }
+
+  .meta {
+    color: #666;
+    font-size: 13px;
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 600px) {
     .header {
-      padding: 20px;
-      border-bottom: 1px solid #ddd;
-      background: white;
+      padding: 16px;
     }
+
     .container {
-      padding: 20px;
-      overflow-y: auto;
-      flex-grow: 1;
+      padding: 16px;
     }
-    ul { list-style: none; padding-left: 0; }
-    li { margin-bottom: 20px; }
-    .meta { color: #555; font-size: 0.9em; }
-    a { color: #0077cc; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .nav a { margin-right: 12px; }
-  </style>
+
+    .search-form input[type="text"] {
+      width: 200px;
+      font-size: 16px;
+    }
+
+    .search-form button {
+      font-size: 16px;
+    }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body {
+      background: #2f3136;
+      color: #e3e5e8;
+    }
+
+    .header {
+      background: #36393f;
+      border-bottom-color: #3a3c40;
+    }
+
+    .header a,
+    .nav a,
+    li a {
+      color: #7289da;
+    }
+
+    .user-id-box code {
+      background: #40444b;
+      color: #e3e5e8;
+    }
+
+    .search-form input[type="text"] {
+      background: #40444b;
+      color: #e3e5e8;
+      border-color: #3a3c40;
+    }
+
+    .search-form button {
+      background: #40444b;
+      color: #e3e5e8;
+      border-color: #3a3c40;
+    }
+
+    .search-form button:hover {
+      background: #4f545c;
+    }
+
+    li {
+      background: #36393f;
+      border-color: #3a3c40;
+    }
+
+    .meta {
+      color: #b9bbbe;
+    }
+  }
+</style>
 </head>
 
 <body>
@@ -702,6 +1069,8 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
     return res.send(`
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>${user.username} — Contributions</title>
   <style>
     body {
