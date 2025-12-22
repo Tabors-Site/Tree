@@ -63,7 +63,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     }
 
     const renderParents = (chain) => {
-      let html = "";
+      let html = "<h3>Parents</h3>";
       let depth = 0;
 
       for (const node of chain) {
@@ -129,17 +129,18 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     // OWNER + CONTRIBUTORS
     const ownerHtml = rootMeta?.rootOwner
       ? `
-    <p>
-      <a href="/api/user/${rootMeta.rootOwner._id}${queryString}">
+   
+      Root Owner: <a href="/api/user/${rootMeta.rootOwner._id}${queryString}">
         ${rootMeta.rootOwner.username}
       </a>
 
-    </p>
+    
   `
-      : `<p><em>No owner</em></p>`;
+      : ``;
 
     const contributorsHtml = rootMeta?.contributors?.length
-      ? `<ul>
+      ? `        <h2>Contributors</h2>
+<ul>
         ${rootMeta.contributors
           .map(
             (u) => `
@@ -153,7 +154,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
           )
           .join("")}
       </ul>`
-      : `<p><em>No contributors</em></p>`;
+      : ``;
 
     const ancestors = allData.ancestors || [];
 
@@ -166,7 +167,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
             isCurrent: true,
           },
         ])
-      : `<p><em>No parents</em></p>`;
+      : ``;
 
     // CHILDREN
     const childrenHtml = allData.children?.length
@@ -242,9 +243,10 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
           }
         </style>
       </head>
-
       <body>
+              ${parentHtml}
 
+         <h3>${ownerHtml}</h3>
         <h1>
   <a href="/api/${allData._id}/${allData.prestige}${queryString}">
     ${allData.name}
@@ -266,8 +268,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 </p>
 
 
-                <h2>Owner</h2>
-        ${ownerHtml}
+     
         <h2>Filters</h2>
 
 <div id="filterButtons"></div>
@@ -318,8 +319,6 @@ const color = isOn ? "#4CAF50" : "#9E9E9E"; // green on, gray off
 
    
      
-        <h2>Parents</h2>
-        ${parentHtml}
 
         <h2>Children</h2>
         ${childrenHtml}
@@ -328,7 +327,6 @@ const color = isOn ? "#4CAF50" : "#9E9E9E"; // green on, gray off
        
      
 
-        <h2>Contributors</h2>
         ${contributorsHtml}
         
 

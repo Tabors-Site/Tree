@@ -11,7 +11,10 @@ function filterTreeByStatus(node, filters) {
   if (filters.trimmed === true) allowedStatuses.push("trimmed");
   if (filters.completed === true) allowedStatuses.push("completed");
 
-  const filteringEnabled = allowedStatuses.length > 0;
+  const filteringEnabled =
+    filters.active !== undefined ||
+    filters.trimmed !== undefined ||
+    filters.completed !== undefined;
 
   const currentVersion = node.versions?.find(
     (v) => v.prestige === node.prestige
