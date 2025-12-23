@@ -34,7 +34,11 @@ export default async function authenticate(req, res, next) {
 
     if (nodeId) {
       const access = await resolveTreeAccess(nodeId, req.userId);
-
+      if (!access.canWrite && !access.isOwner && !access.isContributor) {
+        return res.status(403).json({
+          message: "You do not have access to this tree",
+        });
+      }
       req.rootId = access.rootId;
       req.treeAccess = access;
     }
