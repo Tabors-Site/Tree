@@ -14,6 +14,9 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
     const rawLimit = req.query.limit;
     const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
       return res.status(400).json({
         success: false,
@@ -39,6 +42,8 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
       nodeId,
       version: parsedVersion,
       limit,
+      startDate,
+      endDate,
     });
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

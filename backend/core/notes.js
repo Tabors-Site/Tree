@@ -12,6 +12,15 @@ const uploadsFolder = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadsFolder)) {
   fs.mkdirSync(uploadsFolder);
 }
+function buildDateRange(startDate, endDate) {
+  if (!startDate && !endDate) return null;
+
+  const range = {};
+  if (startDate) range.$gte = new Date(startDate);
+  if (endDate) range.$lte = new Date(endDate);
+
+  return range;
+}
 
 async function extractTaggedUsersAndRewrite(content) {
   const mentionRegex = /@([\w-]+)/g;
@@ -106,7 +115,7 @@ async function createNote({
   };
 }
 
-async function getNotes({ nodeId, version, limit }) {
+async function getNotes({ nodeId, version, limit, startDate, endDate }) {
   try {
     if (!nodeId) {
       throw new Error("Missing required parameter: nodeId");
@@ -121,6 +130,12 @@ async function getNotes({ nodeId, version, limit }) {
     }
 
     const query = { nodeId, version };
+
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
 
     let noteQuery = Note.find(query)
       .sort({ createdAt: -1 })
@@ -166,7 +181,7 @@ async function getNotes({ nodeId, version, limit }) {
   }
 }
 
-async function getAllNotesByUser(userId, limit) {
+async function getAllNotesByUser(userId, limit, startDate, endDate) {
   if (!userId) {
     throw new Error("Missing required parameter: userId");
   }
@@ -175,18 +190,25 @@ async function getAllNotesByUser(userId, limit) {
     throw new Error("Invalid limit: must be a positive number");
   }
 
-  let query = Note.find({ userId }).sort({ createdAt: -1 }).lean();
+  const queryObj = { userId };
+
+  if (startDate || endDate) {
+    queryObj.createdAt = {};
+    if (startDate) queryObj.createdAt.$gte = new Date(startDate);
+    if (endDate) queryObj.createdAt.$lte = new Date(endDate);
+  }
+
+  let query = Note.find(queryObj).sort({ createdAt: -1 }).lean();
 
   if (typeof limit === "number") {
     query = query.limit(limit);
   }
 
   const notes = await query;
-
   return { notes };
 }
 
-async function getAllTagsForUser(userId, limit) {
+async function getAllTagsForUser(userId, limit, startDate, endDate) {
   if (!userId) {
     throw new Error("Missing required parameter: userId");
   }
@@ -195,7 +217,15 @@ async function getAllTagsForUser(userId, limit) {
     throw new Error("Invalid limit: must be a positive number");
   }
 
-  let query = Note.find({ tagged: userId })
+  const queryObj = { tagged: userId };
+
+  if (startDate || endDate) {
+    queryObj.createdAt = {};
+    if (startDate) queryObj.createdAt.$gte = new Date(startDate);
+    if (endDate) queryObj.createdAt.$lte = new Date(endDate);
+  }
+
+  let query = Note.find(queryObj)
     .populate("userId", "username") // author
     .sort({ createdAt: -1 })
     .lean();
@@ -275,7 +305,7 @@ function wordify(str) {
     .trim();
 }
 
-async function searchNotesByUser({ userId, query, limit }) {
+async function searchNotesByUser({ userId, query, limit, startDate, endDate }) {
   if (!userId) throw new Error("Missing required parameter: userId");
   if (!query || typeof query !== "string") {
     throw new Error("Query must be a non-empty string");
@@ -321,6 +351,11 @@ async function searchNotesByUser({ userId, query, limit }) {
     $and: conditions,
   };
 
+  if (startDate || endDate) {
+    mongoQueryObj.createdAt = {};
+    if (startDate) mongoQueryObj.createdAt.$gte = new Date(startDate);
+    if (endDate) mongoQueryObj.createdAt.$lte = new Date(endDate);
+  }
   let mongoQuery = Note.find(mongoQueryObj).sort({ createdAt: -1 }).lean();
 
   if (limit && limit > 0) mongoQuery = mongoQuery.limit(limit);

@@ -1,6 +1,12 @@
 import Contribution from "../db/models/contribution.js";
 
-async function getContributions({ nodeId, version, limit }) {
+async function getContributions({
+  nodeId,
+  version,
+  limit,
+  startDate,
+  endDate,
+}) {
   try {
     if (!nodeId) {
       throw new Error("Missing required parameter: nodeId");
@@ -16,6 +22,11 @@ async function getContributions({ nodeId, version, limit }) {
 
     const query = { nodeId, nodeVersion: version };
 
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) query.date.$lte = new Date(endDate);
+    }
     let contributionsQuery = Contribution.find(query)
       .populate("userId", "username")
       .populate("nodeId", "name")
@@ -146,7 +157,7 @@ async function getContributions({ nodeId, version, limit }) {
   }
 }
 
-async function getContributionsByUser(userId, limit) {
+async function getContributionsByUser(userId, limit, startDate, endDate) {
   try {
     if (!userId) {
       throw new Error("Missing required parameter: userId");
@@ -157,6 +168,12 @@ async function getContributionsByUser(userId, limit) {
     }
 
     const query = { userId };
+
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) query.date.$lte = new Date(endDate);
+    }
 
     let contributionsQuery = Contribution.find(query)
       .populate("userId", "username")

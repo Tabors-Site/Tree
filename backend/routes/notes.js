@@ -22,7 +22,7 @@ router.get("/uploads/:fileName", getFile);
 router.post("/get-Notes", authenticate, getNotes);
 router.post("/get-notes-user", authenticate, getAllNotesByUser);
 router.post("/get-tags-user", authenticate, getAllTagsForUser);
-router.post("/user/search-notes", searchNotesForUser);
+router.post("/user/search-notes", authenticate, searchNotesForUser);
 
 router.post("/delete-note", authenticate, deleteNoteAndFile);
 

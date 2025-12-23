@@ -7,6 +7,7 @@ import mime from "mime-types";
 import {
   createNote as coreCreateNote,
   getNotes as coreGetNotes,
+  deleteNoteAndFile as coreDeleteNoteAndFile,
 } from "../core/notes.js";
 
 import urlAuth from "../middleware/urlAuth.js";
@@ -67,6 +68,9 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const rawLimit = req.query.limit;
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
     const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
@@ -80,6 +84,8 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       nodeId,
       version: Number(version),
       limit,
+      startDate,
+      endDate,
     });
 
     const notes = [...result.notes].reverse().map((n) => ({
@@ -306,6 +312,27 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       background: #5865f2;
     }
   }
+
+  .note-item {
+  position: relative;
+}
+
+.delete-note {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #999;
+  padding: 4px;
+}
+
+.delete-note:hover {
+  color: #e03131;
+}
+
 </style>
   </head>
   <body>
@@ -341,24 +368,33 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
           : n.username ?? "Unknown user";
 
         html += `
-  <li class="
+<li
+  class="
+    note-item
     ${n.isReflection ? "reflection" : ""}
     ${n.contentType === "file" ? "file-note" : ""}
-  ">
+  "
+  data-note-id="${n._id}"
+  data-node-id="${n.nodeId}"
+  data-version="${n.version}"
+>
+  <button class="delete-note" title="Delete note">✕</button>
 
+  <div>
+    <strong>${userLabel}:</strong>
+    <a href="${base}/notes/${n._id}?token=${req.query.token ?? ""}&html">
+      ${preview}
+    </a>
+  </div>
 
-        <div>
-          <strong>${userLabel}:</strong>
-          <a href="${base}/notes/${n._id}?token=${req.query.token ?? ""}&html">
-            ${preview}
-          </a>
-        </div>
-
-        <!-- second line: timestamp -->
-        <div class="meta">${new Date(n.createdAt).toLocaleString()}</div>
-
-      </li>
-    `;
+  <div class="meta">
+    ${new Date(n.createdAt).toLocaleString()}<br />
+    <a href="${base}?token=${req.query.token ?? ""}&html">
+      ${nodeName} v${n.version}
+    </a>
+  </div>
+</li>
+`;
       }
 
       html += `
@@ -407,10 +443,43 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
       }
     });
   </script>
+<script>
+document.addEventListener("click", async (e) => {
+  if (!e.target.classList.contains("delete-note")) return;
+
+  const li = e.target.closest(".note-item");
+  const noteId = li.dataset.noteId;
+  const nodeId = li.dataset.nodeId;
+  const version = li.dataset.version;
+
+  if (!confirm("Delete this note?")) return;
+
+  const token =
+    new URLSearchParams(window.location.search).get("token") || "";
+
+  const qs = token ? "?token=" + encodeURIComponent(token) : "";
+
+  try {
+    const res = await fetch(
+      "/api/" + nodeId + "/" + version + "/notes/" + noteId + qs,
+      { method: "DELETE" }
+    );
+
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Delete failed");
+
+    li.remove();
+  } catch (err) {
+    alert("Delete failed");
+  }
+});
+</script>
+
 
 
   </body>
   </html>`;
+
       return res.send(html);
     }
 
@@ -784,5 +853,24 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+router.delete(
+  "/:nodeId/:version/notes/:noteId",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { noteId } = req.params;
+
+      const result = await coreDeleteNoteAndFile({
+        noteId,
+        userId: req.userId,
+      });
+
+      res.json({ success: true, ...result });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  }
+);
 
 export default router;

@@ -1,5 +1,7 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
+import authenticate from "../middleware/authenticate.js";
+
 import User from "../db/models/user.js";
 import {
   getAllNotesByUser as coreGetAllNotesByUser,
@@ -7,6 +9,8 @@ import {
   searchNotesByUser as coreSearchNotesByUser,
 } from "../core/notes.js";
 import { getContributionsByUser } from "../core/contributions.js";
+
+import { createNewNode } from "../core/treeManagement.js";
 
 import getNodeName from "./helpers/getNameById.js";
 
@@ -135,6 +139,43 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 </ul>
         <h2>Roots</h2>
         ${rootsHtml}
+        <div style="margin-top:16px;">
+  <form
+    method="POST"
+    action="/api/user/${userId}/createRoot?token=${req.query.token ?? ""}&html"
+    style="display:flex; gap:8px; align-items:center;"
+  >
+    <input
+      type="text"
+      name="name"
+      placeholder="New root name"
+      required
+      style="
+        padding:8px 10px;
+        font-size:14px;
+        border-radius:6px;
+        border:1px solid #ccc;
+        flex:1;
+      "
+    />
+
+    <button
+      type="submit"
+      title="Create root"
+      style="
+        padding:8px 12px;
+        font-size:18px;
+        border-radius:6px;
+        border:1px solid #999;
+        background:#eee;
+        cursor:pointer;
+      "
+    >
+      ＋
+    </button>
+  </form>
+</div>
+
 <script>
   const btn = document.getElementById("copyNodeIdBtn");
   const code = document.getElementById("nodeIdCode");
@@ -159,7 +200,8 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 router.get("/user/:userId/notes", urlAuth, async (req, res) => {
   try {
     const userId = req.params.userId;
-
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
     // NEW: search query
     const query = req.query.q || "";
 
@@ -180,9 +222,15 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     // NEW: If search term exists → run search
     let result;
     if (query.trim() !== "") {
-      result = await coreSearchNotesByUser({ userId, query, limit });
+      result = await coreSearchNotesByUser({
+        userId,
+        query,
+        limit,
+        startDate,
+        endDate,
+      });
     } else {
-      result = await coreGetAllNotesByUser(userId, limit);
+      result = await coreGetAllNotesByUser(userId, limit, startDate, endDate);
     }
 
     const notes = result.notes.map((n) => ({
@@ -447,6 +495,26 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
       color: #b9bbbe;
     }
   }
+    .note-item {
+  position: relative;
+}
+
+.delete-note {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #999;
+  padding: 4px;
+}
+
+.delete-note:hover {
+  color: #e03131;
+}
+
 </style>
 </head>
 
@@ -480,7 +548,14 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
       const nodeName = await getNodeName(n.nodeId);
 
       html += `
-      <li>
+      <li
+  class="note-item"
+  data-note-id="${n._id}"
+  data-node-id="${n.nodeId}"
+  data-version="${n.version}"
+>
+  <button class="delete-note" title="Delete note">✕</button>
+
         <div>
           <strong>${user.username}:</strong>
           <a href="/api/${n.nodeId}/${n.version}/notes/${n._id}${tokenQS}">
@@ -507,6 +582,37 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     html += `
     </ul>
   </div>
+<script>
+document.addEventListener("click", async (e) => {
+  if (!e.target.classList.contains("delete-note")) return;
+
+  const li = e.target.closest(".note-item");
+  const noteId = li.dataset.noteId;
+  const nodeId = li.dataset.nodeId;
+  const version = li.dataset.version;
+
+  if (!confirm("Delete this note?")) return;
+
+  const token =
+    new URLSearchParams(window.location.search).get("token") || "";
+
+  const qs = token ? "?token=" + encodeURIComponent(token) : "";
+
+  try {
+    const res = await fetch(
+      "/api/" + nodeId + "/" + version + "/notes/" + noteId + qs,
+      { method: "DELETE" }
+    );
+
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    li.remove();
+  } catch {
+    alert("Delete failed");
+  }
+});
+</script>
 
 </body>
 </html>
@@ -527,6 +633,8 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
   try {
     const userId = req.params.userId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
 
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
@@ -540,7 +648,12 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
       });
     }
 
-    const result = await coreGetAllTagsForUser(userId, limit);
+    const result = await coreGetAllTagsForUser(
+      userId,
+      limit,
+      startDate,
+      endDate
+    );
 
     const notes = result.notes.map((n) => ({
       ...n,
@@ -867,7 +980,8 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     const rawLimit = req.query.limit;
     const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
-
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
       return res.status(400).json({
         success: false,
@@ -882,7 +996,12 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
 
     const queryString = filtered ? `?${filtered}` : "";
 
-    const result = await getContributionsByUser(userId, limit);
+    const result = await getContributionsByUser(
+      userId,
+      limit,
+      startDate,
+      endDate
+    );
     const contributions = result.contributions || [];
 
     // JSON MODE
@@ -1203,6 +1322,53 @@ router.post("/user/reset-password/:token", async (req, res) => {
   } catch (err) {
     console.error("Error resetting password:", err);
     res.status(500).send("Server error");
+  }
+});
+
+router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { name } = req.body;
+
+    if (req.userId.toString() !== userId.toString()) {
+      return res.status(403).json({ success: false, error: "Not authorized" });
+    }
+
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: "Name is required",
+      });
+    }
+
+    const rootNode = await createNewNode(
+      name,
+      null,
+      0,
+      null,
+      true, // isRoot
+      userId,
+      {},
+      {},
+      null,
+      req.user
+    );
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/user/${userId}?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    res.status(201).json({
+      success: true,
+      rootId: rootNode._id,
+      root: rootNode,
+    });
+  } catch (err) {
+    console.error("createRoot error:", err);
+    res.status(400).json({ success: false, error: err.message });
   }
 });
 

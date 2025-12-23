@@ -77,8 +77,11 @@ const UsingAllThePiecesSection = () => {
                     </li>
                     <li>
                         <code>&active=true/false</code>, <code>&completed=true/false</code>,{" "}
-                        <code>&trimmed=true/false</code> — filters what nodes are included.
+                        <code>&trimmed=true/false</code> — filters what nodes are included by status.
                     </li>
+                    <li><code>&startDate=YYYY-MM-DD</code></li>
+                    <li><code>&endDate=YYYY-MM-DD</code></li>
+                    <li>Dates are interpreted in <strong>UTC</strong> so they may be slightly off depending on timezone.</li>
                     <li>
                         Removing <code>?html</code> returns raw JSON instead of HTML.
                     </li>

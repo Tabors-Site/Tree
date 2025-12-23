@@ -36,6 +36,16 @@ import {
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { getTreeForAi, getNodeForAi } from "../controllers/treeDataFetching.js"; // import from your real backend
 
+const TimeWindowSchema = {
+  startDate: z
+    .string()
+    .optional()
+    .describe("ISO date/time. Include items created on or after this time."),
+  endDate: z
+    .string()
+    .optional()
+    .describe("ISO date/time. Include items created on or before this time."),
+};
 const server = getMcpServer();
 const transport = new StreamableHTTPServerTransport({
   sessionIdGenerator: undefined,
@@ -172,45 +182,45 @@ function getMcpServer() {
     },
     async ({ rootId, userId }) => {
       const systemInstructions = `
-Use get-tree(${rootId}) always before get-node(nodeId) to get initial data.
-Find the nodes for the user request based on the tree, and use get-node when deeper data is needed.
-Avoid presenting raw IDs when possible.
+  Use get-tree(${rootId}) always before get-node(nodeId) to get initial data.
+  Find the nodes for the user request based on the tree, and use get-node when deeper data is needed.
+  Avoid presenting raw IDs when possible.
 
 
-Here are the available actions. 
+  Here are the available actions. 
 
-1️⃣ **Create or restructure the tree**
-   - Create a new branch
-   - Add child nodes
-   - Move nodes
-   - Discuss structure or placement
+  1️⃣ **Create or restructure the tree**
+    - Create a new branch
+    - Add child nodes
+    - Move nodes
+    - Discuss structure or placement
 
-2️⃣ **Modify existing data**
-  - Change Node Names
-   - View node data
-   - Update values, goals, status, notes
-   - Add prestige/version
-   - Suggest nodes or improvements
+  2️⃣ **Modify existing data**
+    - Change Node Names
+    - View node data
+    - Update values, goals, status, notes
+    - Add prestige/version
+    - Suggest nodes or improvements
 
-3️⃣ **Explore or ask about data**
-   - View the tree
-   - Inspect nodes
-   - Understand progress or relationships
+  3️⃣ **Explore or ask about data**
+    - View the tree
+    - Inspect nodes
+    - Understand progress or relationships
 
-4️⃣ **Create, edit, or run a node’s script**
-   - Will trigger scripting-orchestrator(nodeId)
+  4️⃣ **Create, edit, or run a node’s script**
+    - Will trigger scripting-orchestrator(nodeId)
 
-5 **Examine User Profile**
-   - Check your notes, mail, and contribution history
-
-
-6 **Initiate BE mode**
-   - Guided real-time traversal of leaf nodes
-   - Will trigger be-mode-orchestrator(nodeId)
+  5 **Examine User Profile**
+    - Check your notes, mail, and contribution history
 
 
-Call the tool get-tree(id) and tree-actions-menu and then present me the menu with a short paragraphed introductory summary of my tree so far.
-`;
+  6 **Initiate BE mode**
+    - Guided real-time traversal of leaf nodes
+    - Will trigger be-mode-orchestrator(nodeId)
+
+
+  Call the tool get-tree(id) and tree-actions-menu and then present me the menu with a short paragraphed introductory summary of my tree so far.
+  `;
 
       // IMPORTANT: This tool returns the context,
       // but does NOT itself call any tool.
@@ -241,36 +251,36 @@ Call the tool get-tree(id) and tree-actions-menu and then present me the menu wi
             type: "text",
             text: `Ask me what I want to do on Tree menu. Call these functions depending on my intent
 
-              1️⃣ **Create or restructure the tree** = tree-structure-orchestrator
+                1️⃣ **Create or restructure the tree** = tree-structure-orchestrator
 
-2️⃣ **Modify existing data**
-   - View tree/node data to understand where to place data = combinations of get-tree for structure, get-node for details,
-   - Update values, goals, status, notes = edit-node-version-values, edit-node-version-goals, edit-node-or-branch-status,  create-node-version-note
-   - Add prestige/version = add-node-prestige
-   - Change a nods name = edit-node-name
-   - Suggest nodes or improvements
-   -(useful tool if you need to undo stuff) = get-node-contributions
+  2️⃣ **Modify existing data**
+    - View tree/node data to understand where to place data = combinations of get-tree for structure, get-node for details,
+    - Update values, goals, status, notes = edit-node-version-values, edit-node-version-goals, edit-node-or-branch-status,  create-node-version-note
+    - Add prestige/version = add-node-prestige
+    - Change a nods name = edit-node-name
+    - Suggest nodes or improvements
+    -(useful tool if you need to undo stuff) = get-node-contributions
 
-3️⃣ **Explore or ask about data**
-   - View the tree = get-tree
-   - Inspect nodes = get-node
-   - Understand progress or relationships
-   - see history of node actions = get-node-contributions
+  3️⃣ **Explore or ask about data**
+    - View the tree = get-tree
+    - Inspect nodes = get-node
+    - Understand progress or relationships
+    - see history of node actions = get-node-contributions
 
-4️⃣ **Create, edit, or run a node’s script** = scripting-orchestrator(nodeId)
+  4️⃣ **Create, edit, or run a node’s script** = scripting-orchestrator(nodeId)
 
-5 **Examine User Profile**
-    - ensure you knw which I want
-   - Check your recent notes = get-unsearched-notes-by-user,
-   - search for notes based on content = get-searched-notes-by-user
-   - check your mail = get-all-tags-by-user,
-   - check your contribution history = get-contributions-by-user
+  5 **Examine User Profile**
+      - ensure you knw which I want
+    - Check your recent notes = get-unsearched-notes-by-user,
+    - search for notes based on content = get-searched-notes-by-user
+    - check your mail = get-all-tags-by-user,
+    - check your contribution history = get-contributions-by-user
 
 
-6. **Initiate BE mode**
-   - Guided real-time traversal of leaf nodes
-   - Will trigger be-mode-orchestrator(nodeId)
-`,
+  6. **Initiate BE mode**
+    - Guided real-time traversal of leaf nodes
+    - Will trigger be-mode-orchestrator(nodeId)
+  `,
           },
         ],
       };
@@ -293,30 +303,30 @@ Call the tool get-tree(id) and tree-actions-menu and then present me the menu wi
     },
     async ({ nodeId }) => {
       const instructions = `
-     
-      Use get-node(${nodeId}) to inspect existing scripts and node state.
-Wait for the user to choose an intent before proceeding.
-Do not call any other tools yet.
+      
+        Use get-node(${nodeId}) to inspect existing scripts and node state.
+  Wait for the user to choose an intent before proceeding.
+  Do not call any other tools yet.
 
-Here’s what I can help with. Choose **one**:
+  Here’s what I can help with. Choose **one**:
 
-1️⃣ **Create a new script**
-   - I will ask what behavior you want
-   - I will use node-script-runtime-environment() to learn the functions/tools
-   - I will write the script with you
-   - Then save it using update-node-script
+  1️⃣ **Create a new script**
+    - I will ask what behavior you want
+    - I will use node-script-runtime-environment() to learn the functions/tools
+    - I will write the script with you
+    - Then save it using update-node-script
 
-2️⃣ **Modify an existing script**
-   - View current scripts on the node
-   - Revise logic together
-   - Save changes
+  2️⃣ **Modify an existing script**
+    - View current scripts on the node
+    - Revise logic together
+    - Save changes
 
-3️⃣ **Execute a script**
-   - Review what the script will do
-   - Ask for confirmation
-   - Run execute-node-script
+  3️⃣ **Execute a script**
+    - Review what the script will do
+    - Ask for confirmation
+    - Run execute-node-script
 
-Reply with the number, or describe what you want to do.`;
+  Reply with the number, or describe what you want to do.`;
 
       return {
         content: [{ type: "text", text: instructions }],
@@ -340,27 +350,27 @@ Reply with the number, or describe what you want to do.`;
     },
     async ({ rootId }) => {
       const instructions = `
-Inspect the structure of that tree.
-Ask me what action I want to take.
+  Inspect the structure of that tree.
+  Ask me what action I want to take.
 
 
-1️⃣ **Create tree branches**
-   - Create new branches (create-node-branch)
-   - Add child nodes (create-node)
-  
-   if it is this one, please ensure I am placing it onto the structure properly, and if it doesn't fit, extend new branches from root nodes or tell me it doesnt fit root.
-      We can discuss placement and branch structure before the tools are called.
-2️⃣ **Move nodes/restructure**
-   - Change parent/child relationships (update-node-branch-parent-relationship)
-   - Reorder hierarchyy
-   - Relocate a subtree
+  1️⃣ **Create tree branches**
+    - Create new branches (create-node-branch)
+    - Add child nodes (create-node)
+    
+    if it is this one, please ensure I am placing it onto the structure properly, and if it doesn't fit, extend new branches from root nodes or tell me it doesnt fit root.
+        We can discuss placement and branch structure before the tools are called.
+  2️⃣ **Move nodes/restructure**
+    - Change parent/child relationships (update-node-branch-parent-relationship)
+    - Reorder hierarchyy
+    - Relocate a subtree
 
-Ask for specifics, or give suggestions if none.
-   just fix up the trees hierarchy so things are in proper logical parent-child order.
+  Ask for specifics, or give suggestions if none.
+    just fix up the trees hierarchy so things are in proper logical parent-child order.
 
 
 
-Ask to reply with a number or figure out intent, and then start appropriate tools.`;
+  Ask to reply with a number or figure out intent, and then start appropriate tools.`;
 
       return {
         content: [{ type: "text", text: instructions }],
@@ -384,42 +394,42 @@ Ask to reply with a number or figure out intent, and then start appropriate tool
     async ({ nodeId }) => {
       const instructions = `You are entering **Be Mode**.
 
-OVERVIEW
-- Guide the user through a branch of the tree **one active leaf node at a time**.
-- Present each node clearly so the user can understand its purpose and work with it directly.
+  OVERVIEW
+  - Guide the user through a branch of the tree **one active leaf node at a time**.
+  - Present each node clearly so the user can understand its purpose and work with it directly.
 
-INITIAL STEP
-1. Use get-tree(${nodeId}) to view the full branch structure.
-2. Identify the first **active leaf node** to begin with. Do not present nodes that have a status as completed (skip).
+  INITIAL STEP
+  1. Use get-tree(${nodeId}) to view the full branch structure.
+  2. Identify the first **active leaf node** to begin with. Do not present nodes that have a status as completed (skip).
 
-FOR EACH NODE (repeat this cycle):
-1. Use get-node(nodeId) to load full context for the current active node.
-2. Explain the node’s intention, purpose, and planned actions in a simple, focused way.
-3. Walk the user through the node so they can clearly see what it represents and what it asks of them.
-4. Use any relevant tools as needed to help them work with or update the node.
+  FOR EACH NODE (repeat this cycle):
+  1. Use get-node(nodeId) to load full context for the current active node.
+  2. Explain the node’s intention, purpose, and planned actions in a simple, focused way.
+  3. Walk the user through the node so they can clearly see what it represents and what it asks of them.
+  4. Use any relevant tools as needed to help them work with or update the node.
 
-OPTIONAL DURING THE NODE
-- If the user expresses something worth recording (you are their data tracker):
-  • important wording or insights → create-node-version-note, and try to copy exact wording or idea without changing 
-  • numerical or measurable details → update values/goals
-- If the user wants to expand or clarify the plan:
-  • use create-node-branch to add deeper steps  
-    then continue guiding through the newly created nodes.
+  OPTIONAL DURING THE NODE
+  - If the user expresses something worth recording (you are their data tracker):
+    • important wording or insights → create-node-version-note, and try to copy exact wording or idea without changing 
+    • numerical or measurable details → update values/goals
+  - If the user wants to expand or clarify the plan:
+    • use create-node-branch to add deeper steps  
+      then continue guiding through the newly created nodes.
 
-COMPLETION STEP (for the current node)
-5. When the node’s work is complete:
-   - Write a brief summary as a reflection note  and/or ensure you fill all the values/goals data if it has any
-     (use isReflection = true unless the node is trivial)
-6. Mark the node as completed.
+  COMPLETION STEP (for the current node)
+  5. When the node’s work is complete:
+    - Write a brief summary as a reflection note  and/or ensure you fill all the values/goals data if it has any
+      (use isReflection = true unless the node is trivial)
+  6. Mark the node as completed.
 
-ADVANCE
-7. Move to the next active node in the branch.
-8. Continue until there are no active nodes remaining.
+  ADVANCE
+  7. Move to the next active node in the branch.
+  8. Continue until there are no active nodes remaining.
 
-OPTIONAL
-- If you need to restart or shift direction,
-  re-enter be-mode-orchestrator with a new nodeId or branchId.
-`;
+  OPTIONAL
+  - If you need to restart or shift direction,
+    re-enter be-mode-orchestrator with a new nodeId or branchId.
+  `;
 
       return {
         content: [{ type: "text", text: instructions }],
@@ -441,97 +451,97 @@ OPTIONAL
     },
     async ({ nodeId }) => {
       const runtimeDocs = `
-Node Script Runtime Environment
+  Node Script Runtime Environment
 
-Node Object (Snapshot)
+  Node Object (Snapshot)
 
-The \`node\` object represents the node state at script start.
-It does NOT auto-update after mutations.
-You must reason manually about state changes.
+  The \`node\` object represents the node state at script start.
+  It does NOT auto-update after mutations.
+  You must reason manually about state changes.
 
-Core Properties
+  Core Properties
 
-node._id
-node.name
-node.type
-node.prestige
+  node._id
+  node.name
+  node.type
+  node.prestige
 
 
-Versions
+  Versions
 
-node.versions[i]
+  node.versions[i]
 
-i = 0 → first generation  
-i = node.prestige → most recent
+  i = 0 → first generation  
+  i = node.prestige → most recent
 
-Version Properties
+  Version Properties
 
-values
-goals
-schedule (ISO timestamp)
-prestige
-reeffectTime (hours)
-status ("active" | "completed" | "trimmed")
-dateCreated
+  values
+  goals
+  schedule (ISO timestamp)
+  prestige
+  reeffectTime (hours)
+  status ("active" | "completed" | "trimmed")
+  dateCreated
 
-Structure
+  Structure
 
-node.scripts → [{ name, script }]
-node.children → child node objects
-node.parent → parent node ID or null
-node.rootOwner → root owner ID or null
+  node.scripts → [{ name, script }]
+  node.children → child node objects
+  node.parent → parent node ID or null
+  node.rootOwner → root owner ID or null
 
-Built-in Functions
+  Built-in Functions
 
-All functions run sequentially.
-Failures do NOT stop later calls.
+  All functions run sequentially.
+  Failures do NOT stop later calls.
 
-API
+  API
 
-getApi() → Performs a GET request
+  getApi() → Performs a GET request
 
-Node Mutation
+  Node Mutation
 
-setValueForNode(nodeId, key, value, version)
-setGoalForNode(nodeId, key, goal, version)
-editStatusForNode(nodeId, status, version, isInherited)
-addPrestigeForNode(nodeId)
-updateScheduleForNode(nodeId, versionIndex, newSchedule, reeffectTime)
+  setValueForNode(nodeId, key, value, version)
+  setGoalForNode(nodeId, key, goal, version)
+  editStatusForNode(nodeId, status, version, isInherited)
+  addPrestigeForNode(nodeId)
+  updateScheduleForNode(nodeId, versionIndex, newSchedule, reeffectTime)
 
-Example Pattern
+  Example Pattern
 
-// Increase wait time each prestige
-let waitTime = node.versions[node.prestige].values.waitTime;
-const newWaitTime = waitTime * 1.05;
+  // Increase wait time each prestige
+  let waitTime = node.versions[node.prestige].values.waitTime;
+  const newWaitTime = waitTime * 1.05;
 
-addPrestigeForNode(node._id);
+  addPrestigeForNode(node._id);
 
-const now = new Date();
-const newSchedule = new Date(
-  now.getTime() + waitTime * 3600 * 1000
-);
+  const now = new Date();
+  const newSchedule = new Date(
+    now.getTime() + waitTime * 3600 * 1000
+  );
 
-updateScheduleForNode(
-  node._id,
-  node.prestige + 1,
-  newSchedule,
-  0
-);
+  updateScheduleForNode(
+    node._id,
+    node.prestige + 1,
+    newSchedule,
+    0
+  );
 
-setValueForNode(
-  node._id,
-  "waitTime",
-  newWaitTime,
-  node.prestige + 1
-);
+  setValueForNode(
+    node._id,
+    "waitTime",
+    newWaitTime,
+    node.prestige + 1
+  );
 
-Execution Notes
+  Execution Notes
 
-• node reflects initial state only  
-• After addPrestigeForNode, use node.prestige + 1  
-• Time units are hours  
-• Side effects still occur even if earlier calls fail
-`;
+  • node reflects initial state only  
+  • After addPrestigeForNode, use node.prestige + 1  
+  • Time units are hours  
+  • Side effects still occur even if earlier calls fail
+  `;
 
       return {
         content: [
@@ -802,9 +812,11 @@ Execution Notes
         .number()
         .optional()
         .describe("Optional limit for the number of most recent notes"),
+
       prestige: z
         .number()
         .describe("Specific number prestige version to filter by"),
+      ...TimeWindowSchema,
     },
     {
       readOnlyHint: true,
@@ -812,9 +824,15 @@ Execution Notes
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, prestige }) => {
+    async ({ nodeId, prestige, limit, startDate, endDate }) => {
       try {
-        const result = await getNotes({ nodeId, version: prestige, limit });
+        const result = await getNotes({
+          nodeId,
+          version: prestige,
+          limit,
+          startDate,
+          endDate,
+        });
 
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -838,6 +856,7 @@ Execution Notes
         .number()
         .optional()
         .describe("Optional limit: number of most recent notes to return."),
+      ...TimeWindowSchema,
     },
     {
       readOnlyHint: true,
@@ -845,13 +864,18 @@ Execution Notes
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ userId, limit }) => {
+    async ({ userId, limit, startDate, endDate }) => {
       if (typeof limit === "number" && limit > 20) {
         limit = 20;
       }
 
       try {
-        const result = await getAllNotesByUser(userId, limit);
+        const result = await getAllNotesByUser(
+          userId,
+          limit,
+          startDate,
+          endDate
+        );
         const trimmedNotes = result.notes.slice(0, 20);
 
         return {
@@ -881,6 +905,7 @@ Execution Notes
         .number()
         .optional()
         .describe("Optional limit: number of most recent tagged notes."),
+      ...TimeWindowSchema,
     },
     {
       readOnlyHint: true,
@@ -888,14 +913,18 @@ Execution Notes
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ userId, limit }) => {
+    async ({ userId, limit, startDate, endDate }) => {
       if (typeof limit === "number" && limit > 20) {
         limit = 20;
       }
 
       try {
-        const result = await getAllTagsForUser(userId, limit);
-        const trimmedNotes = result.notes.slice(0, 20);
+        const result = await getAllTagsForUser(
+          userId,
+          limit,
+          startDate,
+          endDate
+        );
 
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -1173,9 +1202,22 @@ Execution Notes
     },
     async ({ nodeData, parentId, userId }) => {
       try {
-        const rootId = await createNodesRecursive(nodeData, parentId, userId);
+        const { rootId, rootName, totalCreated } = await createNodesRecursive(
+          nodeData,
+          parentId,
+          userId
+        );
         return {
-          content: [{ type: "text", text: JSON.stringify(rootId, null, 2) }],
+          content: [
+            {
+              type: "text",
+              text:
+                `Successfully created a new node branch!\n\n` +
+                `• Root Node: "${rootName}"\n` +
+                `• Root ID: ${rootId}\n` +
+                `• Total Nodes Created: ${totalCreated}`,
+            },
+          ],
         };
       } catch (err) {
         return {
@@ -1206,10 +1248,19 @@ Execution Notes
     },
     async ({ nodeId, newName, userId }) => {
       try {
-        const updatedNode = await editNodeName({ nodeId, newName, userId });
+        const { oldName, newName: updatedName } = await editNodeName({
+          nodeId,
+          newName,
+          userId,
+        });
 
         return {
-          content: [{ type: "text", text: updatedNode }],
+          content: [
+            {
+              type: "text",
+              text: `Node: ${nodeId} was renamed successfully from "${oldName}" to "${updatedName}".`,
+            },
+          ],
         };
       } catch (err) {
         return {
@@ -1270,28 +1321,28 @@ Execution Notes
   );
 
   /*
-  // 🗑️ Delete a node branch
-  server.tool(
-    "delete-node-branch",
-    "Deletes a node and removes all references from its parent and children.",
-    {
-      nodeId: z.string().describe("The ID of the node to delete."),
-      userId: z.string().optional().describe("The user performing the deletion (optional)."),
-    },
-    async ({ nodeId, userId }) => {
-      try {
-        const deleted = await deleteNodeBranch(nodeId, userId);
-        return {
-          content: [{ type: "text", text: `🗑️ Node '${deleted.name}' deleted successfully.` }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text", text: `❌ Failed to delete node: ${err.message}` }],
-        };
+    // 🗑️ Delete a node branch
+    server.tool(
+      "delete-node-branch",
+      "Deletes a node and removes all references from its parent and children.",
+      {
+        nodeId: z.string().describe("The ID of the node to delete."),
+        userId: z.string().optional().describe("The user performing the deletion (optional)."),
+      },
+      async ({ nodeId, userId }) => {
+        try {
+          const deleted = await deleteNodeBranch(nodeId, userId);
+          return {
+            content: [{ type: "text", text: `🗑️ Node '${deleted.name}' deleted successfully.` }],
+          };
+        } catch (err) {
+          return {
+            content: [{ type: "text", text: `❌ Failed to delete node: ${err.message}` }],
+          };
+        }
       }
-    }
-  );
-  */
+    );
+    */
 
   server.tool(
     "get-node-contributions",
@@ -1305,6 +1356,7 @@ Execution Notes
         .number()
         .optional()
         .describe("Optional limit for number of most recent contributions."),
+      ...TimeWindowSchema,
     },
     {
       readOnlyHint: true,
@@ -1312,13 +1364,19 @@ Execution Notes
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, version, limit }) => {
+    async ({ nodeId, version, limit, startDate, endDate }) => {
       if (typeof limit === "number" && limit > 30) {
         limit = 30;
       }
 
       try {
-        const result = await getContributions({ nodeId, version, limit });
+        const result = await getContributions({
+          nodeId,
+          version,
+          limit,
+          startDate,
+          endDate,
+        });
 
         const trimmed = result.contributions.slice(0, 20);
 
@@ -1349,6 +1407,7 @@ Execution Notes
         .number()
         .optional()
         .describe("Optional limit for number of most recent contributions."),
+      ...TimeWindowSchema,
     },
     {
       readOnlyHint: true,
@@ -1356,13 +1415,18 @@ Execution Notes
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ userId, limit }) => {
+    async ({ userId, limit, startDate, endDate }) => {
       if (typeof limit === "number" && limit > 30) {
         limit = 30;
       }
 
       try {
-        const result = await getContributionsByUser(userId, limit);
+        const result = await getContributionsByUser(
+          userId,
+          limit,
+          startDate,
+          endDate
+        );
         const trimmed = result.contributions.slice(0, limit);
 
         return {
@@ -1394,6 +1458,7 @@ Execution Notes
         .number()
         .optional()
         .describe("Optional limit for returned notes."),
+      ...TimeWindowSchema,
     },
     {
       readOnlyHint: true,
@@ -1401,7 +1466,7 @@ Execution Notes
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ userId, query, limit }) => {
+    async ({ userId, query, limit, startDate, endDate }) => {
       try {
         if (typeof limit === "number" && limit > 40) {
           limit = 40;
@@ -1411,6 +1476,8 @@ Execution Notes
           userId,
           query,
           limit,
+          startDate,
+          endDate,
         });
 
         return {
@@ -1432,8 +1499,68 @@ await server.connect(transport);
 
 async function handleMcpRequest(req, res) {
   try {
-    console.log("\n===== INCOMING MCP REQUEST =====");
-    console.log(JSON.stringify(req.body, null, 2));
+    console.log("\n===== MCP IN =====");
+
+    const method = req.body?.method;
+    const toolName = req.body?.params?.name;
+    const args = req.body?.params?.arguments;
+
+    if (method === "tools/call") {
+      console.log(`→ Tool: ${toolName}`);
+      console.log("→ Args:");
+      console.log(JSON.stringify(args, null, 2));
+    } else {
+      console.log(`→ Method: ${method}`);
+    }
+
+    const chunks = [];
+
+    const originalWrite = res.write.bind(res);
+    const originalEnd = res.end.bind(res);
+
+    res.write = (chunk, ...args) => {
+      if (chunk) chunks.push(Buffer.from(chunk));
+      return originalWrite(chunk, ...args);
+    };
+
+    res.end = (chunk, ...args) => {
+      if (chunk) chunks.push(Buffer.from(chunk));
+
+      const rawBody = Buffer.concat(chunks).toString("utf8");
+
+      if (rawBody) {
+        console.log("\n===== MCP OUT =====");
+
+        try {
+          // 1️⃣ Try parsing the outer response
+          const parsed = JSON.parse(rawBody);
+
+          // 2️⃣ If MCP-style tool response, unwrap deeply
+          const content =
+            parsed?.result?.content?.[0]?.text ??
+            parsed?.content?.[0]?.text ??
+            null;
+
+          if (typeof content === "string") {
+            // 3️⃣ Try parsing inner JSON string
+            try {
+              const inner = JSON.parse(content);
+              console.log(JSON.stringify(inner, null, 2));
+            } catch {
+              // Not JSON → normalize newlines for readability
+              console.log(content.replace(/\\n/g, "\n"));
+            }
+          } else {
+            console.log(JSON.stringify(parsed, null, 2));
+          }
+        } catch {
+          // Not JSON at all (rare, but safe)
+          console.log(rawBody.replace(/\\n/g, "\n"));
+        }
+      }
+
+      return originalEnd(chunk, ...args);
+    };
 
     await transport.handleRequest(req, res, req.body);
   } catch (err) {

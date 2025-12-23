@@ -12,6 +12,13 @@ import {
   searchNotesByUser as coreSearchNotesByUser,
 } from "../core/notes.js";
 
+function getDateParams(req) {
+  return {
+    startDate: req.query.startDate ?? req.body.startDate,
+    endDate: req.query.endDate ?? req.body.endDate,
+  };
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsFolder = path.join(__dirname, "../uploads");
@@ -51,11 +58,14 @@ async function createNote(req, res) {
 async function getNotes(req, res) {
   try {
     const limit = Number(req.query.limit ?? req.body.limit);
+    const { startDate, endDate } = getDateParams(req);
 
     const result = await coreGetNotes({
       nodeId: req.body.nodeId,
       version: req.body.version,
       limit,
+      startDate,
+      endDate,
     });
     res.status(200).json({ success: true, ...result });
   } catch (err) {
@@ -66,8 +76,14 @@ async function getAllNotesByUser(req, res) {
   try {
     const userId = req.body.userId || req.params.userId;
     const limit = Number(req.query.limit ?? req.body.limit);
+    const { startDate, endDate } = getDateParams(req);
 
-    const result = await coreGetAllNotesByUser(userId, limit);
+    const result = await coreGetAllNotesByUser(
+      userId,
+      limit,
+      startDate,
+      endDate
+    );
 
     res.status(200).json({ success: true, ...result });
   } catch (err) {
@@ -78,8 +94,14 @@ async function getAllTagsForUser(req, res) {
   try {
     const userId = req.body.userId || req.params.userId;
     const limit = Number(req.query.limit ?? req.body.limit);
+    const { startDate, endDate } = getDateParams(req);
 
-    const result = await coreGetAllTagsForUser(userId, limit);
+    const result = await coreGetAllTagsForUser(
+      userId,
+      limit,
+      startDate,
+      endDate
+    );
 
     res.status(200).json({ success: true, ...result });
   } catch (err) {
@@ -97,6 +119,8 @@ async function searchNotesForUser(req, res) {
       userId,
       query,
       limit,
+      startDate,
+      endDate,
     });
 
     res.status(200).json({ success: true, ...result });
