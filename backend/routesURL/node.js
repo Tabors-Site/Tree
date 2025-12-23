@@ -1,5 +1,9 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
+import authenticate from "../middleware/urlAuth.js";
+import { createNewNode } from "../core/treeManagement.js";
+import { updateParentRelationship } from "../core/treeManagement.js";
+
 import Node from "../db/models/node.js";
 
 const router = express.Router();
@@ -17,6 +21,41 @@ function filterQuery(req) {
     .join("&");
 }
 
+router.post("/:nodeId/updateParent", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params; // child
+    const userId = req.userId;
+
+    // new parent can come from body OR query
+    const newParentId =
+      req.body?.newParentId ||
+      req.query?.newParentId ||
+      req.body?.parentId ||
+      req.query?.parentId;
+
+    if (!newParentId) {
+      return res.status(400).json({
+        error: "newParentId is required",
+      });
+    }
+
+    const result = await updateParentRelationship(nodeId, newParentId, userId);
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(`/api/${nodeId}?token=${req.query.token ?? ""}&html`);
+    }
+
+    res.json({
+      success: true,
+      nodeChild: result.nodeChild,
+      nodeNewParent: result.nodeNewParent,
+    });
+  } catch (err) {
+    console.error("updateParent error:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
 // -----------------------------------------------------------------------------
 // GET /api/:nodeId
 // Returns the node + all versions (no notes)
@@ -37,7 +76,7 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
     // HTML MODE
     // ---------------------------------------------------------
     if (req.query.html !== undefined) {
-      const host = `${req.protocol}://${req.get("host")}`;
+      const host = `https://${req.get("host")}`;
 
       // Versions
       const versionHtml = `
@@ -161,9 +200,87 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
 
            <h2>Parent</h2>
           <p>${parentHtml}</p>
+          <h3>Change Parent</h3>
+
+<form
+  method="POST"
+  action="${host}/api/${nodeId}/updateParent${qs}"
+  style="margin-top:10px;"
+>
+  <input
+    type="text"
+    name="newParentId"
+    placeholder="New parent node ID"
+    required
+    style="
+      padding:8px;
+      font-size:14px;
+      border-radius:6px;
+      border:1px solid #ccc;
+      width:260px;
+    "
+  />
+
+  <button
+    type="submit"
+    style="
+      padding:8px 14px;
+      margin-left:6px;
+      font-size:14px;
+      border-radius:6px;
+      border:none;
+      background:#cc5500;
+      color:white;
+      cursor:pointer;
+    "
+  >
+    Move
+  </button>
+</form>
+
 
           <h2>Children</h2>
-          <ul>${childrenHtml}</ul>
+
+<ul>${childrenHtml}</ul>
+
+<h3>Add Child</h3>
+
+<form
+  method="POST"
+  action="${host}/api/${nodeId}/createChild${qs}"
+  style="margin-top:12px;"
+>
+  <input
+    type="text"
+    name="name"
+    placeholder="Child name"
+    required
+    style="
+      padding:8px;
+      font-size:14px;
+      border-radius:6px;
+      border:1px solid #ccc;
+      width:220px;
+    "
+  />
+
+  <button
+    type="submit"
+    style="
+      padding:8px 14px;
+      margin-left:6px;
+      font-size:14px;
+      border-radius:6px;
+      border:none;
+      background:#0077cc;
+      color:white;
+      cursor:pointer;
+    "
+  >
+    Create
+  </button>
+</form>
+
 <script>
   const btn = document.getElementById("copyNodeIdBtn");
   const code = document.getElementById("nodeIdCode");
@@ -340,6 +457,57 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
   } catch (err) {
     console.error("Error fetching version:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/:nodeId/createChild", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params; // parent id
+    const { name } = req.body;
+    const userId = req.userId;
+
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: "Name is required",
+      });
+    }
+
+    // Load parent
+    const parentNode = await Node.findById(nodeId);
+    if (!parentNode) {
+      return res.status(404).json({
+        success: false,
+        error: "Parent node not found",
+      });
+    }
+
+    // Create child
+    const childNode = await createNewNode(
+      name,
+      null, // schedule
+      null, // reeffectTime
+      parentNode._id, // parentNodeID
+      false, // isRoot
+      userId, // userId (from token)
+      {}, // values
+      {}, // goals
+      null // note
+    );
+
+    // HTML redirect support (same pattern)
+    if ("html" in req.query) {
+      return res.redirect(`/api/${nodeId}?token=${req.query.token ?? ""}&html`);
+    }
+
+    res.status(201).json({
+      success: true,
+      childId: childNode._id,
+      child: childNode,
+    });
+  } catch (err) {
+    console.error("createChild error:", err);
+    res.status(400).json({ success: false, error: err.message });
   }
 });
 

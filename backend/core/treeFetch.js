@@ -31,3 +31,16 @@ export async function resolveRootNode(nodeId) {
 
   return node;
 }
+
+export async function isDescendant(ancestorId, nodeId) {
+  let current = await Node.findById(nodeId).select("parent");
+
+  while (current && current.parent) {
+    if (current.parent.toString() === ancestorId.toString()) {
+      return true;
+    }
+    current = await Node.findById(current.parent).select("parent");
+  }
+
+  return false;
+}

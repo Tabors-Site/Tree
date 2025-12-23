@@ -2,7 +2,8 @@ import Node from "../db/models/node.js";
 import { logContribution } from "../db/utils.js";
 import User from "../db/models/user.js";
 import { createNote } from "./notes.js";
-
+import { resolveTreeAccess } from "./authenticate.js";
+import { isDescendant } from "./treeFetch.js";
 //validate once during recursive branches
 async function getUserOrThrow(userId) {
   if (!userId) {
@@ -193,6 +194,28 @@ export async function updateParentRelationship(
   const nodeNewParent = await Node.findById(nodeNewParentId);
 
   if (!nodeNewParent) throw new Error("New parent node not found");
+  if (await isDescendant(nodeChildId, nodeNewParentId)) {
+    throw new Error("Cannot move a node into its own descendant");
+  }
+  // Resolve tree access for both nodes
+  const childAccess = await resolveTreeAccess(nodeChildId, userId);
+  const newParentAccess = await resolveTreeAccess(nodeNewParentId, userId);
+
+  // CASE 1: Same tree → user must have write access (owner OR contributor)
+  if (childAccess.rootId === newParentAccess.rootId) {
+    if (!childAccess.canWrite) {
+      throw new Error("Must be owner or contributor");
+    }
+  }
+
+  // CASE 2: Different trees → user must own BOTH roots
+  else {
+    if (!childAccess.isOwner || !newParentAccess.isOwner) {
+      throw new Error(
+        "Cannot move nodes across trees unless you own both roots"
+      );
+    }
+  }
 
   // Remove from old parent
   if (oldParent) {
