@@ -1,8 +1,10 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
-import authenticate from "../middleware/urlAuth.js";
+import authenticate from "../middleware/authenticate.js";
 import { createNewNode } from "../core/treeManagement.js";
 import { updateParentRelationship } from "../core/treeManagement.js";
+
+import { editStatus, addPrestige } from "../core/statuses.js";
 
 import Node from "../db/models/node.js";
 
@@ -20,6 +22,75 @@ function filterQuery(req) {
     .map(([key, val]) => (val === "" ? key : `${key}=${val}`))
     .join("&");
 }
+
+router.post("/:nodeId/:version/editStatus", authenticate, async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const userId = req.userId;
+
+    const status = req.body?.status || req.query?.status;
+    const ALLOWED_STATUSES = ["active", "completed", "trimmed"];
+
+    if (!ALLOWED_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: "Invalid status. Must be active, completed, or trimmed.",
+      });
+    }
+    const isInherited =
+      req.body?.isInherited === "true" ||
+      req.body?.isInherited === true ||
+      req.query?.isInherited === "true";
+
+    if (!status) {
+      return res.status(400).json({ error: "status is required" });
+    }
+
+    const result = await editStatus({
+      nodeId,
+      status,
+      version: Number(version),
+      isInherited,
+      userId,
+    });
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("editStatus error:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post("/:nodeId/:version/prestige", authenticate, async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+
+    const userId = req.userId;
+
+    const result = await addPrestige({
+      nodeId,
+      userId,
+    });
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/${nodeId}/${version + 1}?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("prestige error:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
 
 router.post("/:nodeId/updateParent", authenticate, async (req, res) => {
   try {
@@ -327,6 +398,30 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
 
     const data = node.versions[v];
 
+    const ALL_STATUSES = ["active", "completed", "trimmed"];
+    const STATUS_LABELS = {
+      active: "Activate",
+      completed: "Complete",
+      trimmed: "Trim",
+    };
+
+    const statusButtonsHtml = ALL_STATUSES.filter((s) => s !== data.status)
+      .map(
+        (s) => `
+      <button
+        type="submit"
+        name="status"
+        value="${s}"
+        style="padding:8px 12px;margin-right:6px;"
+      >
+        ${STATUS_LABELS[s]}
+      </button>
+    `
+      )
+      .join("");
+
+    const showPrestige = v === node.prestige;
+
     // ----------------------------
     // HTML BROWSER MODE
     // ----------------------------
@@ -427,6 +522,52 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
               <a href="/api/${nodeId}/${version}/transactions${qs}">Transactions</a>
             </h2>
 
+
+<div style="margin-bottom:16px;">
+  <strong>Change Status</strong>
+</div>
+
+<form
+  method="POST"
+  action="https://${req.get("host")}/api/${nodeId}/${version}/editStatus${qs}"
+  onsubmit="return confirm('This will apply to all children. Is that ok?')"
+>
+  <input type="hidden" name="isInherited" value="true" />
+
+ ${statusButtonsHtml}
+</form>
+
+
+
+${
+  showPrestige
+    ? `
+
+  <form
+    method="POST"
+    action="https://${req.get("host")}/api/${nodeId}/${version}/prestige${qs}"
+    onsubmit="return confirm('This will complete the current version and create a new prestige level. Continue?')"
+  >
+    <button
+      type="submit"
+      style="
+        padding:10px 16px;
+        background:#0077cc;
+        color:white;
+        border:none;
+        border-radius:6px;
+        cursor:pointer;
+      "
+    >
+      ➕ Add Prestige
+    </button>
+  </form>
+`
+    : ""
+}
+
+
+
         
 <script>
   const btn = document.getElementById("copyNodeIdBtn");
@@ -439,6 +580,10 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
     });
   });
 </script>
+
+
+
+
 
           </body>
         </html>
