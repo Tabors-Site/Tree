@@ -406,11 +406,16 @@ async function getAllData(req, res) {
           : req.query.completed === "true",
     };
 
-    const filtered = filterTreeByStatus(rootNode, filters);
+    const filteredChildren =
+      filterTreeByStatus({ ...rootNode, children: rootNode.children }, filters)
+        ?.children ?? [];
 
-    //const cleaned = removeNullFields(rootNode);
+    const result = {
+      ...rootNode,
+      children: filteredChildren,
+    };
 
-    return res.json(filtered ?? {});
+    return res.json(result);
   } catch (error) {
     console.error("Error fetching node details:", error);
     res.status(500).json({ message: "Server error" });
