@@ -3,6 +3,20 @@ import { logContribution } from "../db/utils.js";
 import User from "../db/models/user.js";
 import { createNote } from "./notes.js";
 
+//validate once during recursive branches
+async function getUserOrThrow(userId) {
+  if (!userId) {
+    throw new Error("User ID is required");
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  return user;
+}
+
 export async function createNewNode(
   name,
   schedule,
@@ -12,8 +26,11 @@ export async function createNewNode(
   userId,
   values = {},
   goals = {},
-  note = null
+  note = null,
+  validatedUser = null
 ) {
+  const user = validatedUser ?? (await getUserOrThrow(userId));
+
   values = values && typeof values === "object" ? values : {};
   goals = goals && typeof goals === "object" ? goals : {};
 
@@ -33,16 +50,13 @@ export async function createNewNode(
     ],
     children: [],
     parent: parentNodeID || null,
-    rootOwner: isRoot ? userId : null,
+    rootOwner: isRoot ? user._id : null,
     contributors: [],
   });
 
   await newNode.save();
 
   if (isRoot) {
-    const user = await User.findById(userId);
-    if (!user) throw new Error("User not found");
-
     user.roots.push(newNode._id);
     await user.save();
   } else if (parentNodeID) {
@@ -53,7 +67,7 @@ export async function createNewNode(
     await parentNode.save();
 
     await logContribution({
-      userId,
+      userId: user._id,
       nodeId: parentNodeID,
       action: "updateChildNode",
       nodeVersion: parentNode.prestige.toString(),
@@ -65,17 +79,17 @@ export async function createNewNode(
   }
 
   await logContribution({
-    userId,
+    userId: user._id,
     nodeId: newNode._id,
     action: "create",
     nodeVersion: "0",
   });
 
-  if (note && note.trim().length > 0) {
+  if (note?.trim()) {
     await createNote({
       contentType: "text",
       content: note,
-      userId,
+      userId: user._id,
       nodeId: newNode._id,
       version: 0,
       isReflection: false,
@@ -86,16 +100,16 @@ export async function createNewNode(
 }
 
 export async function createNodesRecursive(nodeData, parentId, userId) {
-  const {
-    name,
-    schedule,
-    values,
-    goals,
-    children = [],
-    reeffectTime,
-    effectTime,
-    note,
-  } = nodeData;
+  const user = await getUserOrThrow(userId);
+
+  return createNodesRecursiveInternal(nodeData, parentId, user);
+}
+
+async function createNodesRecursiveInternal(nodeData, parentId, user) {
+  const { name, schedule, values, goals, reeffectTime, effectTime, note } =
+    nodeData;
+
+  const children = Array.isArray(nodeData.children) ? nodeData.children : [];
 
   const timeToUse = reeffectTime ?? effectTime;
 
@@ -105,17 +119,29 @@ export async function createNodesRecursive(nodeData, parentId, userId) {
     timeToUse,
     parentId,
     false,
-    userId,
+    user._id,
     values || {},
     goals || {},
-    note || null
+    note || null,
+    user // 👈 avoids re-query
   );
 
+  let totalCreated = 1;
+
   for (const childData of children) {
-    await createNodesRecursive(childData, newNode._id, userId);
+    const childResult = await createNodesRecursiveInternal(
+      childData,
+      newNode._id,
+      user
+    );
+    totalCreated += childResult.totalCreated;
   }
 
-  return newNode._id;
+  return {
+    rootId: newNode._id,
+    rootName: newNode.name,
+    totalCreated,
+  };
 }
 
 export async function deleteNodeBranch(nodeId, userId) {
@@ -245,5 +271,5 @@ export async function editNodeName({ nodeId, newName, userId }) {
     },
   });
 
-  return node;
+  return { node, oldName, newName };
 }
