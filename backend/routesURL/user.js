@@ -1,6 +1,9 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
 
 import User from "../db/models/user.js";
 import {
@@ -12,7 +15,31 @@ import { getContributionsByUser } from "../core/contributions.js";
 
 import { createNewNode } from "../core/treeManagement.js";
 
+import {
+  createRawIdea as coreCreateRawIdea,
+  getRawIdeas as coreGetRawIdeas,
+  searchRawIdeasByUser as coreSearchRawIdeasByUser,
+  deleteRawIdeaAndFile as coreDeleteRawIdeaAndFile,
+} from "../core/rawIdea.js";
+
 import getNodeName from "./helpers/getNameById.js";
+
+const uploadsFolder = path.join(process.cwd(), "uploads");
+
+if (!fs.existsSync(uploadsFolder)) {
+  fs.mkdirSync(uploadsFolder);
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsFolder),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const name = Date.now() + "-" + Math.random().toString(36).slice(2);
+    cb(null, name + ext);
+  },
+});
+
+const upload = multer({ storage });
 
 const router = express.Router();
 
@@ -130,12 +157,62 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     📋
   </button>
 </p>
+<div style="margin:16px 0;">
+  <form
+    method="POST"
+    action="/api/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html"
+    enctype="multipart/form-data"
+    style="display:flex; gap:8px; align-items:center;"
+  >
+    <input
+      type="text"
+      name="content"
+      placeholder="Capture a raw idea…"
+      style="
+        flex:1;
+        padding:10px 12px;
+        font-size:15px;
+        border-radius:8px;
+        border:1px solid #ccc;
+      "
+      autofocus
+    />
+
+    <input
+      type="file"
+      name="file"
+      style="font-size:13px;"
+    />
+
+    <button
+      type="submit"
+      title="Save raw idea"
+      style="
+        padding:10px 14px;
+        font-size:18px;
+        border-radius:8px;
+        border:1px solid #999;
+        background:#eee;
+        cursor:pointer;
+      "
+    >
+      ⏎
+    </button>
+  </form>
+</div>
+
 
         </p>
       <ul>
      <li>   <a href="/api/user/${userId}/notes?${filtered}">Notes</a></li>
      <li> <a href="/api/user/${userId}/tags?${filtered}">Mail</a></li>
      <li> <a href="/api/user/${userId}/contributions?${filtered}">Contributions</a></li>
+     <li>
+  <a href="/api/user/${userId}/raw-ideas?${filtered}">
+    Raw Ideas
+  </a>
+</li>
+
 </ul>
         <h2>Roots</h2>
         ${rootsHtml}
@@ -530,6 +607,8 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     <div class="nav">
       <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
       <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+      <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
+
     </div>
   </div>
 
@@ -907,6 +986,10 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
        <a href="/api/user/${userId}/contributions?token=${
       req.query.token ?? ""
     }&html">Contributions</a>
+    <a href="/api/user/${userId}/raw-ideas?token=${
+      req.query.token ?? ""
+    }&html">Raw Ideas</a>
+
     
     </div>
 
@@ -1221,6 +1304,8 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
   <div class="nav">
     <a href="/api/user/${userId}/notes${queryString}">Notes</a>
     <a href="/api/user/${userId}/tags${queryString}">Mail</a>
+        <a href="/api/user/${userId}/raw-ideas${queryString}">Raw Ideas</a>
+
   </div>
 
   <h2>Contributions</h2>
@@ -1371,5 +1456,356 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
     res.status(400).json({ success: false, error: err.message });
   }
 });
+
+router.post(
+  "/user/:userId/raw-ideas",
+  authenticate,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      if (req.userId.toString() !== userId.toString()) {
+        return res
+          .status(403)
+          .json({ success: false, error: "Not authorized" });
+      }
+
+      const contentType = req.file ? "file" : "text";
+
+      const result = await coreCreateRawIdea({
+        contentType,
+        content: contentType === "file" ? req.file.filename : req.body.content,
+        userId: req.userId,
+        file: req.file,
+      });
+
+      const wantHtml = "html" in req.query;
+
+      if (wantHtml) {
+        return res.redirect(
+          `/api/user/${userId}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      return res.status(201).json({
+        success: true,
+        rawIdea: result.rawIdea,
+      });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  }
+);
+
+router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    const rawLimit = req.query.limit;
+    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+
+    if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid limit: must be a positive number",
+      });
+    }
+
+    const query = req.query.q || "";
+
+    let result;
+    if (query.trim() !== "") {
+      result = await coreSearchRawIdeasByUser({
+        userId,
+        query,
+        limit,
+        startDate,
+        endDate,
+      });
+    } else {
+      result = await coreGetRawIdeas({
+        userId,
+        limit,
+        startDate,
+        endDate,
+      });
+    }
+
+    const rawIdeas = result.rawIdeas.map((r) => ({
+      ...r,
+      content:
+        r.contentType === "file"
+          ? `${req.protocol}://${req.get("host")}/uploads/${r.content}`
+          : r.content,
+    }));
+
+    // ---------- JSON MODE ----------
+    if (!wantHtml) {
+      return res.json({
+        success: true,
+        rawIdeas,
+      });
+    }
+
+    // ---------- HTML MODE ----------
+    const user = await User.findById(userId).lean();
+
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
+    const searchBoxHtml = `
+  <form
+    method="GET"
+    action="/api/user/${userId}/raw-ideas"
+    style="margin-top:12px;"
+  >
+    <input type="hidden" name="token" value="${req.query.token ?? ""}">
+    <input type="hidden" name="html" value="">
+
+    <input
+      type="text"
+      name="q"
+      placeholder="Search raw ideas…"
+      value="${query}"
+      style="
+        padding:8px 12px;
+        font-size:14px;
+        width:260px;
+        border-radius:6px;
+        border:1px solid #ccc;
+      "
+    />
+
+    <button
+      type="submit"
+      style="
+        padding:8px 14px;
+        border-radius:6px;
+        border:1px solid #999;
+        background:#eee;
+        cursor:pointer;
+      "
+    >
+      Search
+    </button>
+  </form>
+`;
+
+    let html = `
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${user.username} — Raw Ideas</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f5f6f7;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .header {
+      padding: 20px;
+      background: white;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .nav {
+      margin-top: 12px;
+    }
+
+    .nav a {
+      margin-right: 14px;
+      color: #5865f2;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .nav a:hover {
+      text-decoration: underline;
+    }
+
+    .container {
+      padding: 20px;
+      overflow-y: auto;
+      flex-grow: 1;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    li {
+      background: white;
+      padding: 14px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      border: 1px solid #e3e5e8;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    .meta {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body { background: #2f3136; color: #e3e5e8; }
+      .header { background: #36393f; border-bottom-color: #3a3c40; }
+      li { background: #36393f; border-color: #3a3c40; }
+      .meta { color: #b9bbbe; }
+      .nav a { color: #7289da; }
+    }
+      .raw-idea-item {
+  position: relative;
+}
+
+.delete-raw-idea {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #999;
+  padding: 4px;
+}
+
+.delete-raw-idea:hover {
+  color: #e03131;
+}
+
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <h1>
+      Raw Ideas for
+      <a href="/api/user/${userId}${tokenQS}" style="color:#5865f2;">
+        ${user.username}
+      </a>
+    </h1>
+      ${searchBoxHtml}
+
+
+    <div class="nav">
+      <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
+      <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
+      <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <ul>
+`;
+
+    for (const r of rawIdeas) {
+      const preview =
+        r.contentType === "text" ? r.content : `[FILE] ${r.content}`;
+
+      html += `
+<li
+  class="raw-idea-item"
+  data-raw-idea-id="${r._id}"
+>
+  <button class="delete-raw-idea" title="Delete raw idea">✕</button>
+
+  <div>${preview}</div>
+
+  <div class="meta">
+    ${new Date(r.createdAt).toLocaleString()}
+  </div>
+</li>
+
+`;
+    }
+
+    html += `
+    </ul>
+  </div>
+<script>
+document.addEventListener("click", async (e) => {
+  if (!e.target.classList.contains("delete-raw-idea")) return;
+
+  const li = e.target.closest(".raw-idea-item");
+  const rawIdeaId = li.dataset.rawIdeaId;
+
+  if (!confirm("Delete this raw idea?")) return;
+
+  const token =
+    new URLSearchParams(window.location.search).get("token") || "";
+
+  const qs = token ? "?token=" + encodeURIComponent(token) : "";
+
+  try {
+    const res = await fetch(
+      "/api/user/${userId}/raw-ideas/" + rawIdeaId + qs,
+      { method: "DELETE" }
+    );
+
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    li.remove();
+  } catch {
+    alert("Delete failed");
+  }
+});
+</script>
+
+</body>
+</html>
+`;
+
+    return res.send(html);
+  } catch (err) {
+    console.error("Error in /user/:userId/raw-ideas:", err);
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.delete(
+  "/user/:userId/raw-ideas/:rawIdeaId",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { userId, rawIdeaId } = req.params;
+
+      if (req.userId.toString() !== userId.toString()) {
+        return res
+          .status(403)
+          .json({ success: false, error: "Not authorized" });
+      }
+
+      const result = await coreDeleteRawIdeaAndFile({
+        rawIdeaId,
+        userId: req.userId,
+      });
+
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  }
+);
 
 export default router;

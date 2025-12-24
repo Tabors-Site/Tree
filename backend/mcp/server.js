@@ -18,6 +18,7 @@ import {
   deleteNoteAndFile,
   searchNotesByUser,
 } from "../core/notes.js";
+import { getRawIdeas, convertRawIdeaToNote } from "../core/rawIdea.js";
 import {
   createNewNode,
   createNodesRecursive,
@@ -1491,6 +1492,100 @@ function getMcpServer() {
       }
     }
   );
+  server.tool(
+    "get-raw-ideas-by-user",
+    "Fetches raw ideas (inbox) for a user. Read-only.",
+    {
+      userId: z.string().describe("User whose raw ideas to fetch."),
+      limit: z
+        .number()
+        .optional()
+        .describe("Optional limit for number of raw ideas by most recent."),
+      ...TimeWindowSchema,
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ userId, limit, startDate, endDate }) => {
+      try {
+        if (typeof limit === "number" && limit > 30) {
+          limit = 30;
+        }
+
+        const result = await getRawIdeas({
+          userId,
+          limit,
+          startDate,
+          endDate,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(result.rawIdeas, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to fetch raw ideas: ${err.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+  server.tool(
+    "transfer-raw-idea-to-note",
+    "Converts a raw idea into a note on a specific node/version.",
+    {
+      rawIdeaId: z.string().describe("ID of the raw idea to place."),
+      userId: z.string().describe("User performing the action."),
+      nodeId: z.string().describe("Target node ID."),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ rawIdeaId, userId, nodeId }) => {
+      try {
+        const result = await convertRawIdeaToNote({
+          rawIdeaId,
+          userId,
+          nodeId,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to place raw idea: ${err.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
 
   return server;
 }
@@ -1499,7 +1594,8 @@ await server.connect(transport);
 
 async function handleMcpRequest(req, res) {
   try {
-    console.log("\n===== MCP IN =====");
+    const requestId = Math.random().toString(36).substring(7);
+    console.log(`\n[${requestId}] ===== MCP IN =====`);
 
     const method = req.body?.method;
     const toolName = req.body?.params?.name;

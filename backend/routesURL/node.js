@@ -559,7 +559,7 @@ ${
         cursor:pointer;
       "
     >
-      ➕ Add Prestige
+      Add New Version
     </button>
   </form>
 `
