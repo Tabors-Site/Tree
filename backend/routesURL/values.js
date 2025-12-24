@@ -5,6 +5,60 @@ import { findNodeById } from "../db/utils.js";
 const router = express.Router();
 
 const allowedParams = ["token", "html"];
+import authenticate from "../middleware/authenticate.js";
+import { setValueForNode, setGoalForNode } from "../core/values.js";
+
+// SET VALUE
+router.post("/:nodeId/:version/value", authenticate, async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const { key, value } = req.body;
+
+    await setValueForNode({
+      nodeId,
+      version,
+      key,
+      value,
+      userId: req.userId,
+    });
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// SET GOAL
+router.post("/:nodeId/:version/goal", authenticate, async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const { key, goal } = req.body;
+
+    await setGoalForNode({
+      nodeId,
+      version,
+      key,
+      goal,
+      userId: req.userId,
+    });
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
 
 router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
   try {
@@ -56,6 +110,57 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
         goals,
       });
     }
+    const addRowHtml = `
+<tr>
+  <td colspan="3">
+    <form
+      method="POST"
+      action="/api/${nodeId}/${parsedVersion}/value?token=${
+      req.query.token ?? ""
+    }&html"
+      style="display:flex; gap:8px; align-items:center;"
+    >
+      <input
+        type="text"
+        name="key"
+        placeholder="New key"
+        required
+        style="
+          padding:4px 6px;
+          font-size:13px;
+          width:160px;
+        "
+      />
+
+      <input
+        type="number"
+        name="value"
+        value="0"
+        step="any"
+        style="
+          padding:4px 6px;
+          font-size:13px;
+          width:100px;
+        "
+      />
+
+      <button
+        type="submit"
+        style="
+          padding:4px 10px;
+          font-size:13px;
+          border-radius:4px;
+          border:1px solid #999;
+          background:#eee;
+          cursor:pointer;
+        "
+      >
+        Add value
+      </button>
+    </form>
+  </td>
+</tr>
+`;
 
     // HTML MODE
     const rowsHtml =
@@ -65,8 +170,46 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
               (key) => `
               <tr>
                 <td><code>${key}</code></td>
-                <td>${values[key] ?? "—"}</td>
-                <td>${goals[key] ?? "—"}</td>
+                <td>
+  <form
+    method="POST"
+    action="/api/${nodeId}/${parsedVersion}/value?token=${
+                req.query.token ?? ""
+              }&html"
+    style="display:flex; gap:6px; align-items:center;"
+  >
+    <input type="hidden" name="key" value="${key}" />
+    <input
+      type="number"
+      name="value"
+      value="${values[key] ?? ""}"
+      step="any"
+      style="width:90px; padding:4px;"
+    />
+    <button type="submit">Save</button>
+  </form>
+</td>
+
+<td>
+  <form
+    method="POST"
+    action="/api/${nodeId}/${parsedVersion}/goal?token=${
+                req.query.token ?? ""
+              }&html"
+    style="display:flex; gap:6px; align-items:center;"
+  >
+    <input type="hidden" name="key" value="${key}" />
+    <input
+      type="number"
+      name="goal"
+      value="${goals[key] ?? ""}"
+      step="any"
+      style="width:90px; padding:4px;"
+    />
+    <button type="submit">Save</button>
+  </form>
+</td>
+
               </tr>
             `
             )
@@ -151,6 +294,8 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
           </thead>
           <tbody>
             ${rowsHtml}
+              ${addRowHtml}
+
           </tbody>
         </table>
 
