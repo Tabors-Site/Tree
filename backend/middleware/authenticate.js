@@ -47,7 +47,7 @@ export default async function authenticate(req, res, next) {
   } catch (err) {
     console.error("Auth error:", err);
     return res.status(401).json({
-      message: "Invalid or expired token.",
+      message: "Invalid or expired token or wrong nodeId",
     });
   }
 }
