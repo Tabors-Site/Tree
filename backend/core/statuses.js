@@ -113,10 +113,20 @@ async function addPrestigeToNode(node) {
   for (const key of valuesMap.keys()) {
     newValues.set(key, 0);
   }
+  const goalsMap =
+    currentVersion.goals instanceof Map
+      ? currentVersion.goals
+      : new Map(Object.entries(currentVersion.goals || {}));
+
+  const newGoals = new Map();
+  for (const [key, goal] of goalsMap.entries()) {
+    newGoals.set(key, goal);
+  }
 
   const newVersion = {
     prestige: node.prestige + 1,
     values: newValues,
+    goals: newGoals,
     status: "active",
     dateCreated: new Date().toISOString(),
     schedule: await handleSchedule(currentVersion),
