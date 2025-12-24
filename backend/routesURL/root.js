@@ -1,6 +1,9 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
+import authenticate from "../middleware/authenticate.js";
 import { getAllData } from "../controllers/treeDataFetching.js";
+import { createInvite } from "../core/invites.js";
+
 import Node from "../db/models/node.js";
 
 const router = express.Router();
@@ -125,6 +128,47 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       html += `</li>`;
       return html;
     };
+    const isOwner =
+      rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();
+
+    const inviteFormHtml = isOwner
+      ? `
+<h2>Invite Contributor</h2>
+
+<form
+  method="POST"
+  action="/api/root/${nodeId}/invite?token=${req.query.token ?? ""}&html"
+  style="display:flex; gap:8px; max-width:420px; margin-top:8px;"
+>
+  <input
+    type="text"
+    name="userReceiving"
+    placeholder="Username or User ID"
+    required
+    style="
+      flex:1;
+      padding:8px 10px;
+      font-size:14px;
+      border-radius:6px;
+      border:1px solid #ccc;
+    "
+  />
+
+  <button
+    type="submit"
+    style="
+      padding:8px 14px;
+      border-radius:6px;
+      border:1px solid #999;
+      background:#eee;
+      cursor:pointer;
+    "
+  >
+    Invite
+  </button>
+</form>
+`
+      : ``;
 
     // OWNER + CONTRIBUTORS
     const ownerHtml = rootMeta?.rootOwner
@@ -139,24 +183,107 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       : ``;
 
     const contributorsHtml = rootMeta?.contributors?.length
-      ? `        <h2>Contributors</h2>
+      ? `
+<h2>Contributors</h2>
 <ul>
-        ${rootMeta.contributors
-          .map(
-            (u) => `
-              <li>
-                <a href="/api/user/${u._id}${queryString}">
-                  ${u.username}
-                </a>
-              
-              </li>
-            `
-          )
-          .join("")}
-      </ul>`
+${rootMeta.contributors
+  .map((u) => {
+    const isSelf = u._id.toString() === req.userId?.toString();
+
+    return `
+<li style="display:flex; align-items:center; gap:10px;">
+  <a href="/api/user/${u._id}${queryString}">
+    ${u.username}
+  </a>
+
+  ${
+    isOwner
+      ? `
+    <!-- TRANSFER (owner only) -->
+    <form
+      method="POST"
+      action="/api/root/${nodeId}/transfer-owner?token=${
+          req.query.token ?? ""
+        }&html"
+      style="margin:0;"
+      onsubmit="return confirm('Transfer ownership to ${u.username}?')"
+    >
+      <input type="hidden" name="userReceiving" value="${u._id}" />
+      <button type="submit" style="padding:4px 8px;font-size:12px;">
+        Transfer
+      </button>
+    </form>
+    `
+      : ""
+  }
+
+  ${
+    isOwner || isSelf
+      ? `
+    <!-- REMOVE (owner OR self) -->
+    <form
+      method="POST"
+      action="/api/root/${nodeId}/remove-user?token=${
+          req.query.token ?? ""
+        }&html"
+      style="margin:0;"
+      onsubmit="return confirm('${
+        isSelf ? "Leave this root?" : `Remove ${u.username} from this root?`
+      }')"
+    >
+      <input type="hidden" name="userReceiving" value="${u._id}" />
+      <button
+        type="submit"
+        style="
+          padding:4px 8px;
+          font-size:12px;
+          border-radius:6px;
+          border:1px solid #999;
+          background:#f5f5f5;
+          cursor:pointer;
+        "
+      >
+        ${isSelf ? "Unvite yourself (can't be undone)" : "Remove"}
+      </button>
+    </form>
+    `
+      : ""
+  }
+</li>
+`;
+  })
+  .join("")}
+
+</ul>
+`
       : ``;
 
     const ancestors = allData.ancestors || [];
+    const retireHtml = isOwner
+      ? `
+<form
+  method="POST"
+  action="/api/root/${nodeId}/retire?token=${req.query.token ?? ""}&html"
+  onsubmit="return confirm('This will retire the root and remove you as owner. Continue?')"
+  style="margin-top:12px;"
+>
+  <button
+    type="submit"
+    style="
+      padding:8px 14px;
+      border-radius:8px;
+      border:1px solid #900;
+      background:#fff0f0;
+      color:#900;
+      font-weight:600;
+      cursor:pointer;
+    "
+  >
+    Retire Root
+  </button>
+</form>
+`
+      : "";
 
     const parentHtml = ancestors.length
       ? renderParents([
@@ -327,11 +454,11 @@ const color = isOn ? "#4CAF50" : "#9E9E9E"; // green on, gray off
            
       
        
-     
+     ${inviteFormHtml}
 
         ${contributorsHtml}
         
-
+${retireHtml}
       
 
        
@@ -358,6 +485,144 @@ const color = isOn ? "#4CAF50" : "#9E9E9E"; // green on, gray off
   } catch (err) {
     console.error("Error in /root/:nodeId:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /root/:rootId/invite
+router.post("/root/:rootId/invite", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const { userReceiving } = req.body;
+
+    if (!userReceiving) {
+      return res.status(400).json({
+        success: false,
+        error: "userReceiving is required",
+      });
+    }
+
+    await createInvite({
+      userInvitingId: req.userId,
+      userReceiving, // username OR userId
+      rootId,
+      isToBeOwner: false,
+      isUninviting: false,
+    });
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+// POST /root/:rootId/transfer-owner
+router.post("/root/:rootId/transfer-owner", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const { userReceiving } = req.body;
+
+    if (!userReceiving) {
+      return res.status(400).json({
+        success: false,
+        error: "userReceiving is required",
+      });
+    }
+
+    await createInvite({
+      userInvitingId: req.userId,
+      userReceiving, // username OR userId
+      rootId,
+      isToBeOwner: true, // ⭐ THIS is the key
+      isUninviting: false,
+    });
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+// POST /root/:rootId/remove-user
+router.post("/root/:rootId/remove-user", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const { userReceiving } = req.body;
+
+    if (!userReceiving) {
+      return res.status(400).json({
+        success: false,
+        error: "userReceiving is required",
+      });
+    }
+
+    await createInvite({
+      userInvitingId: req.userId,
+      userReceiving, // userId
+      rootId,
+      isToBeOwner: false,
+      isUninviting: true, // ⭐ THIS triggers removal logic
+    });
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+// POST /root/:rootId/retire
+router.post("/root/:rootId/retire", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+
+    await createInvite({
+      userInvitingId: req.userId,
+      userReceiving: req.userId,
+      rootId,
+      isToBeOwner: false,
+      isUninviting: true,
+    });
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+    });
   }
 });
 

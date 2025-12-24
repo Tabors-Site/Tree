@@ -16,6 +16,8 @@ import { getContributionsByUser } from "../core/contributions.js";
 
 import { createNewNode } from "../core/treeManagement.js";
 
+import { getPendingInvitesForUser, respondToInvite } from "../core/invites.js";
+
 import {
   createRawIdea as coreCreateRawIdea,
   getRawIdeas as coreGetRawIdeas,
@@ -185,53 +187,73 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     📋
   </button>
 </p>
-<div style="margin:16px 0;">
+  <div style="margin:16px 0;">
   <form
     method="POST"
     action="/api/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html"
     enctype="multipart/form-data"
-    style="display:flex; gap:8px; align-items:center;"
+    style="display:flex; flex-direction:column; gap:8px;"
   >
-    <input
-      type="text"
+    <textarea
       name="content"
       placeholder="Capture a raw idea…"
+      id="rawIdeaInput"
       style="
-        flex:1;
-        padding:10px 12px;
+        width:100%;
+        padding:12px 14px;
         font-size:15px;
+        line-height:1.5;
         border-radius:8px;
         border:1px solid #ccc;
+        font-family:inherit;
+        resize:vertical;
+        min-height:52px;
+        box-sizing:border-box;
+        transition: border-color 0.2s;
       "
+      rows="1"
       autofocus
-    />
+    ></textarea>
 
-    <input
-      type="file"
-      name="file"
-      style="font-size:13px;"
-    />
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <input
+        type="file"
+        name="file"
+        style="font-size:13px;"
+      />
 
-    <button
-      type="submit"
-      title="Save raw idea"
-      style="
-        padding:10px 14px;
-        font-size:18px;
-        border-radius:8px;
-        border:1px solid #999;
-        background:#eee;
-        cursor:pointer;
-      "
-    >
-      ⏎
-    </button>
+      <button
+        type="submit"
+        title="Save raw idea"
+        style="
+          padding:8px 16px;
+          font-size:14px;
+          border-radius:6px;
+          border:1px solid #999;
+          background:#5865f2;
+          color:white;
+          cursor:pointer;
+          font-weight:500;
+        "
+      >
+        Send
+      </button>
+    </div>
   </form>
 </div>
 
 
+
+
+
         </p>
       <ul>
+      <li>
+  <a href="/api/user/${userId}/invites?${filtered}">
+    Invites
+  </a>
+</li>
+
      <li>   <a href="/api/user/${userId}/notes?${filtered}">Notes</a></li>
      <li> <a href="/api/user/${userId}/tags?${filtered}">Mail</a></li>
      <li> <a href="/api/user/${userId}/contributions?${filtered}">Contributions</a></li>
@@ -290,6 +312,53 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       btn.textContent = "✔️";
       setTimeout(() => (btn.textContent = "📋"), 900);
     });
+  });
+</script>
+<script>
+  // Auto-resize textarea as user types
+  const textarea = document.getElementById("rawIdeaInput");
+  
+  function autoResize() {
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+    
+    // Set height based on content, with a max height
+    const maxHeight = 400; // Maximum height in pixels
+    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+    textarea.style.height = newHeight + 'px';
+    
+    // Add scrollbar if content exceeds max height
+    if (textarea.scrollHeight > maxHeight) {
+      textarea.style.overflowY = 'auto';
+    } else {
+      textarea.style.overflowY = 'hidden';
+    }
+  }
+  
+  // Auto-resize on input
+  textarea.addEventListener('input', autoResize);
+  
+  // Auto-resize on page load (in case there's pre-filled content)
+  autoResize();
+  
+  // Optional: Submit with Cmd/Ctrl+Enter
+  textarea.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      textarea.closest('form').submit();
+    }
+  });
+  
+  // Focus styling
+  textarea.addEventListener('focus', () => {
+    textarea.style.borderColor = '#5865f2';
+    textarea.style.outline = 'none';
+    textarea.style.boxShadow = '0 0 0 3px rgba(88, 101, 242, 0.1)';
+  });
+  
+  textarea.addEventListener('blur', () => {
+    textarea.style.borderColor = '#ccc';
+    textarea.style.boxShadow = 'none';
   });
 </script>
 
@@ -2200,5 +2269,146 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+router.get("/user/:userId/invites", urlAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // 🔐 user can only see their own invites
+    if (req.userId.toString() !== userId.toString()) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const invites = await getPendingInvitesForUser(userId);
+
+    const wantHtml = "html" in req.query;
+    if (!wantHtml) {
+      return res.json({ success: true, invites });
+    }
+
+    // ---------- HTML ----------
+    const rows =
+      invites.length > 0
+        ? invites
+            .map(
+              (i) => `
+<li>
+  <strong>${i.userInviting.username}</strong>
+  invited you to
+  <strong>${i.rootId.name}</strong>
+
+  <div style="margin-top:8px; display:flex; gap:8px;">
+    <form
+  method="POST"
+  action="/api/user/${userId}/invites/${i._id}?token=${
+                req.query.token ?? ""
+              }&html"
+>
+  <input type="hidden" name="accept" value="true" />
+  <button type="submit">Accept</button>
+</form>
+
+<form
+  method="POST"
+  action="/api/user/${userId}/invites/${i._id}?token=${
+                req.query.token ?? ""
+              }&html"
+>
+  <input type="hidden" name="accept" value="false" />
+  <button type="submit">Decline</button>
+</form>
+
+  </div>
+</li>
+`
+            )
+            .join("")
+        : `<p><em>No pending invites</em></p>`;
+
+    return res.send(`
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invites</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      padding: 20px;
+      background: #fafafa;
+    }
+    li {
+      background: white;
+      padding: 14px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      border: 1px solid #e3e5e8;
+    }
+    button {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #999;
+      background: #eee;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Invites</h1>
+
+<ul>
+  ${rows}
+</ul>
+
+</body>
+</html>
+`);
+  } catch (err) {
+    console.error("invites page error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(
+  "/user/:userId/invites/:inviteId",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { userId, inviteId } = req.params;
+      const { accept } = req.body; // "true" or "false"
+
+      if (req.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const acceptInvite = accept === "true";
+
+      await respondToInvite({
+        inviteId,
+        userId: req.userId,
+        acceptInvite,
+      });
+
+      // 🌐 HTML redirect support
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/user/${userId}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      // 📦 JSON response
+      return res.json({
+        success: true,
+        accepted: acceptInvite,
+      });
+    } catch (err) {
+      console.error("respond invite error:", err);
+      return res.status(400).json({
+        success: false,
+        error: err.message,
+      });
+    }
+  }
+);
 
 export default router;
