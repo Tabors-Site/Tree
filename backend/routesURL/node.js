@@ -70,8 +70,13 @@ router.post("/:nodeId/:version/editStatus", authenticate, async (req, res) => {
 router.post("/:nodeId/:version/prestige", authenticate, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
-
     const userId = req.userId;
+
+    const nextVersion = Number(version) + 1;
+
+    if (Number.isNaN(nextVersion)) {
+      return res.status(400).json({ error: "Invalid version" });
+    }
 
     const result = await addPrestige({
       nodeId,
@@ -81,7 +86,7 @@ router.post("/:nodeId/:version/prestige", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/${nodeId}/${version + 1}?token=${req.query.token ?? ""}&html`
+        `/api/${nodeId}/${nextVersion}?token=${req.query.token ?? ""}&html`
       );
     }
 
