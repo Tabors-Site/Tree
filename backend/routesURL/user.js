@@ -4,6 +4,7 @@ import authenticate from "../middleware/authenticate.js";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
+import mime from "mime-types";
 
 import User from "../db/models/user.js";
 import {
@@ -20,6 +21,7 @@ import {
   getRawIdeas as coreGetRawIdeas,
   searchRawIdeasByUser as coreSearchRawIdeasByUser,
   deleteRawIdeaAndFile as coreDeleteRawIdeaAndFile,
+  convertRawIdeaToNote as coreConvertRawIdeaToNote,
 } from "../core/rawIdea.js";
 
 import getNodeName from "./helpers/getNameById.js";
@@ -43,7 +45,33 @@ const upload = multer({ storage });
 
 const router = express.Router();
 
-const allowedParams = ["token", "html"];
+const allowedParams = ["token", "html", "limit", "startTime", "endTime", "q"];
+
+function renderMedia(fileUrl, mimeType) {
+  if (mimeType.startsWith("image/")) {
+    return `<img src="${fileUrl}" style="max-width:100%;" />`;
+  }
+
+  if (mimeType.startsWith("video/")) {
+    return `<video src="${fileUrl}" controls style="max-width:100%;"></video>`;
+  }
+
+  if (mimeType.startsWith("audio/")) {
+    return `<audio src="${fileUrl}" controls></audio>`;
+  }
+
+  if (mimeType === "application/pdf") {
+    return `
+      <iframe
+        src="${fileUrl}"
+        style="width:100%; height:90vh; border:none;"
+      ></iframe>
+    `;
+  }
+
+  // Unknown / non-previewable formats (epub, zip, etc.)
+  return ``;
+}
 
 router.get("/user/:userId", urlAuth, async (req, res) => {
   try {
@@ -1676,6 +1704,12 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
   position: relative;
 }
 
+.raw-idea-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .delete-raw-idea {
   position: absolute;
   top: 8px;
@@ -1691,6 +1725,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
 .delete-raw-idea:hover {
   color: #e03131;
 }
+
 
   </style>
 </head>
@@ -1722,20 +1757,59 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
       const preview =
         r.contentType === "text" ? r.content : `[FILE] ${r.content}`;
 
+      const ideaLink = `/api/user/${userId}/raw-ideas/${r._id}${tokenQS}`;
+
       html += `
-<li
-  class="raw-idea-item"
-  data-raw-idea-id="${r._id}"
->
+<li class="raw-idea-item" data-raw-idea-id="${r._id}">
   <button class="delete-raw-idea" title="Delete raw idea">✕</button>
 
-  <div>${preview}</div>
+  <div>
+    <a
+      href="${ideaLink}"
+      style="color:#5865f2; text-decoration:none;"
+    >
+      ${r.contentType === "text" ? r.content : `[FILE] ${r.content}`}
+    </a>
+  </div>
+
+  <form
+    method="POST"
+    action="/api/user/${userId}/raw-ideas/${r._id}/transfer?token=${token}&html"
+    style="margin-top:10px; display:flex; gap:6px; align-items:center;"
+  >
+    <input
+      type="text"
+      name="nodeId"
+      placeholder="Target node ID"
+      required
+      style="
+        padding:6px 8px;
+        font-size:13px;
+        border-radius:6px;
+        border:1px solid #ccc;
+        width:160px;
+      "
+    />
+
+    <button
+      type="submit"
+      style="
+        padding:6px 10px;
+        font-size:13px;
+        border-radius:6px;
+        border:1px solid #999;
+        background:#eee;
+        cursor:pointer;
+      "
+    >
+      Transfer
+    </button>
+  </form>
 
   <div class="meta">
     ${new Date(r.createdAt).toLocaleString()}
   </div>
 </li>
-
 `;
     }
 
@@ -1807,5 +1881,324 @@ router.delete(
     }
   }
 );
+
+router.post(
+  "/user/:userId/raw-ideas/:rawIdeaId/transfer",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { userId, rawIdeaId } = req.params;
+      const { nodeId } = req.body;
+
+      // 🔐 ownership check (same pattern as others)
+      if (req.userId.toString() !== userId.toString()) {
+        return res
+          .status(403)
+          .json({ success: false, error: "Not authorized" });
+      }
+
+      if (!rawIdeaId || !nodeId) {
+        return res.status(400).json({
+          success: false,
+          error: "raw-idea Id and nodeId are required",
+        });
+      }
+
+      const result = await coreConvertRawIdeaToNote({
+        rawIdeaId,
+        userId: req.userId,
+        nodeId,
+      });
+
+      // 🌐 HTML redirect support
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      // 📦 JSON response
+      return res.json({
+        success: true,
+        note: result.note,
+      });
+    } catch (err) {
+      console.error("raw-idea transfer error:", err);
+      return res.status(400).json({
+        success: false,
+        error: err.message,
+      });
+    }
+  }
+);
+
+router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
+  try {
+    const { userId, rawIdeaId } = req.params;
+
+    const RawIdea = (await import("../db/models/rawIdea.js")).default;
+
+    const rawIdea = await RawIdea.findById(rawIdeaId)
+      .populate("userId", "username")
+      .lean();
+
+    if (!rawIdea) return res.status(404).send("Raw idea not found");
+
+    // Ownership / visibility check
+    if (
+      rawIdea.userId !== "empty" &&
+      rawIdea.userId?._id?.toString() !== userId.toString()
+    ) {
+      return res.status(403).send("Not authorized");
+    }
+
+    const back = `/api/user/${userId}/raw-ideas?token=${
+      req.query.token ?? ""
+    }&html`;
+
+    const userLink =
+      rawIdea.userId && rawIdea.userId !== "empty"
+        ? `<a href="/api/user/${rawIdea.userId._id}?token=${
+            req.query.token ?? ""
+          }&html">
+               ${rawIdea.userId.username ?? rawIdea.userId}:
+             </a>`
+        : "Unknown user";
+
+    // ---------------- HTML MODE ----------------
+    if (req.query.html !== undefined) {
+      // ---------- TEXT ----------
+      if (rawIdea.contentType === "text") {
+        return res.send(`
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background: #f5f6f7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+
+  .page {
+    width: 100%;
+    max-width: 800px;
+    padding: 20px 16px;
+  }
+
+  .top-links {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+
+  .top-links a {
+    color: #5865f2;
+    text-decoration: none;
+  }
+
+  .user-info {
+    margin-bottom: 6px;
+    font-size: 14px;
+    opacity: 0.8;
+  }
+
+  pre {
+    background: white;
+    padding: 18px 20px;
+    border-radius: 10px;
+    font-size: 16px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    border: 1px solid #ddd;
+  }
+
+  .copy-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+  }
+
+  button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+    opacity: 0.6;
+  }
+
+  button:hover {
+    opacity: 1;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #000; color: #e3e5e8; }
+    pre { background: #111; border-color: #333; }
+    .top-links a { color: #7289da; }
+  }
+</style>
+</head>
+
+<body>
+  <div class="page">
+    <div class="top-links">
+      <a href="${back}">Back</a>
+    </div>
+
+    <div class="copy-bar">
+      <button id="copyBtn">📋</button>
+    </div>
+
+    <div class="user-info"><strong>${userLink}</strong></div>
+
+    <pre id="content">${rawIdea.content}</pre>
+  </div>
+
+<script>
+  const btn = document.getElementById("copyBtn");
+  const content = document.getElementById("content");
+
+  btn.addEventListener("click", () => {
+    navigator.clipboard.writeText(content.textContent).then(() => {
+      btn.textContent = "✔️";
+      setTimeout(() => (btn.textContent = "📋"), 900);
+    });
+  });
+</script>
+</body>
+</html>
+`);
+      }
+
+      // ---------- FILE ----------
+      // ---------- FILE ----------
+      const fileUrl = `/api/uploads/${rawIdea.content}`;
+      const filePath = path.join(process.cwd(), "uploads", rawIdea.content);
+      const mimeType = mime.lookup(filePath) || "application/octet-stream";
+      const mediaHtml = renderMedia(fileUrl, mimeType);
+      const fileName = rawIdea.content;
+
+      return res.send(`
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${fileName}</title>
+
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background: #f5f6f7;
+    font-family: system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+
+  .page {
+    width: 100%;
+    max-width: 800px;
+    padding: 20px 16px;
+  }
+
+  .top-links {
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+
+  .top-links a {
+    color: #5865f2;
+    text-decoration: none;
+  }
+
+  .top-links a:hover {
+    text-decoration: underline;
+  }
+
+  .user-info {
+    margin-bottom: 12px;
+    font-size: 14px;
+    opacity: 0.8;
+  }
+
+  h1 {
+    margin: 12px 0;
+    font-size: 22px;
+    font-weight: 600;
+  }
+
+  .download {
+    display: inline-block;
+    margin: 16px 0;
+    padding: 10px 16px;
+    background: #5865f2;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+
+  .download:hover {
+    background: #4752c4;
+  }
+
+  .media {
+    margin-top: 16px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #000; color: #e3e5e8; }
+    .top-links a { color: #7289da; }
+    .download { background: #7289da; }
+  }
+</style>
+</head>
+
+<body>
+  <div class="page">
+    <div class="top-links">
+      <a href="${back}">Back</a>
+    </div>
+
+    <div class="user-info"><strong>${userLink}</strong></div>
+
+    <h1>${fileName}</h1>
+
+    <a class="download" href="${fileUrl}" download>
+      Download
+    </a>
+
+    <div class="media">
+      ${mediaHtml}
+    </div>
+  </div>
+</body>
+</html>
+`);
+    }
+
+    // ---------------- API MODE ----------------
+    if (rawIdea.contentType === "text") {
+      return res.json({ text: rawIdea.content });
+    }
+
+    if (rawIdea.contentType === "file") {
+      const filePath = path.join(process.cwd(), "uploads", rawIdea.content);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      return res.sendFile(filePath);
+    }
+
+    res.status(400).json({ error: "Unknown raw idea type" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 export default router;
