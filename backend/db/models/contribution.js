@@ -32,8 +32,10 @@ const ContributionSchema = new mongoose.Schema({
       "note",
       "updateParent",
       "editScript",
+      "executeScript",
       "updateChildNode",
       "editNameNode",
+      "rawIdea",
     ],
     required: true,
   },
@@ -102,11 +104,54 @@ const ContributionSchema = new mongoose.Schema({
       _id: false,
     },
   },
+  rawIdeaAction: {
+    type: {
+      action: {
+        type: String,
+        enum: ["add", "delete", "placed"],
+        required: true,
+      },
+      rawIdeaId: {
+        type: String,
+        ref: "RawIdea",
+        required: true,
+      },
+      targetNodeId: {
+        type: String,
+        ref: "Node",
+        default: null,
+      },
+      noteId: {
+        type: String,
+        ref: "Note",
+        default: null,
+      },
+      _id: false,
+    },
+  },
 
   editScript: {
     type: {
       scriptName: { type: String, default: null },
       contents: { type: String, default: null },
+      _id: false,
+    },
+  },
+  executeScript: {
+    type: {
+      scriptName: { type: String, default: null },
+      logs: {
+        type: [String],
+        default: [],
+      },
+      success: {
+        type: Boolean,
+        default: null,
+      },
+      error: {
+        type: String,
+        default: null,
+      },
       _id: false,
     },
   },

@@ -102,8 +102,40 @@ export async function executeScript({ nodeId, scriptName, userId }) {
     })()
   `;
 
+  if (logs.length > 200) {
+    logs.length = 200;
+  }
+
   //Execute script safely
-  await vm.run(wrappedScript);
+  try {
+    await vm.run(wrappedScript);
+
+    await logContribution({
+      userId,
+      nodeId,
+      action: "executeScript",
+      nodeVersion: node.prestige.toString(),
+      executeScript: {
+        scriptName,
+        logs,
+        success: true,
+      },
+    });
+  } catch (err) {
+    await logContribution({
+      userId,
+      nodeId,
+      action: "executeScript",
+      nodeVersion: node.prestige.toString(),
+      executeScript: {
+        scriptName,
+        logs,
+        success: false,
+        error: err.message,
+      },
+    });
+    throw err;
+  }
 
   return {
     message: "Script executed successfully",

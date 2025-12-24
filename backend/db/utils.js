@@ -34,7 +34,9 @@ const logContribution = async ({
   scheduleEdited,
   inviteAction,
   noteAction,
+  rawIdeaAction,
   updateParent,
+  executeScript,
   editScript,
   updateChildNode,
   editNameNode,
@@ -55,9 +57,11 @@ const logContribution = async ({
     "transaction",
     "note",
     "updateParent",
+    "executeScript",
     "editScript",
     "updateChildNode",
     "editNameNode",
+    "rawIdea",
   ];
 
   if (!validActions.includes(action)) {
@@ -81,7 +85,9 @@ const logContribution = async ({
       scheduleEdited,
       inviteAction,
       noteAction,
+      rawIdeaAction,
       updateParent,
+      executeScript,
       editScript,
       updateChildNode,
       editNameNode,
