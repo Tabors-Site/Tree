@@ -32,6 +32,11 @@ export async function createInvite({
 }) {
   const node = await Node.findById(rootId).populate("rootOwner contributors");
   if (!node) throw new Error("Root node not found");
+  if (node.parent === "deleted") {
+    throw new Error(
+      "You can’t invite users or delete a root that’s already deleted.."
+    );
+  }
 
   const invitingUser = await User.findById(userInvitingId);
   if (!invitingUser) throw new Error("Inviting user not found");
@@ -147,7 +152,7 @@ export async function createInvite({
       receivingUser._id.toString() === userInvitingId &&
       node.contributors.length > 0
     ) {
-      throw new Error("Owner cannot remove themselves when contributors exist");
+      throw new Error("Owner cannot leave when contributors exist");
     }
 
     // Case 2: Owner removes a contributor
@@ -184,7 +189,7 @@ export async function createInvite({
       receivingUser._id.toString() === userInvitingId &&
       node.contributors.length === 0
     ) {
-      node.rootOwner = null;
+      node.parent = "deleted";
       await node.save();
 
       await User.findByIdAndUpdate(userInvitingId, {
@@ -200,8 +205,18 @@ export async function createInvite({
         inviteAction,
         nodeVersion: node.prestige,
       });
+      await logContribution({
+        userId: userInvitingId,
+        nodeId: node.id,
+        action: "branchLifecycle",
+        nodeVersion: node.prestige.toString(),
+        branchLifecycle: {
+          action: "retired",
+          fromParentId: null,
+        },
+      });
 
-      return { message: "Owner removed themselves and root ownership cleared" };
+      return { message: "Owner retired root" };
     }
 
     // Case 4: Contributor removes themselves

@@ -36,6 +36,7 @@ const ContributionSchema = new mongoose.Schema({
       "updateChildNode",
       "editNameNode",
       "rawIdea",
+      "branchLifecycle",
     ],
     required: true,
   },
@@ -179,6 +180,24 @@ const ContributionSchema = new mongoose.Schema({
   date: {
     type: Date,
     default: Date.now,
+  },
+  branchLifecycle: {
+    type: {
+      action: {
+        type: String,
+        enum: ["retired", "revived", "revivedAsRoot"],
+        required: true,
+      },
+      fromParentId: {
+        type: String,
+        ref: "Node",
+      },
+      toParentId: {
+        type: String,
+        ref: "Node",
+      },
+      _id: false,
+    },
   },
 });
 

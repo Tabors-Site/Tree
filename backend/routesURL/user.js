@@ -14,7 +14,13 @@ import {
 } from "../core/notes.js";
 import { getContributionsByUser } from "../core/contributions.js";
 
-import { createNewNode } from "../core/treeManagement.js";
+import { getDeletedBranchesForUser } from "../core/treeFetch.js";
+
+import {
+  createNewNode,
+  reviveNodeBranch,
+  reviveNodeBranchAsRoot,
+} from "../core/treeManagement.js";
 
 import { getPendingInvitesForUser, respondToInvite } from "../core/invites.js";
 
@@ -257,6 +263,8 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
      <li>   <a href="/api/user/${userId}/notes?${filtered}">Notes</a></li>
      <li> <a href="/api/user/${userId}/tags?${filtered}">Mail</a></li>
      <li> <a href="/api/user/${userId}/contributions?${filtered}">Contributions</a></li>
+          <li> <a href="/api/user/${userId}/deleted?${filtered}">Deleted</a></li>
+
      <li>
   <a href="/api/user/${userId}/raw-ideas?${filtered}">
     Raw Ideas
@@ -2407,6 +2415,191 @@ router.post(
         success: false,
         error: err.message,
       });
+    }
+  }
+);
+
+router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+
+    const deleted = await getDeletedBranchesForUser(userId);
+
+    // ---------- JSON MODE ----------
+    if (!wantHtml) {
+      return res.json({
+        userId,
+        deleted,
+      });
+    }
+
+    // ---------- HTML MODE ----------
+    const user = await User.findById(userId).lean();
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
+    const deletedItems = await Promise.all(
+      deleted.map(async ({ _id, name }) => {
+        return `
+<li style="margin-bottom:14px; padding:12px; background:white; border-radius:8px; border:1px solid #ddd;">
+  <div style="margin-bottom:6px;">
+    <a href="/api/root/${_id}${tokenQS}">
+      <strong>${name || "Untitled"}</strong>
+    </a>
+    <div style="font-size:12px; opacity:0.6;">${_id}</div>
+  </div>
+
+  <!-- Revive as root -->
+  <form
+    method="POST"
+    action="/api/user/${userId}/deleted/${_id}/reviveAsRoot?token=${token}&html"
+    style="margin-bottom:6px;"
+  >
+    <button type="submit">Revive as Root</button>
+  </form>
+
+  <!-- Revive into existing branch -->
+  <form
+    method="POST"
+    action="/api/user/${userId}/deleted/${_id}/revive?token=${token}&html"
+    style="display:flex; gap:6px; align-items:center;"
+  >
+    <input
+      type="text"
+      name="targetParentId"
+      placeholder="Target parent node ID"
+      required
+      style="padding:6px 8px;font-size:13px;border-radius:6px;border:1px solid #ccc;width:220px;"
+    />
+
+    <button type="submit">Revive into Branch</button>
+  </form>
+</li>
+`;
+      })
+    );
+
+    const deletedHtml = deletedItems.length
+      ? `<ul>${deletedItems.join("")}</ul>`
+      : `<p><em>No deleted branches</em></p>`;
+
+    return res.send(`
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Deleted Branches</title>
+        <style>
+          body {
+            font-family: system-ui, sans-serif;
+            padding: 20px;
+            background: #fafafa;
+          }
+          ul {
+            list-style: none;
+            padding-left: 0;
+          }
+          li {
+            margin-bottom: 10px;
+          }
+          a {
+            color: #5865f2;
+            text-decoration: none;
+          }
+          a:hover {
+            text-decoration: underline;
+          }
+        </style>
+      </head>
+      <body>
+
+        <h1>
+          Deleted Branches for
+          <a href="/api/user/${userId}${tokenQS}">
+            ${user.username}
+          </a>
+        </h1>
+
+        ${deletedHtml}
+
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error("Error in /user/:userId/deleted:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+router.post(
+  "/user/:userId/deleted/:nodeId/revive",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { userId, nodeId } = req.params;
+      const { targetParentId } = req.body;
+
+      if (req.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      if (!targetParentId) {
+        return res.status(400).json({
+          error: "targetParentId is required",
+        });
+      }
+
+      const result = await reviveNodeBranch({
+        deletedNodeId: nodeId,
+        targetParentId,
+        userId: req.userId,
+      });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      return res.json({
+        success: true,
+        ...result,
+      });
+    } catch (err) {
+      console.error("revive branch error:", err);
+      return res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+router.post(
+  "/user/:userId/deleted/:nodeId/reviveAsRoot",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { userId, nodeId } = req.params;
+
+      if (req.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const result = await reviveNodeBranchAsRoot({
+        deletedNodeId: nodeId,
+        userId: req.userId,
+      });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      return res.json({
+        success: true,
+        ...result,
+      });
+    } catch (err) {
+      console.error("revive root error:", err);
+      return res.status(400).json({ error: err.message });
     }
   }
 );

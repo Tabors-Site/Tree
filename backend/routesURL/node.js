@@ -2,7 +2,10 @@ import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
 import { createNewNode } from "../core/treeManagement.js";
-import { updateParentRelationship } from "../core/treeManagement.js";
+import {
+  updateParentRelationship,
+  deleteNodeBranch,
+} from "../core/treeManagement.js";
 
 import { editStatus, addPrestige } from "../core/statuses.js";
 
@@ -357,6 +360,30 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
   </button>
 </form>
 
+<h3 style="margin-top:30px;color:#b00020;">Danger Zone</h3>
+
+<form
+  method="POST"
+  action="${host}/api/${nodeId}/delete${qs}"
+  onsubmit="return confirm('Delete this node and its branch? This can be revived later.')"
+>
+  <button
+    type="submit"
+    style="
+      padding:10px 16px;
+      font-size:14px;
+      border-radius:6px;
+      border:none;
+      background:#b00020;
+      color:white;
+      cursor:pointer;
+    "
+  >
+    Delete Node
+  </button>
+</form>
+
+
 <script>
   const btn = document.getElementById("copyNodeIdBtn");
   const code = document.getElementById("nodeIdCode");
@@ -658,6 +685,29 @@ router.post("/:nodeId/createChild", authenticate, async (req, res) => {
   } catch (err) {
     console.error("createChild error:", err);
     res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post("/:nodeId/delete", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const userId = req.userId;
+
+    const deletedNode = await deleteNodeBranch(nodeId, userId);
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/user/${userId}/deleted?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    return res.json({
+      success: true,
+      deletedNode: deletedNode._id,
+    });
+  } catch (err) {
+    console.error("delete node error:", err);
+    return res.status(400).json({ error: err.message });
   }
 });
 

@@ -58,13 +58,13 @@ export async function createNewNode(
   await newNode.save();
 
   if (isRoot) {
-    user.roots.push(newNode._id);
+    user.roots.addToSet(newNode._id);
     await user.save();
   } else if (parentNodeID) {
     const parentNode = await Node.findById(parentNodeID);
     if (!parentNode) throw new Error("Parent node not found");
 
-    parentNode.children.push(newNode._id);
+    parentNode.children.addToSet(newNode._id);
     await parentNode.save();
 
     await logContribution({
@@ -148,8 +148,15 @@ async function createNodesRecursiveInternal(nodeData, parentId, user) {
 export async function deleteNodeBranch(nodeId, userId) {
   const nodeToDelete = await Node.findById(nodeId);
   if (!nodeToDelete) throw new Error("Node not found");
+  const access = await resolveTreeAccess(nodeId, userId);
+  if (!access.isOwner || (!access.isRoot && nodeToDelete.parent === null)) {
+    throw new Error("Invalid delete attempt. Must be owner and not root.");
+  }
 
+  nodeToDelete.rootOwner = userId;
+  const oldParent = nodeToDelete.parent;
   nodeToDelete.parent = "deleted";
+
   await nodeToDelete.save();
 
   const allNodes = await Node.find();
@@ -173,7 +180,16 @@ export async function deleteNodeBranch(nodeId, userId) {
       });
     }
   }
-
+  await logContribution({
+    userId,
+    nodeId: nodeId,
+    action: "branchLifecycle",
+    nodeVersion: nodeToDelete.prestige.toString(),
+    branchLifecycle: {
+      action: "retired",
+      fromParentId: oldParent?.toString() ?? null,
+    },
+  });
   return nodeToDelete;
 }
 
@@ -253,7 +269,7 @@ export async function updateParentRelationship(
   });
 
   // Add to new parent
-  nodeNewParent.children.push(nodeChildId);
+  nodeNewParent.children.addToSet(nodeChildId);
   await nodeNewParent.save();
 
   await logContribution({
@@ -295,4 +311,110 @@ export async function editNodeName({ nodeId, newName, userId }) {
   });
 
   return { node, oldName, newName };
+}
+
+export async function reviveNodeBranch({
+  deletedNodeId,
+  targetParentId,
+  userId,
+}) {
+  const deletedNode = await Node.findById(deletedNodeId);
+  if (!deletedNode) throw new Error("Deleted node not found");
+
+  const targetParent = await Node.findById(targetParentId);
+  if (!targetParent) throw new Error("Target parent node not found");
+
+  if (deletedNode.parent !== "deleted") {
+    throw new Error("Node is not deleted and cannot be revived");
+  }
+
+  if (targetParent.parent === "deleted") {
+    throw new Error("Cannot revive into a deleted branch");
+  }
+
+  const deletedAccess = await resolveTreeAccess(deletedNodeId, userId);
+  const targetAccess = await resolveTreeAccess(targetParentId, userId);
+
+  if (!deletedAccess.isOwner || !targetAccess.isOwner) {
+    throw new Error("You must own both branches to revive a node");
+  }
+  //extra safe but unneeded
+  if (await isDescendant(deletedNodeId, targetParentId)) {
+    throw new Error("Cannot revive a node into its own descendant");
+  }
+
+  deletedNode.parent = targetParentId;
+  deletedNode.rootOwner = null;
+  await deletedNode.save();
+
+  targetParent.children.addToSet(deletedNodeId);
+  await targetParent.save();
+
+  // 6️⃣ Log contributions
+  await logContribution({
+    userId,
+    nodeId: targetParentId,
+    action: "updateChildNode",
+    nodeVersion: targetParent.prestige.toString(),
+    updateChildNode: {
+      action: "added",
+      childId: deletedNodeId.toString(),
+    },
+  });
+  await logContribution({
+    userId,
+    nodeId: deletedNodeId,
+    action: "branchLifecycle",
+    nodeVersion: deletedNode.prestige.toString(),
+    branchLifecycle: {
+      action: "revived",
+      fromParentId: "deleted",
+
+      toParentId: targetParentId.toString(),
+    },
+  });
+
+  return {
+    revivedNode: deletedNodeId,
+    newParent: targetParentId,
+  };
+}
+export async function reviveNodeBranchAsRoot({ deletedNodeId, userId }) {
+  const deletedNode = await Node.findById(deletedNodeId);
+  if (!deletedNode) throw new Error("Deleted node not found");
+
+  if (deletedNode.parent !== "deleted") {
+    throw new Error("Node is not deleted and cannot be revived");
+  }
+
+  const access = await resolveTreeAccess(deletedNodeId, userId);
+  if (!access.isOwner) {
+    throw new Error("Only the owner can revive this branch as a root");
+  }
+
+  if (!deletedNode.rootOwner) {
+    throw new Error("Deleted node has no root owner and cannot be revived");
+  }
+
+  deletedNode.parent = null;
+  deletedNode.rootOwner = userId;
+  await deletedNode.save();
+
+  await User.findByIdAndUpdate(userId, {
+    $addToSet: { roots: deletedNodeId },
+  });
+
+  await logContribution({
+    userId,
+    nodeId: deletedNodeId,
+    action: "branchLifecycle",
+    nodeVersion: deletedNode.prestige.toString(),
+    branchLifecycle: {
+      action: "revivedAsRoot",
+    },
+  });
+
+  return {
+    revivedRoot: deletedNodeId,
+  };
 }

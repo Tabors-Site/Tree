@@ -54,6 +54,17 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       .select("rootOwner contributors")
       .lean()
       .exec();
+    const rootNode = await Node.findById(nodeId).select("parent").lean();
+    const isDeleted = rootNode.parent === "deleted";
+
+    const isRoot = rootNode.parent === null;
+    let rootNameColor = "#000"; // default
+
+    if (isDeleted) {
+      rootNameColor = "#b00020"; // red
+    } else if (isRoot) {
+      rootNameColor = "#2e7d32"; // green
+    }
 
     // JSON MODE
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -264,7 +275,7 @@ ${rootMeta.contributors
 <form
   method="POST"
   action="/api/root/${nodeId}/retire?token=${req.query.token ?? ""}&html"
-  onsubmit="return confirm('This will retire the root and remove you as owner. Continue?')"
+  onsubmit="return confirm('This will retire the root. Continue?')"
   style="margin-top:12px;"
 >
   <button
@@ -376,11 +387,18 @@ ${rootMeta.contributors
               ${parentHtml}
 
          <h3>${ownerHtml}</h3>
-        <h1>
-  <a href="/api/${allData._id}/${allData.prestige}${queryString}">
+ <h1>
+  <a
+    href="/api/${allData._id}/${allData.prestige}${queryString}"
+    style="
+      color: ${rootNameColor};
+      font-weight: 700;
+    "
+  >
     ${allData.name}
   </a>
 </h1>
+
 
     <p style="display:flex;align-items:center;gap:6px;">
   <code id="nodeIdCode">${allData._id}</code>

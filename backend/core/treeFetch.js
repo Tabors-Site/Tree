@@ -44,3 +44,22 @@ export async function isDescendant(ancestorId, nodeId) {
 
   return false;
 }
+
+export async function getDeletedBranchesForUser(userId) {
+  if (!userId) {
+    throw new Error("userId is required");
+  }
+
+  const deletedNodes = await Node.find({
+    parent: "deleted",
+    rootOwner: userId,
+  })
+    .select("_id name")
+    .lean()
+    .exec();
+
+  return deletedNodes.map((n) => ({
+    _id: n._id.toString(),
+    name: n.name,
+  }));
+}

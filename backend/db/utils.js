@@ -43,6 +43,7 @@ const logContribution = async ({
   goalEdited,
   tradeId,
   nodeVersion,
+  branchLifecycle,
 }) => {
   const validActions = [
     "create",
@@ -62,6 +63,7 @@ const logContribution = async ({
     "updateChildNode",
     "editNameNode",
     "rawIdea",
+    "branchLifecycle",
   ];
 
   if (!validActions.includes(action)) {
@@ -91,6 +93,7 @@ const logContribution = async ({
       editScript,
       updateChildNode,
       editNameNode,
+      branchLifecycle,
       date: new Date(),
     });
 

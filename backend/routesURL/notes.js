@@ -915,12 +915,17 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
     background: #f5f6f7;
   }
 
-  .header {
-    padding: 20px;
-    border-bottom: 1px solid #ddd;
-    background: white;
-    flex-shrink: 0;
-  }
+ .header {
+  padding: 20px;
+  border-bottom: 1px solid #ddd;
+  background: white;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 
   .header h1 {
     margin: 0;
