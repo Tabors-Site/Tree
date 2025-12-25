@@ -388,6 +388,27 @@ async function collectSubtreeNodeIds(rootId) {
 
   return ids;
 }
+function nodeMatchesStatus(node, filters) {
+  const currentVersion = node.versions?.find(
+    (v) => v.prestige === node.prestige
+  );
+
+  const status = currentVersion?.status;
+  if (!status) return false;
+
+  // ✅ DEFAULTS (only when no filters provided)
+  if (!filters) {
+    return status === "active" || status === "completed";
+  }
+
+  // ✅ EXPLICIT OVERRIDES
+  if (filters[status] === true) return true;
+  if (filters[status] === false) return false;
+
+  // ✅ FALLBACK TO DEFAULTS
+  return status === "active" || status === "completed";
+}
+
 async function getBook({ nodeId, options = {} }) {
   if (!nodeId) throw new Error("Missing nodeId");
 
@@ -397,6 +418,8 @@ async function getBook({ nodeId, options = {} }) {
     leafNotesOnly: false,
     filesOnly: false,
     textOnly: false,
+    statusFilters: null,
+
     ...options, // ← opt-in only
   };
 
@@ -466,9 +489,26 @@ function applyNoteFilters(notes, node, flags) {
 function buildBookTree(node, nodeMap, notesByNode, flags = {}) {
   const nodeId = node._id.toString();
 
-  // 1. notes on this node
-  const rawNotes = notesByNode.get(nodeId) || [];
+  // 🔴 STATUS FILTER CHECK
+  const filteredChildren = [];
 
+  for (const childId of node.children || []) {
+    const child = nodeMap.get(childId.toString());
+    if (!child) continue;
+
+    const childTree = buildBookTree(child, nodeMap, notesByNode, flags);
+    if (childTree) filteredChildren.push(childTree);
+  }
+
+  const nodePassesStatus = nodeMatchesStatus(node, flags.statusFilters);
+
+  // If node fails AND has no surviving children → prune
+  if (!nodePassesStatus && filteredChildren.length === 0) {
+    return null;
+  }
+
+  // Notes logic (unchanged)
+  const rawNotes = notesByNode.get(nodeId) || [];
   const filteredNotes = applyNoteFilters(rawNotes, node, flags).map((n) => ({
     noteId: n._id.toString(),
     version: n.version,
@@ -477,33 +517,14 @@ function buildBookTree(node, nodeMap, notesByNode, flags = {}) {
     type: n.contentType,
   }));
 
-  // 2. children
-  const children = [];
-
-  for (const childId of node.children || []) {
-    const child = nodeMap.get(childId.toString());
-    if (!child) continue;
-
-    const childTree = buildBookTree(child, nodeMap, notesByNode, flags);
-    if (childTree) {
-      children.push(childTree);
-    }
-  }
-
-  // 3. leafNotesOnly logic
-  const isLeaf = children.length === 0;
+  const isLeaf = filteredChildren.length === 0;
   const notes = flags.leafNotesOnly && !isLeaf ? [] : filteredNotes;
-
-  // 4. FINAL hasContent check (this was the key part)
-  const hasContent = notes.length > 0 || children.length > 0;
-
-  if (!hasContent) return null;
 
   return {
     nodeId,
     nodeName: node.name,
     notes,
-    children,
+    children: filteredChildren,
   };
 }
 
@@ -516,96 +537,3 @@ export {
   searchNotesByUser,
   getBook,
 };
-
-/*
-async function collectSubtreeNodeIds(rootId) {
-  const ids = [];
-  const stack = [rootId];
-
-  while (stack.length) {
-    const currentId = stack.pop();
-    ids.push(currentId);
-
-    const node = await Node.findById(currentId, "children").lean();
-    if (!node) continue;
-
-    // push children in reverse so order is preserved
-    for (let i = node.children.length - 1; i >= 0; i--) {
-      stack.push(node.children[i]);
-    }
-  }
-
-  return ids;
-}
-async function getBook({ nodeId }) {
-  if (!nodeId) throw new Error("Missing nodeId");
-
-  // 1. collect subtree ids
-  const subtreeIds = await collectSubtreeNodeIds(nodeId);
-
-  // 2. load subtree nodes + notes
-  const [nodes, notes] = await Promise.all([
-    Node.find({ _id: { $in: subtreeIds } }).lean(),
-    Note.find({ nodeId: { $in: subtreeIds } }).lean(),
-  ]);
-
-  // 3. build maps
-  const nodeMap = new Map(nodes.map((n) => [n._id.toString(), n]));
-
-  const notesByNode = new Map();
-  for (const n of notes) {
-    const key = n.nodeId.toString();
-    if (!notesByNode.has(key)) notesByNode.set(key, []);
-    notesByNode.get(key).push(n);
-  }
-
-  // 4. build tree in-memory
-  const book = buildBookTree(
-    nodeMap.get(nodeId.toString()),
-    nodeMap,
-    notesByNode
-  );
-
-  return {
-    message: "Book generated successfully",
-    book,
-  };
-}
-function buildBookTree(node, nodeMap, notesByNode) {
-  const nodeId = node._id.toString();
-
-  // notes directly on this node
-  const notes = (notesByNode.get(nodeId) || []).map((n) => ({
-    noteId: n._id.toString(), // ✅ note ID
-    userId: n.userId?.toString(),
-    content: n.content,
-    type: n.contentType,
-  }));
-
-  let hasContent = notes.length > 0;
-
-  const children = [];
-
-  for (const childId of node.children || []) {
-    const child = nodeMap.get(childId.toString());
-    if (!child) continue;
-
-    const childTree = buildBookTree(child, nodeMap, notesByNode);
-    if (childTree) {
-      children.push(childTree);
-      hasContent = true;
-    }
-  }
-
-  // prune empty subtrees
-  if (!hasContent) {
-    return null;
-  }
-
-  return {
-    nodeId, // ✅ node ID
-    nodeName: node.name, // ✅ node name (or node.title)
-    notes,
-    children,
-  };
-}*/

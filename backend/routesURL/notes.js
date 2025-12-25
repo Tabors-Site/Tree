@@ -152,6 +152,21 @@ function renderBookNode(node, depth, req, version) {
   return html;
 }
 const parseBool = (v) => v === "true";
+function normalizeStatusFilters(query) {
+  const parse = (v) =>
+    v === "true" ? true : v === "false" ? false : undefined;
+
+  const filters = {
+    active: parse(query.active),
+    trimmed: parse(query.trimmed),
+    completed: parse(query.completed),
+  };
+
+  const hasAny = Object.values(filters).some((v) => v !== undefined);
+
+  // 👇 THIS IS KEY
+  return hasAny ? filters : null;
+}
 
 router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
   try {
@@ -163,6 +178,7 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       leafNotesOnly: parseBool(req.query.leafNotesOnly),
       filesOnly: parseBool(req.query.filesOnly),
       textOnly: parseBool(req.query.textOnly),
+      statusFilters: normalizeStatusFilters(req.query),
     };
 
     const wantHtml = req.query.html !== undefined;
@@ -170,22 +186,40 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     const { book } = await coreGetBook({ nodeId, options });
 
     const hasContent =
-      book && (book.notes?.length > 0 || book.children?.length > 0);
+      !!book && (book.notes?.length > 0 || book.children?.length > 0);
+    const q = req.query;
 
+    // default ON if missing
+    const isStatusActive = q.active === undefined ? true : q.active === "true";
+
+    const isStatusCompleted =
+      q.completed === undefined ? true : q.completed === "true";
+
+    // default OFF
+    const isStatusTrimmed = q.trimmed === "true";
     // ---------- HTML MODE ----------
     if (wantHtml) {
-      if (!hasContent) {
-        return res.send(`
-          <html>
-            <body style="font-family: system-ui; padding: 32px;">
-              <h1>No content</h1>
-              <p>This node has no notes or child notes.</p>
-            </body>
-          </html>
-        `);
-      }
-      const title = book.nodeName ?? book.nodeId ?? "Untitled";
-      const content = renderBookNode(book, 1, req);
+      const title = book?.nodeName ?? book?.nodeId ?? `Node ${nodeId}`;
+      const content = hasContent
+        ? renderBookNode(book, 1, req)
+        : `   
+    <div style="
+      max-width: 900px;
+      margin: 64px auto;
+      padding: 32px;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      text-align: center;
+      color: #6b7280;
+    ">
+      <h2 style="margin-top:0;">No content</h2>
+      <p>
+        This node has no notes or child notes
+        under the current filters.
+      </p>
+    </div>
+  `;
 
       return res.send(`
 <!DOCTYPE html>
@@ -195,7 +229,7 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
   <title>${title}</title>
 
   <style>
-    * {
+* {
       box-sizing: border-box;
     }
 
@@ -208,7 +242,7 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     }
 
     .header {
-      padding: 24px 32px;
+      padding: 16px 24px;
       background: white;
       border-bottom: 1px solid #e0e0e0;
       position: sticky;
@@ -217,19 +251,44 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
 
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
     .header h1 {
       margin: 0;
-      font-size: 24px;
+      font-size: 20px;
       font-weight: 600;
       color: #2c2c2c;
     }
 
-    .content {
-      padding: 48px 32px 96px 32px;
-      max-width: 100%;
+    .back-button {
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: #e5e7eb;
+      color: #1138F7;
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: background 0.15s ease;
     }
 
-    /* Book section styling - hierarchical indentation */
+    .back-button:hover {
+      background: #d1d5db;
+    }
+
+    .content {
+      padding: 64px 48px 96px 48px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Book section styling - minimal indentation */
     .book-section {
       margin-bottom: 40px;
     }
@@ -242,22 +301,22 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
 
     .book-section.depth-2 {
       margin-bottom: 40px;
-      margin-left: 32px;
+      margin-left: 8px;
     }
 
     .book-section.depth-3 {
       margin-bottom: 32px;
-      margin-left: 64px;
+      margin-left: 16px;
     }
 
     .book-section.depth-4 {
       margin-bottom: 24px;
-      margin-left: 96px;
+      margin-left: 24px;
     }
 
     .book-section.depth-5 {
       margin-bottom: 20px;
-      margin-left: 128px;
+      margin-left: 32px;
     }
 
     /* Heading hierarchy */
@@ -272,9 +331,8 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       font-size: 32px;
       margin-top: 48px;
       margin-bottom: 24px;
-      border-bottom: 2px solid #e0e0e0;
+      border-bottom: 1px solid #e0e0e0;
       padding-bottom: 12px;
-      max-width: 900px;
     }
 
     .book-section.depth-1:first-child h1 {
@@ -285,35 +343,38 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       font-size: 26px;
       margin-top: 40px;
       margin-bottom: 20px;
+      border-bottom: 1px solid #f0f0f0;
+      padding-bottom: 8px;
     }
 
     h3 {
       font-size: 22px;
       margin-top: 32px;
       margin-bottom: 16px;
+      font-weight: 700;
     }
 
     h4 {
       font-size: 19px;
       margin-top: 24px;
       margin-bottom: 12px;
+      font-weight: 700;
     }
 
     h5 {
       font-size: 17px;
       margin-top: 20px;
       margin-bottom: 10px;
-      font-weight: 500;
+      font-weight: 700;
     }
 
     /* Note content with clickable links */
     .note-content {
-      margin: 16px 0 24px 0;
+      margin: 16px 0 28px 0;
       padding: 0;
-      font-size: 17px;
-      line-height: 1.7;
+      font-size: 18px;
+      line-height: 1.75;
       color: #2c2c2c;
-      max-width: 900px;
     }
 
     .note-link {
@@ -343,7 +404,6 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       border: 1px solid #e0e0e0;
       border-radius: 8px;
       transition: border-color 0.15s ease;
-      max-width: 900px;
     }
 
     .file-container:hover {
@@ -380,7 +440,6 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
 
     iframe {
       width: 100%;
-      max-width: 900px;
       height: 600px;
       border: none;
       border-radius: 4px;
@@ -390,11 +449,36 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     /* Mobile responsiveness */
     @media (max-width: 768px) {
       .header {
-        padding: 20px 16px;
+        padding: 12px 16px;
+      }
+
+      .header-top {
+        margin-bottom: 8px;
+      }
+
+      .header h1 {
+        font-size: 16px;
+      }
+
+      .back-button {
+        padding: 5px 10px;
+        font-size: 13px;
+      }
+
+      .filters {
+        margin-top: 0;
+        gap: 4px;
+      }
+
+      .filters button {
+        padding: 4px 8px;
+        font-size: 12px;
+        border-radius: 4px;
       }
 
       .content {
-        padding: 32px 16px 64px 16px;
+        padding: 40px 20px 64px 20px;
+        max-width: 100%;
       }
 
       h1 {
@@ -418,24 +502,61 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       }
 
       .note-content {
-        font-size: 16px;
+        font-size: 17px;
       }
 
-      /* Reduce indentation on mobile */
+      /* Reduce indentation on mobile to prevent overflow */
       .book-section.depth-2 {
-        margin-left: 16px;
+        margin-left: 4px;
       }
 
       .book-section.depth-3 {
-        margin-left: 32px;
+        margin-left: 8px;
       }
 
       .book-section.depth-4 {
-        margin-left: 48px;
+        margin-left: 12px;
       }
 
       .book-section.depth-5 {
-        margin-left: 64px;
+        margin-left: 16px;
+      }
+    }
+
+    /* Extra small devices */
+    @media (max-width: 480px) {
+      .header {
+        padding: 10px 12px;
+      }
+
+      .header-top {
+        margin-bottom: 6px;
+      }
+
+      .header h1 {
+        font-size: 14px;
+      }
+
+      .back-button {
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+
+      .filters button {
+        padding: 3px 6px;
+        font-size: 11px;
+      }
+
+      .content {
+        padding: 32px 16px 48px 16px;
+      }
+
+      /* Minimal indentation on very small screens */
+      .book-section.depth-2,
+      .book-section.depth-3,
+      .book-section.depth-4,
+      .book-section.depth-5 {
+        margin-left: 0;
       }
     }
 
@@ -460,7 +581,7 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       }
 
       h1 {
-        border-bottom-color: #404040;
+        border-bottom-color: #e0e0e0;
       }
 
       .note-content {
@@ -531,66 +652,56 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
         background-color: transparent;
       }
     }
-      .filters {
-  margin-top: 12px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 
-.filters button {
-  padding: 6px 12px;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: 6px;
-  border: 1px solid #d0d5dd;
-  background: #f3f4f6;       /* grey */
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
+    .filters {
+      margin-top: 0;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
 
-.filters button:hover {
-  background: #e5e7eb;
-}
+    .filters button {
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 6px;
+      border: 1px solid #d0d5dd;
+      background: #f3f4f6;
+      color: #374151;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
 
-/* ✅ ACTIVE STATE */
-.filters button.active {
-  background: #2563eb;       /* blue */
-  border-color: #2563eb;
-  color: white;
-}
+    .filters button:hover {
+      background: #e5e7eb;
+    }
 
-.filters button.active:hover {
-  background: #1d4ed8;
-}
+    .filters button.active {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: white;
+    }
+
+    .filters button.active:hover {
+      background: #1d4ed8;
+    }
 
   </style>
 </head>
 
 <body>
-  <div class="header">
-  <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-
-
-    <h1 style="margin:0;">Book: ${title}</h1>
-  </div>
-      <a
-      href="/api/${nodeId}/${req.params.version}/notes?token=${
+ <div class="header">
+  <div class="header-top">
+    <h1>Book: ${title}</h1>
+    <a href="/api/${nodeId}/${req.params.version}/notes?token=${
         req.query.token ?? ""
-      }&html"
-      style="
-        text-decoration:none;
-        padding:6px 12px;
-        border-radius:6px;
-        background:#e5e7eb;
-        color:#1138F7;
-        font-size:14px;
-        font-weight:500;
-      "
-    >
-    Back to Notes
+      }&html" class="back-button">
+      Back to Notes
     </a>
+  </div>
+
+  
 
  <div class="filters">
     <button onclick="toggleFlag('latestVersionOnly')" class="${
@@ -622,6 +733,24 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     }">
       Text
     </button>
+    <button onclick="toggleStatus('active')" class="${
+      isStatusActive ? "active" : ""
+    }">
+  Active
+</button>
+
+<button onclick="toggleStatus('completed')" class="${
+        isStatusCompleted ? "active" : ""
+      }">
+  Completed
+</button>
+
+<button onclick="toggleStatus('trimmed')" class="${
+        isStatusTrimmed ? "active" : ""
+      }">
+  Trimmed
+</button>
+
   </div>
 </div>
 </div>
@@ -674,6 +803,38 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
 
     window.location.href = url.toString();
   }
+</script>
+<script>
+function toggleStatus(flag) {
+  const url = new URL(window.location.href);
+  const params = url.searchParams;
+
+  const defaults = {
+    active: true,
+    completed: true,
+    trimmed: false,
+  };
+
+  const current =
+    params.has(flag)
+      ? params.get(flag) === "true"
+      : defaults[flag];
+
+  const next = !current;
+
+  // If next matches default → REMOVE from URL
+  if (next === defaults[flag]) {
+    params.delete(flag);
+  } else {
+    // Otherwise explicitly set
+    params.set(flag, String(next));
+  }
+
+  // Always keep html mode
+  params.set("html", "true");
+
+  window.location.href = url.toString();
+}
 </script>
 
 </body>
