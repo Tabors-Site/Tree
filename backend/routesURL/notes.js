@@ -8,6 +8,7 @@ import {
   createNote as coreCreateNote,
   getNotes as coreGetNotes,
   deleteNoteAndFile as coreDeleteNoteAndFile,
+  getBook as coreGetBook,
 } from "../core/notes.js";
 
 import urlAuth from "../middleware/urlAuth.js";
@@ -34,6 +35,59 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 function renderMedia(fileUrl, mimeType) {
+  // ---------- IMAGES ----------
+  if (mimeType.startsWith("image/")) {
+    return `
+      <img
+        data-src="${fileUrl}"
+        loading="lazy"
+        style="max-width:100%;"
+        class="lazy-media"
+        alt=""
+      />
+    `;
+  }
+
+  // ---------- VIDEO ----------
+  if (mimeType.startsWith("video/")) {
+    return `
+      <video
+        controls
+        preload="none"
+        data-src="${fileUrl}"
+        class="lazy-media"
+        style="max-width:100%;"
+      ></video>
+    `;
+  }
+
+  // ---------- AUDIO ----------
+  if (mimeType.startsWith("audio/")) {
+    return `
+      <audio
+        controls
+        preload="none"
+        data-src="${fileUrl}"
+        class="lazy-media"
+      ></audio>
+    `;
+  }
+
+  // ---------- PDF ----------
+  if (mimeType === "application/pdf") {
+    return `
+      <iframe
+        data-src="${fileUrl}"
+        loading="lazy"
+        class="lazy-media"
+        style="width:100%; height:90vh; border:none;"
+      ></iframe>
+    `;
+  }
+
+  return ``;
+}
+function renderMediaImmediate(fileUrl, mimeType) {
   if (mimeType.startsWith("image/")) {
     return `<img src="${fileUrl}" style="max-width:100%;" />`;
   }
@@ -48,17 +102,596 @@ function renderMedia(fileUrl, mimeType) {
 
   if (mimeType === "application/pdf") {
     return `
-      <iframe
-        src="${fileUrl}"
-        style="width:100%; height:90vh; border:none;"
-      ></iframe>
+      <iframe src="${fileUrl}" style="width:100%; height:90vh; border:none;"></iframe>
     `;
   }
 
-  // Unknown / non-previewable formats (epub, zip, etc.)
   return ``;
 }
+function renderBookNode(node, depth, req, version) {
+  const level = Math.min(depth, 5);
+  const H = `h${level}`;
+  const token = req.query.token ?? "";
 
+  let html = `
+    <section class="book-section depth-${depth}">
+      <${H}>${node.nodeName ?? node.nodeId}</${H}>
+  `;
+
+  for (const note of node.notes) {
+    const noteUrl = `/api/${node.nodeId}/${note.version}/notes/${note.noteId}?token=${token}&html`;
+
+    if (note.type === "text") {
+      html += `
+        <div class="note-content">
+          <a href="${noteUrl}" class="note-link">${note.content}</a>
+        </div>
+      `;
+    }
+
+    if (note.type === "file") {
+      const fileUrl = `/api/uploads/${note.content}${
+        token ? `?token=${token}` : ""
+      }`;
+      const mimeType = mime.lookup(note.content) || "";
+
+      html += `
+        <div class="file-container">
+          <a href="${noteUrl}" class="note-link file-link">${note.content}</a>
+          ${renderMedia(fileUrl, mimeType)}
+        </div>
+      `;
+    }
+  }
+
+  for (const child of node.children) {
+    html += renderBookNode(child, depth + 1, req, version);
+  }
+
+  html += `</section>`;
+  return html;
+}
+const parseBool = (v) => v === "true";
+
+router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+
+    const options = {
+      latestVersionOnly: parseBool(req.query.latestVersionOnly),
+      lastNoteOnly: parseBool(req.query.lastNoteOnly),
+      leafNotesOnly: parseBool(req.query.leafNotesOnly),
+      filesOnly: parseBool(req.query.filesOnly),
+      textOnly: parseBool(req.query.textOnly),
+    };
+
+    const wantHtml = req.query.html !== undefined;
+
+    const { book } = await coreGetBook({ nodeId, options });
+
+    const hasContent =
+      book && (book.notes?.length > 0 || book.children?.length > 0);
+
+    // ---------- HTML MODE ----------
+    if (wantHtml) {
+      if (!hasContent) {
+        return res.send(`
+          <html>
+            <body style="font-family: system-ui; padding: 32px;">
+              <h1>No content</h1>
+              <p>This node has no notes or child notes.</p>
+            </body>
+          </html>
+        `);
+      }
+      const title = book.nodeName ?? book.nodeId ?? "Untitled";
+      const content = renderBookNode(book, 1, req);
+
+      return res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Charter", "Georgia", "Iowan Old Style", "Times New Roman", serif;
+      background: #fafafa;
+      color: #1a1a1a;
+      line-height: 1.6;
+    }
+
+    .header {
+      padding: 24px 32px;
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+      color: #2c2c2c;
+    }
+
+    .content {
+      padding: 48px 32px 96px 32px;
+      max-width: 100%;
+    }
+
+    /* Book section styling - hierarchical indentation */
+    .book-section {
+      margin-bottom: 40px;
+    }
+
+    .book-section.depth-1 {
+      margin-bottom: 56px;
+      margin-left: 0;
+      page-break-after: avoid;
+    }
+
+    .book-section.depth-2 {
+      margin-bottom: 40px;
+      margin-left: 32px;
+    }
+
+    .book-section.depth-3 {
+      margin-bottom: 32px;
+      margin-left: 64px;
+    }
+
+    .book-section.depth-4 {
+      margin-bottom: 24px;
+      margin-left: 96px;
+    }
+
+    .book-section.depth-5 {
+      margin-bottom: 20px;
+      margin-left: 128px;
+    }
+
+    /* Heading hierarchy */
+    h1, h2, h3, h4, h5 {
+      font-weight: 600;
+      line-height: 1.3;
+      margin: 0 0 16px 0;
+      color: #1a1a1a;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-top: 48px;
+      margin-bottom: 24px;
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 12px;
+      max-width: 900px;
+    }
+
+    .book-section.depth-1:first-child h1 {
+      margin-top: 0;
+    }
+
+    h2 {
+      font-size: 26px;
+      margin-top: 40px;
+      margin-bottom: 20px;
+    }
+
+    h3 {
+      font-size: 22px;
+      margin-top: 32px;
+      margin-bottom: 16px;
+    }
+
+    h4 {
+      font-size: 19px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+    }
+
+    h5 {
+      font-size: 17px;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+
+    /* Note content with clickable links */
+    .note-content {
+      margin: 16px 0 24px 0;
+      padding: 0;
+      font-size: 17px;
+      line-height: 1.7;
+      color: #2c2c2c;
+      max-width: 900px;
+    }
+
+    .note-link {
+      color: inherit;
+      text-decoration: none;
+      white-space: pre-wrap;
+      display: block;
+      padding: 12px 16px;
+      margin: -12px -16px;
+      border-radius: 6px;
+      transition: background-color 0.15s ease;
+    }
+
+    .note-link:hover {
+      background-color: rgba(37, 99, 235, 0.06);
+    }
+
+    .note-link:active {
+      background-color: rgba(37, 99, 235, 0.12);
+    }
+
+    /* File containers */
+    .file-container {
+      margin: 24px 0;
+      padding: 16px;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      transition: border-color 0.15s ease;
+      max-width: 900px;
+    }
+
+    .file-container:hover {
+      border-color: #2563eb;
+    }
+
+    .file-container .note-link {
+      display: inline-block;
+      margin-bottom: 12px;
+      color: #2563eb;
+      font-size: 15px;
+      font-weight: 500;
+      padding: 4px 8px;
+      margin: -4px -8px 8px;
+    }
+
+    .file-container .note-link:hover {
+      background-color: rgba(37, 99, 235, 0.08);
+      text-decoration: underline;
+    }
+
+    /* Media elements */
+    img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+
+    video, audio {
+      max-width: 100%;
+      margin-top: 8px;
+    }
+
+    iframe {
+      width: 100%;
+      max-width: 900px;
+      height: 600px;
+      border: none;
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+      .header {
+        padding: 20px 16px;
+      }
+
+      .content {
+        padding: 32px 16px 64px 16px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      h2 {
+        font-size: 24px;
+      }
+
+      h3 {
+        font-size: 20px;
+      }
+
+      h4 {
+        font-size: 18px;
+      }
+
+      h5 {
+        font-size: 16px;
+      }
+
+      .note-content {
+        font-size: 16px;
+      }
+
+      /* Reduce indentation on mobile */
+      .book-section.depth-2 {
+        margin-left: 16px;
+      }
+
+      .book-section.depth-3 {
+        margin-left: 32px;
+      }
+
+      .book-section.depth-4 {
+        margin-left: 48px;
+      }
+
+      .book-section.depth-5 {
+        margin-left: 64px;
+      }
+    }
+
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #1a1a1a;
+        color: #e0e0e0;
+      }
+
+      .header {
+        background: #2c2c2c;
+        border-bottom-color: #404040;
+      }
+
+      .header h1 {
+        color: #f0f0f0;
+      }
+
+      h1, h2, h3, h4, h5 {
+        color: #f0f0f0;
+      }
+
+      h1 {
+        border-bottom-color: #404040;
+      }
+
+      .note-content {
+        color: #d0d0d0;
+      }
+
+      .note-link:hover {
+        background-color: rgba(96, 165, 250, 0.12);
+      }
+
+      .note-link:active {
+        background-color: rgba(96, 165, 250, 0.18);
+      }
+
+      .file-container {
+        background: #2c2c2c;
+        border-color: #404040;
+      }
+
+      .file-container:hover {
+        border-color: #60a5fa;
+      }
+
+      .file-container .note-link {
+        color: #60a5fa;
+      }
+
+      .file-container .note-link:hover {
+        background-color: rgba(96, 165, 250, 0.12);
+      }
+    }
+
+    /* Print styles */
+    @media print {
+      body {
+        background: white;
+      }
+
+      .header {
+        position: static;
+        box-shadow: none;
+        border-bottom: 2px solid #000;
+      }
+
+      .content {
+        padding: 24px 16px;
+      }
+
+      .book-section.depth-1 {
+        page-break-before: always;
+      }
+
+      .book-section.depth-1:first-child {
+        page-break-before: avoid;
+      }
+
+      h1, h2, h3, h4, h5 {
+        page-break-after: avoid;
+      }
+
+      .note-link {
+        color: inherit;
+        padding: 0;
+        margin: 0;
+      }
+
+      .note-link:hover {
+        background-color: transparent;
+      }
+    }
+      .filters {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filters button {
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid #d0d5dd;
+  background: #f3f4f6;       /* grey */
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filters button:hover {
+  background: #e5e7eb;
+}
+
+/* ✅ ACTIVE STATE */
+.filters button.active {
+  background: #2563eb;       /* blue */
+  border-color: #2563eb;
+  color: white;
+}
+
+.filters button.active:hover {
+  background: #1d4ed8;
+}
+
+  </style>
+</head>
+
+<body>
+  <div class="header">
+  <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+
+
+    <h1 style="margin:0;">Book: ${title}</h1>
+  </div>
+      <a
+      href="/api/${nodeId}/${req.params.version}/notes?token=${
+        req.query.token ?? ""
+      }&html"
+      style="
+        text-decoration:none;
+        padding:6px 12px;
+        border-radius:6px;
+        background:#e5e7eb;
+        color:#1138F7;
+        font-size:14px;
+        font-weight:500;
+      "
+    >
+    Back to Notes
+    </a>
+
+ <div class="filters">
+    <button onclick="toggleFlag('latestVersionOnly')" class="${
+      options.latestVersionOnly ? "active" : ""
+    }">
+      Latest Versions Only
+    </button>
+
+    <button onclick="toggleFlag('lastNoteOnly')" class="${
+      options.lastNoteOnly ? "active" : ""
+    }">
+      Most recent note only
+    </button>
+
+    <button onclick="toggleFlag('leafNotesOnly')" class="${
+      options.leafNotesOnly ? "active" : ""
+    }">
+      Leaf Details Only
+    </button>
+
+    <button onclick="toggleFlag('filesOnly')" class="${
+      options.filesOnly ? "active" : ""
+    }">
+      Files
+    </button>
+
+    <button onclick="toggleFlag('textOnly')" class="${
+      options.textOnly ? "active" : ""
+    }">
+      Text
+    </button>
+  </div>
+</div>
+</div>
+
+
+  
+
+
+  <div class="content">
+    ${content}
+  </div>
+  
+  <!-- Lazy media loader -->
+  <script>
+    const lazyObserver = new IntersectionObserver(
+      (entries, observer) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+
+          const el = entry.target;
+          const src = el.dataset.src;
+
+          if (src) {
+            el.src = src;
+            el.removeAttribute("data-src");
+          }
+
+          observer.unobserve(el);
+        });
+      },
+      { rootMargin: "200px" }
+    );
+
+    document
+      .querySelectorAll(".lazy-media[data-src]")
+      .forEach(el => lazyObserver.observe(el));
+  </script>
+  <script>
+  function toggleFlag(flag) {
+    const url = new URL(window.location.href);
+
+    if (url.searchParams.has(flag)) {
+      url.searchParams.delete(flag);
+    } else {
+      url.searchParams.set(flag, "true");
+    }
+
+    // always keep html mode
+    url.searchParams.set("html", "true");
+
+    window.location.href = url.toString();
+  }
+</script>
+
+</body>
+</html>
+      `);
+    }
+
+    return res.json({
+      success: true,
+      book,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
 /* ------------------------------------------------------------------
    GET /:nodeId/:version/notes 
    - JSON (default)
@@ -337,14 +970,18 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
   </head>
   <body>
 
-  <div class="header">
-    <h1 style="margin:0;">
-    
+   <div class="header">
+    <h1 style="margin:0; flex-grow:1;">
       <a href="${base}?token=${
         req.query.token ?? ""
       }&html">${nodeName} v${version}</a>
       Notes
     </h1>
+    <a href="/api/${nodeId}/${version}/notes/book?token=${
+        req.query.token ?? ""
+      }&html" class="book-button">
+      Book View
+    </a>
   </div>
 
   <div class="notes-container">
@@ -706,7 +1343,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       const fileUrl = `/api/uploads/${note.content}`;
       const filePath = path.join(uploadsFolder, note.content);
       const mimeType = mime.lookup(filePath) || "application/octet-stream";
-      const mediaHtml = renderMedia(fileUrl, mimeType);
+      const mediaHtml = renderMediaImmediate(fileUrl, mimeType);
       const fileName = path.basename(note.content);
 
       return res.send(`
