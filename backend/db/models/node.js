@@ -19,6 +19,16 @@ const NodeSchema = new mongoose.Schema({
       schedule: { type: Date, default: null },
       reeffectTime: { type: Number, default: 0 },
       goals: { type: Map, of: Number, default: {} },
+
+      wallet: {
+        publicKey: { type: String, default: null },
+        encryptedPrivateKey: {
+          iv: String,
+          tag: String,
+          data: String,
+        },
+        createdAt: { type: Date, default: null },
+      },
     },
   ],
   scripts: {

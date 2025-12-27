@@ -148,6 +148,18 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
 
     if (!node) return res.status(404).json({ error: "Node not found" });
 
+    // 🔐 Strip sensitive wallet info
+    if (Array.isArray(node.versions)) {
+      node.versions = node.versions.map((v) => ({
+        ...v,
+        wallet: v.wallet
+          ? {
+              publicKey: v.wallet.publicKey ?? null,
+            }
+          : null,
+      }));
+    }
+
     const queryString = filterQuery(req);
     const qs = queryString ? `?${queryString}` : "";
 
@@ -863,7 +875,20 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
     const v = Number(version);
 
     const node = await Node.findById(nodeId).lean();
+
     if (!node) return res.status(404).json({ error: "Node not found" });
+
+    // 🔐 Strip sensitive wallet info
+    if (Array.isArray(node.versions)) {
+      node.versions = node.versions.map((v) => ({
+        ...v,
+        wallet: v.wallet
+          ? {
+              publicKey: v.wallet.publicKey ?? null,
+            }
+          : null,
+      }));
+    }
 
     if (isNaN(v) || v < 0 || v >= node.versions.length)
       return res.status(400).json({ error: "Invalid version index" });

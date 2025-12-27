@@ -1,12 +1,19 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import { findNodeById } from "../db/utils.js";
+import Node from "../db/models/node.js";
 
 const router = express.Router();
 
 const allowedParams = ["token", "html"];
 import authenticate from "../middleware/authenticate.js";
 import { setValueForNode, setGoalForNode } from "../core/values.js";
+
+import {
+  getVersionWalletInfo,
+  ensureVersionWallet,
+  syncVersionSOLBalance,
+} from "../core/solana.js";
 
 // SET VALUE
 router.post("/:nodeId/:version/value", authenticate, async (req, res) => {
@@ -110,119 +117,498 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
         goals,
       });
     }
-    const addRowHtml = `
-<tr>
-  <td colspan="3">
-    <form
-      method="POST"
-      action="/api/${nodeId}/${parsedVersion}/value?token=${
-      req.query.token ?? ""
-    }&html"
-      style="display:flex; gap:8px; align-items:center;"
-    >
-      <input
-        type="text"
-        name="key"
-        placeholder="New key"
-        required
-        style="
-          padding:4px 6px;
-          font-size:13px;
-          width:160px;
-        "
-      />
-
-      <input
-        type="number"
-        name="value"
-        value="0"
-        step="any"
-        style="
-          padding:4px 6px;
-          font-size:13px;
-          width:100px;
-        "
-      />
-
-      <button
-        type="submit"
-        style="
-          padding:4px 10px;
-          font-size:13px;
-          border-radius:4px;
-          border:1px solid #999;
-          background:#eee;
-          cursor:pointer;
-        "
-      >
-        Add value
-      </button>
-    </form>
-  </td>
-</tr>
-`;
-
-    // HTML MODE
-    const rowsHtml =
-      allKeys.length > 0
-        ? allKeys
-            .map(
-              (key) => `
-              <tr>
-                <td><code>${key}</code></td>
-                <td>
-  <form
-    method="POST"
-    action="/api/${nodeId}/${parsedVersion}/value?token=${
-                req.query.token ?? ""
-              }&html"
-    style="display:flex; gap:6px; align-items:center;"
-  >
-    <input type="hidden" name="key" value="${key}" />
-    <input
-      type="number"
-      name="value"
-      value="${values[key] ?? ""}"
-      step="any"
-      style="width:90px; padding:4px;"
-    />
-    <button type="submit">Save</button>
-  </form>
-</td>
-
-<td>
-  <form
-    method="POST"
-    action="/api/${nodeId}/${parsedVersion}/goal?token=${
-                req.query.token ?? ""
-              }&html"
-    style="display:flex; gap:6px; align-items:center;"
-  >
-    <input type="hidden" name="key" value="${key}" />
-    <input
-      type="number"
-      name="goal"
-      value="${goals[key] ?? ""}"
-      step="any"
-      style="width:90px; padding:4px;"
-    />
-    <button type="submit">Save</button>
-  </form>
-</td>
-
-              </tr>
-            `
-            )
-            .join("")
-        : `
-          <tr>
-            <td colspan="3"><em>No values or goals set</em></td>
-          </tr>
-        `;
-
-    // Replace the HTML return in your /:nodeId/:version/values route with this:
 
     return res.send(`
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>${nodeName} — Values & Goals</title>
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #1a1a1a;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* ---------------- Back Navigation ---------------- */
+
+  .back-nav {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    color: #667eea;
+    text-decoration: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .back-link:hover {
+    background: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  /* ---------------- Header ---------------- */
+
+  .header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1a;
+    line-height: 1.3;
+    margin-bottom: 6px;
+  }
+
+  .header h1 a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .header h1 a:hover {
+    color: #667eea;
+  }
+
+  /* Version badge (MISSING BEFORE) */
+  .version-badge {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  /* Node ID + Copy (MISSING BEFORE) */
+  .node-id-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  #copyNodeIdBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    font-size: 18px;
+    opacity: 0.6;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+
+  #copyNodeIdBtn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+    .section-title {
+      width: 100%;
+      margin-top: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    .section-title a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .section-title a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+  /* ---------------- Code / Links ---------------- */
+
+  code {
+    background: #f0f0f0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    color: #667eea;
+    font-weight: 600;
+    word-break: break-word;
+  }
+
+  a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  a:hover {
+    color: #764ba2;
+    text-decoration: underline;
+  }
+
+  /* ---------------- Table Section ---------------- */
+
+  .table-section {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  th {
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
+  }
+
+  td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e9ecef;
+  }
+
+  tbody tr:hover {
+    background: #f8f9fa;
+  }
+
+  /* ---------------- Forms ---------------- */
+
+  .value-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .value-form input {
+    padding: 8px 12px;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid #d0d0d0;
+    transition: all 0.2s;
+  }
+
+  .value-form input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+
+  .value-form button {
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    background: #667eea;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .value-form button:hover {
+    background: #5856d6;
+    transform: translateY(-1px);
+  }
+
+  .add-row {
+    background: #f8f9fa;
+  }
+
+  .add-button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  }
+
+  /* ---------------- Empty State ---------------- */
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+  }
+
+  /* ---------------- Responsive ---------------- */
+
+  @media (max-width: 640px) {
+    body {
+      padding: 16px;
+    }
+
+    .header,
+    .table-section {
+      padding: 20px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+    }
+
+    .back-nav {
+      flex-direction: column;
+    }
+
+    .back-link {
+      justify-content: center;
+    }
+  }
+</style>
+
+  </head>
+  <body>
+    <div class="container">
+      <!-- Back Navigation -->
+      <div class="back-nav">
+        <a href="/api/root/${nodeId}${queryString}" class="back-link">
+          ← Back to Tree
+        </a>
+        <a href="/api/${nodeId}/${nodeVersion}${queryString}" class="back-link">
+          Back to Version
+        </a>
+         <a
+    href="/api/${nodeId}/${parsedVersion}/values/solana${queryString}"
+    class="back-link"
+  >
+    Solana Wallet
+  </a>
+      </div>
+
+      <!-- Header -->
+      <div class="header">
+  <h1>
+    <a href="/api/${nodeId}/${nodeVersion}${queryString}">
+      ${nodeName}
+    </a>
+  </h1>
+
+  <span class="version-badge">Version ${nodeVersion}</span>
+
+  <div class="node-id-container">
+    <code id="nodeIdCode">${nodeId}</code>
+    <button id="copyNodeIdBtn" title="Copy ID">📋</button>
+  </div>
+
+  <div class="section-title">Values & Goals</div>
+</div>
+
+
+      <!-- Table Section -->
+      <div class="table-section">
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Value</th>
+              <th>Goal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              allKeys.length > 0
+                ? allKeys
+                    .map(
+                      (key) => `
+                <tr>
+                  <td><code>${key}</code></td>
+                  <td>
+                    <form
+                      method="POST"
+                      action="/api/${nodeId}/${parsedVersion}/value?token=${
+                        req.query.token ?? ""
+                      }&html"
+                      class="value-form"
+                    >
+                      <input type="hidden" name="key" value="${key}" />
+                      <input
+                        type="number"
+                        name="value"
+                        value="${values[key] ?? ""}"
+                        step="any"
+                        placeholder="0"
+                      />
+                      <button type="submit">Save</button>
+                    </form>
+                  </td>
+                  <td>
+                    <form
+                      method="POST"
+                      action="/api/${nodeId}/${parsedVersion}/goal?token=${
+                        req.query.token ?? ""
+                      }&html"
+                      class="value-form"
+                    >
+                      <input type="hidden" name="key" value="${key}" />
+                      <input
+                        type="number"
+                        name="goal"
+                        value="${goals[key] ?? ""}"
+                        step="any"
+                        placeholder="0"
+                      />
+                      <button type="submit">Save</button>
+                    </form>
+                  </td>
+                </tr>
+              `
+                    )
+                    .join("")
+                : `
+                <tr>
+                  <td colspan="3" class="empty-state">
+                    No values or goals set yet. Add one below to get started! 👇
+                  </td>
+                </tr>
+              `
+            }
+            
+            <!-- Add New Row -->
+            <tr class="add-row">
+              <td colspan="3">
+                <form
+                  method="POST"
+                  action="/api/${nodeId}/${parsedVersion}/value?token=${
+      req.query.token ?? ""
+    }&html"
+                  class="value-form"
+                >
+                  <input
+                    type="text"
+                    name="key"
+                    placeholder="New key"
+                    required
+                  />
+                  <input
+                    type="number"
+                    name="value"
+                    value="0"
+                    step="any"
+                    placeholder="0"
+                  />
+                  <button type="submit" class="add-button">
+                    ＋ Add Value
+                  </button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <script>
+  const btn = document.getElementById("copyNodeIdBtn");
+  const code = document.getElementById("nodeIdCode");
+
+  if (btn && code) {
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = "✔️";
+        setTimeout(() => (btn.textContent = "📋"), 900);
+      });
+    });
+  }
+</script>
+
+  </body>
+  </html>
+  `);
+  } catch (err) {
+    console.error("Error in /:nodeId/:version/values:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get(
+  "/:nodeId/:version/values/solana",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { nodeId, version } = req.params;
+      const parsedVersion = Number(version);
+
+      if (!Number.isInteger(parsedVersion) || parsedVersion < 0) {
+        return res.status(400).json({ error: "Invalid version" });
+      }
+
+      const filtered = Object.entries(req.query)
+        .filter(([key]) => allowedParams.includes(key))
+        .map(([key, val]) => (val === "" ? key : `${key}=${val}`))
+        .join("&");
+
+      const queryString = filtered ? `?${filtered}` : "";
+      //update values, may need to update as it happens on every page loads
+      const node = await Node.findById(nodeId);
+      await syncVersionSOLBalance(node, parsedVersion);
+      const walletInfo = await getVersionWalletInfo(nodeId, parsedVersion);
+
+      // JSON MODE
+      if (!("html" in req.query)) {
+        return res.json({
+          nodeId,
+          version: parsedVersion,
+          ...walletInfo,
+        });
+      }
+
+      /* ---------------- HTML MODE ---------------- */
+
+      if (!walletInfo.exists) {
+        return res.send(`
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -230,7 +616,8 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${nodeName} — Values & Goals</title>
+  <title>Wallet — Version ${parsedVersion}</title>
+
   <style>
     * {
       box-sizing: border-box;
@@ -239,7 +626,8 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+        'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       padding: 20px;
@@ -247,15 +635,15 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
     }
 
     .container {
-      max-width: 1000px;
+      max-width: 900px;
       margin: 0 auto;
     }
 
-    /* Back Navigation */
+    /* Navigation */
     .back-nav {
       display: flex;
       gap: 12px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       flex-wrap: wrap;
     }
 
@@ -272,406 +660,292 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
       font-weight: 600;
       font-size: 14px;
       transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border: 1px solid transparent;
     }
 
     .back-link:hover {
       background: white;
+      border-color: #667eea;
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
     }
 
-    /* Header Section */
+    /* Header */
     .header {
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
     }
 
     .header h1 {
-      font-size: 28px;
+      font-size: 20px;
       font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 8px;
-      line-height: 1.3;
+      line-height: 1.2;
     }
 
-    .header h1 a {
-      color: #1a1a1a;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .header h1 a:hover {
-      color: #667eea;
-    }
-
-    .section-title {
-      font-size: 18px;
+    .version-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
       font-weight: 600;
-      color: #667eea;
-      margin-top: 8px;
-    }
-
-    /* Table Section */
-    .table-section {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
-    }
-
-    thead {
+      border-radius: 14px;
+      color: white;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
 
-    th {
-      padding: 14px 16px;
-      text-align: left;
-      font-weight: 600;
+    .section-title {
+      margin-top: 4px;
       font-size: 14px;
-      color: white;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    th:first-child {
-      border-radius: 10px 0 0 0;
-    }
-
-    th:last-child {
-      border-radius: 0 10px 0 0;
-    }
-
-    tbody tr {
-      transition: background 0.2s;
-    }
-
-    tbody tr:hover {
-      background: #f8f9fa;
-    }
-
-    tbody tr:last-child td:first-child {
-      border-radius: 0 0 0 10px;
-    }
-
-    tbody tr:last-child td:last-child {
-      border-radius: 0 0 10px 0;
-    }
-
-    td {
-      padding: 14px 16px;
-      border-bottom: 1px solid #e9ecef;
-      vertical-align: middle;
-    }
-
-    tbody tr:last-child td {
-      border-bottom: none;
-    }
-
-    code {
-      background: #f0f0f0;
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-weight: 600;
       color: #667eea;
-      font-weight: 600;
     }
 
-    /* Forms in Table */
-    .value-form {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
+    /* Card */
+    .card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
     }
 
-    .value-form input[type="number"],
-    .value-form input[type="text"] {
-      padding: 8px 12px;
-      font-size: 14px;
-      border-radius: 8px;
-      border: 1px solid #d0d0d0;
-      background: white;
-      font-family: inherit;
-      transition: all 0.2s;
-      width: 100px;
-    }
-
-    .value-form input[type="text"] {
-      width: 160px;
-    }
-
-    .value-form input:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .value-form button {
-      padding: 8px 14px;
-      font-size: 13px;
-      font-weight: 600;
-      border-radius: 8px;
+    button {
+      padding: 10px 18px;
+      border-radius: 10px;
       border: none;
-      background: #667eea;
-      color: white;
+      font-weight: 600;
+      font-size: 14px;
       cursor: pointer;
+      color: white;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       transition: all 0.2s;
-      font-family: inherit;
-      white-space: nowrap;
     }
 
-    .value-form button:hover {
-      background: #5856d6;
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-    }
-
-    /* Add New Row */
-    .add-row {
-      background: #f8f9fa !important;
-    }
-
-    .add-row td {
-      padding: 20px 16px !important;
-    }
-
-    .add-button {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-    }
-
-    .add-button:hover {
+    button:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-    }
-
-    /* Empty State */
-    .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      color: #999;
-      font-style: normal;
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-      body {
-        padding: 16px;
-      }
-
-      .header,
-      .table-section {
-        padding: 20px;
-      }
-
-      .header h1 {
-        font-size: 24px;
-      }
-
-      .table-section {
-        padding: 16px;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-      }
-
-      table {
-        min-width: 600px;
-      }
-
-      th {
-        padding: 12px;
-        font-size: 12px;
-      }
-
-      td {
-        padding: 12px;
-      }
-
-      .value-form {
-        flex-wrap: nowrap;
-      }
-
-      .value-form input[type="number"],
-      .value-form input[type="text"] {
-        font-size: 13px;
-        padding: 6px 10px;
-      }
-
-      .value-form input[type="number"] {
-        width: 80px;
-      }
-
-      .value-form input[type="text"] {
-        width: 140px;
-      }
-
-      .value-form button {
-        padding: 6px 12px;
-        font-size: 12px;
-      }
-
-      .back-nav {
-        flex-direction: column;
-      }
-
-      .back-link {
-        justify-content: center;
-      }
-    }
-
-    @media (min-width: 769px) and (max-width: 1024px) {
-      .container {
-        max-width: 800px;
-      }
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- Back Navigation -->
+
     <div class="back-nav">
       <a href="/api/root/${nodeId}${queryString}" class="back-link">
-        ← Back to Tree
+        Back to Tree
       </a>
-      <a href="/api/${nodeId}/${nodeVersion}${queryString}" class="back-link">
-        Back to Version
+      <a href="/api/${nodeId}/${parsedVersion}/values${queryString}" class="back-link">
+        Back to Values
       </a>
     </div>
 
-    <!-- Header -->
     <div class="header">
-      <h1>
-        <a href="/api/${nodeId}/${nodeVersion}${queryString}">
-          ${nodeName} v${nodeVersion}
-        </a>
-      </h1>
-      <div class="section-title">📊 Values & Goals</div>
+      <h1>Solana Wallet</h1>
+      <span class="version-badge">Version ${parsedVersion}</span>
+      <div class="section-title">Wallet Setup</div>
     </div>
 
-    <!-- Table Section -->
-    <div class="table-section">
-      <table>
-        <thead>
-          <tr>
-            <th>Key</th>
-            <th>Value</th>
-            <th>Goal</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${
-            allKeys.length > 0
-              ? allKeys
-                  .map(
-                    (key) => `
-              <tr>
-                <td><code>${key}</code></td>
-                <td>
-                  <form
-                    method="POST"
-                    action="/api/${nodeId}/${parsedVersion}/value?token=${
-                      req.query.token ?? ""
-                    }&html"
-                    class="value-form"
-                  >
-                    <input type="hidden" name="key" value="${key}" />
-                    <input
-                      type="number"
-                      name="value"
-                      value="${values[key] ?? ""}"
-                      step="any"
-                      placeholder="0"
-                    />
-                    <button type="submit">Save</button>
-                  </form>
-                </td>
-                <td>
-                  <form
-                    method="POST"
-                    action="/api/${nodeId}/${parsedVersion}/goal?token=${
-                      req.query.token ?? ""
-                    }&html"
-                    class="value-form"
-                  >
-                    <input type="hidden" name="key" value="${key}" />
-                    <input
-                      type="number"
-                      name="goal"
-                      value="${goals[key] ?? ""}"
-                      step="any"
-                      placeholder="0"
-                    />
-                    <button type="submit">Save</button>
-                  </form>
-                </td>
-              </tr>
-            `
-                  )
-                  .join("")
-              : `
-              <tr>
-                <td colspan="3" class="empty-state">
-                  No values or goals set yet. Add one below to get started! 👇
-                </td>
-              </tr>
-            `
-          }
-          
-          <!-- Add New Row -->
-          <tr class="add-row">
-            <td colspan="3">
-              <form
-                method="POST"
-                action="/api/${nodeId}/${parsedVersion}/value?token=${
-      req.query.token ?? ""
-    }&html"
-                class="value-form"
-              >
-                <input
-                  type="text"
-                  name="key"
-                  placeholder="New key"
-                  required
-                />
-                <input
-                  type="number"
-                  name="value"
-                  value="0"
-                  step="any"
-                  placeholder="0"
-                />
-                <button type="submit" class="add-button">
-                  ＋ Add Value
-                </button>
-              </form>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <p style="margin-bottom: 16px;">No wallet exists for this version.</p>
+
+      <form
+        method="POST"
+        action="/api/${nodeId}/${parsedVersion}/values/solana?token=${
+          req.query.token ?? ""
+        }&html"
+      >
+        <button type="submit">Create Wallet</button>
+      </form>
     </div>
+
   </div>
 </body>
 </html>
 `);
-    s;
-  } catch (err) {
-    console.error("Error in /:nodeId/:version/values:", err);
-    res.status(500).json({ error: err.message });
+      }
+
+      return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Wallet — Version ${parsedVersion}</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+        'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .back-link:hover {
+      background: white;
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .version-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 14px;
+      color: white;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .section-title {
+      margin-top: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    code {
+      display: block;
+      background: #f0f0f0;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 13px;
+      color: #667eea;
+      word-break: break-all;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="back-nav">
+      <a href="/api/root/${nodeId}${queryString}" class="back-link">Back to Tree</a>
+      <a href="/api/${nodeId}/${parsedVersion}/values${queryString}" class="back-link">
+        Back to Values
+      </a>
+    </div>
+
+    <div class="header">
+      <h1>Solana Wallet</h1>
+      <span class="version-badge">Version ${parsedVersion}</span>
+      <div class="section-title">Wallet Details</div>
+    </div>
+
+    <div class="card">
+      <strong>Address</strong>
+      <code>${walletInfo.publicKey}</code>
+
+      <p style="margin-top:16px;">
+        <strong>SOL Balance:</strong>
+        ${(walletInfo.solBalance / 1e9).toFixed(4)} SOL
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>
+`);
+    } catch (err) {
+      console.error("Error in /:nodeId/:version/values/solana:", err);
+      res.status(500).json({ error: err.message });
+    }
   }
-});
+);
+
+router.post(
+  "/:nodeId/:version/values/solana",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { nodeId, version } = req.params;
+      const parsedVersion = Number(version);
+
+      if (!Number.isInteger(parsedVersion) || parsedVersion < 0) {
+        return res.status(400).json({ error: "Invalid version" });
+      }
+
+      await ensureVersionWallet(nodeId, parsedVersion);
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/${nodeId}/${parsedVersion}/values/solana?token=${
+            req.query.token ?? ""
+          }&html`
+        );
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
 
 export default router;

@@ -312,6 +312,21 @@ async function getRootNodes(req, res) {
     res.status(500).json({ message: "Server error" });
   }
 }
+function stripWalletSecrets(node) {
+  if (!node || !Array.isArray(node.versions)) return node;
+
+  return {
+    ...node,
+    versions: node.versions.map((v) => ({
+      ...v,
+      wallet: v.wallet
+        ? {
+            publicKey: v.wallet.publicKey ?? null,
+          }
+        : null,
+    })),
+  };
+}
 
 async function getAllData(req, res) {
   const { rootId } = req.body;
@@ -322,11 +337,12 @@ async function getAllData(req, res) {
 
   try {
     const populateNodeRecursive = async (nodeId) => {
-      const node = await Node.findById(nodeId)
-        .populate("children")
-        .lean()
-        .exec();
+      let node = await Node.findById(nodeId).populate("children").lean().exec();
+
       if (!node) return null;
+
+      // 🔐 STRIP WALLET SECRETS HERE
+      node = stripWalletSecrets(node);
 
       const contributions = await Contribution.find({
         nodeId: node._id,
