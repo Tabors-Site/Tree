@@ -63,4 +63,71 @@ async function updateSchedule({
   };
 }
 
-export { updateSchedule };
+async function getCalendar({ rootNodeId, startDate, endDate }) {
+  if (!rootNodeId) {
+    const error = new Error("rootNodeId is required");
+    error.status = 400;
+    throw error;
+  }
+
+  const start = startDate ? new Date(startDate) : null;
+  const end = endDate ? new Date(endDate) : null;
+
+  if (start && isNaN(start)) {
+    const error = new Error("Invalid startDate");
+    error.status = 400;
+    throw error;
+  }
+
+  if (end && isNaN(end)) {
+    const error = new Error("Invalid endDate");
+    error.status = 400;
+    throw error;
+  }
+
+  const results = [];
+  const visited = new Set();
+
+  async function walk(nodeId) {
+    if (!nodeId || visited.has(nodeId)) return;
+    visited.add(nodeId);
+
+    const node = await Node.findById(nodeId)
+      .select("name prestige versions children")
+      .lean();
+
+    if (!node) return;
+
+    const versionIndex = node.prestige;
+    const version = node.versions?.[versionIndex];
+
+    if (version?.schedule) {
+      const scheduleDate = new Date(version.schedule);
+
+      const inRange =
+        (!start || scheduleDate >= start) && (!end || scheduleDate <= end);
+
+      if (inRange) {
+        results.push({
+          nodeId: node._id.toString(),
+          name: node.name ?? "(Untitled)",
+          versionIndex,
+          schedule: scheduleDate,
+          reeffectTime: version.reeffectTime ?? null,
+        });
+      }
+    }
+
+    if (Array.isArray(node.children)) {
+      for (const childId of node.children) {
+        await walk(childId);
+      }
+    }
+  }
+
+  await walk(rootNodeId);
+
+  return results;
+}
+
+export { updateSchedule, getCalendar };

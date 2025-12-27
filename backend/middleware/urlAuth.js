@@ -17,7 +17,11 @@ export default async function urlAuth(req, res, next) {
       req.params?.userId || req.body?.userId || req.query?.userId || null;
 
     const nodeId =
-      req.params?.nodeId || req.body?.nodeId || req.query?.nodeId || null;
+      req.params?.nodeId ||
+      req.body?.nodeId ||
+      req.query?.nodeId ||
+      req.params?.rootId || // 👈 ADD THIS
+      null;
 
     if (!userId && !nodeId) {
       return res.status(400).json({

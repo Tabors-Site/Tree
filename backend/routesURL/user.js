@@ -2675,9 +2675,16 @@ document.addEventListener("click", async (e) => {
 
       <!-- Navigation Links -->
       <div class="nav-links">
+              <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
+
         <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
         <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
         <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+                <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
+                        <a href="/api/user/${userId}/deleted${tokenQS}">Deleted</a>
+
+
+
       </div>
     </div>
 
@@ -3184,40 +3191,375 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
         : `<p><em>No pending invites</em></p>`;
 
     return res.send(`
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Invites</title>
   <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
-      font-family: system-ui, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
       padding: 20px;
-      background: #fafafa;
+      color: #1a1a1a;
     }
-    li {
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .back-link:hover {
       background: white;
-      padding: 14px;
-      margin-bottom: 12px;
-      border-radius: 8px;
-      border: 1px solid #e3e5e8;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
     }
-    button {
-      padding: 6px 10px;
-      border-radius: 6px;
-      border: 1px solid #999;
-      background: #eee;
+
+    /* Header Section */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      line-height: 1.3;
+      margin-bottom: 16px;
+    }
+
+   
+    .header h1 a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .header h1 a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    /* Navigation Links */
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      padding: 8px 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .nav-links a:hover {
+      background: white;
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    /* Invites List */
+    .invites-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .invites-list {
+      list-style: none;
+    }
+
+    .invite-card {
+      background: linear-gradient(135deg, #fdfbf7 0%, #fff9f0 100%);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      border-left: 4px solid #d4af37;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(212, 175, 55, 0.1);
+    }
+
+    .invite-card:hover {
+      background: linear-gradient(135deg, #fffef9 0%, #fffbf4 100%);
+      transform: translateX(4px);
+      box-shadow: 0 6px 20px rgba(212, 175, 55, 0.2);
+      border-left-color: #f4d03f;
+    }
+
+    .invite-card:last-child {
+      margin-bottom: 0;
+    }
+
+    .invite-text {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #1a1a1a;
+      margin-bottom: 12px;
+    }
+
+    .invite-text strong:first-child {
+      color: #c9a227;
+      font-weight: 700;
+    }
+
+    .invite-text strong:last-child {
+      color: #1a1a1a;
+      font-weight: 700;
+    }
+
+    .invite-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .invite-actions form {
+      margin: 0;
+    }
+
+    .accept-button {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+      color: #1a1a1a;
       cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+      transition: all 0.2s;
+      font-family: inherit;
+      box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+    }
+
+    .accept-button:hover {
+      background: linear-gradient(135deg, #f4d03f 0%, #ffd700 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(212, 175, 55, 0.4);
+    }
+
+    .decline-button {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: 2px solid #e0e0e0;
+      background: white;
+      color: #666;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .decline-button:hover {
+      border-color: #c62828;
+      color: #c62828;
+      background: #fff5f5;
+      transform: translateY(-1px);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 40px;
+      color: #999;
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-text {
+      font-size: 18px;
+      color: #666;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .header,
+      .invites-section {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .invite-card {
+        padding: 16px;
+      }
+
+      .invite-actions {
+        flex-direction: column;
+      }
+
+      .accept-button,
+      .decline-button {
+        width: 100%;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
     }
   </style>
 </head>
 <body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/user/${userId}?token=${
+      req.query.token ?? ""
+    }&html" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
 
-<h1>Invites</h1>
+    <!-- Header -->
+    <div class="header">
+    <h1>
+     Invites
+      </h1>
 
-<ul>
-  ${rows}
-</ul>
+      <!-- Navigation Links -->
+      <div class="nav-links">
+        <a href="/api/user/${userId}/raw-ideas?token=${
+      req.query.token ?? ""
+    }&html">Raw Ideas</a>
+        <a href="/api/user/${userId}/notes?token=${
+      req.query.token ?? ""
+    }&html">Notes</a>
+        <a href="/api/user/${userId}/tags?token=${
+      req.query.token ?? ""
+    }&html">Mail</a>
+        <a href="/api/user/${userId}/contributions?token=${
+      req.query.token ?? ""
+    }&html">Contributions</a>
+    <a href="/api/user/${userId}/invites?token=${
+      req.query.token ?? ""
+    }&html">Invites</a>
+        <a href="/api/user/${userId}/deleted?token=${
+      req.query.token ?? ""
+    }&html">Deleted</a>
+      </div>
+    </div>
 
+    <!-- Invites Section -->
+    <div class="invites-section">
+      ${
+        invites.length > 0
+          ? `
+        <ul class="invites-list">
+          ${invites
+            .map(
+              (i) => `
+            <li class="invite-card">
+              <div class="invite-text">
+                <strong>${i.userInviting.username}</strong>
+                invited you to
+                <strong>${i.rootId.name}</strong>
+              </div>
+
+              <div class="invite-actions">
+                <form
+                  method="POST"
+                  action="/api/user/${userId}/invites/${i._id}?token=${
+                req.query.token ?? ""
+              }&html"
+                >
+                  <input type="hidden" name="accept" value="true" />
+                  <button type="submit" class="accept-button">Accept</button>
+                </form>
+
+                <form
+                  method="POST"
+                  action="/api/user/${userId}/invites/${i._id}?token=${
+                req.query.token ?? ""
+              }&html"
+                >
+                  <input type="hidden" name="accept" value="false" />
+                  <button type="submit" class="decline-button">Decline</button>
+                </form>
+              </div>
+            </li>
+          `
+            )
+            .join("")}
+        </ul>
+      `
+          : `
+        <div class="empty-state">
+          <div class="empty-state-icon">📬</div>
+          <div class="empty-state-text">No pending invites</div>
+        </div>
+      `
+      }
+    </div>
+  </div>
 </body>
 </html>
 `);

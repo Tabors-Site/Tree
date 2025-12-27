@@ -8,6 +8,7 @@ import {
 } from "../core/treeManagement.js";
 
 import { editStatus, addPrestige } from "../core/statuses.js";
+import { updateSchedule } from "../core/schedules.js";
 
 import Node from "../db/models/node.js";
 
@@ -1335,14 +1336,18 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
       </div>
 
       <div class="meta-card">
-        <div class="meta-label">Scheduled</div>
-        <div class="meta-value">${scheduleHtml}</div>
-      </div>
+  <div class="meta-label">Schedule</div>
+  <div class="meta-value">
+    ${scheduleHtml}
+    <button id="editScheduleBtn" style="margin-left:8px;">✏️</button>
+  </div>
+</div>
 
-      <div class="meta-card">
-        <div class="meta-label">Repeat Hours</div>
-        <div class="meta-value">${reeffectTime}</div>
-      </div>
+<div class="meta-card">
+  <div class="meta-label">Repeat Hours</div>
+  <div class="meta-value">${reeffectTime}</div>
+</div>
+
     </div>
 
     <!-- Navigation Links -->
@@ -1402,6 +1407,58 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
       }
     </div>
   </div>
+  <div id="scheduleModal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.4);
+  align-items:center;
+  justify-content:center;
+">
+  <div style="
+    background:white;
+    padding:24px;
+    border-radius:14px;
+    width:320px;
+  ">
+
+    <form
+      method="POST"
+      action="/api/${nodeId}/${version}/editSchedule${qs}"
+    >
+      <label style="display:block;margin-bottom:8px;">
+        TIME
+        <input
+          type="datetime-local"
+          name="newSchedule"
+          value="${
+            data.schedule
+              ? new Date(data.schedule).toISOString().slice(0, 16)
+              : ""
+          }"
+          required
+          style="width:100%;margin-top:4px;"
+        />
+      </label>
+
+      <label style="display:block;margin-bottom:12px;">
+        REPEAT HOURS
+        <input
+          type="number"
+          name="reeffectTime"
+          min="0"
+          value="${data.reeffectTime ?? 0}"
+          style="width:100%;margin-top:4px;"
+        />
+      </label>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" id="cancelSchedule">Cancel</button>
+        <button type="submit" class="primary-button">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
 
   <script>
     // Copy ID functionality
@@ -1414,7 +1471,25 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
         setTimeout(() => (btn.textContent = "📋"), 900);
       });
     });
+    const editBtn = document.getElementById("editScheduleBtn");
+const modal = document.getElementById("scheduleModal");
+const cancelBtn = document.getElementById("cancelSchedule");
+
+if (editBtn) {
+  editBtn.onclick = () => {
+    modal.style.display = "flex";
+  };
+}
+
+if (cancelBtn) {
+  cancelBtn.onclick = () => {
+    modal.style.display = "none";
+  };
+}
+
   </script>
+  
+
 </body>
 </html>
 `);
@@ -1508,5 +1583,46 @@ router.post("/:nodeId/delete", authenticate, async (req, res) => {
     return res.status(400).json({ error: err.message });
   }
 });
+
+router.post(
+  "/:nodeId/:version/editSchedule",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { nodeId, version } = req.params;
+      const userId = req.userId;
+
+      const newSchedule = req.body?.newSchedule || req.query?.newSchedule;
+
+      const reeffectTime = req.body?.reeffectTime ?? req.query?.reeffectTime;
+
+      if (!newSchedule || reeffectTime === undefined) {
+        return res.status(400).json({
+          error: "newSchedule and reeffectTime are required",
+        });
+      }
+
+      const result = await updateSchedule({
+        nodeId,
+        versionIndex: Number(version),
+        newSchedule,
+        reeffectTime: Number(reeffectTime),
+        userId,
+      });
+
+      // ✅ HTML redirect support (same pattern as editStatus)
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      res.json({ success: true, ...result });
+    } catch (err) {
+      console.error("editSchedule error:", err);
+      res.status(err.status || 400).json({ error: err.message });
+    }
+  }
+);
 
 export default router;
