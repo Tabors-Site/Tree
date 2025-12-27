@@ -196,75 +196,60 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     const contributorsHtml = rootMeta?.contributors?.length
       ? `
 <h2>Contributors</h2>
-<ul>
+<ul class="contributors-list">
 ${rootMeta.contributors
   .map((u) => {
     const isSelf = u._id.toString() === req.userId?.toString();
 
     return `
-<li style="display:flex; align-items:center; gap:10px;">
+<li>
   <a href="/api/user/${u._id}${queryString}">
     ${u.username}
   </a>
 
-  ${
-    isOwner
-      ? `
-    <!-- TRANSFER (owner only) -->
-    <form
-      method="POST"
-      action="/api/root/${nodeId}/transfer-owner?token=${
-          req.query.token ?? ""
-        }&html"
-      style="margin:0;"
-      onsubmit="return confirm('Transfer ownership to ${u.username}?')"
-    >
-      <input type="hidden" name="userReceiving" value="${u._id}" />
-      <button type="submit" style="padding:4px 8px;font-size:12px;">
-        Transfer
-      </button>
-    </form>
-    `
-      : ""
-  }
-
-  ${
-    isOwner || isSelf
-      ? `
-    <!-- REMOVE (owner OR self) -->
-    <form
-      method="POST"
-      action="/api/root/${nodeId}/remove-user?token=${
-          req.query.token ?? ""
-        }&html"
-      style="margin:0;"
-      onsubmit="return confirm('${
-        isSelf ? "Leave this root?" : `Remove ${u.username} from this root?`
-      }')"
-    >
-      <input type="hidden" name="userReceiving" value="${u._id}" />
-      <button
-        type="submit"
-        style="
-          padding:4px 8px;
-          font-size:12px;
-          border-radius:6px;
-          border:1px solid #999;
-          background:#f5f5f5;
-          cursor:pointer;
-        "
+  <div class="contributors-actions">
+    ${
+      isOwner
+        ? `
+      <form
+        method="POST"
+        action="/api/root/${nodeId}/transfer-owner?token=${
+            req.query.token ?? ""
+          }&html"
+        onsubmit="return confirm('Transfer ownership to ${u.username}?')"
       >
-        ${isSelf ? "Unvite yourself (can't be undone)" : "Remove"}
-      </button>
-    </form>
-    `
-      : ""
-  }
+        <input type="hidden" name="userReceiving" value="${u._id}" />
+        <button type="submit">Transfer</button>
+      </form>
+      `
+        : ""
+    }
+
+    ${
+      isOwner || isSelf
+        ? `
+      <form
+        method="POST"
+        action="/api/root/${nodeId}/remove-user?token=${
+            req.query.token ?? ""
+          }&html"
+        onsubmit="return confirm('${
+          isSelf ? "Leave this root?" : `Remove ${u.username} from this root?`
+        }')"
+      >
+        <input type="hidden" name="userReceiving" value="${u._id}" />
+        <button type="submit">
+          ${isSelf ? "Leave" : "Remove"}
+        </button>
+      </form>
+      `
+        : ""
+    }
+  </div>
 </li>
 `;
   })
   .join("")}
-
 </ul>
 `
       : ``;
@@ -324,64 +309,445 @@ ${rootMeta.contributors
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
         <title>${allData.name} — Tree</title>
-        <style>
-          body {
-            font-family: system-ui, sans-serif;
-            padding: 20px;
-            line-height: 1.6;
-            background: #fafafa;
-          }
+       <style>
+  * {
+    box-sizing: border-box;
+  }
 
-          h1 { margin-bottom: 4px; }
-          h2 { margin-top: 32px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    padding: 16px;
+    line-height: 1.6;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    margin: 0;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
 
-          a {
-            color: #0077cc;
-            text-decoration: none;
-            font-weight: 500;
-          }
+  @media (min-width: 768px) {
+    body {
+      padding: 32px 40px;
+    }
+  }
 
-          a:hover { text-decoration: underline; }
+  /* Typography */
+  h1 {
+    font-size: 24px;
+    margin: 16px 0 8px 0;
+    font-weight: 700;
+    line-height: 1.3;
+  }
 
-          ul {
-            list-style: none;
-            padding-left: 18px;
-            margin: 6px 0;
-          }
+  @media (min-width: 768px) {
+    h1 {
+      font-size: 32px;
+      margin: 20px 0 12px 0;
+    }
+  }
 
-          code {
-            background: #eee;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-          }
+  h2 {
+    font-size: 18px;
+    margin: 32px 0 12px 0;
+    font-weight: 600;
+    color: #333;
+  }
 
-          .json-box {
-            margin-top: 40px;
-            padding: 20px;
-            background: #111;
-            color: #0f0;
-            border-radius: 8px;
-            white-space: pre;
-            overflow-x: auto;
-            font-size: 13px;
-          }
+  @media (min-width: 768px) {
+    h2 {
+      font-size: 20px;
+      margin: 40px 0 16px 0;
+    }
+  }
 
-          .button {
-            display: inline-block;
-            padding: 10px 16px;
-            margin-top: 14px;
-            background: #0077cc;
-            color: white;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-          }
+  h3 {
+    font-size: 16px;
+    margin: 24px 0 8px 0;
+    font-weight: 600;
+    color: #555;
+  }
 
-          .button:hover {
-            background: #005fa3;
-          }
-        </style>
+  @media (min-width: 768px) {
+    h3 {
+      font-size: 18px;
+    }
+  }
+
+  /* Links */
+  a {
+    color: #0066cc;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+  }
+
+  a:hover {
+    color: #0052a3;
+    text-decoration: underline;
+  }
+
+  a:active {
+    color: #003d7a;
+  }
+
+  /* Tree Lists */
+  ul {
+    list-style: none;
+    padding-left: 12px;
+    margin: 8px 0;
+  }
+
+  @media (min-width: 768px) {
+    ul {
+      padding-left: 20px;
+      margin: 12px 0;
+    }
+  }
+
+  li {
+    margin: 8px 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* Code and ID Display */
+  code {
+    background: #e8e8e8;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
+    word-break: break-all;
+  }
+
+  @media (min-width: 768px) {
+    code {
+      font-size: 14px;
+    }
+  }
+
+  /* Node ID Container */
+  #nodeIdCode {
+    display: inline-block;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (min-width: 768px) {
+    #nodeIdCode {
+      max-width: none;
+    }
+  }
+
+  /* Buttons */
+  button {
+    font-family: inherit;
+    transition: all 0.2s ease;
+  }
+
+  button:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  button:active {
+    transform: translateY(0);
+  }
+
+  #copyNodeIdBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    opacity: 0.6;
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  #copyNodeIdBtn:hover {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Filter Buttons */
+  #filterButtons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  #filterButtons a {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 6px;
+    color: white;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    min-height: 36px;
+  }
+
+  #filterButtons a:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    text-decoration: none;
+  }
+
+  /* Forms */
+  form {
+    margin: 12px 0;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 15px;
+    border-radius: 6px;
+    border: 1px solid #d0d0d0;
+    background: white;
+    font-family: inherit;
+    transition: border-color 0.2s ease;
+  }
+
+  @media (min-width: 768px) {
+    input[type="text"] {
+      font-size: 16px;
+      padding: 12px 14px;
+    }
+  }
+
+  input[type="text"]:focus {
+    outline: none;
+    border-color: #0066cc;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+  }
+
+  button[type="submit"] {
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: 1px solid #999;
+    background: #f0f0f0;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  @media (min-width: 768px) {
+    button[type="submit"] {
+      padding: 12px 18px;
+      font-size: 15px;
+    }
+  }
+
+  button[type="submit"]:hover {
+    background: #e0e0e0;
+    border-color: #777;
+  }
+
+  /* Invite Form */
+  form[action*="/invite"] {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 100%;
+    margin-top: 12px;
+  }
+
+  @media (min-width: 640px) {
+    form[action*="/invite"] {
+      flex-direction: row;
+      max-width: 500px;
+    }
+
+    form[action*="/invite"] input[type="text"] {
+      flex: 1;
+      width: auto;
+    }
+
+    form[action*="/invite"] button {
+      width: auto;
+    }
+  }
+
+  /* Contributors List */
+  .contributors-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    margin: 8px 0;
+    border: 1px solid #e0e0e0;
+  }
+
+  @media (min-width: 640px) {
+    .contributors-list li {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+
+  .contributors-list a {
+    font-weight: 600;
+  }
+
+  .contributors-list form {
+    display: inline-block;
+    margin: 0;
+  }
+
+  .contributors-list button {
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    background: white;
+    white-space: nowrap;
+  }
+
+  .contributors-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* Retire Button */
+  button[style*="900"] {
+    padding: 10px 18px !important;
+    border-radius: 8px !important;
+    border: 1px solid #c62828 !important;
+    background: #fff5f5 !important;
+    color: #c62828 !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    font-size: 14px !important;
+  }
+
+  @media (min-width: 768px) {
+    button[style*="900"] {
+      font-size: 15px !important;
+    }
+  }
+
+  /* Tree Structure */
+  li[style*="border-left"] {
+    padding-left: 12px !important;
+    margin: 6px 0 !important;
+    position: relative;
+  }
+
+  @media (min-width: 768px) {
+    li[style*="border-left"] {
+      padding-left: 16px !important;
+    }
+  }
+
+  /* Paragraphs */
+  p {
+    margin: 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  p em {
+    color: #666;
+  }
+
+  /* Container for better mobile spacing */
+  .section {
+    margin: 24px 0;
+  }
+
+  @media (min-width: 768px) {
+    .section {
+      margin: 32px 0;
+    }
+  }
+
+  /* Responsive improvements for tree depth */
+  @media (max-width: 640px) {
+    ul ul {
+      padding-left: 8px;
+    }
+
+    li[style*="border-left"] {
+      font-size: 14px;
+    }
+  }
+
+  /* Loading states and interactions */
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Print styles */
+  @media print {
+    body {
+      background: white;
+      padding: 20px;
+    }
+
+    button, form {
+      display: none;
+    }
+
+    a {
+      color: #000;
+      text-decoration: underline;
+    }
+  }
+    /* Jump buttons */
+#jumpTop,
+#jumpBottom {
+  position: fixed;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #0066cc;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  opacity: 0.8;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 999;
+}
+
+#jumpTop:hover,
+#jumpBottom:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+
+#jumpTop {
+  top: 16px;      /* 🔝 top-right */
+}
+
+#jumpBottom {
+  bottom: 16px;   /* 🔻 bottom-right */
+}
+
+/* Hide on print */
+@media print {
+  #jumpTop,
+  #jumpBottom {
+    display: none;
+  }
+}
+
+</style>
       </head>
       <body>
               ${parentHtml}
@@ -419,6 +785,24 @@ ${rootMeta.contributors
         <h2>Filters</h2>
 
 <div id="filterButtons"></div>
+<button id="jumpTop" title="Jump to top">TOP</button>
+<button id="jumpBottom" title="Jump to bottom">BOT</button>
+
+<script>
+  document.getElementById("jumpTop").addEventListener("click", () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+  });
+
+  document.getElementById("jumpBottom").addEventListener("click", () => {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth"
+    });
+  });
+</script>
 
 <script>
   const params = new URLSearchParams(window.location.search);

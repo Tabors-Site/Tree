@@ -1283,7 +1283,645 @@ document.addEventListener("click", async (e) => {
   </body>
   </html>`;
 
-      return res.send(html);
+      // Replace the HTML return in your /:nodeId/:version/notes route with this:
+
+      // Check if we have the current user's ID (from cookie/session)
+      const currentUserId = req.userId ? req.userId.toString() : null;
+
+      return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${nodeName} — Notes</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      color: #1a1a1a;
+      overflow: hidden;
+    }
+
+    /* Top Navigation Bar */
+    .top-nav {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 16px 20px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+      flex-shrink: 0;
+    }
+
+    .top-nav-content {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .nav-left {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .nav-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: #f8f9fa;
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .nav-button:hover {
+      background: white;
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .book-button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .book-button:hover {
+      background: linear-gradient(135deg, #5856d6 0%, #6a3d8e 100%);
+      border-color: transparent;
+    }
+
+    /* Page Title */
+    .page-title {
+      width: 100%;
+      margin-top: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    .page-title a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .page-title a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    /* Notes Container */
+    .notes-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .notes-wrapper {
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .notes-list {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Message Bubble Styles */
+    .note-item {
+      display: flex;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Self messages (right aligned) */
+    .note-item.self {
+      flex-direction: row-reverse;
+    }
+
+    .note-bubble {
+      position: relative;
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    /* Self bubble (purple gradient) */
+    .note-item.self .note-bubble {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    /* Other user bubble (white) */
+    .note-item.other .note-bubble {
+      background: white;
+      color: #1a1a1a;
+      border-bottom-left-radius: 4px;
+    }
+
+    /* Reflection style */
+    .note-item.reflection .note-bubble {
+      background: #fff9e6;
+      border: 2px solid #ffd54f;
+      color: #1a1a1a;
+    }
+
+    .note-item.self.reflection .note-bubble {
+      background: linear-gradient(135deg, #ffd54f 0%, #ffb300 100%);
+      color: #1a1a1a;
+      border: none;
+    }
+
+    /* File badge */
+    .file-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .note-content {
+      font-size: 15px;
+      line-height: 1.5;
+      margin-bottom: 6px;
+    }
+
+    .note-content a {
+      color: inherit;
+      text-decoration: none;
+      opacity: 0.9;
+    }
+
+    .note-content a:hover {
+      opacity: 1;
+    }
+
+    .note-meta {
+      font-size: 11px;
+      opacity: 0.7;
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .note-author {
+      font-weight: 600;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .note-author a {
+      color: inherit;
+      text-decoration: none;
+      opacity: 0.9;
+    }
+
+    .note-author a:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+
+    /* Self messages don't show author */
+    .note-item.self .note-author {
+      display: none;
+    }
+
+    .delete-button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      opacity: 0.5;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .delete-button:hover {
+      opacity: 1;
+      transform: scale(1.2);
+    }
+
+    .note-item.self .delete-button {
+      color: white;
+    }
+
+    .note-item.other .delete-button {
+      color: #999;
+    }
+
+    .note-item.other .delete-button:hover {
+      color: #c62828;
+    }
+
+    /* Input Bar */
+    .input-bar {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 20px;
+      border-top: 1px solid rgba(0, 0, 0, 0.1);
+      box-shadow: 
+        0 -2px 12px rgba(0, 0, 0, 0.05),
+        0 -4px 20px rgba(102, 126, 234, 0);
+      flex-shrink: 0;
+      transition: box-shadow 0.3s ease;
+    }
+
+    .input-bar:focus-within {
+      box-shadow: 
+        0 -2px 12px rgba(0, 0, 0, 0.05),
+        0 -8px 30px rgba(102, 126, 234, 0.4);
+    }
+
+    .input-form {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 15px;
+      line-height: 1.5;
+      resize: none;
+      transition: all 0.2s;
+      background: white;
+      height: 56px;
+      max-height: 120px;
+      overflow-y: hidden;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .input-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .input-options {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      color: #666;
+      cursor: pointer;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    input[type="file"] {
+      font-size: 13px;
+      color: #666;
+    }
+
+    input[type="file"]::file-selector-button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid #d0d0d0;
+      background: white;
+      color: #666;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+      margin-right: 8px;
+    }
+
+    input[type="file"]::file-selector-button:hover {
+      background: #f5f5f5;
+      border-color: #999;
+    }
+
+    .send-button {
+      padding: 12px 28px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+      white-space: nowrap;
+    }
+
+    .send-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .top-nav {
+        padding: 12px 16px;
+      }
+
+      .nav-button {
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .page-title {
+        font-size: 16px;
+      }
+
+      .notes-container {
+        padding: 16px 12px;
+      }
+
+      .note-bubble {
+        max-width: 85%;
+        padding: 10px 14px;
+      }
+
+      .input-bar {
+        padding: 16px;
+      }
+
+      .input-controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .input-options {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .send-button {
+        width: 100%;
+      }
+
+      textarea {
+        font-size: 16px;
+        height: 60px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .nav-left {
+        width: 100%;
+      }
+
+      .nav-button {
+        flex: 1;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Navigation -->
+  <div class="top-nav">
+    <div class="top-nav-content">
+      <div class="nav-left">
+        <a href="/api/root/${nodeId}?token=${
+        req.query.token ?? ""
+      }&html" class="nav-button">
+          ← Back to Tree
+        </a>
+        <a href="${base}?token=${
+        req.query.token ?? ""
+      }&html" class="nav-button">
+          Back to Node
+        </a>
+      </div>
+      <a href="/api/${nodeId}/${version}/notes/book?token=${
+        req.query.token ?? ""
+      }&html" class="nav-button book-button">
+        📖 Book View
+      </a>
+      <div class="page-title">
+        Notes for <a href="${base}?token=${
+        req.query.token ?? ""
+      }&html">${nodeName} v${version}</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notes Container -->
+  <div class="notes-container">
+    <div class="notes-wrapper">
+      <ul class="notes-list">
+      ${notes
+        .map((n) => {
+          const isSelf =
+            currentUserId && n.userId && n.userId.toString() === currentUserId;
+          const preview =
+            n.contentType === "text"
+              ? n.content.length > 169
+                ? n.content.substring(0, 500) + "..."
+                : n.content
+              : n.content.split("/").pop();
+
+          const userLabel = n.userId
+            ? `<a href="/api/user/${n.userId}?token=${
+                req.query.token ?? ""
+              }&html">${n.username ?? n.userId}</a>`
+            : n.username ?? "Unknown user";
+
+          return `
+          <li
+            class="note-item ${isSelf ? "self" : "other"} ${
+            n.isReflection ? "reflection" : ""
+          }"
+            data-note-id="${n._id}"
+            data-node-id="${n.nodeId}"
+            data-version="${n.version}"
+          >
+            <div class="note-bubble">
+              ${
+                n.contentType === "file"
+                  ? '<div class="file-badge">📎 File</div>'
+                  : ""
+              }
+              ${!isSelf ? `<div class="note-author">${userLabel}</div>` : ""}
+              <div class="note-content">
+                <a href="${base}/notes/${n._id}?token=${
+            req.query.token ?? ""
+          }&html">
+                  ${preview}
+                </a>
+              </div>
+              <div class="note-meta">
+                <span>${new Date(n.createdAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}</span>
+                <button class="delete-button" title="Delete note">✕</button>
+              </div>
+            </div>
+          </li>
+        `;
+        })
+        .join("")}
+    </ul>
+    </div>
+  </div>
+
+  <!-- Input Bar -->
+  <div class="input-bar">
+    <form
+      method="POST"
+      action="/api/${nodeId}/${version}/notes?token=${
+        req.query.token ?? ""
+      }&html"
+      enctype="multipart/form-data"
+      class="input-form"
+    >
+      <textarea
+        name="content"
+        rows="1"
+        placeholder="Write a note..."
+        id="noteTextarea"
+      ></textarea>
+
+      <div class="input-controls">
+        <div class="input-options">
+         
+          <input type="file" name="file" />
+        </div>
+        <button type="submit" class="send-button">Send</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    // Auto-scroll to bottom on load
+    const container = document.querySelector('.notes-container');
+    container.scrollTop = container.scrollHeight;
+
+    // Auto-resize textarea with smooth overflow handling
+    const textarea = document.getElementById('noteTextarea');
+    textarea.addEventListener('input', function() {
+      this.style.height = 'auto';
+      const newHeight = Math.min(this.scrollHeight, 120);
+      this.style.height = newHeight + 'px';
+      
+      // Show scrollbar only when content exceeds max height
+      if (this.scrollHeight > 120) {
+        this.style.overflowY = 'auto';
+      } else {
+        this.style.overflowY = 'hidden';
+      }
+    });
+
+    // Submit on Enter (without Shift)
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        textarea.closest('form').submit();
+      }
+    });
+
+    // Delete note functionality
+    document.addEventListener('click', async (e) => {
+      if (!e.target.classList.contains('delete-button')) return;
+
+      const noteItem = e.target.closest('.note-item');
+      const noteId = noteItem.dataset.noteId;
+      const nodeId = noteItem.dataset.nodeId;
+      const version = noteItem.dataset.version;
+
+      if (!confirm('Delete this note? This cannot be undone.')) return;
+
+      const token = new URLSearchParams(window.location.search).get('token') || '';
+      const qs = token ? '?token=' + encodeURIComponent(token) : '';
+
+      try {
+        const res = await fetch(
+          \`/api/\${nodeId}/\${version}/notes/\${noteId}\${qs}\`,
+          { method: 'DELETE' }
+        );
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Delete failed');
+
+        // Fade out animation
+        noteItem.style.opacity = '0';
+        noteItem.style.transform = 'translateY(-10px)';
+        setTimeout(() => noteItem.remove(), 300);
+      } catch (err) {
+        alert('Failed to delete: ' + (err.message || 'Unknown error'));
+      }
+    });
+  </script>
+</body>
+</html>
+`);
     }
 
     // ---------- NORMAL OLD JSON MODE ----------

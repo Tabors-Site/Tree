@@ -133,246 +133,607 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         `
         : `<p><em>No roots found</em></p>`;
 
+    // Replace the HTML return in your user route with this:
+
+    // Replace the HTML return in your user route with this:
+
     return res.send(`
-      <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${user.username} — User Profile</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-        <title>User — ${user.username}</title>
-        <style>
-          body {
-            font-family: system-ui, sans-serif;
-            padding: 20px;
-            line-height: 1.6;
-            background: #fafafa;
-          }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
 
-          h1 { margin-bottom: 4px; }
-          h2 { margin-top: 32px; }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
 
-          a {
-            color: #0077cc;
-            text-decoration: none;
-            font-weight: 500;
-          }
+    /* Header Section */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
 
-          a:hover { text-decoration: underline; }
+    .user-info h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 12px;
+    }
 
-          ul {
-            list-style: none;
-            padding-left: 18px;
-            margin: 6px 0;
-          }
+    .user-id-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
 
-          code {
-            background: #eee;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-          }
-            
-        </style>
-      </head>
+    code {
+      background: #f0f0f0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      color: #666;
+      word-break: break-all;
+    }
 
-      <body>
+    #copyNodeIdBtn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px;
+      opacity: 0.6;
+      font-size: 18px;
+      transition: opacity 0.2s, transform 0.2s;
+    }
 
-        <h1>User</h1>
+    #copyNodeIdBtn:hover {
+      opacity: 1;
+      transform: scale(1.1);
+    }
 
-        <p>
-          <strong>${user.username}</strong><br/>
-          <p style="display:flex;align-items:center;gap:6px;">
-  <code id="nodeIdCode">${user._id}</code>
+    /* Raw Ideas Capture Box - The Star of the Show */
+    .raw-ideas-section {
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(20px);
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 32px;
+      box-shadow: 
+        0 20px 60px rgba(102, 126, 234, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+      position: relative;
+      overflow: hidden;
+    }
 
-  <button id="copyNodeIdBtn" style="
-    background:none;
-    border:none;
-    cursor:pointer;
-    padding:2px;
-    opacity:0.6;
-  " title="Copy ID">
-    📋
-  </button>
-</p>
-  <div style="margin:16px 0;">
-  <form
-    method="POST"
-    action="/api/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html"
-    enctype="multipart/form-data"
-    style="display:flex; flex-direction:column; gap:8px;"
-  >
-    <textarea
-      name="content"
-      placeholder="Capture a raw idea…"
-      id="rawIdeaInput"
-      style="
-        width:100%;
-        padding:12px 14px;
-        font-size:15px;
-        line-height:1.5;
-        border-radius:8px;
-        border:1px solid #ccc;
-        font-family:inherit;
-        resize:vertical;
-        min-height:52px;
-        box-sizing:border-box;
-        transition: border-color 0.2s;
-      "
-      rows="1"
-      autofocus
-    ></textarea>
+    .raw-ideas-section::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(
+        circle,
+        rgba(102, 126, 234, 0.08) 0%,
+        transparent 70%
+      );
+      animation: pulse 8s ease-in-out infinite;
+      pointer-events: none;
+    }
 
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <input
-        type="file"
-        name="file"
-        style="font-size:13px;"
-      />
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 0.5;
+      }
+      50% {
+        transform: scale(1.1) rotate(180deg);
+        opacity: 0.8;
+      }
+    }
 
-      <button
-        type="submit"
-        title="Save raw idea"
-        style="
-          padding:8px 16px;
-          font-size:14px;
-          border-radius:6px;
-          border:1px solid #999;
-          background:#5865f2;
-          color:white;
-          cursor:pointer;
-          font-weight:500;
-        "
-      >
-        Send
-      </button>
+    .raw-ideas-section h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .raw-idea-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      z-index: 1;
+    }
+
+    #rawIdeaInput {
+      width: 100%;
+      padding: 16px 18px;
+      font-size: 16px;
+      line-height: 1.6;
+      border-radius: 12px;
+      border: 2px solid transparent;
+      background: white;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 64px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    }
+
+    #rawIdeaInput:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 
+        0 0 0 4px rgba(102, 126, 234, 0.15),
+        0 8px 30px rgba(102, 126, 234, 0.2);
+      transform: translateY(-2px);
+    }
+
+    #rawIdeaInput::placeholder {
+      color: #999;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .file-input-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 140px;
+    }
+
+    input[type="file"] {
+      font-size: 13px;
+      color: #666;
+      cursor: pointer;
+    }
+
+    input[type="file"]::file-selector-button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid #d0d0d0;
+      background: white;
+      color: #666;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+      margin-right: 8px;
+    }
+
+    input[type="file"]::file-selector-button:hover {
+      background: #f5f5f5;
+      border-color: #999;
+    }
+
+    .send-button {
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      white-space: nowrap;
+    }
+
+    .send-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+    }
+
+    .send-button:active {
+      transform: translateY(0);
+    }
+
+    /* Navigation Links */
+    .nav-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .nav-section h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .nav-links {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .nav-links li {
+      margin: 0;
+    }
+
+    .nav-links a {
+      display: block;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .nav-links a:hover {
+      background: white;
+      border-color: #667eea;
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+    }
+
+    /* Roots Section */
+    .roots-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .roots-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 16px;
+    }
+
+    .roots-list {
+      list-style: none;
+      margin-bottom: 20px;
+    }
+
+    .roots-list li {
+      margin: 8px 0;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .roots-list li:hover {
+      background: white;
+      border-color: #e0e0e0;
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .roots-list a {
+      display: block;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      color: #1a1a1a;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 15px;
+      transition: all 0.2s;
+    }
+
+    .roots-list a:hover {
+      color: #667eea;
+      background: white;
+    }
+
+    .roots-list em {
+      color: #999;
+      font-style: normal;
+    }
+
+    /* Create Root Form */
+    .create-root-form {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .create-root-form input[type="text"] {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 15px;
+      border-radius: 10px;
+      border: 1px solid #d0d0d0;
+      background: white;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .create-root-form input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .create-root-button {
+      padding: 12px 18px;
+      font-size: 24px;
+      line-height: 1;
+      border-radius: 10px;
+      border: 1px solid #d0d0d0;
+      background: white;
+      color: #667eea;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 300;
+    }
+
+    .create-root-button:hover {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+      transform: scale(1.05);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .header,
+      .raw-ideas-section,
+      .nav-section,
+      .roots-section {
+        padding: 20px;
+      }
+
+      .user-info h1 {
+        font-size: 24px;
+      }
+
+      .raw-ideas-section {
+        padding: 24px 20px;
+      }
+
+      #rawIdeaInput {
+        font-size: 15px;
+        padding: 14px 16px;
+      }
+
+      .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .file-input-wrapper {
+        order: 2;
+      }
+
+      .send-button {
+        order: 1;
+        width: 100%;
+      }
+
+      .nav-links {
+        grid-template-columns: 1fr;
+      }
+
+      .create-root-form {
+        flex-direction: column;
+      }
+
+      .create-root-button {
+        width: 100%;
+      }
+
+      code {
+        font-size: 11px;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+
+      .nav-links {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="user-info">
+        <h1>${user.username}</h1>
+        <div class="user-id-container">
+          <code id="nodeIdCode">${user._id}</code>
+          <button id="copyNodeIdBtn" title="Copy ID">📋</button>
+        </div>
+      </div>
     </div>
-  </form>
-</div>
 
+    <!-- Raw Ideas Capture - Featured Section -->
+    <div class="raw-ideas-section">
+      <h2>Capture a Raw Idea</h2>
+      <form
+        method="POST"
+        action="/api/user/${userId}/raw-ideas?token=${
+      req.query.token ?? ""
+    }&html"
+        enctype="multipart/form-data"
+        class="raw-idea-form"
+      >
+        <textarea
+          name="content"
+          placeholder="What's on your mind?"
+          id="rawIdeaInput"
+          rows="1"
+          autofocus
+        ></textarea>
 
+        <div class="form-actions">
+          <div class="file-input-wrapper">
+            <input type="file" name="file" />
+          </div>
+          <button type="submit" class="send-button" title="Save raw idea">
+            Send
+          </button>
+        </div>
+      </form>
+    </div>
 
+    <!-- Navigation Links -->
+    <div class="nav-section">
+      <h2>Quick Links</h2>
+      <ul class="nav-links">
+        <li><a href="/api/user/${userId}/raw-ideas?${filtered}">Raw Ideas</a></li>
+        <li><a href="/api/user/${userId}/invites?${filtered}">Invites</a></li>
+        <li><a href="/api/user/${userId}/notes?${filtered}">Notes</a></li>
+        <li><a href="/api/user/${userId}/tags?${filtered}">Mail</a></li>
+        <li><a href="/api/user/${userId}/contributions?${filtered}">Contributions</a></li>
+        <li><a href="/api/user/${userId}/deleted?${filtered}">Deleted</a></li>
+      </ul>
+    </div>
 
+    <!-- Roots Section -->
+    <div class="roots-section">
+      <h2>Roots</h2>
+      ${
+        roots.length > 0
+          ? `
+        <ul class="roots-list">
+          ${roots
+            .map(
+              (r) => `
+            <li>
+              <a href="/api/root/${r._id}${queryString}">
+                ${r.name || "Untitled"}
+              </a>
+            </li>
+          `
+            )
+            .join("")}
+        </ul>
+      `
+          : `<p class="roots-list"><em>No roots yet</em></p>`
+      }
+      
+      <form
+        method="POST"
+        action="/api/user/${userId}/createRoot?token=${
+      req.query.token ?? ""
+    }&html"
+        class="create-root-form"
+      >
+        <input
+          type="text"
+          name="name"
+          placeholder="New root name"
+          required
+        />
+        <button type="submit" class="create-root-button" title="Create root">
+          ＋
+        </button>
+      </form>
+    </div>
+  </div>
 
-        </p>
-      <ul>
-      <li>
-  <a href="/api/user/${userId}/invites?${filtered}">
-    Invites
-  </a>
-</li>
+  <script>
+    // Copy ID functionality
+    const btn = document.getElementById("copyNodeIdBtn");
+    const code = document.getElementById("nodeIdCode");
 
-     <li>   <a href="/api/user/${userId}/notes?${filtered}">Notes</a></li>
-     <li> <a href="/api/user/${userId}/tags?${filtered}">Mail</a></li>
-     <li> <a href="/api/user/${userId}/contributions?${filtered}">Contributions</a></li>
-          <li> <a href="/api/user/${userId}/deleted?${filtered}">Deleted</a></li>
-
-     <li>
-  <a href="/api/user/${userId}/raw-ideas?${filtered}">
-    Raw Ideas
-  </a>
-</li>
-
-</ul>
-        <h2>Roots</h2>
-        ${rootsHtml}
-        <div style="margin-top:16px;">
-  <form
-    method="POST"
-    action="/api/user/${userId}/createRoot?token=${req.query.token ?? ""}&html"
-    style="display:flex; gap:8px; align-items:center;"
-  >
-    <input
-      type="text"
-      name="name"
-      placeholder="New root name"
-      required
-      style="
-        padding:8px 10px;
-        font-size:14px;
-        border-radius:6px;
-        border:1px solid #ccc;
-        flex:1;
-      "
-    />
-
-    <button
-      type="submit"
-      title="Create root"
-      style="
-        padding:8px 12px;
-        font-size:18px;
-        border-radius:6px;
-        border:1px solid #999;
-        background:#eee;
-        cursor:pointer;
-      "
-    >
-      ＋
-    </button>
-  </form>
-</div>
-
-<script>
-  const btn = document.getElementById("copyNodeIdBtn");
-  const code = document.getElementById("nodeIdCode");
-
-  btn.addEventListener("click", () => {
-    navigator.clipboard.writeText(code.textContent).then(() => {
-      btn.textContent = "✔️";
-      setTimeout(() => (btn.textContent = "📋"), 900);
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = "✔️";
+        setTimeout(() => (btn.textContent = "📋"), 900);
+      });
     });
-  });
-</script>
-<script>
-  // Auto-resize textarea as user types
-  const textarea = document.getElementById("rawIdeaInput");
-  
-  function autoResize() {
-    // Reset height to auto to get the correct scrollHeight
-    textarea.style.height = 'auto';
-    
-    // Set height based on content, with a max height
-    const maxHeight = 400; // Maximum height in pixels
-    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-    textarea.style.height = newHeight + 'px';
-    
-    // Add scrollbar if content exceeds max height
-    if (textarea.scrollHeight > maxHeight) {
-      textarea.style.overflowY = 'auto';
-    } else {
-      textarea.style.overflowY = 'hidden';
-    }
-  }
-  
-  // Auto-resize on input
-  textarea.addEventListener('input', autoResize);
-  
-  // Auto-resize on page load (in case there's pre-filled content)
-  autoResize();
-  
-  // Optional: Submit with Cmd/Ctrl+Enter
-  textarea.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      textarea.closest('form').submit();
-    }
-  });
-  
-  // Focus styling
-  textarea.addEventListener('focus', () => {
-    textarea.style.borderColor = '#5865f2';
-    textarea.style.outline = 'none';
-    textarea.style.boxShadow = '0 0 0 3px rgba(88, 101, 242, 0.1)';
-  });
-  
-  textarea.addEventListener('blur', () => {
-    textarea.style.borderColor = '#ccc';
-    textarea.style.boxShadow = 'none';
-  });
-</script>
 
-      </body>
-      </html>
-    `);
+    // Auto-resize textarea
+    const textarea = document.getElementById("rawIdeaInput");
+    
+    function autoResize() {
+      textarea.style.height = 'auto';
+      const maxHeight = 400;
+      const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+      textarea.style.height = newHeight + 'px';
+      
+      if (textarea.scrollHeight > maxHeight) {
+        textarea.style.overflowY = 'auto';
+      } else {
+        textarea.style.overflowY = 'hidden';
+      }
+    }
+    
+    textarea.addEventListener('input', autoResize);
+    autoResize();
+    
+    // Submit with Cmd/Ctrl+Enter
+   textarea.addEventListener("keydown", (e) => {
+  // Detect mobile keyboards (rough but effective)
+  const isMobile =
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  // ENTER (desktop only) → submit
+  if (!isMobile && e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    textarea.closest("form").submit();
+    return;
+  }
+
+  // SHIFT + ENTER → newline (default behavior)
+  // do nothing
+});
+
+  </script>
+</body>
+</html>
+`);
   } catch (err) {
     console.error("Error in /user/:userId:", err);
     res.status(500).json({ error: err.message });
@@ -1547,7 +1908,7 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/user/${userId}?token=${req.query.token ?? ""}&html`
+        `/api/root/${rootNode._id}?token=${req.query.token ?? ""}&html`
       );
     }
 
@@ -1927,7 +2288,496 @@ document.addEventListener("click", async (e) => {
 </html>
 `;
 
-    return res.send(html);
+    // Replace the HTML return in your /user/:userId/raw-ideas route with this:
+
+    return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${user.username} — Raw Ideas</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Header Section */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    .header h1 a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .header h1 a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    /* Search Box */
+    .search-form {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .search-form input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 12px 16px;
+      font-size: 15px;
+      border-radius: 10px;
+      border: 1px solid #d0d0d0;
+      background: white;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .search-form input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .search-form button {
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .search-form button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    /* Navigation */
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      padding: 8px 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .nav-links a:hover {
+      background: white;
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    /* Raw Ideas List */
+    .ideas-list {
+      list-style: none;
+    }
+
+    .idea-card {
+      position: relative;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      transition: all 0.2s;
+    }
+
+    .idea-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .delete-button {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #999;
+      padding: 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      line-height: 1;
+    }
+
+    .delete-button:hover {
+      background: #ffebee;
+      color: #c62828;
+      transform: scale(1.1);
+    }
+
+    .idea-content {
+      padding-right: 40px;
+      margin-bottom: 12px;
+    }
+
+    .idea-link {
+      color: #1a1a1a;
+      text-decoration: none;
+      font-size: 15px;
+      line-height: 1.6;
+      display: block;
+      word-wrap: break-word;
+      transition: color 0.2s;
+    }
+
+    .idea-link:hover {
+      color: #667eea;
+    }
+
+    .file-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+
+    /* Transfer Form */
+    .transfer-form {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #e9ecef;
+      flex-wrap: wrap;
+    }
+
+    .transfer-form input[type="text"] {
+      flex: 1;
+      min-width: 160px;
+      padding: 10px 14px;
+      font-size: 14px;
+      border-radius: 8px;
+      border: 1px solid #d0d0d0;
+      background: white;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .transfer-form input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .transfer-form button {
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: none;
+      background: #667eea;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+
+    .transfer-form button:hover {
+      background: #5856d6;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Metadata */
+    .idea-meta {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #888;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .idea-meta::before {
+      content: "🕐";
+      font-size: 14px;
+    }
+
+    /* Empty State */
+    .empty-state {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 60px 40px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-text {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-subtext {
+      font-size: 14px;
+      color: #999;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .header {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .search-form {
+        flex-direction: column;
+      }
+
+      .search-form input[type="text"] {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .search-form button {
+        width: 100%;
+      }
+
+      .nav-links {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .nav-links a {
+        text-align: center;
+      }
+
+      .idea-card {
+        padding: 16px;
+      }
+
+      .delete-button {
+        top: 12px;
+        right: 12px;
+      }
+
+      .transfer-form {
+        flex-direction: column;
+      }
+
+      .transfer-form input[type="text"] {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .transfer-form button {
+        width: 100%;
+      }
+
+      .empty-state {
+        padding: 40px 24px;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header Section -->
+    <div class="header">
+      <h1>
+        Raw Ideas for
+        <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
+      </h1>
+
+      <!-- Search Form -->
+      <form method="GET" action="/api/user/${userId}/raw-ideas" class="search-form">
+        <input type="hidden" name="token" value="${token}">
+        <input type="hidden" name="html" value="">
+        <input
+          type="text"
+          name="q"
+          placeholder="Search raw ideas..."
+          value="${query}"
+        />
+        <button type="submit">Search</button>
+      </form>
+
+      <!-- Navigation Links -->
+      <div class="nav-links">
+        <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
+        <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
+        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+      </div>
+    </div>
+
+    <!-- Raw Ideas List -->
+    ${
+      rawIdeas.length > 0
+        ? `
+    <ul class="ideas-list">
+      ${rawIdeas
+        .map(
+          (r) => `
+        <li class="idea-card" data-raw-idea-id="${r._id}">
+          <button class="delete-button" title="Delete raw idea">✕</button>
+
+          <div class="idea-content">
+            <a
+              href="/api/user/${userId}/raw-ideas/${r._id}${tokenQS}"
+              class="idea-link"
+            >
+              ${
+                r.contentType === "file"
+                  ? `<span class="file-badge">FILE</span>${r.content}`
+                  : r.content
+              }
+            </a>
+          </div>
+
+          <form
+            method="POST"
+            action="/api/user/${userId}/raw-ideas/${
+            r._id
+          }/transfer?token=${token}&html"
+            class="transfer-form"
+          >
+            <input
+              type="text"
+              name="nodeId"
+              placeholder="Target node ID"
+              required
+            />
+            <button type="submit">Transfer to Node</button>
+          </form>
+
+          <div class="idea-meta">${new Date(r.createdAt).toLocaleString()}
+          </div>
+        </li>
+      `
+        )
+        .join("")}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">💭</div>
+      <div class="empty-state-text">No raw ideas yet</div>
+      <div class="empty-state-subtext">
+        ${
+          query.trim() !== ""
+            ? "Try a different search term"
+            : "Start capturing your ideas from the user page"
+        }
+      </div>
+    </div>
+    `
+    }
+  </div>
+
+  <script>
+    document.addEventListener("click", async (e) => {
+      if (!e.target.classList.contains("delete-button")) return;
+
+      const card = e.target.closest(".idea-card");
+      const rawIdeaId = card.dataset.rawIdeaId;
+
+      if (!confirm("Delete this raw idea? This cannot be undone.")) return;
+
+      const token = new URLSearchParams(window.location.search).get("token") || "";
+      const qs = token ? "?token=" + encodeURIComponent(token) : "";
+
+      try {
+        const res = await fetch(
+          "/api/user/${userId}/raw-ideas/" + rawIdeaId + qs,
+          { method: "DELETE" }
+        );
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        // Fade out animation
+        card.style.opacity = "0";
+        card.style.transform = "translateX(-20px)";
+        setTimeout(() => card.remove(), 300);
+      } catch (err) {
+        alert("Failed to delete: " + (err.message || "Unknown error"));
+      }
+    });
+  </script>
+</body>
+</html>
+`);
   } catch (err) {
     console.error("Error in /user/:userId/raw-ideas:", err);
     res.status(400).json({ success: false, error: err.message });

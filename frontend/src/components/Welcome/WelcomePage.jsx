@@ -130,7 +130,7 @@ const WelcomePage = () => {
                 href="https://tree.tabors.site/legacy"
                 className="back-to-site-btn"
               >
-                Open App
+                Legacy App
               </a>
             </div>
 
