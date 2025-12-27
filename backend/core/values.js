@@ -30,6 +30,19 @@ function assertUserWritableKey(rawKey) {
 
   return key;
 }
+function findExistingKey(map, incomingKey) {
+  if (!map) return null;
+
+  const lower = incomingKey.toLowerCase();
+
+  for (const existingKey of map.keys()) {
+    if (existingKey.toLowerCase() === lower) {
+      return existingKey; // return the ORIGINAL stored key
+    }
+  }
+
+  return null;
+}
 
 async function setValueForNode({ nodeId, key, value, version, userId }) {
   key = assertUserWritableKey(key);
@@ -47,26 +60,27 @@ async function setValueForNode({ nodeId, key, value, version, userId }) {
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
 
-  if (node.versions[versionIndex] === undefined) {
+  const currentVersion = node.versions?.[versionIndex];
+  if (!currentVersion) {
     throw new Error("Version index does not exist");
   }
 
-  const currentVersion = node.versions[versionIndex];
-
-  if (currentVersion) {
-    currentVersion.values.set(key, value);
-  } else {
+  if (!currentVersion.values) {
     currentVersion.values = new Map();
-    currentVersion.values.set(key, value);
   }
+
+  // 🔑 CASE-INSENSITIVE CHECK
+  const existingKey = findExistingKey(currentVersion.values, key);
+  const finalKey = existingKey ?? key;
+
+  currentVersion.values.set(finalKey, value);
 
   await node.save();
   await logContribution({
     userId,
     nodeId,
     action: "editValue",
-    status: null,
-    valueEdited: { [key]: value },
+    valueEdited: { [finalKey]: value },
     nodeVersion: versionIndex,
     tradeId: null,
   });
@@ -75,7 +89,7 @@ async function setValueForNode({ nodeId, key, value, version, userId }) {
 }
 
 async function setGoalForNode({ nodeId, key, goal, version, userId }) {
-  const versionIndex = version.toString();
+  const versionIndex = Number(version);
   const numericGoal = Number(goal);
 
   if (isNaN(numericGoal) || (typeof goal === "string" && goal.includes("e"))) {
@@ -85,26 +99,27 @@ async function setGoalForNode({ nodeId, key, goal, version, userId }) {
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
 
-  if (node.versions[versionIndex] === undefined) {
+  const currentVersion = node.versions?.[versionIndex];
+  if (!currentVersion) {
     throw new Error("Version index does not exist");
   }
 
-  const currentVersion = node.versions[versionIndex];
-
-  if (currentVersion) {
-    currentVersion.goals.set(key, goal);
-  } else {
+  if (!currentVersion.goals) {
     currentVersion.goals = new Map();
-    currentVersion.goals.set(key, goal);
   }
+
+  // 🔑 CASE-INSENSITIVE CHECK
+  const existingKey = findExistingKey(currentVersion.goals, key);
+  const finalKey = existingKey ?? key;
+
+  currentVersion.goals.set(finalKey, goal);
 
   await node.save();
   await logContribution({
     userId,
     nodeId,
     action: "editGoal",
-    status: null,
-    goalEdited: { [key]: goal },
+    goalEdited: { [finalKey]: goal },
     nodeVersion: versionIndex,
     tradeId: null,
   });

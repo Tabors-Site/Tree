@@ -13,7 +13,32 @@ import {
   getVersionWalletInfo,
   ensureVersionWallet,
   syncVersionSOLBalance,
+  sendSOLFromVersion,
 } from "../core/solana.js";
+
+function isAutoKey(key) {
+  return key.startsWith("_auto__");
+}
+
+function formatAutoKeyName(key) {
+  return key
+    .replace(/^_auto__/, "")
+    .replace(/_/g, " ")
+    .toUpperCase();
+}
+
+function formatAutoValue(key, value) {
+  if (value == null) return "";
+
+  // SOL auto key
+  if (key === "_auto__sol") {
+    return Number(value / 1e9)
+      .toFixed(9)
+      .replace(/\.?0+$/, "");
+  }
+
+  return value;
+}
 
 // SET VALUE
 router.post("/:nodeId/:version/value", authenticate, async (req, res) => {
@@ -462,51 +487,70 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
             ${
               allKeys.length > 0
                 ? allKeys
-                    .map(
-                      (key) => `
-                <tr>
-                  <td><code>${key}</code></td>
-                  <td>
-                    <form
-                      method="POST"
-                      action="/api/${nodeId}/${parsedVersion}/value?token=${
-                        req.query.token ?? ""
-                      }&html"
-                      class="value-form"
-                    >
-                      <input type="hidden" name="key" value="${key}" />
-                      <input
-                        type="number"
-                        name="value"
-                        value="${values[key] ?? ""}"
-                        step="any"
-                        placeholder="0"
-                      />
-                      <button type="submit">Save</button>
-                    </form>
-                  </td>
-                  <td>
-                    <form
-                      method="POST"
-                      action="/api/${nodeId}/${parsedVersion}/goal?token=${
-                        req.query.token ?? ""
-                      }&html"
-                      class="value-form"
-                    >
-                      <input type="hidden" name="key" value="${key}" />
-                      <input
-                        type="number"
-                        name="goal"
-                        value="${goals[key] ?? ""}"
-                        step="any"
-                        placeholder="0"
-                      />
-                      <button type="submit">Save</button>
-                    </form>
-                  </td>
-                </tr>
+                    .map((key) => {
+                      const isAuto = isAutoKey(key);
+                      const displayName = isAuto ? formatAutoKeyName(key) : key;
+                      const displayValue = isAuto
+                        ? formatAutoValue(key, values[key])
+                        : values[key] ?? "";
+
+                      return `
+      <tr>
+        <td><code>${displayName}</code></td>
+
+        <td>
+          ${
+            isAuto
+              ? `<code>${displayValue}</code>`
+              : `
+                <form
+                  method="POST"
+                  action="/api/${nodeId}/${parsedVersion}/value?token=${
+                  req.query.token ?? ""
+                }&html"
+                  class="value-form"
+                >
+                  <input type="hidden" name="key" value="${key}" />
+                  <input
+                    type="number"
+                    name="value"
+                    value="${displayValue}"
+                      data-original="${displayValue}"
+
+                    step="any"
+                    placeholder="0"
+                  />
+<button type="submit" class="save-btn" hidden>Save</button>
+                </form>
               `
-                    )
+          }
+        </td>
+
+        <!-- GOALS ARE ALWAYS EDITABLE -->
+        <td>
+          <form
+            method="POST"
+            action="/api/${nodeId}/${parsedVersion}/goal?token=${
+                        req.query.token ?? ""
+                      }&html"
+            class="value-form"
+          >
+            <input type="hidden" name="key" value="${key}" />
+            <input
+              type="number"
+              name="goal"
+              value="${goals[key] ?? ""}"
+                data-original="${goals[key] ?? ""}"
+
+              step="any"
+              placeholder="0"
+            />
+<button type="submit" class="save-btn" hidden>Save</button>
+          </form>
+        </td>
+      </tr>
+    `;
+                    })
                     .join("")
                 : `
                 <tr>
@@ -563,6 +607,28 @@ router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
     });
   }
 </script>
+<script>
+  document.querySelectorAll(".value-form").forEach((form) => {
+    const input = form.querySelector("input[type='number']");
+    const button = form.querySelector(".save-btn");
+
+    if (!input || !button) return;
+
+    const original = input.dataset.original ?? "";
+
+    function updateButton() {
+      const changed = String(input.value) !== String(original);
+      button.hidden = !changed;
+    }
+
+    // Initial state
+    updateButton();
+
+    // Watch for changes
+    input.addEventListener("input", updateButton);
+  });
+</script>
+
 
   </body>
   </html>
@@ -729,6 +795,8 @@ router.get(
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     }
+
+    
   </style>
 </head>
 <body>
@@ -879,6 +947,56 @@ router.get(
       color: #667eea;
       word-break: break-all;
       margin-top: 6px;
+      }
+      .send-card {
+  margin-top: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.1);
+}
+
+.send-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #1a1a1a;
+}
+
+.send-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.send-form input {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #d0d0d0;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.send-form input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.send-form button {
+  margin-top: 6px;
+}
+
+.fee-note {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e6e6e6;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+}
+
     }
   </style>
 </head>
@@ -900,13 +1018,59 @@ router.get(
 
     <div class="card">
       <strong>Address</strong>
-      <code>${walletInfo.publicKey}</code>
+<a
+  href="https://solscan.io/account/${walletInfo.publicKey}"
+  target="_blank"
+  rel="noopener noreferrer"
+  style="text-decoration: none;"
+>
+  <code>${walletInfo.publicKey}</code>
+</a>
+
 
       <p style="margin-top:16px;">
         <strong>SOL Balance:</strong>
         ${(walletInfo.solBalance / 1e9).toFixed(4)} SOL
       </p>
     </div>
+<div class="send-card">
+  <h3>Send SOL</h3>
+
+  <form
+    method="POST"
+    action="/api/${nodeId}/${parsedVersion}/values/solana/send?token=${
+        req.query.token ?? ""
+      }&html"
+    class="send-form"
+  >
+    <input
+      type="text"
+      name="destination"
+      placeholder="Destination (address or nodeId)"
+      required
+    />
+
+    <input
+      type="number"
+      name="amount"
+      step="any"
+      min="0"
+      placeholder="Amount (SOL)"
+      required
+    />
+
+    <button type="submit">Send SOL</button>
+  </form>
+
+  <div class="fee-note">
+    <strong>Note:</strong>
+    Each transaction costs a small network fee.
+   <strong>If your balance is below 0.001 you may not have enough to make a transaction. </strong>
+    Rent-exempt minimum is 0.0009 SOL on Solana, so to send to a new node wallet will need at least that minimum amount.
+  
+  </div>
+</div>
+
 
   </div>
 </body>
@@ -943,6 +1107,83 @@ router.post(
 
       res.json({ success: true });
     } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+function isLikelySolanaAddress(value) {
+  return (
+    typeof value === "string" && (value.length === 43 || value.length === 44)
+  );
+}
+
+function isLikelyNodeId(value) {
+  return typeof value === "string" && value.length === 36;
+}
+router.post(
+  "/:nodeId/:version/values/solana/send",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { nodeId, version } = req.params;
+      const { destination, amount } = req.body;
+
+      const parsedVersion = Number(version);
+      if (!Number.isInteger(parsedVersion) || parsedVersion < 0) {
+        return res.status(400).json({ error: "Invalid version" });
+      }
+
+      if (typeof destination !== "string" || !destination.trim()) {
+        return res.status(400).json({ error: "Destination is required" });
+      }
+
+      const dest = destination.trim();
+
+      let toAddress;
+      let toNodeId;
+
+      if (isLikelySolanaAddress(dest)) {
+        toAddress = dest;
+      } else if (isLikelyNodeId(dest)) {
+        toNodeId = dest;
+      } else {
+        return res.status(400).json({
+          error: "Destination must be a Solana address or a nodeId",
+        });
+      }
+
+      const solAmount = Number(amount);
+      if (!Number.isFinite(solAmount) || solAmount <= 0) {
+        return res.status(400).json({ error: "Invalid SOL amount" });
+      }
+
+      // SOL → lamports
+      const lamports = Math.round(solAmount * 1e9);
+
+      const result = await sendSOLFromVersion({
+        nodeId,
+        versionIndex: parsedVersion,
+        toAddress,
+        toNodeId,
+        lamports,
+      });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/${nodeId}/${parsedVersion}/values/solana?token=${
+            req.query.token ?? ""
+          }&html`
+        );
+      }
+
+      res.json({
+        success: true,
+        signature: result.signature,
+        to: result.to,
+      });
+    } catch (err) {
+      console.error("Send SOL error:", err);
       res.status(500).json({ error: err.message });
     }
   }
