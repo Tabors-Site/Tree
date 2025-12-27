@@ -198,97 +198,173 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     // default OFF
     const isStatusTrimmed = q.trimmed === "true";
     // ---------- HTML MODE ----------
+    // Replace the HTML return in your /:nodeId/:version/notes/book route with this:
+
     if (wantHtml) {
       const title = book?.nodeName ?? book?.nodeId ?? `Node ${nodeId}`;
       const content = hasContent
         ? renderBookNode(book, 1, req)
-        : `   
-    <div style="
-      max-width: 900px;
-      margin: 64px auto;
-      padding: 32px;
-      background: white;
-      border: 1px solid #e0e0e0;
-      border-radius: 12px;
-      text-align: center;
-      color: #6b7280;
-    ">
-      <h2 style="margin-top:0;">No content</h2>
-      <p>
-        This node has no notes or child notes
-        under the current filters.
-      </p>
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📖</div>
+      <div class="empty-state-text">No content</div>
+      <div class="empty-state-subtext">
+        This node has no notes or child notes under the current filters.
+      </div>
     </div>
   `;
 
       return res.send(`
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Book: ${title}</title>
   <style>
-* {
+    * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
     body {
-      margin: 0;
-      font-family: "Charter", "Georgia", "Iowan Old Style", "Times New Roman", serif;
-      background: #fafafa;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
       color: #1a1a1a;
-      line-height: 1.6;
     }
 
-    .header {
-      padding: 16px 24px;
-      background: white;
-      border-bottom: 1px solid #e0e0e0;
+    /* Top Navigation Bar */
+    .top-nav {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 16px 20px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
       position: sticky;
       top: 0;
       z-index: 100;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
 
-    .header-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 12px;
-    }
-
-    .header h1 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 600;
-      color: #2c2c2c;
-    }
-
-    .back-button {
-      text-decoration: none;
-      padding: 6px 12px;
-      border-radius: 6px;
-      background: #e5e7eb;
-      color: #1138F7;
-      font-size: 14px;
-      font-weight: 500;
-      white-space: nowrap;
-      transition: background 0.15s ease;
-    }
-
-    .back-button:hover {
-      background: #d1d5db;
-    }
-
-    .content {
-      padding: 64px 48px 96px 48px;
+    .top-nav-content {
       max-width: 900px;
       margin: 0 auto;
     }
 
-    /* Book section styling - minimal indentation */
+    .nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .nav-left {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .back-link, .nav-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .back-link:hover, .nav-button:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .page-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 12px;
+    }
+
+    /* Filters */
+    .filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter-button {
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 2px solid #e0e0e0;
+      background: white;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+
+    .filter-button:hover {
+      border-color: #667eea;
+      background: #f8f9fa;
+      transform: translateY(-1px);
+    }
+
+    .filter-button.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-color: #667eea;
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .filter-button.active:hover {
+      background: linear-gradient(135deg, #5856d6 0%, #6a3d8e 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+    }
+
+    /* Content Container */
+    .content-wrapper {
+      padding: 32px 20px;
+    }
+
+    .content {
+      max-width: 900px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 48px 64px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      font-family: "Charter", "Georgia", "Iowan Old Style", "Times New Roman", serif;
+      line-height: 1.7;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    /* Book Section Hierarchy */
     .book-section {
       margin-bottom: 40px;
     }
@@ -296,43 +372,43 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     .book-section.depth-1 {
       margin-bottom: 56px;
       margin-left: 0;
-      page-break-after: avoid;
     }
 
     .book-section.depth-2 {
       margin-bottom: 40px;
-      margin-left: 8px;
+      margin-left: 16px;
     }
 
     .book-section.depth-3 {
       margin-bottom: 32px;
-      margin-left: 16px;
+      margin-left: 32px;
     }
 
     .book-section.depth-4 {
       margin-bottom: 24px;
-      margin-left: 24px;
+      margin-left: 48px;
     }
 
     .book-section.depth-5 {
       margin-bottom: 20px;
-      margin-left: 32px;
+      margin-left: 64px;
     }
 
-    /* Heading hierarchy */
+    /* Heading Hierarchy */
     h1, h2, h3, h4, h5 {
-      font-weight: 600;
+      font-weight: 700;
       line-height: 1.3;
       margin: 0 0 16px 0;
       color: #1a1a1a;
     }
 
     h1 {
-      font-size: 32px;
+      font-size: 36px;
       margin-top: 48px;
       margin-bottom: 24px;
-      border-bottom: 1px solid #e0e0e0;
-      padding-bottom: 12px;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 16px;
+      color: #667eea;
     }
 
     .book-section.depth-1:first-child h1 {
@@ -340,218 +416,235 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     }
 
     h2 {
-      font-size: 26px;
+      font-size: 30px;
       margin-top: 40px;
       margin-bottom: 20px;
-      border-bottom: 1px solid #f0f0f0;
-      padding-bottom: 8px;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 12px;
     }
 
     h3 {
-      font-size: 22px;
+      font-size: 24px;
       margin-top: 32px;
       margin-bottom: 16px;
-      font-weight: 700;
     }
 
     h4 {
-      font-size: 19px;
+      font-size: 20px;
       margin-top: 24px;
       margin-bottom: 12px;
-      font-weight: 700;
     }
 
     h5 {
-      font-size: 17px;
+      font-size: 18px;
       margin-top: 20px;
       margin-bottom: 10px;
-      font-weight: 700;
     }
 
-    /* Note content with clickable links */
+    /* Note Content */
     .note-content {
       margin: 16px 0 28px 0;
       padding: 0;
       font-size: 18px;
-      line-height: 1.75;
+      line-height: 1.8;
       color: #2c2c2c;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
 
     .note-link {
       color: inherit;
       text-decoration: none;
       white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
       display: block;
       padding: 12px 16px;
       margin: -12px -16px;
-      border-radius: 6px;
-      transition: background-color 0.15s ease;
+      border-radius: 8px;
+      transition: all 0.2s;
     }
 
     .note-link:hover {
-      background-color: rgba(37, 99, 235, 0.06);
+      background-color: rgba(102, 126, 234, 0.08);
+      transform: translateX(4px);
     }
 
     .note-link:active {
-      background-color: rgba(37, 99, 235, 0.12);
+      background-color: rgba(102, 126, 234, 0.12);
     }
 
-    /* File containers */
+    /* File Containers */
     .file-container {
       margin: 24px 0;
-      padding: 16px;
-      background: white;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      transition: border-color 0.15s ease;
+      padding: 20px;
+      background: #f8f9fa;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      transition: all 0.2s;
     }
 
     .file-container:hover {
-      border-color: #2563eb;
+      border-color: #667eea;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
     }
 
     .file-container .note-link {
       display: inline-block;
       margin-bottom: 12px;
-      color: #2563eb;
-      font-size: 15px;
-      font-weight: 500;
+      color: #667eea;
+      font-size: 16px;
+      font-weight: 600;
       padding: 4px 8px;
       margin: -4px -8px 8px;
     }
 
     .file-container .note-link:hover {
-      background-color: rgba(37, 99, 235, 0.08);
+      background-color: rgba(102, 126, 234, 0.1);
       text-decoration: underline;
     }
 
-    /* Media elements */
+    /* Media Elements */
     img {
       max-width: 100%;
       height: auto;
-      border-radius: 4px;
-      margin-top: 8px;
+      border-radius: 8px;
+      margin-top: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
     video, audio {
       max-width: 100%;
-      margin-top: 8px;
+      margin-top: 12px;
+      border-radius: 8px;
     }
 
     iframe {
       width: 100%;
       height: 600px;
       border: none;
-      border-radius: 4px;
-      margin-top: 8px;
+      border-radius: 8px;
+      margin-top: 12px;
     }
 
-    /* Mobile responsiveness */
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 80px 40px;
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-text {
+      font-size: 24px;
+      color: #666;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .empty-state-subtext {
+      font-size: 16px;
+      color: #999;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 1024px) {
+      .content {
+        padding: 40px 48px;
+      }
+    }
+
     @media (max-width: 768px) {
-      .header {
+      .top-nav {
         padding: 12px 16px;
       }
 
-      .header-top {
-        margin-bottom: 8px;
-      }
-
-      .header h1 {
-        font-size: 16px;
-      }
-
-      .back-button {
-        padding: 5px 10px;
+      .nav-button {
+        padding: 8px 12px;
         font-size: 13px;
       }
 
-      .filters {
-        margin-top: 0;
-        gap: 4px;
-      }
-
-      .filters button {
-        padding: 4px 8px;
-        font-size: 12px;
-        border-radius: 4px;
-      }
-
-      .content {
-        padding: 40px 20px 64px 20px;
-        max-width: 100%;
-      }
-
-      h1 {
-        font-size: 28px;
-      }
-
-      h2 {
-        font-size: 24px;
-      }
-
-      h3 {
-        font-size: 20px;
-      }
-
-      h4 {
+      .page-title {
         font-size: 18px;
       }
 
+      .filter-button {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+
+      .content-wrapper {
+        padding: 24px 16px;
+      }
+
+      .content {
+        padding: 32px 24px;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      h2 {
+        font-size: 26px;
+      }
+
+      h3 {
+        font-size: 22px;
+      }
+
+      h4 {
+        font-size: 19px;
+      }
+
       h5 {
-        font-size: 16px;
+        font-size: 17px;
       }
 
       .note-content {
         font-size: 17px;
       }
 
-      /* Reduce indentation on mobile to prevent overflow */
       .book-section.depth-2 {
-        margin-left: 4px;
-      }
-
-      .book-section.depth-3 {
         margin-left: 8px;
       }
 
+      .book-section.depth-3 {
+        margin-left: 16px;
+      }
+
       .book-section.depth-4 {
-        margin-left: 12px;
+        margin-left: 24px;
       }
 
       .book-section.depth-5 {
-        margin-left: 16px;
+        margin-left: 32px;
       }
     }
 
-    /* Extra small devices */
     @media (max-width: 480px) {
-      .header {
-        padding: 10px 12px;
+      .nav-buttons {
+        flex-direction: column;
+        align-items: stretch;
       }
 
-      .header-top {
-        margin-bottom: 6px;
+      .nav-left {
+        width: 100%;
+        flex-direction: column;
       }
 
-      .header h1 {
-        font-size: 14px;
-      }
-
-      .back-button {
-        padding: 4px 8px;
-        font-size: 12px;
-      }
-
-      .filters button {
-        padding: 3px 6px;
-        font-size: 11px;
+      .nav-button, .back-link {
+        justify-content: center;
+        width: 100%;
       }
 
       .content {
-        padding: 32px 16px 48px 16px;
+        padding: 24px 16px;
       }
 
-      /* Minimal indentation on very small screens */
       .book-section.depth-2,
       .book-section.depth-3,
       .book-section.depth-4,
@@ -559,211 +652,83 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
         margin-left: 0;
       }
     }
-
-    /* Dark mode */
-    @media (prefers-color-scheme: dark) {
-      body {
-        background: #1a1a1a;
-        color: #e0e0e0;
-      }
-
-      .header {
-        background: #2c2c2c;
-        border-bottom-color: #404040;
-      }
-
-      .header h1 {
-        color: #f0f0f0;
-      }
-
-      h1, h2, h3, h4, h5 {
-        color: #f0f0f0;
-      }
-
-      h1 {
-        border-bottom-color: #e0e0e0;
-      }
-
-      .note-content {
-        color: #d0d0d0;
-      }
-
-      .note-link:hover {
-        background-color: rgba(96, 165, 250, 0.12);
-      }
-
-      .note-link:active {
-        background-color: rgba(96, 165, 250, 0.18);
-      }
-
-      .file-container {
-        background: #2c2c2c;
-        border-color: #404040;
-      }
-
-      .file-container:hover {
-        border-color: #60a5fa;
-      }
-
-      .file-container .note-link {
-        color: #60a5fa;
-      }
-
-      .file-container .note-link:hover {
-        background-color: rgba(96, 165, 250, 0.12);
-      }
-    }
-
-    /* Print styles */
-    @media print {
-      body {
-        background: white;
-      }
-
-      .header {
-        position: static;
-        box-shadow: none;
-        border-bottom: 2px solid #000;
-      }
-
-      .content {
-        padding: 24px 16px;
-      }
-
-      .book-section.depth-1 {
-        page-break-before: always;
-      }
-
-      .book-section.depth-1:first-child {
-        page-break-before: avoid;
-      }
-
-      h1, h2, h3, h4, h5 {
-        page-break-after: avoid;
-      }
-
-      .note-link {
-        color: inherit;
-        padding: 0;
-        margin: 0;
-      }
-
-      .note-link:hover {
-        background-color: transparent;
-      }
-    }
-
-    .filters {
-      margin-top: 0;
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .filters button {
-      padding: 6px 12px;
-      font-size: 13px;
-      font-weight: 500;
-      border-radius: 6px;
-      border: 1px solid #d0d5dd;
-      background: #f3f4f6;
-      color: #374151;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      white-space: nowrap;
-    }
-
-    .filters button:hover {
-      background: #e5e7eb;
-    }
-
-    .filters button.active {
-      background: #2563eb;
-      border-color: #2563eb;
-      color: white;
-    }
-
-    .filters button.active:hover {
-      background: #1d4ed8;
-    }
-
   </style>
 </head>
-
 <body>
- <div class="header">
-  <div class="header-top">
-    <h1>Book: ${title}</h1>
-    <a href="/api/${nodeId}/${req.params.version}/notes?token=${
+  <!-- Top Navigation -->
+  <div class="top-nav">
+    <div class="top-nav-content">
+      <div class="nav-buttons">
+        <div class="nav-left">
+          <a href="/api/root/${nodeId}/${req.params.version}?token=${
         req.query.token ?? ""
-      }&html" class="back-button">
-      Back to Notes
-    </a>
+      }&html" class="nav-button">
+            ← Back to Tree
+          </a>
+          <a href="/api/${nodeId}/${req.params.version}?token=${
+        req.query.token ?? ""
+      }&html" class="nav-button">
+            Back to Version
+          </a>
+        </div>
+      </div>
+
+      <div class="page-title">Book: ${title}</div>
+
+      <!-- Filters -->
+      <div class="filters">
+        <button onclick="toggleFlag('latestVersionOnly')" class="filter-button ${
+          options.latestVersionOnly ? "active" : ""
+        }">
+          Latest Versions Only
+        </button>
+        <button onclick="toggleFlag('lastNoteOnly')" class="filter-button ${
+          options.lastNoteOnly ? "active" : ""
+        }">
+          Most Recent Note
+        </button>
+        <button onclick="toggleFlag('leafNotesOnly')" class="filter-button ${
+          options.leafNotesOnly ? "active" : ""
+        }">
+          Leaf Details Only
+        </button>
+        <button onclick="toggleFlag('filesOnly')" class="filter-button ${
+          options.filesOnly ? "active" : ""
+        }">
+          Files Only
+        </button>
+        <button onclick="toggleFlag('textOnly')" class="filter-button ${
+          options.textOnly ? "active" : ""
+        }">
+          Text Only
+        </button>
+        <button onclick="toggleStatus('active')" class="filter-button ${
+          isStatusActive ? "active" : ""
+        }">
+          Active
+        </button>
+        <button onclick="toggleStatus('completed')" class="filter-button ${
+          isStatusCompleted ? "active" : ""
+        }">
+          Completed
+        </button>
+        <button onclick="toggleStatus('trimmed')" class="filter-button ${
+          isStatusTrimmed ? "active" : ""
+        }">
+          Trimmed
+        </button>
+      </div>
+    </div>
   </div>
 
-  
-
- <div class="filters">
-    <button onclick="toggleFlag('latestVersionOnly')" class="${
-      options.latestVersionOnly ? "active" : ""
-    }">
-      Latest Versions Only
-    </button>
-
-    <button onclick="toggleFlag('lastNoteOnly')" class="${
-      options.lastNoteOnly ? "active" : ""
-    }">
-      Most recent note only
-    </button>
-
-    <button onclick="toggleFlag('leafNotesOnly')" class="${
-      options.leafNotesOnly ? "active" : ""
-    }">
-      Leaf Details Only
-    </button>
-
-    <button onclick="toggleFlag('filesOnly')" class="${
-      options.filesOnly ? "active" : ""
-    }">
-      Files
-    </button>
-
-    <button onclick="toggleFlag('textOnly')" class="${
-      options.textOnly ? "active" : ""
-    }">
-      Text
-    </button>
-    <button onclick="toggleStatus('active')" class="${
-      isStatusActive ? "active" : ""
-    }">
-  Active
-</button>
-
-<button onclick="toggleStatus('completed')" class="${
-        isStatusCompleted ? "active" : ""
-      }">
-  Completed
-</button>
-
-<button onclick="toggleStatus('trimmed')" class="${
-        isStatusTrimmed ? "active" : ""
-      }">
-  Trimmed
-</button>
-
+  <!-- Content -->
+  <div class="content-wrapper">
+    <div class="content">
+      ${content}
+    </div>
   </div>
-</div>
-</div>
 
-
-  
-
-
-  <div class="content">
-    ${content}
-  </div>
-  
-  <!-- Lazy media loader -->
+  <!-- Lazy Media Loader -->
   <script>
     const lazyObserver = new IntersectionObserver(
       (entries, observer) => {
@@ -788,58 +753,50 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       .querySelectorAll(".lazy-media[data-src]")
       .forEach(el => lazyObserver.observe(el));
   </script>
-  <script>
-  function toggleFlag(flag) {
-    const url = new URL(window.location.href);
 
-    if (url.searchParams.has(flag)) {
-      url.searchParams.delete(flag);
-    } else {
-      url.searchParams.set(flag, "true");
+  <script>
+    function toggleFlag(flag) {
+      const url = new URL(window.location.href);
+
+      if (url.searchParams.has(flag)) {
+        url.searchParams.delete(flag);
+      } else {
+        url.searchParams.set(flag, "true");
+      }
+
+      url.searchParams.set("html", "true");
+      window.location.href = url.toString();
     }
 
-    // always keep html mode
-    url.searchParams.set("html", "true");
+    function toggleStatus(flag) {
+      const url = new URL(window.location.href);
+      const params = url.searchParams;
 
-    window.location.href = url.toString();
-  }
-</script>
-<script>
-function toggleStatus(flag) {
-  const url = new URL(window.location.href);
-  const params = url.searchParams;
+      const defaults = {
+        active: true,
+        completed: true,
+        trimmed: false,
+      };
 
-  const defaults = {
-    active: true,
-    completed: true,
-    trimmed: false,
-  };
+      const current = params.has(flag)
+        ? params.get(flag) === "true"
+        : defaults[flag];
 
-  const current =
-    params.has(flag)
-      ? params.get(flag) === "true"
-      : defaults[flag];
+      const next = !current;
 
-  const next = !current;
+      if (next === defaults[flag]) {
+        params.delete(flag);
+      } else {
+        params.set(flag, String(next));
+      }
 
-  // If next matches default → REMOVE from URL
-  if (next === defaults[flag]) {
-    params.delete(flag);
-  } else {
-    // Otherwise explicitly set
-    params.set(flag, String(next));
-  }
-
-  // Always keep html mode
-  params.set("html", "true");
-
-  window.location.href = url.toString();
-}
-</script>
-
+      params.set("html", "true");
+      window.location.href = url.toString();
+    }
+  </script>
 </body>
 </html>
-      `);
+  `);
     }
 
     return res.json({
@@ -1756,7 +1713,7 @@ document.addEventListener("click", async (e) => {
         <a href="${base}?token=${
         req.query.token ?? ""
       }&html" class="nav-button">
-          Back to Node
+          Back to Version
         </a>
       </div>
       <a href="/api/${nodeId}/${version}/notes/book?token=${

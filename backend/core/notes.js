@@ -250,6 +250,9 @@ async function getAllTagsForUser(userId, limit, startDate, endDate) {
 async function deleteNoteAndFile({ noteId, userId }) {
   const note = await Note.findById(noteId);
   if (!note) throw new Error("Note not found");
+  if (note.userId.toString() !== userId.toString()) {
+    throw new Error("You do not have permission to delete this note");
+  }
 
   const { nodeId, version } = note; // original nodeId for logging
   let fileDeleted = false;

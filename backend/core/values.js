@@ -1,6 +1,39 @@
 import { findNodeById, logContribution } from "../db/utils.js";
 
+const SYSTEM_KEY_PREFIX = "_auto";
+
+function assertUserWritableKey(rawKey) {
+  if (typeof rawKey !== "string") {
+    throw new Error("Invalid key");
+  }
+
+  const key = rawKey.trim();
+
+  if (!key.length) {
+    throw new Error("Key cannot be empty");
+  }
+
+  if (key.startsWith(SYSTEM_KEY_PREFIX)) {
+    throw new Error(
+      "This key is reserved for system use and cannot be set by users"
+    );
+  }
+
+  if (key.includes("\0") || key.includes("\n")) {
+    throw new Error("Invalid key format");
+  }
+
+  // optional but recommended
+  if (key.length > 128) {
+    throw new Error("Key is too long");
+  }
+
+  return key;
+}
+
 async function setValueForNode({ nodeId, key, value, version, userId }) {
+  key = assertUserWritableKey(key);
+
   const versionIndex = Number(version);
   const numericValue = Number(value);
 
