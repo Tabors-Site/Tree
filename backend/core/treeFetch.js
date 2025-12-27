@@ -1,5 +1,27 @@
 import Node from "../db/models/node.js";
 
+import User from "../db/models/user.js";
+
+export async function getRootNodesForUser(userId) {
+  if (!userId) {
+    throw new Error("userId is required");
+  }
+
+  const user = await User.findById(userId)
+    .populate("roots", "name _id")
+    .lean()
+    .exec();
+
+  if (!user || !Array.isArray(user.roots) || user.roots.length === 0) {
+    return [];
+  }
+
+  return user.roots.map((node) => ({
+    _id: node._id.toString(),
+    name: node.name,
+  }));
+}
+
 export async function resolveRootNode(nodeId) {
   if (!nodeId) {
     throw new Error("nodeId is required");

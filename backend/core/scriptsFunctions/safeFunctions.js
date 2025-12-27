@@ -37,6 +37,9 @@ function enqueue(nodeId, fn) {
   return next;
 }
 
+//add traverse subtree
+//add note to node
+
 //bound to user id
 function makeSafeFunctions(userId) {
   return {

@@ -27,6 +27,8 @@ import {
   editNodeName,
 } from "../core/treeManagement.js";
 
+import { getRootNodesForUser } from "../core/treeFetch.js";
+
 import { executeScript, updateScript } from "../core/scripts.js";
 
 import {
@@ -48,12 +50,11 @@ const TimeWindowSchema = {
     .describe("ISO date/time. Include items created on or before this time."),
 };
 const server = getMcpServer();
-const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: undefined,
-});
+const transport = new StreamableHTTPServerTransport({});
 function getMcpServer() {
   const server = new McpServer({
     name: "tree-helper",
+    protocolVersion: "2025-11-25",
     version: "1.0.0",
     capabilities: {
       resources: { listChanged: true },
@@ -219,6 +220,13 @@ function getMcpServer() {
     - Guided real-time traversal of leaf nodes
     - Will trigger be-mode-orchestrator(nodeId)
 
+    7️⃣ **Process raw ideas (Inbox → Tree)**
+  - Review unplaced raw ideas
+  - Decide where they belong
+  - Place them into the tree with confirmation
+  - Will trigger raw-idea-filter-orchestrator
+
+
 
   Call the tool get-tree(id) and tree-actions-menu and then present me the menu with a short paragraphed introductory summary of my tree so far.
   `;
@@ -281,9 +289,90 @@ function getMcpServer() {
   6. **Initiate BE mode**
     - Guided real-time traversal of leaf nodes
     - Will trigger be-mode-orchestrator(nodeId)
+
+    7️⃣ **Process raw ideas**
+  - Review raw ideas inbox
+  - Decide correct node placement
+  - Confirm before converting
+  - = raw-idea-filter-orchestrator
+
   `,
           },
         ],
+      };
+    }
+  );
+  server.tool(
+    "raw-idea-filter-orchestrator",
+    "Guides filtering and placing raw ideas into the tree. READ-ONLY.",
+    {
+      userId: z
+        .string()
+        .describe("The user whose raw ideas will be processed."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({}) => {
+      const instructions = `
+You are entering **Raw Idea Filtering Mode**.
+
+GOAL  
+Help the user take an unplaced raw idea and decide the *best hierarchical location* for it in their tree.
+You must NEVER convert a raw idea automatically. Always wait for confirmation.
+
+STEP-BY-STEP PROCESS  
+
+1️⃣ **Load Raw Ideas**
+- Call get-raw-ideas-by-user(userId)
+- Present a short list (titles or summaries).
+- Ask the user which raw idea they want to process.
+- If only one exists, you may auto-select it.
+
+2️⃣ **Load User Roots**
+- Call get-root-nodes-by-user(userId)
+- If multiple roots exist:
+  - Choose the most relevant root based on the raw idea
+  - Ask the user to confirm or override
+
+3️⃣ **Inspect Tree Structure**
+- Call get-tree(rootId)
+- Analyze where the raw idea logically belongs:
+
+4️⃣ **Determine Best Placement**
+- Decide:
+  - Target node ID
+- Explain *why* this location fits:
+  - Purpose
+  - Scope
+  - Hierarchical logic
+
+5️⃣ **Present Placement Proposal**
+- Clearly state:
+  - Raw idea summary
+  - Target node name
+- Ask the user explicitly:
+
+  “Would you like me to convert this raw idea into a note under <Node Name>?”
+
+6️⃣ **Wait for Confirmation**
+- DO NOT call transfer-raw-idea-to-note yet.
+- Only proceed if the user explicitly agrees.
+- If confirmed:
+  → call transfer-raw-idea-to-note(rawIdeaId, userId, nodeId)
+
+RULES  
+- Never guess silently.
+- Never place without consent.
+- Never skip tree inspection.
+- Prefer explaining structure over speed.
+`;
+
+      return {
+        content: [{ type: "text", text: instructions }],
       };
     }
   );
@@ -1587,10 +1676,253 @@ function getMcpServer() {
     }
   );
 
+  server.tool(
+    "get-root-nodes-by-user",
+    "Fetches all root nodes owned by a user. READ-ONLY.",
+    {
+      userId: z
+        .string()
+        .describe("The ID of the user whose root nodes to fetch."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ userId }) => {
+      try {
+        const roots = await getRootNodesForUser(userId);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(roots, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to fetch root nodes: ${err.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+  server.tool(
+    "batch-operations",
+    "Apply the same operation to multiple nodes, supporting uniform or per-node payloads.",
+    {
+      operation: z.enum([
+        "edit-status",
+        "add-prestige",
+        "set-value",
+        "set-goal",
+        "add-note",
+        "update-schedule",
+      ]),
+
+      userId: z.string(),
+      mode: z.enum(["uniform", "per-item"]),
+
+      // uniform mode
+      nodeIds: z.array(z.string()).optional(),
+      payload: z
+        .object({
+          status: z.enum(["active", "trimmed", "completed"]).optional(),
+          isInherited: z.boolean().optional(),
+
+          key: z.string().optional(),
+          value: z.number().optional(),
+          goal: z.number().optional(),
+          prestige: z.number().optional(),
+
+          content: z.string().optional(),
+
+          newSchedule: z.string().optional(),
+          reeffectTime: z.number().optional(),
+        })
+        .optional(),
+
+      // per-item mode
+      items: z
+        .array(
+          z.object({
+            nodeId: z.string(),
+            payload: z.object({
+              status: z.enum(["active", "trimmed", "completed"]).optional(),
+              isInherited: z.boolean().optional(),
+
+              key: z.string().optional(),
+              value: z.number().optional(),
+              goal: z.number().optional(),
+              prestige: z.number().optional(),
+
+              content: z.string().optional(),
+
+              newSchedule: z.string().optional(),
+              reeffectTime: z.number().optional(),
+            }),
+          })
+        )
+        .optional(),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ operation, userId, mode, nodeIds, payload, items }) => {
+      const results = [];
+      let tasks = [];
+
+      // normalize tasks
+      if (mode === "uniform") {
+        if (!nodeIds || !payload) {
+          throw new Error("Uniform mode requires nodeIds and payload");
+        }
+        tasks = nodeIds.map((nodeId) => ({ nodeId, payload }));
+      }
+
+      if (mode === "per-item") {
+        if (!items || items.length === 0) {
+          throw new Error("Per-item mode requires items");
+        }
+        tasks = items;
+      }
+
+      if (tasks.length > 50) {
+        throw new Error("Batch size exceeds maximum of 50");
+      }
+
+      // execute batch
+      for (const { nodeId, payload } of tasks) {
+        try {
+          let result;
+
+          switch (operation) {
+            case "edit-status":
+              result = await editStatus({
+                nodeId,
+                status: payload.status,
+                version: payload.prestige,
+                isInherited: payload.isInherited ?? true,
+                userId,
+              });
+              break;
+
+            case "add-prestige":
+              result = await addPrestige({ nodeId, userId });
+              break;
+
+            case "set-value":
+              result = await setValueForNode({
+                nodeId,
+                key: payload.key,
+                value: payload.value,
+                version: payload.prestige,
+                userId,
+              });
+              break;
+
+            case "set-goal":
+              result = await setGoalForNode({
+                nodeId,
+                key: payload.key,
+                goal: payload.goal,
+                version: payload.prestige,
+                userId,
+              });
+              break;
+
+            case "add-note":
+              result = await createNote({
+                contentType: "text",
+                content: payload.content,
+                userId,
+                nodeId,
+                isReflection: false,
+              });
+              break;
+
+            case "update-schedule":
+              result = await updateSchedule({
+                nodeId,
+                versionIndex: payload.prestige,
+                newSchedule: payload.newSchedule,
+                reeffectTime: payload.reeffectTime,
+                userId,
+              });
+              break;
+
+            default:
+              throw new Error(`Unsupported batch operation: ${operation}`);
+          }
+
+          results.push({ nodeId, success: true, result });
+        } catch (err) {
+          results.push({
+            nodeId,
+            success: false,
+            error: err.message,
+          });
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                operation,
+                mode,
+                total: results.length,
+                succeeded: results.filter((r) => r.success).length,
+                failed: results.filter((r) => !r.success).length,
+                results,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
   return server;
 }
 
 await server.connect(transport);
+
+const pendingCalls = new Map();
+const completedCalls = new Map();
+const CACHE_MS = 2000;
+
+// Helper to parse SSE format
+function parseSseResponse(rawBody) {
+  const lines = rawBody.split("\n");
+  for (const line of lines) {
+    if (line.startsWith("data: ")) {
+      const jsonStr = line.substring(6); // Remove "data: " prefix
+      return JSON.parse(jsonStr);
+    }
+  }
+  throw new Error("No data found in SSE response");
+}
+
+// Helper to format as SSE
+function formatSseResponse(jsonData) {
+  return `event: message\ndata: ${JSON.stringify(jsonData)}\n\n`;
+}
 
 async function handleMcpRequest(req, res) {
   try {
@@ -1602,63 +1934,101 @@ async function handleMcpRequest(req, res) {
     const args = req.body?.params?.arguments;
 
     if (method === "tools/call") {
+      const callKey = `${toolName}:${JSON.stringify(args)}`;
+      const now = Date.now();
+
+      // Check completed cache
+      const cached = completedCalls.get(callKey);
+      if (cached && now - cached.timestamp < CACHE_MS) {
+        console.log(`♻️ Returning cached response for: ${toolName}`);
+        res.setHeader("Content-Type", "text/event-stream");
+        return res.end(formatSseResponse(cached.response));
+      }
+
+      // Check pending requests
+      const pending = pendingCalls.get(callKey);
+      if (pending) {
+        console.log(`⏳ Waiting for in-flight request: ${toolName}`);
+        const response = await pending;
+        res.setHeader("Content-Type", "text/event-stream");
+        return res.end(formatSseResponse(response));
+      }
+
       console.log(`→ Tool: ${toolName}`);
       console.log("→ Args:");
       console.log(JSON.stringify(args, null, 2));
+
+      // Create promise for this request
+      const requestPromise = new Promise((resolve, reject) => {
+        const chunks = [];
+        const originalWrite = res.write.bind(res);
+        const originalEnd = res.end.bind(res);
+
+        res.write = (chunk, ...args) => {
+          if (chunk) chunks.push(Buffer.from(chunk));
+          return originalWrite(chunk, ...args);
+        };
+
+        res.end = (chunk, ...args) => {
+          if (chunk) chunks.push(Buffer.from(chunk));
+
+          const rawBody = Buffer.concat(chunks).toString("utf8");
+
+          if (rawBody) {
+            console.log("\n===== MCP OUT =====");
+
+            try {
+              // Parse SSE format
+              const parsed = parseSseResponse(rawBody);
+
+              const content =
+                parsed?.result?.content?.[0]?.text ??
+                parsed?.content?.[0]?.text ??
+                null;
+
+              if (typeof content === "string") {
+                try {
+                  const inner = JSON.parse(content);
+                  console.log(JSON.stringify(inner, null, 2));
+                } catch {
+                  console.log(content.replace(/\\n/g, "\n"));
+                }
+              } else {
+                console.log(JSON.stringify(parsed, null, 2));
+              }
+
+              // Cache the parsed response
+              completedCalls.set(callKey, {
+                timestamp: Date.now(),
+                response: parsed,
+              });
+
+              pendingCalls.delete(callKey);
+
+              if (completedCalls.size > 100) {
+                const entries = [...completedCalls.entries()];
+                entries
+                  .slice(0, 50)
+                  .forEach(([key]) => completedCalls.delete(key));
+              }
+
+              resolve(parsed);
+            } catch (err) {
+              console.log(rawBody);
+              reject(err);
+            }
+          }
+
+          return originalEnd(chunk, ...args);
+        };
+      });
+
+      pendingCalls.set(callKey, requestPromise);
+      await transport.handleRequest(req, res, req.body);
     } else {
       console.log(`→ Method: ${method}`);
+      await transport.handleRequest(req, res, req.body);
     }
-
-    const chunks = [];
-
-    const originalWrite = res.write.bind(res);
-    const originalEnd = res.end.bind(res);
-
-    res.write = (chunk, ...args) => {
-      if (chunk) chunks.push(Buffer.from(chunk));
-      return originalWrite(chunk, ...args);
-    };
-
-    res.end = (chunk, ...args) => {
-      if (chunk) chunks.push(Buffer.from(chunk));
-
-      const rawBody = Buffer.concat(chunks).toString("utf8");
-
-      if (rawBody) {
-        console.log("\n===== MCP OUT =====");
-
-        try {
-          // 1️⃣ Try parsing the outer response
-          const parsed = JSON.parse(rawBody);
-
-          // 2️⃣ If MCP-style tool response, unwrap deeply
-          const content =
-            parsed?.result?.content?.[0]?.text ??
-            parsed?.content?.[0]?.text ??
-            null;
-
-          if (typeof content === "string") {
-            // 3️⃣ Try parsing inner JSON string
-            try {
-              const inner = JSON.parse(content);
-              console.log(JSON.stringify(inner, null, 2));
-            } catch {
-              // Not JSON → normalize newlines for readability
-              console.log(content.replace(/\\n/g, "\n"));
-            }
-          } else {
-            console.log(JSON.stringify(parsed, null, 2));
-          }
-        } catch {
-          // Not JSON at all (rare, but safe)
-          console.log(rawBody.replace(/\\n/g, "\n"));
-        }
-      }
-
-      return originalEnd(chunk, ...args);
-    };
-
-    await transport.handleRequest(req, res, req.body);
   } catch (err) {
     console.error("[MCP] Error:", err);
     if (!res.headersSent) {

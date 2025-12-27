@@ -152,6 +152,12 @@ export async function deleteNodeBranch(nodeId, userId) {
   if (!access.isOwner || (!access.isRoot && nodeToDelete.parent === null)) {
     throw new Error("Invalid delete attempt. Must be owner and not root.");
   }
+  if (nodeToDelete.parent === null) {
+    throw new Error("Root nodes can only be retired on root view");
+  }
+  if (nodeToDelete.parent === "deleted") {
+    throw new Error("Node has already been deleted");
+  }
 
   nodeToDelete.rootOwner = userId;
   const oldParent = nodeToDelete.parent;
