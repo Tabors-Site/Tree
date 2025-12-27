@@ -120,11 +120,7 @@ export async function syncVersionSOLBalance(node, versionIndex) {
   const version = node?.versions?.[versionIndex];
 
   if (!version?.wallet?.publicKey) {
-    // No wallet yet → balance is zero
-    version?.values?.set("_auto__sol", 0);
-    node.markModified("versions");
-    await node.save();
-    return 0;
+    return null;
   }
 
   const pubkey = new PublicKey(version.wallet.publicKey);
@@ -165,9 +161,13 @@ export async function getVersionWalletInfo(nodeId, versionIndex) {
 /* ------------------------------------------------------------------ */
 
 async function resolveDestinationPublicKey({ toAddress, toNodeId }) {
-  // Case 1: direct address
+  // Case 1: direct Solana address
   if (toAddress) {
-    return new PublicKey(toAddress);
+    return {
+      pubkey: new PublicKey(toAddress),
+      node: null,
+      versionIndex: null,
+    };
   }
 
   // Case 2: node → latest version (auto-create wallet if missing)
@@ -177,10 +177,10 @@ async function resolveDestinationPublicKey({ toAddress, toNodeId }) {
 
     const versionIndex = node.prestige;
 
-    // ✅ ENSURE wallet exists on destination node latest version
+    // Ensure destination wallet exists
     await ensureVersionWallet(toNodeId, versionIndex);
 
-    // Reload to get the newly created wallet
+    // Reload to get the wallet
     const updated = await Node.findById(toNodeId);
     const walletPubkey = updated?.versions?.[versionIndex]?.wallet?.publicKey;
 
@@ -188,7 +188,11 @@ async function resolveDestinationPublicKey({ toAddress, toNodeId }) {
       throw new Error("Failed to resolve destination wallet");
     }
 
-    return new PublicKey(walletPubkey);
+    return {
+      pubkey: new PublicKey(walletPubkey),
+      node: updated,
+      versionIndex,
+    };
   }
 
   throw new Error("Must provide either toAddress or toNodeId");
@@ -204,43 +208,96 @@ export async function sendSOLFromVersion({
   if (!Number.isInteger(versionIndex) || versionIndex < 0) {
     throw new Error("Invalid version index");
   }
-  if (toNodeId === nodeId) {
+
+  if (toNodeId && toNodeId === nodeId) {
     throw new Error("Cannot send SOL to the same node");
   }
+
   if (!Number.isSafeInteger(lamports) || lamports <= 0) {
     throw new Error("Invalid lamports");
   }
 
+  // Ensure sender wallet exists
   await ensureVersionWallet(nodeId, versionIndex);
 
   const node = await Node.findById(nodeId);
   const signer = await getVersionKeypair(node, versionIndex);
 
-  const destinationPubkey = await resolveDestinationPublicKey({
+  const dest = await resolveDestinationPublicKey({
     toAddress,
     toNodeId,
   });
+  const destinationPubkey = dest.pubkey;
+
+  /* -------------------------------------------------- */
+  /*  Fee + rent aware auto-adjust                      */
+  /* -------------------------------------------------- */
+
+  const [senderBalance, destInfo] = await Promise.all([
+    connection.getBalance(signer.publicKey),
+    connection.getAccountInfo(destinationPubkey),
+  ]);
+
+  let overhead = 0;
+
+  // Destination account doesn't exist → must be rent exempt
+  if (!destInfo) {
+    overhead += await connection.getMinimumBalanceForRentExemption(0);
+  }
+
+  // Conservative fee buffer
+  const FEE_BUFFER = 10_000; // ~0.00001 SOL
+  overhead += FEE_BUFFER;
+
+  const maxSendable = senderBalance - overhead;
+
+  if (maxSendable <= 0) {
+    throw new Error("Insufficient SOL to cover fees and rent");
+  }
+
+  // Auto-adjust amount if needed
+  const finalLamports = Math.min(lamports, maxSendable);
+
+  /* -------------------------------------------------- */
+  /*  Build + send transaction                          */
+  /* -------------------------------------------------- */
 
   const tx = new Transaction().add(
     SystemProgram.transfer({
       fromPubkey: signer.publicKey,
       toPubkey: destinationPubkey,
-      lamports,
+      lamports: finalLamports,
     })
   );
 
-  const sig = await sendAndConfirmTransaction(connection, tx, [signer]);
+  let signature;
+
+  try {
+    signature = await sendAndConfirmTransaction(connection, tx, [signer]);
+  } catch (err) {
+    // Surface Solana logs if available
+    if (typeof err?.getLogs === "function") {
+      const logs = await err.getLogs();
+      console.error("Solana tx logs:", logs);
+    }
+    throw err;
+  }
+
+  /* -------------------------------------------------- */
+  /*  Sync + persist                                   */
+  /* -------------------------------------------------- */
 
   await syncVersionSOLBalance(node, versionIndex);
-
-  node.markModified("versions");
-  await node.save();
+  if (dest.node) {
+    await syncVersionSOLBalance(dest.node, dest.versionIndex);
+  }
 
   return {
-    signature: sig,
+    signature,
     from: signer.publicKey.toBase58(),
     to: destinationPubkey.toBase58(),
-    lamports,
+    lamports: finalLamports,
+    adjusted: finalLamports !== lamports,
   };
 }
 
