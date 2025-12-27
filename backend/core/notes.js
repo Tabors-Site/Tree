@@ -5,6 +5,7 @@ import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
 import { logContribution } from "../db/utils.js";
 import { fileURLToPath } from "url";
+import { resolveRootNode } from "./treeFetch.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -250,8 +251,21 @@ async function getAllTagsForUser(userId, limit, startDate, endDate) {
 async function deleteNoteAndFile({ noteId, userId }) {
   const note = await Note.findById(noteId);
   if (!note) throw new Error("Note not found");
-  if (note.userId.toString() !== userId.toString()) {
-    throw new Error("You do not have permission to delete this note");
+
+  const rootNode = await resolveRootNode(note.nodeId);
+
+  const isAuthor = note.userId?.toString() === userId.toString();
+
+  const isRootOwner = rootNode.rootOwner?.toString() === userId.toString();
+
+  if (!isAuthor && !isRootOwner) {
+    if (!note.userId) {
+      throw new Error("This note has no author and cannot be deleted by you");
+    }
+
+    throw new Error(
+      "Only the note author or the tree owner can delete this note"
+    );
   }
 
   const { nodeId, version } = note; // original nodeId for logging
