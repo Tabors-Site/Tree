@@ -1163,7 +1163,514 @@ document.addEventListener("click", async (e) => {
 </html>
 `;
 
-    return res.send(html);
+    // Replace the HTML return in your /user/:userId/notes route with this:
+
+    // Process notes outside the template literal
+    const processedNotes = await Promise.all(
+      notes.map(async (n) => {
+        const preview =
+          n.contentType === "text"
+            ? n.content.length > 120
+              ? n.content.substring(0, 120) + "…"
+              : n.content
+            : n.content.split("/").pop();
+
+        const nodeName = await getNodeName(n.nodeId);
+
+        return `
+    <li
+      class="note-card"
+      data-note-id="${n._id}"
+      data-node-id="${n.nodeId}"
+      data-version="${n.version}"
+    >
+      <button class="delete-button" title="Delete note">✕</button>
+
+      <div class="note-content">
+        <div class="note-author">${user.username}</div>
+        <a
+          href="/api/${n.nodeId}/${n.version}/notes/${n._id}${tokenQS}"
+          class="note-link"
+        >
+          ${
+            n.contentType === "file"
+              ? `<span class="file-badge">FILE</span>`
+              : ""
+          }${preview}
+        </a>
+      </div>
+
+      <div class="note-meta">
+        ${new Date(n.createdAt).toLocaleString()}
+        <span class="meta-separator">•</span>
+        <a href="/api/${n.nodeId}/${n.version}${tokenQS}">
+          ${nodeName} v${n.version}
+        </a>
+        <span class="meta-separator">•</span>
+        <a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
+          View Notes
+        </a>
+      </div>
+    </li>
+  `;
+      })
+    );
+
+    return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${user.username} — Notes</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Header Section */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    .header h1 a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .header h1 a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    /* Search Box */
+    .search-form {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .search-form input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 12px 16px;
+      font-size: 15px;
+      border-radius: 10px;
+      border: 1px solid #d0d0d0;
+      background: white;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .search-form input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .search-form button {
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .search-form button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    /* Navigation Links */
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      padding: 8px 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .nav-links a:hover {
+      background: white;
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    /* Notes List */
+    .notes-list {
+      list-style: none;
+    }
+
+    .note-card {
+      position: relative;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      transition: all 0.2s;
+    }
+
+    .note-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .delete-button {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #999;
+      padding: 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      line-height: 1;
+    }
+
+    .delete-button:hover {
+      background: #ffebee;
+      color: #c62828;
+      transform: scale(1.1);
+    }
+
+    .note-content {
+      padding-right: 40px;
+      margin-bottom: 12px;
+    }
+
+    .note-author {
+      font-weight: 600;
+      color: #667eea;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    .note-link {
+      color: #1a1a1a;
+      text-decoration: none;
+      font-size: 15px;
+      line-height: 1.6;
+      display: block;
+      word-wrap: break-word;
+      transition: color 0.2s;
+    }
+
+    .note-link:hover {
+      color: #667eea;
+    }
+
+    .file-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+
+    /* Note Meta */
+    .note-meta {
+      padding-top: 12px;
+      border-top: 1px solid #e9ecef;
+      font-size: 13px;
+      color: #888;
+      line-height: 1.8;
+    }
+
+    .note-meta a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .note-meta a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    .meta-separator {
+      margin: 0 6px;
+      color: #ccc;
+    }
+
+    /* Empty State */
+    .empty-state {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 60px 40px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-text {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-subtext {
+      font-size: 14px;
+      color: #999;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .header {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .search-form {
+        flex-direction: column;
+      }
+
+      .search-form input[type="text"] {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .search-form button {
+        width: 100%;
+      }
+
+      .nav-links {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .nav-links a {
+        text-align: center;
+      }
+
+      .note-card {
+        padding: 16px;
+      }
+
+      .delete-button {
+        top: 12px;
+        right: 12px;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+
+      .empty-state {
+        padding: 40px 24px;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
+
+    <!-- Header Section -->
+    <div class="header">
+      <h1>
+        Notes by
+        <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
+      </h1>
+
+      <!-- Search Form -->
+      <form method="GET" action="/api/user/${userId}/notes" class="search-form">
+        <input type="hidden" name="token" value="${token}">
+        <input type="hidden" name="html" value="">
+        <input
+          type="text"
+          name="q"
+          placeholder="Search notes..."
+          value="${query.replace(/"/g, "&quot;")}"
+        />
+        <button type="submit">Search</button>
+      </form>
+
+      <!-- Navigation Links -->
+      <div class="nav-links">
+        <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
+
+        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
+        <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
+        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+        <a href="/api/user/${userId}/deleted${tokenQS}">Deleted</a>
+      </div>
+    </div>
+
+    <!-- Notes List -->
+    ${
+      notes.length > 0
+        ? `
+    <ul class="notes-list">
+      ${processedNotes.join("")}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📝</div>
+      <div class="empty-state-text">No notes yet</div>
+      <div class="empty-state-subtext">
+        ${
+          query.trim() !== ""
+            ? "Try a different search term"
+            : "Notes will appear here as you create them"
+        }
+      </div>
+    </div>
+    `
+    }
+  </div>
+
+  <script>
+    document.addEventListener("click", async (e) => {
+      if (!e.target.classList.contains("delete-button")) return;
+
+      const card = e.target.closest(".note-card");
+      const noteId = card.dataset.noteId;
+      const nodeId = card.dataset.nodeId;
+      const version = card.dataset.version;
+
+      if (!confirm("Delete this note? This cannot be undone.")) return;
+
+      const token = new URLSearchParams(window.location.search).get("token") || "";
+      const qs = token ? "?token=" + encodeURIComponent(token) : "";
+
+      try {
+        const res = await fetch(
+          \`/api/\${nodeId}/\${version}/notes/\${noteId}\${qs}\`,
+          { method: "DELETE" }
+        );
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || "Delete failed");
+
+        // Fade out animation
+        card.style.opacity = "0";
+        card.style.transform = "translateX(-20px)";
+        setTimeout(() => card.remove(), 300);
+      } catch (err) {
+        alert("Failed to delete: " + (err.message || "Unknown error"));
+      }
+    });
+  </script>
+</body>
+</html>
+`);
   } catch (err) {
     console.error("Error in /user/:userId/notes:", err);
     res.status(400).json({ success: false, error: err.message });
@@ -1515,7 +2022,482 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
 </body>
 </html>`;
 
-    return res.send(html);
+    // Replace the HTML return in your /user/:userId/tags route with this:
+
+    // Replace the HTML return in your /user/:userId/tags route with this:
+
+    return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${user.username} — Mail</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Header Section */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+
+    .header h1::before {
+      content: '📨 ';
+      font-size: 26px;
+    }
+
+    .unread-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-left: 12px;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+      animation: pulse-badge 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-badge {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+
+    .header h1 a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .header h1 a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    .header-subtitle {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 16px;
+    }
+
+    /* Navigation Links */
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      padding: 8px 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .nav-links a:hover {
+      background: white;
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    /* Notes List */
+    .notes-list {
+      list-style: none;
+    }
+
+    .note-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-left: 4px solid #667eea;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .note-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, rgba(118, 75, 162, 0.03) 100%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+
+    .note-card:hover {
+      transform: translateX(8px) translateY(-4px);
+      box-shadow: 0 12px 32px rgba(102, 126, 234, 0.2);
+      border-left-color: #764ba2;
+    }
+
+    .note-card:hover::before {
+      opacity: 1;
+    }
+
+    .note-card.unread {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(252, 252, 255, 0.98) 100%);
+      border-left-width: 5px;
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.15);
+    }
+
+    .note-card.unread::after {
+      content: '';
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 10px;
+      height: 10px;
+      background: #667eea;
+      border-radius: 50%;
+      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% {
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+      }
+      50% {
+        box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.1);
+      }
+    }
+
+    .note-content {
+      margin-bottom: 12px;
+    }
+
+    .note-author {
+      font-weight: 700;
+      color: #667eea;
+      font-size: 15px;
+      margin-right: 6px;
+      position: relative;
+      display: inline-block;
+    }
+
+    .note-author::before {
+      content: '💬';
+      margin-right: 6px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .note-author a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .note-author a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    .note-link {
+      color: #1a1a1a;
+      text-decoration: none;
+      font-size: 15px;
+      line-height: 1.6;
+      word-wrap: break-word;
+      transition: color 0.2s;
+    }
+
+    .note-link:hover {
+      color: #667eea;
+    }
+
+    .file-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 8px;
+    }
+
+    /* Note Meta */
+    .note-meta {
+      padding-top: 12px;
+      border-top: 1px solid #e9ecef;
+      font-size: 13px;
+      color: #888;
+      line-height: 1.8;
+    }
+
+    .note-meta a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .note-meta a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    .meta-separator {
+      margin: 0 6px;
+      color: #ccc;
+    }
+
+    /* Empty State */
+    .empty-state {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 60px 40px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-text {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-subtext {
+      font-size: 14px;
+      color: #999;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .header {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .nav-links {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .nav-links a {
+        text-align: center;
+      }
+
+      .note-card {
+        padding: 16px;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+
+      .empty-state {
+        padding: 40px 24px;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
+
+    <!-- Header Section -->
+    <div class="header">
+      <h1>
+        Mail for
+        <a href="/api/user/${userId}${tokenQS}">@${user.username}</a>
+        ${
+          notes.length > 0
+            ? `<span class="unread-badge">${notes.length} ${
+                notes.length === 1 ? "message" : "messages"
+              }</span>`
+            : ""
+        }
+      </h1>
+      <div class="header-subtitle">Notes where others have mentioned you</div>
+
+      <!-- Navigation Links -->
+      <div class="nav-links">
+        <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
+                <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
+
+        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
+        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+        <a href="/api/user/${userId}/deleted${tokenQS}">Deleted</a>
+      </div>
+    </div>
+
+    <!-- Notes List -->
+    ${
+      notes.length > 0
+        ? `
+    <ul class="notes-list">
+      ${await Promise.all(
+        notes.map(async (n) => {
+          const nodeName = await getNodeName(n.nodeId);
+          const preview =
+            n.contentType === "text"
+              ? n.content.length > 120
+                ? n.content.substring(0, 120) + "…"
+                : n.content
+              : n.content.split("/").pop();
+
+          const author = n.userId.username || n.userId._id;
+
+          return `
+          <li class="note-card unread">
+            <div class="note-content">
+              <span class="note-author">
+                <a href="/api/user/${n.userId._id}${tokenQS}">
+                  ${author}
+                </a>
+              </span>
+              <a href="/api/${n.nodeId}/${n.version}/notes/${
+            n._id
+          }${tokenQS}" class="note-link">
+                ${
+                  n.contentType === "file"
+                    ? `<span class="file-badge">FILE</span>`
+                    : ""
+                }${preview}
+              </a>
+            </div>
+
+            <div class="note-meta">
+              ${new Date(n.createdAt).toLocaleString()}
+              <span class="meta-separator">•</span>
+              <a href="/api/${n.nodeId}/${n.version}${tokenQS}">
+                ${nodeName} v${n.version}
+              </a>
+              <span class="meta-separator">•</span>
+              <a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
+                View Notes
+              </a>
+            </div>
+          </li>
+        `;
+        })
+      ).then((results) => results.join(""))}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📬</div>
+      <div class="empty-state-text">No tagged notes yet</div>
+      <div class="empty-state-subtext">
+        Notes where you're tagged will appear here
+      </div>
+    </div>
+    `
+    }
+  </div>
+</body>
+</html>
+`);
   } catch (err) {
     console.error("Error in /user/:userId/tags:", err);
     res.status(400).json({ success: false, error: err.message });
@@ -2649,11 +3631,40 @@ document.addEventListener("click", async (e) => {
         max-width: 700px;
       }
     }
+    .back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  color: #667eea;
+  text-decoration: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
   </style>
 </head>
 <body>
   <div class="container">
+  
     <!-- Header Section -->
+     <div class="back-nav">
+      <a href="/api/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
     <div class="header">
       <h1>
         Raw Ideas for
@@ -2675,12 +3686,12 @@ document.addEventListener("click", async (e) => {
 
       <!-- Navigation Links -->
       <div class="nav-links">
-              <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
 
         <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
+                        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
+
         <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
         <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
-                <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
                         <a href="/api/user/${userId}/deleted${tokenQS}">Deleted</a>
 
 
@@ -3493,15 +4504,14 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
         <a href="/api/user/${userId}/notes?token=${
       req.query.token ?? ""
     }&html">Notes</a>
+    
         <a href="/api/user/${userId}/tags?token=${
       req.query.token ?? ""
     }&html">Mail</a>
         <a href="/api/user/${userId}/contributions?token=${
       req.query.token ?? ""
     }&html">Contributions</a>
-    <a href="/api/user/${userId}/invites?token=${
-      req.query.token ?? ""
-    }&html">Invites</a>
+  
         <a href="/api/user/${userId}/deleted?token=${
       req.query.token ?? ""
     }&html">Deleted</a>
@@ -3676,47 +4686,426 @@ router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
       ? `<ul>${deletedItems.join("")}</ul>`
       : `<p><em>No deleted branches</em></p>`;
 
+    // Replace the HTML return in your /user/:userId/deleted route with this:
+
     return res.send(`
-      <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Deleted Branches</title>
-        <style>
-          body {
-            font-family: system-ui, sans-serif;
-            padding: 20px;
-            background: #fafafa;
-          }
-          ul {
-            list-style: none;
-            padding-left: 0;
-          }
-          li {
-            margin-bottom: 10px;
-          }
-          a {
-            color: #5865f2;
-            text-decoration: none;
-          }
-          a:hover {
-            text-decoration: underline;
-          }
-        </style>
-      </head>
-      <body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${user.username} — Deleted Branches</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-        <h1>
-          Deleted Branches for
-          <a href="/api/user/${userId}${tokenQS}">
-            ${user.username}
-          </a>
-        </h1>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
 
-        ${deletedHtml}
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
 
-      </body>
-      </html>
-    `);
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Header Section */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    .header h1 a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .header h1 a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    /* Navigation Links */
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      padding: 8px 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .nav-links a:hover {
+      background: white;
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    /* Deleted Items List */
+    .deleted-list {
+      list-style: none;
+    }
+
+    .deleted-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      transition: all 0.2s;
+      border-left: 4px solid #c62828;
+    }
+
+    .deleted-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .deleted-info {
+      margin-bottom: 16px;
+    }
+
+    .deleted-name {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .deleted-name a {
+      color: #1a1a1a;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .deleted-name a:hover {
+      color: #667eea;
+    }
+
+    .deleted-id {
+      font-size: 13px;
+      color: #888;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    }
+
+    /* Revival Forms */
+    .revival-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-top: 16px;
+      border-top: 1px solid #e9ecef;
+    }
+
+    .revive-as-root-form button {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      font-family: inherit;
+      box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+      width: 100%;
+    }
+
+    .revive-as-root-form button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(76, 175, 80, 0.4);
+    }
+
+    .revive-into-branch-form {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .revive-into-branch-form input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px 14px;
+      font-size: 14px;
+      border-radius: 8px;
+      border: 1px solid #d0d0d0;
+      background: white;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .revive-into-branch-form input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .revive-into-branch-form button {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: none;
+      background: #667eea;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+
+    .revive-into-branch-form button:hover {
+      background: #5856d6;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Empty State */
+    .empty-state {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 60px 40px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-text {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-subtext {
+      font-size: 14px;
+      color: #999;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .header {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .nav-links {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .nav-links a {
+        text-align: center;
+      }
+
+      .deleted-card {
+        padding: 16px;
+      }
+
+      .deleted-name {
+        font-size: 16px;
+      }
+
+      .revive-as-root-form button {
+        width: 100%;
+      }
+
+      .revive-into-branch-form {
+        flex-direction: column;
+      }
+
+      .revive-into-branch-form input[type="text"] {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .revive-into-branch-form button {
+        width: 100%;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+
+      .empty-state {
+        padding: 40px 24px;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
+
+    <!-- Header Section -->
+    <div class="header">
+      <h1>
+        Deleted Branches for
+        <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
+      </h1>
+
+      <!-- Navigation Links -->
+      <div class="nav-links">
+        <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
+                <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
+
+        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
+        <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
+        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+      </div>
+    </div>
+
+    <!-- Deleted Items List -->
+    ${
+      deleted.length > 0
+        ? `
+    <ul class="deleted-list">
+      ${deleted
+        .map(
+          ({ _id, name }) => `
+        <li class="deleted-card">
+          <div class="deleted-info">
+            <div class="deleted-name">
+              <a href="/api/root/${_id}${tokenQS}">
+                ${name || "Untitled"}
+              </a>
+            </div>
+            <div class="deleted-id">${_id}</div>
+          </div>
+
+          <div class="revival-section">
+            <!-- Revive as Root -->
+            <form
+              method="POST"
+              action="/api/user/${userId}/deleted/${_id}/reviveAsRoot?token=${token}&html"
+              class="revive-as-root-form"
+            >
+              <button type="submit">Revive as Root</button>
+            </form>
+
+            <!-- Revive into Branch -->
+            <form
+              method="POST"
+              action="/api/user/${userId}/deleted/${_id}/revive?token=${token}&html"
+              class="revive-into-branch-form"
+            >
+              <input
+                type="text"
+                name="targetParentId"
+                placeholder="Target parent node ID"
+                required
+              />
+              <button type="submit">Revive into Branch</button>
+            </form>
+          </div>
+        </li>
+      `
+        )
+        .join("")}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">🗑️</div>
+      <div class="empty-state-text">No deleted branches</div>
+      <div class="empty-state-subtext">
+        Deleted branches will appear here and can be revived
+      </div>
+    </div>
+    `
+    }
+  </div>
+</body>
+</html>
+`);
   } catch (err) {
     console.error("Error in /user/:userId/deleted:", err);
     res.status(500).json({ error: err.message });
