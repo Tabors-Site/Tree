@@ -14,6 +14,8 @@ export const sections = [
   { id: "ai", label: "How AI fits in" },
   { id: "pieces", label: "The 3 core pieces" },
   { id: "next", label: "What to do next" },
+  { id: "api", label: "API Info" },
+
 ];
 
 const WelcomePage = () => {

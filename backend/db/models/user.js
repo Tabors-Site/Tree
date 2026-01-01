@@ -2,6 +2,19 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import { v4 as uuidv4 } from "uuid";
 
+const ApiKeySchema = new mongoose.Schema(
+  {
+    _id: { type: String, default: uuidv4 },
+    keyHash: { type: String, required: true },
+    name: { type: String, default: "API Key" },
+    lastUsedAt: { type: Date, default: null },
+    revoked: { type: Boolean, default: false },
+
+    usageCount: { type: Number, default: 0 },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } }
+);
+
 const UserSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
   username: { type: String, required: true, unique: true },
@@ -12,6 +25,8 @@ const UserSchema = new mongoose.Schema({
 
   resetPasswordToken: { type: String, required: false },
   resetPasswordExpiry: { type: Date, required: false },
+
+  apiKeys: [ApiKeySchema],
 
   roots: [{ type: String, ref: "Node" }],
 });

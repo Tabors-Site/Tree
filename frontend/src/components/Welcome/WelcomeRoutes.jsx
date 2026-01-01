@@ -8,6 +8,8 @@ import HowToUseSection from "./HowUseSection.jsx";
 import UsingAllThePiecesSection from "./UsingPiecesSection.jsx";
 import WhatToDoNextSection from "./WhatNextSection.jsx";
 import BeSection from "./BeSection.jsx";
+import ApiAccessSection from "./API.jsx";
+
 
 const WelcomeRoutes = () => {
   return (
@@ -27,6 +29,8 @@ const WelcomeRoutes = () => {
         <Route path="pieces" element={<UsingAllThePiecesSection />} />
         <Route path="next" element={<WhatToDoNextSection />} />
         <Route path="be" element={<BeSection />} />
+        <Route path="api" element={<ApiAccessSection />} />
+
       </Route>
     </Routes>
   );

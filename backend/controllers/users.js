@@ -277,6 +277,114 @@ const resetPassword = async (req, res) => {
   res.json({ message: "Password has been reset successfully" });
 };
 
+export async function generateApiKey() {
+  const rawKey = crypto.randomBytes(32).toString("hex"); // 64 chars
+  const keyHash = await bcrypt.hash(rawKey, 10);
+
+  return { rawKey, keyHash };
+}
+
+export async function compareApiKey(rawKey, keyHash) {
+  return bcrypt.compare(rawKey, keyHash);
+}
+
+const MAX_API_KEYS_PER_USER = 10;
+
+export const createApiKey = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { name, revokeOld = false } = req.body;
+
+    if (name && typeof name !== "string") {
+      return res.status(400).json({ message: "Invalid key name" });
+    }
+
+    const safeName = name?.trim().slice(0, 64) || "API Key";
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (
+      user.apiKeys.filter((k) => !k.revoked).length >= MAX_API_KEYS_PER_USER
+    ) {
+      return res.status(400).json({
+        message: "API key limit reached",
+      });
+    }
+
+    if (revokeOld) {
+      user.apiKeys.forEach((k) => (k.revoked = true));
+    }
+
+    const { rawKey, keyHash } = await generateApiKey();
+
+    user.apiKeys.push({
+      keyHash,
+      name: safeName,
+    });
+
+    await user.save();
+
+    return res.status(201).json({
+      apiKey: rawKey,
+      message: "Store this key securely. You will not see it again.",
+    });
+  } catch (err) {
+    console.error("[createApiKey]", err);
+    return res.status(500).json({ message: "Failed to create API key" });
+  }
+};
+
+export const listApiKeys = async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("apiKeys").lean();
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.json(
+      user.apiKeys.map((k) => ({
+        id: k._id,
+        name: k.name,
+        createdAt: k.createdAt,
+        lastUsedAt: k.lastUsedAt,
+        usageCount: k.usageCount,
+        revoked: k.revoked,
+      }))
+    );
+  } catch (err) {
+    console.error("[listApiKeys]", err);
+    return res.status(500).json({ message: "Failed to list API keys" });
+  }
+};
+
+export const deleteApiKey = async (req, res) => {
+  try {
+    const { keyId } = req.params;
+
+    if (!keyId) {
+      return res.status(400).json({ message: "Key ID required" });
+    }
+
+    const result = await User.updateOne(
+      { _id: req.userId, "apiKeys._id": keyId },
+      { $set: { "apiKeys.$.revoked": true } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "API key not found" });
+    }
+
+    return res.json({ message: "API key revoked" });
+  } catch (err) {
+    console.error("[deleteApiKey]", err);
+    return res.status(500).json({ message: "Failed to revoke API key" });
+  }
+};
+
 /* ===========================
     EXPORT CONTROLLERS
 =========================== */
