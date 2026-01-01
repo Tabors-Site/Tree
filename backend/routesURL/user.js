@@ -32,6 +32,12 @@ import {
   convertRawIdeaToNote as coreConvertRawIdeaToNote,
 } from "../core/rawIdea.js";
 
+import {
+  createApiKey,
+  listApiKeys,
+  deleteApiKey,
+} from "../controllers/users.js";
+
 import getNodeName from "./helpers/getNameById.js";
 
 const uploadsFolder = path.join(process.cwd(), "uploads");
@@ -112,30 +118,6 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         roots,
       });
     }
-
-    // HTML MODE
-    const rootsHtml =
-      roots.length > 0
-        ? `
-          <ul>
-            ${roots
-              .map(
-                (r) => `
-              <li>
-                <a href="/api/root/${r._id}${queryString}">
-                  ${r.name || "Untitled"} 
-                </a>
-              </li>
-            `
-              )
-              .join("")}
-          </ul>
-        `
-        : `<p><em>No roots found</em></p>`;
-
-    // Replace the HTML return in your user route with this:
-
-    // Replace the HTML return in your user route with this:
 
     return res.send(`
 <!DOCTYPE html>
@@ -636,6 +618,8 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         <li><a href="/api/user/${userId}/tags?${filtered}">Mail</a></li>
         <li><a href="/api/user/${userId}/contributions?${filtered}">Contributions</a></li>
         <li><a href="/api/user/${userId}/deleted?${filtered}">Deleted</a></li>
+        <li><a href="/api/user/${userId}/api-keys?${filtered}">API Keys</a></li>
+
       </ul>
     </div>
 
@@ -791,379 +775,6 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
 
     // HTML MODE
     const user = await User.findById(userId).lean();
-
-    // --- SEARCH BAR HTML ---
-    const searchBoxHtml = `
-      <form method="GET" action="/api/user/${userId}/notes" style="margin-top: 12px;">
-        <input type="hidden" name="token" value="${token}">
-        <input type="hidden" name="html" value="">
-        <input
-          type="text"
-          name="q"
-          placeholder="Search notes..."
-          value="${query}"
-          style="
-            padding: 8px 12px;
-            font-size: 14px;
-            width: 260px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-          "
-        />
-        <button
-          type="submit"
-          style="
-            padding: 8px 14px;
-            border-radius: 6px;
-            border: 1px solid #999;
-            background: #eee;
-            cursor: pointer;
-          "
-        >
-          Search
-        </button>
-      </form>
-    `;
-
-    let html = `
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>${user.username} — Notes</title>
-  <style>
-  body {
-    margin: 0;
-    padding: 0;
-    background: #f5f6f7;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
-    
-
-  .header {
-    padding: 20px;
-    border-bottom: 1px solid #ddd;
-    background: white;
-    flex-shrink: 0;
-  }
-
-  .header h1 {
-    margin: 0 0 12px 0;
-    font-size: 24px;
-    font-weight: 600;
-  }
-
-  .header a {
-    color: #5865f2;
-    text-decoration: none;
-  }
-
-  .header a:hover {
-    text-decoration: underline;
-  }
-
-  .nav {
-    margin-top: 12px;
-  }
-
-  .nav a {
-    color: #5865f2;
-    text-decoration: none;
-    margin-right: 16px;
-    font-size: 14px;
-  }
-
-  .nav a:hover {
-    text-decoration: underline;
-  }
-
-  .container {
-    padding: 20px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    flex-grow: 1;
-  }
-
-  .user-id-box {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin: 8px 0;
-  }
-
-  .user-id-box code {
-    background: #eee;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 13px;
-  }
-
-  .user-id-box button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
-    opacity: 0.6;
-    font-size: 16px;
-  }
-
-  .user-id-box button:hover {
-    opacity: 1;
-  }
-
-  .search-form {
-    margin-top: 12px;
-  }
-
-  .search-form input[type="text"] {
-    padding: 8px 12px;
-    font-size: 14px;
-    width: 260px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    font-family: inherit;
-  }
-
-  .search-form button {
-    padding: 8px 14px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    background: white;
-    cursor: pointer;
-    font-size: 14px;
-    margin-left: 6px;
-  }
-
-  .search-form button:hover {
-    background: #f5f6f7;
-  }
-
-  ul {
-    list-style: none;
-    padding-left: 0;
-    margin: 0;
-  }
-
-  li {
-    margin-bottom: 16px;
-    padding: 14px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    border: 1px solid #e3e5e8;
-  }
-
-  li a {
-    color: #5865f2;
-    text-decoration: none;
-  }
-
-  li a:hover {
-    text-decoration: underline;
-  }
-
-  .meta {
-    color: #666;
-    font-size: 13px;
-    margin-top: 6px;
-    line-height: 1.6;
-  }
-
-  @media (max-width: 600px) {
-    .header {
-      padding: 16px;
-    }
-
-    .container {
-      padding: 16px;
-    }
-
-    .search-form input[type="text"] {
-      width: 200px;
-      font-size: 16px;
-    }
-
-    .search-form button {
-      font-size: 16px;
-    }
-  }
-
-  @media (prefers-color-scheme: dark) {
-    body {
-      background: #2f3136;
-      color: #e3e5e8;
-    }
-
-    .header {
-      background: #36393f;
-      border-bottom-color: #3a3c40;
-    }
-
-    .header a,
-    .nav a,
-    li a {
-      color: #7289da;
-    }
-
-    .user-id-box code {
-      background: #40444b;
-      color: #e3e5e8;
-    }
-
-    .search-form input[type="text"] {
-      background: #40444b;
-      color: #e3e5e8;
-      border-color: #3a3c40;
-    }
-
-    .search-form button {
-      background: #40444b;
-      color: #e3e5e8;
-      border-color: #3a3c40;
-    }
-
-    .search-form button:hover {
-      background: #4f545c;
-    }
-
-    li {
-      background: #36393f;
-      border-color: #3a3c40;
-    }
-
-    .meta {
-      color: #b9bbbe;
-    }
-  }
-    .note-item {
-  position: relative;
-}
-
-.delete-note {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  color: #999;
-  padding: 4px;
-}
-
-.delete-note:hover {
-  color: #e03131;
-}
-
-</style>
-</head>
-
-<body>
-
-  <div class="header">
-    <h1 style="margin:0;">
-      Notes by <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
-    </h1>
-
-    ${searchBoxHtml}
-
-    <div class="nav">
-      <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
-      <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
-      <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
-
-    </div>
-  </div>
-
-  <div class="container">
-    <ul>
-`;
-
-    for (const n of notes) {
-      const preview =
-        n.contentType === "text"
-          ? n.content.length > 120
-            ? n.content.substring(0, 120) + "…"
-            : n.content
-          : `[FILE] ${n.content}`;
-
-      const nodeName = await getNodeName(n.nodeId);
-
-      html += `
-      <li
-  class="note-item"
-  data-note-id="${n._id}"
-  data-node-id="${n.nodeId}"
-  data-version="${n.version}"
->
-  <button class="delete-note" title="Delete note">✕</button>
-
-        <div>
-          <strong>${user.username}:</strong>
-          <a href="/api/${n.nodeId}/${n.version}/notes/${n._id}${tokenQS}">
-            ${preview}
-          </a>
-        </div>
-
-        <div class="meta">
-          ${new Date(n.createdAt).toLocaleString()}<br />
-
-          <a href="/api/${n.nodeId}/${n.version}${tokenQS}">
-            ${nodeName} v${n.version}
-          </a>
-          <br />
-
-          <a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
-            View Notes
-          </a>
-        </div>
-      </li>
-`;
-    }
-
-    html += `
-    </ul>
-  </div>
-<script>
-document.addEventListener("click", async (e) => {
-  if (!e.target.classList.contains("delete-note")) return;
-
-  const li = e.target.closest(".note-item");
-  const noteId = li.dataset.noteId;
-  const nodeId = li.dataset.nodeId;
-  const version = li.dataset.version;
-
-  if (!confirm("Delete this note?")) return;
-
-  const token =
-    new URLSearchParams(window.location.search).get("token") || "";
-
-  const qs = token ? "?token=" + encodeURIComponent(token) : "";
-
-  try {
-    const res = await fetch(
-      "/api/" + nodeId + "/" + version + "/notes/" + noteId + qs,
-      { method: "DELETE" }
-    );
-
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-
-    li.remove();
-  } catch {
-    alert("Delete failed");
-  }
-});
-</script>
-
-</body>
-</html>
-`;
-
-    // Replace the HTML return in your /user/:userId/notes route with this:
 
     // Process notes outside the template literal
     const processedNotes = await Promise.all(
@@ -1570,6 +1181,12 @@ document.addEventListener("click", async (e) => {
         max-width: 700px;
       }
     }
+           .header-subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 16px;
+  }
+
   </style>
 </head>
 <body>
@@ -1587,6 +1204,9 @@ document.addEventListener("click", async (e) => {
         Notes by
         <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
+<div class="header-subtitle">
+  View and manage all of your notes across every tree
+</div>
 
       <!-- Search Form -->
       <form method="GET" action="/api/user/${userId}/notes" class="search-form">
@@ -2256,7 +1876,7 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
     }
 
     .note-author::before {
-      content: '💬';
+      content: '  ';
       margin-right: 6px;
       font-size: 14px;
       opacity: 0.8;
@@ -2394,6 +2014,7 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
         max-width: 700px;
       }
     }
+      
   </style>
 </head>
 <body>
@@ -2504,267 +2125,715 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
   }
 });
 
+const renderDetails = (c, queryString) => {
+  switch (c.action) {
+    case "editValue":
+      return `
+        <div style="margin-left:12px;">
+          <strong>Values updated</strong>
+          ${renderKeyValueMap(c.valueEdited)}
+        </div>
+      `;
+
+    case "editGoal":
+      return `
+        <div style="margin-left:12px;">
+          <strong>Goal updated</strong>
+          ${renderKeyValueMap(c.goalEdited)}
+        </div>
+      `;
+
+    case "editSchedule":
+      return `
+        <div style="margin-left:12px;">
+          ${
+            c.scheduleEdited?.date
+              ? `<div>Date: <code>${new Date(
+                  c.scheduleEdited.date
+                ).toLocaleString()}</code></div>`
+              : ""
+          }
+          ${
+            c.scheduleEdited?.reeffectTime !== undefined
+              ? `<div>Re-effect time: <code>${c.scheduleEdited.reeffectTime}</code></div>`
+              : ""
+          }
+        </div>
+      `;
+
+    case "executeScript":
+      return `
+        <div style="margin-left:12px;">
+          <div>Status: <code>${
+            c.executeScript?.success ? "success" : "failed"
+          }</code></div>
+          ${
+            c.executeScript?.logs?.length
+              ? `<pre><code>${escapeHtml(
+                  c.executeScript.logs.join("\n")
+                )}</code></pre>`
+              : ""
+          }
+          ${
+            c.executeScript?.error
+              ? `<div>Error: <code>${escapeHtml(
+                  c.executeScript.error
+                )}</code></div>`
+              : ""
+          }
+        </div>
+      `;
+
+    case "branchLifecycle":
+      return `
+        <div style="margin-left:12px;">
+          ${
+            c.branchLifecycle?.fromParentId
+              ? `From: ${renderLink(
+                  c.branchLifecycle.fromParentId,
+                  queryString
+                )}<br/>`
+              : ""
+          }
+          ${
+            c.branchLifecycle?.toParentId
+              ? `To: ${renderLink(c.branchLifecycle.toParentId, queryString)}`
+              : ""
+          }
+        </div>
+      `;
+
+    default:
+      return "";
+  }
+};
+const renderKeyValueMap = (data) => {
+  if (!data) return "";
+
+  const entries =
+    data instanceof Map
+      ? [...data.entries()]
+      : typeof data === "object"
+      ? Object.entries(data)
+      : [];
+
+  if (entries.length === 0) return "";
+
+  return `
+    <ul>
+      ${entries
+        .map(
+          ([key, value]) =>
+            `<li><code>${escapeHtml(key)}</code>: <code>${escapeHtml(
+              value
+            )}</code></li>`
+        )
+        .join("")}
+    </ul>
+  `;
+};
+const escapeHtml = (str = "") =>
+  String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+/* ------------------------- GENERIC HELPERS ------------------------- */
+
+const renderUser = (user) => {
+  if (!user) return `<code>unknown user</code>`;
+
+  // populated user object
+  if (typeof user === "object") {
+    if (user.username) {
+      return `<code>${escapeHtml(user.username)}</code>`;
+    }
+    if (user._id) {
+      return `<code>${escapeHtml(user._id)}</code>`;
+    }
+  }
+
+  // string id
+  if (typeof user === "string") {
+    return `<code>${escapeHtml(user)}</code>`;
+  }
+
+  return `<code>unknown user</code>`;
+};
+
+const renderLink = (id, queryString) =>
+  id
+    ? `<a href="/api/${id}${queryString}"><code>${id}</code></a>`
+    : `<code>unknown</code>`;
+
+const renderVersionLink = (
+  nodeId,
+  version,
+  queryString,
+  label = `Version ${version}`
+) =>
+  `<a href="/api/${nodeId}/${version}${queryString}">
+    <code>${label}</code>
+  </a>`;
+
+export const contributionRenderers = ({
+  nodeId,
+  version,
+  nextVersion,
+  queryString,
+}) => ({
+  create: () => `created node`,
+  editStatus: (c) => `changed status to <code>${c.statusEdited}</code>`,
+  editValue: () => `updated values`,
+  prestige: () =>
+    nodeId
+      ? `added new version ${renderVersionLink(
+          nodeId,
+          nextVersion,
+          queryString
+        )}`
+      : `added new version`,
+  transaction: () =>
+    nodeId
+      ? `completed <a href="/api/${nodeId}/${version}/transactions${queryString}">
+          <code>transaction</code>
+        </a>`
+      : `completed <code>transaction</code>`,
+  delete: () => `deleted node`,
+  editSchedule: () => `updated schedule`,
+  editGoal: () => `updated goal`,
+  editNameNode: (c) =>
+    `renamed node from <code>${c.editNameNode?.oldName}</code> to <code>${c.editNameNode?.newName}</code>`,
+  updateParent: (c) =>
+    `changed parent from ${renderLink(
+      c.updateParent?.oldParentId,
+      queryString
+    )} to ${renderLink(c.updateParent?.newParentId, queryString)}`,
+  updateChildNode: (c) =>
+    `${c.updateChildNode?.action} child ${renderLink(
+      c.updateChildNode?.childId,
+      queryString
+    )}`,
+  note: (c) =>
+    `${c.noteAction?.action === "add" ? "added" : "removed"} note
+   <a href="/api/${c.nodeId}/${c.nodeVersion}/notes/${
+      c.noteAction?.noteId
+    }${queryString}">
+     <code>${c.noteAction?.noteId}</code>
+   </a>`,
+  editScript: (c) => `updated script <code>${c.editScript?.scriptName}</code>`,
+  executeScript: (c) =>
+    `executed script <code>${c.executeScript?.scriptName}</code>`,
+  rawIdea: (c) => {
+    const { action, rawIdeaId, targetNodeId } = c.rawIdeaAction || {};
+
+    if (action === "add") {
+      return `added raw idea
+      <a href="/api/user/${c.userId?._id}/raw-ideas/${rawIdeaId}${queryString}">
+        <code>${rawIdeaId}</code>
+      </a>`;
+    }
+
+    if (action === "delete") {
+      return `deleted raw idea
+      <code>${rawIdeaId}</code>`;
+    }
+
+    if (action === "place" && targetNodeId) {
+      return `placed raw idea
+      <code>${rawIdeaId}</code>
+      into ${renderLink(targetNodeId, queryString)}`;
+    }
+
+    return "updated raw idea";
+  },
+
+  branchLifecycle: (c) =>
+    c.branchLifecycle?.action === "retired"
+      ? "retired branch"
+      : c.branchLifecycle?.action === "revived"
+      ? "revived branch"
+      : "revived branch as root",
+  invite: (c) => {
+    const { action, receivingId } = c.inviteAction || {};
+    const target = renderUser(receivingId);
+    if (action === "invite") return `invited contributor ${target}`;
+    if (action === "acceptInvite") return `accepted invitation from ${target}`;
+    if (action === "denyInvite") return `declined invitation from ${target}`;
+    if (action === "removeContributor") return `removed contributor ${target}`;
+    if (action === "switchOwner") return `transferred ownership to ${target}`;
+    return "updated collaboration";
+  },
+});
+
+const contributionsCss = `<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+      'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #1a1a1a;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* Back Navigation */
+  .back-nav {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    color: #667eea;
+    text-decoration: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .back-link:hover {
+    background: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Header Section */
+  .header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+
+  .header h1::before {
+    content: '📊 ';
+    font-size: 26px;
+  }
+
+  .header h1 a {
+    color: #667eea;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .header h1 a:hover {
+    color: #764ba2;
+    text-decoration: underline;
+  }
+
+  .header-subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 16px;
+  }
+
+  /* Navigation Links */
+  .nav-links {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    padding: 8px 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+  }
+
+  .nav-links a:hover {
+    background: white;
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  }
+
+  /* Contributions List */
+  .contributions-list {
+    list-style: none;
+  }
+
+  .contribution-item {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-left: 4px solid #667eea;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .contribution-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, rgba(118, 75, 162, 0.03) 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .contribution-item:hover {
+    transform: translateX(8px) translateY(-4px);
+    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.2);
+    border-left-color: #764ba2;
+  }
+
+  .contribution-item:hover::before {
+    opacity: 1;
+  }
+
+  .contribution-user {
+    font-weight: 700;
+    color: #667eea;
+    font-size: 15px;
+    margin-bottom: 4px;
+    position: relative;
+    display: inline-block;
+  }
+
+  .contribution-user::before {
+    content: '👤';
+    margin-right: 6px;
+    font-size: 14px;
+    opacity: 0.8;
+  }
+
+  .contribution-action {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #1a1a1a;
+    margin-bottom: 6px;
+  }
+
+  .contribution-time {
+    font-size: 13px;
+    color: #888;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e9ecef;
+    display: block;
+  }
+
+  .contribution-details {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e9ecef;
+  }
+
+  .contribution-details strong {
+    color: #667eea;
+    font-size: 14px;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .contribution-details ul {
+    list-style: none;
+    padding-left: 0;
+    margin-top: 8px;
+  }
+
+  .contribution-details li {
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 14px;
+  }
+
+  /* Code + Links */
+  code {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    color: #667eea;
+    font-weight: 600;
+    word-break: break-word;
+  }
+
+  pre {
+    background: #2d2d2d;
+    color: #a9b7c6;
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  pre code {
+    background: none;
+    color: inherit;
+    padding: 0;
+    font-weight: 400;
+  }
+
+  a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  a:hover {
+    color: #764ba2;
+    text-decoration: underline;
+  }
+
+  /* Empty State */
+  .empty-state {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 60px 40px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+
+  .empty-state-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+
+  .empty-state-text {
+    font-size: 18px;
+    color: #666;
+    margin-bottom: 8px;
+  }
+
+  .empty-state-subtext {
+    font-size: 14px;
+    color: #999;
+  }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    body {
+      padding: 16px;
+    }
+
+    .header {
+      padding: 20px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+    }
+
+    .back-nav {
+      flex-direction: column;
+    }
+
+    .back-link {
+      justify-content: center;
+    }
+
+    .nav-links {
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .nav-links a {
+      text-align: center;
+    }
+
+    .contribution-item {
+      padding: 16px;
+    }
+
+    code {
+      font-size: 12px;
+    }
+
+    pre {
+      font-size: 12px;
+    }
+
+    .empty-state {
+      padding: 40px 24px;
+    }
+  }
+
+  @media (min-width: 641px) and (max-width: 1024px) {
+    .container {
+      max-width: 700px;
+    }
+  }
+</style>`;
+
 router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
   try {
-    const userId = req.params.userId;
-
+    const { userId } = req.params;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-    const rawLimit = req.query.limit;
-    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
-    const startDate = req.query.startDate;
-    const endDate = req.query.endDate;
+
+    const limit =
+      req.query.limit !== undefined ? Number(req.query.limit) : undefined;
+
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid limit: must be a positive number",
-      });
+      return res.status(400).json({ error: "Invalid limit" });
     }
 
     const filtered = Object.entries(req.query)
-      .filter(([key]) => ["token", "html"].includes(key))
-      .map(([key, val]) => (val === "" ? key : `${key}=${val}`))
+      .filter(([k]) => ["token", "html"].includes(k))
+      .map(([k, v]) => (v === "" ? k : `${k}=${v}`))
       .join("&");
 
     const queryString = filtered ? `?${filtered}` : "";
 
-    const result = await getContributionsByUser(
+    const { contributions = [] } = await getContributionsByUser(
       userId,
       limit,
-      startDate,
-      endDate
+      req.query.startDate,
+      req.query.endDate
     );
-    const contributions = result.contributions || [];
 
-    // JSON MODE
     if (!wantHtml) {
-      return res.json({
-        success: true,
-        contributions,
-      });
+      return res.json({ userId, contributions });
     }
 
     const user = await User.findById(userId).lean();
+    const username = user?.username || "Unknown user";
 
-    // FIX: async map + Promise.all
-    const processed = await Promise.all(
+    const renderers = contributionRenderers({
+      nodeId: null,
+      version: null,
+      nextVersion: null,
+      queryString,
+    });
+
+    const items = await Promise.all(
       contributions.map(async (c) => {
-        const username = c.username ?? "Unknown user";
-        const time = new Date(c.date).toLocaleString();
         const nodeId = c.nodeId?._id || c.nodeId;
-        const version = c.nodeVersion;
-        const nodeName = await getNodeName(nodeId);
+        const version = Number(c.nodeVersion ?? 0);
+        const time = new Date(c.date).toLocaleString();
+        const nodeName = nodeId ? await getNodeName(nodeId) : "Unknown node";
 
-        // Helper for node/version footer
-        const footer = `
-  <div class="meta" style="margin-top:6px;">
-    <a href="/api/${nodeId}/${version ?? 0}${queryString}">
-      ${nodeName}${version !== undefined ? ` v${version}` : ""}
-    </a>
-  </div>
-`;
+        const render = renderers[c.action] || (() => c.action);
+        const details = renderDetails(c, queryString);
 
-        // --------------------------
-        // TRANSACTION
-        // --------------------------
-        if (c.action === "transaction" && c.tradeId) {
-          const a = c.additionalInfo?.nodeA;
-          const b = c.additionalInfo?.nodeB;
-
-          return `
-<li>
-  <strong>${username}</strong>
-  made a <code>transaction</code><br/>
-  <small>${time}</small>
-
-  <div style="margin-top:6px; padding-left:12px;">
-    <div>
-      <strong>${a?.name}</strong>
-      (${a?.versionIndex}) →
-      <code>${JSON.stringify(a?.valuesSent)}</code>
-    </div>
-
-    <div>
-      <strong>${b?.name}</strong>
-      (${b?.versionIndex}) →
-      <code>${JSON.stringify(b?.valuesSent)}</code>
-    </div>
-  </div>
-
-  ${footer}
-</li>
-`;
-        }
-
-        // --------------------------
-        // EDIT NAME NODE
-        // --------------------------
-        if (c.action === "editNameNode") {
-          const { oldName, newName } = c.additionalInfo || {};
-          return `
-<li>
-  <strong>${username}</strong>
-  renamed node <code>${oldName}</code> → <code>${newName}</code><br/>
-  <small>${time}</small>
-  ${footer}
-</li>
-`;
-        }
-
-        // --------------------------
-        // UPDATE PARENT
-        // --------------------------
-        if (c.action === "updateParent") {
-          const { oldParentId, newParentId } = c.additionalInfo || {};
-          return `
-<li>
-  <strong>${username}</strong>
-  changed parent:
-  <a href="/api/${oldParentId}${queryString}">
-    ${await getNodeName(oldParentId)}
-  </a>
-  →
-  <a href="/api/${newParentId}${queryString}">
-    ${await getNodeName(newParentId)}
-  </a>
-  <br/>
-  <small>${time}</small>
-  ${footer}
-</li>
-`;
-        }
-
-        // --------------------------
-        // UPDATE CHILD NODE
-        // --------------------------
-        if (c.action === "updateChildNode") {
-          const { action, childId } = c.additionalInfo || {};
-          return `
-<li>
-  <strong>${username}</strong>
-  <code>${action}</code> child
-  <a href="/api/${childId}${queryString}">
-    ${await getNodeName(childId)}
-  </a>
-  <br/>
-  <small>${time}</small>
-  ${footer}
-</li>
-`;
-        }
-
-        // --------------------------
-        // EDIT SCRIPT
-        // --------------------------
-        if (c.action === "editScript") {
-          const { scriptName } = c.additionalInfo || {};
-          return `
-<li>
-  <strong>${username}</strong>
-  updated script <code>${scriptName}</code>
-  <br/>
-  <small>${time}</small>
-  ${footer}
-</li>
-`;
-        }
-
-        // --------------------------
-        // NOTE
-        // --------------------------
-        if (c.action === "note") {
-          const { action, noteId } = c.additionalInfo || {};
-          return `
-<li>
-  <strong>${username}</strong>
-  ${action === "add" ? "added" : "removed"} note
-  <a href="/api/${nodeId}/${version}/notes/${noteId}${queryString}">
-    <code>${noteId}</code>
-  </a>
-  <br/>
-  <small>${time}</small>
-  ${footer}
-</li>
-`;
-        }
-
-        // --------------------------
-        // DEFAULT
-        // --------------------------
         return `
-<li>
-  <strong>${username}</strong>
-  <code>${c.action}</code><br/>
-  <small>${time}</small>
-
-  ${
-    c.additionalInfo
-      ? `<div style="margin-top:6px; padding-left:12px;">
-          <code>${JSON.stringify(c.additionalInfo)}</code>
-         </div>`
-      : ""
-  }
-
-  ${footer}
-</li>
-`;
+<li class="contribution-item">
+  <div class="contribution-user">${username}</div>
+  <div class="contribution-action">
+    ${render(c)}
+    ${
+      nodeId
+        ? ` on <a href="/api/${nodeId}/${version}${queryString}">
+            <code>${nodeName}</code>
+          </a>`
+        : ""
+    }
+  </div>
+  <span class="contribution-time">${time}</span>
+  ${details ? `<div class="contribution-details">${details}</div>` : ""}
+</li>`;
       })
     );
 
-    const contributionsHtml =
-      processed.length > 0
-        ? `<ul>${processed.join("")}</ul>`
-        : `<p><em>No contributions found</em></p>`;
-
-    // FINAL HTML response
-    return res.send(`
-<html>
+    res.send(`
+<!DOCTYPE html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>${user.username} — Contributions</title>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      padding: 20px;
-      background: #fafafa;
-      line-height: 1.6;
-    }
-    h1 { margin-bottom: 6px; }
-    ul { list-style: none; padding-left: 18px; }
-    li { margin-bottom: 14px; }
-    code {
-      background: #eee;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 12px;
-    }
-    small { color: #555; }
-    a { color: #0077cc; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .nav a { margin-right: 12px; }
-  </style>
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${username} — Contributions</title>
+  ${contributionsCss}
 </head>
 
 <body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/user/${userId}${queryString}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
 
-  <h1>Contributions by <a href="/api/user/${userId}${queryString}">${user.username}</a></h1>
+    <!-- Header Section -->
+    <div class="header">
+      <h1>
+        Contributions by
+        <a href="/api/user/${userId}${queryString}">@${username}</a>
+      </h1>
+      <div class="header-subtitle">Activity & change history</div>
 
-  <div class="nav">
-    <a href="/api/user/${userId}/notes${queryString}">Notes</a>
-    <a href="/api/user/${userId}/tags${queryString}">Mail</a>
+      <!-- Navigation Links -->
+      <div class="nav-links">
         <a href="/api/user/${userId}/raw-ideas${queryString}">Raw Ideas</a>
+        <a href="/api/user/${userId}/notes${queryString}">Notes</a>
+        <a href="/api/user/${userId}/tags${queryString}">Mail</a>
+        <a href="/api/user/${userId}/invites${queryString}">Invites</a>
+        <a href="/api/user/${userId}/deleted${queryString}">Deleted</a>
+      </div>
+    </div>
 
+    <!-- Contributions List -->
+    ${
+      items.length
+        ? `<ul class="contributions-list">${items.join("")}</ul>`
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📊</div>
+      <div class="empty-state-text">No contributions yet</div>
+      <div class="empty-state-subtext">
+        Contributions and activity will appear here
+      </div>
+    </div>`
+    }
   </div>
-
-  <h2>Contributions</h2>
-  ${contributionsHtml}
-
 </body>
 </html>
 `);
   } catch (err) {
-    console.error("Error in /user/:userId/contributions:", err);
-    res.status(400).json({ success: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -3653,7 +3722,11 @@ document.addEventListener("click", async (e) => {
   transition: all 0.2s;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
-
+  .header-subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 16px;
+  }
   </style>
 </head>
 <body>
@@ -3670,6 +3743,9 @@ document.addEventListener("click", async (e) => {
         Raw Ideas for
         <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
+<div class="header-subtitle">
+  Organize raw ideas by placing them as notes on the appropriate node. You can use the ChatGPT connector to automate this process.
+</div>
 
       <!-- Search Form -->
       <form method="GET" action="/api/user/${userId}/raw-ideas" class="search-form">
@@ -3897,16 +3973,15 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       return res.status(403).send("Not authorized");
     }
 
-    const back = `/api/user/${userId}/raw-ideas?token=${
-      req.query.token ?? ""
-    }&html`;
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+    const back = `/api/user/${userId}/raw-ideas${tokenQS}`;
 
     const userLink =
       rawIdea.userId && rawIdea.userId !== "empty"
-        ? `<a href="/api/user/${rawIdea.userId._id}?token=${
-            req.query.token ?? ""
-          }&html">
-               ${rawIdea.userId.username ?? rawIdea.userId}:
+        ? `<a href="/api/user/${rawIdea.userId._id}${tokenQS}">
+               ${rawIdea.userId.username ?? rawIdea.userId}
              </a>`
         : "Unknown user";
 
@@ -3915,113 +3990,222 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       // ---------- TEXT ----------
       if (rawIdea.contentType === "text") {
         return res.send(`
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Raw Idea by ${rawIdea.userId?.username || "User"}</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-<style>
-  body {
-    margin: 0;
-    padding: 0;
-    background: #f5f6f7;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    display: flex;
-    justify-content: center;
-  }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
 
-  .page {
-    width: 100%;
-    max-width: 800px;
-    padding: 20px 16px;
-  }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
 
-  .top-links {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 12px;
-    font-size: 14px;
-  }
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
 
-  .top-links a {
-    color: #5865f2;
-    text-decoration: none;
-  }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
 
-  .user-info {
-    margin-bottom: 6px;
-    font-size: 14px;
-    opacity: 0.8;
-  }
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
 
-  pre {
-    background: white;
-    padding: 18px 20px;
-    border-radius: 10px;
-    font-size: 16px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    border: 1px solid #ddd;
-  }
+    /* Raw Idea Card */
+    .raw-idea-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
 
-  .copy-bar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 8px;
-  }
+    .raw-idea-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
 
-  button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 22px;
-    opacity: 0.6;
-  }
+    /* User Info */
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e9ecef;
+    }
 
-  button:hover {
-    opacity: 1;
-  }
+    .user-info::before {
+      content: '💡';
+      font-size: 18px;
+    }
 
-  @media (prefers-color-scheme: dark) {
-    body { background: #000; color: #e3e5e8; }
-    pre { background: #111; border-color: #333; }
-    .top-links a { color: #7289da; }
-  }
-</style>
+    .user-info a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: color 0.2s;
+    }
+
+    .user-info a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    /* Copy Button */
+    .copy-bar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 16px;
+    }
+
+    #copyBtn {
+      background: rgba(102, 126, 234, 0.1);
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      cursor: pointer;
+      font-size: 20px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    #copyBtn:hover {
+      background: rgba(102, 126, 234, 0.2);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    #copyBtn:active {
+      transform: translateY(0);
+    }
+
+    /* Raw Idea Content */
+    pre {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 12px;
+      font-size: 16px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      border: 1px solid #e9ecef;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      color: #1a1a1a;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .raw-idea-card {
+        padding: 20px;
+      }
+
+      pre {
+        font-size: 17px;
+        padding: 16px;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
+  </style>
 </head>
-
 <body>
-  <div class="page">
-    <div class="top-links">
-      <a href="${back}">Back</a>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="${back}" class="back-link">← Back to Raw Ideas</a>
     </div>
 
-    <div class="copy-bar">
-      <button id="copyBtn">📋</button>
+    <!-- Raw Idea Card -->
+    <div class="raw-idea-card">
+      <div class="user-info">
+        ${userLink}
+      </div>
+
+      <div class="copy-bar">
+        <button id="copyBtn" title="Copy raw idea">📋</button>
+      </div>
+
+      <pre id="content">${rawIdea.content}</pre>
     </div>
-
-    <div class="user-info"><strong>${userLink}</strong></div>
-
-    <pre id="content">${rawIdea.content}</pre>
   </div>
 
-<script>
-  const btn = document.getElementById("copyBtn");
-  const content = document.getElementById("content");
+  <script>
+    const btn = document.getElementById("copyBtn");
+    const content = document.getElementById("content");
 
-  btn.addEventListener("click", () => {
-    navigator.clipboard.writeText(content.textContent).then(() => {
-      btn.textContent = "✔️";
-      setTimeout(() => (btn.textContent = "📋"), 900);
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(content.textContent).then(() => {
+        btn.textContent = "✔️";
+        setTimeout(() => (btn.textContent = "📋"), 900);
+      });
     });
-  });
-</script>
+  </script>
 </body>
 </html>
 `);
       }
 
-      // ---------- FILE ----------
       // ---------- FILE ----------
       const fileUrl = `/api/uploads/${rawIdea.content}`;
       const filePath = path.join(process.cwd(), "uploads", rawIdea.content);
@@ -4030,96 +4214,228 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       const fileName = rawIdea.content;
 
       return res.send(`
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${fileName}</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${fileName}</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-<style>
-  body {
-    margin: 0;
-    padding: 0;
-    background: #f5f6f7;
-    font-family: system-ui, sans-serif;
-    display: flex;
-    justify-content: center;
-  }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
 
-  .page {
-    width: 100%;
-    max-width: 800px;
-    padding: 20px 16px;
-  }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
 
-  .top-links {
-    margin-bottom: 12px;
-    font-size: 14px;
-  }
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
 
-  .top-links a {
-    color: #5865f2;
-    text-decoration: none;
-  }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
 
-  .top-links a:hover {
-    text-decoration: underline;
-  }
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
 
-  .user-info {
-    margin-bottom: 12px;
-    font-size: 14px;
-    opacity: 0.8;
-  }
+    /* File Card */
+    .file-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
 
-  h1 {
-    margin: 12px 0;
-    font-size: 22px;
-    font-weight: 600;
-  }
+    .file-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
 
-  .download {
-    display: inline-block;
-    margin: 16px 0;
-    padding: 10px 16px;
-    background: #5865f2;
-    color: white;
-    text-decoration: none;
-    border-radius: 6px;
-    font-weight: 500;
-  }
+    /* User Info */
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e9ecef;
+    }
 
-  .download:hover {
-    background: #4752c4;
-  }
+     .user-info::before {
+      content: '👤';
+      font-size: 18px;
+    }
 
-  .media {
-    margin-top: 16px;
-  }
+    .user-info a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: color 0.2s;
+    }
 
-  @media (prefers-color-scheme: dark) {
-    body { background: #000; color: #e3e5e8; }
-    .top-links a { color: #7289da; }
-    .download { background: #7289da; }
-  }
-</style>
+    .user-info a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    /* File Header */
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+      word-break: break-word;
+    }
+
+    h1::before {
+      content: '📎 ';
+      font-size: 22px;
+    }
+
+    /* Download Button */
+    .download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      margin-bottom: 24px;
+    }
+
+    .download:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .download::before {
+      content: '⬇️';
+      font-size: 16px;
+    }
+
+    /* Media Container */
+    .media {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #e9ecef;
+    }
+
+    .media img,
+    .media video,
+    .media audio {
+      max-width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .file-card {
+        padding: 20px;
+      }
+
+      h1 {
+        font-size: 22px;
+      }
+
+      .download {
+        padding: 12px 18px;
+        font-size: 16px;
+        width: 100%;
+        justify-content: center;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
+  </style>
 </head>
-
 <body>
-  <div class="page">
-    <div class="top-links">
-      <a href="${back}">Back</a>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="${back}" class="back-link">← Back to Raw Ideas</a>
     </div>
 
-    <div class="user-info"><strong>${userLink}</strong></div>
+    <!-- File Card -->
+    <div class="file-card">
+      <div class="user-info">
+        ${userLink}
+      </div>
 
-    <h1>${fileName}</h1>
+      <h1>${fileName}</h1>
 
-    <a class="download" href="${fileUrl}" download>
-      Download
-    </a>
+      <a class="download" href="${fileUrl}" download>
+        Download
+      </a>
 
-    <div class="media">
-      ${mediaHtml}
+      <div class="media">
+        ${mediaHtml}
+      </div>
     </div>
   </div>
 </body>
@@ -4477,6 +4793,11 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
         max-width: 700px;
       }
     }
+        .header-subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 16px;
+  }
   </style>
 </head>
 <body>
@@ -4492,9 +4813,11 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
 
     <!-- Header -->
     <div class="header">
+
     <h1>
      Invites
       </h1>
+          <div class="header-subtitle">Join other people's trees</div>
 
       <!-- Navigation Links -->
       <div class="nav-links">
@@ -5014,6 +5337,11 @@ router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
         max-width: 700px;
       }
     }
+        .header-subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 16px;
+  }
   </style>
 </head>
 <body>
@@ -5031,6 +5359,10 @@ router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
         Deleted Branches for
         <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
+<div class="header-subtitle">
+  Recover deleted trees and branches as new trees or merge them into existing ones.
+</div>
+
 
       <!-- Navigation Links -->
       <div class="nav-links">
@@ -5182,6 +5514,325 @@ router.post(
       console.error("revive root error:", err);
       return res.status(400).json({ error: err.message });
     }
+  }
+);
+
+router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
+  if (req.userId.toString() !== req.params.userId.toString()) {
+    return res.status(403).json({ message: "Not authorized" });
+  }
+
+  return createApiKey(req, res);
+});
+
+router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
+  try {
+    if (req.userId.toString() !== req.params.userId.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+
+    const user = await User.findById(req.userId)
+      .select("username apiKeys")
+      .lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+    const apiKeys = user.apiKeys ?? [];
+
+    // ---------- JSON MODE ----------
+    if (!wantHtml) {
+      return res.json(
+        apiKeys.map((k) => ({
+          id: k._id,
+          name: k.name,
+          createdAt: k.createdAt,
+          lastUsedAt: k.lastUsedAt,
+          usageCount: k.usageCount,
+          revoked: k.revoked,
+        }))
+      );
+    }
+
+    // ---------- HTML MODE ----------
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+    return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${user.username} — API Keys</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 16px;
+      padding: 10px 16px;
+      background: white;
+      border-radius: 10px;
+      color: #667eea;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .header {
+      background: white;
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+
+    .header h1 {
+      margin-bottom: 8px;
+    }
+
+    .header-subtitle {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 16px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      padding: 8px 14px;
+      background: #f5f6fa;
+      border-radius: 8px;
+      color: #667eea;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+
+    .card h3 {
+      margin-bottom: 6px;
+    }
+
+    .meta {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    .badge.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .badge.revoked {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .actions {
+      margin-top: 12px;
+    }
+
+    .actions button {
+      background: #c62828;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .create-form {
+      margin-bottom: 24px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .create-form input {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .create-form button {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      background: #667eea;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .empty {
+      background: white;
+      border-radius: 16px;
+      padding: 48px;
+      text-align: center;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back-link" href="/api/user/${
+      req.userId
+    }${tokenQS}">← Back to Profile</a>
+
+    <div class="header">
+      <h1>API Keys</h1>
+      <div class="header-subtitle">
+        Manage programmatic access to your account
+      </div>
+
+      <div class="nav-links">
+        <a href="/api/user/${req.userId}/raw-ideas${tokenQS}">Raw Ideas</a>
+        <a href="/api/user/${req.userId}/notes${tokenQS}">Notes</a>
+        <a href="/api/user/${req.userId}/invites${tokenQS}">Invites</a>
+        <a href="/api/user/${
+          req.userId
+        }/contributions${tokenQS}">Contributions</a>
+      </div>
+    </div>
+
+    <!-- Create API Key -->
+    <div class="card">
+      <form class="create-form" method="POST" action="/api/user/${
+        req.userId
+      }/api-keys?token=${token}&html">
+        <input type="text" name="name" placeholder="API key name (optional)" />
+        <button type="submit">＋ Create New API Key</button>
+      </form>
+      <div class="meta">
+        You will only see the key once after creation.
+      </div>
+    </div>
+
+    <!-- API Keys List -->
+    ${
+      apiKeys.length > 0
+        ? apiKeys
+            .map(
+              (k) => `
+      <div class="card">
+        <h3>${k.name}</h3>
+        <div class="meta">Created: ${new Date(
+          k.createdAt
+        ).toLocaleString()}</div>
+        <div class="meta">Usage count: ${k.usageCount}</div>
+        <div class="meta">
+          Status:
+          <span class="badge ${k.revoked ? "revoked" : "active"}">
+            ${k.revoked ? "Revoked" : "Active"}
+          </span>
+        </div>
+
+        ${
+          !k.revoked
+            ? `
+        <div class="actions">
+         <button
+  class="revoke-button"
+  data-key-id="${k._id}"
+>
+  Revoke
+</button>
+
+        </div>
+        `
+            : ""
+        }
+      </div>
+      `
+            )
+            .join("")
+        : `
+      <div class="empty">
+        No API keys yet. Create one above to get started.
+      </div>
+      `
+    }
+  </div>
+  <script>
+document.addEventListener("click", async (e) => {
+  if (!e.target.classList.contains("revoke-button")) return;
+
+  const keyId = e.target.dataset.keyId;
+
+  if (!confirm("Revoke this API key? This cannot be undone.")) return;
+
+  const token =
+    new URLSearchParams(window.location.search).get("token") || "";
+  const qs = token ? "?token=" + encodeURIComponent(token) : "";
+
+  try {
+    const res = await fetch(
+  "/api/user/${req.userId}/api-keys/" + keyId + qs,
+  { method: "DELETE" }
+);
+
+
+    const data = await res.json();
+    if (!data.message) throw new Error("Revoke failed");
+
+    location.reload();
+  } catch (err) {
+    alert("Failed to revoke API key");
+  }
+});
+</script>
+
+</body>
+</html>
+`);
+  } catch (err) {
+    console.error("api keys page error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete(
+  "/user/:userId/api-keys/:keyId",
+  authenticate,
+  async (req, res) => {
+    if (req.userId.toString() !== req.params.userId.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    return deleteApiKey(req, res);
   }
 );
 

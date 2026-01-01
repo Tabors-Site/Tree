@@ -1964,139 +1964,218 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     if (req.query.html !== undefined) {
       if (note.contentType === "text") {
         return res.send(`
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<style>
-  body {
-    margin: 0;
-    padding: 0;
-    background: #f5f6f7;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    display: flex;
-    justify-content: center;
-  }
-
-  .page {
-    width: 100%;
-    max-width: 800px;
-    padding: 20px 16px;
-    box-sizing: border-box;
-  }
-
-  .user-info {
-    margin-bottom: 4px;
-    font-size: 14px;
-    opacity: 0.8;
-  }
-
-  pre {
-    background: white;
-    padding: 18px 20px;
-    border-radius: 10px;
-    font-size: 16px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    border: 1px solid #ddd;
-  }
-
-  .copy-bar {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 8px;
-  }
-
-  #copyNoteBtn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 22px;
-    opacity: 0.6;
-    padding: 4px;
-    border-radius: 6px;
-  }
-
-  #copyNoteBtn:hover {
-    opacity: 1;
-    background: rgba(0,0,0,0.05);
-  }
-
-  @media (max-width: 600px) {
-    pre {
-      font-size: 17px;
-      padding: 16px;
-      border-radius: 12px;
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Note by ${note.userId?.username || "User"}</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-  }
-    @media (prefers-color-scheme: dark) {
+
     body {
-      background: #000000ff;
-      color: #000000ff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
     }
 
-    .top-links a {
-      color: #7289da;
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
     }
 
-    .download {
-      background: #7289da;
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
     }
 
-    .download:hover {
-      background: #5865f2;
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
-      
-        }
-      .top-links {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
-  font-size: 14px;
-}
 
-.top-links a {
-  color: #5865f2;
-  text-decoration: none;
-}
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
 
-.top-links a:hover {
-  text-decoration: underline;
-}
-  
+    /* Note Card */
+    .note-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
 
- 
-</style>
+    .note-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
 
+    /* User Info */
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .user-info::before {
+      content: '👤';
+      font-size: 18px;
+    }
+
+    .user-info a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: color 0.2s;
+    }
+
+    .user-info a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    /* Copy Button */
+    .copy-bar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 16px;
+    }
+
+    #copyNoteBtn {
+      background: rgba(102, 126, 234, 0.1);
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      cursor: pointer;
+      font-size: 20px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    #copyNoteBtn:hover {
+      background: rgba(102, 126, 234, 0.2);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    #copyNoteBtn:active {
+      transform: translateY(0);
+    }
+
+    /* Note Content */
+    pre {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 12px;
+      font-size: 16px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      border: 1px solid #e9ecef;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      color: #1a1a1a;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .note-card {
+        padding: 20px;
+      }
+
+      pre {
+        font-size: 17px;
+        padding: 16px;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <div class="page">
-  <div class="top-links">
-    <a href="${back}">Back</a>
-  </div>
-  <div class="copy-bar">
-    <button id="copyNoteBtn" title="Copy note">📋</button>
-  </div>
-    <div class="user-info"><strong>${userLink}</strong></div>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="${back}" class="back-link">← Back to Notes</a>
+    </div>
 
-  <pre id="noteContent">${note.content}</pre>
-</div>
+    <!-- Note Card -->
+    <div class="note-card">
+      <div class="user-info">
+        ${userLink}
+      </div>
+
+      <div class="copy-bar">
+        <button id="copyNoteBtn" title="Copy note">📋</button>
+      </div>
+
+      <pre id="noteContent">${note.content}</pre>
+    </div>
+  </div>
+
   <script>
-  const copyBtn = document.getElementById("copyNoteBtn");
-  const noteContent = document.getElementById("noteContent");
+    const copyBtn = document.getElementById("copyNoteBtn");
+    const noteContent = document.getElementById("noteContent");
 
-  copyBtn.addEventListener("click", () => {
-    navigator.clipboard.writeText(noteContent.textContent).then(() => {
-      copyBtn.textContent = "✔️";
-      setTimeout(() => (copyBtn.textContent = "📋"), 900);
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(noteContent.textContent).then(() => {
+        copyBtn.textContent = "✔️";
+        setTimeout(() => (copyBtn.textContent = "📋"), 900);
+      });
     });
-  });
-</script>
-
+  </script>
 </body>
-
 </html>
 `);
       }
@@ -2108,124 +2187,228 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       const fileName = path.basename(note.content);
 
       return res.send(`
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${fileName}</title>
   <style>
-  body {
-    margin: 0;
-    padding: 0;
-    background: #f5f6f7;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    font-size: 16px;
-    display: flex;
-    justify-content: center;
-  }
-
-  .page {
-    width: 100%;
-    max-width: 800px;
-    padding: 20px 16px;
-    box-sizing: border-box;
-  }
-
-  .top-links {
-    margin-bottom: 12px;
-    font-size: 14px;
-  }
-
-  .top-links a {
-    color: #5865f2;
-    text-decoration: none;
-  }
-
-  .top-links a:hover {
-    text-decoration: underline;
-  }
-
-  .user-info {
-    margin-bottom: 12px;
-    font-size: 14px;
-    opacity: 0.8;
-  }
-
-  h1 {
-    margin: 12px 0;
-    font-size: 24px;
-    font-weight: 600;
-  }
-
-  .download {
-    display: inline-block;
-    margin: 16px 0;
-    padding: 10px 16px;
-    background: #5865f2;
-    color: white;
-    text-decoration: none;
-    border-radius: 6px;
-    font-weight: 500;
-  }
-
-  .download:hover {
-    background: #4752c4;
-  }
-
-  .media {
-    margin-top: 16px;
-  }
-
-  @media (max-width: 600px) {
-    body {
-      font-size: 17px;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* File Card */
+    .file-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .file-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
+
+    /* User Info */
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .user-info::before {
+      content: '👤';
+      font-size: 18px;
+    }
+
+    .user-info a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: color 0.2s;
+    }
+
+    .user-info a:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    /* File Header */
     h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+      word-break: break-word;
+    }
+
+    h1::before {
+      content: '📎 ';
       font-size: 22px;
     }
 
+    /* Download Button */
     .download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       padding: 12px 20px;
-      font-size: 17px;
-    }
-  }
-
-  @media (prefers-color-scheme: dark) {
-    body {
-      background: #000000ff;
-      color: #e3e5e8;
-    }
-
-    .top-links a {
-      color: #7289da;
-    }
-
-    .download {
-      background: #7289da;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      margin-bottom: 24px;
     }
 
     .download:hover {
-      background: #5865f2;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
-  }
+
+    .download::before {
+      content: '⬇️';
+      font-size: 16px;
+    }
+
+    /* Media Container */
+    .media {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #e9ecef;
+    }
+
+    .media img,
+    .media video,
+    .media audio {
+      max-width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .file-card {
+        padding: 20px;
+      }
+
+      h1 {
+        font-size: 22px;
+      }
+
+      .download {
+        padding: 12px 18px;
+        font-size: 16px;
+        width: 100%;
+        justify-content: center;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="page">
-    <div class="top-links">
-      <a href="${back}">Back</a>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="${back}" class="back-link">← Back to Notes</a>
     </div>
 
-    <div class="user-info"><strong>${userLink}</strong></div>
+    <!-- File Card -->
+    <div class="file-card">
+      <div class="user-info">
+        ${userLink}
+      </div>
 
-    <h1>${fileName}</h1>
+      <h1>${fileName}</h1>
 
-    <a class="download" href="${fileUrl}" download>
-      Download
-    </a>
+      <a class="download" href="${fileUrl}" download>
+        Download
+      </a>
 
-    <div class="media">
-      ${mediaHtml}
+      <div class="media">
+        ${mediaHtml}
+      </div>
     </div>
   </div>
 </body>
