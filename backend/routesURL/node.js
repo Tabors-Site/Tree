@@ -1,7 +1,7 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
-import { createNewNode } from "../core/treeManagement.js";
+import { createNewNode, editNodeName } from "../core/treeManagement.js";
 import {
   updateParentRelationship,
   deleteNodeBranch,
@@ -1436,7 +1436,7 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
               ? new Date(data.schedule).toISOString().slice(0, 16)
               : ""
           }"
-          required
+          
           style="width:100%;margin-top:4px;"
         />
       </label>
@@ -1584,6 +1584,38 @@ router.post("/:nodeId/delete", authenticate, async (req, res) => {
   }
 });
 
+router.post("/:nodeId/:version/editName", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const userId = req.userId;
+
+    const newName = req.body?.name || req.query?.name;
+
+    if (!newName) {
+      return res.status(400).json({ error: "newName is required" });
+    }
+
+    const result = await editNodeName({
+      nodeId,
+      newName,
+      userId,
+    });
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(`/api/${nodeId}?token=${req.query.token ?? ""}&html`);
+    }
+
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (err) {
+    console.error("editName error:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post(
   "/:nodeId/:version/editSchedule",
   authenticate,
@@ -1596,9 +1628,9 @@ router.post(
 
       const reeffectTime = req.body?.reeffectTime ?? req.query?.reeffectTime;
 
-      if (!newSchedule || reeffectTime === undefined) {
+      if (reeffectTime === undefined) {
         return res.status(400).json({
-          error: "newSchedule and reeffectTime are required",
+          error: "reeffectTime is required",
         });
       }
 

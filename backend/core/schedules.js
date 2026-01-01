@@ -8,14 +8,9 @@ async function updateSchedule({
   reeffectTime,
   userId,
 }) {
-  if (
-    !nodeId ||
-    versionIndex === undefined ||
-    !newSchedule ||
-    reeffectTime === undefined
-  ) {
+  if (!nodeId || versionIndex === undefined || reeffectTime === undefined) {
     const error = new Error(
-      "nodeId, versionIndex, newSchedule, and reeffectTime are required."
+      "nodeId, versionIndex, and reeffectTime are required."
     );
     error.status = 400;
     throw error;
@@ -40,9 +35,21 @@ async function updateSchedule({
     throw error;
   }
 
-  const formattedDate = new Date(newSchedule);
+  let formattedDate = null;
+
+  if (newSchedule !== undefined && newSchedule !== "" && newSchedule !== null) {
+    formattedDate = new Date(newSchedule);
+    if (isNaN(formattedDate)) {
+      const error = new Error("Invalid schedule date.");
+      error.status = 400;
+      throw error;
+    }
+  }
 
   node.versions[versionIndex].schedule = formattedDate;
+
+  node.versions[versionIndex].schedule = formattedDate;
+
   node.versions[versionIndex].reeffectTime = reeffectTime;
 
   await node.save();
