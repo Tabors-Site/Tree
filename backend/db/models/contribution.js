@@ -199,6 +199,98 @@ const ContributionSchema = new mongoose.Schema({
       _id: false,
     },
   },
+  transactionMeta: {
+    type: {
+      /** What happened globally */
+      event: {
+        type: String,
+        enum: [
+          // lifecycle
+          "created",
+          "approved",
+          "denied",
+          "execution_started",
+          "succeeded",
+          "failed",
+
+          // ✅ policy / system resolution
+          "accepted_by_policy",
+          "rejected_by_policy",
+        ],
+        required: true,
+      },
+
+      /** This contribution’s point of view */
+      side: {
+        type: String,
+        enum: ["A", "B"],
+        required: true,
+      },
+
+      /** How this node participated in the event */
+      role: {
+        type: String,
+        enum: [
+          // human roles
+          "proposer",
+          "approver",
+          "denier",
+          "sender",
+          "receiver",
+          "counterparty",
+
+          // ✅ system-generated
+          "system",
+        ],
+        required: true,
+      },
+
+      /** The other node (if any) */
+      counterpartyNodeId: {
+        type: String,
+        ref: "Node",
+        default: null,
+      },
+
+      /** Versions involved */
+      versionSelf: {
+        type: Number,
+        required: true,
+        min: 0,
+      },
+
+      versionCounterparty: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+
+      /** Value deltas from THIS node’s perspective */
+      valuesSent: {
+        type: Map,
+        of: Number,
+      },
+
+      valuesReceived: {
+        type: Map,
+        of: Number,
+      },
+
+      /** Failure diagnostics (only for failed) */
+      failureReason: {
+        type: String,
+      },
+
+      /** Who caused this event (important for approvals / denials) */
+      actorUserId: {
+        type: String,
+        ref: "User",
+        required: true,
+      },
+
+      _id: false,
+    },
+  },
 });
 
 const Contribution = mongoose.model("Contribution", ContributionSchema);

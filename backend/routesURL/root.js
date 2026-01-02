@@ -4,6 +4,7 @@ import authenticate from "../middleware/authenticate.js";
 import { getAllData } from "../controllers/treeDataFetching.js";
 import { createInvite } from "../core/invites.js";
 import { getCalendar } from "../core/schedules.js";
+import { setTransactionPolicy } from "../core/transactions.js";
 
 import Node from "../db/models/node.js";
 
@@ -62,7 +63,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     const rootMeta = await Node.findById(nodeId)
       .populate("rootOwner", "username _id")
       .populate("contributors", "username _id")
-      .select("rootOwner contributors")
+      .select("rootOwner contributors transactionPolicy")
       .lean()
       .exec();
     const rootNode = await Node.findById(nodeId).select("parent").lean();
@@ -86,6 +87,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
         contributors: rootMeta?.contributors || [],
       });
     }
+    const transactionPolicy = rootMeta?.transactionPolicy ?? "OWNER_ONLY";
 
     const renderParents = (chain) => {
       let html = "<h3>Parents</h3>";
@@ -191,6 +193,57 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 </form>
 `
       : ``;
+
+    const policyHtml = isOwner
+      ? `
+
+<form
+  method="POST"
+  action="/api/root/${nodeId}/transaction-policy?token=${
+          req.query.token ?? ""
+        }&html"
+  style="max-width: 420px;"
+>
+  <label style="font-weight:600; display:block; margin-bottom:8px;">
+    Transaction Approval Mode
+  </label>
+
+  <select
+    name="policy"
+    style="
+      width:100%;
+      padding:10px;
+      border-radius:8px;
+      border:1px solid #ccc;
+      font-size:14px;
+    "
+  >
+    <option value="OWNER_ONLY" ${
+      transactionPolicy === "OWNER_ONLY" ? "selected" : ""
+    }>
+      Owner only
+    </option>
+    <option value="ANYONE" ${transactionPolicy === "ANYONE" ? "selected" : ""}>
+      Anyone (single approval)
+    </option>
+    <option value="MAJORITY" ${
+      transactionPolicy === "MAJORITY" ? "selected" : ""
+    }>
+      Majority of root members
+    </option>
+    <option value="ALL" ${transactionPolicy === "ALL" ? "selected" : ""}>
+      All root members
+    </option>
+  </select>
+
+  <button type="submit" style="margin-top:12px;">
+    Update Policy
+  </button>
+</form>
+`
+      : `
+
+`;
 
     // OWNER + CONTRIBUTORS
     const ownerHtml = rootMeta?.rootOwner
@@ -814,6 +867,9 @@ ${rootMeta.contributors
 
       <!-- Contributors -->
       ${contributorsHtml}
+
+      <!-- Transaction Policy -->
+${policyHtml}
 
       <!-- Retire Button -->
       ${retireHtml}
@@ -1686,5 +1742,34 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     res.status(err.status || 500).json({ error: err.message });
   }
 });
+
+router.post(
+  "/root/:nodeId/transaction-policy",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { nodeId } = req.params;
+      const { policy } = req.body;
+
+      const result = await setTransactionPolicy({
+        rootNodeId: nodeId,
+        policy,
+        userId: req.userId,
+      });
+
+      // HTML fallback
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      console.error("Change policy error:", err);
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
 
 export default router;

@@ -4925,7 +4925,7 @@ router.post(
       // 🌐 HTML redirect support
       if ("html" in req.query) {
         return res.redirect(
-          `/api/user/${userId}?token=${req.query.token ?? ""}&html`
+          `/api/user/${userId}/invites?token=${req.query.token ?? ""}&html`
         );
       }
 

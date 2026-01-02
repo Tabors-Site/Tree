@@ -44,6 +44,11 @@ const NodeSchema = new mongoose.Schema({
     ],
     default: [],
   },
+  transactionPolicy: {
+    type: String,
+    enum: ["OWNER_ONLY", "ANYONE", "MAJORITY", "ALL"],
+    default: "OWNER_ONLY",
+  },
   children: [{ type: String, ref: "Node" }],
   parent: { type: String, ref: "Node", default: null },
 

@@ -31,10 +31,7 @@ async function getContributions({
       .populate("userId", "username")
       .populate("nodeId", "name")
       .populate("inviteAction.receivingId", "username")
-      .populate({
-        path: "tradeId",
-        populate: { path: "nodeAId nodeBId", select: "name" },
-      })
+
       .sort({ date: -1 })
       .lean();
 
@@ -61,9 +58,7 @@ async function getContributions({
         case "editStatus":
           additionalInfo = { statusEdited: contribution.statusEdited };
           break;
-        case "trade":
-          additionalInfo = { tradeId: contribution.tradeId };
-          break;
+
         case "invite":
           additionalInfo = contribution.inviteAction
             ? {
@@ -79,22 +74,7 @@ async function getContributions({
         case "editGoal":
           additionalInfo = { goalEdited: contribution.goalEdited };
           break;
-        case "transaction":
-          additionalInfo = contribution.tradeId
-            ? {
-                nodeA: {
-                  name: contribution.tradeId.nodeAId?.name,
-                  versionIndex: contribution.tradeId.versionAIndex,
-                  valuesSent: contribution.tradeId.valuesTraded?.nodeA,
-                },
-                nodeB: {
-                  name: contribution.tradeId.nodeBId?.name,
-                  versionIndex: contribution.tradeId.versionBIndex,
-                  valuesSent: contribution.tradeId.valuesTraded?.nodeB,
-                },
-              }
-            : null;
-          break;
+
         case "note":
           additionalInfo = contribution.noteAction
             ? {
@@ -179,10 +159,7 @@ async function getContributionsByUser(userId, limit, startDate, endDate) {
       .populate("userId", "username")
       .populate("nodeId", "name")
       .populate("inviteAction.receivingId", "username")
-      .populate({
-        path: "tradeId",
-        populate: { path: "nodeAId nodeBId", select: "name" },
-      })
+
       .sort({ date: -1 })
       .lean();
 
@@ -209,9 +186,7 @@ async function getContributionsByUser(userId, limit, startDate, endDate) {
         case "editStatus":
           additionalInfo = { statusEdited: contribution.statusEdited };
           break;
-        case "trade":
-          additionalInfo = { tradeId: contribution.tradeId };
-          break;
+
         case "invite":
           additionalInfo = contribution.inviteAction
             ? {
@@ -227,22 +202,7 @@ async function getContributionsByUser(userId, limit, startDate, endDate) {
         case "editGoal":
           additionalInfo = { goalEdited: contribution.goalEdited };
           break;
-        case "transaction":
-          additionalInfo = contribution.tradeId
-            ? {
-                nodeA: {
-                  name: contribution.tradeId.nodeAId?.name,
-                  versionIndex: contribution.tradeId.versionAIndex,
-                  valuesSent: contribution.tradeId.valuesTraded?.nodeA,
-                },
-                nodeB: {
-                  name: contribution.tradeId.nodeBId?.name,
-                  versionIndex: contribution.tradeId.versionBIndex,
-                  valuesSent: contribution.tradeId.valuesTraded?.nodeB,
-                },
-              }
-            : null;
-          break;
+
         case "note":
           additionalInfo = contribution.noteAction
             ? {

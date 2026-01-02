@@ -44,6 +44,7 @@ const logContribution = async ({
   tradeId,
   nodeVersion,
   branchLifecycle,
+  transactionMeta,
 }) => {
   const validActions = [
     "create",
@@ -74,6 +75,26 @@ const logContribution = async ({
     throw new Error("Missing required fields");
   }
 
+  if (action === "transaction") {
+    if (!transactionMeta) {
+      throw new Error("transactionMeta is required for transaction actions");
+    }
+
+    const requiredTransactionFields = [
+      "event",
+      "side",
+      "role",
+      "versionSelf",
+      "actorUserId",
+    ];
+
+    for (const field of requiredTransactionFields) {
+      if (transactionMeta[field] === undefined) {
+        throw new Error(`transactionMeta.${field} is required`);
+      }
+    }
+  }
+
   try {
     const newContribution = new Contribution({
       userId,
@@ -94,6 +115,7 @@ const logContribution = async ({
       updateChildNode,
       editNameNode,
       branchLifecycle,
+      transactionMeta,
       date: new Date(),
     });
 
