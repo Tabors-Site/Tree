@@ -91,7 +91,7 @@ async function createRawIdea({ contentType, content, userId, file }) {
   await rawIdea.save();
   await logContribution({
     userId,
-    nodeId: "empty",
+    nodeId: "deleted",
     action: "rawIdea",
     nodeVersion: "0",
     rawIdeaAction: {
@@ -116,7 +116,7 @@ async function convertRawIdeaToNote({ rawIdeaId, userId, nodeId }) {
   if (!rawIdea) {
     throw new Error("Raw idea not found");
   }
-  if (rawIdea.userId === "empty") {
+  if (rawIdea.userId === "deleted") {
     throw new Error("Raw idea already placed");
   }
 
@@ -167,7 +167,7 @@ async function convertRawIdeaToNote({ rawIdeaId, userId, nodeId }) {
     },
   });
 
-  rawIdea.userId = "empty";
+  rawIdea.userId = "deleted";
   rawIdea.content = rawIdea.content; // preserve text
   await rawIdea.save();
 
@@ -201,7 +201,7 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId }) {
   }
 
   // --- SOFT DELETE ---
-  rawIdea.userId = "empty"; // sentinel
+  rawIdea.userId = "deleted"; // sentinel
   rawIdea.content = fileDeleted
     ? "File was deleted"
     : rawIdea.contentType === "text"
@@ -213,9 +213,9 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId }) {
   // --- LOG CONTRIBUTION ---
   await logContribution({
     userId,
-    nodeId: "empty",
+    nodeId: "deleted",
     action: "rawIdea",
-    nodeVersion: "empty",
+    nodeVersion: "deleted",
     rawIdeaAction: {
       action: "delete",
       rawIdeaId: rawIdeaId.toString(),
