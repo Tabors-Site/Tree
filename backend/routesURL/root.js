@@ -5,6 +5,7 @@ import { getAllData } from "../controllers/treeDataFetching.js";
 import { createInvite } from "../core/invites.js";
 import { getCalendar } from "../core/schedules.js";
 import { setTransactionPolicy } from "../core/transactions.js";
+import { getGlobalValuesTreeAndFlat } from "../core/values.js";
 
 import Node from "../db/models/node.js";
 
@@ -828,6 +829,10 @@ ${rootMeta.contributors
       </a>
         <a href="/api/root/${allData._id}/calendar${queryString}" class="back-link">
         Calendar
+      </a>
+       </a>
+        <a href="/api/root/${allData._id}/values${queryString}" class="back-link">
+        Global Values
       </a>
     </div>
     `
@@ -1771,5 +1776,725 @@ router.post(
     }
   }
 );
+
+router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+
+    const filtered = Object.entries(req.query)
+      .filter(([key]) => allowedParams.includes(key))
+      .map(([key, val]) => (val === "" ? key : `${key}=${val}`))
+      .join("&");
+
+    const queryString = filtered ? `?${filtered}` : "";
+
+    const result = await getGlobalValuesTreeAndFlat(nodeId);
+
+    // JSON MODE (default)
+    if (!("html" in req.query)) {
+      return res.json(result);
+    }
+
+    // ---- HTML MODE ----
+    const rootNodeName = result.tree.nodeName || "Unknown";
+
+    // Render flat summary as cards
+    const flatSummary =
+      Object.entries(result.flat).length > 0
+        ? Object.entries(result.flat)
+            .sort(([, a], [, b]) => b - a) // Sort by value descending
+            .map(
+              ([key, value]) => `
+            <div class="value-card">
+              <div class="value-key">${key}</div>
+              <div class="value-amount">${value.toLocaleString()}</div>
+            </div>
+          `
+            )
+            .join("")
+        : `<div class="empty-state-small">No values yet</div>`;
+
+    // Render tree with expandable/collapsible nodes
+    function renderTree(node, depth = 0) {
+      const hasChildren = node.children && node.children.length > 0;
+      const hasLocalValues =
+        node.localValues && Object.keys(node.localValues).length > 0;
+      const hasTotalValues =
+        node.totalValues && Object.keys(node.totalValues).length > 0;
+      const nodeIdShort = node.nodeId ? node.nodeId.substring(0, 8) : "";
+
+      let localValuesHtml = "";
+      if (hasLocalValues) {
+        localValuesHtml = Object.entries(node.localValues)
+          .map(
+            ([k, v]) => `
+            <div class="node-value-item" title="${k}: ${v.toLocaleString()}">
+              <span class="value-key-small">${k}</span>
+              <span class="value-amount-small">${v.toLocaleString()}</span>
+            </div>
+          `
+          )
+          .join("");
+      }
+
+      let totalValuesHtml = "";
+      if (hasTotalValues) {
+        totalValuesHtml = Object.entries(node.totalValues)
+          .map(
+            ([k, v]) => `
+            <div class="node-value-item" title="${k}: ${v.toLocaleString()}">
+              <span class="value-key-small">${k}</span>
+              <span class="value-amount-small">${v.toLocaleString()}</span>
+            </div>
+          `
+          )
+          .join("");
+      }
+
+      const childrenHtml = hasChildren
+        ? node.children.map((c) => renderTree(c, depth + 1)).join("")
+        : "";
+
+      const valueCount = Math.max(
+        Object.keys(node.localValues || {}).length,
+        Object.keys(node.totalValues || {}).length
+      );
+
+      return `
+        <div class="tree-node" data-depth="${depth}">
+          <div class="tree-node-header ${hasChildren ? "has-children" : ""}">
+            ${
+              hasChildren
+                ? `<button class="tree-toggle" onclick="toggleNode(this)" aria-label="Toggle children">▼</button>`
+                : '<span class="tree-spacer"></span>'
+            }
+            <div class="tree-node-info">
+              <a href="/api/${
+                node.nodeId
+              }${queryString}" class="tree-node-name" title="${node.nodeName}">
+                ${node.nodeName}
+              </a>
+              ${
+                valueCount > 0
+                  ? `<span class="value-count">${valueCount} value${
+                      valueCount !== 1 ? "s" : ""
+                    }</span>`
+                  : ""
+              }
+            </div>
+          </div>
+          
+          ${
+            hasLocalValues || hasTotalValues
+              ? `
+            <div class="tree-node-values local-values">
+              ${
+                localValuesHtml ||
+                '<div class="empty-values">No local values</div>'
+              }
+            </div>
+            <div class="tree-node-values total-values" style="display: none;">
+              ${
+                totalValuesHtml ||
+                '<div class="empty-values">No total values</div>'
+              }
+            </div>
+          `
+              : ""
+          }
+          
+          ${
+            hasChildren
+              ? `
+            <div class="tree-children">
+              ${childrenHtml}
+            </div>
+          `
+              : ""
+          }
+        </div>
+      `;
+    }
+
+    return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Global Values - ${rootNodeName}</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Header */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+    }
+
+    .header h1::before {
+      content: '💎 ';
+      font-size: 26px;
+    }
+
+    .header-subtitle {
+      font-size: 14px;
+      color: #888;
+    }
+
+    /* Section */
+    .section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+    }
+
+    /* Flat Summary Cards */
+    .flat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .value-card {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(102, 126, 234, 0.1);
+      transition: all 0.3s;
+    }
+
+    .value-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.15);
+      border-color: rgba(102, 126, 234, 0.3);
+    }
+
+    .value-key {
+      font-size: 14px;
+      font-weight: 600;
+      color: #667eea;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      word-break: break-all;
+      overflow-wrap: break-word;
+      hyphens: auto;
+    }
+
+    .value-amount {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1a1a1a;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    /* Tree View */
+    .tree-container {
+      position: relative;
+    }
+
+    .tree-node {
+      position: relative;
+      margin-bottom: 4px;
+    }
+
+    .tree-node-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    .tree-node-header:hover {
+      background: white;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+      transform: translateX(4px);
+    }
+
+    .tree-toggle {
+      width: 24px;
+      height: 24px;
+      background: white;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .tree-toggle:hover {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    .tree-toggle.collapsed {
+      transform: rotate(-90deg);
+    }
+
+    .tree-spacer {
+      width: 24px;
+      flex-shrink: 0;
+    }
+
+    .tree-node-info {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .tree-node-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.2s;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 300px;
+    }
+
+    .tree-node-name:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    .value-count {
+      font-size: 12px;
+      color: #888;
+      padding: 2px 8px;
+      background: white;
+      border-radius: 10px;
+      border: 1px solid #e9ecef;
+      flex-shrink: 0;
+    }
+
+    .tree-node-values {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 8px;
+      margin: 12px 0 12px 36px;
+      padding: 12px;
+      background: white;
+      border-radius: 8px;
+      border-left: 3px solid #667eea;
+    }
+
+    .tree-node-values.total-values {
+      border-left-color: #10b981;
+    }
+
+    .node-value-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      padding: 10px 12px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      transition: all 0.2s;
+      min-height: 60px;
+      cursor: help;
+      overflow: hidden;
+    }
+
+    .node-value-item:hover {
+      background: rgba(102, 126, 234, 0.05);
+    }
+
+    .value-key-small {
+      font-size: 11px;
+      font-weight: 600;
+      color: #667eea;
+      letter-spacing: 0.3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+      line-height: 1.3;
+    }
+
+    .value-amount-small {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a1a;
+      font-family: 'SF Mono', Monaco, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+
+    .empty-values {
+      font-size: 13px;
+      color: #999;
+      font-style: italic;
+      padding: 8px;
+    }
+
+    .tree-children {
+      margin-left: 20px;
+      padding-left: 12px;
+      border-left: 2px solid #e9ecef;
+      margin-top: 4px;
+      transition: all 0.3s;
+    }
+
+    .tree-children.collapsed {
+      display: none;
+    }
+
+    /* Empty States */
+    .empty-state-small {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+      font-style: italic;
+    }
+
+    /* Controls */
+    .tree-controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn-control {
+      padding: 8px 16px;
+      background: white;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #667eea;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-control:hover {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .btn-control.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-color: #667eea;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .controls-group {
+      display: flex;
+      gap: 8px;
+      background: #f8f9fa;
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid #e9ecef;
+    }
+
+    .controls-group .btn-control {
+      border: none;
+      background: transparent;
+    }
+
+    .controls-group .btn-control:hover {
+      background: white;
+      color: #667eea;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+    }
+
+    .controls-group .btn-control.active {
+      background: white;
+      color: #667eea;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .header,
+      .section {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .flat-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .tree-children {
+        margin-left: 20px;
+        padding-left: 12px;
+      }
+
+      .tree-node-values {
+        margin-left: 36px;
+        grid-template-columns: 1fr;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+
+      .value-amount {
+        font-size: 24px;
+      }
+
+      .tree-node-name {
+        max-width: 200px;
+      }
+
+      .tree-controls {
+        flex-direction: column;
+      }
+
+      .controls-group {
+        width: 100%;
+      }
+
+      .controls-group .btn-control {
+        flex: 1;
+        text-align: center;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 800px;
+      }
+
+      .flat-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/root/${nodeId}${queryString}" class="back-link">
+        ← Back to Tree
+      </a>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+      <h1>Global Values</h1>
+      <div class="header-subtitle">Cumulative values across all nodes</div>
+    </div>
+
+    <!-- Flat Summary -->
+    <div class="section">
+      <div class="section-title">Total Summary</div>
+      <div class="flat-grid">
+        ${flatSummary}
+      </div>
+    </div>
+
+    <!-- Tree View -->
+    <div class="section">
+      <div class="tree-controls">
+        <div class="controls-group">
+          <button class="btn-control active" id="showLocalBtn" onclick="showLocalValues()">
+            Local Values
+          </button>
+          <button class="btn-control" id="showTotalBtn" onclick="showTotalValues()">
+            Total Values
+          </button>
+        </div>
+        <button class="btn-control" onclick="expandAll()">Expand All</button>
+        <button class="btn-control" onclick="collapseAll()">Collapse All</button>
+      </div>
+      <div class="tree-container">
+        ${renderTree(result.tree)}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentView = 'local';
+
+    function showLocalValues() {
+      currentView = 'local';
+      document.getElementById('showLocalBtn').classList.add('active');
+      document.getElementById('showTotalBtn').classList.remove('active');
+      
+      document.querySelectorAll('.local-values').forEach(el => {
+        el.style.display = 'grid';
+      });
+      document.querySelectorAll('.total-values').forEach(el => {
+        el.style.display = 'none';
+      });
+    }
+
+    function showTotalValues() {
+      currentView = 'total';
+      document.getElementById('showTotalBtn').classList.add('active');
+      document.getElementById('showLocalBtn').classList.remove('active');
+      
+      document.querySelectorAll('.local-values').forEach(el => {
+        el.style.display = 'none';
+      });
+      document.querySelectorAll('.total-values').forEach(el => {
+        el.style.display = 'grid';
+      });
+    }
+
+    function toggleNode(button) {
+      button.classList.toggle('collapsed');
+      const treeNode = button.closest('.tree-node');
+      const children = treeNode.querySelector('.tree-children');
+      if (children) {
+        children.classList.toggle('collapsed');
+      }
+    }
+
+    function expandAll() {
+      document.querySelectorAll('.tree-toggle').forEach(btn => {
+        btn.classList.remove('collapsed');
+      });
+      document.querySelectorAll('.tree-children').forEach(children => {
+        children.classList.remove('collapsed');
+      });
+    }
+
+    function collapseAll() {
+      document.querySelectorAll('.tree-toggle').forEach(btn => {
+        btn.classList.add('collapsed');
+      });
+      document.querySelectorAll('.tree-children').forEach(children => {
+        children.classList.add('collapsed');
+      });
+    }
+  </script>
+</body>
+</html>
+    `);
+  } catch (err) {
+    console.error("Error in /root/:nodeId/values:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

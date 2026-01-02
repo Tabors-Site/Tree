@@ -127,4 +127,96 @@ async function setGoalForNode({ nodeId, key, goal, version, userId }) {
   return { message: "Goal updated successfully." };
 }
 
-export { setValueForNode, setGoalForNode };
+function stripAutoPrefixFromObject(obj) {
+  const out = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (key.startsWith("_auto__")) {
+      const base = key.slice("_auto__".length);
+      out[`AUTO_${base}`] = value; // ← system key preserved
+    } else {
+      out[key] = value; // ← user key preserved
+    }
+  }
+
+  return out;
+}
+
+function mergeSummedValues(target, source) {
+  if (!(source instanceof Map)) return;
+
+  for (const [key, value] of source.entries()) {
+    const numeric = Number(value);
+    if (isNaN(numeric)) continue;
+
+    const existingKey = findExistingKey(target, key);
+    const finalKey = existingKey ?? key;
+
+    target.set(finalKey, (target.get(finalKey) ?? 0) + numeric);
+  }
+}
+
+function collectNodeVersionValues(node) {
+  const sum = new Map();
+
+  for (const version of node.versions || []) {
+    if (!version?.values) continue;
+    mergeSummedValues(sum, version.values);
+  }
+
+  return sum;
+}
+
+async function getGlobalValuesTreeAndFlat(rootNodeId) {
+  const root = await findNodeById(rootNodeId);
+  if (!root) throw new Error("Node not found");
+
+  const flatTotals = new Map();
+
+  async function build(node) {
+    // 1️⃣ local raw values
+    const localValues = collectNodeVersionValues(node);
+
+    // 2️⃣ accumulated starts with local
+    const accumulated = new Map(localValues);
+
+    // 3️⃣ recurse children
+    const children = [];
+    for (const childId of node.children || []) {
+      const child = await findNodeById(childId);
+      if (!child) continue;
+
+      const childResult = await build(child);
+      children.push(childResult.node);
+
+      // merge child accumulated raw values
+      mergeSummedValues(accumulated, childResult.accumulated);
+    }
+
+    // 4️⃣ flat totals count local once
+    mergeSummedValues(flatTotals, localValues);
+
+    return {
+      node: {
+        nodeId: node._id.toString(),
+        nodeName: node.name,
+
+        // ✅ BOTH exposed
+        localValues: stripAutoPrefixFromObject(Object.fromEntries(localValues)),
+        totalValues: stripAutoPrefixFromObject(Object.fromEntries(accumulated)),
+
+        children,
+      },
+      accumulated, // raw Map returned upward
+    };
+  }
+
+  const { node: tree } = await build(root);
+
+  return {
+    flat: stripAutoPrefixFromObject(Object.fromEntries(flatTotals)),
+    tree,
+  };
+}
+
+export { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat };
