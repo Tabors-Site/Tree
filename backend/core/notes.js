@@ -32,27 +32,33 @@ async function extractTaggedUsersAndRewrite(content) {
     return { tagged: [], rewrittenContent: content };
   }
 
-  const identifiers = matches.map((m) => m[1]);
+  // normalize mentions to lowercase
+  const identifiers = matches.map((m) => m[1].toLowerCase());
 
+  // fetch all users once
   const users = await User.find({
-    $or: [{ username: { $in: identifiers } }, { _id: { $in: identifiers } }],
-  });
+    username: { $in: identifiers },
+  }).collation({ locale: "en", strength: 2 }); // case-insensitive
 
-  const idToUser = {};
+  // build lookup maps
+  const usernameToUser = {};
   users.forEach((u) => {
-    idToUser[u._id] = u;
-    idToUser[u.username] = u;
+    usernameToUser[u.username.toLowerCase()] = u;
   });
 
-  const uniqueTagged = [...new Set(users.map((u) => u._id))];
+  const taggedUserIds = [...new Set(users.map((u) => u._id.toString()))];
 
-  const rewrittenContent = content.replace(mentionRegex, (full, ident) => {
-    const user = idToUser[ident];
+  // rewrite mentions using canonical username
+  const rewrittenContent = content.replace(mentionRegex, (full, raw) => {
+    const user = usernameToUser[raw.toLowerCase()];
     if (!user) return full;
-    return "@" + user.username;
+    return `@${user.username}`;
   });
 
-  return { tagged: uniqueTagged, rewrittenContent };
+  return {
+    tagged: taggedUserIds,
+    rewrittenContent,
+  };
 }
 
 async function createNote({
@@ -286,10 +292,13 @@ async function deleteNoteAndFile({ noteId, userId }) {
     // update note fields
     note.content = "File was deleted";
     note.nodeId = "deleted";
+    note.userId = "deleted";
   } else {
     // text note: keep content, just move nodeId
     note.nodeId = "deleted";
+    note.userId = "deleted";
   }
+  note.tagged = [];
 
   await note.save();
 
