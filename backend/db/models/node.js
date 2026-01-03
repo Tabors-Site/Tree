@@ -39,7 +39,7 @@ const NodeSchema = new mongoose.Schema({
           default: uuidv4,
         },
         name: { type: String, required: true },
-        script: { type: String, required: true },
+        script: { type: String },
       },
     ],
     default: [],

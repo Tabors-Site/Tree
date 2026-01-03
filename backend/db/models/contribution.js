@@ -134,12 +134,20 @@ const ContributionSchema = new mongoose.Schema({
   editScript: {
     type: {
       scriptName: { type: String, default: null },
+      scriptId: {
+        type: String,
+        required: true,
+      },
       contents: { type: String, default: null },
       _id: false,
     },
   },
   executeScript: {
     type: {
+      scriptId: {
+        type: String,
+        required: true,
+      },
       scriptName: { type: String, default: null },
       logs: {
         type: [String],
