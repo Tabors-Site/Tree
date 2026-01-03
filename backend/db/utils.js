@@ -36,6 +36,8 @@ const logContribution = async ({
   noteAction,
   rawIdeaAction,
   updateParent,
+  energyUsed = null,
+
   executeScript,
   editScript,
   updateChildNode,
@@ -100,6 +102,8 @@ const logContribution = async ({
       userId,
       nodeId,
       action,
+      energyUsed,
+
       statusEdited,
       valueEdited,
       tradeId,

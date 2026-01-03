@@ -1,6 +1,8 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
+import { energyGuard } from "../middleware/EnergyGuard.js";
+
 import { getAllData } from "../controllers/treeDataFetching.js";
 import { createInvite } from "../core/invites.js";
 import { getCalendar } from "../core/schedules.js";
@@ -950,142 +952,162 @@ ${policyHtml}
 });
 
 // POST /root/:rootId/invite
-router.post("/root/:rootId/invite", authenticate, async (req, res) => {
-  try {
-    const { rootId } = req.params;
-    const { userReceiving } = req.body;
+router.post(
+  "/root/:rootId/invite",
+  authenticate,
+  energyGuard("invite"),
+  async (req, res) => {
+    try {
+      const { rootId } = req.params;
+      const { userReceiving } = req.body;
 
-    if (!userReceiving) {
+      if (!userReceiving) {
+        return res.status(400).json({
+          success: false,
+          error: "userReceiving is required",
+        });
+      }
+
+      await createInvite({
+        userInvitingId: req.userId,
+        userReceiving, // username OR userId
+        rootId,
+        isToBeOwner: false,
+        isUninviting: false,
+      });
+
+      // HTML redirect support
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/root/${rootId}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      return res.json({ success: true });
+    } catch (err) {
       return res.status(400).json({
         success: false,
-        error: "userReceiving is required",
+        error: err.message,
       });
     }
-
-    await createInvite({
-      userInvitingId: req.userId,
-      userReceiving, // username OR userId
-      rootId,
-      isToBeOwner: false,
-      isUninviting: false,
-    });
-
-    // HTML redirect support
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`
-      );
-    }
-
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
   }
-});
+);
 
 // POST /root/:rootId/transfer-owner
-router.post("/root/:rootId/transfer-owner", authenticate, async (req, res) => {
-  try {
-    const { rootId } = req.params;
-    const { userReceiving } = req.body;
+router.post(
+  "/root/:rootId/transfer-owner",
+  authenticate,
+  energyGuard("invite"),
+  async (req, res) => {
+    try {
+      const { rootId } = req.params;
+      const { userReceiving } = req.body;
 
-    if (!userReceiving) {
+      if (!userReceiving) {
+        return res.status(400).json({
+          success: false,
+          error: "userReceiving is required",
+        });
+      }
+
+      await createInvite({
+        userInvitingId: req.userId,
+        userReceiving, // username OR userId
+        rootId,
+        isToBeOwner: true, // ⭐ THIS is the key
+        isUninviting: false,
+      });
+
+      // HTML redirect support
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/root/${rootId}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      return res.json({ success: true });
+    } catch (err) {
       return res.status(400).json({
         success: false,
-        error: "userReceiving is required",
+        error: err.message,
       });
     }
-
-    await createInvite({
-      userInvitingId: req.userId,
-      userReceiving, // username OR userId
-      rootId,
-      isToBeOwner: true, // ⭐ THIS is the key
-      isUninviting: false,
-    });
-
-    // HTML redirect support
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`
-      );
-    }
-
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
   }
-});
+);
 
 // POST /root/:rootId/remove-user
-router.post("/root/:rootId/remove-user", authenticate, async (req, res) => {
-  try {
-    const { rootId } = req.params;
-    const { userReceiving } = req.body;
+router.post(
+  "/root/:rootId/remove-user",
+  authenticate,
+  energyGuard("invite"),
+  async (req, res) => {
+    try {
+      const { rootId } = req.params;
+      const { userReceiving } = req.body;
 
-    if (!userReceiving) {
+      if (!userReceiving) {
+        return res.status(400).json({
+          success: false,
+          error: "userReceiving is required",
+        });
+      }
+
+      await createInvite({
+        userInvitingId: req.userId,
+        userReceiving, // userId
+        rootId,
+        isToBeOwner: false,
+        isUninviting: true, // ⭐ THIS triggers removal logic
+      });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      return res.json({ success: true });
+    } catch (err) {
       return res.status(400).json({
         success: false,
-        error: "userReceiving is required",
+        error: err.message,
       });
     }
-
-    await createInvite({
-      userInvitingId: req.userId,
-      userReceiving, // userId
-      rootId,
-      isToBeOwner: false,
-      isUninviting: true, // ⭐ THIS triggers removal logic
-    });
-
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`
-      );
-    }
-
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
   }
-});
+);
 
 // POST /root/:rootId/retire
-router.post("/root/:rootId/retire", authenticate, async (req, res) => {
-  try {
-    const { rootId } = req.params;
+router.post(
+  "/root/:rootId/retire",
+  authenticate,
+  energyGuard("delete"),
+  async (req, res) => {
+    try {
+      const { rootId } = req.params;
 
-    await createInvite({
-      userInvitingId: req.userId,
-      userReceiving: req.userId,
-      rootId,
-      isToBeOwner: false,
-      isUninviting: true,
-    });
+      await createInvite({
+        userInvitingId: req.userId,
+        userReceiving: req.userId,
+        rootId,
+        isToBeOwner: false,
+        isUninviting: true,
+      });
 
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`
-      );
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      return res.json({ success: true });
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        error: err.message,
+      });
     }
-
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
   }
-});
+);
 
 router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
   try {
@@ -1750,6 +1772,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
 
 router.post(
   "/root/:nodeId/transaction-policy",
+  energyGuard("updateParent"),
   authenticate,
   async (req, res) => {
     try {

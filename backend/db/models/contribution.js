@@ -40,6 +40,11 @@ const ContributionSchema = new mongoose.Schema({
     ],
     required: true,
   },
+  energyUsed: {
+    type: Number,
+    //required: true,
+    min: 0,
+  },
   statusEdited: {
     type: String,
     enum: ["completed", "active", "trimmed", "divider"],

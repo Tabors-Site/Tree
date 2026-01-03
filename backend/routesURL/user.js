@@ -1,6 +1,8 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
+import { energyGuard } from "../middleware/EnergyGuard.js";
+
 import path from "path";
 import fs from "fs";
 import multer from "multer";
@@ -108,7 +110,8 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     }
 
     const roots = user.roots || [];
-
+    const profileType = user.profileType;
+    const energy = user.availableEnergy;
     // JSON MODE
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml) {
@@ -118,6 +121,24 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         roots,
       });
     }
+    const ENERGY_RESET_MS = 24 * 60 * 60 * 1000;
+    const storageUsedKB = user.storageUsage || 0;
+
+    const lastResetAt = energy?.lastResetAt
+      ? new Date(energy.lastResetAt)
+      : null;
+
+    const nextResetAt = lastResetAt
+      ? new Date(lastResetAt.getTime() + ENERGY_RESET_MS)
+      : null;
+
+    // Format nicely (local time, hh:mm)
+    const resetTimeLabel = nextResetAt
+      ? nextResetAt.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "—";
 
     return res.send(`
 <!DOCTYPE html>
@@ -563,19 +584,93 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         grid-template-columns: repeat(2, 1fr);
       }
     }
+      .user-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.plan-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+  background: #f0f0f0;
+  color: #555;
+}
+
+.plan-badge.basic {
+  background: #e0e0e0;
+  color: #555;
+}
+
+.plan-badge.standard {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.plan-badge.premium {
+  background: linear-gradient(135deg, #ffd700, #ffb300);
+  color: #4e342e;
+}
+
+.energy-indicator {
+  color: #444;
+  font-weight: 500;
+}
+
   </style>
 </head>
 <body>
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <div class="user-info">
-        <h1>${user.username}</h1>
-        <div class="user-id-container">
-          <code id="nodeIdCode">${user._id}</code>
-          <button id="copyNodeIdBtn" title="Copy ID">📋</button>
-        </div>
-      </div>
+     <div class="user-info">
+  <h1>${user.username}</h1>
+
+  <div class="user-meta">
+  <span class="plan-badge ${profileType}">
+    ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Plan
+  </span>
+
+  <span class="energy-indicator">
+    ⚡ ${energy?.amount ?? 0} energy · resets at ${resetTimeLabel}
+  </span>
+<br />
+  <span
+  class="energy-indicator"
+  id="storageIndicator"
+  data-storage-kb="${storageUsedKB}"
+>
+  💾 <span id="storageValue"></span><button
+    id="storageToggle"
+    style="
+      margin-left:6px;
+      font-size:12px;
+      padding:2px 6px;
+      border-radius:6px;
+      border:1px solid #ccc;
+      cursor:pointer;
+      background:white;
+    "
+  >
+  MB
+  </button>'s
+  used
+</span>
+
+</div>
+
+
+  <div class="user-id-container">
+    <code id="nodeIdCode">${user._id}</code>
+    <button id="copyNodeIdBtn" title="Copy ID">📋</button>
+  </div>
+</div>
+
     </div>
 
     <!-- Raw Ideas Capture - Featured Section -->
@@ -713,6 +808,37 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
   // SHIFT + ENTER → newline (default behavior)
   // do nothing
 });
+
+(() => {
+  const indicator = document.getElementById("storageIndicator");
+  if (!indicator) return;
+
+  const valueEl = document.getElementById("storageValue");
+  const toggleBtn = document.getElementById("storageToggle");
+
+  const storageKB = Number(indicator.dataset.storageKb || 0);
+
+  let unit = "MB";
+
+  function render() {
+    if (unit === "MB") {
+      const mb = storageKB / 1024;
+      valueEl.textContent = mb.toFixed(mb < 10 ? 2 : 1);
+      toggleBtn.textContent = "MB";
+    } else {
+      const gb = storageKB / (1024 * 1024);
+      valueEl.textContent = gb.toFixed(gb < 1 ? 3 : 2);
+      toggleBtn.textContent = "GB";
+    }
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    unit = unit === "GB" ? "MB" : "GB";
+    render();
+  });
+
+  render();
+})();
 
   </script>
 </body>
@@ -2927,57 +3053,80 @@ router.post("/user/reset-password/:token", async (req, res) => {
   }
 });
 
-router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { name } = req.body;
+router.post(
+  "/user/:userId/createRoot",
+  authenticate,
+  energyGuard("create"),
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { name } = req.body;
 
-    if (req.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ success: false, error: "Not authorized" });
-    }
+      if (req.userId.toString() !== userId.toString()) {
+        return res
+          .status(403)
+          .json({ success: false, error: "Not authorized" });
+      }
 
-    if (!name || typeof name !== "string") {
-      return res.status(400).json({
-        success: false,
-        error: "Name is required",
-      });
-    }
+      if (!name || typeof name !== "string") {
+        return res.status(400).json({
+          success: false,
+          error: "Name is required",
+        });
+      }
 
-    const rootNode = await createNewNode(
-      name,
-      null,
-      0,
-      null,
-      true, // isRoot
-      userId,
-      {},
-      {},
-      null,
-      req.user
-    );
-
-    // HTML redirect support
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/root/${rootNode._id}?token=${req.query.token ?? ""}&html`
+      const rootNode = await createNewNode(
+        name,
+        null,
+        0,
+        null,
+        true, // isRoot
+        userId,
+        {},
+        {},
+        null,
+        req.user
       );
-    }
 
-    res.status(201).json({
-      success: true,
-      rootId: rootNode._id,
-      root: rootNode,
-    });
-  } catch (err) {
-    console.error("createRoot error:", err);
-    res.status(400).json({ success: false, error: err.message });
+      // HTML redirect support
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/root/${rootNode._id}?token=${req.query.token ?? ""}&html`
+        );
+      }
+
+      res.status(201).json({
+        success: true,
+        rootId: rootNode._id,
+        root: rootNode,
+      });
+    } catch (err) {
+      console.error("createRoot error:", err);
+      res.status(400).json({ success: false, error: err.message });
+    }
   }
-});
+);
 
 router.post(
   "/user/:userId/raw-ideas",
   authenticate,
   upload.single("file"),
+
+  energyGuard("rawIdea", (req) => {
+    // FILE raw idea
+    if (req.file) {
+      return {
+        type: "file",
+        sizeMB: req.file.size / (1024 * 1024),
+      };
+    }
+
+    // TEXT raw idea
+    return {
+      type: "text",
+      content: req.body?.content || "",
+    };
+  }),
   async (req, res) => {
     try {
       const { userId } = req.params;
@@ -3881,6 +4030,7 @@ document.addEventListener("click", async (e) => {
 router.delete(
   "/user/:userId/raw-ideas/:rawIdeaId",
   authenticate,
+  energyGuard("updateChildNode"), //temp 1 energy
   async (req, res) => {
     try {
       const { userId, rawIdeaId } = req.params;
@@ -3906,6 +4056,8 @@ router.delete(
 router.post(
   "/user/:userId/raw-ideas/:rawIdeaId/transfer",
   authenticate,
+  energyGuard("updateChildNode"), //temp 1 energy
+
   async (req, res) => {
     try {
       const { userId, rawIdeaId } = req.params;
@@ -4905,6 +5057,8 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
 router.post(
   "/user/:userId/invites/:inviteId",
   authenticate,
+  energyGuard("invite"),
+
   async (req, res) => {
     try {
       const { userId, inviteId } = req.params;
@@ -5446,6 +5600,8 @@ router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
 router.post(
   "/user/:userId/deleted/:nodeId/revive",
   authenticate,
+
+  energyGuard("branchLifecycle"), //temp 1 energy
   async (req, res) => {
     try {
       const { userId, nodeId } = req.params;
@@ -5487,6 +5643,9 @@ router.post(
 router.post(
   "/user/:userId/deleted/:nodeId/reviveAsRoot",
   authenticate,
+
+  energyGuard("branchLifecycle"), //temp 1 energy
+
   async (req, res) => {
     try {
       const { userId, nodeId } = req.params;
@@ -5517,13 +5676,18 @@ router.post(
   }
 );
 
-router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
-  if (req.userId.toString() !== req.params.userId.toString()) {
-    return res.status(403).json({ message: "Not authorized" });
-  }
+router.post(
+  "/user/:userId/api-keys",
+  authenticate,
+  energyGuard("updateChildNode"), //temp 1 energy
+  async (req, res) => {
+    if (req.userId.toString() !== req.params.userId.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
 
-  return createApiKey(req, res);
-});
+    return createApiKey(req, res);
+  }
+);
 
 router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
   try {
@@ -5827,6 +5991,8 @@ document.addEventListener("click", async (e) => {
 router.delete(
   "/user/:userId/api-keys/:keyId",
   authenticate,
+  energyGuard("branchLifecycle"), //temp 1 energy
+
   async (req, res) => {
     if (req.userId.toString() !== req.params.userId.toString()) {
       return res.status(403).json({ message: "Not authorized" });

@@ -15,6 +15,21 @@ const ApiKeySchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+const EnergySchema = new mongoose.Schema(
+  {
+    amount: {
+      type: Number,
+      required: true,
+    },
+    lastResetAt: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const UserSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
   username: { type: String, required: true, unique: true },
@@ -29,6 +44,26 @@ const UserSchema = new mongoose.Schema({
   apiKeys: [ApiKeySchema],
 
   roots: [{ type: String, ref: "Node" }],
+
+  profileType: {
+    type: String,
+    enum: ["basic", "standard", "premium", "god"],
+    default: "basic",
+    required: true,
+  },
+
+  availableEnergy: {
+    type: EnergySchema,
+    required: true,
+    default: () => ({
+      amount: 0,
+      lastResetAt: new Date(),
+    }),
+  },
+  storageUsage: {
+    type: Number, // in MB
+    default: 0,
+  },
 });
 
 // Hash password before saving

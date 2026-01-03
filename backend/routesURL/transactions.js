@@ -1,6 +1,8 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
+import { energyGuard } from "../middleware/EnergyGuard.js";
+
 import {
   getTransactions,
   createTransaction,
@@ -979,6 +981,8 @@ ${sortedTransactions
 router.post(
   "/:nodeId/:version/transactions",
   authenticate,
+  energyGuard("transaction"),
+
   async (req, res) => {
     try {
       const normalized = normalizeTransactionBody(req.body);
@@ -1012,6 +1016,8 @@ router.post(
 router.post(
   "/:nodeId/:version/transactions/:transactionId/approve",
   authenticate,
+  energyGuard("transaction"),
+
   async (req, res) => {
     try {
       const tx = await applyApproval(req.params.transactionId, req.userId);
@@ -1036,6 +1042,8 @@ router.post(
 router.post(
   "/:nodeId/:version/transactions/:transactionId/deny",
   authenticate,
+  energyGuard("transaction"),
+
   async (req, res) => {
     try {
       await denyTransaction(req.params.transactionId, req.userId);
