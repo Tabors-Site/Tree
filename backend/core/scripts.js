@@ -149,12 +149,17 @@ export async function executeScript({ nodeId, scriptId, userId }) {
     },
   });
 
+  const wrappedScript = `
+    (async () => {
+      ${scriptObj.script}
+    })()
+  `;
+  if (logs.length > 200) {
+    logs.length = 200;
+  }
+
   try {
-    await vm.run(`
-      (async () => {
-        ${scriptObj.script}
-      })()
-    `);
+    await vm.run(wrappedScript);
 
     await logContribution({
       userId,
@@ -201,11 +206,15 @@ export async function getScript({ nodeId, scriptId }) {
 
   const contributions = await Contribution.find({
     nodeId,
-    action: "editScript",
-    "editScript.scriptId": scriptId, // ✅ key fix
+    action: { $in: ["editScript", "executeScript"] },
+    $or: [
+      { "editScript.scriptId": scriptId },
+      { "executeScript.scriptId": scriptId },
+    ],
   })
     .sort({ date: -1 })
     .lean();
+
   console.log(contributions);
   return {
     script: {
@@ -213,12 +222,35 @@ export async function getScript({ nodeId, scriptId }) {
       name: scriptObj.name,
       script: scriptObj.script,
     },
-    contributions: contributions.map((c) => ({
-      userId: c.userId,
-      nodeVersion: c.nodeVersion,
-      scriptName: c.editScript?.scriptName,
-      contents: c.editScript?.contents,
-      createdAt: c.date,
-    })),
+
+    contributions: contributions
+      .map((c) => {
+        if (c.action === "editScript") {
+          return {
+            type: "edit",
+            userId: c.userId,
+            nodeVersion: c.nodeVersion,
+            scriptName: c.editScript?.scriptName,
+            contents: c.editScript?.contents,
+            createdAt: c.date,
+          };
+        }
+
+        if (c.action === "executeScript") {
+          return {
+            type: "execute",
+            userId: c.userId,
+            nodeVersion: c.nodeVersion,
+            scriptName: c.executeScript?.scriptName,
+            logs: c.executeScript?.logs || [],
+            success: c.executeScript?.success,
+            error: c.executeScript?.error || null,
+            createdAt: c.date,
+          };
+        }
+
+        return null;
+      })
+      .filter(Boolean),
   };
 }

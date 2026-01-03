@@ -748,7 +748,9 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
 
     <!-- Scripts Section -->
     <div class="scripts-section">
-      <h2>Scripts</h2>
+      <a href="${host}/api/${node._id}/scripts/help${qs}">
+
+      <h2>Scripts</h2></a>
       <form
       method="POST"
       action="${host}/api/${nodeId}/script/create${qs}"
@@ -1709,17 +1711,20 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
     // ---------------------------------------------------------
     if ("html" in req.query) {
       const host = `https://${req.get("host")}`;
-      const historyHtml =
-        contributions && contributions.length
-          ? contributions
-              .map(
-                (c, i) => `
+      const editHistory = contributions.filter((c) => c.type === "edit");
+      const executionHistory = contributions.filter(
+        (c) => c.type === "execute"
+      );
+
+      const editHistoryHtml = editHistory.length
+        ? editHistory
+            .map(
+              (c, i) => `
 <li class="history-item">
   <div class="history-header">
     <div class="history-title">
-      <span class="edit-number">Edit ${contributions.length - i}: ${
-                  c.scriptName
-                }</span>
+      <span class="edit-number">Edit ${editHistory.length - i}</span>
+      ${c.scriptName ? `<span class="script-name">${c.scriptName}</span>` : ""}
       ${i === 0 ? `<span class="current-badge">Current</span>` : ""}
     </div>
     <div class="history-meta">
@@ -1728,18 +1733,77 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
     </div>
   </div>
 
+  ${
+    c.contents
+      ? `
   <details>
     <summary>
       <span class="summary-icon">▶</span>
       View code
     </summary>
     <pre class="history-code">${c.contents}</pre>
-  </details>
+  </details>`
+      : `<div class="empty-history-item">Empty script</div>`
+  }
 </li>
 `
-              )
-              .join("")
-          : `<li class="empty-history">No edit history yet</li>`;
+            )
+            .join("")
+        : `<li class="empty-history">No edit history yet</li>`;
+
+      const executionHistoryHtml = executionHistory.length
+        ? executionHistory
+            .map(
+              (c, i) => `
+<li class="history-item ${c.success ? "success" : "failure"}">
+  <div class="history-header">
+    <div class="history-title">
+      <span class="edit-number">Run ${executionHistory.length - i}</span>
+      ${c.scriptName ? `<span class="script-name">${c.scriptName}</span>` : ""}
+      ${
+        c.success
+          ? `<span class="current-badge success-badge">Success</span>`
+          : `<span class="current-badge failure-badge">Failed</span>`
+      }
+    </div>
+    <div class="history-meta">
+      <span class="version-badge">v${c.nodeVersion}</span>
+      <span class="timestamp">${new Date(c.createdAt).toLocaleString()}</span>
+    </div>
+  </div>
+
+  ${
+    c.logs && c.logs.length
+      ? `
+  <details>
+    <summary>
+      <span class="summary-icon">▶</span>
+      View logs (${c.logs.length} ${c.logs.length === 1 ? "entry" : "entries"})
+    </summary>
+    <pre class="history-code">${c.logs.join("\n")}</pre>
+  </details>`
+      : ""
+  }
+
+  ${
+    c.error
+      ? `<div class="error-message">
+          <div class="error-label">Error:</div>
+          <pre class="error-code">${c.error}</pre>
+        </div>`
+      : ""
+  }
+
+  ${
+    !c.logs?.length && !c.error
+      ? `<div class="empty-history-item">No logs or output</div>`
+      : ""
+  }
+</li>
+`
+            )
+            .join("")
+        : `<li class="empty-history">No executions yet</li>`;
 
       return res.send(`
 <!DOCTYPE html>
@@ -1928,7 +1992,7 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
     .action-bar {
       display: flex;
       gap: 12px;
-      margin-bottom: 24px;
+      margin-top: 20px;
       flex-wrap: wrap;
     }
 
@@ -2042,6 +2106,14 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
       transform: translateX(4px);
     }
 
+    .history-item.success {
+      border-left: 4px solid #10b981;
+    }
+
+    .history-item.failure {
+      border-left: 4px solid #ef4444;
+    }
+
     .history-header {
       display: flex;
       justify-content: space-between;
@@ -2064,6 +2136,15 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
       font-size: 15px;
     }
 
+    .script-name {
+      font-size: 13px;
+      color: #667eea;
+      background: rgba(102, 126, 234, 0.1);
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+
     .current-badge {
       padding: 4px 10px;
       background: linear-gradient(135deg, #10b981 0%, #059669 100%);
@@ -2071,6 +2152,14 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
       border-radius: 12px;
       font-size: 12px;
       font-weight: 600;
+    }
+
+    .success-badge {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+
+    .failure-badge {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
     }
 
     .history-meta {
@@ -2139,6 +2228,44 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
       padding: 40px;
       color: #888;
       font-style: italic;
+      background: #f8f9fa;
+      border-radius: 12px;
+      border: 1px solid #e9ecef;
+    }
+
+    .empty-history-item {
+      text-align: center;
+      padding: 20px;
+      color: #888;
+      font-style: italic;
+      font-size: 14px;
+    }
+
+    /* Error Messages */
+    .error-message {
+      margin-top: 12px;
+      padding: 12px;
+      background: rgba(239, 68, 68, 0.1);
+      border-left: 3px solid #ef4444;
+      border-radius: 8px;
+    }
+
+    .error-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #ef4444;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .error-code {
+      color: #ef4444;
+      background: rgba(0, 0, 0, 0.05);
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin: 0;
     }
 
     /* Responsive */
@@ -2177,6 +2304,10 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
       .history-header {
         flex-direction: column;
         align-items: flex-start;
+      }
+
+      .history-title {
+        width: 100%;
       }
 
       pre {
@@ -2270,11 +2401,19 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
       </form>
     </div>
 
+    <!-- Execution History -->
+    <div class="section">
+      <div class="section-title">Execution History</div>
+      <ul class="history-list">
+        ${executionHistoryHtml}
+      </ul>
+    </div>
+
     <!-- Edit History -->
     <div class="section">
       <div class="section-title">Edit History</div>
       <ul class="history-list">
-        ${historyHtml}
+        ${editHistoryHtml}
       </ul>
     </div>
   </div>
@@ -2356,7 +2495,14 @@ router.post(
     } catch (err) {
       console.error("Error executing script:", err);
 
-      const qs = filterQuery(req);
+      let qs = "";
+      try {
+        qs = filterQuery(req);
+      } catch (e) {
+        console.error("filterQuery failed:", e);
+      }
+      const { nodeId, scriptId } = req.params;
+
       return res.redirect(
         `/api/${nodeId}/script/${scriptId}?${qs}&error=${encodeURIComponent(
           err.message
@@ -2850,7 +2996,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, node.prestige + 1);`,
     <!-- Back Navigation -->
     <div class="back-nav">
       <a href="${host}/api/${nodeId}${qsWithQ}" class="back-link">
-        ← Back to ${node.name}
+        ← Back to Node
       </a>
     </div>
 
