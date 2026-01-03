@@ -215,7 +215,6 @@ export async function getScript({ nodeId, scriptId }) {
     .sort({ date: -1 })
     .lean();
 
-  console.log(contributions);
   return {
     script: {
       id: scriptObj._id,

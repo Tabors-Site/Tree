@@ -311,7 +311,6 @@ async function deleteNoteAndFile({ noteId, userId }) {
       fileSizeKB = Math.ceil(stats.size / 1024);
       fs.unlinkSync(filePath);
       fileDeleted = true;
-      console.log(`Deleted file: ${filePath}`);
     } else {
       console.log(`File not found: ${filePath}`);
     }
