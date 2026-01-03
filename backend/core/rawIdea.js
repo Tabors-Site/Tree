@@ -89,6 +89,30 @@ async function createRawIdea({ contentType, content, userId, file }) {
   });
 
   await rawIdea.save();
+  // ---- STORAGE ACCOUNTING ----
+  // ---- STORAGE ACCOUNTING ----
+
+  // FILE → KB
+  if (contentType === "file" && file?.size) {
+    const sizeKB = Math.ceil(file.size / 1024);
+
+    await User.findByIdAndUpdate(userId, {
+      $inc: { storageUsage: sizeKB },
+    });
+  }
+
+  // TEXT → KB
+  if (contentType === "text" && finalContent) {
+    const bytes = Buffer.byteLength(finalContent, "utf8");
+    const sizeKB = Math.ceil(bytes / 1024);
+
+    if (sizeKB > 0) {
+      await User.findByIdAndUpdate(userId, {
+        $inc: { storageUsage: sizeKB },
+      });
+    }
+  }
+
   await logContribution({
     userId,
     nodeId: "deleted",
@@ -191,10 +215,15 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId }) {
   let fileDeleted = false;
 
   // --- FILE CLEANUP ---
+  let fileSizeKB = 0;
+
   if (rawIdea.contentType === "file" && rawIdea.content) {
     const filePath = path.join(process.cwd(), "uploads", rawIdea.content);
 
     if (fs.existsSync(filePath)) {
+      const stats = fs.statSync(filePath);
+      fileSizeKB = Math.ceil(stats.size / 1024);
+
       fs.unlinkSync(filePath);
       fileDeleted = true;
     }
@@ -209,6 +238,16 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId }) {
     : "File was deleted";
 
   await rawIdea.save();
+
+  await User.findByIdAndUpdate(userId, [
+    {
+      $set: {
+        storageUsage: {
+          $max: [{ $subtract: ["$storageUsage", fileSizeKB] }, 0],
+        },
+      },
+    },
+  ]);
 
   // --- LOG CONTRIBUTION ---
   await logContribution({

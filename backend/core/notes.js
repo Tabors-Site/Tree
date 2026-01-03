@@ -107,6 +107,29 @@ async function createNote({
   });
 
   await newNote.save();
+  // ---- STORAGE ACCOUNTING ----
+
+  // FILE → KB
+  if (contentType === "file" && file?.size) {
+    const sizeKB = Math.ceil(file.size / 1024);
+
+    await User.findByIdAndUpdate(userId, {
+      $inc: { storageUsage: sizeKB },
+    });
+  }
+
+  // TEXT → KB
+  if (contentType === "text" && finalContent) {
+    const bytes = Buffer.byteLength(finalContent, "utf8");
+    const sizeKB = Math.ceil(bytes / 1024);
+
+    if (sizeKB > 0) {
+      await User.findByIdAndUpdate(userId, {
+        $inc: { storageUsage: sizeKB },
+      });
+    }
+  }
+
   await logContribution({
     userId,
     nodeId,
@@ -276,12 +299,15 @@ async function deleteNoteAndFile({ noteId, userId }) {
 
   const { nodeId, version } = note; // original nodeId for logging
   let fileDeleted = false;
+  let fileSizeKB = 0;
 
   // If it's a file, delete it and modify content
   if (note.contentType === "file" && note.content) {
     const filePath = path.join(uploadsFolder, note.content);
 
     if (fs.existsSync(filePath)) {
+      const stats = fs.statSync(filePath);
+      fileSizeKB = Math.ceil(stats.size / 1024);
       fs.unlinkSync(filePath);
       fileDeleted = true;
       console.log(`Deleted file: ${filePath}`);
@@ -301,6 +327,18 @@ async function deleteNoteAndFile({ noteId, userId }) {
   note.tagged = [];
 
   await note.save();
+
+  if (fileDeleted && fileSizeKB > 0) {
+    await User.findByIdAndUpdate(userId, [
+      {
+        $set: {
+          storageUsage: {
+            $max: [{ $subtract: ["$storageUsage", fileSizeKB] }, 0],
+          },
+        },
+      },
+    ]);
+  }
 
   await logContribution({
     userId,
