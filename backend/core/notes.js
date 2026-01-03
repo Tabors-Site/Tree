@@ -296,6 +296,7 @@ async function deleteNoteAndFile({ noteId, userId }) {
       "Only the note author or the tree owner can delete this note"
     );
   }
+  const fileOwnerId = note.userId?.toString();
 
   const { nodeId, version } = note; // original nodeId for logging
   let fileDeleted = false;
@@ -328,16 +329,29 @@ async function deleteNoteAndFile({ noteId, userId }) {
 
   await note.save();
 
-  if (fileDeleted && fileSizeKB > 0) {
-    await User.findByIdAndUpdate(userId, [
-      {
-        $set: {
-          storageUsage: {
-            $max: [{ $subtract: ["$storageUsage", fileSizeKB] }, 0],
+  if (
+    fileDeleted &&
+    fileSizeKB > 0 &&
+    fileOwnerId &&
+    fileOwnerId !== "deleted"
+  ) {
+    try {
+      await User.findByIdAndUpdate(fileOwnerId, [
+        {
+          $set: {
+            storageUsage: {
+              $max: [{ $subtract: ["$storageUsage", fileSizeKB] }, 0],
+            },
           },
         },
-      },
-    ]);
+      ]);
+    } catch (err) {
+      console.error("Storage update failed", {
+        fileOwnerId,
+        fileSizeKB,
+        noteId,
+      });
+    }
   }
 
   await logContribution({
