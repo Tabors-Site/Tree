@@ -56,7 +56,7 @@ const UserSchema = new mongoose.Schema({
     type: EnergySchema,
     required: true,
     default: () => ({
-      amount: 0,
+      amount: 60,
       lastResetAt: new Date(),
     }),
   },

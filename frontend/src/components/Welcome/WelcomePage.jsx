@@ -33,7 +33,12 @@ const WelcomePage = () => {
 
   const handleOpenBrowser = async () => {
     const token = Cookies.get("token");
-    if (!token) return;
+
+    // 1️⃣ Not logged in → login page
+    if (!token) {
+      window.location.href = "/must-login";
+      return;
+    }
 
     try {
       const res = await fetch(`${apiUrl}/verify-token`, {
@@ -45,20 +50,35 @@ const WelcomePage = () => {
         credentials: "include",
       });
 
-      if (!res.ok) return;
+      if (!res.ok) {
+        window.location.href = "/login";
+        return;
+      }
 
       const data = await res.json();
 
       Cookies.set("username", data.username, { expires: 7 });
       Cookies.set("userId", data.userId, { expires: 7 });
       Cookies.set("loggedIn", true, { expires: 7 });
-      Cookies.set("HTMLShareToken", data.HTMLShareToken, { expires: 7 });
 
+      // 2️⃣ Logged in, no htmlShareToken → setup page
+      if (!data.HTMLShareToken) {
+        window.location.href =
+          `${apiUrl}/user/${data.userId}/shareToken?html`;
+        return;
+      }
+
+      // 3️⃣ Logged in + token → existing behavior
       window.location.href =
-        `https://tree.tabors.site/api/user/${data.userId}?token=${data.HTMLShareToken}&html`;
+        `${apiUrl}/user/${data.userId}?token=${data.HTMLShareToken}&html`;
 
-    } catch (err) { }
+    } catch (err) {
+      console.error("URL Browser error:", err);
+      window.location.href = "/login";
+    }
   };
+
+
 
   return (
     <>
@@ -118,23 +138,14 @@ const WelcomePage = () => {
         <section className="welcome-landing">
           <div className="welcome-header">
             <div className="header-buttons">
-              {/* Show only if they have token */}
-              {hasToken && (
-                <button
-                  className="back-to-site-btn"
-                  onClick={handleOpenBrowser}
-                >
-                  URL Browser
-                </button>
-              )}
-
-              <a
-                href="https://tree.tabors.site/legacy"
+              <button
                 className="back-to-site-btn"
+                onClick={handleOpenBrowser}
               >
-                Legacy App
-              </a>
+                Open App
+              </button>
             </div>
+
 
             <h1>Welcome to Treefficiency</h1>
 

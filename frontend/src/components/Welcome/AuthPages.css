@@ -1,0 +1,50 @@
+.auth-container {
+  text-align: center;
+
+  background: var(--panel-bg, #111);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.auth-container h2 {
+  margin-bottom: 0.5rem;
+}
+
+.auth-subtext {
+  opacity: 0.8;
+  margin-bottom: 2rem;
+  font-size: 0.95rem;
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.primary-btn {
+  padding: 0.7rem 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+
+  background: #4f46e5;
+  color: white;
+}
+
+.primary-btn:hover {
+  background: #4338ca;
+}
+
+.secondary-btn {
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}

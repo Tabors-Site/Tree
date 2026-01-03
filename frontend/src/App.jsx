@@ -7,10 +7,13 @@ const App = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/*" element={<WelcomeRoutes />} />
-        <Route path="/legacy/*" element={<LegacyApp />} />
+
       </Routes>
     </BrowserRouter>
   );
 };
 
 export default App;
+
+//removed path
+//<Route path="/legacy/*" element={<LegacyApp />} />

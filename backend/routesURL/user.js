@@ -18,6 +18,7 @@ import { getContributionsByUser } from "../core/contributions.js";
 
 import { getDeletedBranchesForUser } from "../core/treeFetch.js";
 
+import { setHtmlShareToken } from "../core/user.js";
 import {
   createNewNode,
   reviveNodeBranch,
@@ -714,6 +715,8 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         <li><a href="/api/user/${userId}/contributions?${filtered}">Contributions</a></li>
         <li><a href="/api/user/${userId}/deleted?${filtered}">Deleted</a></li>
         <li><a href="/api/user/${userId}/api-keys?${filtered}">API Keys</a></li>
+        <li><a href="/api/user/${userId}/sharetoken?${filtered}">Share Token</a></li>
+
 
       </ul>
     </div>
@@ -6001,5 +6004,549 @@ router.delete(
     return deleteApiKey(req, res);
   }
 );
+
+router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (req.userId.toString() !== userId.toString()) {
+      return res.status(403).send("Not authorized");
+    }
+
+    const user = await User.findById(userId)
+      .select("username htmlShareToken")
+      .lean();
+
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    const token = user.htmlShareToken;
+    const tokenQS = req.query.token
+      ? `?token=${req.query.token}&html`
+      : "?html";
+
+    return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Share Token — @${user.username}</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+  overflow-x: hidden;
+    }
+
+    /* Animated background elements */
+    body::before,
+    body::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0.1;
+      animation: float 20s infinite ease-in-out;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Card */
+    .card {
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(20px);
+      border-radius: 24px;
+      padding: 48px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      position: relative;
+      overflow: hidden;
+      animation: slideUp 0.6s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 6px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      display: inline-block;
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 12px;
+    }
+
+    .username {
+      font-size: 18px;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    /* Welcome Message */
+    .welcome-box {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+      padding: 24px;
+      border-radius: 16px;
+      margin-bottom: 32px;
+      border: 2px solid rgba(102, 126, 234, 0.2);
+    }
+
+    .welcome-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .welcome-title::before {
+      content: '👋';
+      font-size: 24px;
+    }
+
+    .welcome-text {
+      color: #555;
+      line-height: 1.8;
+      font-size: 15px;
+    }
+
+    /* Description */
+    .description {
+      color: #555;
+      line-height: 1.8;
+      margin-bottom: 24px;
+      font-size: 15px;
+      text-align: center;
+    }
+
+    .description strong {
+      color: #667eea;
+    }
+
+    /* Token Display */
+    .token-section {
+      margin-bottom: 32px;
+    }
+
+    .token-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #667eea;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .token-label::before {
+      content: '🔑';
+      font-size: 16px;
+    }
+
+    .token-display {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #f8f9fa;
+      padding: 16px 20px;
+      border-radius: 12px;
+      border: 2px solid #e9ecef;
+      transition: all 0.2s;
+    }
+
+    .token-display:hover {
+      border-color: #667eea;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+    }
+
+    .token-text {
+      flex: 1;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 14px;
+      color: #1a1a1a;
+      word-break: break-all;
+      font-weight: 600;
+    }
+
+    .btn-copy {
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .btn-copy:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Form */
+    .form-section {
+      background: white;
+      padding: 24px;
+      border-radius: 16px;
+      border: 2px solid #e9ecef;
+      margin-bottom: 24px;
+    }
+
+    .form-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 16px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    input {
+      flex: 1;
+      padding: 14px 18px;
+      border-radius: 10px;
+      border: 2px solid #e9ecef;
+      font-size: 15px;
+      font-family: 'SF Mono', Monaco, monospace;
+      transition: all 0.2s;
+      background: white;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    }
+
+    input::placeholder {
+      color: #aaa;
+    }
+
+    .btn-submit {
+      padding: 14px 28px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      flex-shrink: 0;
+    }
+
+    .btn-submit:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    /* Info Box */
+    .info-box {
+      background: linear-gradient(135deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 152, 0, 0.1) 100%);
+      padding: 16px 20px;
+      border-radius: 12px;
+      border-left: 4px solid #ffa500;
+      margin-bottom: 24px;
+    }
+
+    .info-box-content {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .info-box-content::before {
+      content: 'ℹ️ ';
+      margin-right: 6px;
+    }
+
+    /* Back Link */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      text-decoration: none;
+      color: #667eea;
+      font-weight: 600;
+      font-size: 15px;
+      background: rgba(102, 126, 234, 0.1);
+      border-radius: 10px;
+      transition: all 0.2s;
+      width: 100%;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .back-link:hover {
+      background: rgba(102, 126, 234, 0.2);
+      transform: translateY(-2px);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+        align-items: flex-start;
+        padding-top: 40px;
+      }
+
+      .card {
+        padding: 32px 24px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      .icon {
+        font-size: 56px;
+      }
+
+      .form-row {
+        flex-direction: column;
+      }
+
+      .btn-submit {
+        width: 100%;
+      }
+
+      .token-display {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .btn-copy {
+        width: 100%;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 500px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <!-- Header -->
+      <div class="header">
+        <div class="icon">🔐</div>
+        <h1>Share Token</h1>
+        <div class="username">@${user.username}</div>
+      </div>
+
+      ${
+        token
+          ? `
+          <!-- Existing Token View -->
+          <div class="description">
+            This token allows <strong>read-only HTML access</strong> to your public pages
+            (profile, notes, trees) without logging in.
+          </div>
+
+          <div class="token-section">
+            <div class="token-label">Current Token</div>
+            <div class="token-display">
+              <div class="token-text" id="tokenText">${token}</div>
+              <button class="btn-copy" onclick="copyToken()">📋</button>
+            </div>
+          </div>
+
+          <div class="info-box">
+            <div class="info-box-content">
+              You can change your token at any time to invalidate old URLs.
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-title">Update Your Token</div>
+            <form method="POST" action="/api/user/${userId}/shareToken${tokenQS}">
+              <div class="form-row">
+                <input
+                  name="htmlShareToken"
+                  placeholder="Enter new token"
+                  required
+                />
+                <button type="submit" class="btn-submit">Update Token</button>
+              </div>
+            </form>
+          </div>
+        `
+          : `
+          <!-- First Time View -->
+          <div class="welcome-box">
+            <div class="welcome-title">Welcome!</div>
+            <div class="welcome-text">
+              You don't have a share token yet. Creating one lets you share a public, read-only HTML view of your content with others and easily access it yourself from anywhere. You can change your
+              token at any time to invalidate old URLs.
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-title">Create Your Share Token</div>
+            <form method="POST" action="/api/user/${userId}/shareToken${tokenQS}">
+              <div class="form-row">
+                <input
+                  name="htmlShareToken"
+                  placeholder="Choose a unique token"
+                  required
+                />
+                <button type="submit" class="btn-submit">Create Token</button>
+              </div>
+            </form>
+          </div>
+        `
+      }
+
+      <a class="back-link" href="/api/user/${userId}${tokenQS}">
+        ← Back to Profile
+      </a>
+       <a class="back-link" href="/">
+        ← Back to tree.tabors.site
+      </a>
+    </div>
+  </div>
+
+  <script>
+    function copyToken() {
+      const tokenText = document.getElementById('tokenText').textContent;
+      navigator.clipboard.writeText(tokenText).then(() => {
+        const btn = document.querySelector('.btn-copy');
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
+      `);
+  } catch (err) {
+    console.error("shareToken page error:", err);
+    res.status(500).send("Server error");
+  }
+});
+router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (req.userId.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    let u = await setHtmlShareToken({
+      userId,
+      htmlShareToken: req.body.htmlShareToken,
+    });
+
+    // Always redirect back to profile
+    return res.redirect(
+      `/api/user/${userId}?token=${u.htmlShareToken ?? ""}&html`
+    );
+  } catch (err) {
+    console.error("shareToken update error:", err);
+    res.status(400).send(err.message || "Failed to update share token");
+  }
+});
 
 export default router;

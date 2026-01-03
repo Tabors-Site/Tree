@@ -9,6 +9,8 @@ import UsingAllThePiecesSection from "./UsingPiecesSection.jsx";
 import WhatToDoNextSection from "./WhatNextSection.jsx";
 import BeSection from "./BeSection.jsx";
 import ApiAccessSection from "./API.jsx";
+import MustLogin from "./MustLogin.jsx";
+
 
 
 const WelcomeRoutes = () => {
@@ -18,6 +20,9 @@ const WelcomeRoutes = () => {
       <Route path="/" element={<WelcomePage />}>
         <Route index element={<WhySection />} />
       </Route>
+
+      <Route path="/must-login" element={<MustLogin />} />
+
 
 
       <Route path="/welcome" element={<WelcomePage />}>

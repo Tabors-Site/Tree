@@ -1,6 +1,22 @@
 import { z } from "zod";
 import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { setValueForNode, setGoalForNode } from "../core/values.js";
+import { fileTypeFromBuffer } from "file-type";
+
+import path from "path";
+import fs from "fs";
+
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// MUST match the rest of your app
+const uploadsFolder = path.join(__dirname, "../uploads");
+
+if (!fs.existsSync(uploadsFolder)) {
+  fs.mkdirSync(uploadsFolder);
+}
 
 import {
   getContributionsByUser,
@@ -641,6 +657,97 @@ RULES
           },
         ],
       };
+    }
+  );
+
+  server.tool(
+    "create-node-version-image-note",
+    "Creates a new image note for a node version by uploading a base64 image.",
+    {
+      userId: z.string().describe("The ID of the user creating the note."),
+      nodeId: z.string().describe("The ID of the node the note belongs to."),
+      prestige: z
+        .number()
+        .optional()
+        .describe("The prestige version of the node"),
+
+      imageBase64: z
+        .string()
+        .describe("Base64-encoded image data (no data URL prefix)"),
+
+      extension: z
+        .enum(["jpg", "jpeg", "png", "webp"])
+        .describe("Image file extension"),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ userId, nodeId, prestige, imageBase64, extension }) => {
+      try {
+        if (!userId || !nodeId) {
+          throw new Error("Missing required fields");
+        }
+
+        if (!imageBase64) {
+          throw new Error("imageBase64 is required");
+        }
+        if (imageBase64.length < 100) {
+          throw new Error("imageBase64 too short — likely truncated");
+        }
+        const version =
+          typeof prestige === "number"
+            ? prestige
+            : await getLatestPrestigeForNode(nodeId);
+
+        const type = await fileTypeFromBuffer(buffer);
+
+        if (!type || type.ext !== extension) {
+          throw new Error("Invalid or corrupted image data");
+        }
+        // 🔐 Generate safe filename
+        const filename = `${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}.${extension}`;
+        const absolutePath = path.join(uploadsFolder, filename);
+
+        // 🧠 Decode + write image
+        const buffer = Buffer.from(imageBase64, "base64");
+        await fs.promises.writeFile(absolutePath, buffer);
+
+        // 📝 Create file-backed note
+        const result = await createNote({
+          contentType: "file",
+          content: null, // ignored for file notes
+          userId,
+          nodeId,
+          version,
+          isReflection: true,
+          file: {
+            filename,
+          },
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to create image note: ${err.message}`,
+            },
+          ],
+        };
+      }
     }
   );
 
