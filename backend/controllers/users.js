@@ -13,7 +13,7 @@ import TempUser from "../db/models/tempUser.js";
 
 const register = async (req, res) => {
   try {
-    const { username, password, email } = req.body;
+    let { username, password, email } = req.body;
 
     /* -------------------------
        ORIGINAL VALIDATIONS
@@ -24,6 +24,12 @@ const register = async (req, res) => {
         message: "Username, email, and password are required",
       });
     }
+    if (password.length < 8) {
+      return res.status(400).json({
+        message: "Password must be at least 8 characters long",
+      });
+    }
+    username = username.trim();
 
     /* -------------------------
        CHECK REAL USERS (EXACT MATCH)
@@ -59,7 +65,7 @@ const register = async (req, res) => {
 
     const verificationToken = crypto.randomBytes(32).toString("hex");
 
-    await TempUser.create({
+    let temp = await TempUser.create({
       username,
       email,
       password,
@@ -72,7 +78,7 @@ const register = async (req, res) => {
     -------------------------- */
 
     const verifyUrl = `https://tree.tabors.site/api/user/verify/${verificationToken}`;
-    await sendVerificationEmail(email, verifyUrl);
+    await sendVerificationEmail(email, verifyUrl, temp.username);
 
     res.status(201).json({
       message: "Check your email to complete registration",
@@ -121,19 +127,33 @@ const verifyEmail = async (req, res) => {
        CREATE REAL USER
     -------------------------- */
 
-    await User.create({
+    const user = await User.create({
       username: tempUser.username,
       email: tempUser.email,
       password: tempUser.password, // already hashed
     });
+    const authToken = jwt.sign(
+      { userId: user._id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: "365d" }
+    );
 
+    res.cookie("token", authToken, {
+      httpOnly: false, // matches your login behavior
+      secure: true,
+      sameSite: "None",
+      domain: ".tabors.site",
+      maxAge: 604800000,
+      path: "/",
+    });
     /* -------------------------
        CLEANUP
     -------------------------- */
 
     await tempUser.deleteOne();
-    return res.redirect("https://tree.tabors.site/login?verified=true");
-    res.json({ message: "User registered successfully" });
+    return res.redirect(
+      `https://tree.tabors.site/api/user/${user._id}/shareToken?html`
+    );
   } catch (err) {
     console.error("[verifyEmail]", err);
     res.status(500).json({ message: "Verification failed" });
@@ -184,6 +204,7 @@ const login = async (req, res) => {
       message: "Login successful",
       token,
       userId: user._id.toString(),
+      htmlShareToken: user.htmlShareToken || null,
     });
   } catch (error) {
     console.error("Error during login:", error);
@@ -325,7 +346,7 @@ async function sendResetEmail(to, link) {
 }
 
 /* ---- SEND REGISTRATION VERIFICATION EMAIL ---- */
-async function sendVerificationEmail(to, link) {
+async function sendVerificationEmail(to, link, username) {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -339,7 +360,7 @@ async function sendVerificationEmail(to, link) {
     to,
     subject: "Complete Your Registration",
     html: `
-      <p>Thanks for registering!</p>
+      <p>Thanks for registering, ${username}!</p>
 
       <p>Please confirm your email by clicking the link below:</p>
 
