@@ -1,3 +1,6 @@
+// core/energy/useEnergy.js
+import fs from "fs";
+import User from "../db/models/user.js";
 /* ================================
  * CONSTANTS (HALF-COST VERSION)
  * ================================ */
@@ -129,4 +132,92 @@ export function maybeResetEnergy(user) {
   user.availableEnergy.lastResetAt = new Date();
 
   return true;
+}
+
+// core/errors/EnergyError.js
+export class EnergyError extends Error {
+  constructor(message, meta = {}) {
+    super(message);
+    this.name = "EnergyError";
+    Object.assign(this, meta);
+  }
+}
+
+const MAX_FILE_MB_STANDARD = 1024; // 1 GB
+
+export async function useEnergy({
+  userId,
+  action,
+  payload = null,
+  file = null, // optional { path }
+}) {
+  if (!userId) {
+    throw new EnergyError("Not authenticated");
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    if (file?.path) {
+      await fs.promises.unlink(file.path).catch(() => {});
+    }
+    throw new EnergyError("User not found");
+  }
+
+  // 🔁 reset window if needed
+  maybeResetEnergy(user);
+
+  // 🚫 Basic plan: no files
+  if (
+    (action === "note" || action === "rawIdea") &&
+    payload?.type === "file" &&
+    user.profileType === "basic"
+  ) {
+    if (file?.path) {
+      await fs.promises.unlink(file.path).catch(() => {});
+    }
+
+    throw new EnergyError("File uploads are not available on the Basic plan", {
+      code: "PLAN_RESTRICTION",
+    });
+  }
+
+  // 🚫 Standard plan: 1GB hard cap
+  if (
+    payload?.type === "file" &&
+    user.profileType === "standard" &&
+    payload.sizeMB > MAX_FILE_MB_STANDARD
+  ) {
+    if (file?.path) {
+      await fs.promises.unlink(file.path).catch(() => {});
+    }
+
+    throw new EnergyError("File exceeds 1 GB limit for Standard plan", {
+      code: "FILE_TOO_LARGE",
+      limitMB: MAX_FILE_MB_STANDARD,
+    });
+  }
+
+  // ⚡ calculate cost
+  const cost = calculateEnergyCost(action, payload);
+
+  if (user.availableEnergy.amount < cost) {
+    if (file?.path) {
+      await fs.promises.unlink(file.path).catch(() => {});
+    }
+
+    throw new EnergyError("Energy limit reached", {
+      code: "INSUFFICIENT_ENERGY",
+      required: cost,
+      remaining: user.availableEnergy.amount,
+    });
+  }
+
+  // 💸 deduct
+  user.availableEnergy.amount -= cost;
+  await user.save();
+
+  return {
+    energyUsed: cost,
+    remainingEnergy: user.availableEnergy.amount,
+  };
 }

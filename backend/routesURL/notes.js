@@ -14,7 +14,6 @@ import {
 import urlAuth from "../middleware/urlAuth.js";
 import getNodeName from "./helpers/getNameById.js";
 import authenticate from "../middleware/authenticate.js";
-import { energyGuard } from "../middleware/EnergyGuard.js";
 
 const router = express.Router();
 
@@ -1897,19 +1896,6 @@ router.post(
   authenticate,
   upload.single("file"),
 
-  energyGuard("note", (req) => {
-    if (req.file) {
-      return {
-        type: "file",
-        sizeMB: req.file.size / (1024 * 1024),
-      };
-    }
-
-    return {
-      type: "text",
-      content: req.body?.content || "",
-    };
-  }),
   async (req, res) => {
     try {
       const { nodeId, version } = req.params;
@@ -2453,7 +2439,6 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
 router.delete(
   "/:nodeId/:version/notes/:noteId",
   authenticate,
-  energyGuard("updateChildNode"), //temp 1 energy
   async (req, res) => {
     try {
       const { noteId } = req.params;

@@ -1,7 +1,6 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
-import { energyGuard } from "../middleware/EnergyGuard.js";
 
 import {
   getTransactions,
@@ -981,7 +980,6 @@ ${sortedTransactions
 router.post(
   "/:nodeId/:version/transactions",
   authenticate,
-  energyGuard("transaction"),
 
   async (req, res) => {
     try {
@@ -1016,7 +1014,6 @@ router.post(
 router.post(
   "/:nodeId/:version/transactions/:transactionId/approve",
   authenticate,
-  energyGuard("transaction"),
 
   async (req, res) => {
     try {
@@ -1042,7 +1039,6 @@ router.post(
 router.post(
   "/:nodeId/:version/transactions/:transactionId/deny",
   authenticate,
-  energyGuard("transaction"),
 
   async (req, res) => {
     try {

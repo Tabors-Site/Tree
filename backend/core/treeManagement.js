@@ -4,6 +4,8 @@ import User from "../db/models/user.js";
 import { createNote } from "./notes.js";
 import { resolveTreeAccess } from "./authenticate.js";
 import { isDescendant } from "./treeFetch.js";
+import { useEnergy } from "../core/energy.js";
+
 //validate once during recursive branches
 async function getUserOrThrow(userId) {
   if (!userId) {
@@ -31,6 +33,11 @@ export async function createNewNode(
   validatedUser = null
 ) {
   const user = validatedUser ?? (await getUserOrThrow(userId));
+
+  const { energyUsed } = await useEnergy({
+    userId: user._id,
+    action: "create",
+  });
 
   values = values && typeof values === "object" ? values : {};
   goals = goals && typeof goals === "object" ? goals : {};
@@ -84,6 +91,7 @@ export async function createNewNode(
     nodeId: newNode._id,
     action: "create",
     nodeVersion: "0",
+    energyUsed,
   });
 
   if (note?.trim()) {
@@ -158,7 +166,10 @@ export async function deleteNodeBranch(nodeId, userId) {
   if (nodeToDelete.parent === "deleted") {
     throw new Error("Node has already been deleted");
   }
-
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "branchLifecycle",
+  });
   nodeToDelete.rootOwner = userId;
   const oldParent = nodeToDelete.parent;
   nodeToDelete.parent = "deleted";
@@ -195,6 +206,7 @@ export async function deleteNodeBranch(nodeId, userId) {
       action: "retired",
       fromParentId: oldParent?.toString() ?? null,
     },
+    energyUsed,
   });
   return nodeToDelete;
 }
@@ -219,6 +231,7 @@ export async function updateParentRelationship(
   if (await isDescendant(nodeChildId, nodeNewParentId)) {
     throw new Error("Cannot move a node into its own descendant");
   }
+
   // Resolve tree access for both nodes
   const childAccess = await resolveTreeAccess(nodeChildId, userId);
   const newParentAccess = await resolveTreeAccess(nodeNewParentId, userId);
@@ -238,6 +251,10 @@ export async function updateParentRelationship(
       );
     }
   }
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "updateParent",
+  });
 
   // Remove from old parent
   if (oldParent) {
@@ -272,6 +289,7 @@ export async function updateParentRelationship(
       oldParentId: oldParentId ? oldParentId.toString() : null,
       newParentId: nodeNewParentId.toString(),
     },
+    energyUsed,
   });
 
   // Add to new parent
@@ -300,6 +318,10 @@ export async function editNodeName({ nodeId, newName, userId }) {
   if (!node) {
     throw new Error("Node not found");
   }
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "editNameNode",
+  });
 
   const oldName = node.name;
   node.name = newName;
@@ -314,6 +336,7 @@ export async function editNodeName({ nodeId, newName, userId }) {
       oldName,
       newName,
     },
+    energyUsed,
   });
 
   return { node, oldName, newName };
@@ -348,6 +371,10 @@ export async function reviveNodeBranch({
   if (await isDescendant(deletedNodeId, targetParentId)) {
     throw new Error("Cannot revive a node into its own descendant");
   }
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "branchLifecycle",
+  });
 
   deletedNode.parent = targetParentId;
   deletedNode.rootOwner = null;
@@ -378,6 +405,7 @@ export async function reviveNodeBranch({
 
       toParentId: targetParentId.toString(),
     },
+    energyUsed,
   });
 
   return {
@@ -401,6 +429,10 @@ export async function reviveNodeBranchAsRoot({ deletedNodeId, userId }) {
   if (!deletedNode.rootOwner) {
     throw new Error("Deleted node has no root owner and cannot be revived");
   }
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "branchLifecycle",
+  });
 
   deletedNode.parent = null;
   deletedNode.rootOwner = userId;
@@ -418,6 +450,7 @@ export async function reviveNodeBranchAsRoot({ deletedNodeId, userId }) {
     branchLifecycle: {
       action: "revivedAsRoot",
     },
+    energyUsed,
   });
 
   return {

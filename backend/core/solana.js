@@ -13,6 +13,7 @@ import {
 } from "@solana/spl-token";
 import crypto from "crypto";
 import Node from "../db/models/node.js";
+import { useEnergy } from "../core/energy.js";
 
 const JUP_BASE = "https://api.jup.ag/ultra/v1";
 const SOL_MINT = "So11111111111111111111111111111111111111112";

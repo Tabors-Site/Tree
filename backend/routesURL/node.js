@@ -8,7 +8,6 @@ import {
 } from "../core/treeManagement.js";
 
 import { updateScript, executeScript, getScript } from "../core/scripts.js";
-import { energyGuard } from "../middleware/EnergyGuard.js";
 
 import { editStatus, addPrestige } from "../core/statuses.js";
 import { updateSchedule } from "../core/schedules.js";
@@ -30,136 +29,115 @@ function filterQuery(req) {
     .join("&");
 }
 
-router.post(
-  "/:nodeId/:version/editStatus",
-  authenticate,
-  energyGuard("editStatus"),
-  async (req, res) => {
-    try {
-      const { nodeId, version } = req.params;
-      const userId = req.userId;
+router.post("/:nodeId/:version/editStatus", authenticate, async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const userId = req.userId;
 
-      const status = req.body?.status || req.query?.status;
-      const ALLOWED_STATUSES = ["active", "completed", "trimmed"];
+    const status = req.body?.status || req.query?.status;
+    const ALLOWED_STATUSES = ["active", "completed", "trimmed"];
 
-      if (!ALLOWED_STATUSES.includes(status)) {
-        return res.status(400).json({
-          error: "Invalid status. Must be active, completed, or trimmed.",
-        });
-      }
-      const isInherited =
-        req.body?.isInherited === "true" ||
-        req.body?.isInherited === true ||
-        req.query?.isInherited === "true";
-
-      if (!status) {
-        return res.status(400).json({ error: "status is required" });
-      }
-
-      const result = await editStatus({
-        nodeId,
-        status,
-        version: Number(version),
-        isInherited,
-        userId,
+    if (!ALLOWED_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: "Invalid status. Must be active, completed, or trimmed.",
       });
-
-      // HTML redirect support
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`
-        );
-      }
-
-      res.json({ success: true, ...result });
-    } catch (err) {
-      console.error("editStatus error:", err);
-      res.status(400).json({ error: err.message });
     }
-  }
-);
+    const isInherited =
+      req.body?.isInherited === "true" ||
+      req.body?.isInherited === true ||
+      req.query?.isInherited === "true";
 
-router.post(
-  "/:nodeId/:version/prestige",
-  authenticate,
-  energyGuard("prestige"),
-  async (req, res) => {
-    try {
-      const { nodeId, version } = req.params;
-      const userId = req.userId;
-
-      const nextVersion = Number(version) + 1;
-
-      if (Number.isNaN(nextVersion)) {
-        return res.status(400).json({ error: "Invalid version" });
-      }
-
-      const result = await addPrestige({
-        nodeId,
-        userId,
-      });
-
-      // HTML redirect support
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/${nodeId}/${nextVersion}?token=${req.query.token ?? ""}&html`
-        );
-      }
-
-      res.json({ success: true, ...result });
-    } catch (err) {
-      console.error("prestige error:", err);
-      res.status(400).json({ error: err.message });
+    if (!status) {
+      return res.status(400).json({ error: "status is required" });
     }
-  }
-);
 
-router.post(
-  "/:nodeId/updateParent",
-  authenticate,
-  energyGuard("updateParent"),
-  async (req, res) => {
-    try {
-      const { nodeId } = req.params; // child
-      const userId = req.userId;
+    const result = await editStatus({
+      nodeId,
+      status,
+      version: Number(version),
+      isInherited,
+      userId,
+    });
 
-      // new parent can come from body OR query
-      const newParentId =
-        req.body?.newParentId ||
-        req.query?.newParentId ||
-        req.body?.parentId ||
-        req.query?.parentId;
-
-      if (!newParentId) {
-        return res.status(400).json({
-          error: "newParentId is required",
-        });
-      }
-
-      const result = await updateParentRelationship(
-        nodeId,
-        newParentId,
-        userId
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`
       );
-
-      // HTML redirect support
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/${nodeId}?token=${req.query.token ?? ""}&html`
-        );
-      }
-
-      res.json({
-        success: true,
-        nodeChild: result.nodeChild,
-        nodeNewParent: result.nodeNewParent,
-      });
-    } catch (err) {
-      console.error("updateParent error:", err);
-      res.status(400).json({ error: err.message });
     }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("editStatus error:", err);
+    res.status(400).json({ error: err.message });
   }
-);
+});
+
+router.post("/:nodeId/:version/prestige", authenticate, async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const userId = req.userId;
+
+    const nextVersion = Number(version) + 1;
+
+    if (Number.isNaN(nextVersion)) {
+      return res.status(400).json({ error: "Invalid version" });
+    }
+
+    const result = await addPrestige({
+      nodeId,
+      userId,
+    });
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/${nodeId}/${nextVersion}?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("prestige error:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post("/:nodeId/updateParent", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params; // child
+    const userId = req.userId;
+
+    // new parent can come from body OR query
+    const newParentId =
+      req.body?.newParentId ||
+      req.query?.newParentId ||
+      req.body?.parentId ||
+      req.query?.parentId;
+
+    if (!newParentId) {
+      return res.status(400).json({
+        error: "newParentId is required",
+      });
+    }
+
+    const result = await updateParentRelationship(nodeId, newParentId, userId);
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(`/api/${nodeId}?token=${req.query.token ?? ""}&html`);
+    }
+
+    res.json({
+      success: true,
+      nodeChild: result.nodeChild,
+      nodeNewParent: result.nodeNewParent,
+    });
+  } catch (err) {
+    console.error("updateParent error:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
 // -----------------------------------------------------------------------------
 // GET /api/:nodeId
 // Returns the node + all versions (no notes)
@@ -1565,135 +1543,115 @@ if (cancelBtn) {
   }
 });
 
-router.post(
-  "/:nodeId/createChild",
-  authenticate,
-  energyGuard("create"),
-  async (req, res) => {
-    try {
-      const { nodeId } = req.params; // parent id
-      const { name } = req.body;
-      const userId = req.userId;
+router.post("/:nodeId/createChild", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params; // parent id
+    const { name } = req.body;
+    const userId = req.userId;
 
-      if (!name || typeof name !== "string") {
-        return res.status(400).json({
-          success: false,
-          error: "Name is required",
-        });
-      }
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: "Name is required",
+      });
+    }
 
-      // Load parent
-      const parentNode = await Node.findById(nodeId);
-      if (!parentNode) {
-        return res.status(404).json({
-          success: false,
-          error: "Parent node not found",
-        });
-      }
+    // Load parent
+    const parentNode = await Node.findById(nodeId);
+    if (!parentNode) {
+      return res.status(404).json({
+        success: false,
+        error: "Parent node not found",
+      });
+    }
 
-      // Create child
-      const childNode = await createNewNode(
-        name,
-        null, // schedule
-        null, // reeffectTime
-        parentNode._id, // parentNodeID
-        false, // isRoot
-        userId, // userId (from token)
-        {}, // values
-        {}, // goals
-        null // note
+    // Create child
+    const childNode = await createNewNode(
+      name,
+      null, // schedule
+      null, // reeffectTime
+      parentNode._id, // parentNodeID
+      false, // isRoot
+      userId, // userId (from token)
+      {}, // values
+      {}, // goals
+      null // note
+    );
+
+    // HTML redirect support (same pattern)
+    if ("html" in req.query) {
+      return res.redirect(`/api/${nodeId}?token=${req.query.token ?? ""}&html`);
+    }
+
+    res.status(201).json({
+      success: true,
+      childId: childNode._id,
+      child: childNode,
+    });
+  } catch (err) {
+    console.error("createChild error:", err);
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post("/:nodeId/delete", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const userId = req.userId;
+
+    const deletedNode = await deleteNodeBranch(nodeId, userId);
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/user/${userId}/deleted?token=${req.query.token ?? ""}&html`
       );
-
-      // HTML redirect support (same pattern)
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/${nodeId}?token=${req.query.token ?? ""}&html`
-        );
-      }
-
-      res.status(201).json({
-        success: true,
-        childId: childNode._id,
-        child: childNode,
-      });
-    } catch (err) {
-      console.error("createChild error:", err);
-      res.status(400).json({ success: false, error: err.message });
     }
+
+    return res.json({
+      success: true,
+      deletedNode: deletedNode._id,
+    });
+  } catch (err) {
+    console.error("delete node error:", err);
+    return res.status(400).json({ error: err.message });
   }
-);
+});
 
-router.post(
-  "/:nodeId/delete",
-  authenticate,
-  energyGuard("delete"),
-  async (req, res) => {
-    try {
-      const { nodeId } = req.params;
-      const userId = req.userId;
+router.post("/:nodeId/:version/editName", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const userId = req.userId;
 
-      const deletedNode = await deleteNodeBranch(nodeId, userId);
+    const newName = req.body?.name || req.query?.name;
 
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/user/${userId}/deleted?token=${req.query.token ?? ""}&html`
-        );
-      }
-
-      return res.json({
-        success: true,
-        deletedNode: deletedNode._id,
-      });
-    } catch (err) {
-      console.error("delete node error:", err);
-      return res.status(400).json({ error: err.message });
+    if (!newName) {
+      return res.status(400).json({ error: "newName is required" });
     }
-  }
-);
 
-router.post(
-  "/:nodeId/:version/editName",
-  authenticate,
-  energyGuard("editNameNode"),
-  async (req, res) => {
-    try {
-      const { nodeId } = req.params;
-      const userId = req.userId;
+    const result = await editNodeName({
+      nodeId,
+      newName,
+      userId,
+    });
 
-      const newName = req.body?.name || req.query?.name;
-
-      if (!newName) {
-        return res.status(400).json({ error: "newName is required" });
-      }
-
-      const result = await editNodeName({
-        nodeId,
-        newName,
-        userId,
-      });
-
-      // HTML redirect support
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/${nodeId}?token=${req.query.token ?? ""}&html`
-        );
-      }
-
-      res.json({
-        success: true,
-        ...result,
-      });
-    } catch (err) {
-      console.error("editName error:", err);
-      res.status(400).json({ error: err.message });
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(`/api/${nodeId}?token=${req.query.token ?? ""}&html`);
     }
+
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (err) {
+    console.error("editName error:", err);
+    res.status(400).json({ error: err.message });
   }
-);
+});
 
 router.post(
   "/:nodeId/:version/editSchedule",
   authenticate,
-  energyGuard("editSchedule"),
   async (req, res) => {
     try {
       const { nodeId, version } = req.params;
@@ -2499,7 +2457,6 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
 router.post(
   "/:nodeId/script/:scriptId/edit",
   authenticate,
-  energyGuard("editScript", (req) => req.body.script),
   async (req, res) => {
     try {
       const { nodeId, scriptId } = req.params;
@@ -2526,7 +2483,6 @@ router.post(
 router.post(
   "/:nodeId/script/:scriptId/execute",
   authenticate,
-  energyGuard("executeScript"),
   async (req, res) => {
     try {
       const { nodeId, scriptId } = req.params;
@@ -3242,34 +3198,29 @@ setValueForNode(node._id, "waitTime", newWaitTime, node.prestige + 1);`,
   }
 });
 
-router.post(
-  "/:nodeId/script/create",
-  authenticate,
-  energyGuard("editScript", (req) => req.body.script),
-  async (req, res) => {
-    try {
-      const { nodeId } = req.params;
-      const { name } = req.body;
-      const userId = req.userId;
+router.post("/:nodeId/script/create", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { name } = req.body;
+    const userId = req.userId;
 
-      if (!name) {
-        return res.status(400).send("Script name is required");
-      }
-
-      const result = await updateScript({
-        nodeId,
-        name,
-        userId,
-      });
-
-      const qs = filterQuery(req);
-
-      return res.redirect(`/api/${nodeId}/script/${result.scriptId}?${qs}`);
-    } catch (err) {
-      console.error("Create script error:", err);
-      return res.status(500).send("Failed to create script");
+    if (!name) {
+      return res.status(400).send("Script name is required");
     }
+
+    const result = await updateScript({
+      nodeId,
+      name,
+      userId,
+    });
+
+    const qs = filterQuery(req);
+
+    return res.redirect(`/api/${nodeId}/script/${result.scriptId}?${qs}`);
+  } catch (err) {
+    console.error("Create script error:", err);
+    return res.status(500).send("Failed to create script");
   }
-);
+});
 
 export default router;

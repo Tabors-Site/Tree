@@ -5,6 +5,7 @@ import Node from "../db/models/node.js";
 import Note from "../db/models/notes.js";
 import User from "../db/models/user.js";
 import { logContribution } from "../db/utils.js";
+import { useEnergy } from "../core/energy.js";
 
 import { fileURLToPath } from "url";
 
@@ -80,6 +81,17 @@ async function createRawIdea({ contentType, content, userId, file }) {
     taggedUserIds = tagged;
     finalContent = rewrittenContent;
   }
+  const payload =
+    contentType === "file"
+      ? { type: "file", sizeMB: Math.ceil(file.size / (1024 * 1024)) }
+      : { type: "text", content: content ?? "" };
+
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "rawIdea",
+    payload,
+    file,
+  });
 
   const rawIdea = new RawIdea({
     contentType,
@@ -122,6 +134,7 @@ async function createRawIdea({ contentType, content, userId, file }) {
       action: "add",
       rawIdeaId: rawIdea._id.toString(),
     },
+    energyUsed,
   });
 
   return {
@@ -211,6 +224,15 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId }) {
   if (rawIdea.userId.toString() !== userId) {
     throw new Error("You do not own this raw idea");
   }
+  let energyUsed = null;
+
+  if (rawIdea.contentType === "text") {
+    const energyResult = await useEnergy({
+      userId,
+      action: "rawIdea",
+    });
+    energyUsed = energyResult.energyUsed;
+  }
 
   let fileDeleted = false;
 
@@ -259,6 +281,7 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId }) {
       action: "delete",
       rawIdeaId: rawIdeaId.toString(),
     },
+    ...(energyUsed ? { energyUsed } : {}),
   });
 
   return {

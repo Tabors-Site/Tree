@@ -1,7 +1,6 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
-import { energyGuard } from "../middleware/EnergyGuard.js";
 
 import path from "path";
 import fs from "fs";
@@ -3056,80 +3055,58 @@ router.post("/user/reset-password/:token", async (req, res) => {
   }
 });
 
-router.post(
-  "/user/:userId/createRoot",
-  authenticate,
-  energyGuard("create"),
-  async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { name } = req.body;
+router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { name } = req.body;
 
-      if (req.userId.toString() !== userId.toString()) {
-        return res
-          .status(403)
-          .json({ success: false, error: "Not authorized" });
-      }
-
-      if (!name || typeof name !== "string") {
-        return res.status(400).json({
-          success: false,
-          error: "Name is required",
-        });
-      }
-
-      const rootNode = await createNewNode(
-        name,
-        null,
-        0,
-        null,
-        true, // isRoot
-        userId,
-        {},
-        {},
-        null,
-        req.user
-      );
-
-      // HTML redirect support
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/root/${rootNode._id}?token=${req.query.token ?? ""}&html`
-        );
-      }
-
-      res.status(201).json({
-        success: true,
-        rootId: rootNode._id,
-        root: rootNode,
-      });
-    } catch (err) {
-      console.error("createRoot error:", err);
-      res.status(400).json({ success: false, error: err.message });
+    if (req.userId.toString() !== userId.toString()) {
+      return res.status(403).json({ success: false, error: "Not authorized" });
     }
+
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: "Name is required",
+      });
+    }
+
+    const rootNode = await createNewNode(
+      name,
+      null,
+      0,
+      null,
+      true, // isRoot
+      userId,
+      {},
+      {},
+      null,
+      req.user
+    );
+
+    // HTML redirect support
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/root/${rootNode._id}?token=${req.query.token ?? ""}&html`
+      );
+    }
+
+    res.status(201).json({
+      success: true,
+      rootId: rootNode._id,
+      root: rootNode,
+    });
+  } catch (err) {
+    console.error("createRoot error:", err);
+    res.status(400).json({ success: false, error: err.message });
   }
-);
+});
 
 router.post(
   "/user/:userId/raw-ideas",
   authenticate,
   upload.single("file"),
 
-  energyGuard("rawIdea", (req) => {
-    // FILE raw idea
-    if (req.file) {
-      return {
-        type: "file",
-        sizeMB: req.file.size / (1024 * 1024),
-      };
-    }
-
-    // TEXT raw idea
-    return {
-      type: "text",
-      content: req.body?.content || "",
-    };
-  }),
   async (req, res) => {
     try {
       const { userId } = req.params;
@@ -4033,7 +4010,6 @@ document.addEventListener("click", async (e) => {
 router.delete(
   "/user/:userId/raw-ideas/:rawIdeaId",
   authenticate,
-  energyGuard("updateChildNode"), //temp 1 energy
   async (req, res) => {
     try {
       const { userId, rawIdeaId } = req.params;
@@ -4059,7 +4035,6 @@ router.delete(
 router.post(
   "/user/:userId/raw-ideas/:rawIdeaId/transfer",
   authenticate,
-  energyGuard("updateChildNode"), //temp 1 energy
 
   async (req, res) => {
     try {
@@ -5060,7 +5035,6 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
 router.post(
   "/user/:userId/invites/:inviteId",
   authenticate,
-  energyGuard("invite"),
 
   async (req, res) => {
     try {
@@ -5604,7 +5578,6 @@ router.post(
   "/user/:userId/deleted/:nodeId/revive",
   authenticate,
 
-  energyGuard("branchLifecycle"), //temp 1 energy
   async (req, res) => {
     try {
       const { userId, nodeId } = req.params;
@@ -5647,8 +5620,6 @@ router.post(
   "/user/:userId/deleted/:nodeId/reviveAsRoot",
   authenticate,
 
-  energyGuard("branchLifecycle"), //temp 1 energy
-
   async (req, res) => {
     try {
       const { userId, nodeId } = req.params;
@@ -5679,18 +5650,13 @@ router.post(
   }
 );
 
-router.post(
-  "/user/:userId/api-keys",
-  authenticate,
-  energyGuard("updateChildNode"), //temp 1 energy
-  async (req, res) => {
-    if (req.userId.toString() !== req.params.userId.toString()) {
-      return res.status(403).json({ message: "Not authorized" });
-    }
-
-    return createApiKey(req, res);
+router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
+  if (req.userId.toString() !== req.params.userId.toString()) {
+    return res.status(403).json({ message: "Not authorized" });
   }
-);
+
+  return createApiKey(req, res);
+});
 
 router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
   try {
@@ -5994,7 +5960,6 @@ document.addEventListener("click", async (e) => {
 router.delete(
   "/user/:userId/api-keys/:keyId",
   authenticate,
-  energyGuard("branchLifecycle"), //temp 1 energy
 
   async (req, res) => {
     if (req.userId.toString() !== req.params.userId.toString()) {

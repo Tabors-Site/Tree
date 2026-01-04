@@ -1,4 +1,5 @@
 import { logContribution, findNodeById, handleSchedule } from "../db/utils.js";
+import { useEnergy } from "../core/energy.js";
 
 async function editStatus({ nodeId, status, version, isInherited, userId }) {
   const node = await findNodeById(nodeId);
@@ -14,6 +15,10 @@ async function editStatus({ nodeId, status, version, isInherited, userId }) {
   if (status === "completed") {
     isInherited = true;
   }
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "editStatus",
+  });
 
   // Update status
   targetVersion.status = status;
@@ -25,6 +30,7 @@ async function editStatus({ nodeId, status, version, isInherited, userId }) {
     action: "editStatus",
     statusEdited: status,
     nodeVersion: version,
+    energyUsed,
   });
 
   // Cascade if inherited
@@ -82,6 +88,11 @@ async function addPrestige({ nodeId, userId }) {
   console.log(nodeId);
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
+
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "prestige",
+  });
   const targetNodeIndex = node.prestige;
   await addPrestigeToNode(node);
 
@@ -90,6 +101,7 @@ async function addPrestige({ nodeId, userId }) {
     nodeId,
     action: "prestige",
     nodeVersion: targetNodeIndex,
+    energyUsed,
   });
 
   return { message: "Prestige added successfully." };

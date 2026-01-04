@@ -2,6 +2,7 @@ import Node from "../db/models/node.js";
 import User from "../db/models/user.js";
 import Invite from "../db/models/invite.js";
 import { logContribution } from "../db/utils.js";
+import { useEnergy } from "../core/energy.js";
 
 // EXACT UUID REGEX FROM OLD CODE
 const isValidUUID = (id) =>
@@ -61,7 +62,10 @@ export async function createInvite({
 
   // EXACT OLD OWNER CHECK (no optional chaining)
   const isOwner = node.rootOwner._id.toString() === userInvitingId;
-
+  const { energyUsed } = await useEnergy({
+    userId: userInvitingId,
+    action: "invite",
+  });
   const invite = new Invite({
     userInviting: userInvitingId,
     userReceiving: receivingUser._id,
@@ -102,6 +106,7 @@ export async function createInvite({
       action: "invite",
       inviteAction,
       nodeVersion: node.prestige,
+      energyUsed,
     });
 
     await invite.save();
@@ -139,6 +144,7 @@ export async function createInvite({
       action: "invite",
       inviteAction,
       nodeVersion: node.prestige,
+      energyUsed,
     });
 
     return { message: "Ownership transferred and invite logged" };
@@ -178,6 +184,7 @@ export async function createInvite({
         action: "invite",
         inviteAction,
         nodeVersion: node.prestige,
+        energyUsed,
       });
 
       return { message: "Contributor removed by owner and invite logged" };
@@ -204,6 +211,7 @@ export async function createInvite({
         action: "invite",
         inviteAction,
         nodeVersion: node.prestige,
+        energyUsed,
       });
       await logContribution({
         userId: userInvitingId,
@@ -252,6 +260,7 @@ export async function createInvite({
         action: "invite",
         inviteAction,
         nodeVersion: node.prestige,
+        energyUsed,
       });
 
       return { message: "Contributor removed themselves and invite logged" };
@@ -275,7 +284,10 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
     "rootOwner contributors"
   );
   if (!node) throw new Error("Node not found");
-
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "invite",
+  });
   const inviteAction = { receivingId: userId };
 
   if (acceptInvite) {
@@ -301,6 +313,7 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
     action: "invite",
     inviteAction,
     nodeVersion: node.prestige,
+    energyUsed,
   });
 
   return {

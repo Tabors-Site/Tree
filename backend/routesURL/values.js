@@ -7,7 +7,6 @@ const router = express.Router();
 
 const allowedParams = ["token", "html"];
 import authenticate from "../middleware/authenticate.js";
-import { energyGuard } from "../middleware/EnergyGuard.js";
 
 import { setValueForNode, setGoalForNode } from "../core/values.js";
 
@@ -45,66 +44,56 @@ function formatAutoValue(key, value) {
 }
 
 // SET VALUE
-router.post(
-  "/:nodeId/:version/value",
-  authenticate,
-  energyGuard("editValue"),
-  async (req, res) => {
-    try {
-      const { nodeId, version } = req.params;
-      const { key, value } = req.body;
+router.post("/:nodeId/:version/value", authenticate, async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const { key, value } = req.body;
 
-      await setValueForNode({
-        nodeId,
-        version,
-        key,
-        value,
-        userId: req.userId,
-      });
+    await setValueForNode({
+      nodeId,
+      version,
+      key,
+      value,
+      userId: req.userId,
+    });
 
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`
-        );
-      }
-
-      res.json({ success: true });
-    } catch (err) {
-      res.status(400).json({ success: false, error: err.message });
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`
+      );
     }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
   }
-);
+});
 
 // SET GOAL
-router.post(
-  "/:nodeId/:version/goal",
-  authenticate,
-  energyGuard("editGoal"),
-  async (req, res) => {
-    try {
-      const { nodeId, version } = req.params;
-      const { key, goal } = req.body;
+router.post("/:nodeId/:version/goal", authenticate, async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const { key, goal } = req.body;
 
-      await setGoalForNode({
-        nodeId,
-        version,
-        key,
-        goal,
-        userId: req.userId,
-      });
+    await setGoalForNode({
+      nodeId,
+      version,
+      key,
+      goal,
+      userId: req.userId,
+    });
 
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`
-        );
-      }
-
-      res.json({ success: true });
-    } catch (err) {
-      res.status(400).json({ success: false, error: err.message });
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`
+      );
     }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
   }
-);
+});
 
 router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
   try {
@@ -1354,7 +1343,6 @@ ${
 router.post(
   "/:nodeId/:version/values/solana",
   authenticate,
-  energyGuard("editGoal"), //temp 1 value energy since no solana contributions
 
   async (req, res) => {
     try {
@@ -1394,7 +1382,6 @@ function isLikelyNodeId(value) {
 router.post(
   "/:nodeId/:version/values/solana/send",
   authenticate,
-  energyGuard("editGoal"), //temp 1 value energy since no solana contributions
 
   async (req, res) => {
     try {
@@ -1464,7 +1451,6 @@ router.post(
 router.post(
   "/:nodeId/:version/values/solana/transaction",
   authenticate,
-  energyGuard("editGoal"), //temp 1 value energy since no solana contributions
 
   async (req, res) => {
     const { nodeId, version } = req.params;

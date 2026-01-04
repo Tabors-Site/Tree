@@ -4,6 +4,7 @@ import Contribution from "../db/models/contribution.js";
 import Transaction from "../db/models/transaction.js";
 import { logContribution } from "../db/utils.js";
 import { resolveTreeAccess } from "./authenticate.js";
+import { useEnergy } from "../core/energy.js";
 
 function assertPositiveMap(map, label) {
   for (const [key, value] of map) {
@@ -194,6 +195,11 @@ export const createTransaction = async ({
 
   const allResolved = approvalGroups.every((g) => g.resolved);
 
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "transaction",
+  });
+
   const transaction = await Transaction.create({
     sideA,
     sideB,
@@ -222,6 +228,7 @@ export const createTransaction = async ({
         versionCounterparty: versionBIndex ?? null,
         actorUserId: userId,
       },
+      energyUsed,
     });
   }
 
@@ -241,6 +248,7 @@ export const createTransaction = async ({
         versionCounterparty: versionAIndex,
         actorUserId: userId,
       },
+      energyUsed,
     });
   }
 

@@ -1,4 +1,5 @@
 import { findNodeById, logContribution } from "../db/utils.js";
+import { useEnergy } from "../core/energy.js";
 
 const SYSTEM_KEY_PREFIX = "_auto";
 
@@ -73,6 +74,11 @@ async function setValueForNode({ nodeId, key, value, version, userId }) {
   const existingKey = findExistingKey(currentVersion.values, key);
   const finalKey = existingKey ?? key;
 
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "editValue",
+  });
+
   currentVersion.values.set(finalKey, value);
 
   await node.save();
@@ -82,7 +88,7 @@ async function setValueForNode({ nodeId, key, value, version, userId }) {
     action: "editValue",
     valueEdited: { [finalKey]: value },
     nodeVersion: versionIndex,
-    tradeId: null,
+    energyUsed,
   });
 
   return { message: "Value updated successfully." };
@@ -111,6 +117,10 @@ async function setGoalForNode({ nodeId, key, goal, version, userId }) {
   // 🔑 CASE-INSENSITIVE CHECK
   const existingKey = findExistingKey(currentVersion.goals, key);
   const finalKey = existingKey ?? key;
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "editGoal",
+  });
 
   currentVersion.goals.set(finalKey, goal);
 
@@ -121,7 +131,7 @@ async function setGoalForNode({ nodeId, key, goal, version, userId }) {
     action: "editGoal",
     goalEdited: { [finalKey]: goal },
     nodeVersion: versionIndex,
-    tradeId: null,
+    energyUsed,
   });
 
   return { message: "Goal updated successfully." };

@@ -7,6 +7,7 @@ import {
   getHtmlShareToken,
   forgotPassword,
   resetPassword,
+  verifyEmail,
 } from "../controllers/users.js";
 import authenticate from "../middleware/authenticate.js";
 
@@ -30,5 +31,6 @@ router.post("/verify-token", authenticate, getHtmlShareToken, (req, res) => {
 
 router.post("/user/forgot-password", forgotPassword);
 router.post("/user/reset-password", resetPassword);
+router.get("/user/verify/:token", verifyEmail);
 
 export default router;

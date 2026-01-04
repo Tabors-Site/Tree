@@ -1,5 +1,6 @@
 import Node from "../db/models/node.js";
 import { logContribution } from "../db/utils.js";
+import { useEnergy } from "../core/energy.js";
 
 async function updateSchedule({
   nodeId,
@@ -45,7 +46,10 @@ async function updateSchedule({
       throw error;
     }
   }
-
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "editSchedule",
+  });
   node.versions[versionIndex].schedule = formattedDate;
 
   node.versions[versionIndex].schedule = formattedDate;
@@ -62,6 +66,7 @@ async function updateSchedule({
     action: "editSchedule",
     nodeVersion: versionIndex,
     scheduleEdited,
+    energyUsed,
   });
 
   return {

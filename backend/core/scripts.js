@@ -2,6 +2,7 @@ import { VM } from "vm2";
 import Node from "../db/models/node.js";
 import { logContribution } from "../db/utils.js";
 import Contribution from "../db/models/contribution.js";
+import { useEnergy } from "../core/energy.js";
 
 import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";
 
@@ -39,6 +40,13 @@ export async function updateScript({ nodeId, scriptId, name, script, userId }) {
       }
     }
   }
+
+  const payload = script !== undefined ? finalScript.length : 0;
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "editScript",
+    payload,
+  });
 
   // ---------------------------------------------------------
   // Load node
@@ -98,6 +106,7 @@ export async function updateScript({ nodeId, scriptId, name, script, userId }) {
       scriptName: targetScript.name,
       contents: finalScript || null,
     },
+    energyUsed,
   });
 
   return {
@@ -123,6 +132,10 @@ export async function executeScript({ nodeId, scriptId, userId }) {
   if (!scriptObj) {
     throw new Error("Script not found");
   }
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "executeScript",
+  });
 
   const scriptName = scriptObj.name;
 
@@ -172,6 +185,7 @@ export async function executeScript({ nodeId, scriptId, userId }) {
         logs,
         success: true,
       },
+      energyUsed,
     });
   } catch (err) {
     await logContribution({
@@ -186,6 +200,7 @@ export async function executeScript({ nodeId, scriptId, userId }) {
         success: false,
         error: err.message,
       },
+      energyUsed,
     });
     throw err;
   }

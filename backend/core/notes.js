@@ -6,6 +6,7 @@ import Node from "../db/models/node.js";
 import { logContribution } from "../db/utils.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
+import { useEnergy } from "../core/energy.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,12 +77,23 @@ async function createNote({
   if (!userId || !nodeId) {
     throw new Error("Missing required fields");
   }
-
-  let filePath = null;
   if (contentType === "file") {
     if (!file) throw new Error("File is required for file content type");
     filePath = file.filename;
   }
+  const payload =
+    contentType === "file"
+      ? { type: "file", sizeMB: Math.ceil(file.size / (1024 * 1024)) }
+      : { type: "text", content: content ?? "" };
+
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "note",
+    payload,
+    file, // allows cleanup on failure
+  });
+
+  let filePath = null;
 
   const isReflectionBool = isReflection === "true" || isReflection === true;
   let taggedUserIds = [];
@@ -139,6 +151,7 @@ async function createNote({
       action: "add",
       noteId: newNote._id.toString(),
     },
+    energyUsed,
   });
   return {
     message: "Note created successfully",
@@ -296,6 +309,15 @@ async function deleteNoteAndFile({ noteId, userId }) {
       "Only the note author or the tree owner can delete this note"
     );
   }
+  let energyUsed = null;
+
+  if (note.contentType === "text") {
+    const energyResult = await useEnergy({
+      userId,
+      action: "rawIdea",
+    });
+    energyUsed = energyResult.energyUsed;
+  }
   const fileOwnerId = note.userId?.toString();
 
   const { nodeId, version } = note; // original nodeId for logging
@@ -363,6 +385,7 @@ async function deleteNoteAndFile({ noteId, userId }) {
       noteId: noteId.toString(),
       fileDeleted: fileDeleted || undefined,
     },
+    energyUsed,
   });
 
   return {
