@@ -2131,9 +2131,16 @@ async function handleMcpRequest(req, res) {
       });
 
       pendingCalls.set(callKey, requestPromise);
+      if (req.body?.params?.arguments && req.userId) {
+        req.body.params.arguments.userId = req.userId;
+      }
       await transport.handleRequest(req, res, req.body);
     } else {
       console.log(`→ Method: ${method}`);
+      if (req.body?.params?.arguments && req.userId) {
+        req.body.params.arguments.userId = req.userId;
+      }
+
       await transport.handleRequest(req, res, req.body);
     }
   } catch (err) {

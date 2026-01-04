@@ -11,11 +11,12 @@ import {
 } from "../mcp/oauth.js";
 
 import authenticateOptional from "../middleware/authenticateLite.js";
+import authenticateOpenAIConnector from "../middleware/authenticateOpenAIConnector.js";
 
 const router = express.Router();
 
 router.post("/AiResponse", getAiResponse);
-router.post("/mcp", handleMcpRequest);
+router.post("/mcp", authenticateOpenAIConnector, handleMcpRequest);
 router.post("/getMCPResponse", getMCPResponse);
 router.post("/aiUserResponse", aiUserResponse);
 router.get("/login", renderLoginPage);
