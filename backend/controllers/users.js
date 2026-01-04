@@ -85,6 +85,7 @@ const login = async (req, res) => {
       sameSite: "None",
       domain: ".tabors.site",
       maxAge: 604800000,
+      path: "/",
     });
 
     res.status(200).json({

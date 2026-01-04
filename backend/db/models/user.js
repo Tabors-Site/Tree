@@ -15,6 +15,16 @@ const ApiKeySchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+const OpenAIConnectorSchema = new mongoose.Schema(
+  {
+    token: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+    lastUsedAt: { type: Date, default: null },
+    revoked: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const EnergySchema = new mongoose.Schema(
   {
     amount: {
@@ -63,6 +73,10 @@ const UserSchema = new mongoose.Schema({
   storageUsage: {
     type: Number, // in MB
     default: 0,
+  },
+  openAiConnector: {
+    type: OpenAIConnectorSchema,
+    required: false,
   },
 });
 

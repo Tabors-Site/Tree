@@ -14,7 +14,13 @@ const MustLogin = () => {
                     className="primary-btn"
                     onClick={() => (window.location.href = "https://tabors.site")}
                 >
-                    Go to tabors.site & Login
+                    Go to tabors.site & Register
+                </button>
+                <button
+                    className="primary-btn"
+                    onClick={() => (window.location.href = "https://tree.tabors.site/login")}
+                >
+                    Login
                 </button>
 
                 <button
