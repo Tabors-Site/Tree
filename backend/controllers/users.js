@@ -5,46 +5,138 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
-const USER_REGISTRATION_KEY = process.env.USER_REGISTRATION_KEY;
 
 /* ===========================
     REGISTER
 =========================== */
+import TempUser from "../db/models/tempUser.js";
+
 const register = async (req, res) => {
   try {
-    const { username, password, email, registrationKey } = req.body;
+    const { username, password, email } = req.body;
 
-    if (!username || !password || !email || !registrationKey) {
+    /* -------------------------
+       ORIGINAL VALIDATIONS
+    -------------------------- */
+
+    if (!username || !password || !email) {
       return res.status(400).json({
-        message: "Username, email, password and registration key are required",
+        message: "Username, email, and password are required",
       });
     }
 
-    if (registrationKey !== USER_REGISTRATION_KEY) {
-      return res.status(400).json({ message: "Registration key is invalid" });
-    }
+    /* -------------------------
+       CHECK REAL USERS (EXACT MATCH)
+    -------------------------- */
 
-    // Check username case-insensitive
     const existingUser = await User.findOne({
       username: { $regex: `^${username}$`, $options: "i" },
     });
+
     if (existingUser) {
       return res.status(400).json({ message: "Username already taken" });
     }
 
-    // Check email uniqueness
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
       return res.status(400).json({ message: "Email already registered" });
     }
 
-    const newUser = new User({ username, password, email });
-    await newUser.save();
+    /* -------------------------
+       CLEAN OLD TEMP USERS
+    -------------------------- */
 
-    res.status(201).json({ message: "User registered successfully" });
+    await TempUser.deleteMany({
+      $or: [
+        { email },
+        { username: { $regex: `^${username}$`, $options: "i" } },
+      ],
+    });
+
+    /* -------------------------
+       CREATE TEMP USER
+    -------------------------- */
+
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+
+    await TempUser.create({
+      username,
+      email,
+      password,
+      verificationToken,
+      expiresAt: Date.now() + 1000 * 60 * 60 * 12, // 12 hours
+    });
+
+    /* -------------------------
+       SEND EMAIL
+    -------------------------- */
+
+    const verifyUrl = `https://tree.tabors.site/api/user/verify/${verificationToken}`;
+    await sendVerificationEmail(email, verifyUrl);
+
+    res.status(201).json({
+      message: "Check your email to complete registration",
+    });
   } catch (error) {
     console.error("Error during registration:", error);
     res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const tempUser = await TempUser.findOne({
+      verificationToken: token,
+      expiresAt: { $gt: Date.now() },
+    });
+
+    if (!tempUser) {
+      return res.status(400).json({
+        message: "Invalid or expired verification link",
+      });
+    }
+
+    /* -------------------------
+       RE-RUN ORIGINAL CHECKS
+    -------------------------- */
+
+    const existingUser = await User.findOne({
+      username: { $regex: `^${tempUser.username}$`, $options: "i" },
+    });
+
+    if (existingUser) {
+      await tempUser.deleteOne();
+      return res.status(400).json({ message: "Username already taken" });
+    }
+
+    const existingEmail = await User.findOne({ email: tempUser.email });
+    if (existingEmail) {
+      await tempUser.deleteOne();
+      return res.status(400).json({ message: "Email already registered" });
+    }
+
+    /* -------------------------
+       CREATE REAL USER
+    -------------------------- */
+
+    await User.create({
+      username: tempUser.username,
+      email: tempUser.email,
+      password: tempUser.password, // already hashed
+    });
+
+    /* -------------------------
+       CLEANUP
+    -------------------------- */
+
+    await tempUser.deleteOne();
+    return res.redirect("https://tree.tabors.site/login?verified=true");
+    res.json({ message: "User registered successfully" });
+  } catch (err) {
+    console.error("[verifyEmail]", err);
+    res.status(500).json({ message: "Verification failed" });
   }
 };
 
@@ -232,6 +324,38 @@ async function sendResetEmail(to, link) {
   });
 }
 
+/* ---- SEND REGISTRATION VERIFICATION EMAIL ---- */
+async function sendVerificationEmail(to, link) {
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS, // Google App Password
+    },
+  });
+
+  await transporter.sendMail({
+    from: `<${process.env.EMAIL_USER}>`,
+    to,
+    subject: "Complete Your Registration",
+    html: `
+      <p>Thanks for registering!</p>
+
+      <p>Please confirm your email by clicking the link below:</p>
+
+      <p>
+        <a href="${link}">${link}</a>
+      </p>
+
+      <p>This link expires in <strong>12 hours</strong>.</p>
+
+      <p>If you did not request this account, you can ignore this email.</p>
+
+      <p>— Tree Helper</p>
+    `,
+  });
+}
+
 /* ---- FORGOT PASSWORD ---- */
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
@@ -397,4 +521,5 @@ export {
   setHtmlShareToken,
   forgotPassword,
   resetPassword,
+  verifyEmail,
 };

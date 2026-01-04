@@ -58,6 +58,9 @@ export async function oauthAuthorize(req, res) {
     code_challenge_method,
     scope,
   } = req.query;
+  if (client_id !== "chatgpt-connector") {
+    return res.status(400).send("Invalid client");
+  }
 
   // 1️⃣ Basic validation
   if (response_type !== "code") {
@@ -568,6 +571,9 @@ export function renderLoginPage(req, res) {
 export async function oauthToken(req, res) {
   try {
     const { grant_type, code, client_id, code_verifier } = req.body;
+    if (client_id !== "chatgpt-connector") {
+      return res.status(400).send("Invalid client");
+    }
 
     // 1️⃣ Grant type validation
     if (grant_type !== "authorization_code") {
