@@ -35,7 +35,7 @@ const WelcomePage = () => {
 
     // Not logged in → login page
     if (!token) {
-      window.location.href = "/must-login";
+      window.location.href = "/login";
       return;
     }
 

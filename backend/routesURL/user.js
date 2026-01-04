@@ -661,6 +661,20 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
   </button>'s
   used
 </span>
+<button
+  id="logoutBtn"
+  style="
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: none;
+    background: #ef4444;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+  "
+>
+  Log out
+</button>
 
 </div>
 
@@ -841,8 +855,22 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 
   render();
 })();
+document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+  try {
+    await fetch("/api/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+
+    // Redirect to login (or home)
+    window.location.href = "/login";
+  } catch (err) {
+    console.error("Logout failed", err);
+  }
+});
 
   </script>
+  
 </body>
 </html>
 `);

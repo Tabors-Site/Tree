@@ -7,7 +7,9 @@ import {
   oauthRegister,
   oauthAuthorize,
   renderLoginPage,
+  renderRegisterPage,
   oauthToken,
+  renderForgotPasswordPage,
 } from "../mcp/oauth.js";
 
 import authenticateOptional from "../middleware/authenticateLite.js";
@@ -20,6 +22,8 @@ router.post("/mcp", authenticateOpenAIConnector, handleMcpRequest);
 router.post("/getMCPResponse", getMCPResponse);
 router.post("/aiUserResponse", aiUserResponse);
 router.get("/login", renderLoginPage);
+router.get("/register", renderRegisterPage);
+router.get("/forgot-password", renderForgotPasswordPage);
 
 router.get("/.well-known/openid-configuration", getOpenIdConfiguration);
 router.post("/oauth2/register", oauthRegister);
