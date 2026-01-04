@@ -1,28 +1,27 @@
 import { Link } from "react-router-dom";
 import { sections } from "./WelcomePage";
-import './SectionNav.css'
 
 const SectionNav = ({ currentId }) => {
-    const index = sections.findIndex((s) => s.id === currentId);
-
-    const prev = index > 0 ? sections[index - 1] : null;
-    const next = index < sections.length - 1 ? sections[index + 1] : null;
+    const currentIndex = sections.findIndex((s) => s.id === currentId);
+    const prevSection = currentIndex > 0 ? sections[currentIndex - 1] : null;
+    const nextSection = currentIndex < sections.length - 1 ? sections[currentIndex + 1] : null;
 
     return (
-        <div className="section-nav">
-            {prev && (
-                <Link to={`/welcome/${prev.id}`} className="nav-btn">
-                    Prev: {prev.label}
+        <nav className="section-nav">
+            {prevSection ? (
+                <Link to={`/welcome/${prevSection.id}`} className="prev">
+                    {prevSection.label}
                 </Link>
+            ) : (
+                <div />
             )}
 
-            {next && (
-                <Link to={`/welcome/${next.id}`} className="nav-btn">
-                    Next: {next.label}
+            {nextSection && (
+                <Link to={`/welcome/${nextSection.id}`} className="next">
+                    {nextSection.label}
                 </Link>
             )}
-        </div>
-
+        </nav>
     );
 };
 

@@ -4,7 +4,6 @@ import Cookies from "js-cookie";
 import "./WelcomePage.css";
 import { useLocation } from "react-router-dom";
 
-
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
 
 export const sections = [
@@ -15,7 +14,6 @@ export const sections = [
   { id: "pieces", label: "The 3 core pieces" },
   { id: "next", label: "What to do next" },
   { id: "api", label: "API Info" },
-
 ];
 
 const WelcomePage = () => {
@@ -25,6 +23,7 @@ const WelcomePage = () => {
     const token = Cookies.get("token");
     if (token) setHasToken(true);
   }, []);
+
   const location = useLocation();
 
   useEffect(() => {
@@ -34,7 +33,7 @@ const WelcomePage = () => {
   const handleOpenBrowser = async () => {
     const token = Cookies.get("token");
 
-    // 1️⃣ Not logged in → login page
+    // Not logged in → login page
     if (!token) {
       window.location.href = "/must-login";
       return;
@@ -61,16 +60,14 @@ const WelcomePage = () => {
       Cookies.set("userId", data.userId, { expires: 7 });
       Cookies.set("loggedIn", true, { expires: 7 });
 
-      // 2️⃣ Logged in, no htmlShareToken → setup page
+      // Logged in, no htmlShareToken → setup page
       if (!data.HTMLShareToken) {
-        window.location.href =
-          `${apiUrl}/user/${data.userId}/shareToken?html`;
+        window.location.href = `${apiUrl}/user/${data.userId}/shareToken?html`;
         return;
       }
 
-      // 3️⃣ Logged in + token → existing behavior
-      window.location.href =
-        `${apiUrl}/user/${data.userId}?token=${data.HTMLShareToken}&html`;
+      // Logged in + token → existing behavior
+      window.location.href = `${apiUrl}/user/${data.userId}?token=${data.HTMLShareToken}&html`;
 
     } catch (err) {
       console.error("URL Browser error:", err);
@@ -78,105 +75,49 @@ const WelcomePage = () => {
     }
   };
 
-
-
   return (
-    <>
-      <style>{`
-        .welcome-header {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-          align-items: flex-start;
-        }
-
-        .welcome-header h1 {
-          margin: 0;
-          order: -1;
-        }
-
-        .header-buttons {
-          display: flex;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-
-        .header-buttons .back-to-site-btn {
-          flex: 0 0 auto;
-        }
-
-        .back-to-site-btn.legacy {
-          flex: 0 0 auto;
-        }
-
-        /* Desktop layout */
-        @media (min-width: 768px) {
-          .welcome-header {
-            flex-direction: row;
-            align-items: center;
-            width: 100%;
-          }
-
-          .welcome-header h1 {
-            order: 0;
-            margin-left: 1rem;
-            flex: 1;
-          }
-
-          .header-buttons {
-            gap: 0.5rem;
-            flex: 0 0 auto;
-          }
-
-          .back-to-site-btn.legacy {
-            flex: 0 0 auto;
-          }
-        }
-      `}</style>
-
-      <div className="welcome-page">
-        <section className="welcome-landing">
-          <div className="welcome-header">
-            <div className="header-buttons">
-              <button
-                className="back-to-site-btn"
-                onClick={handleOpenBrowser}
-              >
-                Open App
-              </button>
-            </div>
-
-
-            <h1>Welcome to Treefficiency</h1>
-
-            <a
-              href="https://tabors.site"
-              className="back-to-site-btn legacy"
+    <div className="welcome-page">
+      <section className="welcome-landing">
+        <div className="welcome-header">
+          <div className="header-buttons">
+            <button
+              className="back-to-site-btn"
+              onClick={handleOpenBrowser}
             >
-              Back to tabors.site
-            </a>
+              Open App
+            </button>
           </div>
-        </section>
 
-        <div className="intro-layout">
-          <aside className="intro-nav">
-            {sections.map((s) => (
-              <NavLink
-                key={s.id}
-                to={`/welcome/${s.id}`}
-                className={({ isActive }) => (isActive ? "active" : "")}
-              >
-                {s.label}
-              </NavLink>
-            ))}
-          </aside>
+          <h1>Welcome to Treefficiency</h1>
 
-          <main className="intro-content">
-            <Outlet />
-          </main>
+          <a
+            href="https://tabors.site"
+            className="back-to-site-btn legacy"
+          >
+            Back to tabors.site
+          </a>
         </div>
+      </section>
+
+      <div className="intro-layout">
+        <aside className="intro-nav">
+          {sections.map((s) => (
+            <NavLink
+              key={s.id}
+              to={`/welcome/${s.id}`}
+              className={({ isActive }) => (isActive ? "active" : "")}
+            >
+              {s.label}
+            </NavLink>
+          ))}
+        </aside>
+
+        <main className="intro-content">
+          <Outlet />
+        </main>
       </div>
-    </>
+    </div>
   );
 };
+
 export default WelcomePage;
