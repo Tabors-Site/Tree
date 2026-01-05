@@ -54,6 +54,7 @@ import {
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { getTreeForAi, getNodeForAi } from "../controllers/treeDataFetching.js"; // import from your real backend
+import { resolveTreeAccess } from "../core/authenticate.js";
 
 const TimeWindowSchema = {
   startDate: z
@@ -2012,7 +2013,7 @@ await server.connect(transport);
 
 const pendingCalls = new Map();
 const completedCalls = new Map();
-const CACHE_MS = 2000;
+const CACHE_MS = 7000;
 
 // Helper to parse SSE format
 function parseSseResponse(rawBody) {
@@ -2131,14 +2132,55 @@ async function handleMcpRequest(req, res) {
       });
 
       pendingCalls.set(callKey, requestPromise);
-      if (req.body?.params?.arguments && req.userId) {
-        req.body.params.arguments.userId = req.userId;
+      const requestArgs = req.body?.params?.arguments ?? {};
+      requestArgs.userId = req.userId;
+
+      const nodeId = requestArgs.nodeId ?? requestArgs.rootId;
+
+      if (nodeId && req.userId) {
+        const access = await resolveTreeAccess(nodeId, req.userId);
+
+        if (!access.canWrite) {
+          res.write(
+            `data: ${JSON.stringify({
+              jsonrpc: "2.0",
+              id: req.body.id,
+              error: {
+                code: 403,
+                message: "You are not in this tree.",
+              },
+            })}\n\n`
+          );
+          res.end();
+          return;
+        }
       }
+
       await transport.handleRequest(req, res, req.body);
     } else {
       console.log(`→ Method: ${method}`);
-      if (req.body?.params?.arguments && req.userId) {
-        req.body.params.arguments.userId = req.userId;
+      const requestArgs = req.body?.params?.arguments ?? {};
+      requestArgs.userId = req.userId;
+
+      const nodeId = requestArgs.nodeId ?? requestArgs.rootId;
+
+      if (nodeId && req.userId) {
+        const access = await resolveTreeAccess(nodeId, req.userId);
+
+        if (!access.canWrite) {
+          res.write(
+            `data: ${JSON.stringify({
+              jsonrpc: "2.0",
+              id: req.body.id,
+              error: {
+                code: 403,
+                message: "You are not in this tree.",
+              },
+            })}\n\n`
+          );
+          res.end();
+          return;
+        }
       }
 
       await transport.handleRequest(req, res, req.body);
