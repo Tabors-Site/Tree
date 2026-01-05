@@ -1162,7 +1162,7 @@ export function renderRegisterPage(req, res) {
         // Redirect to login after 3 seconds
         setTimeout(() => {
           window.location.href = "/login";
-        }, 3000);
+        }, 7000);
 
       } catch (err) {
         console.error(err);

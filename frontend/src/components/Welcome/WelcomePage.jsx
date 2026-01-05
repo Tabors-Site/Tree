@@ -7,12 +7,12 @@ import { useLocation } from "react-router-dom";
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
 
 export const sections = [
+  { id: "gettingstarted", label: "Getting Started" },
   { id: "why", label: "Why I Made This" },
   { id: "structure", label: "Trees and nodes" },
   { id: "workflow", label: "How to use it" },
   { id: "ai", label: "How AI fits in" },
-  { id: "pieces", label: "The 3 core pieces" },
-  { id: "next", label: "What to do next" },
+  { id: "pieces", label: "Interaction Methods" },
   { id: "api", label: "API Info" },
 ];
 

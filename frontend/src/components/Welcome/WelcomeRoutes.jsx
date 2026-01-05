@@ -18,7 +18,7 @@ const WelcomeRoutes = () => {
     <Routes>
 
       <Route path="/" element={<WelcomePage />}>
-        <Route index element={<WhySection />} />
+        <Route index element={<WhatToDoNextSection />} />
       </Route>
 
       <Route path="/must-login" element={<MustLogin />} />
@@ -26,13 +26,13 @@ const WelcomeRoutes = () => {
 
 
       <Route path="/welcome" element={<WelcomePage />}>
-        <Route index element={<WhySection />} />
+        <Route index element={<WhatToDoNextSection />} />
+        <Route path="gettingstarted" element={<WhatToDoNextSection />} />
         <Route path="why" element={<WhySection />} />
         <Route path="structure" element={<StructureSection />} />
         <Route path="ai" element={<HowAIFitsInSection />} />
         <Route path="workflow" element={<HowToUseSection />} />
         <Route path="pieces" element={<UsingAllThePiecesSection />} />
-        <Route path="next" element={<WhatToDoNextSection />} />
         <Route path="be" element={<BeSection />} />
         <Route path="api" element={<ApiAccessSection />} />
 

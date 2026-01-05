@@ -110,17 +110,20 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     }
 
     const roots = user.roots || [];
-    const profileType = user.profileType;
+    const profileType = user.profileType || "basic";
     const energy = user.availableEnergy;
-    // JSON MODE
+
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml) {
       return res.json({
         userId: user._id,
         username: user.username,
         roots,
+        profileType,
+        energy,
       });
     }
+
     const ENERGY_RESET_MS = 24 * 60 * 60 * 1000;
     const storageUsedKB = user.storageUsage || 0;
 
@@ -132,7 +135,6 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       ? new Date(lastResetAt.getTime() + ENERGY_RESET_MS)
       : null;
 
-    // Format nicely (local time, hh:mm)
     const resetTimeLabel = nextResetAt
       ? nextResetAt.toLocaleTimeString([], {
           hour: "2-digit",
@@ -148,7 +150,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${user.username} — User Profile</title>
+  <title>@${user.username} — Profile</title>
   <style>
     * {
       box-sizing: border-box;
@@ -162,77 +164,249 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       min-height: 100vh;
       padding: 20px;
       color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
     }
 
     .container {
-      max-width: 800px;
+      max-width: 900px;
       margin: 0 auto;
+      position: relative;
+      z-index: 1;
     }
 
     /* Header Section */
     .header {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(20px);
       border-radius: 16px;
-      padding: 24px;
+      padding: 32px;
       margin-bottom: 24px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+      animation: slideUp 0.6s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
     }
 
     .user-info h1 {
-      font-size: 28px;
+      font-size: 32px;
       font-weight: 700;
       color: #1a1a1a;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
+      letter-spacing: -0.5px;
     }
 
+    .user-info h1::before {
+      content: '👤 ';
+      font-size: 28px;
+    }
+
+    /* User Meta Info */
+    .user-meta {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .plan-badge {
+      padding: 6px 14px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .plan-badge.basic {
+      background: #f0f0f0;
+      color: #555;
+    }
+
+    .plan-badge.standard {
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      color: #1565c0;
+    }
+
+    .plan-badge.premium {
+      background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%);
+      color: #4e342e;
+    }
+
+    .meta-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #444;
+    }
+
+    .storage-toggle-btn {
+      padding: 2px 8px;
+      margin-left: 4px;
+      border-radius: 6px;
+      border: 1px solid #d0d0d0;
+      background: white;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #667eea;
+    }
+
+    .storage-toggle-btn:hover {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    .logout-btn {
+      padding: 8px 16px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .logout-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+    }
+
+    /* User ID */
     .user-id-container {
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      margin-top: 12px;
     }
 
-    code {
-      background: #f0f0f0;
-      padding: 6px 12px;
-      border-radius: 6px;
+    .user-id-container code {
+      flex: 1;
+      background: transparent;
+      padding: 0;
       font-size: 13px;
-      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-      color: #666;
+      font-family: 'SF Mono', Monaco, monospace;
+      color: #667eea;
+      font-weight: 600;
       word-break: break-all;
     }
 
     #copyNodeIdBtn {
-      background: none;
-      border: none;
+      background: rgba(102, 126, 234, 0.1);
+      border: 1px solid rgba(102, 126, 234, 0.2);
       cursor: pointer;
-      padding: 6px;
-      opacity: 0.6;
-      font-size: 18px;
-      transition: opacity 0.2s, transform 0.2s;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 16px;
+      transition: all 0.2s;
+      flex-shrink: 0;
     }
 
     #copyNodeIdBtn:hover {
-      opacity: 1;
+      background: rgba(102, 126, 234, 0.2);
       transform: scale(1.1);
     }
 
-    /* Raw Ideas Capture Box - The Star of the Show */
+    /* Raw Ideas Capture */
     .raw-ideas-section {
       background: rgba(255, 255, 255, 0.98);
       backdrop-filter: blur(20px);
-      border-radius: 20px;
+      border-radius: 16px;
       padding: 32px;
-      margin-bottom: 32px;
+      margin-bottom: 24px;
       box-shadow: 
-        0 20px 60px rgba(102, 126, 234, 0.3),
+        0 20px 60px rgba(102, 126, 234, 0.2),
         0 0 0 1px rgba(255, 255, 255, 0.5) inset;
       position: relative;
       overflow: hidden;
+      animation: slideUp 0.7s ease-out;
     }
 
     .raw-ideas-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+    }
+
+    .raw-ideas-section::after {
       content: '';
       position: absolute;
       top: -50%;
@@ -241,7 +415,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       height: 200%;
       background: radial-gradient(
         circle,
-        rgba(102, 126, 234, 0.08) 0%,
+        rgba(16, 185, 129, 0.05) 0%,
         transparent 70%
       );
       animation: pulse 8s ease-in-out infinite;
@@ -260,25 +434,30 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     }
 
     .raw-ideas-section h2 {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 600;
-      color: #667eea;
-      margin-bottom: 16px;
+      color: #10b981;
+      margin-bottom: 20px;
       position: relative;
       z-index: 1;
+    }
+
+    .raw-ideas-section h2::before {
+      content: '💡 ';
+      font-size: 20px;
     }
 
     .raw-idea-form {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 16px;
       position: relative;
       z-index: 1;
     }
 
     #rawIdeaInput {
       width: 100%;
-      padding: 16px 18px;
+      padding: 16px 20px;
       font-size: 16px;
       line-height: 1.6;
       border-radius: 12px;
@@ -286,17 +465,18 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       background: white;
       font-family: inherit;
       resize: vertical;
-      min-height: 64px;
+      min-height: 80px;
+      max-height: 400px;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
     }
 
     #rawIdeaInput:focus {
       outline: none;
-      border-color: #667eea;
+      border-color: #10b981;
       box-shadow: 
-        0 0 0 4px rgba(102, 126, 234, 0.15),
-        0 8px 30px rgba(102, 126, 234, 0.2);
+        0 0 0 4px rgba(16, 185, 129, 0.15),
+        0 8px 30px rgba(16, 185, 129, 0.2);
       transform: translateY(-2px);
     }
 
@@ -313,9 +493,8 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     }
 
     .file-input-wrapper {
-      position: relative;
       flex: 1;
-      min-width: 140px;
+      min-width: 180px;
     }
 
     input[type="file"] {
@@ -325,133 +504,149 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     }
 
     input[type="file"]::file-selector-button {
-      padding: 8px 14px;
+      padding: 8px 16px;
       border-radius: 8px;
       border: 1px solid #d0d0d0;
       background: white;
-      color: #666;
+      color: #667eea;
       cursor: pointer;
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       transition: all 0.2s;
-      margin-right: 8px;
+      margin-right: 10px;
     }
 
     input[type="file"]::file-selector-button:hover {
-      background: #f5f5f5;
-      border-color: #999;
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
     }
 
     .send-button {
-      padding: 12px 28px;
-      font-size: 15px;
+      padding: 14px 32px;
+      font-size: 16px;
       font-weight: 600;
       border-radius: 10px;
       border: none;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: white;
       cursor: pointer;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
       white-space: nowrap;
     }
 
     .send-button:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.5);
     }
 
-    .send-button:active {
-      transform: translateY(0);
-    }
+  
 
-    /* Navigation Links */
+    /* Navigation Section */
     .nav-section {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(20px);
       border-radius: 16px;
-      padding: 24px;
+      padding: 28px;
       margin-bottom: 24px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      animation: slideUp 0.8s ease-out;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .nav-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
     }
 
     .nav-section h2 {
-      font-size: 16px;
+      font-size: 18px;
       font-weight: 600;
-      color: #555;
-      margin-bottom: 16px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      color: #1a1a1a;
+      margin-bottom: 20px;
     }
 
     .nav-links {
       list-style: none;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 10px;
-    }
-
-    .nav-links li {
-      margin: 0;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
     }
 
     .nav-links a {
       display: block;
-      padding: 12px 16px;
+      padding: 14px 18px;
       background: #f8f9fa;
       border-radius: 10px;
       color: #667eea;
       text-decoration: none;
-      font-weight: 500;
+      font-weight: 600;
       font-size: 14px;
       transition: all 0.2s;
       border: 1px solid transparent;
+      text-align: center;
     }
 
     .nav-links a:hover {
       background: white;
       border-color: #667eea;
-      transform: translateX(4px);
+      transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
     }
 
     /* Roots Section */
     .roots-section {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(20px);
       border-radius: 16px;
-      padding: 24px;
+      padding: 28px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      animation: slideUp 0.9s ease-out;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .roots-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
     }
 
     .roots-section h2 {
       font-size: 20px;
-      font-weight: 700;
+      font-weight: 600;
       color: #1a1a1a;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
+    }
+
+    .roots-section h2::before {
+      content: '🌳 ';
+      font-size: 20px;
     }
 
     .roots-list {
       list-style: none;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
 
     .roots-list li {
-      margin: 8px 0;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-    }
-
-    .roots-list li:hover {
-      background: white;
-      border-color: #e0e0e0;
-      transform: translateX(4px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      margin-bottom: 10px;
     }
 
     .roots-list a {
       display: block;
-      padding: 12px 16px;
+      padding: 14px 18px;
       background: #f8f9fa;
       border-radius: 10px;
       color: #1a1a1a;
@@ -459,31 +654,38 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       font-weight: 500;
       font-size: 15px;
       transition: all 0.2s;
+      border: 1px solid transparent;
     }
 
     .roots-list a:hover {
-      color: #667eea;
       background: white;
+      color: #667eea;
+      border-color: #667eea;
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
     }
 
     .roots-list em {
       color: #999;
-      font-style: normal;
+      font-style: italic;
+      display: block;
+      padding: 20px;
+      text-align: center;
     }
 
     /* Create Root Form */
     .create-root-form {
       display: flex;
-      gap: 10px;
+      gap: 12px;
       align-items: stretch;
     }
 
     .create-root-form input[type="text"] {
       flex: 1;
-      padding: 12px 16px;
+      padding: 14px 18px;
       font-size: 15px;
       border-radius: 10px;
-      border: 1px solid #d0d0d0;
+      border: 2px solid #e9ecef;
       background: white;
       font-family: inherit;
       transition: all 0.2s;
@@ -492,27 +694,26 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     .create-root-form input[type="text"]:focus {
       outline: none;
       border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
     }
 
     .create-root-button {
-      padding: 12px 18px;
+      padding: 14px 20px;
       font-size: 24px;
       line-height: 1;
       border-radius: 10px;
-      border: 1px solid #d0d0d0;
-      background: white;
-      color: #667eea;
+      border: none;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
       cursor: pointer;
       transition: all 0.2s;
       font-weight: 300;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     }
 
     .create-root-button:hover {
-      background: #667eea;
-      color: white;
-      border-color: #667eea;
-      transform: scale(1.05);
+      transform: scale(1.05) translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
 
     /* Responsive Design */
@@ -525,20 +726,24 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       .raw-ideas-section,
       .nav-section,
       .roots-section {
-        padding: 20px;
-      }
-
-      .user-info h1 {
-        font-size: 24px;
-      }
-
-      .raw-ideas-section {
         padding: 24px 20px;
       }
 
-      #rawIdeaInput {
-        font-size: 15px;
-        padding: 14px 16px;
+      .user-info h1 {
+        font-size: 28px;
+      }
+
+      .user-meta {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .meta-item,
+      .plan-badge,
+      .logout-btn {
+        width: 100%;
+        justify-content: center;
       }
 
       .form-actions {
@@ -548,6 +753,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 
       .file-input-wrapper {
         order: 2;
+        min-width: auto;
       }
 
       .send-button {
@@ -567,134 +773,68 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         width: 100%;
       }
 
-      code {
+      .user-id-container code {
         font-size: 11px;
-        max-width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
     }
 
     @media (min-width: 641px) and (max-width: 1024px) {
       .container {
-        max-width: 700px;
+        max-width: 750px;
       }
 
       .nav-links {
         grid-template-columns: repeat(2, 1fr);
       }
     }
-      .user-meta {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-  font-size: 14px;
-}
-
-.plan-badge {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 12px;
-  background: #f0f0f0;
-  color: #555;
-}
-
-.plan-badge.basic {
-  background: #e0e0e0;
-  color: #555;
-}
-
-.plan-badge.standard {
-  background: #e3f2fd;
-  color: #1565c0;
-}
-
-.plan-badge.premium {
-  background: linear-gradient(135deg, #ffd700, #ffb300);
-  color: #4e342e;
-}
-
-.energy-indicator {
-  color: #444;
-  font-weight: 500;
-}
-
   </style>
 </head>
 <body>
   <div class="container">
     <!-- Header -->
     <div class="header">
-     <div class="user-info">
-  <h1>${user.username}</h1>
+      <div class="user-info">
+        <h1>@${user.username}</h1>
 
-  <div class="user-meta">
-  <span class="plan-badge ${profileType}">
-    ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Plan
-  </span>
+        <div class="user-meta">
+          <span class="plan-badge ${profileType}">
+            ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Plan
+          </span>
 
-  <span class="energy-indicator">
-    ⚡ ${energy?.amount ?? 0} energy · resets at ${resetTimeLabel}
-  </span>
-<br />
-  <span
-  class="energy-indicator"
-  id="storageIndicator"
-  data-storage-kb="${storageUsedKB}"
->
-  💾 <span id="storageValue"></span><button
-    id="storageToggle"
-    style="
-      margin-left:6px;
-      font-size:12px;
-      padding:2px 6px;
-      border-radius:6px;
-      border:1px solid #ccc;
-      cursor:pointer;
-      background:white;
-    "
-  >
-  MB
-  </button>'s
-  used
-</span>
-<button
-  id="logoutBtn"
-  style="
-    padding: 8px 14px;
-    border-radius: 8px;
-    border: none;
-    background: #ef4444;
-    color: white;
-    font-weight: 600;
-    cursor: pointer;
-  "
->
-  Log out
-</button>
+          <span class="meta-item">
+            ⚡ ${energy?.amount ?? 0} · resets ${resetTimeLabel}
+          </span>
 
-</div>
+          <span class="meta-item">
+            💾 <span id="storageValue"></span>
+            <button
+              id="storageToggle"
+              class="storage-toggle-btn"
+              data-storage-kb="${storageUsedKB}"
+            >
+              MB
+            </button>
+            used
+          </span>
 
+          <button id="logoutBtn" class="logout-btn">
+            Log out
+          </button>
+        </div>
 
-  <div class="user-id-container">
-    <code id="nodeIdCode">${user._id}</code>
-    <button id="copyNodeIdBtn" title="Copy ID">📋</button>
-  </div>
-</div>
-
+        <div class="user-id-container">
+          <code id="nodeIdCode">${user._id}</code>
+          <button id="copyNodeIdBtn" title="Copy ID">📋</button>
+        </div>
+      </div>
     </div>
 
-    <!-- Raw Ideas Capture - Featured Section -->
+    <!-- Raw Ideas Capture -->
     <div class="raw-ideas-section">
       <h2>Capture a Raw Idea</h2>
       <form
         method="POST"
-        action="/api/user/${userId}/raw-ideas?token=${
-      req.query.token ?? ""
-    }&html"
+        action="/api/user/${userId}/raw-ideas${queryString}"
         enctype="multipart/form-data"
         class="raw-idea-form"
       >
@@ -721,22 +861,20 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     <div class="nav-section">
       <h2>Quick Links</h2>
       <ul class="nav-links">
-        <li><a href="/api/user/${userId}/raw-ideas?${filtered}">Raw Ideas</a></li>
-        <li><a href="/api/user/${userId}/invites?${filtered}">Invites</a></li>
-        <li><a href="/api/user/${userId}/notes?${filtered}">Notes</a></li>
-        <li><a href="/api/user/${userId}/tags?${filtered}">Mail</a></li>
-        <li><a href="/api/user/${userId}/contributions?${filtered}">Contributions</a></li>
-        <li><a href="/api/user/${userId}/deleted?${filtered}">Deleted</a></li>
-        <li><a href="/api/user/${userId}/api-keys?${filtered}">API Keys</a></li>
-        <li><a href="/api/user/${userId}/sharetoken?${filtered}">Share Token</a></li>
-
-
+        <li><a href="/api/user/${userId}/raw-ideas${queryString}">Raw Ideas</a></li>
+        <li><a href="/api/user/${userId}/notes${queryString}">Notes</a></li>
+        <li><a href="/api/user/${userId}/tags${queryString}">Mail</a></li>
+        <li><a href="/api/user/${userId}/contributions${queryString}">Contributions</a></li>
+        <li><a href="/api/user/${userId}/invites${queryString}">Invites</a></li>
+        <li><a href="/api/user/${userId}/deleted${queryString}">Deleted</a></li>
+        <li><a href="/api/user/${userId}/api-keys${queryString}">API Keys</a></li>
+        <li><a href="/api/user/${userId}/sharetoken${queryString}">Share Token</a></li>
       </ul>
     </div>
 
     <!-- Roots Section -->
     <div class="roots-section">
-      <h2>Roots</h2>
+      <h2>My Roots</h2>
       ${
         roots.length > 0
           ? `
@@ -754,20 +892,18 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
             .join("")}
         </ul>
       `
-          : `<p class="roots-list"><em>No roots yet</em></p>`
+          : `<ul class="roots-list"><li><em>No roots yet — create your first one below!</em></li></ul>`
       }
       
       <form
         method="POST"
-        action="/api/user/${userId}/createRoot?token=${
-      req.query.token ?? ""
-    }&html"
+        action="/api/user/${userId}/createRoot${queryString}"
         class="create-root-form"
       >
         <input
           type="text"
           name="name"
-          placeholder="New root name"
+          placeholder="New root name..."
           required
         />
         <button type="submit" class="create-root-button" title="Create root">
@@ -779,14 +915,55 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 
   <script>
     // Copy ID functionality
-    const btn = document.getElementById("copyNodeIdBtn");
-    const code = document.getElementById("nodeIdCode");
-
-    btn.addEventListener("click", () => {
+    document.getElementById("copyNodeIdBtn").addEventListener("click", () => {
+      const code = document.getElementById("nodeIdCode");
+      const btn = document.getElementById("copyNodeIdBtn");
+      
       navigator.clipboard.writeText(code.textContent).then(() => {
         btn.textContent = "✔️";
-        setTimeout(() => (btn.textContent = "📋"), 900);
+        setTimeout(() => (btn.textContent = "📋"), 1000);
       });
+    });
+
+    // Storage toggle
+    (() => {
+      const toggleBtn = document.getElementById("storageToggle");
+      const valueEl = document.getElementById("storageValue");
+      const storageKB = Number(toggleBtn.dataset.storageKb || 0);
+      let unit = "MB";
+
+      function render() {
+        if (unit === "MB") {
+          const mb = storageKB / 1024;
+          valueEl.textContent = mb.toFixed(mb < 10 ? 2 : 1);
+          toggleBtn.textContent = "MB";
+        } else {
+          const gb = storageKB / (1024 * 1024);
+          valueEl.textContent = gb.toFixed(gb < 1 ? 3 : 2);
+          toggleBtn.textContent = "GB";
+        }
+      }
+
+      toggleBtn.addEventListener("click", () => {
+        unit = unit === "GB" ? "MB" : "GB";
+        render();
+      });
+
+      render();
+    })();
+
+    // Logout
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      try {
+        await fetch("/api/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+        window.location.href = "/login";
+      } catch (err) {
+        console.error("Logout failed", err);
+        alert("Logout failed. Please try again.");
+      }
     });
 
     // Auto-resize textarea
@@ -797,80 +974,22 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       const maxHeight = 400;
       const newHeight = Math.min(textarea.scrollHeight, maxHeight);
       textarea.style.height = newHeight + 'px';
-      
-      if (textarea.scrollHeight > maxHeight) {
-        textarea.style.overflowY = 'auto';
-      } else {
-        textarea.style.overflowY = 'hidden';
-      }
+      textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
     }
     
     textarea.addEventListener('input', autoResize);
     autoResize();
     
-    // Submit with Cmd/Ctrl+Enter
-   textarea.addEventListener("keydown", (e) => {
-  // Detect mobile keyboards (rough but effective)
-  const isMobile =
-    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  // ENTER (desktop only) → submit
-  if (!isMobile && e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    textarea.closest("form").submit();
-    return;
-  }
-
-  // SHIFT + ENTER → newline (default behavior)
-  // do nothing
-});
-
-(() => {
-  const indicator = document.getElementById("storageIndicator");
-  if (!indicator) return;
-
-  const valueEl = document.getElementById("storageValue");
-  const toggleBtn = document.getElementById("storageToggle");
-
-  const storageKB = Number(indicator.dataset.storageKb || 0);
-
-  let unit = "MB";
-
-  function render() {
-    if (unit === "MB") {
-      const mb = storageKB / 1024;
-      valueEl.textContent = mb.toFixed(mb < 10 ? 2 : 1);
-      toggleBtn.textContent = "MB";
-    } else {
-      const gb = storageKB / (1024 * 1024);
-      valueEl.textContent = gb.toFixed(gb < 1 ? 3 : 2);
-      toggleBtn.textContent = "GB";
-    }
-  }
-
-  toggleBtn.addEventListener("click", () => {
-    unit = unit === "GB" ? "MB" : "GB";
-    render();
-  });
-
-  render();
-})();
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  try {
-    await fetch("/api/logout", {
-      method: "POST",
-      credentials: "include",
+    // Submit with Enter (desktop only)
+    textarea.addEventListener("keydown", (e) => {
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      
+      if (!isMobile && e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        textarea.closest("form").submit();
+      }
     });
-
-    // Redirect to login (or home)
-    window.location.href = "/login";
-  } catch (err) {
-    console.error("Logout failed", err);
-  }
-});
-
   </script>
-  
 </body>
 </html>
 `);
