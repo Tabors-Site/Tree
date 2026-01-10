@@ -2,6 +2,9 @@ import { z } from "zod";
 import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { setValueForNode, setGoalForNode } from "../core/values.js";
 import { fileTypeFromBuffer } from "file-type";
+import User from "../db/models/user.js";
+
+import { emitNavigate } from "../routesURL/ws.js";
 
 import path from "path";
 import fs from "fs";
@@ -55,6 +58,26 @@ import {
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { getTreeForAi, getNodeForAi } from "../controllers/treeDataFetching.js"; // import from your real backend
 import { resolveTreeAccess } from "../core/authenticate.js";
+
+async function resolvePrestige({ nodeId, prestige }) {
+  // If a valid prestige is explicitly provided, use it as-is
+  if (typeof prestige === "number" && prestige >= 0) {
+    return prestige;
+  }
+
+  // Otherwise, fetch the node and use its latest prestige
+  const node = await getNodeForAi(nodeId);
+
+  if (!node) {
+    throw new Error(`Node not found: ${nodeId}`);
+  }
+
+  if (typeof node.prestige !== "number") {
+    throw new Error(`Node prestige missing for node ${nodeId}`);
+  }
+
+  return node.prestige;
+}
 
 const TimeWindowSchema = {
   startDate: z
@@ -191,7 +214,6 @@ function getMcpServer() {
     "Entry point for all tree-helper workflows. Loads tree + provides system instructions. READ-ONLY.",
     {
       rootId: z.string(),
-      userId: z.string(),
     },
     {
       readOnlyHint: true,
@@ -199,8 +221,9 @@ function getMcpServer() {
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ rootId, userId }) => {
+    async ({ rootId }) => {
       const systemInstructions = `
+  
   Use get-tree(${rootId}) always before get-node(nodeId) to get initial data.
   Find the nodes for the user request based on the tree, and use get-node when deeper data is needed.
   Avoid presenting raw IDs when possible.
@@ -261,7 +284,6 @@ function getMcpServer() {
     "Waits for decision on intensions menu. Read-only to decide next choice.",
     {
       rootId: z.string(),
-      userId: z.string(),
       treeData: z.any(),
     },
     {
@@ -661,7 +683,7 @@ RULES
     }
   );
 
-  server.tool(
+  /*server.tool(
     "create-node-version-image-note",
     "Creates a new image note for a node version by uploading a base64 image.",
     {
@@ -750,7 +772,7 @@ RULES
         };
       }
     }
-  );
+  );*/
 
   server.tool(
     "update-node-script",
@@ -838,11 +860,15 @@ RULES
       openWorldHint: false,
     },
     async ({ nodeId, key, value, prestige, userId }) => {
+      const version = await resolvePrestige({
+        nodeId,
+        prestige,
+      });
       const result = await setValueForNode({
         nodeId,
         key,
         value,
-        version: prestige,
+        version,
         userId,
       });
 
@@ -881,12 +907,16 @@ RULES
       openWorldHint: false,
     },
     async ({ nodeId, key, goal, prestige, userId }) => {
+      const version = await resolvePrestige({
+        nodeId,
+        prestige,
+      });
       try {
         const result = await setGoalForNode({
           nodeId,
           key,
           goal,
-          version: prestige,
+          version,
           userId,
         });
 
@@ -934,11 +964,13 @@ RULES
       openWorldHint: false,
     },
     async ({ nodeId, status, prestige, isInherited, userId }) => {
+      const version = await resolvePrestige({ nodeId, prestige });
+
       try {
         const result = await editStatus({
           nodeId,
           status,
-          version: prestige,
+          version,
           isInherited,
           userId,
         });
@@ -966,10 +998,7 @@ RULES
       content: z.string().describe("The text content of the note."),
       userId: z.string().describe("The ID of the user creating the note."),
       nodeId: z.string().describe("The ID of the node the note belongs to."),
-      prestige: z
-        .number()
-        .optional()
-        .describe("The prestige version of the node"),
+      prestige: z.number().describe("The prestige version of the node"),
     },
     {
       readOnlyHint: false,
@@ -978,13 +1007,17 @@ RULES
       openWorldHint: false,
     },
     async ({ content, userId, nodeId, prestige }) => {
+      const version = await resolvePrestige({
+        nodeId,
+        prestige,
+      });
       try {
         const result = await createNote({
           contentType: "text",
           content,
           userId,
           nodeId,
-          version: prestige,
+          version,
           isReflection: true, // 🔥 Always included, always true, backend safe
         });
 
@@ -1023,10 +1056,12 @@ RULES
       openWorldHint: false,
     },
     async ({ nodeId, prestige, limit, startDate, endDate }) => {
+      const version = await resolvePrestige({ nodeId, prestige });
+
       try {
         const result = await getNotes({
           nodeId,
-          version: prestige,
+          version,
           limit,
           startDate,
           endDate,
@@ -1240,10 +1275,14 @@ RULES
       openWorldHint: false,
     },
     async ({ nodeId, prestige, newSchedule, reeffectTime, userId }) => {
+      const version = await resolvePrestige({
+        nodeId,
+        prestige,
+      });
       try {
         const result = await updateSchedule({
           nodeId,
-          versionIndex: prestige,
+          versionIndex: version,
           newSchedule,
           reeffectTime,
           userId,
@@ -1563,6 +1602,10 @@ RULES
       openWorldHint: false,
     },
     async ({ nodeId, version, limit, startDate, endDate }) => {
+      const ensuredVersion = await resolvePrestige({
+        nodeId,
+        prestige: version,
+      });
       if (typeof limit === "number" && limit > 30) {
         limit = 30;
       }
@@ -1570,7 +1613,7 @@ RULES
       try {
         const result = await getContributions({
           nodeId,
-          version,
+          version: ensuredVersion,
           limit,
           startDate,
           endDate,
@@ -1823,7 +1866,7 @@ RULES
       }
     }
   );
-  server.tool(
+  /*server.tool(
     "batch-operations",
     "Apply the same operation to multiple nodes, supporting uniform or per-node payloads.",
     {
@@ -2004,7 +2047,7 @@ RULES
         ],
       };
     }
-  );
+  );*/
 
   return server;
 }
@@ -2042,6 +2085,60 @@ async function handleMcpRequest(req, res) {
     const args = req.body?.params?.arguments;
 
     if (method === "tools/call") {
+      const requestArgs = req.body?.params?.arguments ?? {};
+      if (!req.userId) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.end(
+          formatSseResponse({
+            jsonrpc: "2.0",
+            id: req.body.id,
+            error: {
+              code: -32602,
+              message: "You are not authorized as this user",
+            },
+          })
+        );
+        return;
+      }
+      requestArgs.userId = req.userId;
+      const user = await User.findById(req.userId).select("htmlShareToken");
+      const htmlShareToken = user?.htmlShareToken ?? null;
+
+      // inject into args so mapper can use it
+      if (args && htmlShareToken) {
+        args.htmlShareToken = htmlShareToken;
+      }
+
+      const nodeId = requestArgs.nodeId ?? requestArgs.rootId;
+
+      if (nodeId && req.userId) {
+        const access = await resolveTreeAccess(nodeId, req.userId);
+
+        if (!access.canWrite) {
+          res.setHeader("Content-Type", "text/event-stream");
+          res.end(
+            formatSseResponse({
+              jsonrpc: "2.0",
+              id: req.body.id,
+              error: {
+                code: -32602,
+                message:
+                  "Invalid nodeId, or you are not in this tree. Use get-roots-for-user to find rootId's, and then present them to me so I can choose one.",
+              },
+            })
+          );
+          return;
+        }
+      }
+      const apiPath = mapToolCallToApiUrl(toolName, args);
+
+      if (apiPath) {
+        emitNavigate({
+          userId: req.userId,
+          url: `https://tree.tabors.site${apiPath}`,
+        });
+      }
+
       const callKey = `${toolName}:${JSON.stringify(args)}`;
       const now = Date.now();
 
@@ -2054,12 +2151,24 @@ async function handleMcpRequest(req, res) {
       }
 
       // Check pending requests
+      res.setHeader("Content-Type", "text/event-stream");
+
       const pending = pendingCalls.get(callKey);
       if (pending) {
         console.log(`⏳ Waiting for in-flight request: ${toolName}`);
-        const response = await pending;
-        res.setHeader("Content-Type", "text/event-stream");
-        return res.end(formatSseResponse(response));
+        try {
+          const response = await pending;
+          res.end(formatSseResponse(response));
+        } catch (err) {
+          res.end(
+            formatSseResponse({
+              jsonrpc: "2.0",
+              id: req.body.id,
+              error: err,
+            })
+          );
+        }
+        return;
       }
 
       console.log(`→ Tool: ${toolName}`);
@@ -2132,35 +2241,33 @@ async function handleMcpRequest(req, res) {
       });
 
       pendingCalls.set(callKey, requestPromise);
-      const requestArgs = req.body?.params?.arguments ?? {};
-      requestArgs.userId = req.userId;
-
-      const nodeId = requestArgs.nodeId ?? requestArgs.rootId;
-
-      if (nodeId && req.userId) {
-        const access = await resolveTreeAccess(nodeId, req.userId);
-
-        if (!access.canWrite) {
-          res.write(
-            `data: ${JSON.stringify({
-              jsonrpc: "2.0",
-              id: req.body.id,
-              error: {
-                code: 403,
-                message: "You are not in this tree.",
-              },
-            })}\n\n`
-          );
-          res.end();
-          return;
-        }
-      }
 
       await transport.handleRequest(req, res, req.body);
     } else {
       console.log(`→ Method: ${method}`);
       const requestArgs = req.body?.params?.arguments ?? {};
+      if (!req.userId) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.end(
+          formatSseResponse({
+            jsonrpc: "2.0",
+            id: req.body.id,
+            error: {
+              code: -32602,
+              message: "You are not authorized as this user",
+            },
+          })
+        );
+        return;
+      }
       requestArgs.userId = req.userId;
+      const user = await User.findById(req.userId).select("htmlShareToken");
+      const htmlShareToken = user?.htmlShareToken ?? null;
+
+      // inject into args so mapper can use it
+      if (args && htmlShareToken) {
+        args.htmlShareToken = htmlShareToken;
+      }
 
       const nodeId = requestArgs.nodeId ?? requestArgs.rootId;
 
@@ -2168,19 +2275,35 @@ async function handleMcpRequest(req, res) {
         const access = await resolveTreeAccess(nodeId, req.userId);
 
         if (!access.canWrite) {
-          res.write(
-            `data: ${JSON.stringify({
+          res.setHeader("Content-Type", "text/event-stream");
+          res.end(
+            formatSseResponse({
               jsonrpc: "2.0",
               id: req.body.id,
               error: {
-                code: 403,
-                message: "You are not in this tree.",
+                code: -32602,
+                message:
+                  "Invalid nodeId, or you are not in this tree. Use get-roots-for-user to find rootId's, and then present them to me so I can choose one.",
               },
-            })}\n\n`
+            })
           );
-          res.end();
           return;
         }
+      }
+      if (args?.nodeId && "prestige" in args) {
+        args.prestige = await resolvePrestige({
+          nodeId: args.nodeId,
+          prestige: args.prestige,
+        });
+      }
+
+      const apiPath = mapToolCallToApiUrl(toolName, args);
+
+      if (apiPath) {
+        emitNavigate({
+          userId: req.userId,
+          url: `https://tree.tabors.site${apiPath}`,
+        });
       }
 
       await transport.handleRequest(req, res, req.body);
@@ -2194,6 +2317,99 @@ async function handleMcpRequest(req, res) {
         id: req.body.id || null,
       });
     }
+  }
+}
+
+function mapToolCallToApiUrl(toolName, args) {
+  const { nodeId, rootId, userId, prestige, version, htmlShareToken } =
+    args ?? {};
+
+  // helper: always append token safely
+  const withToken = (path) => {
+    if (!htmlShareToken) return path;
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}token=${htmlShareToken}`;
+  };
+
+  switch (toolName) {
+    /* ---------------- TREE / ROOT ---------------- */
+
+    case "tree-start":
+    case "get-tree":
+      return withToken(`/api/root/${rootId || nodeId}?html`);
+
+    case "tree-actions-menu":
+      return withToken(`/api/root/${rootId}?html`);
+
+    case "tree-structure-orchestrator":
+      return withToken(`/api/root/${rootId}?html`);
+
+    /* ---------------- NODE ---------------- */
+
+    case "get-node":
+    case "be-mode-orchestrator":
+    case "scripting-orchestrator":
+    case "node-script-runtime-environment":
+      return withToken(`/api/${nodeId}?html`);
+
+    /* ---------------- NODE VERSION ---------------- */
+
+    case "edit-node-version-value":
+    case "edit-node-version-goal":
+    case "edit-node-or-branch-status":
+    case "edit-node-version-schedule":
+    case "add-node-prestige":
+      return withToken(`/api/${nodeId}/${prestige}?html`);
+
+    /* ---------------- NOTES ---------------- */
+
+    case "get-node-notes":
+    case "create-node-version-note":
+    case "create-node-version-image-note":
+    case "delete-node-note":
+      return withToken(`/api/${nodeId}/${prestige}/notes?html`);
+
+    /* ---------------- CONTRIBUTIONS ---------------- */
+
+    case "get-node-contributions":
+      return withToken(`/api/${nodeId}/${version}/contributions?html`);
+
+    case "get-contributions-by-user":
+      return withToken(`/api/user/${userId}/contributions?html`);
+
+    /* ---------------- USER ---------------- */
+
+    case "get-root-nodes-by-user":
+      return withToken(`/api/user/${userId}?html`);
+
+    case "get-unsearched-notes-by-user":
+    case "get-searched-notes-by-user":
+      return withToken(`/api/user/${userId}/notes?html`);
+
+    case "get-all-tags-for-user":
+      return withToken(`/api/user/${userId}/tags?html`);
+
+    /* ---------------- RAW IDEAS ---------------- */
+
+    case "get-raw-ideas-by-user":
+    case "raw-idea-filter-orchestrator":
+      return withToken(`/api/user/${userId}/raw-ideas?html`);
+
+    /* ---------------- SCRIPTS ---------------- */
+
+    case "update-node-script":
+    case "execute-node-script":
+      return withToken(`/api/${nodeId}?html`);
+
+    /* ---------------- BATCH ---------------- */
+
+    case "batch-operations":
+      return withToken(`/api/user/${userId}/contributions?html`);
+
+    /* ---------------- DEFAULT ---------------- */
+
+    default:
+      return null;
   }
 }
 
