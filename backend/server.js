@@ -5,11 +5,14 @@ import cookieParser from "cookie-parser";
 import registerRoutes from "./routes/routesHandler.js";
 import registerURLRoutes from "./routesURL/routeURLHandler.js";
 
-import { initWebSocketServer } from "./ws/websocket.js";
+import { initWebSocketServer } from "./routesURL/ws.js";
+
+//import { initWebSocketServer } from "./ws/websocket.js";
 
 import "./db/config.js"; // Initialize DB connection
 
 import dotenv from "dotenv";
+//import { initWebSocketServer } from "./ws/websocket.js";
 
 dotenv.config();
 
@@ -39,7 +42,7 @@ registerRoutes(app);
 registerURLRoutes(app);
 
 const server = http.createServer(app);
-initWebSocketServer(server, [rootFrontEnd, treeFrontEnd, beFrontEnd]);
+export const wsServer = initWebSocketServer(server);
 
 const PORT = process.env.PORT || 80; //
 

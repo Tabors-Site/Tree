@@ -794,7 +794,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     <!-- Header -->
     <div class="header">
       <div class="user-info">
-        <h1>@${user.username}</h1>
+        <h1>@${user.username}</h1> 
 
         <div class="user-meta">
           <span class="plan-badge ${profileType}">
@@ -826,6 +826,8 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
           <code id="nodeIdCode">${user._id}</code>
           <button id="copyNodeIdBtn" title="Copy ID">📋</button>
         </div>
+
+        <a href="/app"><h2>NEW: TRY AI GUIDED APP</h2></a>
       </div>
     </div>
 
@@ -1038,9 +1040,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     const notes = result.notes.map((n) => ({
       ...n,
       content:
-        n.contentType === "file"
-          ? `${req.protocol}://${req.get("host")}/uploads/${n.content}`
-          : n.content,
+        n.contentType === "file" ? `/api/uploads/${n.content}` : n.content,
     }));
 
     // JSON MODE (no HTML)
@@ -1606,9 +1606,7 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
       ...n,
 
       content:
-        n.contentType === "file"
-          ? `${req.protocol}://${req.get("host")}/uploads/${n.content}`
-          : n.content,
+        n.contentType === "file" ? `/api/uploads/${n.content}` : n.content,
     }));
 
     if (!wantHtml) {
@@ -3332,9 +3330,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
     const rawIdeas = result.rawIdeas.map((r) => ({
       ...r,
       content:
-        r.contentType === "file"
-          ? `${req.protocol}://${req.get("host")}/uploads/${r.content}`
-          : r.content,
+        r.contentType === "file" ? `/api/uploads/${r.content}` : r.content,
     }));
 
     // ---------- JSON MODE ----------

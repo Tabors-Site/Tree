@@ -4,7 +4,11 @@ import { resolveRootNode } from "./treeFetch.js";
 
 export async function resolveTreeAccess(nodeId, userId) {
   if (!nodeId) {
-    throw new Error("nodeId is required");
+    return {
+      ok: false,
+      error: "NODE_ID_MISSING",
+      message: "nodeId is required",
+    };
   }
 
   const startNodeId = nodeId;
@@ -15,12 +19,21 @@ export async function resolveTreeAccess(nodeId, userId) {
     .exec();
 
   if (!node) {
-    throw new Error("Node not found");
+    return {
+      ok: false,
+      error: "NODE_NOT_FOUND",
+      message:
+        "Node not found. Use get-root-nodes-by-user to find a valid node.",
+    };
   }
 
-  while (!Boolean(node.rootOwner)) {
+  while (!node.rootOwner) {
     if (!node.parent) {
-      throw new Error("Invalid tree: no rootOwner found");
+      return {
+        ok: false,
+        error: "INVALID_TREE",
+        message: "Invalid tree: no rootOwner found",
+      };
     }
 
     node = await Node.findById(node.parent)
@@ -29,18 +42,21 @@ export async function resolveTreeAccess(nodeId, userId) {
       .exec();
 
     if (!node) {
-      throw new Error("Broken tree");
+      return {
+        ok: false,
+        error: "BROKEN_TREE",
+        message: "Broken tree: parent node missing",
+      };
     }
   }
 
   const isRoot = node._id.toString() === startNodeId;
-
   const isOwner = node.rootOwner?.toString() === userId;
-
   const isContributor =
     node.contributors?.some((id) => id.toString() === userId) ?? false;
 
   return {
+    ok: true,
     rootId: node._id.toString(),
     isRoot,
     isOwner,

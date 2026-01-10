@@ -842,16 +842,12 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
     const notes = [...result.notes].reverse().map((n) => ({
       ...n,
       content:
-        n.contentType === "file"
-          ? `${req.protocol}://${req.get("host")}/uploads/${n.content}`
-          : n.content,
+        n.contentType === "file" ? `/api/uploads/${n.content}` : n.content,
     }));
 
     // ---------- OPTIONAL HTML MODE ----------
     if (req.query.html !== undefined) {
-      const base = `${req.protocol}://${req.get(
-        "host"
-      )}/api/${nodeId}/${version}`;
+      const base = `/api/${nodeId}/${version}`;
 
       const nodeName = await getNodeName(nodeId);
 
@@ -1928,7 +1924,14 @@ router.post(
     }
   }
 );
+const allowedParams = ["token", "html", "error"];
 
+function filterQuery(req) {
+  return Object.entries(req.query)
+    .filter(([key]) => allowedParams.includes(key))
+    .map(([key, val]) => (val === "" ? key : `${key}=${val}`))
+    .join("&");
+}
 /* ------------------------------------------------------------------
    GET /:nodeId/:version/notes/:noteId
    - JSON (old behavior)
@@ -1939,6 +1942,9 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
   try {
     const { nodeId, version, noteId } = req.params;
 
+    const queryString = filterQuery(req);
+    const qs = queryString ? `?${queryString}` : "";
+
     const Note = (await import("../db/models/notes.js")).default;
     const note = await Note.findById(noteId)
       .populate("userId", "username")
@@ -1946,20 +1952,14 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
 
     if (!note) return res.status(404).send("Note not found");
 
-    const back = `${req.protocol}://${req.get(
-      "host"
-    )}/api/${nodeId}/${version}/notes?token=${req.query.token ?? ""}&html`;
-
-    const nodeUrl = `${req.protocol}://${req.get("host")}/api/${nodeId}?token=${
-      req.query.token ?? ""
-    }&html`;
+    const back = `/api/${nodeId}/${version}/notes${qs}`;
+    const nodeUrl = `/api/${nodeId}${qs}`;
 
     const userLink = note.userId
-      ? `<a href="/api/user/${note.userId._id}?token=${
-          req.query.token ?? ""
-        }&html">
-           ${note.userId.username ?? note.userId}:
-         </a>`
+      ? `<a href="/api/user/${note.userId._id}${qs}">
+
+       ${note.userId.username ?? "Unknown user"}
+     </a>`
       : note.username ?? "Unknown user";
 
     if (req.query.html !== undefined) {

@@ -19,7 +19,7 @@ const router = express.Router();
 import getNodeName from "./helpers/getNameById.js";
 
 // Allowed query params for HTML mode
-const allowedParams = ["token", "html"];
+const allowedParams = ["token", "html", "error"];
 
 // Utility: keep only allowed query params
 function filterQuery(req) {
@@ -170,65 +170,20 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
     // HTML MODE
     // ---------------------------------------------------------
     if (req.query.html !== undefined) {
-      const host = `https://${req.get("host")}`;
-
       // Versions
-      const versionHtml = `
-  <ul>
-    ${[...node.versions]
-      .reverse()
-      .map(
-        (_, i, arr) =>
-          `<li><a href="${host}/api/${nodeId}/${arr.length - 1 - i}${qs}">
-            Version ${arr.length - 1 - i}
-          </a></li>`
-      )
-      .join("")}
-  </ul>
-`;
-
-      // Scripts
-      const scriptsHtml =
-        node.scripts && node.scripts.length
-          ? node.scripts
-              .map(
-                (s) => `
-          <li>
-            <strong>${s.name}</strong>
-            <pre>${s.script}</pre>
-          </li>`
-              )
-              .join("")
-          : `<li><em>No scripts</em></li>`;
 
       const parentName = node.parent
         ? (await Node.findById(node.parent, "name").lean())?.name
         : null;
-      // Parent link
-      const parentHtml = node.parent
-        ? `<a href="${host}/api/${node.parent}${qs}">${parentName}</a>`
-        : `<em>None</em>`;
 
       const children = await Node.find({ _id: { $in: node.children } })
         .select("name _id")
         .lean();
 
-      const childrenHtml =
-        node.children && node.children.length
-          ? node.children
-              .map((c) => {
-                const child = children.find((child) => child._id === c);
-                const name = child ? child.name : c; // fallback to raw ID if missing
-
-                return `<li><a href="${host}/api/${c}${qs}">${name}</a></li>`;
-              })
-              .join("")
-          : `<li><em>No children</em></li>`;
-
       // ---------------------------------------------------------
       // NEW: Root View button
       // ---------------------------------------------------------
-      const rootUrl = `${host}/api/root/${nodeId}${qs}`;
+      const rootUrl = `/api/root/${nodeId}${qs}`;
 
       // Replace the HTML return in your /:nodeId route with this:
 
@@ -738,7 +693,8 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
           .reverse()
           .map(
             (_, i, arr) =>
-              `<li><a href="${host}/api/${nodeId}/${arr.length - 1 - i}${qs}">
+              `<li><a href="/api/${nodeId}/${arr.length - 1 - i}${qs}">
+
                 Version ${arr.length - 1 - i}
               </a></li>`
           )
@@ -748,12 +704,12 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
 
     <!-- Scripts Section -->
     <div class="scripts-section">
-      <a href="${host}/api/${node._id}/scripts/help${qs}">
+<a href="/api/${node._id}/scripts/help${qs}">
 
       <h2>Scripts</h2></a>
       <form
       method="POST"
-      action="${host}/api/${nodeId}/script/create${qs}"
+action="/api/${nodeId}/script/create${qs}"
       style="display:flex;gap:8px;align-items:center;"
     >
       <input
@@ -785,7 +741,8 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
             ? node.scripts
                 .map(
                   (s) => `
-                  <a href="${host}/api/${node._id}/script/${s._id}${qs}">
+                 <a href="/api/${node._id}/script/${s._id}${qs}">
+
             <li>
               <strong>${s.name}</strong>
               <pre>${s.script}</pre>
@@ -802,14 +759,15 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
       <h2>Parent</h2>
       <p>${
         node.parent
-          ? `<a href="${host}/api/${node.parent}${qs}">${parentName}</a>`
+          ? `<a href="/api/${node.parent}${qs}">
+${parentName}</a>`
           : `<em>None (This is a root node)</em>`
       }</p>
 
       <h3>Change Parent</h3>
       <form
         method="POST"
-        action="${host}/api/${nodeId}/updateParent${qs}"
+  action="/api/${nodeId}/updateParent${qs}"
         class="action-form"
       >
         <input
@@ -831,7 +789,8 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
                 .map((c) => {
                   const child = children.find((child) => child._id === c);
                   const name = child ? child.name : c;
-                  return `<li><a href="${host}/api/${c}${qs}">${name}</a></li>`;
+                  return `<li><a href="/api/${c}${qs}">
+${name}</a></li>`;
                 })
                 .join("")
             : `<li><em>No children yet</em></li>`
@@ -841,7 +800,7 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
       <h3>Add Child</h3>
       <form
         method="POST"
-        action="${host}/api/${nodeId}/createChild${qs}"
+action="/api/${nodeId}/createChild${qs}"
         class="action-form"
       >
         <input
@@ -861,7 +820,7 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
       <h3>⚠️ Danger Zone</h3>
       <form
         method="POST"
-        action="${host}/api/${nodeId}/delete${qs}"
+action="/api/${nodeId}/delete${qs}"
         onsubmit="return confirm('Delete this node and its branch? This can be revived later.')"
       >
         <button type="submit" class="danger-button">
@@ -936,21 +895,6 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
       trimmed: "Trim",
     };
 
-    const statusButtonsHtml = ALL_STATUSES.filter((s) => s !== data.status)
-      .map(
-        (s) => `
-      <button
-        type="submit"
-        name="status"
-        value="${s}"
-        style="padding:8px 12px;margin-right:6px;"
-      >
-        ${STATUS_LABELS[s]}
-      </button>
-    `
-      )
-      .join("");
-
     const showPrestige = v === node.prestige;
 
     // ----------------------------
@@ -960,10 +904,9 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
       const queryString = filterQuery(req);
       const qs = queryString ? `?${queryString}` : "";
 
-      const backUrl = `${req.protocol}://${req.get("host")}/api/${nodeId}${qs}`;
-      const backTreeUrl = `${req.protocol}://${req.get(
-        "host"
-      )}/api/root/${nodeId}${qs}`;
+      const backUrl = `/api/${nodeId}${qs}`;
+      const backTreeUrl = `/api/root/${nodeId}${qs}`;
+
       const createdDate = data.dateCreated
         ? new Date(data.dateCreated).toLocaleString()
         : "Unknown";
@@ -1399,9 +1342,8 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
       <h3>Change Status</h3>
       <form
         method="POST"
-        action="https://${req.get(
-          "host"
-        )}/api/${nodeId}/${version}/editStatus${qs}"
+         action="/api/${nodeId}/${version}/editStatus${qs}"
+
         onsubmit="return confirm('This will apply to all children. Is that ok?')"
         class="action-form"
       >
@@ -1425,9 +1367,8 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
         <h3 style="margin-top: 24px;">Version Control</h3>
         <form
           method="POST"
-          action="https://${req.get(
-            "host"
-          )}/api/${nodeId}/${version}/prestige${qs}"
+         action="/api/${nodeId}/${version}/prestige${qs}"
+
           onsubmit="return confirm('This will complete the current version and create a new prestige level. Continue?')"
           class="action-form"
         >
@@ -1710,7 +1651,6 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
     // HTML MODE
     // ---------------------------------------------------------
     if ("html" in req.query) {
-      const host = `https://${req.get("host")}`;
       const editHistory = contributions.filter((c) => c.type === "edit");
       const executionHistory = contributions.filter(
         (c) => c.type === "execute"
@@ -2331,12 +2271,14 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="${host}/api/${nodeId}${qsWithQ}" class="back-link">
-        ← Back to Node
-      </a>
-      <a href="${host}/api/${nodeId}/scripts/help${qsWithQ}" class="back-link">
-        📚 Help
-      </a>
+     <a href="/api/${nodeId}${qsWithQ}" class="back-link">
+  ← Back to Node
+</a>
+
+<a href="/api/${nodeId}/scripts/help${qsWithQ}" class="back-link">
+  📚 Help
+</a>
+
     </div>
 
     <!-- Header -->
@@ -2633,7 +2575,6 @@ setValueForNode(node._id, "waitTime", newWaitTime, node.prestige + 1);`,
     // HTML MODE
     // ---------------------------------------------------------
     if ("html" in req.query) {
-      const host = `https://${req.get("host")}`;
       const qs = filterQuery(req);
       const qsWithQ = qs ? `?${qs}` : "";
 
@@ -2995,9 +2936,9 @@ setValueForNode(node._id, "waitTime", newWaitTime, node.prestige + 1);`,
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="${host}/api/${nodeId}${qsWithQ}" class="back-link">
-        ← Back to Node
-      </a>
+      <a href="/api/${nodeId}${qsWithQ}" class="back-link">
+  ← Back to Node
+</a>
     </div>
 
     <!-- Header -->
