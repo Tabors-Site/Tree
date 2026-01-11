@@ -77,6 +77,7 @@ async function createNote({
   if (!userId || !nodeId) {
     throw new Error("Missing required fields");
   }
+  let filePath = null;
   if (contentType === "file") {
     if (!file) throw new Error("File is required for file content type");
     filePath = file.filename;
@@ -92,8 +93,6 @@ async function createNote({
     payload,
     file, // allows cleanup on failure
   });
-
-  let filePath = null;
 
   const isReflectionBool = isReflection === "true" || isReflection === true;
   let taggedUserIds = [];
