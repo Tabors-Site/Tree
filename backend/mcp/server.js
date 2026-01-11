@@ -27,7 +27,11 @@ import {
 } from "../core/contributions.js";
 
 import { updateSchedule } from "../core/schedules.js";
-
+import {
+  commitCompressionResult,
+  getNextCompressionPayloadForLLM,
+  createUnderstandingRun,
+} from "../core/understanding.js";
 import { editStatus, addPrestige } from "../core/statuses.js";
 import {
   createNote,
@@ -2048,6 +2052,162 @@ RULES
       };
     }
   );*/
+  server.tool(
+    "understanding-create",
+    "Create an understanding run (shadow tree + merge rules).",
+    {
+      rootNodeId: z.string().describe("Root node to build understanding from."),
+      perspective: z
+        .string()
+        .optional()
+        .default("general")
+        .describe("Perspective for this understanding run."),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ rootNodeId, perspective }) => {
+      const result = await createUnderstandingRun(rootNodeId, perspective);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                message: "Understanding run created",
+                ...result,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "understanding-next",
+    "Get the next summarization payload for the LLM.",
+    {
+      understandingRunId: z.string().describe("UnderstandingRun ID."),
+      rootNodeId: z.string().describe("Root node of this understanding run"),
+      perspective: z.string().describe("Perspective to summarize under."),
+      noteVersion: z.number().describe("Node version to pull notes from."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ understandingRunId, perspective, noteVersion }) => {
+      const payload = await getNextCompressionPayloadForLLM(
+        understandingRunId,
+        perspective,
+        noteVersion
+      );
+
+      if (!payload) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  done: true,
+                  message: "No more summarization steps remaining.",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+      payload.understandingRunId = understandingRunId;
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(payload, null, 2),
+          },
+        ],
+      };
+    }
+  );
+  server.tool(
+    "understanding-commit",
+    "Commit a summarized understanding result.",
+    {
+      mode: z
+        .enum(["leaf", "merge"])
+        .describe("leaf = single node, merge = batch layer"),
+
+      understandingRunId: z
+        .string()
+        .describe("UnderstandingRun this summary belongs to"),
+
+      understandingNodeId: z
+        .string()
+        .optional()
+        .describe("Required when mode = leaf"),
+
+      currentLayer: z
+        .number()
+        .describe("Layer being committed (0 for leaf, N for merge)"),
+
+      perspective: z.string().describe("Perspective used"),
+      rootNodeId: z.string().describe("Root node of this understanding run"),
+      encoding: z.string().describe("LLM-produced summary"),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+    },
+    async ({
+      mode,
+      understandingRunId,
+      understandingNodeId,
+      currentLayer,
+      perspective,
+      encoding,
+    }) => {
+      await commitCompressionResult({
+        mode,
+        understandingRunId,
+        understandingNodeId,
+        currentLayer,
+        perspective,
+        encoding,
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                message: "Understanding committed successfully",
+                mode,
+                understandingRunId,
+                understandingNodeId,
+                currentLayer,
+                perspective,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
 
   return server;
 }
@@ -2321,8 +2481,20 @@ async function handleMcpRequest(req, res) {
 }
 
 function mapToolCallToApiUrl(toolName, args) {
-  const { nodeId, rootId, userId, prestige, version, htmlShareToken } =
-    args ?? {};
+  const {
+    nodeId,
+    rootId,
+    rootNodeId,
+    userId,
+    prestige,
+    version,
+    htmlShareToken,
+    understandingRunId,
+    understandingNodeId,
+  } = args ?? {};
+
+  // 🔑 normalize root once (THIS FIXES THE BREAK)
+  const resolvedRootId = rootId ?? rootNodeId ?? nodeId;
 
   // helper: always append token safely
   const withToken = (path) => {
@@ -2336,13 +2508,13 @@ function mapToolCallToApiUrl(toolName, args) {
 
     case "tree-start":
     case "get-tree":
-      return withToken(`/api/root/${rootId || nodeId}?html`);
+      return withToken(`/api/root/${resolvedRootId}?html`);
 
     case "tree-actions-menu":
-      return withToken(`/api/root/${rootId}?html`);
+      return withToken(`/api/root/${resolvedRootId}?html`);
 
     case "tree-structure-orchestrator":
-      return withToken(`/api/root/${rootId}?html`);
+      return withToken(`/api/root/${resolvedRootId}?html`);
 
     /* ---------------- NODE ---------------- */
 
@@ -2351,6 +2523,33 @@ function mapToolCallToApiUrl(toolName, args) {
     case "scripting-orchestrator":
     case "node-script-runtime-environment":
       return withToken(`/api/${nodeId}?html`);
+
+    /* ---------------- UNDERSTANDINGS ---------------- */
+
+    case "understanding-create":
+      if (!resolvedRootId) return null;
+      return withToken(`/api/root/${resolvedRootId}/understandings?html`);
+
+    case "understanding-next":
+      if (!resolvedRootId || !understandingRunId) return null;
+      return withToken(
+        `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}?html`
+      );
+
+    case "understanding-commit":
+      if (understandingNodeId && resolvedRootId) {
+        return withToken(
+          `/api/root/${resolvedRootId}/understandings/${understandingNodeId}?html`
+        );
+      }
+
+      if (understandingRunId && resolvedRootId) {
+        return withToken(
+          `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}?html`
+        );
+      }
+
+      return null;
 
     /* ---------------- NODE VERSION ---------------- */
 

@@ -867,6 +867,33 @@ ${rootMeta.contributors
       <!-- Children Tree -->
       <h2>Children</h2>
       ${childrenHtml}
+<!-- Understandings -->
+<h2>Understandings</h2>
+
+<a
+  href="/api/root/${nodeId}/understandings${queryString}"
+  style="
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    background: #667eea;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    transition: all 0.2s;
+  "
+  onmouseover="this.style.transform='translateY(-2px)'"
+  onmouseout="this.style.transform='translateY(0)'"
+>
+  View Understandings
+</a>
+<br />
+<br />
+<h2>Tree Ownership Options</h2>
 
       <!-- Invite Form -->
       ${inviteFormHtml}
@@ -876,7 +903,7 @@ ${rootMeta.contributors
 
       <!-- Transaction Policy -->
 ${policyHtml}
-
+    <h2>Retire Tree</h2>
       <!-- Retire Button -->
       ${retireHtml}
     </div>
