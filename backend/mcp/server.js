@@ -3,6 +3,7 @@ import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { setValueForNode, setGoalForNode } from "../core/values.js";
 import { fileTypeFromBuffer } from "file-type";
 import User from "../db/models/user.js";
+import UnderstandingRun from "../db/models/understandingRun.js";
 
 import { emitNavigate } from "../routesURL/ws.js";
 
@@ -2096,8 +2097,6 @@ RULES
     {
       understandingRunId: z.string().describe("UnderstandingRun ID."),
       rootNodeId: z.string().describe("Root node of this understanding run"),
-      perspective: z.string().describe("Perspective to summarize under."),
-      noteVersion: z.number().describe("Node version to pull notes from."),
     },
     {
       readOnlyHint: true,
@@ -2105,12 +2104,26 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ understandingRunId, perspective, noteVersion }) => {
-      const payload = await getNextCompressionPayloadForLLM(
-        understandingRunId,
-        perspective,
-        noteVersion
-      );
+    async ({ understandingRunId, rootNodeId }) => {
+      // 1️⃣ Load run to get perspective (authoritative)
+      const run = await UnderstandingRun.findById(understandingRunId).lean();
+      if (!run) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                { error: "UnderstandingRun not found" },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      // 2️⃣ Get next compression payload (pure logic)
+      const payload = await getNextCompressionPayloadForLLM(understandingRunId);
 
       if (!payload) {
         return {
@@ -2129,41 +2142,71 @@ RULES
           ],
         };
       }
-      payload.understandingRunId = understandingRunId;
+
+      // 3️⃣ Build explicit LLM instructions (THIS IS THE KEY)
+      const instructions = `
+You are performing a summarization step for an "understanding run".
+
+Perspective:
+"${run.perspective}"
+CRITICAL RULES:
+- You MUST NOT invent or guess any IDs or layer numbers.
+- For LEAF mode:
+  - Use mode = "leaf"
+  - Use understandingNodeId exactly as provided in target.understandingNodeId
+  - Do NOT provide currentLayer (it will be assumed as 0)
+- For MERGE mode:
+  - Use mode = "merge"
+  - You MUST set currentLayer EXACTLY equal to target.nextLayer
+  - Do NOT change or recompute the layer number
+
+Summarization Rules:
+- Summarize STRICTLY from this perspective.
+- Ignore information not relevant to this perspective.
+- Preserve key facts, definitions, procedures, and distinctions.
+- Do NOT add new information.
+- Do NOT speculate or infer beyond the inputs.
+- Output must be suitable for hierarchical merging.
+
+Return ONLY the summary text. The system will handle structure.
+`.trim();
+
+      // 4️⃣ Attach instructions to payload (LLM-facing)
+      const llmPayload = {
+        ...payload,
+        instructions,
+      };
+
+      // 5️⃣ Return to LLM
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(payload, null, 2),
+            text: JSON.stringify(llmPayload, null, 2),
           },
         ],
       };
     }
   );
+
   server.tool(
     "understanding-commit",
     "Commit a summarized understanding result.",
     {
-      mode: z
-        .enum(["leaf", "merge"])
-        .describe("leaf = single node, merge = batch layer"),
+      mode: z.enum(["leaf", "merge"]),
 
-      understandingRunId: z
-        .string()
-        .describe("UnderstandingRun this summary belongs to"),
+      understandingRunId: z.string(),
 
-      understandingNodeId: z
-        .string()
-        .optional()
-        .describe("Required when mode = leaf"),
+      // leaf only
+      understandingNodeId: z.string().optional(),
+      rootNodeId: z.string().describe("Root node of this understanding run"),
 
+      // merge only
       currentLayer: z
         .number()
-        .describe("Layer being committed (0 for leaf, N for merge)"),
+        .optional("EXACTLY equal to target.nextLayer from next"),
 
-      perspective: z.string().describe("Perspective used"),
-      rootNodeId: z.string().describe("Root node of this understanding run"),
-      encoding: z.string().describe("LLM-produced summary"),
+      encoding: z.string(),
     },
     {
       readOnlyHint: false,
@@ -2175,15 +2218,14 @@ RULES
       understandingRunId,
       understandingNodeId,
       currentLayer,
-      perspective,
       encoding,
+      rootNodeId,
     }) => {
       await commitCompressionResult({
         mode,
         understandingRunId,
         understandingNodeId,
         currentLayer,
-        perspective,
         encoding,
       });
 
@@ -2198,7 +2240,6 @@ RULES
                 understandingRunId,
                 understandingNodeId,
                 currentLayer,
-                perspective,
               },
               null,
               2

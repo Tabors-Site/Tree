@@ -73,25 +73,52 @@ router.get(
   async (req, res) => {
     try {
       const { runId, nodeId } = req.params;
-      const queryString = buildQueryString(req);
+      const qs = buildQueryString(req);
 
       const run = await UnderstandingRun.findById(runId).lean();
       if (!run) {
         return res.status(404).json({ error: "UnderstandingRun not found" });
       }
 
+      const topology = new Map(Object.entries(run.topology || {}));
+
       const nodes = await UnderstandingNode.find({
         _id: { $in: Object.values(run.nodeMap ?? {}) },
       })
-        .select(
-          "_id realNodeId parent children mergeLayer depthFromRoot perspectiveStates"
-        )
+        .select("_id realNodeId perspectiveStates")
         .lean();
 
+      const byId = new Map(nodes.map((n) => [String(n._id), n]));
+
+      // ✅ completion is run-relative
       const completed = {};
-      for (const n of nodes) {
-        const state = n.perspectiveStates?.[run._id];
-        completed[n._id] = !!state && state.currentLayer === n.mergeLayer;
+      for (const node of nodes) {
+        const topo = topology.get(String(node._id));
+        const state = node.perspectiveStates?.[run._id];
+
+        let isCompleted = false;
+
+        if (state) {
+          // Case 1: reached its declared max merge layer
+          if (state.currentLayer >= topo.mergeLayer) {
+            isCompleted = true;
+          }
+          // Case 2: final root — children are all completed
+          else if (topo.parent === null && topo.children.length > 0) {
+            isCompleted = topo.children.every((cid) => {
+              const child = byId.get(String(cid));
+              const childState = child?.perspectiveStates?.[run._id];
+              const childTopo = topology.get(String(cid));
+              return (
+                childState &&
+                childTopo &&
+                childState.currentLayer >= childTopo.mergeLayer
+              );
+            });
+          }
+        }
+
+        completed[node._id] = isCompleted;
       }
 
       const data = {
@@ -101,40 +128,62 @@ router.get(
         maxDepth: run.maxDepth,
         createdAt: run.createdAt,
         nodeMap: run.nodeMap ?? {},
-        nodes,
         completed,
       };
 
-      // Check if HTML output is requested
+      // JSON mode
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       if (!wantHtml) {
-        return res.json(data);
+        return res.json({
+          ...data,
+          nodes,
+          topology: run.topology,
+        });
       }
 
-      // Build tree structure
-      const nodeById = new Map(nodes.map((n) => [n._id, { ...n }]));
-      const rootNode = nodes.find((n) => n.parent === null);
-
-      const buildTree = (nodeId) => {
-        const node = nodeById.get(nodeId);
-        if (!node) return null;
+      // 🌳 Build tree from topology
+      const buildTree = (uNodeId) => {
+        const node = byId.get(String(uNodeId));
+        const topo = topology.get(String(uNodeId));
+        if (!node || !topo) return null;
 
         return {
           ...node,
-          childNodes: (node.children || []).map(buildTree).filter(Boolean),
+          depthFromRoot: topo.depthFromRoot,
+          mergeLayer: topo.mergeLayer,
+          childNodes: topo.children.map(buildTree).filter(Boolean),
         };
       };
 
-      const tree = rootNode ? buildTree(rootNode._id) : null;
+      // Find root
+      const rootEntry = [...topology.entries()].find(
+        ([, topo]) => topo.parent === null
+      );
+      let rootFinalEncoding = null;
+      let rootIsCompleted = false;
 
-      // Calculate stats
+      if (rootEntry) {
+        const rootUNodeId = rootEntry[0];
+        const rootNode = byId.get(String(rootUNodeId));
+        const rootState = rootNode?.perspectiveStates?.[run._id];
+
+        rootIsCompleted = !!completed[rootUNodeId];
+
+        if (rootIsCompleted && rootState?.encoding) {
+          rootFinalEncoding = rootState.encoding;
+        }
+      }
+
+      const tree = rootEntry ? buildTree(rootEntry[0]) : null;
+
+      // 📊 Progress
       const totalNodes = nodes.length;
       const completedCount = Object.values(completed).filter(Boolean).length;
       const progressPercent =
         totalNodes > 0 ? Math.round((completedCount / totalNodes) * 100) : 0;
 
       const rainbow = [
-        "#FF6B6B",
+        "#667eea",
         "#4ECDC4",
         "#45B7D1",
         "#FFA07A",
@@ -144,74 +193,116 @@ router.get(
         "#85C1E2",
       ];
 
-      // Render tree recursively
+      // 🎨 Render tree with modern styling
       const renderTree = (node, depth = 0) => {
         if (!node) return "";
 
         const isCompleted = completed[node._id];
         const color = rainbow[depth % rainbow.length];
         const statusIcon = isCompleted ? "✓" : "○";
-        const statusColor = isCompleted ? "#2e7d32" : "#757575";
 
         const perspectiveState = node.perspectiveStates?.[run._id];
-        const encoding = perspectiveState?.encoding || "No encoding available";
+        const encoding = perspectiveState?.encoding || "";
+        const encodingSummary = encoding
+          ? encoding.length > 150
+            ? encoding.slice(0, 150) + "..."
+            : encoding
+          : "No encoding yet";
 
         let html = `
-          <div style="margin-left: ${
-            depth * 20
-          }px; border-left: 2px solid ${color}; padding-left: 10px; margin-top: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;" onclick="toggleNode('${
-              node._id
-            }')">
-              <span style="color: ${statusColor}; font-weight: bold; font-size: 18px;">${statusIcon}</span>
-              <span style="color: #1976d2; font-size: 14px;">▸ ${node._id.slice(
-                0,
-                8
-              )}...</span>
-              <span style="color: #666; font-size: 12px;">Depth ${
-                node.depthFromRoot
-              } • Layer ${node.mergeLayer}</span>
-            </div>
-            <div id="detail-${
-              node._id
-            }" style="display: none; margin-top: 8px; padding: 12px; background: #f5f5f5; border-radius: 4px; font-size: 13px; line-height: 1.6;">
-              <div style="margin-bottom: 8px;"><strong>Understanding Node ID:</strong> <span style="font-family: monospace; font-size: 12px;"> <a href="/api/root/${
-                data.rootNodeId
-              }/understandings/${node._id}${queryString}">${
+          <div class="tree-node" style="margin-left:${depth * 24}px;">
+            <div class="tree-node-header ${
+              isCompleted ? "completed" : "pending"
+            }" 
+                 style="border-left-color: ${color};">
+              <div onclick="toggleNode('${node._id}')">
+                <div class="node-status">
+                  <span class="status-icon ${
+                    isCompleted ? "completed" : "pending"
+                  }">${statusIcon}</span>
+                  <span class="expand-icon">▸</span>
+                </div>
+                <div class="node-info">
+                  <div class="node-ids">
+                    <a href="/api/${
+                      node.realNodeId
+                    }${qs}" class="node-link" onclick="event.stopPropagation();">
+                      📄 ${node.realNodeId.slice(0, 8)}...
+                    </a>
+                    <span class="separator">•</span>
+                    <a href="/api/root/${run.rootNodeId}/understandings/${
           node._id
-        }</span></div></a>
-              <div style="margin-bottom: 8px;"><strong>Real Node ID:</strong> <span style="font-family: monospace; font-size: 12px;"><a href="/api/${
-                node.realNodeId
-              }${queryString}">${node.realNodeId}</span></div></a>
-              <div style="margin-bottom: 12px;"><strong>Status:</strong> <span style="color: ${statusColor}; font-weight: bold;">${
-          isCompleted ? "Completed" : "Pending"
-        }</span></div>
-              <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #ddd;">
-                <strong style="display: block; margin-bottom: 6px;">Encoding:</strong>
-                <div style="color: #444; white-space: pre-wrap; word-wrap: break-word;">${encoding}</div>
+        }${qs}" class="understanding-link" onclick="event.stopPropagation();">
+                      🧠 ${node._id.slice(0, 8)}...
+                    </a>
+                  </div>
+                  <div class="node-meta">
+                    Depth ${node.depthFromRoot} • Layer ${node.mergeLayer}
+                  </div>
+                  ${
+                    encoding
+                      ? `<div class="encoding-preview">${encodingSummary}</div>`
+                      : ""
+                  }
+                </div>
+              </div>
+              <div id="detail-${node._id}" class="node-details">
+                <div class="detail-row">
+                  <strong>Understanding Node:</strong> 
+                  <a href="/api/root/${run.rootNodeId}/understandings/${
+          node._id
+        }${qs}" class="detail-link" onclick="event.stopPropagation();">
+                    <code>${node._id}</code>
+                  </a>
+                </div>
+                <div class="detail-row">
+                  <strong>Real Node:</strong> 
+                  <a href="/api/${
+                    node.realNodeId
+                  }${qs}" class="detail-link" onclick="event.stopPropagation();">
+                    <code>${node.realNodeId}</code>
+                  </a>
+                </div>
+                <div class="detail-row">
+                  <strong>Status:</strong> 
+                  <span class="status-badge ${
+                    isCompleted ? "completed" : "pending"
+                  }">
+                    ${isCompleted ? "Completed" : "Pending"}
+                  </span>
+                </div>
+                ${
+                  encoding
+                    ? `
+                  <div class="detail-row encoding-full">
+                    <strong>Full Encoding:</strong>
+                    <pre>${encoding}</pre>
+                  </div>
+                `
+                    : ""
+                }
               </div>
             </div>
           </div>
         `;
 
-        if (node.childNodes && node.childNodes.length > 0) {
-          for (const child of node.childNodes) {
-            html += renderTree(child, depth + 1);
-          }
+        for (const child of node.childNodes || []) {
+          html += renderTree(child, depth + 1);
         }
 
         return html;
       };
 
-      const currentUserId = req.userId ? req.userId.toString() : null;
+      const createdDate = new Date(run.createdAt).toLocaleString();
 
-      // Send HTML
-      return res.send(`<!DOCTYPE html>
+      return res.send(`
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Understanding Run</title>
+  <meta name="theme-color" content="#667eea">
+  <title>Understanding Run Progress</title>
   <style>
     * {
       box-sizing: border-box;
@@ -219,350 +310,630 @@ router.get(
       padding: 0;
     }
 
-    html, body {
-      width: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-    }
-
     body {
-      padding-bottom: 40px;
-    }
-
-    .top-nav {
-      background: white;
-      border-bottom: 1px solid #e0e0e0;
-      padding: 12px 20px;
-      display: flex;
-      gap: 15px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .top-nav a {
-      color: #1976d2;
-      text-decoration: none;
-      font-size: 14px;
-    }
-
-    .top-nav a:hover {
-      text-decoration: underline;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
     }
 
     .container {
-      max-width: 900px;
+      max-width: 1000px;
       margin: 0 auto;
-      padding: 20px;
     }
 
-    .card {
-      background: white;
-      padding: 24px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
       margin-bottom: 20px;
+      flex-wrap: wrap;
     }
 
-    .card h1 {
-      margin: 0 0 16px 0;
-      color: #1976d2;
-      font-size: 24px;
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
-    .card h2 {
-      margin: 0 0 16px 0;
-      font-size: 18px;
-      color: #333;
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
     }
 
-    .info-grid {
+    /* Header Section */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    .run-info {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 12px;
       margin-top: 16px;
     }
 
-    .info-item-label {
-      font-size: 12px;
-      color: #757575;
-      margin-bottom: 4px;
-    }
-
-    .info-item-value {
-      font-size: 14px;
-    }
-
-    .info-item-value.mono {
-      font-family: monospace;
-    }
-
-    .perspective-section {
-      margin-top: 20px;
-      padding: 16px;
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-      border-radius: 8px;
-      border-left: 4px solid #667eea;
-    }
-
-    .perspective-label {
-      font-size: 14px;
-      font-weight: 700;
-      color: #667eea;
-      margin-bottom: 8px;
-    }
-
-    .perspective-value {
-      font-size: 15px;
-      color: #444;
-      line-height: 1.6;
-    }
-
-    .progress-bar-container {
-      flex: 1;
-      background: #e0e0e0;
-      height: 24px;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-
-    .progress-bar-fill {
-      background: linear-gradient(90deg, #2e7d32, #4caf50);
-      height: 100%;
-      transition: width 0.3s;
-    }
-
-    .progress-percent {
-      font-size: 20px;
-      font-weight: bold;
-      color: #2e7d32;
-      min-width: 60px;
-      text-align: right;
-    }
-
-    .stats-row {
+    .info-item {
       display: flex;
-      gap: 30px;
-      font-size: 14px;
-      color: #666;
-      margin-top: 12px;
+      flex-direction: column;
+      gap: 4px;
     }
 
-    .toggle-button {
-      background: #1976d2;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 4px;
-      cursor: pointer;
+    .info-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+    }
+
+    .info-value {
       font-size: 14px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .run-id {
+      background: #f0f0f0;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: 'SF Mono', Monaco, monospace;
+      color: #666;
+    }
+
+    /* Progress Section */
+    .progress-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 16px;
     }
 
-    .toggle-button:hover {
-      background: #1565c0;
+    .progress-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
     }
 
-    .json-data {
-      background: #f5f5f5;
+    .progress-stats {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .progress-bar-container {
+      height: 40px;
+      background: #f0f0f0;
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 20px;
+      transition: width 0.6s ease;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 16px;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+    }
+
+    .progress-text {
+      color: white;
+      font-weight: 700;
+      font-size: 14px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .progress-detail {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 14px;
+      color: #666;
+    }
+
+    /* Tree Section */
+    .tree-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .tree-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+    }
+
+    /* Tree Nodes */
+    .tree-node {
+      margin-bottom: 8px;
+    }
+
+    .tree-node-header {
+      display: flex;
+      flex-direction: column;
       padding: 16px;
-      border-radius: 4px;
-      overflow-x: auto;
-      font-size: 12px;
-      margin: 0;
-      font-family: monospace;
+      background: #f8f9fa;
+      border-radius: 12px;
+      border-left: 4px solid #667eea;
+      transition: all 0.2s;
     }
 
+    .tree-node-header > div:first-child {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    .tree-node-header:hover {
+      background: white;
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .tree-node-header.completed {
+      background: #e8f5e9;
+    }
+
+    .tree-node-header.completed:hover {
+      background: #c8e6c9;
+    }
+
+    .node-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .status-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .status-icon.completed {
+      background: #4caf50;
+      color: white;
+    }
+
+    .status-icon.pending {
+      background: #e0e0e0;
+      color: #757575;
+    }
+
+    .expand-icon {
+      color: #999;
+      font-size: 14px;
+      transition: transform 0.2s;
+    }
+
+    .tree-node-header.expanded .expand-icon {
+      transform: rotate(90deg);
+    }
+
+    .node-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .node-ids {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+
+    .node-link, .understanding-link {
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .node-link {
+      color: #667eea;
+      background: rgba(102, 126, 234, 0.1);
+    }
+
+    .node-link:hover {
+      background: rgba(102, 126, 234, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .understanding-link {
+      color: #764ba2;
+      background: rgba(118, 75, 162, 0.1);
+    }
+
+    .understanding-link:hover {
+      background: rgba(118, 75, 162, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .separator {
+      color: #ccc;
+    }
+
+    .node-meta {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .encoding-preview {
+      font-size: 13px;
+      color: #555;
+      line-height: 1.5;
+      margin-top: 8px;
+      font-style: italic;
+    }
+
+    .node-details {
+      display: none;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 2px solid rgba(0, 0, 0, 0.06);
+      width: 100%;
+    }
+
+    .node-details.visible {
+      display: block;
+    }
+
+    .detail-row {
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .detail-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .detail-row strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #666;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .detail-row code {
+      background: #f5f5f5;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: 'SF Mono', Monaco, monospace;
+      color: #666;
+      word-break: break-all;
+      display: inline-block;
+    }
+
+    .detail-link {
+      text-decoration: none;
+      display: inline-block;
+      transition: transform 0.2s;
+    }
+
+    .detail-link:hover {
+      transform: translateY(-1px);
+    }
+
+    .detail-link code {
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .detail-link:hover code {
+      background: #e3f2fd;
+      color: #667eea;
+    }
+
+    .detail-row pre {
+      background: #f5f5f5;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: 'SF Mono', Monaco, monospace;
+      color: #333;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .encoding-full {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+
+    .status-badge.completed {
+      background: #e8f5e9;
+      color: #388e3c;
+    }
+
+    .status-badge.pending {
+      background: #fff3e0;
+      color: #f57c00;
+    }
+
+    /* Responsive Design */
     @media (max-width: 640px) {
-      .container {
-        padding: 10px;
-      }
-      
-      .card {
+      body {
         padding: 16px;
       }
 
-      .info-grid {
+      .header,
+      .progress-section,
+      .tree-section {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .run-info {
         grid-template-columns: 1fr;
       }
+
+      .progress-bar-container {
+        height: 32px;
+      }
+
+      .progress-stats {
+        font-size: 20px;
+      }
+
+      .tree-node-header {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .node-ids {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
     }
-      .header-section {
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #e0e0e0;
-}
-.back-nav {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.back-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  color: #667eea;
-  text-decoration: none;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.back-link:hover {
-  background: white;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.owner-info {
-  font-size: 14px;
-  color: #667eea;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-h1 {
-  font-size: 28px;
-  margin: 12px 0;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
   </style>
 </head>
 <body>
-  ${
-    currentUserId
-      ? `
-  
-  `
-      : ""
-  }
-
   <div class="container">
-  <div class="back-nav">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/root/${run.rootNodeId}${qs}" class="back-link">
+        ← Back to Tree
+      </a>
+      <a href="/api/root/${
+        run.rootNodeId
+      }/understandings${qs}" class="back-link">
+        Understandings
+      </a>
+    </div>
 
-  <a href="/api/root/${nodeId}${queryString}" class="back-link">
- ← Back to Tree  </a>
-
-  <a href="/api/root/${nodeId}/understandings${queryString}" class="back-link">
-Understandings  </a>
-
-
-</div>
-
-    <!-- Header Card -->
-    <div class="card">
-      <h1>Understanding Run</h1>
-      <div class="info-grid">
-        <div>
-          <div class="info-item-label">Run ID</div>
-          <div class="info-item-value mono">${data.understandingRunId}</div>
-        </div>
-        <div>
-          <div class="info-item-label">Root Node ID</div>
-          <div class="info-item-value mono">
-            <a href="/api/root/${
-              data.rootNodeId
-            }${queryString}" style="color: #1976d2; text-decoration: none;">${data.rootNodeId.slice(
-        0,
-        8
-      )}...</a>
+    <!-- Header -->
+    <div class="header">
+      <h1>Understanding Run Progress</h1>
+      <div class="run-info">
+        <div class="info-item">
+          <div class="info-label">Run ID</div>
+          <div class="info-value">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="run-id" id="runIdCode">${run._id}</span>
+              <button id="copyRunIdBtn" title="Copy Run ID" style="background: none; border: none; cursor: pointer; padding: 4px; opacity: 0.6; font-size: 16px; transition: opacity 0.2s, transform 0.2s;">📋</button>
+            </div>
           </div>
         </div>
-        <div>
-          <div class="info-item-label">Max Depth</div>
-          <div class="info-item-value">${data.maxDepth}</div>
+        <div class="info-item">
+          <div class="info-label">Max Depth</div>
+          <div class="info-value">${run.maxDepth}</div>
         </div>
-        <div>
-          <div class="info-item-label">Created</div>
-          <div class="info-item-value">${new Date(
-            data.createdAt
-          ).toLocaleString()}</div>
-        </div>
-      </div>
-
-      <div class="perspective-section">
-        <div class="perspective-label">Perspective</div>
-        <div class="perspective-value">${data.perspective}</div>
-      </div>
-    </div>
-
-    <!-- Progress Card -->
-    <div class="card">
-      <h2>Progress Overview</h2>
-      <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 12px;">
-        <div class="progress-bar-container">
-          <div class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
-        </div>
-        <div class="progress-percent">${progressPercent}%</div>
-      </div>
-      <div class="stats-row">
-        <div>
-          <span style="color: #2e7d32; font-weight: bold;">✓</span> 
-          ${completedCount} completed
-        </div>
-        <div>
-          <span style="color: #757575; font-weight: bold;">○</span> 
-          ${totalNodes - completedCount} pending
-        </div>
-        <div>
-          <strong>Total:</strong> ${totalNodes} nodes
+        <div class="info-item">
+          <div class="info-label">Created</div>
+          <div class="info-value">${createdDate}</div>
         </div>
       </div>
     </div>
 
-    <!-- Node Tree Card -->
-    <div class="card">
-      <h2>Node Hierarchy</h2>
-      <div style="font-size: 12px; color: #666; margin-bottom: 12px;">
-        Click on any node to view details and encoding
-      </div>
-      ${
-        tree
-          ? renderTree(tree)
-          : '<div style="color: #757575;">No tree structure available</div>'
-      }
+    <!-- Perspective Section -->
+    <div class="header" style="padding: 20px 28px;">
+      <div class="info-label" style="margin-bottom: 8px;">Perspective</div>
+      <div style="font-size: 16px; font-weight: 600; color: #1a1a1a; font-style: italic;">${
+        run.perspective
+      }</div>
     </div>
 
-   
+    <!-- Progress Section -->
+    <div class="progress-section">
+    ${
+      rootIsCompleted && rootFinalEncoding
+        ? `
+  <div class="header" style="
+    padding: 28px;
+    margin-bottom: 24px;
+    border-left: 6px solid #4caf50;
+  ">
+    <div class="info-label" style="margin-bottom: 8px;">
+      Final Understanding (Root)
+    </div>
+    <div style="
+      font-size: 14px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f5f5f5;
+      padding: 16px;
+      border-radius: 10px;
+      font-family: 'SF Mono', Monaco, monospace;
+      color: #333;
+    ">
+      ${rootFinalEncoding}
+    </div>
+  </div>
+`
+        : ""
+    }
+
+      <div class="progress-header">
+        <div class="progress-title">Compression Progress</div>
+        <div class="progress-stats">${progressPercent}%</div>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar" style="width: ${progressPercent}%;">
+          ${
+            progressPercent > 10
+              ? `<span class="progress-text">${progressPercent}%</span>`
+              : ""
+          }
+        </div>
+      </div>
+      <div class="progress-detail">
+        ${completedCount} of ${totalNodes} nodes completed
+      </div>
+    </div>
+
+    <!-- Tree Section -->
+    <div class="tree-section">
+      <h2>Understanding Tree</h2>
+      ${tree ? renderTree(tree) : "<p>No tree available</p>"}
+    </div>
   </div>
 
   <script>
-    function toggleNode(nodeId) {
-      const detail = document.getElementById('detail-' + nodeId);
-      const arrow = event.currentTarget.querySelector('span:nth-child(2)');
-      
-      if (detail.style.display === 'none') {
-        detail.style.display = 'block';
-        arrow.textContent = arrow.textContent.replace('▸', '▾');
-      } else {
-        detail.style.display = 'none';
-        arrow.textContent = arrow.textContent.replace('▾', '▸');
-      }
+    // Copy Run ID functionality
+    const copyBtn = document.getElementById("copyRunIdBtn");
+    const runIdCode = document.getElementById("runIdCode");
+
+    if (copyBtn && runIdCode) {
+      copyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(runIdCode.textContent).then(() => {
+          copyBtn.textContent = "✔️";
+          setTimeout(() => (copyBtn.textContent = "📋"), 900);
+        });
+      });
+
+      copyBtn.addEventListener("mouseenter", () => {
+        copyBtn.style.opacity = "1";
+        copyBtn.style.transform = "scale(1.1)";
+      });
+
+      copyBtn.addEventListener("mouseleave", () => {
+        copyBtn.style.opacity = "0.6";
+        copyBtn.style.transform = "scale(1)";
+      });
     }
 
-   
+    function toggleNode(id) {
+      const details = document.getElementById('detail-' + id);
+      const header = details.closest('.tree-node-header');
+      
+      if (details.classList.contains('visible')) {
+        details.classList.remove('visible');
+        header.classList.remove('expanded');
+      } else {
+        details.classList.add('visible');
+        header.classList.add('expanded');
+      }
+    }
   </script>
 </body>
-</html>`);
+</html>
+      `);
     } catch (err) {
       console.error("Error fetching UnderstandingRun:", err);
-      res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: err.message });
     }
   }
 );
+
 router.get(
   "/root/:nodeId/understandings/:understandingNodeId",
   urlAuth,
   async (req, res) => {
     try {
       const { understandingNodeId, nodeId } = req.params;
+      const { runId } = req.query;
+
+      /* =========================
+         Load Understanding Node
+         ========================= */
 
       const uNode = await UnderstandingNode.findById(
         understandingNodeId
@@ -575,13 +946,66 @@ router.get(
       const realNode = await Node.findById(uNode.realNodeId)
         .select("name prestige")
         .lean();
+
+      /* =========================
+         Optional Run Context
+         ========================= */
+
+      let run = null;
+      let structure = null;
+
+      if (runId) {
+        run = await UnderstandingRun.findById(runId).lean();
+        if (!run) {
+          return res.status(404).json({ error: "UnderstandingRun not found" });
+        }
+
+        const topo = run.topology?.[understandingNodeId];
+        if (topo) {
+          structure = {
+            depthFromRoot: topo.depthFromRoot,
+            mergeLayer: topo.mergeLayer,
+            childrenCount: topo.children.length,
+          };
+        }
+      }
+
+      /* =========================
+         Notes (for leaf / context)
+         ========================= */
+
       const notesResult = await getNotes({
         nodeId: realNode._id,
         version: realNode.prestige,
       });
-      const { runId } = req.query; // optional filter
 
-      const state = runId ? uNode.perspectiveStates?.[runId] : null;
+      /* =========================
+         Build Encoding History
+         ========================= */
+
+      const encodingHistory = Object.entries(uNode.perspectiveStates || {}).map(
+        ([stateRunId, state]) => {
+          const isCurrentRun = runId && stateRunId === runId;
+          const isCompleted =
+            run &&
+            run.topology?.[understandingNodeId] &&
+            state.currentLayer === run.topology[understandingNodeId].mergeLayer;
+
+          return {
+            runId: stateRunId,
+            perspective: state.perspective,
+            currentLayer: state.currentLayer,
+            encoding: state.encoding,
+            updatedAt: state.updatedAt,
+            isCurrentRun,
+            isCompleted,
+          };
+        }
+      );
+
+      /* =========================
+         JSON Response
+         ========================= */
 
       const data = {
         understandingNodeId: uNode._id,
@@ -589,14 +1013,14 @@ router.get(
           id: uNode.realNodeId,
           name: realNode?.name ?? "Unknown",
         },
-        structure: {
-          parent: uNode.parent,
-          children: uNode.children,
-          depthFromRoot: uNode.depthFromRoot,
-          mergeLayer: uNode.mergeLayer,
-        },
-        perspectiveState: state,
-        allPerspectiveStates: uNode.perspectiveStates,
+        runContext: run
+          ? {
+              runId: run._id,
+              perspective: run.perspective,
+              structure,
+            }
+          : null,
+        encodingHistory,
         createdAt: uNode.createdAt,
         notesToBeCompressed: (notesResult?.notes ?? []).map((n) => ({
           content: n.content,
@@ -605,455 +1029,170 @@ router.get(
         })),
       };
 
-      // Check if HTML output is requested
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       if (!wantHtml) {
         return res.json(data);
       }
 
-      // Determine if we have any encodings
-      const allStates = Object.values(data.allPerspectiveStates || {});
-      const hasEncodings = allStates.length > 0;
-      const notes = data.notesToBeCompressed || [];
+      /* =========================
+         HTML Rendering
+         ========================= */
 
-      const currentUserId = req.userId ? req.userId.toString() : null;
       const queryString = buildQueryString(req);
+      const hasEncodings = encodingHistory.length > 0;
 
-      // Send HTML
       return res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${data.realNode.name} - Understanding Node</title>
+  <meta charset="UTF-8" />
+  <title>${data.realNode.name} – Understanding Node</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-      html, body {
-      width: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-    }
-
     body {
-      padding-bottom: 40px;
+      font-family: system-ui, -apple-system;
+      background: linear-gradient(135deg,#667eea,#764ba2);
+      padding: 24px;
     }
-
-    .top-nav {
-      background: white;
-      border-bottom: 1px solid #e0e0e0;
-      padding: 12px 20px;
-      display: flex;
-      gap: 15px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .top-nav a {
-      color: #1976d2;
-      text-decoration: none;
-      font-size: 14px;
-    }
-
-    .top-nav a:hover {
-      text-decoration: underline;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-
     .card {
       background: white;
+      max-width: 900px;
+      margin: auto;
+      border-radius: 14px;
       padding: 24px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: 0 10px 30px rgba(0,0,0,.15);
       margin-bottom: 20px;
     }
-
-    .card h1 {
-      margin: 0 0 16px 0;
-      color: #1976d2;
-      font-size: 24px;
+    h1,h2,h3 {
+      margin-bottom: 12px;
     }
-
-    .card h2 {
-      margin: 0 0 16px 0;
-      font-size: 18px;
-      color: #333;
-    }
-
-    .card h3 {
-      margin: 0 0 12px 0;
-      font-size: 16px;
-      color: #444;
-    }
-
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    .info-item-label {
-      font-size: 12px;
-      color: #757575;
-      margin-bottom: 4px;
-    }
-
-    .info-item-value {
-      font-size: 14px;
-    }
-
-    .info-item-value.mono {
-      font-family: monospace;
-    }
-
-    .status-badge {
+    .badge {
       display: inline-block;
-      padding: 4px 12px;
-      border-radius: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
       font-size: 12px;
       font-weight: 600;
     }
-
-    .status-badge.encoded {
+    .badge.complete {
       background: #e8f5e9;
       color: #2e7d32;
     }
-
-    .status-badge.pending {
+    .badge.pending {
       background: #fff3e0;
       color: #f57c00;
     }
-
-    .encoding-section {
-      margin-top: 20px;
-      padding: 16px;
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-      border-radius: 8px;
+    .encoding {
       border-left: 4px solid #667eea;
-    }
-
-    .encoding-label {
-      font-size: 14px;
-      font-weight: 700;
-      color: #667eea;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .encoding-value {
-      font-size: 15px;
-      color: #444;
-      line-height: 1.6;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-
-    .note-item {
-      padding: 16px;
+      padding: 12px;
+      margin-bottom: 16px;
       background: #f9f9f9;
       border-radius: 8px;
-      border-left: 3px solid #1976d2;
-      margin-bottom: 12px;
     }
-
-    .note-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-      font-size: 12px;
-      color: #757575;
+    .encoding.current {
+      border-left-color: #2e7d32;
+      background: #f1f8f4;
     }
-
-    .note-author {
-      font-weight: 600;
-      color: #1976d2;
-    }
-
-    .note-content {
-      font-size: 14px;
-      color: #333;
-      line-height: 1.6;
+    pre {
       white-space: pre-wrap;
-      word-wrap: break-word;
+      word-break: break-word;
     }
-
-    .section-divider {
-      margin: 24px 0;
-      border: 0;
-      border-top: 2px solid #e0e0e0;
-    }
-
-    .toggle-button {
-      background: #1976d2;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-
-    .toggle-button:hover {
-      background: #1565c0;
-    }
-
-    .json-data {
-      background: #f5f5f5;
-      padding: 16px;
-      border-radius: 4px;
-      overflow-x: auto;
+    .meta {
       font-size: 12px;
-      margin: 0;
-      font-family: monospace;
+      color: #666;
+      margin-bottom: 6px;
     }
-
-    @media (max-width: 640px) {
-      .container {
-        padding: 10px;
-      }
-      
-      .card {
-        padding: 16px;
-      }
-
-      .info-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .note-meta {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-      }
+    a {
+      color: #667eea;
+      font-weight: 600;
+      text-decoration: none;
     }
-      .back-nav {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.back-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  color: #667eea;
-  text-decoration: none;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.back-link:hover {
-  background: white;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.owner-info {
-  font-size: 14px;
-  color: #667eea;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-h1 {
-  font-size: 28px;
-  margin: 12px 0;
-  font-weight: 700;
-  line-height: 1.3;
-}
   </style>
 </head>
 <body>
-  ${
-    currentUserId
-      ? `
-    <div class="back-nav">
 
-  <a href="/api/root/${nodeId}${queryString}" class="back-link">
- ← Back to Tree  </a>
+  <div class="card">
+    <a href="/api/root/${nodeId}${queryString}">← Back to Tree</a> ·
+    <a href="/api/root/${nodeId}/understandings${queryString}">Understandings</a>
 
-  <a href="/api/root/${nodeId}/understandings${queryString}" class="back-link">
-Understandings  </a>
+    <h1>${data.realNode.name}</h1>
 
+    ${
+      data.runContext
+        ? `
+      <p class="meta">
+        Run: <strong>${data.runContext.runId}</strong><br/>
+        Depth: ${data.runContext.structure?.depthFromRoot ?? "-"} ·
+        Merge Layer: ${data.runContext.structure?.mergeLayer ?? "-"} ·
+        Children: ${data.runContext.structure?.childrenCount ?? 0}
+      </p>
+    `
+        : `<p class="meta"><em>No run context selected</em></p>`
+    }
+  </div>
 
-
-</div>
-  `
-      : ""
-  }
-
-  <div class="container">
-    <!-- Header Card -->
-    <div class="card">
-      <h1>${data.realNode.name}</h1>
-      <div style="margin-bottom: 16px;">
-        <span class="status-badge ${hasEncodings ? "encoded" : "pending"}">
-          ${hasEncodings ? "✓ Encoded" : "○ Pending Compression"}
-        </span>
-      </div>
-      
-      <div class="info-grid">
-        <div>
-          <div class="info-item-label">Understanding Node ID</div>
-          <div class="info-item-value mono">${data.understandingNodeId}</div>
-        </div>
-        <div>
-          <div class="info-item-label">Real Node ID</div>
-          <div class="info-item-value mono">
-            <a href="/api/root/${
-              data.realNode.id
-            }${queryString}" style="color: #1976d2; text-decoration: none;">${data.realNode.id.slice(
-        0,
-        8
-      )}...</a>
-          </div>
-        </div>
-        <div>
-          <div class="info-item-label">Depth from Root</div>
-          <div class="info-item-value">${data.structure.depthFromRoot}</div>
-        </div>
-        <div>
-          <div class="info-item-label">Merge Layer</div>
-          <div class="info-item-value">${data.structure.mergeLayer}</div>
-        </div>
-        <div>
-          <div class="info-item-label">Children</div>
-          <div class="info-item-value">${
-            data.structure.children?.length || 0
-          }</div>
-        </div>
-        <div>
-          <div class="info-item-label">Created</div>
-          <div class="info-item-value">${new Date(
-            data.createdAt
-          ).toLocaleString()}</div>
-        </div>
-      </div>
-    </div>
+  <div class="card">
+    <h2>Compression History</h2>
 
     ${
       hasEncodings
-        ? `
-      <!-- Encodings Card -->
-      <div class="card">
-        <h2>Encodings</h2>
-        ${allStates
-          .map(
-            (state, idx) => `
-          <div class="encoding-section" style="${
-            idx > 0 ? "margin-top: 16px;" : ""
-          }">
-            <div class="encoding-label">
-              📝 ${state.perspective} 
-              <span style="font-size: 12px; font-weight: 400; color: #666;">
-                (Layer ${state.currentLayer}/${data.structure.mergeLayer})
-              </span>
-            </div>
-            <div class="encoding-value">${state.encoding}</div>
-            <div style="font-size: 11px; color: #888; margin-top: 8px;">
-              Updated: ${new Date(state.updatedAt).toLocaleString()}
-            </div>
-          </div>
-        `
-          )
-          .join("")}
-      </div>
-
-      ${
-        notes.length > 0
-          ? `
-        <!-- Original Notes Card -->
-        <div class="card">
-          <h2>Original Notes</h2>
-          <div style="font-size: 13px; color: #666; margin-bottom: 16px;">
-            These notes were compressed into the encoding above
-          </div>
-          ${notes
+        ? encodingHistory
             .map(
-              (note) => `
-            <div class="note-item">
-              <div class="note-meta">
-                <span class="note-author">@${note.username}</span>
-                <span>${new Date(note.createdAt).toLocaleString()}</span>
-              </div>
-              <div class="note-content">${note.content}</div>
-            </div>
-          `
-            )
-            .join("")}
+              (e) => `
+      <div class="encoding ${e.isCurrentRun ? "current" : ""}">
+        <div class="meta">
+          Run: ${e.runId}
+          ${e.isCurrentRun ? "· <strong>current</strong>" : ""}
         </div>
-      `
-          : ""
-      }
-    `
-        : `
-      <!-- Notes to be Compressed Card -->
-      <div class="card">
-        <h2>Notes to be Compressed</h2>
-        ${
-          notes.length > 0
-            ? `
-          <div style="font-size: 13px; color: #666; margin-bottom: 16px;">
-            ${notes.length} note${
-                notes.length === 1 ? "" : "s"
-              } waiting to be compressed
-          </div>
-          ${notes
-            .map(
-              (note) => `
-            <div class="note-item">
-              <div class="note-meta">
-                <span class="note-author">@${note.username}</span>
-                <span>${new Date(note.createdAt).toLocaleString()}</span>
-              </div>
-              <div class="note-content">${note.content}</div>
-            </div>
-          `
-            )
-            .join("")}
-        `
-            : `
-          <div style="color: #757575; font-size: 14px;">
-            No notes available for compression
-          </div>
-        `
-        }
+        <div class="meta">
+          Perspective: ${e.perspective} ·
+          Layer ${e.currentLayer}
+        </div>
+        <span class="badge ${e.isCompleted ? "complete" : "pending"}">
+          ${e.isCompleted ? "✓ Complete" : "○ In Progress"}
+        </span>
+        <pre>${e.encoding}</pre>
+        <div class="meta">
+          Updated: ${new Date(e.updatedAt).toLocaleString()}
+        </div>
       </div>
     `
+            )
+            .join("")
+        : `<p><em>No encodings yet.</em></p>`
     }
+  </div>
 
-  
-
+  ${
+    !hasEncodings
+      ? `
+  <div class="card">
+    <h2>Notes to be Compressed</h2>
+    ${
+      data.notesToBeCompressed.length
+        ? data.notesToBeCompressed
+            .map(
+              (n) => `
+      <div>
+        <strong>@${n.username}</strong>
+        <pre>${n.content}</pre>
+      </div>
+    `
+            )
+            .join("")
+        : `<p>No notes available.</p>`
+    }
+  </div>
+  `
+      : ""
+  }
 
 </body>
 </html>`);
     } catch (err) {
       console.error("Error fetching UnderstandingNode:", err);
-      res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: err.message });
     }
   }
 );
+
 router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -1181,6 +1320,11 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
       font-weight: 600;
       cursor: pointer;
     }
+       .header-subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 16px;
+  }
   </style>
 </head>
 <body>
@@ -1190,7 +1334,16 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
     </div>
 
     <h1>Understandings</h1>
+      <div class="header-subtitle">
+  Use the <strong>understanding-next</strong> and <strong>understanding-commit</strong> tools in ChatGPT.
+  For example, copy the <strong>understanding-run-id</strong> and invoke
+  <em>understanding-next(run-id, root-id)</em>, then alternate between commit and next as needed.
+  The selected perspective determines how your data is understood. New perspectives are revealing.
+</div>
+
+<br />
     <div style="color:#666;">Root: <strong>${data.rootName}</strong></div>
+
 
     ${
       data.understandings.length
@@ -1216,8 +1369,7 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
       <input
         type="text"
         name="perspective"
-        placeholder="Perspective (e.g. general, technical)"
-        value="general"
+        placeholder="Perspective"
       />
       <button type="submit">Create Understanding</button>
     </form>

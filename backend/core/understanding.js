@@ -11,47 +11,63 @@ export async function createUnderstandingRun(
   rootNodeId,
   perspective = "general"
 ) {
+  // Load full real-node graph
   const nodes = await Node.find({}).lean();
   const nodeById = new Map(nodes.map((n) => [n._id, n]));
 
   const rootNode = nodeById.get(rootNodeId);
   if (!rootNode) throw new Error("Root node not found");
-
-  const understandingRun = await UnderstandingRun.create({
+  if (perspective.trim() == "") {
+    perspective = "semantically compress while maintaining meaning";
+  }
+  // Create run early so we have its ID
+  const run = await UnderstandingRun.create({
     rootNodeId,
     perspective,
     nodeMap: {},
+    topology: {},
   });
 
-  const nodeMap = {};
+  const nodeMap = new Map(); // realNodeId -> uNodeId
+  const topology = new Map(); // uNodeId -> topology object
 
-  const rootUNode = await buildTree({
+  // Build tree + topology
+  const rootUNodeId = await buildRunTree({
     realNode: rootNode,
     nodeById,
     nodeMap,
+    topology,
+    parentUNodeId: null,
+    depth: 0,
   });
 
-  const maxDepth = await computeSubtreeHeight(rootUNode._id);
-  await computeMergeLayer(rootUNode._id);
+  // Compute subtreeHeight + mergeLayer in one pass
+  const maxDepth = computeDerivedTopology(rootUNodeId, topology);
 
-  understandingRun.nodeMap = nodeMap;
-  understandingRun.maxDepth = maxDepth;
-  await understandingRun.save();
+  // Persist results
+  run.nodeMap = Object.fromEntries(nodeMap);
+  run.topology = Object.fromEntries(topology);
+  run.maxDepth = maxDepth;
+  await run.save();
 
   return {
-    understandingRunId: understandingRun._id,
+    understandingRunId: run._id,
     perspective,
-    nodeCount: Object.keys(nodeMap).length,
+    nodeCount: nodeMap.size,
     maxDepth,
+    realRootNode: rootNodeId,
   };
 }
-async function buildTree({
+
+async function buildRunTree({
   realNode,
   nodeById,
   nodeMap,
-  parentUNodeId = null,
-  depth = 0,
+  topology,
+  parentUNodeId,
+  depth,
 }) {
+  // Get or create semantic node (SAFE)
   let uNode = await UnderstandingNode.findOne({
     realNodeId: realNode._id,
   });
@@ -59,92 +75,146 @@ async function buildTree({
   if (!uNode) {
     uNode = await UnderstandingNode.create({
       realNodeId: realNode._id,
-      parent: parentUNodeId,
-      children: [],
-      depthFromRoot: depth,
-      subtreeHeight: 0,
-      mergeLayer: 0,
     });
   }
 
-  nodeMap[realNode._id] = uNode._id;
+  const uNodeId = uNode._id;
+  nodeMap.set(realNode._id, uNodeId);
 
+  // Initialize topology entry
+  topology.set(uNodeId, {
+    parent: parentUNodeId,
+    children: [],
+    depthFromRoot: depth,
+    subtreeHeight: 0, // computed later
+    mergeLayer: 0, // computed later
+  });
+
+  // Recurse
   for (const childId of realNode.children || []) {
     const childRealNode = nodeById.get(childId);
     if (!childRealNode) continue;
 
-    const childUNode = await buildTree({
+    const childUNodeId = await buildRunTree({
       realNode: childRealNode,
       nodeById,
       nodeMap,
-      parentUNodeId: uNode._id,
+      topology,
+      parentUNodeId: uNodeId,
       depth: depth + 1,
     });
 
-    uNode.children.push(childUNode._id);
+    topology.get(uNodeId).children.push(childUNodeId);
   }
 
-  await uNode.save();
-  return uNode;
+  return uNodeId;
+}
+function computeDerivedTopology(uNodeId, topology) {
+  const node = topology.get(uNodeId);
+
+  // Leaf
+  if (!node.children.length) {
+    node.subtreeHeight = 0;
+    node.mergeLayer = 0;
+    return node.depthFromRoot;
+  }
+
+  let maxDepth = node.depthFromRoot;
+  let maxChildHeight = 0;
+
+  for (const childId of node.children) {
+    const childDepth = computeDerivedTopology(childId, topology);
+    const child = topology.get(childId);
+
+    maxDepth = Math.max(maxDepth, childDepth);
+    maxChildHeight = Math.max(maxChildHeight, child.subtreeHeight);
+  }
+
+  // Height = longest path below this node
+  node.subtreeHeight = maxChildHeight + 1;
+
+  // 🔑 THIS IS THE KEY RULE
+  node.mergeLayer = node.subtreeHeight;
+
+  return maxDepth;
 }
 
-async function computeMergeLayer(uNodeId) {
-  const uNode = await UnderstandingNode.findById(uNodeId);
-
-  if (uNode.children.length === 0) {
-    uNode.mergeLayer = 0;
-    await uNode.save();
-    return 0;
-  }
-
-  let minChildMerge = Infinity;
-  for (const childId of uNode.children) {
-    minChildMerge = Math.min(minChildMerge, await computeMergeLayer(childId));
-  }
-
-  uNode.mergeLayer = minChildMerge + 1;
-  await uNode.save();
-  return uNode.mergeLayer;
-}
-
-async function computeSubtreeHeight(uNodeId) {
-  const uNode = await UnderstandingNode.findById(uNodeId);
-
-  if (uNode.children.length === 0) {
-    uNode.subtreeHeight = 0;
-    await uNode.save();
-    return 0;
-  }
-
-  let max = 0;
-  for (const childId of uNode.children) {
-    max = Math.max(max, await computeSubtreeHeight(childId));
-  }
-
-  uNode.subtreeHeight = max + 1;
-  await uNode.save();
-  return uNode.subtreeHeight;
-}
-
-export async function getNextCompressionPayloadForLLM(
-  understandingRunId,
-  perspective,
-  noteVersion
-) {
-  const run = await UnderstandingRun.findById(understandingRunId);
+export async function getNextCompressionPayloadForLLM(understandingRunId) {
+  const run = await UnderstandingRun.findById(understandingRunId).lean();
   if (!run) throw new Error("UnderstandingRun not found");
 
-  const uNodes = await UnderstandingNode.find({
-    _id: { $in: Array.from(run.nodeMap.values()) },
-  }).lean();
+  const perspective = run.perspective;
+  const topology = new Map(Object.entries(run.topology || {}));
 
+  const uNodeIds = Object.values(run.nodeMap || {});
+  const uNodes = await UnderstandingNode.find({
+    _id: { $in: uNodeIds },
+  }).lean();
   const byId = new Map(uNodes.map((n) => [String(n._id), n]));
 
   /* ============================================================
-   * 1️⃣ LEAF PHASE — one node at a time (raw notes → layer 0)
+   * 0) If a merge batch is already pending, return it again
+   *    (keeps LLM + commit in sync / retry-safe)
+   * ============================================================ */
+  if (
+    run.pendingMerge &&
+    Array.isArray(run.pendingMerge.targetNodeIds) &&
+    typeof run.pendingMerge.layer === "number"
+  ) {
+    const layer = run.pendingMerge.layer;
+    const targetNodeIds = run.pendingMerge.targetNodeIds;
+
+    const inputs = [];
+
+    for (const uNodeId of targetNodeIds) {
+      const node = byId.get(String(uNodeId));
+      if (!node) continue;
+
+      const topo = topology.get(String(node._id));
+      if (!topo) continue;
+
+      const realNode = await Node.findById(node.realNodeId).lean();
+      if (!realNode) continue;
+
+      const childSummaries = topo.children.map((cid) => {
+        const child = byId.get(String(cid));
+        const childState = child?.perspectiveStates?.[understandingRunId];
+        return {
+          understandingNodeId: child?._id,
+          realNodeId: child?.realNodeId,
+          summary: childState?.encoding ?? "",
+          currentLayer: childState?.currentLayer,
+        };
+      });
+
+      inputs.push({
+        understandingNodeId: node._id,
+        realNodeId: realNode._id,
+        nodeName: realNode.name,
+        nextLayer: layer,
+        childSummaries,
+      });
+    }
+
+    return {
+      understandingRunId,
+      rootNodeId: run.rootNodeId,
+      mode: "merge",
+      target: {
+        perspective,
+        nextLayer: layer,
+      },
+      inputs,
+    };
+  }
+
+  /* ============================================================
+   * 1) LEAF PHASE — pick an uncompressed leaf (run-topology leaf)
    * ============================================================ */
   const nextLeaf = uNodes.find((n) => {
-    if (n.children?.length) return false; // leaf only
+    const topo = topology.get(String(n._id));
+    if (!topo) return false;
+    if (topo.children.length !== 0) return false; // leaf in THIS run
     const state = n.perspectiveStates?.[understandingRunId];
     return !state;
   });
@@ -155,7 +225,7 @@ export async function getNextCompressionPayloadForLLM(
 
     const notesResult = await getNotes({
       nodeId: realNode._id,
-      version: noteVersion ?? realNode.prestige,
+      version: realNode.prestige,
     });
 
     return {
@@ -183,57 +253,53 @@ export async function getNextCompressionPayloadForLLM(
   }
 
   /* ============================================================
-   * 2️⃣ MERGE PHASE — equalized children → parent at next layer
+   * 2) MERGE PHASE — find parents ready to merge at next layer
    * ============================================================ */
-
-  // Find all parents that are "ready" right now
-  // Ready means:
-  // - has children
-  // - every child has a state for this perspective
-  // - all children have SAME currentLayer
-  // - parent has not yet reached mergeLayer
-  // - and nextLayer (= childLayer+1) does not exceed parent.mergeLayer
   const readyParents = [];
 
   for (const node of uNodes) {
-    if (!node.children?.length) continue; // skip leaves
+    const topo = topology.get(String(node._id));
+    if (!topo || topo.children.length === 0) continue;
 
-    const childStates = node.children
+    const childStates = topo.children
       .map(
         (cid) => byId.get(String(cid))?.perspectiveStates?.[understandingRunId]
       )
       .filter(Boolean);
 
-    if (childStates.length !== node.children.length) continue; // some child missing state
+    if (childStates.length !== topo.children.length) continue;
 
-    const childLayer = childStates[0].currentLayer;
-    if (!childStates.every((s) => s.currentLayer === childLayer)) continue; // not equalized
+    // Allow layer skew: parent advances based on the slowest child
+    const childLayers = childStates.map((s) => s.currentLayer ?? -1);
+    const minChildLayer = Math.min(...childLayers);
 
-    const nextLayer = childLayer + 1;
+    if (minChildLayer < 0) continue; // safety guard
 
-    // parent progress
+    const nextLayer = minChildLayer + 1;
+
     const parentState = node.perspectiveStates?.[understandingRunId];
     const parentCurrent = parentState ? parentState.currentLayer : -1;
 
-    // already at/above nextLayer or already maxed
     if (parentCurrent >= nextLayer) continue;
-    if (nextLayer > node.mergeLayer) continue;
+    if (nextLayer > topo.mergeLayer) continue;
 
-    readyParents.push({
-      node,
-      nextLayer,
-    });
+    readyParents.push({ node, nextLayer });
   }
 
-  if (readyParents.length === 0) {
-    return null; // nothing ready (you can treat this as "waiting" state)
-  }
+  if (readyParents.length === 0) return null;
 
-  // Choose the lowest nextLayer first (bottom-up leveling)
   const minNextLayer = Math.min(...readyParents.map((r) => r.nextLayer));
-
-  // Batch all parents that can merge into this same nextLayer
   const batch = readyParents.filter((r) => r.nextLayer === minNextLayer);
+
+  // ✅ Persist pending merge so commit is deterministic
+  await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
+    $set: {
+      pendingMerge: {
+        layer: minNextLayer,
+        targetNodeIds: batch.map((b) => b.node._id),
+      },
+    },
+  });
 
   const inputs = [];
 
@@ -241,7 +307,9 @@ export async function getNextCompressionPayloadForLLM(
     const realNode = await Node.findById(node.realNodeId).lean();
     if (!realNode) continue;
 
-    const childSummaries = node.children.map((cid) => {
+    const topo = topology.get(String(node._id));
+
+    const childSummaries = topo.children.map((cid) => {
       const child = byId.get(String(cid));
       const childState = child?.perspectiveStates?.[understandingRunId];
       return {
@@ -256,7 +324,7 @@ export async function getNextCompressionPayloadForLLM(
       understandingNodeId: node._id,
       realNodeId: realNode._id,
       nodeName: realNode.name,
-      nextLayer, // where THIS parent will be committed
+      nextLayer,
       childSummaries,
     });
   }
@@ -264,7 +332,6 @@ export async function getNextCompressionPayloadForLLM(
   return {
     understandingRunId,
     rootNodeId: run.rootNodeId,
-
     mode: "merge",
     target: {
       perspective,
@@ -272,21 +339,45 @@ export async function getNextCompressionPayloadForLLM(
     },
     inputs,
   };
-
 }
 
 export async function commitCompressionResult({
   mode,
-  understandingNodeId, // required for leaf
-  currentLayer, // required for merge
-  perspective,
-  encoding,
   understandingRunId,
+  encoding,
+
+  // leaf
+  understandingNodeId,
+
+  // merge
+  currentLayer,
 }) {
+  const run = await UnderstandingRun.findById(understandingRunId).lean();
+  if (!run) {
+    throw new Error("UnderstandingRun not found");
+  }
+
+  const perspective = run.perspective;
+  const topology = run.topology || {};
+
+  /* =====================
+     LEAF COMMIT
+     ===================== */
   if (mode === "leaf") {
-    // 🔹 LEAF: commit to ONE understanding node
+    if (!understandingNodeId) {
+      throw new Error("understandingNodeId required for leaf commit");
+    }
+
     const node = await UnderstandingNode.findById(understandingNodeId);
-    if (!node) throw new Error("UnderstandingNode not found");
+    if (!node) {
+      throw new Error("UnderstandingNode not found");
+    }
+
+    const existing = node.perspectiveStates?.get(understandingRunId);
+    if (existing) {
+      // idempotent: already committed
+      return;
+    }
 
     node.perspectiveStates.set(understandingRunId, {
       understandingRunId,
@@ -300,23 +391,43 @@ export async function commitCompressionResult({
     return;
   }
 
+  /* =====================
+     MERGE COMMIT
+     ===================== */
   if (mode === "merge") {
-    const nodes = await UnderstandingNode.find({
-      mergeLayer: { $gte: currentLayer }, // allowed structurally
-      [`perspectiveStates.${understandingRunId}`]: { $exists: false },
-    });
+    const pending = run.pendingMerge;
 
-    for (const node of nodes) {
+    if (
+      !pending ||
+      pending.layer !== currentLayer ||
+      !Array.isArray(pending.targetNodeIds)
+    ) {
+      throw new Error("No pending merge for this layer");
+    }
+
+    for (const uNodeId of pending.targetNodeIds) {
+      const node = await UnderstandingNode.findById(uNodeId);
+      if (!node) continue;
+
+      const existing = node.perspectiveStates?.get(understandingRunId);
+      if (existing && existing.currentLayer >= currentLayer) continue;
+
       node.perspectiveStates.set(understandingRunId, {
         understandingRunId,
         perspective,
         encoding,
-        currentLayer, // ✅ THIS IS THE VALUE YOU COMPUTED
+        currentLayer,
         updatedAt: new Date(),
       });
 
       await node.save();
     }
+
+    // clear pending merge
+    await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
+      $unset: { pendingMerge: "" },
+    });
+
     return;
   }
 

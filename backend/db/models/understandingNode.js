@@ -38,46 +38,19 @@ const UnderstandingNodeSchema = new mongoose.Schema({
     default: uuidv4,
   },
 
+  // canonical link to real node
   realNodeId: {
     type: String,
     ref: "Node",
     unique: true,
     index: true,
-  },
-
-  parent: {
-    type: String,
-    ref: "UnderstandingNode",
-    default: null,
-  },
-
-  children: {
-    type: [String],
-    ref: "UnderstandingNode",
-    default: [],
-  },
-
-  // 🔑 distance from run root
-  depthFromRoot: {
-    type: Number,
     required: true,
-    index: true,
   },
 
-  // 🔑 max depth below this node
-  subtreeHeight: {
-    type: Number,
-    required: true,
-    index: true,
-  },
-
-  // 🔑 earliest layer where children may merge
-  mergeLayer: {
-    type: Number,
-    required: true,
-    index: true,
-  },
-
+  /**
+   * Run-specific semantic state
+   * Map<understandingRunId, PerspectiveState>
+   */
   perspectiveStates: {
     type: Map,
     of: PerspectiveStateSchema,
@@ -90,8 +63,4 @@ const UnderstandingNodeSchema = new mongoose.Schema({
   },
 });
 
-const UnderstandingNode = mongoose.model(
-  "UnderstandingNode",
-  UnderstandingNodeSchema
-);
-export default UnderstandingNode;
+export default mongoose.model("UnderstandingNode", UnderstandingNodeSchema);
