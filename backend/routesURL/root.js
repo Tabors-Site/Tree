@@ -449,6 +449,40 @@ ${rootMeta.contributors
       padding-bottom: 20px;
       border-bottom: 2px solid #e0e0e0;
     }
+      /* Section Headers */
+.section-header {
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+  /* Action Buttons */
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  background: #667eea;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: all 0.2s;
+}
+
+.action-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  background: #5856d6;
+}
 
     .owner-info {
       font-size: 14px;
@@ -839,13 +873,9 @@ ${rootMeta.contributors
     `
         : ""
     }
-
-    <!-- Main Content Card -->
+    <!-- Header Section -->
     <div class="content-card">
-      <!-- Header Section -->
       <div class="header-section">
-        ${parentHtml}
-        
         <div class="owner-info">${ownerHtml}</div>
         
         <h1>
@@ -858,55 +888,78 @@ ${rootMeta.contributors
           <code id="nodeIdCode">${allData._id}</code>
           <button id="copyNodeIdBtn" title="Copy ID">📋</button>
         </div>
+        
       </div>
+    </div>
 
-      <!-- Filters -->
-      <h2>Filters</h2>
+    <!-- Parents Section -->
+    ${
+      ancestors.length
+        ? `
+    <div class="content-card">
+      <div class="section-header">
+        <h2>Parents</h2>
+      </div>
+      ${parentHtml.replace("<h3>Parents</h3>", "")}
+    </div>
+    `
+        : ""
+    }
+
+    <!-- Children Section -->
+    <div class="content-card">
+      <div class="section-header">
       <div id="filterButtons"></div>
-
-      <!-- Children Tree -->
-      <h2>Children</h2>
+        <h2>Children</h2>
+      </div>
       ${childrenHtml}
-<!-- Understandings -->
-<h2>Understandings</h2>
+    </div>
 
-<a
-  href="/api/root/${nodeId}/understandings${queryString}"
-  style="
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 20px;
-    border-radius: 10px;
-    background: #667eea;
-    color: white;
-    font-weight: 600;
-    font-size: 14px;
-    text-decoration: none;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    transition: all 0.2s;
-  "
-  onmouseover="this.style.transform='translateY(-2px)'"
-  onmouseout="this.style.transform='translateY(0)'"
->
-  View Understandings
-</a>
-<br />
-<br />
-<h2>Tree Ownership Options</h2>
+ 
 
-      <!-- Invite Form -->
+    <!-- Understandings Section -->
+    <div class="content-card">
+      <div class="section-header">
+        <h2>Understandings</h2>
+      </div>
+      <a
+        href="/api/root/${nodeId}/understandings${queryString}"
+        class="action-button"
+      >
+        View Understandings
+      </a>
+    </div>
+
+    <!-- Tree Ownership Options Section -->
+    ${
+      inviteFormHtml
+        ? `
+    <div class="content-card">
+      <div class="section-header">
+        <h2>Tree Ownership Options</h2>
+      </div>
+      
       ${inviteFormHtml}
-
-      <!-- Contributors -->
       ${contributorsHtml}
+      ${policyHtml}
+    </div>
+    `
+        : ""
+    }
 
-      <!-- Transaction Policy -->
-${policyHtml}
-    <h2>Retire Tree</h2>
-      <!-- Retire Button -->
+    <!-- Retire Tree Section -->
+    ${
+      retireHtml
+        ? `
+    <div class="content-card">
+      <div class="section-header">
+        <h2>Retire Tree</h2>
+      </div>
       ${retireHtml}
     </div>
+    `
+        : ""
+    }
 
     <!-- Jump Buttons -->
     <button id="jumpTop" title="Jump to top">TOP</button>

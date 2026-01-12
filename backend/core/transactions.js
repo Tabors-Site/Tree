@@ -83,7 +83,9 @@ export async function setTransactionPolicy({ rootNodeId, policy, userId }) {
     throw new Error("Invalid transaction policy");
   }
 
-  const root = await Node.findById(rootNodeId).select("rootOwner parent");
+  const root = await Node.findById(rootNodeId).select(
+    "rootOwner parent transactionPolicy"
+  );
   if (!root) {
     throw new Error("Root not found");
   }
@@ -94,6 +96,9 @@ export async function setTransactionPolicy({ rootNodeId, policy, userId }) {
 
   if (root.rootOwner.toString() !== userId.toString()) {
     throw new Error("Only root owner can change transaction policy");
+  }
+  if (root.transactionPolicy == policy) {
+    throw new Error("This transaction policy is already set");
   }
 
   root.transactionPolicy = policy;
