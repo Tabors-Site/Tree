@@ -18,6 +18,8 @@ import { getContributionsByUser } from "../core/contributions.js";
 import { getDeletedBranchesForUser } from "../core/treeFetch.js";
 
 import { setHtmlShareToken } from "../core/user.js";
+import { maybeResetEnergy } from "../core/energy.js";
+
 import {
   createNewNode,
   reviveNodeBranch,
@@ -108,6 +110,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+    maybeResetEnergy(user);
 
     const roots = user.roots || [];
     const profileType = user.profileType || "basic";

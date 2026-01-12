@@ -1296,6 +1296,16 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
         <button id="copyNodeIdBtn" title="Copy ID">📋</button>
       </div>
     </div>
+ <!-- Navigation Links -->
+    <div class="nav-section">
+      <h2>Quick Access</h2>
+      <div class="nav-links">
+        <a href="/api/${nodeId}/${version}/notes${qs}">Notes</a>
+        <a href="/api/${nodeId}/${version}/values${qs}">Values / Goals</a>
+        <a href="/api/${nodeId}/${version}/contributions${qs}">Contributions</a>
+        <a href="/api/${nodeId}/${version}/transactions${qs}">Transactions</a>
+      </div>
+    </div>
 
     <!-- Metadata Grid -->
     <div class="meta-grid">
@@ -1326,17 +1336,7 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
 
     </div>
 
-    <!-- Navigation Links -->
-    <div class="nav-section">
-      <h2>Quick Access</h2>
-      <div class="nav-links">
-        <a href="/api/${nodeId}/${version}/notes${qs}">Notes</a>
-        <a href="/api/${nodeId}/${version}/values${qs}">Values / Goals</a>
-        <a href="/api/${nodeId}/${version}/contributions${qs}">Contributions</a>
-        <a href="/api/${nodeId}/${version}/transactions${qs}">Transactions</a>
-      </div>
-    </div>
-
+   
     <!-- Actions Section -->
     <div class="actions-section">
       <h3>Change Status</h3>
