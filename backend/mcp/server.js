@@ -2190,8 +2190,8 @@ Return ONLY the summary text. The system will handle structure.
   );
 
   server.tool(
-    "understanding-commit",
-    "Commit a summarized understanding result.",
+    "understanding-capture",
+    "capture a summarized understanding result.",
     {
       mode: z.enum(["leaf", "merge"]),
 
@@ -2209,10 +2209,10 @@ Return ONLY the summary text. The system will handle structure.
       encoding: z.string(),
     },
     {
-      readOnlyHint: false,
+      readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: false,
-    },
+      openWorldHint: false,    },
     async ({
       mode,
       understandingRunId,
@@ -2235,7 +2235,7 @@ Return ONLY the summary text. The system will handle structure.
             type: "text",
             text: JSON.stringify(
               {
-                message: "Understanding committed successfully",
+                message: "Understanding captured successfully",
                 mode,
                 understandingRunId,
                 understandingNodeId,
@@ -2249,6 +2249,78 @@ Return ONLY the summary text. The system will handle structure.
       };
     }
   );
+
+  server.tool(
+  "understanding-finisher",
+  "Instructs the LLM to repeatedly call understanding-next and understanding-capture until complete.",
+  {
+    understandingRunId: z.string().describe("Understanding run to finish."),
+    rootNodeId: z.string().describe("Root node of this understanding run."),
+  },
+  {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  async ({ understandingRunId, rootNodeId }) => {
+    const instructions = `
+You are now in **Understanding Finisher Mode**.
+
+GOAL  
+Fully complete the understanding run by repeatedly summarizing and capture results.
+
+STRICT LOOP (YOU MUST FOLLOW THIS EXACTLY):
+
+1️⃣ Call:
+   understanding-next(
+     understandingRunId = "${understandingRunId}",
+     rootNodeId = "${rootNodeId}"
+   )
+
+2️⃣ If the response contains:
+   { "done": true }
+   → STOP immediately. The run is finished.
+
+3️⃣ Otherwise:
+   - Read the payload carefully.
+   - Produce the summary text EXACTLY as instructed.
+   - Do NOT invent IDs, layers, or metadata.
+
+4️⃣ Call:
+   understanding-capture(
+     mode,
+     understandingRunId,
+     rootNodeId,
+     understandingNodeId (if provided),
+     currentLayer (ONLY if merge mode),
+     encoding = "<your summary text>"
+   )
+
+5️⃣ After capturing:
+   → Return to step 1️⃣ and repeat.
+
+ABSOLUTE RULES:
+- You MUST NOT skip steps.
+- You MUST NOT summarize multiple payloads at once.
+- You MUST NOT stop early.
+- You MUST NOT call any other tools.
+- One summarize → one capture → one loop.
+
+Continue until understanding-next explicitly returns done = true.
+`.trim();
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: instructions,
+        },
+      ],
+    };
+  }
+);
+
 
   return server;
 }
@@ -2577,10 +2649,10 @@ function mapToolCallToApiUrl(toolName, args) {
         `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}?html`
       );
 
-    case "understanding-commit":
+    case "understanding-capture":
       if (understandingNodeId && resolvedRootId) {
         return withToken(
-          `/api/root/${resolvedRootId}/understandings/${understandingNodeId}?html`
+          `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}/${understandingNodeId}?html`
         );
       }
 

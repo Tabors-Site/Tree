@@ -248,8 +248,10 @@ router.get(
               </div>
               <div id="detail-${node._id}" class="node-details">
                 <div class="detail-row">
-                  <strong>Understanding Node:</strong> 
-                  <a href="/api/root/${run.rootNodeId}/understandings/${
+                  <strong>This Run's Understanding Results:</strong> 
+                  <a href="/api/root/${run.rootNodeId}/understandings/run/${
+          run._id
+        }/${
           node._id
         }${qs}" class="detail-link" onclick="event.stopPropagation();">
                     <code>${node._id}</code>
@@ -783,7 +785,7 @@ router.get(
       <a href="/api/root/${
         run.rootNodeId
       }/understandings${qs}" class="back-link">
-        Understandings
+        Understanding Runs
       </a>
     </div>
 
@@ -794,10 +796,35 @@ router.get(
         <div class="info-item">
           <div class="info-label">Run ID</div>
           <div class="info-value">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="run-id" id="runIdCode">${run._id}</span>
-              <button id="copyRunIdBtn" title="Copy Run ID" style="background: none; border: none; cursor: pointer; padding: 4px; opacity: 0.6; font-size: 16px; transition: opacity 0.2s, transform 0.2s;">📋</button>
-            </div>
+           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+  <span class="run-id" id="runIdCode">${run._id}</span>
+
+  <button
+    id="copyRunIdBtn"
+    title="Copy Run ID"
+    style="background: none; border: none; cursor: pointer; padding: 4px; opacity: 0.6; font-size: 16px;"
+  >
+    📋
+  </button>
+
+  <button
+    id="copyForAiBtn"
+    title="Copy AI command"
+    style="
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+    "
+  >
+    🤖 Copy for AI
+  </button>
+</div>
+
           </div>
         </div>
         <div class="info-item">
@@ -830,7 +857,7 @@ router.get(
     border-left: 6px solid #4caf50;
   ">
     <div class="info-label" style="margin-bottom: 8px;">
-      Final Understanding (Root)
+      Final Understanding Generated
     </div>
     <div style="
       font-size: 14px;
@@ -898,6 +925,7 @@ router.get(
         copyBtn.style.opacity = "0.6";
         copyBtn.style.transform = "scale(1)";
       });
+      
     }
 
     function toggleNode(id) {
@@ -913,6 +941,28 @@ router.get(
       }
     }
   </script>
+
+  <script>
+  const copyForAiBtn = document.getElementById("copyForAiBtn");
+
+  if (copyForAiBtn) {
+const aiText = \`understanding-finisher rootId ${run.rootNodeId}, run ${
+        run._id
+      }\`;
+
+    copyForAiBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(aiText).then(() => {
+        const original = copyForAiBtn.textContent;
+        copyForAiBtn.textContent = "✔ Now paste into ChatGPT with tree tool enabled";
+        setTimeout(() => {
+          copyForAiBtn.textContent = original;
+        }, 4000);
+      });
+    });
+  }
+</script>
+
 </body>
 </html>
       `);
@@ -1038,152 +1088,617 @@ router.get(
          HTML Rendering
          ========================= */
 
-      const queryString = buildQueryString(req);
+      const qs = buildQueryString(req);
       const hasEncodings = encodingHistory.length > 0;
+
+      const backTreeUrl = `/api/root/${nodeId}${qs}`;
+      const backUnderstandingsUrl = `/api/root/${nodeId}/understandings${qs}`;
+      const realNodeUrl = `/api/${data.realNode.id}${qs}`;
 
       return res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>${data.realNode.name} – Understanding Node</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <title>Understandings for ${data.realNode.name}</title>
   <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
-      font-family: system-ui, -apple-system;
-      background: linear-gradient(135deg,#667eea,#764ba2);
-      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
     }
-    .card {
-      background: white;
-      max-width: 900px;
-      margin: auto;
-      border-radius: 14px;
-      padding: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.15);
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
       margin-bottom: 20px;
+      flex-wrap: wrap;
     }
-    h1,h2,h3 {
-      margin-bottom: 12px;
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
-    .badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
+
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Header Section */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+
+    .header h1 a {
+      color: #1a1a1a;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .header h1 a:hover {
+      color: #667eea;
+    }
+
+    .node-ids {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .node-id-label {
       font-size: 12px;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
     }
-    .badge.complete {
+
+    code {
+      background: #f0f0f0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      color: #666;
+      word-break: break-all;
+    }
+
+    .id-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .copy-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      opacity: 0.6;
+      font-size: 16px;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+
+    .copy-btn:hover {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+
+    a code {
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    a:hover code {
+      background: #e3f2fd;
+      color: #667eea;
+    }
+
+    /* Run Context Card */
+    .context-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 20px 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .context-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .context-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .context-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+    }
+
+    .context-value {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    /* Content Section */
+    .content-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .content-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-icon {
+      font-size: 24px;
+    }
+
+    /* Encoding Cards */
+    .encoding-list {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .encoding-card {
+      border-left: 4px solid #667eea;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      transition: all 0.2s;
+    }
+
+    .encoding-card:hover {
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .encoding-card.current {
+      border-left-color: #4caf50;
+      background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
+    }
+
+    .encoding-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .encoding-meta {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .encoding-run {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .encoding-run strong {
+      color: #667eea;
+    }
+
+    .encoding-run a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .encoding-run code {
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .encoding-run a:hover code {
+      background: #e3f2fd;
+      color: #667eea;
+    }
+
+    .encoding-details {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+
+    .status-badge.completed {
       background: #e8f5e9;
-      color: #2e7d32;
+      color: #388e3c;
     }
-    .badge.pending {
+
+    .status-badge.pending {
       background: #fff3e0;
       color: #f57c00;
     }
-    .encoding {
-      border-left: 4px solid #667eea;
-      padding: 12px;
-      margin-bottom: 16px;
-      background: #f9f9f9;
+
+    .encoding-content {
+      background: white;
+      padding: 16px;
       border-radius: 8px;
-    }
-    .encoding.current {
-      border-left-color: #2e7d32;
-      background: #f1f8f4;
-    }
-    pre {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #333;
       white-space: pre-wrap;
-      word-break: break-word;
+      word-wrap: break-word;
+      margin-bottom: 12px;
     }
-    .meta {
+
+    .encoding-footer {
       font-size: 12px;
-      color: #666;
-      margin-bottom: 6px;
+      color: #999;
     }
-    a {
-      color: #667eea;
+
+    .current-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      background: #4caf50;
+      color: white;
+      border-radius: 6px;
+      font-size: 12px;
       font-weight: 600;
-      text-decoration: none;
+    }
+
+    /* Notes Section */
+    .notes-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .note-card {
+      padding: 16px 20px;
+      border-radius: 12px;
+      border-left: 4px solid #f57c00;
+      background: #fff8f0;
+      transition: all 0.2s;
+    }
+
+    .note-card:hover {
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .note-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #666;
+    }
+
+    .note-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #f57c00;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    .note-content {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #333;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-style: italic;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .header,
+      .context-card,
+      .content-section {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .context-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .encoding-header {
+        flex-direction: column;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+
+      code {
+        font-size: 11px;
+      }
     }
   </style>
 </head>
 <body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="${backTreeUrl}" class="back-link">
+        ← Back to Tree
+      </a>
+      <a href="${backUnderstandingsUrl}" class="back-link">
+        Understanding Runs
+      </a>
+    </div>
 
-  <div class="card">
-    <a href="/api/root/${nodeId}${queryString}">← Back to Tree</a> ·
-    <a href="/api/root/${nodeId}/understandings${queryString}">Understandings</a>
-
-    <h1>${data.realNode.name}</h1>
+    <!-- Header -->
+    <div class="header">
+      <h1>
+        <a href="${realNodeUrl}">Understandings for ${data.realNode.name}</a>
+      </h1>
+      <div class="node-ids">
+        <span class="node-id-label">Understanding Node:</span>
+        <div class="id-container">
+          <code id="understandingNodeId">${data.understandingNodeId}</code>
+          <button class="copy-btn" onclick="copyId('understandingNodeId', this)" title="Copy ID">📋</button>
+        </div>
+      </div>
+      <div class="node-ids">
+        <span class="node-id-label">Real Node:</span>
+        <div class="id-container">
+          <a href="${realNodeUrl}">
+            <code id="realNodeId">${data.realNode.id}</code>
+          </a>
+          <button class="copy-btn" onclick="copyId('realNodeId', this)" title="Copy ID">📋</button>
+        </div>
+      </div>
+    </div>
 
     ${
       data.runContext
         ? `
-      <p class="meta">
-        Run: <strong>${data.runContext.runId}</strong><br/>
-        Depth: ${data.runContext.structure?.depthFromRoot ?? "-"} ·
-        Merge Layer: ${data.runContext.structure?.mergeLayer ?? "-"} ·
-        Children: ${data.runContext.structure?.childrenCount ?? 0}
-      </p>
-    `
-        : `<p class="meta"><em>No run context selected</em></p>`
-    }
-  </div>
-
-  <div class="card">
-    <h2>Compression History</h2>
-
-    ${
-      hasEncodings
-        ? encodingHistory
-            .map(
-              (e) => `
-      <div class="encoding ${e.isCurrentRun ? "current" : ""}">
-        <div class="meta">
-          Run: ${e.runId}
-          ${e.isCurrentRun ? "· <strong>current</strong>" : ""}
+    <!-- Run Context -->
+    <div class="context-card">
+      <div style="font-size: 14px; font-weight: 600; color: #667eea; margin-bottom: 8px;">
+        Current Run Context
+      </div>
+      <div class="context-grid">
+        <div class="context-item">
+          <div class="context-label">Run ID</div>
+          <div class="context-value">
+            <code style="font-size: 12px;">${data.runContext.runId}</code>
+          </div>
         </div>
-        <div class="meta">
-          Perspective: ${e.perspective} ·
-          Layer ${e.currentLayer}
+        <div class="context-item">
+          <div class="context-label">Depth</div>
+          <div class="context-value">${
+            data.runContext.structure?.depthFromRoot ?? "-"
+          }</div>
         </div>
-        <span class="badge ${e.isCompleted ? "complete" : "pending"}">
-          ${e.isCompleted ? "✓ Complete" : "○ In Progress"}
-        </span>
-        <pre>${e.encoding}</pre>
-        <div class="meta">
-          Updated: ${new Date(e.updatedAt).toLocaleString()}
+        <div class="context-item">
+          <div class="context-label">Merge Layer</div>
+          <div class="context-value">${
+            data.runContext.structure?.mergeLayer ?? "-"
+          }</div>
+        </div>
+        <div class="context-item">
+          <div class="context-label">Children</div>
+          <div class="context-value">${
+            data.runContext.structure?.childrenCount ?? 0
+          }</div>
         </div>
       </div>
+    </div>
     `
-            )
-            .join("")
-        : `<p><em>No encodings yet.</em></p>`
+        : ""
     }
-  </div>
 
-  ${
-    !hasEncodings
-      ? `
-  <div class="card">
-    <h2>Notes to be Compressed</h2>
+    <!-- Encoding History -->
+    <div class="content-section">
+      <h2>
+        <span class="section-icon">📚</span>
+        Compression History
+      </h2>
+
+      ${
+        hasEncodings
+          ? `
+        <div class="encoding-list">
+          ${encodingHistory
+            .map((e) => {
+              const runUrl = `/api/root/${nodeId}/understandings/run/${e.runId}${qs}`;
+              const runIdUnique = e.runId.replace(/-/g, "");
+              return `
+            <div class="encoding-card ${e.isCurrentRun ? "current" : ""}">
+              <div class="encoding-header">
+                <div class="encoding-meta">
+                  <div class="encoding-run">
+                    <strong>Run:</strong>
+                    <a href="${runUrl}">
+                      <code id="runId_${runIdUnique}">${e.runId}</code>
+                    </a>
+                    <button class="copy-btn" onclick="copyId('runId_${runIdUnique}', this)" title="Copy Run ID">📋</button>
+                    ${
+                      e.isCurrentRun
+                        ? '<span class="current-badge">⭐ Current</span>'
+                        : ""
+                    }
+                  </div>
+                  <div class="encoding-details">
+                    ${e.perspective} • Layer ${e.currentLayer}
+                  </div>
+                </div>
+                ${
+                  e.encoding
+                    ? `
+                  <span class="status-badge completed">
+                    ✓ Completed
+                  </span>
+                `
+                    : `
+                  <span class="status-badge pending">
+                    ○ In Progress
+                  </span>
+                `
+                }
+              </div>
+
+              ${
+                e.encoding
+                  ? `
+                <div class="encoding-content">${e.encoding}</div>
+              `
+                  : `
+                <div class="encoding-content" style="background: #fff3e0; color: #f57c00; font-style: italic;">
+                  Compression in progress...
+                </div>
+              `
+              }
+
+              <div class="encoding-footer">
+                Updated: ${new Date(e.updatedAt).toLocaleString()}
+              </div>
+            </div>
+          `;
+            })
+            .join("")}
+        </div>
+      `
+          : `
+        <div class="empty-state">
+          No compression history yet
+        </div>
+      `
+      }
+    </div>
+
     ${
-      data.notesToBeCompressed.length
-        ? data.notesToBeCompressed
-            .map(
-              (n) => `
-      <div>
-        <strong>@${n.username}</strong>
-        <pre>${n.content}</pre>
+      !hasEncodings && data.notesToBeCompressed.length > 0
+        ? `
+    <!-- Notes to be Compressed -->
+    <div class="content-section">
+      <h2>
+        <span class="section-icon">📝</span>
+        Notes to be Compressed
+      </h2>
+
+      <div class="notes-list">
+        ${data.notesToBeCompressed
+          .map(
+            (n) => `
+          <div class="note-card">
+            <div class="note-header">
+              <div class="note-avatar">👤</div>
+              <span>@${n.username}</span>
+            </div>
+            <div class="note-content">${n.content}</div>
+          </div>
+        `
+          )
+          .join("")}
       </div>
+    </div>
     `
-            )
-            .join("")
-        : `<p>No notes available.</p>`
+        : ""
     }
   </div>
-  `
-      : ""
-  }
-
 </body>
 </html>`);
     } catch (err) {
@@ -1333,11 +1848,11 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
       <a href="/api/root/${nodeId}${queryString}">← Back to Tree</a>
     </div>
 
-    <h1>Understandings</h1>
+    <h1>Understanding Runs For Tree</h1>
       <div class="header-subtitle">
-  Use the <strong>understanding-next</strong> and <strong>understanding-commit</strong> tools in ChatGPT.
+  Use the <strong>understanding-finisher</strong> tool in ChatGPT.
   For example, copy the <strong>understanding-run-id</strong> and invoke
-  <em>understanding-next(run-id, root-id)</em>, then alternate between commit and next as needed.
+  <em>understanding-finisher(run-id, root-id)</em>. Keep pushing it forward until it is finished.
   The selected perspective determines how your data is understood. New perspectives are revealing.
 </div>
 
@@ -1381,5 +1896,647 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+router.get(
+  "/root/:nodeId/understandings/run/:runId/:understandingNodeId",
+  urlAuth,
+  async (req, res) => {
+    try {
+      const { runId, understandingNodeId, nodeId } = req.params;
+      const qs = buildQueryString(req);
+
+      const root = await Node.findById(nodeId).select("_id name userId").lean();
+      if (!root) {
+        return res.status(404).json({ error: "Root not found" });
+      }
+
+      /* =========================
+         Load Understanding Node
+         ========================= */
+
+      const uNode = await UnderstandingNode.findById(
+        understandingNodeId
+      ).lean();
+
+      if (!uNode) {
+        return res.status(404).json({ error: "UnderstandingNode not found" });
+      }
+
+      const realNode = await Node.findById(uNode.realNodeId)
+        .select("name prestige")
+        .lean();
+
+      /* =========================
+         Load Run
+         ========================= */
+
+      const run = await UnderstandingRun.findById(runId).lean();
+      if (!run) {
+        return res.status(404).json({ error: "UnderstandingRun not found" });
+      }
+
+      /* =========================
+         Notes → Chats
+         ========================= */
+
+      const notesResult = await getNotes({
+        nodeId: realNode._id,
+        version: realNode.prestige,
+      });
+
+      const chats = (notesResult?.notes ?? []).map((n) => ({
+        role: n.username === "assistant" ? "assistant" : "user",
+        content: n.content,
+        username: n.username,
+        createdAt: n.createdAt,
+      }));
+
+      /* =========================
+         Final Message (per run)
+         ========================= */
+
+      const state = uNode.perspectiveStates?.[runId] ?? null;
+      const finalMessage = state?.encoding ?? null;
+
+      // ✅ NEW: completion = presence of final message
+      const isCompleted = Boolean(finalMessage);
+
+      /* =========================
+         JSON Response
+         ========================= */
+
+      const data = {
+        runId,
+        understandingNodeId,
+        realNode: {
+          id: uNode.realNodeId,
+          name: realNode?.name ?? "Unknown",
+        },
+        perspective: run.perspective,
+        finalMessage,
+        chats,
+        isCompleted,
+        updatedAt: state?.updatedAt ?? null,
+      };
+
+      const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+      if (!wantHtml) {
+        return res.json(data);
+      }
+
+      /* =========================
+         HTML Rendering
+         ========================= */
+
+      const backTreeUrl = `/api/root/${nodeId}${qs}`;
+      const backRunUrl = `/api/root/${nodeId}/understandings/run/${runId}${qs}`;
+
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <title>${data.realNode.name} – Compression</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .back-link:hover {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Header Section */
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    ${
+      !isCompleted
+        ? `
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+      animation: shimmer 2s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+    `
+        : ""
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      animation: ${!isCompleted ? "pulse 2s ease-in-out infinite" : "none"};
+    }
+
+    .status-badge.processing {
+      background: linear-gradient(135deg, #FFA07A 0%, #FF6B6B 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+    }
+
+    .status-badge.completed {
+      background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+    }
+
+    @keyframes pulse {
+      0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+      }
+      50% { 
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(255, 107, 107, 0.5);
+      }
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .perspective-tag {
+      font-size: 13px;
+      color: #666;
+      padding: 6px 12px;
+      background: #f0f0f0;
+      border-radius: 6px;
+      font-style: italic;
+    }
+
+    /* Content Sections */
+    .content-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .content-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-icon {
+      font-size: 24px;
+    }
+
+    /* Compressed Output */
+    .compressed-output {
+      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+      border-left: 4px solid #4caf50;
+      padding: 20px;
+      border-radius: 12px;
+      font-size: 15px;
+      line-height: 1.8;
+      color: #1a1a1a;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.15);
+      animation: slideIn 0.6s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    /* Chat Messages */
+    .chat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .chat-message {
+      padding: 16px 20px;
+      border-radius: 12px;
+      border-left: 4px solid;
+      animation: fadeIn 0.4s ease-out;
+      transition: all 0.2s;
+    }
+
+    .chat-message:hover {
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .chat-message.user {
+      background: #fff8f0;
+      border-left-color: #f57c00;
+    }
+
+    .chat-message.assistant {
+      background: #f1f8f4;
+      border-left-color: #2e7d32;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #666;
+    }
+
+    .chat-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    .chat-message.user .chat-avatar {
+      background: #f57c00;
+      color: white;
+    }
+
+    .chat-message.assistant .chat-avatar {
+      background: #2e7d32;
+      color: white;
+    }
+
+    .chat-content {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #333;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-style: italic;
+    }
+
+    /* Processing Indicator */
+    .processing-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 20px;
+      background: linear-gradient(135deg, rgba(255, 160, 122, 0.1) 0%, rgba(255, 107, 107, 0.1) 100%);
+      border-radius: 12px;
+      margin-bottom: 24px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .processing-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #667eea;
+      animation: bounce 1.4s ease-in-out infinite;
+    }
+
+    .dot:nth-child(1) { animation-delay: 0s; }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { 
+        transform: scale(0);
+        opacity: 0.5;
+      }
+      40% { 
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    /* Auto-refresh notification */
+    .auto-refresh {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 12px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      font-size: 13px;
+      font-weight: 600;
+      color: #667eea;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: slideUp 0.5s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Responsive Design */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .header,
+      .content-section {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+
+      .auto-refresh {
+        bottom: 16px;
+        right: 16px;
+        left: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="${backTreeUrl}" class="back-link">
+        ← Back to Tree
+      </a>
+      <a href="${backRunUrl}" class="back-link">
+        Back to Run Progress
+      </a>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+      <h1>${data.realNode.name}</h1>
+      <div class="header-meta">
+        <span class="status-badge ${isCompleted ? "completed" : "processing"}">
+          ${
+            isCompleted
+              ? "✓ Compressed"
+              : '<span class="spinner"></span> Processing'
+          }
+        </span>
+        <span class="perspective-tag">${data.perspective}</span>
+      </div>
+    </div>
+
+    ${
+      !isCompleted
+        ? `
+    <!-- Processing Indicator -->
+    <div class="processing-indicator">
+      <div class="processing-dots">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <span style="font-weight: 600; color: #667eea;">
+        Compressing notes into understanding...
+      </span>
+    </div>
+    `
+        : ""
+    }
+
+    ${
+      isCompleted
+        ? `
+    <!-- Compressed Output (Phase 2) -->
+    <div class="content-section">
+      <h2>
+        <span class="section-icon">✨</span>
+        Compressed Understanding
+      </h2>
+      <div class="compressed-output">${finalMessage}</div>
+    </div>
+    `
+        : ""
+    }
+
+    <!-- Original Notes (always visible) -->
+    <div class="content-section">
+      <h2>
+        <span class="section-icon">${isCompleted ? "📝" : "🔄"}</span>
+        ${isCompleted ? "Original Notes" : "Notes Being Compressed"}
+      </h2>
+
+      ${
+        chats.length
+          ? `
+        <div class="chat-list">
+          ${chats
+            .map(
+              (c) => `
+            <div class="chat-message ${c.role}">
+              <div class="chat-header">
+                <div class="chat-avatar">${
+                  c.role === "assistant" ? "🤖" : "👤"
+                }</div>
+                <span>@${c.username}</span>
+              </div>
+              <div class="chat-content">${c.content}</div>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      `
+          : `
+        <div class="empty-state">No notes available</div>
+      `
+      }
+    </div>
+
+    ${
+      !isCompleted
+        ? `
+    <!-- Auto-refresh notification -->
+    <div class="auto-refresh">
+      <div class="spinner"></div>
+      Checking for updates...
+    </div>
+    `
+        : ""
+    }
+  </div>
+
+  ${
+    !isCompleted
+      ? `
+  <script>
+    // Auto-refresh every 3 seconds when processing
+    let refreshCount = 0;
+    const maxRefreshes = 100; // Safety limit
+
+    function checkForUpdates() {
+      if (refreshCount >= maxRefreshes) {
+        console.log('Max refresh limit reached');
+        return;
+      }
+      
+      refreshCount++;
+      
+      // Add a small random delay to make it feel more organic
+      const delay = 3000 + Math.random() * 1000;
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, delay);
+    }
+
+    // Start checking
+    checkForUpdates();
+  </script>
+  `
+      : ""
+  }
+</body>
+</html>`);
+    } catch (err) {
+      console.error("Error fetching run node view:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+);
 
 export default router;
