@@ -126,8 +126,8 @@ export function renderLoginPage(req, res) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#667eea">
+  <meta name="viewport" content="width=device-width, initial-scale=1", viewport-fit=cover />
+  <meta name="theme-color" content="#736fe6">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Tree — Login</title>
 
@@ -137,7 +137,7 @@ export function renderLoginPage(req, res) {
       margin: 0;
       padding: 0;
     }
-
+  
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -189,7 +189,11 @@ export function renderLoginPage(req, res) {
         transform: translateY(-30px) rotate(5deg);
       }
     }
-
+ html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
     /* Brand Header */
     .brand-header {
       position: relative;
@@ -704,7 +708,11 @@ export function renderRegisterPage(req, res) {
       left: -100px;
       animation-delay: -10s;
     }
-
+ html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
     @keyframes float {
       0%, 100% {
         transform: translateY(0) rotate(0deg);
@@ -1250,6 +1258,11 @@ export function renderForgotPasswordPage(req, res) {
       left: -100px;
       animation-delay: -10s;
     }
+       html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
 
     @keyframes float {
       0%, 100% {

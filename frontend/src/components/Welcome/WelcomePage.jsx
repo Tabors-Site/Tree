@@ -9,6 +9,7 @@ const WelcomePage = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+
   const handleOpenBrowser = async () => {
     const token = Cookies.get("token");
 
@@ -75,7 +76,7 @@ const WelcomePage = () => {
             🌳
           </div>
 
-          <h1>Tree</h1>
+          <h1 data-text="Tree">Tree</h1>
           <h2>A Context Management System</h2>
 
         </div>

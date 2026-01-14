@@ -1,4 +1,9 @@
 /* WelcomePage.css - Apple-inspired Refined Design */
+:root {
+  --glass-water-rgb: 115, 111, 230; /* #736fe6 */
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
 * {
   box-sizing: border-box;
@@ -10,9 +15,6 @@ html,
 body {
   overflow-x: hidden;
   overflow-y: hidden;
-
-  width: 100%;
-  height: 100%;
 }
 
 /* Page Container */
@@ -120,7 +122,6 @@ body {
 }
 .hero-logo {
   font-size: 120px;
-  line-height: 1;
   margin-bottom: 40px;
   filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.2));
 
@@ -136,30 +137,157 @@ body {
     transform: scale(1.06);
   }
 }
+/* =========================
+   Hero Title – Living Glass
+   ========================= */
 
 .hero-center h1 {
+  position: relative;
+
   font-size: 96px;
-  font-weight: 600; /* down from 700 */
-  letter-spacing: -2.5px; /* slightly tighter */
+  font-weight: 600;
+  letter-spacing: -2.5px;
+  margin-bottom: 20px;
+
   color: white;
-}
-.hero-center h1 {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-  margin-bottom: 20px; /* slightly more breathing room */
+
+  /* Safe entrance animation */
+  animation: fadeInDown 0.9s ease-out both;
+}
+
+/* =========================
+   Glass layer (always on)
+   ========================= */
+
+.hero-center h1::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+
+  color: transparent;
+
+  background: linear-gradient(
+      120deg,
+      rgba(var(--glass-water-rgb), 0.55),
+      rgba(255, 255, 255, 0.9),
+      rgba(var(--glass-water-rgb), 0.55)
+    ),
+    radial-gradient(
+      120% 60% at 10% 20%,
+      rgba(255, 255, 255, 0.35),
+      transparent 60%
+    );
+
+  background-size: 200% 200%, 120% 120%;
+  background-position: 0% 50%, 20% 20%;
+
+  -webkit-background-clip: text;
+  background-clip: text;
+
+  text-shadow: 0 0 32px rgba(115, 111, 230, 0.55), 0 2px 6px rgba(0, 0, 0, 0.2);
+
+  animation: glassFlow 6s ease-in-out infinite,
+    glassBreath 4.5s ease-in-out infinite;
+
+  animation-delay: 0.9s;
+  animation-fill-mode: both;
+
+  pointer-events: none;
+  will-change: background-position, opacity, transform;
+}
+
+/* =========================
+   Hover intensifies glass
+   ========================= */
+
+.hero-center h1:hover::after {
+  animation-duration: 3s, 2.5s;
+  text-shadow: 0 0 48px rgba(115, 111, 230, 0.8), 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* =========================
+   Sparkle sweep (hover only)
+   ========================= */
+
+.hero-center h1::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+
+  background: linear-gradient(
+    110deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.25),
+    transparent 60%
+  );
+
+  opacity: 0;
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+.hero-center h1:hover::before {
+  opacity: 1;
+  animation: sparkleSweep 0.8s ease forwards;
+}
+
+/* =========================
+   Keyframes
+   ========================= */
+
+@keyframes glassFlow {
+  0% {
+    background-position: 0% 50%, 20% 20%;
+    transform: translateY(0);
+  }
+  50% {
+    background-position: 100% 50%, 80% 30%;
+    transform: translateY(-1px);
+  }
+  100% {
+    background-position: 0% 50%, 20% 20%;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glassBreath {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes sparkleSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%) rotate(-2deg);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(120%) rotate(2deg);
+  }
 }
 
 .hero-center h2 {
   animation: fadeInDown 1s ease-out 0.15s both;
 }
-.hero-center h1 {
-  animation: fadeInDown 0.9s ease-out both;
-}
 
 .hero-center h2 {
   font-size: 28px;
-  font-weight: 450; /* softer */
-  opacity: 0.85;
+  font-weight: 450;
   letter-spacing: -0.3px;
+
+  color: rgba(235, 238, 255, 0.85); /* glass-tinted white */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 12px rgba(115, 111, 230, 0.25);
+
+  animation: fadeInDown 1s ease-out 0.15s both;
 }
 
 .hero-center p {
@@ -179,42 +307,174 @@ body {
   flex-shrink: 0;
 }
 
+/* =========================
+   Glass Water Buttons
+   ========================= */
+
 .back-to-site-btn {
+  /* Layout */
+  position: relative;
+  overflow: hidden;
+
   padding: 10px 20px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px);
+  border-radius: 980px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+
+  /* Glass material */
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+
   color: white;
   text-decoration: none;
-  border-radius: 980px;
-  font-weight: 500;
-  font-size: 15px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: none;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  cursor: pointer;
   font-family: inherit;
-  display: inline-block;
-  white-space: nowrap;
+
+  font-size: 15px;
+  font-weight: 500;
   letter-spacing: -0.2px;
+
+  border: 1px solid rgba(255, 255, 255, 0.28);
+
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+
+  cursor: pointer;
+
+  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
 }
+
+/* =========================
+   Liquid light layer
+   ========================= */
+
+.back-to-site-btn::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+
+  background: radial-gradient(
+      120% 60% at 0% 0%,
+      rgba(255, 255, 255, 0.35),
+      transparent 60%
+    ),
+    linear-gradient(
+      120deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.25),
+      transparent 70%
+    );
+
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+
+  pointer-events: none;
+}
+
+/* =========================
+   Hover = water motion + glass flicker
+   ========================= */
 
 .back-to-site-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
 }
 
+.back-to-site-btn:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* =========================
+   Active press
+   ========================= */
+
+.back-to-site-btn:active {
+  background: rgba(var(--glass-water-rgb), 0.45);
+  transform: translateY(0);
+  animation: none;
+}
+
+/* =========================
+   Subtle water drift
+   ========================= */
+
+@keyframes waterDrift {
+  0% {
+    transform: translateY(-1px);
+  }
+  100% {
+    transform: translateY(1px);
+  }
+}
+@keyframes openAppHoverShimmerClone {
+  0% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(100%);
+  }
+}
+
+/* =========================
+   Secondary button (same glass, less emphasis)
+   ========================= */
+
 .back-to-site-btn.legacy {
-  background: transparent;
-  color: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  opacity: 0.85;
 }
 
 .back-to-site-btn.legacy:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.4);
-  color: white;
+  opacity: 1;
+}
+
+/* =========================
+   Primary button (Open App)
+   ========================= */
+
+.open-app-btn {
+  --glass-alpha: 0.34;
+  --glass-alpha-hover: 0.46;
+
+  font-weight: 600;
+}
+
+/* Extra glass sparkle for primary */
+.open-app-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background: linear-gradient(
+    100deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+
+  opacity: 0;
+  transform: translateX(-100%);
+  transition: transform 0.8s ease, opacity 0.3s ease;
+
+  animation: openAppHoverShimmerClone 1.6s ease forwards,
+    waterDriftOnce 1.8s ease-in-out;
+  animation-delay: 1.5s;
+
+  pointer-events: none;
+}
+
+.open-app-btn:hover::after {
+  opacity: 1;
+  transform: translateX(100%);
 }
 
 /* Responsive Design */
