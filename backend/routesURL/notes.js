@@ -1945,6 +1945,9 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     const queryString = filterQuery(req);
     const qs = queryString ? `?${queryString}` : "";
 
+    // Check if token exists in query
+    const hasToken = req.query.token !== undefined;
+
     const Note = (await import("../db/models/notes.js")).default;
     const note = await Note.findById(noteId)
       .populate("userId", "username")
@@ -1952,12 +1955,14 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
 
     if (!note) return res.status(404).send("Note not found");
 
-    const back = `/api/${nodeId}/${version}/notes${qs}`;
+    const back = hasToken
+      ? `/api/${nodeId}/${version}/notes${qs}`
+      : "https://tree.tabors.site";
+    const backText = hasToken ? "← Back to Notes" : "← Back to Home";
     const nodeUrl = `/api/${nodeId}${qs}`;
 
     const userLink = note.userId
       ? `<a href="/api/user/${note.userId._id}${qs}">
-
        ${note.userId.username ?? "Unknown user"}
      </a>`
       : note.username ?? "Unknown user";
@@ -2072,14 +2077,15 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       text-decoration: underline;
     }
 
-    /* Copy Button */
+    /* Copy Button Bar */
     .copy-bar {
       display: flex;
       justify-content: flex-end;
+      gap: 8px;
       margin-bottom: 16px;
     }
 
-    #copyNoteBtn {
+    .copy-btn {
       background: rgba(102, 126, 234, 0.1);
       border: 1px solid rgba(102, 126, 234, 0.2);
       cursor: pointer;
@@ -2089,13 +2095,13 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       transition: all 0.2s;
     }
 
-    #copyNoteBtn:hover {
+    .copy-btn:hover {
       background: rgba(102, 126, 234, 0.2);
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
     }
 
-    #copyNoteBtn:active {
+    .copy-btn:active {
       transform: translateY(0);
     }
 
@@ -2112,7 +2118,17 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
       color: #1a1a1a;
     }
-
+#copyUrlBtn {
+    display: inline-flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      color: #667eea;
+      text-decoration: none;
+      border-radius: 10px;
+     
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);}
     /* Responsive */
     @media (max-width: 640px) {
       body {
@@ -2148,7 +2164,9 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="${back}" class="back-link">← Back to Notes</a>
+      <a href="${back}" class="back-link">${backText}</a>
+              <button id="copyUrlBtn" class="copy-btn" title="Copy URL to share">🔗</button>
+
     </div>
 
     <!-- Note Card -->
@@ -2158,7 +2176,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       </div>
 
       <div class="copy-bar">
-        <button id="copyNoteBtn" title="Copy note">📋</button>
+        <button id="copyNoteBtn" class="copy-btn" title="Copy note">📋</button>
       </div>
 
       <pre id="noteContent">${note.content}</pre>
@@ -2166,13 +2184,26 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
   </div>
 
   <script>
-    const copyBtn = document.getElementById("copyNoteBtn");
+    const copyNoteBtn = document.getElementById("copyNoteBtn");
+    const copyUrlBtn = document.getElementById("copyUrlBtn");
     const noteContent = document.getElementById("noteContent");
 
-    copyBtn.addEventListener("click", () => {
+    copyNoteBtn.addEventListener("click", () => {
       navigator.clipboard.writeText(noteContent.textContent).then(() => {
-        copyBtn.textContent = "✔️";
-        setTimeout(() => (copyBtn.textContent = "📋"), 900);
+        copyNoteBtn.textContent = "✔️";
+        setTimeout(() => (copyNoteBtn.textContent = "📋"), 900);
+      });
+    });
+
+    copyUrlBtn.addEventListener("click", () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      if (!url.searchParams.has('html')) {
+        url.searchParams.set('html', '');
+      }
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        copyUrlBtn.textContent = "✔️";
+        setTimeout(() => (copyUrlBtn.textContent = "🔗"), 900);
       });
     });
   </script>
@@ -2304,12 +2335,16 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       word-break: break-word;
     }
 
-    h1::before {
-      content: '📎 ';
-      font-size: 22px;
+ 
+
+    /* Action Buttons */
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
     }
 
-    /* Download Button */
     .download {
       display: inline-flex;
       align-items: center;
@@ -2323,7 +2358,8 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       font-size: 15px;
       transition: all 0.2s;
       box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-      margin-bottom: 24px;
+      border: none;
+      cursor: pointer;
     }
 
     .download:hover {
@@ -2333,6 +2369,32 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
 
     .download::before {
       content: '⬇️';
+      font-size: 16px;
+    }
+
+    .copy-url-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: rgba(102, 126, 234, 0.1);
+      color: #667eea;
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .copy-url-btn:hover {
+      background: rgba(102, 126, 234, 0.2);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .copy-url-btn::before {
+      content: '🔗';
       font-size: 16px;
     }
 
@@ -2365,7 +2427,12 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
         font-size: 22px;
       }
 
-      .download {
+      .action-bar {
+        flex-direction: column;
+      }
+
+      .download,
+      .copy-url-btn {
         padding: 12px 18px;
         font-size: 16px;
         width: 100%;
@@ -2392,7 +2459,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="${back}" class="back-link">← Back to Notes</a>
+      <a href="${back}" class="back-link">${backText}</a>
     </div>
 
     <!-- File Card -->
@@ -2403,15 +2470,37 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
 
       <h1>${fileName}</h1>
 
-      <a class="download" href="${fileUrl}" download>
-        Download
-      </a>
+      <div class="action-bar">
+        <a class="download" href="${fileUrl}" download>
+          Download
+        </a>
+        <button id="copyUrlBtn" class="copy-url-btn">
+          Share
+        </button>
+      </div>
 
       <div class="media">
         ${mediaHtml}
       </div>
     </div>
   </div>
+
+  <script>
+    const copyUrlBtn = document.getElementById("copyUrlBtn");
+
+    copyUrlBtn.addEventListener("click", () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      if (!url.searchParams.has('html')) {
+        url.searchParams.set('html', '');
+      }
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        const originalText = copyUrlBtn.textContent;
+        copyUrlBtn.textContent = "✔️ Copied!";
+        setTimeout(() => (copyUrlBtn.textContent = originalText), 900);
+      });
+    });
+  </script>
 </body>
 </html>
 `);
