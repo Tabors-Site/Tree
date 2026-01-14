@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { sections } from "./WelcomePage";
+//import { sections } from "./WelcomePage";
 
 const SectionNav = ({ currentId }) => {
     const currentIndex = sections.findIndex((s) => s.id === currentId);
