@@ -155,6 +155,12 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>@${user.username} — Profile</title>
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -199,6 +205,11 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       left: -100px;
       animation-delay: -10s;
     }
+       html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
 
     @keyframes float {
       0%, 100% {
@@ -209,30 +220,10 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       }
     }
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      position: relative;
-      z-index: 1;
-    }
-
-    /* Header Section */
-    .header {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(20px);
-      border-radius: 16px;
-      padding: 32px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      position: relative;
-      overflow: hidden;
-      animation: slideUp 0.6s ease-out;
-    }
-
-    @keyframes slideUp {
+    @keyframes fadeInUp {
       from {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(30px);
       }
       to {
         opacity: 1;
@@ -240,22 +231,41 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       }
     }
 
-    .header::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Glass Card Base */
+    .glass-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out both;
+    }
+
+    /* Header Section */
+    .header {
+      animation-delay: 0.1s;
     }
 
     .user-info h1 {
       font-size: 32px;
       font-weight: 700;
-      color: #1a1a1a;
+      color: white;
       margin-bottom: 16px;
       letter-spacing: -0.5px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
     .user-info h1::before {
@@ -271,79 +281,121 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       margin-bottom: 16px;
       flex-wrap: wrap;
     }
+.send-button.loading {
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.send-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.25),
+    rgba(255,255,255,0.6),
+    rgba(255,255,255,0.25)
+  );
+  transition: width 0.2s ease;
+  pointer-events: none;
+}
 
     .plan-badge {
-      padding: 6px 14px;
-      border-radius: 12px;
+      padding: 8px 16px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 13px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #667eea;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
+.plan-basic {
+  background: rgba(255, 255, 255, 0.9);
+  color: #64748b;
+}
 
-    .plan-badge.basic {
-      background: #f0f0f0;
-      color: #555;
-    }
+/* STANDARD */
+.plan-standard {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  color: white;
+}
 
-    .plan-badge.standard {
-      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-      color: #1565c0;
-    }
+/* PREMIUM */
+.plan-premium {
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  color: white;
+}
 
-    .plan-badge.premium {
-      background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%);
-      color: #4e342e;
-    }
-
+/* GOD ✨ */
+.plan-god {
+  background: linear-gradient(
+    135deg,
+    #facc15,
+    #f59e0b,
+    #eab308
+  );
+  color: #3a2e00;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 0 20px rgba(250, 204, 21, 0.6),
+    0 6px 24px rgba(234, 179, 8, 0.5);
+  border: 1px solid rgba(255, 215, 0, 0.9);
+}
     .meta-item {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 6px 12px;
-      background: #f8f9fa;
-      border-radius: 10px;
+      padding: 8px 14px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 980px;
       font-size: 13px;
       font-weight: 500;
-      color: #444;
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
     }
 
     .storage-toggle-btn {
       padding: 2px 8px;
       margin-left: 4px;
       border-radius: 6px;
-      border: 1px solid #d0d0d0;
-      background: white;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.2);
       font-size: 11px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
-      color: #667eea;
+      color: white;
     }
 
     .storage-toggle-btn:hover {
-      background: #667eea;
-      color: white;
-      border-color: #667eea;
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.05);
     }
 
     .logout-btn {
       padding: 8px 16px;
-      border-radius: 10px;
-      border: none;
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(239, 68, 68, 0.3);
+      backdrop-filter: blur(10px);
       color: white;
       font-weight: 600;
       font-size: 13px;
       cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
     }
 
     .logout-btn:hover {
+      background: rgba(239, 68, 68, 0.5);
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
     }
 
     /* User ID */
@@ -352,9 +404,11 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #f8f9fa;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
       border-radius: 10px;
       margin-top: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .user-id-container code {
@@ -363,14 +417,14 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       padding: 0;
       font-size: 13px;
       font-family: 'SF Mono', Monaco, monospace;
-      color: #667eea;
+      color: white;
       font-weight: 600;
       word-break: break-all;
     }
 
     #copyNodeIdBtn {
-      background: rgba(102, 126, 234, 0.1);
-      border: 1px solid rgba(102, 126, 234, 0.2);
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
       cursor: pointer;
       padding: 6px 10px;
       border-radius: 6px;
@@ -380,33 +434,17 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     }
 
     #copyNodeIdBtn:hover {
-      background: rgba(102, 126, 234, 0.2);
+      background: rgba(255, 255, 255, 0.3);
       transform: scale(1.1);
     }
 
-    /* Raw Ideas Capture */
+    /* Raw Ideas Capture - Enhanced with glow */
     .raw-ideas-section {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(20px);
-      border-radius: 16px;
-      padding: 32px;
-      margin-bottom: 24px;
+      animation-delay: 0.2s;
       box-shadow: 
-        0 20px 60px rgba(102, 126, 234, 0.2),
-        0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-      position: relative;
-      overflow: hidden;
-      animation: slideUp 0.7s ease-out;
-    }
-
-    .raw-ideas-section::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+        0 20px 60px rgba(16, 185, 129, 0.3),
+        0 0 40px rgba(16, 185, 129, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
     }
 
     .raw-ideas-section::after {
@@ -418,7 +456,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       height: 200%;
       background: radial-gradient(
         circle,
-        rgba(16, 185, 129, 0.05) 0%,
+        rgba(16, 185, 129, 0.15) 0%,
         transparent 70%
       );
       animation: pulse 8s ease-in-out infinite;
@@ -439,10 +477,12 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     .raw-ideas-section h2 {
       font-size: 20px;
       font-weight: 600;
-      color: #10b981;
+      color: white;
       margin-bottom: 20px;
       position: relative;
       z-index: 1;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2),
+        0 0 20px rgba(16, 185, 129, 0.4);
     }
 
     .raw-ideas-section h2::before {
@@ -464,27 +504,49 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       font-size: 16px;
       line-height: 1.6;
       border-radius: 12px;
-      border: 2px solid transparent;
-      background: white;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
       font-family: inherit;
       resize: vertical;
       min-height: 80px;
       max-height: 400px;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      box-shadow: 
+        0 4px 20px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      color: #5044c9;
+      font-weight: 600;
+      text-shadow: 
+        0 0 12px rgba(102, 126, 234, 0.7),
+        0 0 20px rgba(102, 126, 234, 0.4),
+        0 1px 3px rgba(255, 255, 255, 1),
+        0 2px 8px rgba(80, 68, 201, 0.5);
+      letter-spacing: 0.3px;
     }
 
     #rawIdeaInput:focus {
       outline: none;
-      border-color: #10b981;
+      border-color: rgba(102, 126, 234, 0.6);
+      backdrop-filter: blur(28px) saturate(170%);
+      -webkit-backdrop-filter: blur(28px) saturate(170%);
       box-shadow: 
-        0 0 0 4px rgba(16, 185, 129, 0.15),
-        0 8px 30px rgba(16, 185, 129, 0.2);
+        0 0 0 4px rgba(102, 126, 234, 0.25),
+        0 0 40px rgba(102, 126, 234, 0.5),
+        0 8px 30px rgba(102, 126, 234, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
       transform: translateY(-2px);
+    }
+    
+    #rawIdeaInput:focus::placeholder {
+      color: rgba(80, 68, 201, 0.4);
     }
 
     #rawIdeaInput::placeholder {
-      color: #999;
+      color: rgba(80, 68, 201, 0.4);
+      font-weight: 400;
+      text-shadow: 0 0 6px rgba(102, 126, 234, 0.25);
     }
 
     .form-actions {
@@ -502,16 +564,17 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 
     input[type="file"] {
       font-size: 13px;
-      color: #666;
+      color: rgba(255, 255, 255, 0.9);
       cursor: pointer;
     }
 
     input[type="file"]::file-selector-button {
       padding: 8px 16px;
-      border-radius: 8px;
-      border: 1px solid #d0d0d0;
-      background: white;
-      color: #667eea;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      color: white;
       cursor: pointer;
       font-size: 13px;
       font-weight: 600;
@@ -520,60 +583,63 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     }
 
     input[type="file"]::file-selector-button:hover {
-      background: #667eea;
-      color: white;
-      border-color: #667eea;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
     }
 
     .send-button {
       padding: 14px 32px;
       font-size: 16px;
       font-weight: 600;
-      border-radius: 10px;
-      border: none;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(16, 185, 129, 0.9);
+      backdrop-filter: blur(10px);
       color: white;
       cursor: pointer;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
       white-space: nowrap;
-    }
-
-    .send-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.5);
-    }
-
-  
-
-    /* Navigation Section */
-    .nav-section {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(20px);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      animation: slideUp 0.8s ease-out;
       position: relative;
       overflow: hidden;
     }
 
-    .nav-section::before {
-      content: '';
+    .send-button::before {
+      content: "";
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .send-button:hover {
+      background: rgba(16, 185, 129, 1);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.5);
+    }
+
+    .send-button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Navigation Section */
+    .nav-section {
+      animation-delay: 0.3s;
     }
 
     .nav-section h2 {
       font-size: 18px;
       font-weight: 600;
-      color: #1a1a1a;
+      color: white;
       margin-bottom: 20px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
     .nav-links {
@@ -586,51 +652,57 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     .nav-links a {
       display: block;
       padding: 14px 18px;
-      background: #f8f9fa;
-      border-radius: 10px;
-      color: #667eea;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 980px;
+      color: white;
       text-decoration: none;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
+      transition: all 0.3s;
+      border: 1px solid rgba(255, 255, 255, 0.3);
       text-align: center;
-    }
-
-    .nav-links a:hover {
-      background: white;
-      border-color: #667eea;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-    }
-
-    /* Roots Section */
-    .roots-section {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(20px);
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      animation: slideUp 0.9s ease-out;
       position: relative;
       overflow: hidden;
     }
 
-    .roots-section::before {
-      content: '';
+    .nav-links a::before {
+      content: "";
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      inset: -40%;
+      background: linear-gradient(
+        120deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.25),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-100%);
+      transition: opacity 0.3s, transform 0.6s;
+    }
+
+    .nav-links a:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .nav-links a:hover::before {
+      opacity: 1;
+      transform: translateX(100%);
+    }
+
+    /* Roots Section */
+    .roots-section {
+      animation-delay: 0.4s;
     }
 
     .roots-section h2 {
       font-size: 20px;
       font-weight: 600;
-      color: #1a1a1a;
+      color: white;
       margin-bottom: 20px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
     .roots-section h2::before {
@@ -650,26 +722,47 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     .roots-list a {
       display: block;
       padding: 14px 18px;
-      background: #f8f9fa;
-      border-radius: 10px;
-      color: #1a1a1a;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      color: white;
       text-decoration: none;
       font-weight: 500;
       font-size: 15px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
+      transition: all 0.3s;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .roots-list a::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: linear-gradient(
+        120deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.25),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-100%);
+      transition: opacity 0.3s, transform 0.6s;
     }
 
     .roots-list a:hover {
-      background: white;
-      color: #667eea;
-      border-color: #667eea;
+      background: rgba(255, 255, 255, 0.3);
       transform: translateX(4px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .roots-list a:hover::before {
+      opacity: 1;
+      transform: translateX(100%);
     }
 
     .roots-list em {
-      color: #999;
+      color: rgba(255, 255, 255, 0.7);
       font-style: italic;
       display: block;
       padding: 20px;
@@ -687,36 +780,61 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       flex: 1;
       padding: 14px 18px;
       font-size: 15px;
-      border-radius: 10px;
-      border: 2px solid #e9ecef;
-      background: white;
+      border-radius: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.9);
       font-family: inherit;
       transition: all 0.2s;
     }
 
     .create-root-form input[type="text"]:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+      border-color: white;
+      background: white;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2),
+        0 4px 20px rgba(0, 0, 0, 0.1);
     }
 
     .create-root-button {
       padding: 14px 20px;
       font-size: 24px;
       line-height: 1;
-      border-radius: 10px;
-      border: none;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
       color: white;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.3s;
       font-weight: 300;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .create-root-button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
     }
 
     .create-root-button:hover {
+      background: rgba(255, 255, 255, 0.35);
       transform: scale(1.05) translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .create-root-button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     /* Responsive Design */
@@ -725,10 +843,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         padding: 16px;
       }
 
-      .header,
-      .raw-ideas-section,
-      .nav-section,
-      .roots-section {
+      .glass-card {
         padding: 24px 20px;
       }
 
@@ -795,14 +910,15 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 <body>
   <div class="container">
     <!-- Header -->
-    <div class="header">
+    <div class="glass-card header">
       <div class="user-info">
         <h1>@${user.username}</h1> 
 
         <div class="user-meta">
-          <span class="plan-badge ${profileType}">
-            ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Plan
-          </span>
+      <span class="plan-badge plan-${profileType}">
+  ${profileType === "god" ? "👑 " : ""}
+  ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Plan
+</span>
 
           <span class="meta-item">
             ⚡ ${energy?.amount ?? 0} · resets ${resetTimeLabel}
@@ -829,13 +945,11 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
           <code id="nodeIdCode">${user._id}</code>
           <button id="copyNodeIdBtn" title="Copy ID">📋</button>
         </div>
-
-        <a href="/app"><h2>NEW: TRY AI GUIDED APP</h2></a>
       </div>
     </div>
 
     <!-- Raw Ideas Capture -->
-    <div class="raw-ideas-section">
+    <div class="glass-card raw-ideas-section">
       <h2>Capture a Raw Idea</h2>
       <form
         method="POST"
@@ -855,15 +969,17 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
           <div class="file-input-wrapper">
             <input type="file" name="file" />
           </div>
-          <button type="submit" class="send-button" title="Save raw idea">
-            Send
-          </button>
+<button type="submit" class="send-button" title="Save raw idea" id="rawIdeaSendBtn">
+  <span class="send-label">Send</span>
+  <span class="send-progress"></span>
+</button>
+         
         </div>
       </form>
     </div>
 
     <!-- Navigation Links -->
-    <div class="nav-section">
+    <div class="glass-card nav-section">
       <h2>Quick Links</h2>
       <ul class="nav-links">
         <li><a href="/api/user/${userId}/raw-ideas${queryString}">Raw Ideas</a></li>
@@ -878,7 +994,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     </div>
 
     <!-- Roots Section -->
-    <div class="roots-section">
+    <div class="glass-card roots-section">
       <h2>My Roots</h2>
       ${
         roots.length > 0
@@ -892,7 +1008,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
                 ${r.name || "Untitled"}
               </a>
             </li>
-          `
+          `,
             )
             .join("")}
         </ul>
@@ -964,7 +1080,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
           method: "POST",
           credentials: "include",
         });
-        window.location.href = "/login";
+        window.top.location.href = "/login";
       } catch (err) {
         console.error("Logout failed", err);
         alert("Logout failed. Please try again.");
@@ -975,7 +1091,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     const textarea = document.getElementById("rawIdeaInput");
     
     function autoResize() {
-      textarea.style.height = 'auto';
+      textarea.style.height ='auto';
       const maxHeight = 400;
       const newHeight = Math.min(textarea.scrollHeight, maxHeight);
       textarea.style.height = newHeight + 'px';
@@ -995,6 +1111,66 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       }
     });
   </script>
+
+  <script>
+  const form = document.querySelector('.raw-idea-form');
+  const sendBtn = document.getElementById('rawIdeaSendBtn');
+  const progressBar = sendBtn.querySelector('.send-progress');
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    // Lock UI
+    sendBtn.classList.add('loading');
+    sendBtn.disabled = true;
+    progressBar.style.width = '15%'; // start slightly filled
+
+    const formData = new FormData(form);
+    const xhr = new XMLHttpRequest();
+
+    xhr.open('POST', form.action, true);
+
+    // Upload progress (lagged on purpose)
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+
+      // lag progress ~20%
+      const realPercent = (e.loaded / e.total) * 100;
+      const lagged = Math.min(90, Math.round(realPercent * 0.8));
+
+      progressBar.style.width = lagged + '%';
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        progressBar.style.width = '100%';
+        setTimeout(() => document.location.reload(), 150);
+      } else {
+        fail();
+      }
+    };
+
+    xhr.onerror = fail;
+
+    function fail() {
+      alert('Send failed');
+      sendBtn.classList.remove('loading');
+      sendBtn.disabled = false;
+      progressBar.style.width = '0%';
+    }
+
+    xhr.send(formData);
+  });
+
+  textarea.addEventListener('keydown', (e) => {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!isMobile && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+</script>
+
 </body>
 </html>
 `);
@@ -1102,7 +1278,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
       </div>
     </li>
   `;
-      })
+      }),
     );
 
     return res.send(`
@@ -1115,355 +1291,517 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${user.username} — Notes</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-    }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
 
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
 
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
-      text-decoration: none;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
 
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
 
-    /* Header Section */
-    .header {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
 
-    .header h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 16px;
-      line-height: 1.3;
-    }
-
-    .header h1 a {
-      color: #667eea;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .header h1 a:hover {
-      color: #764ba2;
-      text-decoration: underline;
-    }
-
-    /* Search Box */
-    .search-form {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
-
-    .search-form input[type="text"] {
-      flex: 1;
-      min-width: 200px;
-      padding: 12px 16px;
-      font-size: 15px;
-      border-radius: 10px;
-      border: 1px solid #d0d0d0;
-      background: white;
-      font-family: inherit;
-      transition: all 0.2s;
-    }
-
-    .search-form input[type="text"]:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .search-form button {
-      padding: 12px 24px;
-      font-size: 15px;
-      font-weight: 600;
-      border-radius: 10px;
-      border: none;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-family: inherit;
-      white-space: nowrap;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-    }
-
-    .search-form button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
-    }
-
-    /* Navigation Links */
-    .nav-links {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .nav-links a {
-      padding: 8px 16px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-    }
-
-    .nav-links a:hover {
-      background: white;
-      border-color: #667eea;
-      transform: translateY(-2px);
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
-    }
-
-    /* Notes List */
-    .notes-list {
-      list-style: none;
-    }
-
-    .note-card {
-      position: relative;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      transition: all 0.2s;
-    }
-
-    .note-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
-    }
-
-    .delete-button {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background: none;
-      border: none;
-      font-size: 20px;
-      cursor: pointer;
-      color: #999;
-      padding: 8px;
-      border-radius: 6px;
-      transition: all 0.2s;
-      line-height: 1;
-    }
-
-    .delete-button:hover {
-      background: #ffebee;
-      color: #c62828;
-      transform: scale(1.1);
-    }
-
-    .note-content {
-      padding-right: 40px;
-      margin-bottom: 12px;
-    }
-
-    .note-author {
-      font-weight: 600;
-      color: #667eea;
-      font-size: 14px;
-      margin-bottom: 6px;
-    }
-
-    .note-link {
-      color: #1a1a1a;
-      text-decoration: none;
-      font-size: 15px;
-      line-height: 1.6;
-      display: block;
-      word-wrap: break-word;
-      transition: color 0.2s;
-    }
-
-    .note-link:hover {
-      color: #667eea;
-    }
-
-    .file-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-right: 8px;
-    }
-
-    /* Note Meta */
-    .note-meta {
-      padding-top: 12px;
-      border-top: 1px solid #e9ecef;
-      font-size: 13px;
-      color: #888;
-      line-height: 1.8;
-    }
-
-    .note-meta a {
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.2s;
-    }
-
-    .note-meta a:hover {
-      color: #764ba2;
-      text-decoration: underline;
-    }
-
-    .meta-separator {
-      margin: 0 6px;
-      color: #ccc;
-    }
-
-    /* Empty State */
-    .empty-state {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 60px 40px;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
-
-    .empty-state-icon {
-      font-size: 64px;
-      margin-bottom: 16px;
-    }
-
-    .empty-state-text {
-      font-size: 18px;
-      color: #666;
-      margin-bottom: 8px;
-    }
-
-    .empty-state-subtext {
-      font-size: 14px;
-      color: #999;
-    }
-
-    /* Responsive Design */
-    @media (max-width: 640px) {
-      body {
-        padding: 16px;
-      }
-
-      .header {
-        padding: 20px;
-      }
-
-      .header h1 {
-        font-size: 24px;
-      }
-
-      .search-form {
-        flex-direction: column;
-      }
-
-      .search-form input[type="text"] {
-        width: 100%;
-        min-width: 0;
-      }
-
-      .search-form button {
-        width: 100%;
-      }
-
-      .nav-links {
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .nav-links a {
-        text-align: center;
-      }
-
-      .note-card {
-        padding: 16px;
-      }
-
-      .delete-button {
-        top: 12px;
-        right: 12px;
-      }
-
-      .back-nav {
-        flex-direction: column;
-      }
-
-      .back-link {
-        justify-content: center;
-      }
-
-      .empty-state {
-        padding: 40px 24px;
-      }
-    }
-
-    @media (min-width: 641px) and (max-width: 1024px) {
-      .container {
-        max-width: 700px;
-      }
-    }
-           .header-subtitle {
-    font-size: 14px;
-    color: #888;
-    margin-bottom: 16px;
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
   }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Glass Header Section */
+.header {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header h1 a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 20px;
+  font-weight: 400;
+}
+
+/* Glass Search Form */
+.search-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-form input[type="text"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  font-size: 16px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.search-form input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.search-form input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15),
+    0 8px 30px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.search-form button {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.search-form button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.search-form button:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.search-form button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Glass Notes List */
+.notes-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.note-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+}
+
+.note-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.note-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.note-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.delete-button {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  color: white;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.8;
+  transition: all 0.3s;
+  z-index: 10;
+}
+
+.delete-button:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 0.6);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.note-content {
+  padding-right: 48px;
+  margin-bottom: 12px;
+}
+
+.note-author {
+  font-weight: 600;
+  color: white;
+  font-size: 13px;
+  margin-bottom: 6px;
+  opacity: 0.9;
+  letter-spacing: -0.2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.note-link {
+  color: white;
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1.6;
+  display: block;
+  word-wrap: break-word;
+  transition: all 0.2s;
+  font-weight: 400;
+}
+
+.note-link:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.file-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Note Meta */
+.note-meta {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.8;
+}
+
+.note-meta a {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.note-meta a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.meta-separator {
+  margin: 0 6px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Empty State */
+.empty-state {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .search-form {
+    flex-direction: column;
+  }
+
+  .search-form input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  .search-form button {
+    width: 100%;
+  }
+
+  .note-card {
+    padding: 20px 16px;
+  }
+
+  .delete-button {
+    top: 16px;
+    right: 16px;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
 
   </style>
 </head>
@@ -1482,9 +1820,9 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
         Notes by
         <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
-<div class="header-subtitle">
-  View and manage all of your notes across every tree
-</div>
+      <div class="header-subtitle">
+        View and manage all of your notes across every tree
+      </div>
 
       <!-- Search Form -->
       <form method="GET" action="/api/user/${userId}/notes" class="search-form">
@@ -1498,16 +1836,6 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
         />
         <button type="submit">Search</button>
       </form>
-
-      <!-- Navigation Links -->
-      <div class="nav-links">
-        <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
-
-        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
-        <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
-        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
-        <a href="/api/user/${userId}/deleted${tokenQS}">Deleted</a>
-      </div>
     </div>
 
     <!-- Notes List -->
@@ -1558,6 +1886,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
         if (!data.success) throw new Error(data.error || "Delete failed");
 
         // Fade out animation
+        card.style.transition = "all 0.3s ease";
         card.style.opacity = "0";
         card.style.transform = "translateX(-20px)";
         setTimeout(() => card.remove(), 300);
@@ -1602,12 +1931,11 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
       userId,
       limit,
       startDate,
-      endDate
+      endDate,
     );
 
     const notes = result.notes.map((n) => ({
       ...n,
-
       content:
         n.contentType === "file" ? `/api/uploads/${n.content}` : n.content,
     }));
@@ -1622,306 +1950,6 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
 
     const user = await User.findById(userId).lean();
 
-    let html = `
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>${user.username} — Tagged Notes</title>
-  <style>
-  body {
-    margin: 0;
-    padding: 0;
-    background: #f5f6f7;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
-
-  .header {
-    padding: 20px;
-    border-bottom: 1px solid #ddd;
-    background: white;
-    flex-shrink: 0;
-  }
-
-  .header h1 {
-    margin: 0 0 12px 0;
-    font-size: 24px;
-    font-weight: 600;
-  }
-
-  .header a {
-    color: #5865f2;
-    text-decoration: none;
-  }
-
-  .header a:hover {
-    text-decoration: underline;
-  }
-
-  .nav {
-    margin-top: 12px;
-  }
-
-  .nav a {
-    color: #5865f2;
-    text-decoration: none;
-    margin-right: 16px;
-    font-size: 14px;
-  }
-
-  .nav a:hover {
-    text-decoration: underline;
-  }
-
-  .container {
-    padding: 20px;
-    overflow-y: auto;
-    flex-grow: 1;
-  }
-
-  .user-id-box {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin: 8px 0;
-  }
-
-  .user-id-box code {
-    background: #eee;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 13px;
-  }
-
-  .user-id-box button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
-    opacity: 0.6;
-    font-size: 16px;
-  }
-
-  .user-id-box button:hover {
-    opacity: 1;
-  }
-
-  .search-form {
-    margin-top: 12px;
-  }
-
-  .search-form input[type="text"] {
-    padding: 8px 12px;
-    font-size: 14px;
-    width: 260px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    font-family: inherit;
-  }
-
-  .search-form button {
-    padding: 8px 14px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    background: white;
-    cursor: pointer;
-    font-size: 14px;
-    margin-left: 6px;
-  }
-
-  .search-form button:hover {
-    background: #f5f6f7;
-  }
-
-  ul {
-    list-style: none;
-    padding-left: 0;
-    margin: 0;
-  }
-
-  li {
-    margin-bottom: 16px;
-    padding: 14px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    border: 1px solid #e3e5e8;
-  }
-
-  li a {
-    color: #5865f2;
-    text-decoration: none;
-  }
-
-  li a:hover {
-    text-decoration: underline;
-  }
-
-  .meta {
-    color: #666;
-    font-size: 13px;
-    margin-top: 6px;
-    line-height: 1.6;
-  }
-
-  @media (max-width: 600px) {
-    .header {
-      padding: 16px;
-    }
-
-    .container {
-      padding: 16px;
-    }
-
-    .search-form input[type="text"] {
-      width: 200px;
-      font-size: 16px;
-    }
-
-    .search-form button {
-      font-size: 16px;
-    }
-  }
-
-  @media (prefers-color-scheme: dark) {
-    body {
-      background: #2f3136;
-      color: #e3e5e8;
-    }
-
-    .header {
-      background: #36393f;
-      border-bottom-color: #3a3c40;
-    }
-
-    .header a,
-    .nav a,
-    li a {
-      color: #7289da;
-    }
-
-    .user-id-box code {
-      background: #40444b;
-      color: #e3e5e8;
-    }
-
-    .search-form input[type="text"] {
-      background: #40444b;
-      color: #e3e5e8;
-      border-color: #3a3c40;
-    }
-
-    .search-form button {
-      background: #40444b;
-      color: #e3e5e8;
-      border-color: #3a3c40;
-    }
-
-    .search-form button:hover {
-      background: #4f545c;
-    }
-
-    li {
-      background: #36393f;
-      border-color: #3a3c40;
-    }
-
-    .meta {
-      color: #b9bbbe;
-    }
-  }
-</style>
-</head>
-
-<body>
-
-  <div class="header">
-    <h1 style="margin:0;">
-      Mail for <a href="/api/user/${userId}?token=${
-      req.query.token ?? ""
-    }&html">
-        @${user.username}
-      </a>
-    </h1>
-
-    <div class="nav">
- 
-      <a href="/api/user/${userId}/notes?token=${
-      req.query.token ?? ""
-    }&html">Notes</a>
-       <a href="/api/user/${userId}/contributions?token=${
-      req.query.token ?? ""
-    }&html">Contributions</a>
-    <a href="/api/user/${userId}/raw-ideas?token=${
-      req.query.token ?? ""
-    }&html">Raw Ideas</a>
-
-    
-    </div>
-
-    
-  </div>
-
-  <div class="container">
-    <ul>
-`;
-
-    for (const n of notes) {
-      const nodeName = await getNodeName(n.nodeId);
-      const preview =
-        n.contentType === "text"
-          ? n.content.length > 120
-            ? n.content.substring(0, 120) + "…"
-            : n.content
-          : `[FILE] ${n.content}`;
-
-      const author = n.userId.username || n.userId._id;
-
-      html += `
-<li>
-  <div>
-    <a href="/api/user/${n.userId._id}?token=${req.query.token ?? ""}&html">
-      <strong>${author}:</strong>
-    </a>
-
-    <a href="/api/${n.nodeId}/${n.version}/notes/${n._id}?token=${
-        req.query.token ?? ""
-      }&html">
-      ${preview}
-    </a>
-  </div>
-
-  <div class="meta">
-    ${new Date(n.createdAt).toLocaleString()}<br/>
-
-    <a href="/api/${n.nodeId}/${n.version}?token=${req.query.token ?? ""}&html">
-      ${nodeName} v${n.version}
-    </a>
-
-    <br/>
-
-    <a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
-      View Notes
-    </a>
-  </div>
-</li>
-`;
-    }
-
-    html += `
-    </ul>
-  </div>
-
-</body>
-</html>`;
-
-    // Replace the HTML return in your /user/:userId/tags route with this:
-
-    // Replace the HTML return in your /user/:userId/tags route with this:
-
     return res.send(`
 <!DOCTYPE html>
 <html lang="en">
@@ -1932,365 +1960,466 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${user.username} — Mail</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-    }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
 
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
 
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
-      text-decoration: none;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
 
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
 
-    /* Header Section */
-    .header {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
 
-    .header h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 8px;
-      line-height: 1.3;
-    }
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
 
-    .header h1::before {
-      content: '📨 ';
-      font-size: 26px;
-    }
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
-    .unread-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border-radius: 12px;
-      font-size: 13px;
-      font-weight: 700;
-      margin-left: 12px;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-      animation: pulse-badge 2s ease-in-out infinite;
-    }
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
 
-    @keyframes pulse-badge {
-      0%, 100% {
-        transform: scale(1);
-      }
-      50% {
-        transform: scale(1.05);
-      }
-    }
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
 
-    .header h1 a {
-      color: #667eea;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
 
-    .header h1 a:hover {
-      color: #764ba2;
-      text-decoration: underline;
-    }
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
 
-    .header-subtitle {
-      font-size: 14px;
-      color: #888;
-      margin-bottom: 16px;
-    }
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
 
-    /* Navigation Links */
-    .nav-links {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-    .nav-links a {
-      padding: 8px 16px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-    }
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
 
-    .nav-links a:hover {
-      background: white;
-      border-color: #667eea;
-      transform: translateY(-2px);
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
-    }
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
 
-    /* Notes List */
-    .notes-list {
-      list-style: none;
-    }
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
 
-    .note-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      border-left: 4px solid #667eea;
-      position: relative;
-      overflow: hidden;
-    }
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-    .note-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, rgba(118, 75, 162, 0.03) 100%);
-      opacity: 0;
-      transition: opacity 0.3s;
-      pointer-events: none;
-    }
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
 
-    .note-card:hover {
-      transform: translateX(8px) translateY(-4px);
-      box-shadow: 0 12px 32px rgba(102, 126, 234, 0.2);
-      border-left-color: #764ba2;
-    }
+.header h1 a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
 
-    .note-card:hover::before {
-      opacity: 1;
-    }
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
 
-    .note-card.unread {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(252, 252, 255, 0.98) 100%);
-      border-left-width: 5px;
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.15);
-    }
+.message-count {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border-radius: 980px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
 
-    .note-card.unread::after {
-      content: '';
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      width: 10px;
-      height: 10px;
-      background: #667eea;
-      border-radius: 50%;
-      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
-      animation: pulse-dot 2s ease-in-out infinite;
-    }
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
 
-    @keyframes pulse-dot {
-      0%, 100% {
-        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
-      }
-      50% {
-        box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.1);
-      }
-    }
+/* Glass Notes List */
+.notes-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 
-    .note-content {
-      margin-bottom: 12px;
-    }
+.note-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  
+  /* Start hidden for lazy loading */
+  opacity: 0;
+  transform: translateY(30px);
+}
 
-    .note-author {
-      font-weight: 700;
-      color: #667eea;
-      font-size: 15px;
-      margin-right: 6px;
-      position: relative;
-      display: inline-block;
-    }
+/* When item becomes visible */
+.note-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
 
-    .note-author::before {
-      content: '  ';
-      margin-right: 6px;
-      font-size: 14px;
-      opacity: 0.8;
-    }
+.note-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
 
-    .note-author a {
-      color: #667eea;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
+.note-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
 
-    .note-author a:hover {
-      color: #764ba2;
-      text-decoration: underline;
-    }
+.note-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-    .note-link {
-      color: #1a1a1a;
-      text-decoration: none;
-      font-size: 15px;
-      line-height: 1.6;
-      word-wrap: break-word;
-      transition: color 0.2s;
-    }
+.note-content {
+  margin-bottom: 12px;
+}
 
-    .note-link:hover {
-      color: #667eea;
-    }
+.note-author {
+  font-weight: 600;
+  color: white;
+  font-size: 15px;
+  margin-bottom: 8px;
+  display: block;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
 
-    .file-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-right: 8px;
-    }
+.note-author a {
+  color: white;
+  text-decoration: none;
+  transition: all 0.2s;
+}
 
-    /* Note Meta */
-    .note-meta {
-      padding-top: 12px;
-      border-top: 1px solid #e9ecef;
-      font-size: 13px;
-      color: #888;
-      line-height: 1.8;
-    }
+.note-author a:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
 
-    .note-meta a {
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.2s;
-    }
+.note-link {
+  color: white;
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1.6;
+  display: block;
+  word-wrap: break-word;
+  transition: all 0.2s;
+  font-weight: 400;
+}
 
-    .note-meta a:hover {
-      color: #764ba2;
-      text-decoration: underline;
-    }
+.note-link:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
 
-    .meta-separator {
-      margin: 0 6px;
-      color: #ccc;
-    }
+.file-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
 
-    /* Empty State */
-    .empty-state {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 60px 40px;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+/* Note Meta */
+.note-meta {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.8;
+}
 
-    .empty-state-icon {
-      font-size: 64px;
-      margin-bottom: 16px;
-    }
+.note-meta a {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
 
-    .empty-state-text {
-      font-size: 18px;
-      color: #666;
-      margin-bottom: 8px;
-    }
+.note-meta a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
 
-    .empty-state-subtext {
-      font-size: 14px;
-      color: #999;
-    }
+.meta-separator {
+  margin: 0 6px;
+  color: rgba(255, 255, 255, 0.5);
+}
 
-    /* Responsive Design */
-    @media (max-width: 640px) {
-      body {
-        padding: 16px;
-      }
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
 
-      .header {
-        padding: 20px;
-      }
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
 
-      .header h1 {
-        font-size: 24px;
-      }
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-      .nav-links {
-        flex-direction: column;
-        gap: 8px;
-      }
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
 
-      .nav-links a {
-        text-align: center;
-      }
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
 
-      .note-card {
-        padding: 16px;
-      }
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
 
-      .back-nav {
-        flex-direction: column;
-      }
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
 
-      .back-link {
-        justify-content: center;
-      }
+  .header {
+    padding: 24px 20px;
+  }
 
-      .empty-state {
-        padding: 40px 24px;
-      }
-    }
+  .header h1 {
+    font-size: 24px;
+  }
 
-    @media (min-width: 641px) and (max-width: 1024px) {
-      .container {
-        max-width: 700px;
-      }
-    }
-      
+  .message-count {
+    display: block;
+    margin-left: 0;
+    margin-top: 8px;
+    width: fit-content;
+  }
+
+  .note-card {
+    padding: 20px 16px;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
   </style>
 </head>
 <body>
@@ -2309,23 +2438,11 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
         <a href="/api/user/${userId}${tokenQS}">@${user.username}</a>
         ${
           notes.length > 0
-            ? `<span class="unread-badge">${notes.length} ${
-                notes.length === 1 ? "message" : "messages"
-              }</span>`
+            ? `<span class="message-count">${notes.length}</span>`
             : ""
         }
       </h1>
       <div class="header-subtitle">Notes where others have mentioned you</div>
-
-      <!-- Navigation Links -->
-      <div class="nav-links">
-        <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
-                <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
-
-        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
-        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
-        <a href="/api/user/${userId}/deleted${tokenQS}">Deleted</a>
-      </div>
     </div>
 
     <!-- Notes List -->
@@ -2346,16 +2463,16 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
           const author = n.userId.username || n.userId._id;
 
           return `
-          <li class="note-card unread">
+          <li class="note-card">
             <div class="note-content">
-              <span class="note-author">
+              <div class="note-author">
                 <a href="/api/user/${n.userId._id}${tokenQS}">
                   ${author}
                 </a>
-              </span>
+              </div>
               <a href="/api/${n.nodeId}/${n.version}/notes/${
-            n._id
-          }${tokenQS}" class="note-link">
+                n._id
+              }${tokenQS}" class="note-link">
                 ${
                   n.contentType === "file"
                     ? `<span class="file-badge">FILE</span>`
@@ -2377,21 +2494,46 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
             </div>
           </li>
         `;
-        })
+        }),
       ).then((results) => results.join(""))}
     </ul>
     `
         : `
     <div class="empty-state">
       <div class="empty-state-icon">📬</div>
-      <div class="empty-state-text">No tagged notes yet</div>
+      <div class="empty-state-text">No messages yet</div>
       <div class="empty-state-subtext">
-        Notes where you're tagged will appear here
+        Notes where you're mentioned will appear here
       </div>
     </div>
     `
     }
   </div>
+
+  <script>
+    // Intersection Observer for lazy loading animations
+    const observerOptions = {
+      root: null,
+      rootMargin: '50px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, index * 50);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe all note cards
+    document.querySelectorAll('.note-card').forEach(card => {
+      observer.observe(card);
+    });
+  </script>
 </body>
 </html>
 `);
@@ -2425,7 +2567,7 @@ const renderDetails = (c, queryString) => {
           ${
             c.scheduleEdited?.date
               ? `<div>Date: <code>${new Date(
-                  c.scheduleEdited.date
+                  c.scheduleEdited.date,
                 ).toLocaleString()}</code></div>`
               : ""
           }
@@ -2446,14 +2588,14 @@ const renderDetails = (c, queryString) => {
           ${
             c.executeScript?.logs?.length
               ? `<pre><code>${escapeHtml(
-                  c.executeScript.logs.join("\n")
+                  c.executeScript.logs.join("\n"),
                 )}</code></pre>`
               : ""
           }
           ${
             c.executeScript?.error
               ? `<div>Error: <code>${escapeHtml(
-                  c.executeScript.error
+                  c.executeScript.error,
                 )}</code></div>`
               : ""
           }
@@ -2467,7 +2609,7 @@ const renderDetails = (c, queryString) => {
             c.branchLifecycle?.fromParentId
               ? `From: ${renderLink(
                   c.branchLifecycle.fromParentId,
-                  queryString
+                  queryString,
                 )}<br/>`
               : ""
           }
@@ -2490,8 +2632,8 @@ const renderKeyValueMap = (data) => {
     data instanceof Map
       ? [...data.entries()]
       : typeof data === "object"
-      ? Object.entries(data)
-      : [];
+        ? Object.entries(data)
+        : [];
 
   if (entries.length === 0) return "";
 
@@ -2501,8 +2643,8 @@ const renderKeyValueMap = (data) => {
         .map(
           ([key, value]) =>
             `<li><code>${escapeHtml(key)}</code>: <code>${escapeHtml(
-              value
-            )}</code></li>`
+              value,
+            )}</code></li>`,
         )
         .join("")}
     </ul>
@@ -2546,7 +2688,7 @@ const renderVersionLink = (
   nodeId,
   version,
   queryString,
-  label = `Version ${version}`
+  label = `Version ${version}`,
 ) =>
   `<a href="/api/${nodeId}/${version}${queryString}">
     <code>${label}</code>
@@ -2566,7 +2708,7 @@ export const contributionRenderers = ({
       ? `added new version ${renderVersionLink(
           nodeId,
           nextVersion,
-          queryString
+          queryString,
         )}`
       : `added new version`,
   transaction: () =>
@@ -2583,18 +2725,18 @@ export const contributionRenderers = ({
   updateParent: (c) =>
     `changed parent from ${renderLink(
       c.updateParent?.oldParentId,
-      queryString
+      queryString,
     )} to ${renderLink(c.updateParent?.newParentId, queryString)}`,
   updateChildNode: (c) =>
     `${c.updateChildNode?.action} child ${renderLink(
       c.updateChildNode?.childId,
-      queryString
+      queryString,
     )}`,
   note: (c) =>
     `${c.noteAction?.action === "add" ? "added" : "removed"} note
    <a href="/api/${c.nodeId}/${c.nodeVersion}/notes/${
-      c.noteAction?.noteId
-    }${queryString}">
+     c.noteAction?.noteId
+   }${queryString}">
      <code>${c.noteAction?.noteId}</code>
    </a>`,
   editScript: (c) => `updated script <code>${c.editScript?.scriptName}</code>`,
@@ -2628,8 +2770,8 @@ export const contributionRenderers = ({
     c.branchLifecycle?.action === "retired"
       ? "retired branch"
       : c.branchLifecycle?.action === "revived"
-      ? "revived branch"
-      : "revived branch as root",
+        ? "revived branch"
+        : "revived branch as root",
   invite: (c) => {
     const { action, receivingId } = c.inviteAction || {};
     const target = renderUser(receivingId);
@@ -3005,7 +3147,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
       userId,
       limit,
       req.query.startDate,
-      req.query.endDate
+      req.query.endDate,
     );
 
     if (!wantHtml) {
@@ -3048,7 +3190,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
   <span class="contribution-time">${time}</span>
   ${details ? `<div class="contribution-details">${details}</div>` : ""}
 </li>`;
-      })
+      }),
     );
 
     res.send(`
@@ -3229,13 +3371,13 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
       {},
       {},
       null,
-      req.user
+      req.user,
     );
 
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/root/${rootNode._id}?token=${req.query.token ?? ""}&html`
+        `/api/root/${rootNode._id}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -3278,7 +3420,7 @@ router.post(
 
       if (wantHtml) {
         return res.redirect(
-          `/api/user/${userId}?token=${req.query.token ?? ""}&html`
+          `/api/user/${userId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -3289,7 +3431,7 @@ router.post(
     } catch (err) {
       res.status(400).json({ success: false, error: err.message });
     }
-  }
+  },
 );
 
 router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
@@ -3349,272 +3491,6 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
 
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
-    const searchBoxHtml = `
-  <form
-    method="GET"
-    action="/api/user/${userId}/raw-ideas"
-    style="margin-top:12px;"
-  >
-    <input type="hidden" name="token" value="${req.query.token ?? ""}">
-    <input type="hidden" name="html" value="">
-
-    <input
-      type="text"
-      name="q"
-      placeholder="Search raw ideas…"
-      value="${query}"
-      style="
-        padding:8px 12px;
-        font-size:14px;
-        width:260px;
-        border-radius:6px;
-        border:1px solid #ccc;
-      "
-    />
-
-    <button
-      type="submit"
-      style="
-        padding:8px 14px;
-        border-radius:6px;
-        border:1px solid #999;
-        background:#eee;
-        cursor:pointer;
-      "
-    >
-      Search
-    </button>
-  </form>
-`;
-
-    let html = `
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${user.username} — Raw Ideas</title>
-
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: #f5f6f7;
-      font-family: system-ui, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-
-    .header {
-      padding: 20px;
-      background: white;
-      border-bottom: 1px solid #ddd;
-    }
-
-    .header h1 {
-      margin: 0;
-      font-size: 24px;
-    }
-
-    .nav {
-      margin-top: 12px;
-    }
-
-    .nav a {
-      margin-right: 14px;
-      color: #5865f2;
-      text-decoration: none;
-      font-size: 14px;
-    }
-
-    .nav a:hover {
-      text-decoration: underline;
-    }
-
-    .container {
-      padding: 20px;
-      overflow-y: auto;
-      flex-grow: 1;
-    }
-
-    ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    li {
-      background: white;
-      padding: 14px;
-      margin-bottom: 12px;
-      border-radius: 8px;
-      border: 1px solid #e3e5e8;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
-
-    .meta {
-      margin-top: 6px;
-      font-size: 13px;
-      color: #666;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      body { background: #2f3136; color: #e3e5e8; }
-      .header { background: #36393f; border-bottom-color: #3a3c40; }
-      li { background: #36393f; border-color: #3a3c40; }
-      .meta { color: #b9bbbe; }
-      .nav a { color: #7289da; }
-    }
-      .raw-idea-item {
-  position: relative;
-}
-
-.raw-idea-item {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.delete-raw-idea {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  color: #999;
-  padding: 4px;
-}
-
-.delete-raw-idea:hover {
-  color: #e03131;
-}
-
-
-  </style>
-</head>
-
-<body>
-
-  <div class="header">
-    <h1>
-      Raw Ideas for
-      <a href="/api/user/${userId}${tokenQS}" style="color:#5865f2;">
-        ${user.username}
-      </a>
-    </h1>
-      ${searchBoxHtml}
-
-
-    <div class="nav">
-      <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
-      <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
-      <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
-    </div>
-  </div>
-
-  <div class="container">
-    <ul>
-`;
-
-    for (const r of rawIdeas) {
-      const preview =
-        r.contentType === "text" ? r.content : `[FILE] ${r.content}`;
-
-      const ideaLink = `/api/user/${userId}/raw-ideas/${r._id}${tokenQS}`;
-
-      html += `
-<li class="raw-idea-item" data-raw-idea-id="${r._id}">
-  <button class="delete-raw-idea" title="Delete raw idea">✕</button>
-
-  <div>
-    <a
-      href="${ideaLink}"
-      style="color:#5865f2; text-decoration:none;"
-    >
-      ${r.contentType === "text" ? r.content : `[FILE] ${r.content}`}
-    </a>
-  </div>
-
-  <form
-    method="POST"
-    action="/api/user/${userId}/raw-ideas/${r._id}/transfer?token=${token}&html"
-    style="margin-top:10px; display:flex; gap:6px; align-items:center;"
-  >
-    <input
-      type="text"
-      name="nodeId"
-      placeholder="Target node ID"
-      required
-      style="
-        padding:6px 8px;
-        font-size:13px;
-        border-radius:6px;
-        border:1px solid #ccc;
-        width:160px;
-      "
-    />
-
-    <button
-      type="submit"
-      style="
-        padding:6px 10px;
-        font-size:13px;
-        border-radius:6px;
-        border:1px solid #999;
-        background:#eee;
-        cursor:pointer;
-      "
-    >
-      Transfer
-    </button>
-  </form>
-
-  <div class="meta">
-    ${new Date(r.createdAt).toLocaleString()}
-  </div>
-</li>
-`;
-    }
-
-    html += `
-    </ul>
-  </div>
-<script>
-document.addEventListener("click", async (e) => {
-  if (!e.target.classList.contains("delete-raw-idea")) return;
-
-  const li = e.target.closest(".raw-idea-item");
-  const rawIdeaId = li.dataset.rawIdeaId;
-
-  if (!confirm("Delete this raw idea?")) return;
-
-  const token =
-    new URLSearchParams(window.location.search).get("token") || "";
-
-  const qs = token ? "?token=" + encodeURIComponent(token) : "";
-
-  try {
-    const res = await fetch(
-      "/api/user/${userId}/raw-ideas/" + rawIdeaId + qs,
-      { method: "DELETE" }
-    );
-
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-
-    li.remove();
-  } catch {
-    alert("Delete failed");
-  }
-});
-</script>
-
-</body>
-</html>
-`;
-
-    // Replace the HTML return in your /user/:userId/raw-ideas route with this:
 
     return res.send(`
 <!DOCTYPE html>
@@ -3626,401 +3502,658 @@ document.addEventListener("click", async (e) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${user.username} — Raw Ideas</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-    }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
 
-    /* Header Section */
-    .header {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
 
-    .header h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 16px;
-      line-height: 1.3;
-    }
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
 
-    .header h1 a {
-      color: #667eea;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
 
-    .header h1 a:hover {
-      color: #764ba2;
-      text-decoration: underline;
-    }
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
 
-    /* Search Box */
-    .search-form {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
 
-    .search-form input[type="text"] {
-      flex: 1;
-      min-width: 200px;
-      padding: 12px 16px;
-      font-size: 15px;
-      border-radius: 10px;
-      border: 1px solid #d0d0d0;
-      background: white;
-      font-family: inherit;
-      transition: all 0.2s;
-    }
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
-    .search-form input[type="text"]:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
 
-    .search-form button {
-      padding: 12px 24px;
-      font-size: 15px;
-      font-weight: 600;
-      border-radius: 10px;
-      border: none;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-family: inherit;
-      white-space: nowrap;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-    }
-
-    .search-form button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
-    }
-
-    /* Navigation */
-    .nav-links {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .nav-links a {
-      padding: 8px 16px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-    }
-
-    .nav-links a:hover {
-      background: white;
-      border-color: #667eea;
-      transform: translateY(-2px);
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
-    }
-
-    /* Raw Ideas List */
-    .ideas-list {
-      list-style: none;
-    }
-
-    .idea-card {
-      position: relative;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      transition: all 0.2s;
-    }
-
-    .idea-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
-    }
-
-    .delete-button {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background: none;
-      border: none;
-      font-size: 20px;
-      cursor: pointer;
-      color: #999;
-      padding: 8px;
-      border-radius: 6px;
-      transition: all 0.2s;
-      line-height: 1;
-    }
-
-    .delete-button:hover {
-      background: #ffebee;
-      color: #c62828;
-      transform: scale(1.1);
-    }
-
-    .idea-content {
-      padding-right: 40px;
-      margin-bottom: 12px;
-    }
-
-    .idea-link {
-      color: #1a1a1a;
-      text-decoration: none;
-      font-size: 15px;
-      line-height: 1.6;
-      display: block;
-      word-wrap: break-word;
-      transition: color 0.2s;
-    }
-
-    .idea-link:hover {
-      color: #667eea;
-    }
-
-    .file-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-right: 8px;
-    }
-
-    /* Transfer Form */
-    .transfer-form {
-      display: flex;
-      gap: 10px;
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid #e9ecef;
-      flex-wrap: wrap;
-    }
-
-    .transfer-form input[type="text"] {
-      flex: 1;
-      min-width: 160px;
-      padding: 10px 14px;
-      font-size: 14px;
-      border-radius: 8px;
-      border: 1px solid #d0d0d0;
-      background: white;
-      font-family: inherit;
-      transition: all 0.2s;
-    }
-
-    .transfer-form input[type="text"]:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .transfer-form button {
-      padding: 10px 18px;
-      font-size: 14px;
-      font-weight: 600;
-      border-radius: 8px;
-      border: none;
-      background: #667eea;
-      color: white;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-family: inherit;
-      white-space: nowrap;
-    }
-
-    .transfer-form button:hover {
-      background: #5856d6;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
-
-    /* Metadata */
-    .idea-meta {
-      margin-top: 12px;
-      font-size: 13px;
-      color: #888;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .idea-meta::before {
-      content: "🕐";
-      font-size: 14px;
-    }
-
-    /* Empty State */
-    .empty-state {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 60px 40px;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
-
-    .empty-state-icon {
-      font-size: 64px;
-      margin-bottom: 16px;
-    }
-
-    .empty-state-text {
-      font-size: 18px;
-      color: #666;
-      margin-bottom: 8px;
-    }
-
-    .empty-state-subtext {
-      font-size: 14px;
-      color: #999;
-    }
-
-    /* Responsive Design */
-    @media (max-width: 640px) {
-      body {
-        padding: 16px;
-      }
-
-      .header {
-        padding: 20px;
-      }
-
-      .header h1 {
-        font-size: 24px;
-      }
-
-      .search-form {
-        flex-direction: column;
-      }
-
-      .search-form input[type="text"] {
-        width: 100%;
-        min-width: 0;
-      }
-
-      .search-form button {
-        width: 100%;
-      }
-
-      .nav-links {
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .nav-links a {
-        text-align: center;
-      }
-
-      .idea-card {
-        padding: 16px;
-      }
-
-      .delete-button {
-        top: 12px;
-        right: 12px;
-      }
-
-      .transfer-form {
-        flex-direction: column;
-      }
-
-      .transfer-form input[type="text"] {
-        width: 100%;
-        min-width: 0;
-      }
-
-      .transfer-form button {
-        width: 100%;
-      }
-
-      .empty-state {
-        padding: 40px 24px;
-      }
-    }
-
-    @media (min-width: 641px) and (max-width: 1024px) {
-      .container {
-        max-width: 700px;
-      }
-    }
-    .back-nav {
+/* Glass Back Navigation */
+.back-nav {
   display: flex;
   gap: 12px;
   margin-bottom: 20px;
   flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
 }
 
 .back-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  color: #667eea;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
   text-decoration: none;
-  border-radius: 10px;
+  border-radius: 980px;
   font-weight: 600;
   font-size: 14px;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
 }
-  .header-subtitle {
-    font-size: 14px;
-    color: #888;
-    margin-bottom: 16px;
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
+
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header h1 a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 20px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Glass Search Form */
+.search-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-form input[type="text"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  font-size: 16px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.search-form input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.search-form input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15),
+    0 8px 30px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.search-form button {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.search-form button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.search-form button:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.search-form button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Glass Ideas List */
+.ideas-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.idea-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  
+  /* Start hidden for lazy loading */
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* When item becomes visible */
+.idea-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.idea-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.idea-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.idea-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.delete-button {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  color: white;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.8;
+  transition: all 0.3s;
+  z-index: 10;
+}
+
+.delete-button:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 0.6);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.idea-content {
+  padding-right: 48px;
+  margin-bottom: 16px;
+}
+
+.idea-link {
+  color: white;
+  text-decoration: none;
+  font-size: 16px;
+  line-height: 1.6;
+  display: block;
+  word-wrap: break-word;
+  transition: all 0.2s;
+  font-weight: 400;
+}
+
+.idea-link:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.file-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Subtle Transfer Form */
+.transfer-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.transfer-form input[type="text"] {
+  flex: 1;
+  min-width: 180px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.transfer-form input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+}
+
+.transfer-form input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.transfer-form button {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  opacity: 0.85;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.transfer-form button:hover {
+  background: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Metadata */
+.idea-meta {
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .search-form {
+    flex-direction: column;
+  }
+
+  .search-form input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  .search-form button {
+    width: 100%;
+  }
+
+  .idea-card {
+    padding: 20px 16px;
+  }
+
+  .delete-button {
+    top: 16px;
+    right: 16px;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  .transfer-form {
+    flex-direction: column;
+  }
+
+  .transfer-form input[type="text"] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .transfer-form button {
+    width: 100%;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
   </style>
 </head>
 <body>
   <div class="container">
-  
-    <!-- Header Section -->
-     <div class="back-nav">
+    <!-- Back Navigation -->
+    <div class="back-nav">
       <a href="/api/user/${userId}${tokenQS}" class="back-link">
         ← Back to Profile
       </a>
     </div>
+
+    <!-- Header Section -->
     <div class="header">
       <h1>
         Raw Ideas for
         <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
-<div class="header-subtitle">
-  Organize raw ideas by placing them as notes on the appropriate node. You can use the ChatGPT connector to automate this process.
-</div>
+      <div class="header-subtitle">
+        Organize raw ideas by placing them as notes on the appropriate node. You can use the ChatGPT connector to automate this process.
+      </div>
 
       <!-- Search Form -->
       <form method="GET" action="/api/user/${userId}/raw-ideas" class="search-form">
@@ -4030,24 +4163,10 @@ document.addEventListener("click", async (e) => {
           type="text"
           name="q"
           placeholder="Search raw ideas..."
-          value="${query}"
+          value="${query.replace(/"/g, "&quot;")}"
         />
         <button type="submit">Search</button>
       </form>
-
-      <!-- Navigation Links -->
-      <div class="nav-links">
-
-        <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
-                        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
-
-        <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
-        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
-                        <a href="/api/user/${userId}/deleted${tokenQS}">Deleted</a>
-
-
-
-      </div>
     </div>
 
     <!-- Raw Ideas List -->
@@ -4077,8 +4196,8 @@ document.addEventListener("click", async (e) => {
           <form
             method="POST"
             action="/api/user/${userId}/raw-ideas/${
-            r._id
-          }/transfer?token=${token}&html"
+              r._id
+            }/transfer?token=${token}&html"
             class="transfer-form"
           >
             <input
@@ -4090,10 +4209,11 @@ document.addEventListener("click", async (e) => {
             <button type="submit">Transfer to Node</button>
           </form>
 
-          <div class="idea-meta">${new Date(r.createdAt).toLocaleString()}
+          <div class="idea-meta">
+            ${new Date(r.createdAt).toLocaleString()}
           </div>
         </li>
-      `
+      `,
         )
         .join("")}
     </ul>
@@ -4115,10 +4235,44 @@ document.addEventListener("click", async (e) => {
   </div>
 
   <script>
-    document.addEventListener("click", async (e) => {
-      if (!e.target.classList.contains("delete-button")) return;
+    // Intersection Observer for lazy loading animations
+    const observerOptions = {
+      root: null,
+      rootMargin: '50px',
+      threshold: 0.1
+    };
 
-      const card = e.target.closest(".idea-card");
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          // Add a small stagger delay based on order
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, index * 50); // 50ms stagger between items
+          
+          // Stop observing once animated
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe all idea cards
+    document.querySelectorAll('.idea-card').forEach(card => {
+      observer.observe(card);
+    });
+
+    // Delete button handler with event delegation
+    document.addEventListener("click", async function(e) {
+      // Check if clicked element is delete button
+      const deleteBtn = e.target.closest(".delete-button");
+      if (!deleteBtn) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const card = deleteBtn.closest(".idea-card");
+      if (!card) return;
+
       const rawIdeaId = card.dataset.rawIdeaId;
 
       if (!confirm("Delete this raw idea? This cannot be undone.")) return;
@@ -4133,16 +4287,17 @@ document.addEventListener("click", async (e) => {
         );
 
         const data = await res.json();
-        if (!data.success) throw new Error(data.error);
+        if (!data.success) throw new Error(data.error || "Delete failed");
 
         // Fade out animation
+        card.style.transition = "all 0.3s ease";
         card.style.opacity = "0";
         card.style.transform = "translateX(-20px)";
         setTimeout(() => card.remove(), 300);
       } catch (err) {
         alert("Failed to delete: " + (err.message || "Unknown error"));
       }
-    });
+    }, true); // Use capture phase to ensure we catch the event
   </script>
 </body>
 </html>
@@ -4175,7 +4330,7 @@ router.delete(
     } catch (err) {
       res.status(400).json({ success: false, error: err.message });
     }
-  }
+  },
 );
 
 router.post(
@@ -4210,7 +4365,7 @@ router.post(
       // 🌐 HTML redirect support
       if ("html" in req.query) {
         return res.redirect(
-          `/api/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html`
+          `/api/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -4226,7 +4381,7 @@ router.post(
         error: err.message,
       });
     }
-  }
+  },
 );
 
 router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
@@ -4755,43 +4910,8 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
     }
 
     // ---------- HTML ----------
-    const rows =
-      invites.length > 0
-        ? invites
-            .map(
-              (i) => `
-<li>
-  <strong>${i.userInviting.username}</strong>
-  invited you to
-  <strong>${i.rootId.name}</strong>
-
-  <div style="margin-top:8px; display:flex; gap:8px;">
-    <form
-  method="POST"
-  action="/api/user/${userId}/invites/${i._id}?token=${
-                req.query.token ?? ""
-              }&html"
->
-  <input type="hidden" name="accept" value="true" />
-  <button type="submit">Accept</button>
-</form>
-
-<form
-  method="POST"
-  action="/api/user/${userId}/invites/${i._id}?token=${
-                req.query.token ?? ""
-              }&html"
->
-  <input type="hidden" name="accept" value="false" />
-  <button type="submit">Decline</button>
-</form>
-
-  </div>
-</li>
-`
-            )
-            .join("")
-        : `<p><em>No pending invites</em></p>`;
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
 
     return res.send(`
 <!DOCTYPE html>
@@ -4803,372 +4923,537 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Invites</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-    }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
 
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
 
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
-      text-decoration: none;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
 
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
 
-    /* Header Section */
-    .header {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
 
-    .header h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: #1a1a1a;
-      line-height: 1.3;
-      margin-bottom: 16px;
-    }
-
-   
-    .header h1 a {
-      color: #667eea;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .header h1 a:hover {
-      color: #764ba2;
-      text-decoration: underline;
-    }
-
-    /* Navigation Links */
-    .nav-links {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .nav-links a {
-      padding: 8px 16px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-    }
-
-    .nav-links a:hover {
-      background: white;
-      border-color: #667eea;
-      transform: translateY(-2px);
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
-    }
-
-    /* Invites List */
-    .invites-section {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
-
-    .invites-list {
-      list-style: none;
-    }
-
-    .invite-card {
-      background: linear-gradient(135deg, #fdfbf7 0%, #fff9f0 100%);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-      border-left: 4px solid #d4af37;
-      transition: all 0.2s;
-      box-shadow: 0 2px 8px rgba(212, 175, 55, 0.1);
-    }
-
-    .invite-card:hover {
-      background: linear-gradient(135deg, #fffef9 0%, #fffbf4 100%);
-      transform: translateX(4px);
-      box-shadow: 0 6px 20px rgba(212, 175, 55, 0.2);
-      border-left-color: #f4d03f;
-    }
-
-    .invite-card:last-child {
-      margin-bottom: 0;
-    }
-
-    .invite-text {
-      font-size: 15px;
-      line-height: 1.6;
-      color: #1a1a1a;
-      margin-bottom: 12px;
-    }
-
-    .invite-text strong:first-child {
-      color: #c9a227;
-      font-weight: 700;
-    }
-
-    .invite-text strong:last-child {
-      color: #1a1a1a;
-      font-weight: 700;
-    }
-
-    .invite-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-
-    .invite-actions form {
-      margin: 0;
-    }
-
-    .accept-button {
-      padding: 10px 20px;
-      border-radius: 8px;
-      border: none;
-      background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
-      color: #1a1a1a;
-      cursor: pointer;
-      font-weight: 700;
-      font-size: 14px;
-      transition: all 0.2s;
-      font-family: inherit;
-      box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
-    }
-
-    .accept-button:hover {
-      background: linear-gradient(135deg, #f4d03f 0%, #ffd700 100%);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(212, 175, 55, 0.4);
-    }
-
-    .decline-button {
-      padding: 10px 20px;
-      border-radius: 8px;
-      border: 2px solid #e0e0e0;
-      background: white;
-      color: #666;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      font-family: inherit;
-    }
-
-    .decline-button:hover {
-      border-color: #c62828;
-      color: #c62828;
-      background: #fff5f5;
-      transform: translateY(-1px);
-    }
-
-    /* Empty State */
-    .empty-state {
-      text-align: center;
-      padding: 60px 40px;
-      color: #999;
-    }
-
-    .empty-state-icon {
-      font-size: 64px;
-      margin-bottom: 16px;
-    }
-
-    .empty-state-text {
-      font-size: 18px;
-      color: #666;
-    }
-
-    /* Responsive Design */
-    @media (max-width: 640px) {
-      body {
-        padding: 16px;
-      }
-
-      .header,
-      .invites-section {
-        padding: 20px;
-      }
-
-      .header h1 {
-        font-size: 24px;
-      }
-
-      .invite-card {
-        padding: 16px;
-      }
-
-      .invite-actions {
-        flex-direction: column;
-      }
-
-      .accept-button,
-      .decline-button {
-        width: 100%;
-      }
-
-      .back-nav {
-        flex-direction: column;
-      }
-
-      .back-link {
-        justify-content: center;
-      }
-    }
-
-    @media (min-width: 641px) and (max-width: 1024px) {
-      .container {
-        max-width: 700px;
-      }
-    }
-        .header-subtitle {
-    font-size: 14px;
-    color: #888;
-    margin-bottom: 16px;
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
   }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
+
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Glass Invites List */
+.invites-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.invite-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  
+  /* Start hidden for lazy loading */
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* When item becomes visible */
+.invite-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.invite-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.invite-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.invite-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.invite-text {
+  font-size: 16px;
+  line-height: 1.6;
+  color: white;
+  margin-bottom: 16px;
+  font-weight: 400;
+}
+
+.invite-text strong {
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.invite-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.invite-actions form {
+  margin: 0;
+}
+
+.accept-button,
+.decline-button {
+  position: relative;
+  overflow: hidden;
+  padding: 10px 20px;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.accept-button {
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.accept-button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.accept-button:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.accept-button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.decline-button {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: white;
+  opacity: 0.85;
+}
+
+.decline-button:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .invite-card {
+    padding: 20px 16px;
+  }
+
+  .invite-actions {
+    flex-direction: column;
+  }
+
+  .accept-button,
+  .decline-button {
+    width: 100%;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
   </style>
 </head>
 <body>
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/user/${userId}?token=${
-      req.query.token ?? ""
-    }&html" class="back-link">
+      <a href="/api/user/${userId}${tokenQS}" class="back-link">
         ← Back to Profile
       </a>
     </div>
 
     <!-- Header -->
     <div class="header">
-
-    <h1>
-     Invites
-      </h1>
-          <div class="header-subtitle">Join other people's trees</div>
-
-      <!-- Navigation Links -->
-      <div class="nav-links">
-        <a href="/api/user/${userId}/raw-ideas?token=${
-      req.query.token ?? ""
-    }&html">Raw Ideas</a>
-        <a href="/api/user/${userId}/notes?token=${
-      req.query.token ?? ""
-    }&html">Notes</a>
-    
-        <a href="/api/user/${userId}/tags?token=${
-      req.query.token ?? ""
-    }&html">Mail</a>
-        <a href="/api/user/${userId}/contributions?token=${
-      req.query.token ?? ""
-    }&html">Contributions</a>
-  
-        <a href="/api/user/${userId}/deleted?token=${
-      req.query.token ?? ""
-    }&html">Deleted</a>
-      </div>
+      <h1>Invites</h1>
+      <div class="header-subtitle">Join other people's trees</div>
     </div>
 
     <!-- Invites Section -->
-    <div class="invites-section">
-      ${
-        invites.length > 0
-          ? `
-        <ul class="invites-list">
-          ${invites
-            .map(
-              (i) => `
-            <li class="invite-card">
-              <div class="invite-text">
-                <strong>${i.userInviting.username}</strong>
-                invited you to
-                <strong>${i.rootId.name}</strong>
-              </div>
+    ${
+      invites.length > 0
+        ? `
+    <ul class="invites-list">
+      ${invites
+        .map(
+          (i) => `
+        <li class="invite-card">
+          <div class="invite-text">
+            <strong>${i.userInviting.username}</strong>
+            invited you to
+            <strong>${i.rootId.name}</strong>
+          </div>
 
-              <div class="invite-actions">
-                <form
-                  method="POST"
-                  action="/api/user/${userId}/invites/${i._id}?token=${
-                req.query.token ?? ""
-              }&html"
-                >
-                  <input type="hidden" name="accept" value="true" />
-                  <button type="submit" class="accept-button">Accept</button>
-                </form>
+          <div class="invite-actions">
+            <form
+              method="POST"
+              action="/api/user/${userId}/invites/${i._id}${tokenQS}"
+            >
+              <input type="hidden" name="accept" value="true" />
+              <button type="submit" class="accept-button">Accept</button>
+            </form>
 
-                <form
-                  method="POST"
-                  action="/api/user/${userId}/invites/${i._id}?token=${
-                req.query.token ?? ""
-              }&html"
-                >
-                  <input type="hidden" name="accept" value="false" />
-                  <button type="submit" class="decline-button">Decline</button>
-                </form>
-              </div>
-            </li>
-          `
-            )
-            .join("")}
-        </ul>
-      `
-          : `
-        <div class="empty-state">
-          <div class="empty-state-icon">📬</div>
-          <div class="empty-state-text">No pending invites</div>
-        </div>
-      `
-      }
+            <form
+              method="POST"
+              action="/api/user/${userId}/invites/${i._id}${tokenQS}"
+            >
+              <input type="hidden" name="accept" value="false" />
+              <button type="submit" class="decline-button">Decline</button>
+            </form>
+          </div>
+        </li>
+      `,
+        )
+        .join("")}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📬</div>
+      <div class="empty-state-text">No pending invites</div>
     </div>
+    `
+    }
   </div>
+
+  <script>
+    // Intersection Observer for lazy loading animations
+    const observerOptions = {
+      root: null,
+      rootMargin: '50px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          // Add a small stagger delay based on order
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, index * 50); // 50ms stagger between items
+          
+          // Stop observing once animated
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe all invite cards
+    document.querySelectorAll('.invite-card').forEach(card => {
+      observer.observe(card);
+    });
+  </script>
 </body>
 </html>
 `);
@@ -5202,7 +5487,7 @@ router.post(
       // 🌐 HTML redirect support
       if ("html" in req.query) {
         return res.redirect(
-          `/api/user/${userId}/invites?token=${req.query.token ?? ""}&html`
+          `/api/user/${userId}/invites?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -5218,7 +5503,7 @@ router.post(
         error: err.message,
       });
     }
-  }
+  },
 );
 
 router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
@@ -5241,52 +5526,6 @@ router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
     const user = await User.findById(userId).lean();
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
-    const deletedItems = await Promise.all(
-      deleted.map(async ({ _id, name }) => {
-        return `
-<li style="margin-bottom:14px; padding:12px; background:white; border-radius:8px; border:1px solid #ddd;">
-  <div style="margin-bottom:6px;">
-    <a href="/api/root/${_id}${tokenQS}">
-      <strong>${name || "Untitled"}</strong>
-    </a>
-    <div style="font-size:12px; opacity:0.6;">${_id}</div>
-  </div>
-
-  <!-- Revive as root -->
-  <form
-    method="POST"
-    action="/api/user/${userId}/deleted/${_id}/reviveAsRoot?token=${token}&html"
-    style="margin-bottom:6px;"
-  >
-    <button type="submit">Revive as Root</button>
-  </form>
-
-  <!-- Revive into existing branch -->
-  <form
-    method="POST"
-    action="/api/user/${userId}/deleted/${_id}/revive?token=${token}&html"
-    style="display:flex; gap:6px; align-items:center;"
-  >
-    <input
-      type="text"
-      name="targetParentId"
-      placeholder="Target parent node ID"
-      required
-      style="padding:6px 8px;font-size:13px;border-radius:6px;border:1px solid #ccc;width:220px;"
-    />
-
-    <button type="submit">Revive into Branch</button>
-  </form>
-</li>
-`;
-      })
-    );
-
-    const deletedHtml = deletedItems.length
-      ? `<ul>${deletedItems.join("")}</ul>`
-      : `<p><em>No deleted branches</em></p>`;
-
-    // Replace the HTML return in your /user/:userId/deleted route with this:
 
     return res.send(`
 <!DOCTYPE html>
@@ -5298,327 +5537,531 @@ router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${user.username} — Deleted Branches</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-    }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
 
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
 
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
-      text-decoration: none;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
 
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
 
-    /* Header Section */
-    .header {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
 
-    .header h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 16px;
-      line-height: 1.3;
-    }
-
-    .header h1 a {
-      color: #667eea;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .header h1 a:hover {
-      color: #764ba2;
-      text-decoration: underline;
-    }
-
-    /* Navigation Links */
-    .nav-links {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .nav-links a {
-      padding: 8px 16px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-    }
-
-    .nav-links a:hover {
-      background: white;
-      border-color: #667eea;
-      transform: translateY(-2px);
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
-    }
-
-    /* Deleted Items List */
-    .deleted-list {
-      list-style: none;
-    }
-
-    .deleted-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      transition: all 0.2s;
-      border-left: 4px solid #c62828;
-    }
-
-    .deleted-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
-    }
-
-    .deleted-info {
-      margin-bottom: 16px;
-    }
-
-    .deleted-name {
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-
-    .deleted-name a {
-      color: #1a1a1a;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .deleted-name a:hover {
-      color: #667eea;
-    }
-
-    .deleted-id {
-      font-size: 13px;
-      color: #888;
-      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    }
-
-    /* Revival Forms */
-    .revival-section {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      padding-top: 16px;
-      border-top: 1px solid #e9ecef;
-    }
-
-    .revive-as-root-form button {
-      padding: 10px 20px;
-      border-radius: 8px;
-      border: none;
-      background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
-      color: white;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      font-family: inherit;
-      box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
-      width: 100%;
-    }
-
-    .revive-as-root-form button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(76, 175, 80, 0.4);
-    }
-
-    .revive-into-branch-form {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .revive-into-branch-form input[type="text"] {
-      flex: 1;
-      min-width: 200px;
-      padding: 10px 14px;
-      font-size: 14px;
-      border-radius: 8px;
-      border: 1px solid #d0d0d0;
-      background: white;
-      font-family: inherit;
-      transition: all 0.2s;
-    }
-
-    .revive-into-branch-form input[type="text"]:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .revive-into-branch-form button {
-      padding: 10px 20px;
-      font-size: 14px;
-      font-weight: 600;
-      border-radius: 8px;
-      border: none;
-      background: #667eea;
-      color: white;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-family: inherit;
-      white-space: nowrap;
-    }
-
-    .revive-into-branch-form button:hover {
-      background: #5856d6;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
-
-    /* Empty State */
-    .empty-state {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 60px 40px;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
-
-    .empty-state-icon {
-      font-size: 64px;
-      margin-bottom: 16px;
-    }
-
-    .empty-state-text {
-      font-size: 18px;
-      color: #666;
-      margin-bottom: 8px;
-    }
-
-    .empty-state-subtext {
-      font-size: 14px;
-      color: #999;
-    }
-
-    /* Responsive Design */
-    @media (max-width: 640px) {
-      body {
-        padding: 16px;
-      }
-
-      .header {
-        padding: 20px;
-      }
-
-      .header h1 {
-        font-size: 24px;
-      }
-
-      .nav-links {
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .nav-links a {
-        text-align: center;
-      }
-
-      .deleted-card {
-        padding: 16px;
-      }
-
-      .deleted-name {
-        font-size: 16px;
-      }
-
-      .revive-as-root-form button {
-        width: 100%;
-      }
-
-      .revive-into-branch-form {
-        flex-direction: column;
-      }
-
-      .revive-into-branch-form input[type="text"] {
-        width: 100%;
-        min-width: 0;
-      }
-
-      .revive-into-branch-form button {
-        width: 100%;
-      }
-
-      .back-nav {
-        flex-direction: column;
-      }
-
-      .back-link {
-        justify-content: center;
-      }
-
-      .empty-state {
-        padding: 40px 24px;
-      }
-    }
-
-    @media (min-width: 641px) and (max-width: 1024px) {
-      .container {
-        max-width: 700px;
-      }
-    }
-        .header-subtitle {
-    font-size: 14px;
-    color: #888;
-    margin-bottom: 16px;
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
   }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
+
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header h1 a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Glass Deleted List */
+.deleted-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.deleted-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  
+  /* Start hidden for lazy loading */
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* When item becomes visible */
+.deleted-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.deleted-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.deleted-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.deleted-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.deleted-info {
+  margin-bottom: 16px;
+}
+
+.deleted-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.deleted-name a {
+  color: white;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.deleted-name a:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.deleted-id {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  letter-spacing: -0.3px;
+}
+
+/* Revival Forms */
+.revival-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.revive-as-root-form button {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 24px;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s;
+  font-family: inherit;
+  width: 100%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.revive-as-root-form button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.revive-as-root-form button:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.revive-as-root-form button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.revive-into-branch-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.revive-into-branch-form input[type="text"] {
+  flex: 1;
+  min-width: 180px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.revive-into-branch-form input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+}
+
+.revive-into-branch-form input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.revive-into-branch-form button {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  opacity: 0.85;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.revive-into-branch-form button:hover {
+  background: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .deleted-card {
+    padding: 20px 16px;
+  }
+
+  .deleted-name {
+    font-size: 16px;
+  }
+
+  .revive-as-root-form button {
+    width: 100%;
+  }
+
+  .revive-into-branch-form {
+    flex-direction: column;
+  }
+
+  .revive-into-branch-form input[type="text"] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .revive-into-branch-form button {
+    width: 100%;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
   </style>
 </head>
 <body>
@@ -5636,19 +6079,8 @@ router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
         Deleted Branches for
         <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
-<div class="header-subtitle">
-  Recover deleted trees and branches as new trees or merge them into existing ones.
-</div>
-
-
-      <!-- Navigation Links -->
-      <div class="nav-links">
-        <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
-                <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
-
-        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
-        <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
-        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+      <div class="header-subtitle">
+        Recover deleted trees and branches as new trees or merge them into existing ones.
       </div>
     </div>
 
@@ -5696,7 +6128,7 @@ router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
             </form>
           </div>
         </li>
-      `
+      `,
         )
         .join("")}
     </ul>
@@ -5712,6 +6144,34 @@ router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
     `
     }
   </div>
+
+  <script>
+    // Intersection Observer for lazy loading animations
+    const observerOptions = {
+      root: null,
+      rootMargin: '50px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          // Add a small stagger delay based on order
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, index * 50); // 50ms stagger between items
+          
+          // Stop observing once animated
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe all deleted cards
+    document.querySelectorAll('.deleted-card').forEach(card => {
+      observer.observe(card);
+    });
+  </script>
 </body>
 </html>
 `);
@@ -5747,7 +6207,7 @@ router.post(
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`
+          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -5759,7 +6219,7 @@ router.post(
       console.error("revive branch error:", err);
       return res.status(400).json({ error: err.message });
     }
-  }
+  },
 );
 
 router.post(
@@ -5781,7 +6241,7 @@ router.post(
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`
+          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -5793,7 +6253,7 @@ router.post(
       console.error("revive root error:", err);
       return res.status(400).json({ error: err.message });
     }
-  }
+  },
 );
 
 router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
@@ -5828,7 +6288,7 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
           lastUsedAt: k.lastUsedAt,
           usageCount: k.usageCount,
           revoked: k.revoked,
-        }))
+        })),
       );
     }
 
@@ -5842,258 +6302,723 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${user.username} — API Keys</title>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-    }
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
 
-    .back-link {
-      display: inline-block;
-      margin-bottom: 16px;
-      padding: 10px 16px;
-      background: white;
-      border-radius: 10px;
-      color: #667eea;
-      font-weight: 600;
-      text-decoration: none;
-    }
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
 
-    .header {
-      background: white;
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-    }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
 
-    .header h1 {
-      margin-bottom: 8px;
-    }
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
 
-    .header-subtitle {
-      font-size: 14px;
-      color: #888;
-      margin-bottom: 16px;
-    }
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
 
-    .nav-links {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
 
-    .nav-links a {
-      padding: 8px 14px;
-      background: #f5f6fa;
-      border-radius: 8px;
-      color: #667eea;
-      font-weight: 600;
-      text-decoration: none;
-    }
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
 
-    .card {
-      background: white;
-      border-radius: 14px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-    }
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
-    .card h3 {
-      margin-bottom: 6px;
-    }
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
 
-    .meta {
-      font-size: 13px;
-      color: #666;
-      margin-bottom: 8px;
-    }
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
 
-    .badge {
-      display: inline-block;
-      padding: 4px 10px;
-      font-size: 12px;
-      border-radius: 999px;
-      font-weight: 600;
-    }
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
 
-    .badge.active {
-      background: #e8f5e9;
-      color: #2e7d32;
-    }
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
 
-    .badge.revoked {
-      background: #ffebee;
-      color: #c62828;
-    }
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
 
-    .actions {
-      margin-top: 12px;
-    }
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-    .actions button {
-      background: #c62828;
-      color: white;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-    }
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
 
-    .create-form {
-      margin-bottom: 24px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
 
-    .create-form input {
-      padding: 10px 14px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      flex: 1;
-      min-width: 200px;
-    }
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
 
-    .create-form button {
-      padding: 10px 18px;
-      border-radius: 8px;
-      border: none;
-      background: #667eea;
-      color: white;
-      font-weight: 700;
-      cursor: pointer;
-    }
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-    .empty {
-      background: white;
-      border-radius: 16px;
-      padding: 48px;
-      text-align: center;
-      color: #666;
-    }
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Create Form Card */
+.create-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.create-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.create-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.create-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.create-form input {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  font-size: 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.create-form input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.create-form input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.create-form button {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.create-form button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.create-form button:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.create-form button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.create-hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* API Keys List */
+.keys-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.key-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  
+  /* Start hidden for lazy loading */
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* Active keys get green glass tint */
+.key-card.active {
+  background: rgba(76, 175, 80, 0.2);
+  border-color: rgba(76, 175, 80, 0.35);
+}
+
+.key-card.active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at top right,
+    rgba(76, 175, 80, 0.15),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* When item becomes visible */
+.key-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.key-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.key-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.key-card.active:hover {
+  background: rgba(76, 175, 80, 0.28);
+  box-shadow: 0 12px 32px rgba(76, 175, 80, 0.15);
+}
+
+.key-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.key-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.key-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.meta-item {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 980px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.badge.active {
+  background: rgba(76, 175, 80, 0.25);
+  color: white;
+  border-color: rgba(76, 175, 80, 0.4);
+}
+
+.badge.revoked {
+  background: rgba(239, 68, 68, 0.25);
+  color: white;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.key-actions {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.revoke-button {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.25);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+
+.revoke-button:hover {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header,
+  .create-card {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .create-form {
+    flex-direction: column;
+  }
+
+  .create-form input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .create-form button {
+    width: 100%;
+  }
+
+  .key-card {
+    padding: 20px 16px;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
   </style>
 </head>
 <body>
   <div class="container">
-    <a class="back-link" href="/api/user/${
-      req.userId
-    }${tokenQS}">← Back to Profile</a>
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/user/${req.userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
 
+    <!-- Header -->
     <div class="header">
       <h1>API Keys</h1>
       <div class="header-subtitle">
         Manage programmatic access to your account
       </div>
-
-      <div class="nav-links">
-        <a href="/api/user/${req.userId}/raw-ideas${tokenQS}">Raw Ideas</a>
-        <a href="/api/user/${req.userId}/notes${tokenQS}">Notes</a>
-        <a href="/api/user/${req.userId}/invites${tokenQS}">Invites</a>
-        <a href="/api/user/${
-          req.userId
-        }/contributions${tokenQS}">Contributions</a>
-      </div>
     </div>
 
     <!-- Create API Key -->
-    <div class="card">
+    <div class="create-card">
       <form class="create-form" method="POST" action="/api/user/${
         req.userId
       }/api-keys?token=${token}&html">
-        <input type="text" name="name" placeholder="API key name (optional)" />
-        <button type="submit">＋ Create New API Key</button>
+        <input type="text" name="name" placeholder="Key name (optional)" />
+        <button type="submit">Create Key</button>
       </form>
-      <div class="meta">
-        You will only see the key once after creation.
+      <div class="create-hint">
+        You'll only see the key once after creation.
       </div>
     </div>
 
     <!-- API Keys List -->
     ${
       apiKeys.length > 0
-        ? apiKeys
-            .map(
-              (k) => `
-      <div class="card">
-        <h3>${k.name}</h3>
-        <div class="meta">Created: ${new Date(
-          k.createdAt
-        ).toLocaleString()}</div>
-        <div class="meta">Usage count: ${k.usageCount}</div>
-        <div class="meta">
-          Status:
-          <span class="badge ${k.revoked ? "revoked" : "active"}">
-            ${k.revoked ? "Revoked" : "Active"}
-          </span>
-        </div>
+        ? `
+    <div class="keys-list">
+      ${apiKeys
+        .map(
+          (k) => `
+        <div class="key-card${!k.revoked ? " active" : ""}">
+          <div class="key-name">${k.name || "Untitled Key"}</div>
+          
+          <div class="key-meta">
+            <div class="meta-item">
+              Created ${new Date(k.createdAt).toLocaleDateString()}
+            </div>
+            <div class="meta-item">
+              Used ${k.usageCount} ${k.usageCount === 1 ? "time" : "times"}
+            </div>
+            <div class="meta-item">
+              <span class="badge ${k.revoked ? "revoked" : "active"}">
+                ${k.revoked ? "Revoked" : "Active"}
+              </span>
+            </div>
+          </div>
 
-        ${
-          !k.revoked
-            ? `
-        <div class="actions">
-         <button
-  class="revoke-button"
-  data-key-id="${k._id}"
->
-  Revoke
-</button>
-
+          ${
+            !k.revoked
+              ? `
+          <div class="key-actions">
+            <button class="revoke-button" data-key-id="${k._id}">
+              Revoke Key
+            </button>
+          </div>
+          `
+              : ""
+          }
         </div>
-        `
-            : ""
-        }
-      </div>
-      `
-            )
-            .join("")
+      `,
+        )
+        .join("")}
+    </div>
+    `
         : `
-      <div class="empty">
-        No API keys yet. Create one above to get started.
+    <div class="empty-state">
+      <div class="empty-state-icon">🔑</div>
+      <div class="empty-state-text">No API keys yet</div>
+      <div class="empty-state-subtext">
+        Create one above to get started
       </div>
-      `
+    </div>
+    `
     }
   </div>
+
   <script>
-document.addEventListener("click", async (e) => {
-  if (!e.target.classList.contains("revoke-button")) return;
+    // Intersection Observer for lazy loading animations
+    const observerOptions = {
+      root: null,
+      rootMargin: '50px',
+      threshold: 0.1
+    };
 
-  const keyId = e.target.dataset.keyId;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, index * 50);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
 
-  if (!confirm("Revoke this API key? This cannot be undone.")) return;
+    // Observe all key cards
+    document.querySelectorAll('.key-card').forEach(card => {
+      observer.observe(card);
+    });
 
-  const token =
-    new URLSearchParams(window.location.search).get("token") || "";
-  const qs = token ? "?token=" + encodeURIComponent(token) : "";
+    // Revoke button handler
+    document.addEventListener("click", async (e) => {
+      if (!e.target.classList.contains("revoke-button")) return;
 
-  try {
-    const res = await fetch(
-  "/api/user/${req.userId}/api-keys/" + keyId + qs,
-  { method: "DELETE" }
-);
+      const keyId = e.target.dataset.keyId;
 
+      if (!confirm("Revoke this API key? This cannot be undone.")) return;
 
-    const data = await res.json();
-    if (!data.message) throw new Error("Revoke failed");
+      const token = new URLSearchParams(window.location.search).get("token") || "";
+      const qs = token ? "?token=" + encodeURIComponent(token) : "";
 
-    location.reload();
-  } catch (err) {
-    alert("Failed to revoke API key");
-  }
-});
-</script>
+      try {
+        const res = await fetch(
+          "/api/user/${req.userId}/api-keys/" + keyId + qs,
+          { method: "DELETE" }
+        );
 
+        const data = await res.json();
+        if (!data.message) throw new Error("Revoke failed");
+
+        location.reload();
+      } catch (err) {
+        alert("Failed to revoke API key");
+      }
+    });
+  </script>
 </body>
 </html>
 `);
@@ -6102,7 +7027,6 @@ document.addEventListener("click", async (e) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 router.delete(
   "/user/:userId/api-keys/:keyId",
   authenticate,
@@ -6113,7 +7037,7 @@ router.delete(
     }
 
     return deleteApiKey(req, res);
-  }
+  },
 );
 
 router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
@@ -6147,391 +7071,441 @@ router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Share Token — @${user.username}</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      position: relative;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
   overflow-x: hidden;
-    }
+  touch-action: manipulation;
+}
 
-    /* Animated background elements */
-    body::before,
-    body::after {
-      content: '';
-      position: absolute;
-      border-radius: 50%;
-      opacity: 0.1;
-      animation: float 20s infinite ease-in-out;
-    }
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
 
-    body::before {
-      width: 600px;
-      height: 600px;
-      background: white;
-      top: -300px;
-      right: -200px;
-      animation-delay: -5s;
-    }
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
 
-    body::after {
-      width: 400px;
-      height: 400px;
-      background: white;
-      bottom: -200px;
-      left: -100px;
-      animation-delay: -10s;
-    }
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
 
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
-    }
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
 
-    .container {
-      max-width: 600px;
-      width: 100%;
-      position: relative;
-      z-index: 1;
-    }
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
-    /* Card */
-    .card {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(20px);
-      border-radius: 24px;
-      padding: 48px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-      position: relative;
-      overflow: hidden;
-      animation: slideUp 0.6s ease-out;
-    }
+.container {
+  max-width: 600px;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
 
-    @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
+/* Glass Card */
+.card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 24px;
+  padding: 48px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out;
+}
 
-    .card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 6px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    }
+.card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
 
-    /* Header */
-    .header {
-      text-align: center;
-      margin-bottom: 32px;
-    }
+.card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-    .icon {
-      font-size: 64px;
-      margin-bottom: 20px;
-      display: inline-block;
-      animation: bounce 2s infinite;
-    }
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 32px;
+}
 
-    @keyframes bounce {
-      0%, 100% {
-        transform: translateY(0);
-      }
-      50% {
-        transform: translateY(-10px);
-      }
-    }
+.icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  display: inline-block;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+  animation: bounce 2s infinite;
+}
 
-    h1 {
-      font-size: 32px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 12px;
-    }
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
 
-    .username {
-      font-size: 18px;
-      color: #667eea;
-      font-weight: 600;
-    }
+h1 {
+  font-size: 32px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
 
-    /* Welcome Message */
-    .welcome-box {
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-      padding: 24px;
-      border-radius: 16px;
-      margin-bottom: 32px;
-      border: 2px solid rgba(102, 126, 234, 0.2);
-    }
+.username {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
 
-    .welcome-title {
-      font-size: 20px;
-      font-weight: 700;
-      color: #667eea;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+/* Description */
+.description {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  margin-bottom: 28px;
+  font-size: 15px;
+  text-align: center;
+}
 
-    .welcome-title::before {
-      content: '👋';
-      font-size: 24px;
-    }
+/* Welcome Box */
+.welcome-box {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 24px;
+  border-radius: 16px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
 
-    .welcome-text {
-      color: #555;
-      line-height: 1.8;
-      font-size: 15px;
-    }
+.welcome-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
 
-    /* Description */
-    .description {
-      color: #555;
-      line-height: 1.8;
-      margin-bottom: 24px;
-      font-size: 15px;
-      text-align: center;
-    }
+.welcome-text {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  font-size: 15px;
+}
 
-    .description strong {
-      color: #667eea;
-    }
+/* Token Section */
+.token-section {
+  margin-bottom: 28px;
+}
 
-    /* Token Display */
-    .token-section {
-      margin-bottom: 32px;
-    }
+.token-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
 
-    .token-label {
-      font-size: 14px;
-      font-weight: 600;
-      color: #667eea;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+.token-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: all 0.3s;
+}
 
-    .token-label::before {
-      content: '🔑';
-      font-size: 16px;
-    }
+.token-display:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+}
 
-    .token-display {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: #f8f9fa;
-      padding: 16px 20px;
-      border-radius: 12px;
-      border: 2px solid #e9ecef;
-      transition: all 0.2s;
-    }
+.token-text {
+  flex: 1;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 14px;
+  color: white;
+  word-break: break-all;
+  font-weight: 500;
+}
 
-    .token-display:hover {
-      border-color: #667eea;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
-    }
+.btn-copy {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 980px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
 
-    .token-text {
-      flex: 1;
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 14px;
-      color: #1a1a1a;
-      word-break: break-all;
-      font-weight: 600;
-    }
+.btn-copy:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
 
-    .btn-copy {
-      padding: 8px 16px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      flex-shrink: 0;
-    }
+/* Form Section */
+.form-section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 24px;
+}
 
-    .btn-copy:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
+.form-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 16px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
 
-    /* Form */
-    .form-section {
-      background: white;
-      padding: 24px;
-      border-radius: 16px;
-      border: 2px solid #e9ecef;
-      margin-bottom: 24px;
-    }
+.form-row {
+  display: flex;
+  gap: 12px;
+}
 
-    .form-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1a1a1a;
-      margin-bottom: 16px;
-    }
+input {
+  flex: 1;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 15px;
+  font-family: 'SF Mono', Monaco, monospace;
+  transition: all 0.3s;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: white;
+  font-weight: 500;
+}
 
-    .form-row {
-      display: flex;
-      gap: 12px;
-    }
+input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
 
-    input {
-      flex: 1;
-      padding: 14px 18px;
-      border-radius: 10px;
-      border: 2px solid #e9ecef;
-      font-size: 15px;
-      font-family: 'SF Mono', Monaco, monospace;
-      transition: all 0.2s;
-      background: white;
-    }
+input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+}
 
-    input:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
-    }
+.btn-submit {
+  padding: 14px 28px;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
 
-    input::placeholder {
-      color: #aaa;
-    }
+.btn-submit::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
 
-    .btn-submit {
-      padding: 14px 28px;
-      border-radius: 10px;
-      border: none;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      font-weight: 700;
-      font-size: 15px;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-      flex-shrink: 0;
-    }
+.btn-submit:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
 
-    .btn-submit:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-    }
+.btn-submit:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-    /* Info Box */
-    .info-box {
-      background: linear-gradient(135deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 152, 0, 0.1) 100%);
-      padding: 16px 20px;
-      border-radius: 12px;
-      border-left: 4px solid #ffa500;
-      margin-bottom: 24px;
-    }
+/* Info Box */
+.info-box {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 14px 18px;
+  border-radius: 12px;
+  border-left: 3px solid rgba(255, 255, 255, 0.5);
+  margin-bottom: 24px;
+}
 
-    .info-box-content {
-      font-size: 14px;
-      color: #666;
-      line-height: 1.6;
-    }
+.info-box-content {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.6;
+}
 
-    .info-box-content::before {
-      content: 'ℹ️ ';
-      margin-right: 6px;
-    }
+/* Back Links */
+.back-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
-    /* Back Link */
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 20px;
-      text-decoration: none;
-      color: #667eea;
-      font-weight: 600;
-      font-size: 15px;
-      background: rgba(102, 126, 234, 0.1);
-      border-radius: 10px;
-      transition: all 0.2s;
-      width: 100%;
-      justify-content: center;
-      margin-bottom: 10px;
-    }
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 980px;
+  transition: all 0.3s;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
 
-    .back-link:hover {
-      background: rgba(102, 126, 234, 0.2);
-      transform: translateY(-2px);
-    }
+.back-link:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
 
-    /* Responsive */
-    @media (max-width: 640px) {
-      body {
-        padding: 16px;
-        align-items: flex-start;
-        padding-top: 40px;
-      }
+/* Responsive */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 40px;
+  }
 
-      .card {
-        padding: 32px 24px;
-      }
+  .card {
+    padding: 32px 24px;
+  }
 
-      h1 {
-        font-size: 28px;
-      }
+  h1 {
+    font-size: 28px;
+  }
 
-      .icon {
-        font-size: 56px;
-      }
+  .icon {
+    font-size: 56px;
+  }
 
-      .form-row {
-        flex-direction: column;
-      }
+  .form-row {
+    flex-direction: column;
+  }
 
-      .btn-submit {
-        width: 100%;
-      }
+  .btn-submit {
+    width: 100%;
+  }
 
-      .token-display {
-        flex-direction: column;
-        align-items: stretch;
-      }
+  .token-display {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
-      .btn-copy {
-        width: 100%;
-      }
-    }
+  .btn-copy {
+    width: 100%;
+  }
+}
 
-    @media (min-width: 641px) and (max-width: 1024px) {
-      .container {
-        max-width: 500px;
-      }
-    }
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 500px;
+  }
+}
   </style>
 </head>
 <body>
@@ -6549,26 +7523,25 @@ router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
           ? `
           <!-- Existing Token View -->
           <div class="description">
-            This token allows <strong>read-only HTML access</strong> to your public pages
-            (profile, notes, trees) without logging in.
+            Share read-only access to your content.
           </div>
 
           <div class="token-section">
-            <div class="token-label">Current Token</div>
+            <div class="token-label">Your Token</div>
             <div class="token-display">
               <div class="token-text" id="tokenText">${token}</div>
-              <button class="btn-copy" onclick="copyToken()">📋</button>
+              <button class="btn-copy" onclick="copyToken()">Copy</button>
             </div>
           </div>
 
           <div class="info-box">
             <div class="info-box-content">
-              You can change your token at any time to invalidate old URLs.
+              Change your token anytime to revoke access.
             </div>
           </div>
 
           <div class="form-section">
-            <div class="form-title">Update Your Token</div>
+            <div class="form-title">Update Token</div>
             <form method="POST" action="/api/user/${userId}/shareToken${tokenQS}">
               <div class="form-row">
                 <input
@@ -6576,7 +7549,7 @@ router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
                   placeholder="Enter new token"
                   required
                 />
-                <button type="submit" class="btn-submit">Update Token</button>
+                <button type="submit" class="btn-submit">Update</button>
               </div>
             </form>
           </div>
@@ -6584,35 +7557,36 @@ router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
           : `
           <!-- First Time View -->
           <div class="welcome-box">
-            <div class="welcome-title">Welcome!</div>
+            <div class="welcome-title">Create a Share Token</div>
             <div class="welcome-text">
-              You don't have a share token yet. Creating one lets you share a public, read-only HTML view of your content with others and easily access it yourself from anywhere. You can change your
-              token at any time to invalidate old URLs.
+              Share read-only access to your trees and notes. Change it anytime to revoke old links.
             </div>
           </div>
 
           <div class="form-section">
-            <div class="form-title">Create Your Share Token</div>
+            <div class="form-title">Choose Your Token</div>
             <form method="POST" action="/api/user/${userId}/shareToken${tokenQS}">
               <div class="form-row">
                 <input
                   name="htmlShareToken"
-                  placeholder="Choose a unique token"
+                  placeholder="Enter a unique token"
                   required
                 />
-                <button type="submit" class="btn-submit">Create Token</button>
+                <button type="submit" class="btn-submit">Create</button>
               </div>
             </form>
           </div>
         `
       }
 
-      <a class="back-link" href="/api/user/${userId}${tokenQS}">
-        ← Back to Profile
-      </a>
-       <a class="back-link" href="/">
-        ← Back to tree.tabors.site
-      </a>
+      <div class="back-links">
+        <a class="back-link" href="/api/user/${userId}${tokenQS}">
+          ← Back to Profile
+        </a>
+        <a class="back-link" target="_top" href="/">
+          ← Back to tree.tabors.site
+        </a>
+      </div>
     </div>
   </div>
 
@@ -6622,7 +7596,7 @@ router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
       navigator.clipboard.writeText(tokenText).then(() => {
         const btn = document.querySelector('.btn-copy');
         const originalText = btn.textContent;
-        btn.textContent = '✓ Copied!';
+        btn.textContent = '✓ Copied';
         setTimeout(() => {
           btn.textContent = originalText;
         }, 2000);
@@ -6645,12 +7619,27 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
       return res.status(403).json({ message: "Not authorized" });
     }
 
-    let u = await setHtmlShareToken({
+    // 1️⃣ Fetch user BEFORE updating token
+    const user = await User.findById(userId).select("htmlShareToken");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const hadShareTokenBefore = Boolean(user.htmlShareToken);
+
+    // 2️⃣ Create/update token
+    const u = await setHtmlShareToken({
       userId,
       htmlShareToken: req.body.htmlShareToken,
     });
 
-    // Always redirect back to profile
+    // 3️⃣ Conditional redirect
+    if (!hadShareTokenBefore) {
+      return res.redirect("/app");
+    }
+
+    // existing behavior
     return res.redirect(
       `/api/user/${userId}?token=${u.htmlShareToken ?? ""}&html`
     );
@@ -6659,5 +7648,6 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
     res.status(400).send(err.message || "Failed to update share token");
   }
 });
+
 
 export default router;

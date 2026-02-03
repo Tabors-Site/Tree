@@ -92,39 +92,42 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     const transactionPolicy = rootMeta?.transactionPolicy ?? "OWNER_ONLY";
 
     const renderParents = (chain) => {
-      let html = "<h3>Parents</h3>";
-      let depth = 0;
+      if (!chain || chain.length === 0) return "";
 
-      for (const node of chain) {
-        const color = rainbow[depth % rainbow.length];
+      // Don't show navigation path if we're at root (only one node and it's current)
+      if (chain.length === 1 && chain[0].isCurrent) return "";
+
+      let html = '<div class="breadcrumb-constellation">';
+
+      // Create nodes with connecting lines
+      chain.forEach((node, idx) => {
+        const isLast = idx === chain.length - 1;
+        const color = rainbow[idx % rainbow.length];
 
         html += `
-      <ul>
-        <li style="
-          border-left: 4px solid ${color};
-          padding-left: 12px;
-          margin: 6px 0;
-          font-weight: ${node.isCurrent ? "700" : "500"};
-        ">
-       ${
-         node.isCurrent
-           ? `<a href="/api/${node._id}${queryString}">
-<strong><u>${node.name}</u></strong>
-       </a> (current)`
-           : `<a href="/api/root/${node._id}${queryString}">
-         ${node.name}
-       </a>`
-       }
+          <div class="breadcrumb-node ${isLast ? "current-node" : ""}" data-depth="${idx}">
+            <div class="node-connector" style="background: linear-gradient(90deg, ${rainbow[(idx - 1 + rainbow.length) % rainbow.length]}, ${color});"></div>
+            <div class="node-bubble" style="border-color: ${color}; box-shadow: 0 0 20px ${color}40;" data-node-id="${node._id}" data-is-current="${node.isCurrent ? "true" : "false"}">
+              <div class="bubble-scroll-zone"></div>
+              ${
+                node.isCurrent
+                  ? `<a href="/api/${node._id}${queryString}" class="node-link current">
+                      <span class="node-icon">●</span>
+                      <span class="node-name">${node.name}</span>
+                      <span class="node-badge">YOU ARE HERE</span>
+                    </a>`
+                  : `<a href="/api/root/${node._id}${queryString}" class="node-link">
+                      <span class="node-icon">○</span>
+                      <span class="node-name">${node.name}</span>
+                      <span class="depth-badge">Level ${idx + 1}</span>
+                    </a>`
+              }
+            </div>
+          </div>
+        `;
+      });
 
-    `;
-        depth++;
-      }
-
-      // close all opened tags
-      for (let i = 0; i < chain.length; i++) {
-        html += `</li></ul>`;
-      }
-
+      html += "</div>";
       return html;
     };
 
@@ -133,15 +136,22 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       const color = rainbow[depth % rainbow.length];
 
       let html = `
-        <li style="
-          border-left: 4px solid ${color};
-          padding-left: 12px;
-          margin: 6px 0;
-        ">
-          <a href="/api/${node._id}/${node.prestige}${queryString}">
-            ${node.name}
-          </a>
-      `;
+    <li
+      class="tree-node"
+        data-node-id="${node._id}"
+
+      style="
+        border-left: 4px solid ${color};
+        padding-left: 12px;
+        margin: 6px 0;
+      "
+    >
+
+    
+      <a href="/api/${node._id}/${node.prestige}${queryString}">
+        ${node.name}
+      </a>
+  `;
 
       if (node.children && node.children.length > 0) {
         html += `<ul>`;
@@ -154,6 +164,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       html += `</li>`;
       return html;
     };
+
     const isOwner =
       rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();
 
@@ -202,8 +213,8 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 <form
   method="POST"
   action="/api/root/${nodeId}/transaction-policy?token=${
-          req.query.token ?? ""
-        }&html"
+    req.query.token ?? ""
+  }&html"
   style="max-width: 420px;"
 >
   <label style="font-weight:600; display:block; margin-bottom:8px;">
@@ -280,8 +291,8 @@ ${rootMeta.contributors
       <form
         method="POST"
         action="/api/root/${nodeId}/transfer-owner?token=${
-            req.query.token ?? ""
-          }&html"
+          req.query.token ?? ""
+        }&html"
         onsubmit="return confirm('Transfer ownership to ${u.username}?')"
       >
         <input type="hidden" name="userReceiving" value="${u._id}" />
@@ -297,8 +308,8 @@ ${rootMeta.contributors
       <form
         method="POST"
         action="/api/root/${nodeId}/remove-user?token=${
-            req.query.token ?? ""
-          }&html"
+          req.query.token ?? ""
+        }&html"
         onsubmit="return confirm('${
           isSelf ? "Leave this root?" : `Remove ${u.username} from this root?`
         }')"
@@ -360,7 +371,9 @@ ${rootMeta.contributors
 
     // CHILDREN
     const childrenHtml = allData.children?.length
-      ? `<ul>${allData.children.map((c) => renderTree(c)).join("")}</ul>`
+      ? `<ul class="tree-root">${allData.children
+          .map((c) => renderTree(c))
+          .join("")}</ul>`
       : `<p><em>No children</em></p>`;
 
     // SAFE JSON
@@ -384,10 +397,17 @@ ${rootMeta.contributors
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${allData.name} — Tree</title>
   <style>
+   :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -396,19 +416,77 @@ ${rootMeta.contributors
       min-height: 100vh;
       padding: 20px;
       color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    .current {
+    color: rgb(51, 66, 85);}
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .container {
       max-width: 900px;
       margin: 0 auto;
+      position: relative;
+      z-index: 1;
     }
 
-    /* Back Navigation */
+    /* Glass Back Navigation */
     .back-nav {
       display: flex;
       gap: 12px;
       margin-bottom: 20px;
       flex-wrap: wrap;
+      animation: fadeInUp 0.5s ease-out;
     }
 
     .back-link {
@@ -416,107 +494,433 @@ ${rootMeta.contributors
       align-items: center;
       gap: 6px;
       padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+transition:
+  transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+  background-color 0.3s ease,
+  opacity 0.3s ease;   
+     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    .back-link::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
     }
 
     .back-link:hover {
-      background: white;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
     }
 
-    /* Main Content Card */
+    .back-link:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Glass Content Cards */
     .content-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
       border-radius: 16px;
       padding: 28px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
       margin-bottom: 24px;
+      animation: fadeInUp 0.6s ease-out;
+      animation-fill-mode: both;
+       position: relative;
+  overflow: hidden;
     }
+
+    .content-card:nth-child(2) { animation-delay: 0.1s; }
+    .content-card:nth-child(3) { animation-delay: 0.15s; }
+    .content-card:nth-child(4) { animation-delay: 0.2s; }
+    .content-card:nth-child(5) { animation-delay: 0.25s; }
+
+    
+
+  .content-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,0.18),
+      rgba(255,255,255,0.05)
+    );
+
+  pointer-events: none;
+}
+   html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
 
     /* Header Section */
     .header-section {
       margin-bottom: 24px;
       padding-bottom: 20px;
-      border-bottom: 2px solid #e0e0e0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     }
-      /* Section Headers */
-.section-header {
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #e0e0e0;
+
+    .section-header {
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .section-header h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.3px;
+    }
+
+    /* ==========================================
+       CONSTELLATION BREADCRUMB NAVIGATION
+       ========================================== */
+    
+    .breadcrumb-constellation {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 24px 16px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      position: relative;
+      min-height: 100px;
+      
+      /* Scrollbar styling */
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+    }
+    
+    .breadcrumb-constellation::-webkit-scrollbar {
+      height: 6px;
+    }
+    
+    .breadcrumb-constellation::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    
+    .breadcrumb-constellation::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 3px;
+    }
+    
+    .breadcrumb-node {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      animation: nodeSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      animation-fill-mode: both;
+    }
+    
+    .breadcrumb-node:nth-child(1) { animation-delay: 0s; }
+    .breadcrumb-node:nth-child(2) { animation-delay: 0.1s; }
+    .breadcrumb-node:nth-child(3) { animation-delay: 0.2s; }
+    .breadcrumb-node:nth-child(4) { animation-delay: 0.3s; }
+    .breadcrumb-node:nth-child(5) { animation-delay: 0.4s; }
+    .breadcrumb-node:nth-child(6) { animation-delay: 0.5s; }
+    .breadcrumb-node:nth-child(n+7) { animation-delay: 0.6s; }
+    
+    @keyframes nodeSlideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-30px) scale(0.8);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+      }
+    }
+    
+    .node-connector {
+      width: 40px;
+      height: 3px;
+      border-radius: 2px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .node-connector::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+      animation: shimmer 2s infinite;
+    }
+    
+    @keyframes shimmer {
+      to {
+        left: 100%;
+      }
+    }
+    
+    .breadcrumb-node:first-child .node-connector {
+      display: none;
+    }
+    
+    .node-bubble {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border: 2px solid;
+      border-radius: 12px;
+      padding: 12px 18px;
+      position: relative;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+    }
+    
+    .bubble-scroll-zone {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 35%;
+      z-index: 10;
+      cursor: pointer;
+    }
+    
+    .bubble-scroll-zone:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px 0 0 12px;
+    }
+    
+    .node-bubble:hover {
+      transform: scale(1.05) translateY(-3px);
+      background: rgba(255, 255, 255, 0.25);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+    
+    .current-node .node-bubble {
+      background: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2),
+                  inset 0 0 30px rgba(255, 255, 255, 0.3);
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2),
+                    inset 0 0 30px rgba(255, 255, 255, 0.3);
+      }
+      50% {
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3),
+                    inset 0 0 40px rgba(255, 255, 255, 0.5);
+      }
+    }
+    
+    .node-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    
+    .node-link:hover {
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
+    
+    .node-link.current {
+      font-weight: 700;
+      font-size: 15px;
+    }
+    
+    .node-icon {
+      font-size: 20px;
+      line-height: 1;
+      transition: transform 0.3s;
+    }
+    
+    .node-link:hover .node-icon {
+      transform: scale(1.3);
+    }
+    
+    .current-node .node-icon {
+      animation: glow 2s infinite;
+    }
+    
+    @keyframes glow {
+      0%, 100% {
+        filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.6));
+      }
+      50% {
+        filter: drop-shadow(0 0 8px rgba(255, 255, 255, 1));
+      }
+    }
+    
+    .node-name {
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .node-badge {
+      background: rgba(255, 255, 255, 0.3);
+      padding: 2px 8px;
+      border-radius: 8px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+    
+    .depth-badge {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      opacity: 0.7;
+    }
+    
+    /* Mobile optimization */
+    @media (max-width: 640px) {
+      .breadcrumb-constellation {
+        padding: 16px 8px;
+        min-height: 80px;
+      }
+      
+      .node-connector {
+        width: 24px;
+      }
+      
+      .node-bubble {
+        padding: 8px 12px;
+      }
+      
+      .node-link {
+        font-size: 12px;
+        gap: 6px;
+      }
+      
+      .node-icon {
+        font-size: 16px;
+      }
+      
+      .node-name {
+        max-width: 100px;
+      }
+      
+      .node-badge {
+        font-size: 8px;
+        padding: 1px 6px;
+      }
+    }
+
+    /* Glass Action Buttons */
+   .action-button {
+  background: rgba(255,255,255,0.22);
+  border: 1px solid rgba(255,255,255,0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.35),
+    0 4px 12px rgba(0,0,0,0.12);
 }
 
-.section-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: #1a1a1a;
-}
-  /* Action Buttons */
-.action-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-radius: 10px;
-  background: #667eea;
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
-  text-decoration: none;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-  transition: all 0.2s;
-}
 
-.action-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-  background: #5856d6;
-}
+    .action-button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .action-button:hover {
+      background: rgba(255, 255, 255, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .action-button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
 
     .owner-info {
       font-size: 14px;
-      color: #667eea;
+      color: white;
       font-weight: 600;
       margin-bottom: 8px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     .owner-info a {
-      color: #667eea;
+      color: white;
       text-decoration: none;
-      transition: color 0.2s;
+      transition: all 0.2s;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.3);
     }
 
     .owner-info a:hover {
-      color: #764ba2;
-      text-decoration: underline;
+      border-bottom-color: white;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
     }
 
     h1 {
       font-size: 28px;
       margin: 12px 0;
-      font-weight: 700;
+      font-weight: 600;
       line-height: 1.3;
+      letter-spacing: -0.5px;
     }
 
     h1 a {
-      color: ${rootNameColor};
+      color: white;
       text-decoration: none;
-      transition: color 0.2s;
+      transition: all 0.2s;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
     h1 a:hover {
-      opacity: 0.8;
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+      transform: translateX(4px);
+      display: inline-block;
     }
 
     .node-id-container {
@@ -524,30 +928,37 @@ ${rootMeta.contributors
       align-items: center;
       gap: 8px;
       margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     code {
-      background: #f0f0f0;
-      padding: 6px 12px;
-      border-radius: 6px;
+      background: transparent;
+      padding: 0;
+      border-radius: 0;
       font-size: 13px;
       font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-      color: #666;
+      color: white;
       word-break: break-all;
+      flex: 1;
     }
 
     #copyNodeIdBtn {
-      background: none;
-      border: none;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
       cursor: pointer;
-      padding: 6px;
-      opacity: 0.6;
-      font-size: 18px;
-      transition: opacity 0.2s, transform 0.2s;
+      padding: 6px 10px;
+      border-radius: 6px;
+      opacity: 1;
+      font-size: 16px;
+      transition: all 0.2s;
+      flex-shrink: 0;
     }
 
     #copyNodeIdBtn:hover {
-      opacity: 1;
+      background: rgba(255, 255, 255, 0.3);
       transform: scale(1.1);
     }
 
@@ -555,15 +966,18 @@ ${rootMeta.contributors
     h2 {
       font-size: 18px;
       margin: 24px 0 16px 0;
-      font-weight: 700;
-      color: #1a1a1a;
+      font-weight: 600;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.3px;
     }
 
     h3 {
       font-size: 16px;
       margin: 20px 0 12px 0;
       font-weight: 600;
-      color: #667eea;
+      color: white;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     /* Filter Buttons */
@@ -579,21 +993,44 @@ ${rootMeta.contributors
       align-items: center;
       padding: 8px 16px;
       font-size: 13px;
-      border-radius: 8px;
+      border-radius: 980px;
       color: white;
       font-weight: 600;
-      transition: all 0.2s;
-      text-decoration: none;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+transition:
+  transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+  background-color 0.3s ease,
+  opacity 0.3s ease;         text-decoration: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #filterButtons a::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
     }
 
     #filterButtons a:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      text-decoration: none;
     }
 
-    /* Tree Structure */
+    #filterButtons a:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Tree Structure - Keep rainbow colors */
     ul {
       list-style: none;
       padding-left: 16px;
@@ -607,63 +1044,112 @@ ${rootMeta.contributors
     }
 
     li a {
-      color: #667eea;
+      color: white;
       text-decoration: none;
       font-weight: 500;
-      transition: color 0.2s;
+      transition: all 0.2s;
+      position: relative;
+      display: inline-block;
     }
 
     li a:hover {
-      color: #764ba2;
-      text-decoration: underline;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+      transform: translateX(4px);
     }
 
-    /* Parents/Children with colored borders */
+    /* Parents/Children with colored borders - keep the rainbow */
     li[style*="border-left"] {
       padding-left: 12px !important;
       margin: 6px 0 !important;
       position: relative;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      padding: 8px 12px !important;
+      transition: all 0.2s;
     }
 
-    /* Forms */
+    li[style*="border-left"]:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateX(4px);
+    }
+
+    /* Glass Forms */
     form {
       margin: 16px 0;
     }
 
-    input[type="text"] {
+    input[type="text"],
+    select {
       width: 100%;
       padding: 12px 14px;
       font-size: 15px;
-      border-radius: 8px;
-      border: 1px solid #d0d0d0;
-      background: white;
+      border-radius: 10px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.15);
       font-family: inherit;
-      transition: all 0.2s;
+transition:
+  transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+  background-color 0.3s ease,
+  opacity 0.3s ease;   
+        color: white;
+      font-weight: 500;
     }
 
-    input[type="text"]:focus {
+    input[type="text"]::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    input[type="text"]:focus,
+    select:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.25);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+    }
+
+    select option {
+      background: #667eea;
+      color: white;
     }
 
     button[type="submit"] {
       padding: 10px 18px;
-      border-radius: 8px;
-      border: none;
-      background: #667eea;
-      color: white;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.25);
       cursor: pointer;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
-      font-family: inherit;
+transition:
+  transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+  background-color 0.3s ease,
+  opacity 0.3s ease;   
+        font-family: inherit;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    button[type="submit"]::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+    
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
     }
 
     button[type="submit"]:hover {
-      background: #5856d6;
+      background: rgba(255, 255, 255, 0.35);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    button[type="submit"]:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     /* Invite Form */
@@ -689,7 +1175,7 @@ ${rootMeta.contributors
       }
     }
 
-    /* Contributors */
+    /* Contributors - Glass List Items */
     .contributors-list {
       list-style: none;
       padding-left: 0;
@@ -700,17 +1186,19 @@ ${rootMeta.contributors
       flex-direction: column;
       gap: 8px;
       padding: 14px 16px;
-      background: #f8f9fa;
+      background: rgba(255, 255, 255, 0.12);
       border-radius: 10px;
       margin: 8px 0;
-      border: 1px solid #e0e0e0;
-      transition: all 0.2s;
-    }
+      border: 1px solid rgba(255, 255, 255, 0.25);
+transition:
+  transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+  background-color 0.3s ease,
+  opacity 0.3s ease;   
+      }
 
     .contributors-list li:hover {
-      background: white;
+      background: rgba(255, 255, 255, 0.18);
       transform: translateX(4px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
     }
 
     @media (min-width: 640px) {
@@ -723,7 +1211,8 @@ ${rootMeta.contributors
 
     .contributors-list a {
       font-weight: 600;
-      color: #667eea;
+      color: white;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     .contributors-list form {
@@ -734,17 +1223,14 @@ ${rootMeta.contributors
     .contributors-list button {
       padding: 6px 12px;
       font-size: 13px;
-      border-radius: 6px;
-      border: 1px solid #d0d0d0;
-      background: white;
-      color: #666;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .contributors-list button:hover {
-      background: #f0f0f0;
-      border-color: #999;
+      transform: translateY(-1px);
     }
 
     .contributors-actions {
@@ -755,18 +1241,16 @@ ${rootMeta.contributors
 
     /* Retire Button */
     form[action*="/retire"] button {
-      background: #fff5f5 !important;
-      color: #c62828 !important;
-      border: 1px solid #c62828 !important;
+      background: rgba(239, 68, 68, 0.3) !important;
+      border: 1px solid rgba(239, 68, 68, 0.5) !important;
     }
 
     form[action*="/retire"] button:hover {
-      background: #ffebee !important;
+      background: rgba(239, 68, 68, 0.5) !important;
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(198, 40, 40, 0.3) !important;
     }
 
-    /* Jump Buttons */
+    /* Glass Jump Buttons */
     #jumpTop,
     #jumpBottom {
       position: fixed;
@@ -774,24 +1258,28 @@ ${rootMeta.contributors
       width: 48px;
       height: 48px;
       border-radius: 50%;
-      border: none;
-      background: rgba(102, 126, 234, 0.95);
-      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(var(--glass-water-rgb), 0.35);
       color: white;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       cursor: pointer;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-      opacity: 0.9;
-      transition: all 0.2s;
-      z-index: 999;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      opacity: 1;
+transition:
+  transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+  background-color 0.3s ease,
+  opacity 0.3s ease;   
+        z-index: 999;
     }
 
     #jumpTop:hover,
     #jumpBottom:hover {
-      opacity: 1;
       transform: translateY(-3px) scale(1.05);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      background: rgba(var(--glass-water-rgb), 0.45);
     }
 
     #jumpTop {
@@ -801,8 +1289,60 @@ ${rootMeta.contributors
     #jumpBottom {
       bottom: 20px;
     }
+.glass-shadow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+  :hover > .glass-shadow {
+  opacity: 1;
+}
 
     /* Responsive Design */
+    @media (max-width: 640px) {
+  ul {
+    padding-left: 6px;
+  }
+}
+  @media (max-width: 640px) {
+  .tree-node {
+    padding: 6px 8px;
+  }
+}
+  @media (max-width: 640px) {
+  .tree-node {
+    margin-left: 0;
+  }
+
+  li[style*="border-left"] {
+    padding-left: 8px !important;
+  }
+}
+@media (max-width: 640px) {
+  .tree-node,
+  .tree-node:hover,
+  li[style*="border-left"],
+  li[style*="border-left"]:hover {
+    transform: none !important;
+  }
+}
+@media (max-width: 640px) {
+  li[style*="border-left"] {
+    padding-left: 8px !important;
+    margin-left: 0 !important;
+  }
+}
+@media (hover: none) {
+  .tree-node:hover::before {
+    opacity: 0;
+    transform: none;
+  }
+}
+
     @media (max-width: 640px) {
       body {
         padding: 16px;
@@ -833,7 +1373,7 @@ ${rootMeta.contributors
         width: 44px;
         height: 44px;
         right: 16px;
-        font-size: 11px;
+        font-size: 10px;
       }
 
       #jumpTop {
@@ -850,6 +1390,26 @@ ${rootMeta.contributors
         max-width: 700px;
       }
     }
+
+.tree-node {
+  position: relative;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.12);
+
+  transition:
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+
+
+
   </style>
 </head>
 <body>
@@ -865,16 +1425,40 @@ ${rootMeta.contributors
         <a href="/api/root/${allData._id}/calendar${queryString}" class="back-link">
         Calendar
       </a>
+      </a>
+        <a href="/api/root/${allData._id}/book${queryString}" class="back-link">
+        Book
+      </a>
        </a>
         <a href="/api/root/${allData._id}/values${queryString}" class="back-link">
         Global Values
       </a>
+      </a>
+        <a href="/api/root/${allData._id}/understandings${queryString}" class="back-link">
+        Understandings
+      </a>
+    </div>
+    `
+        : ""
+    } 
+    <!-- Header Section -->
+ 
+
+    <!-- Navigation Path (Constellation) -->
+    ${
+      ancestors.length
+        ? `
+    <div class="content-card">
+      <div class="section-header">
+        <h2>Navigation Path</h2>
+      </div>
+      ${parentHtml}
     </div>
     `
         : ""
     }
-    <!-- Header Section -->
-    <div class="content-card">
+       <div class="content-card">
+
       <div class="header-section">
         <div class="owner-info">${ownerHtml}</div>
         
@@ -892,43 +1476,21 @@ ${rootMeta.contributors
       </div>
     </div>
 
-    <!-- Parents Section -->
-    ${
-      ancestors.length
-        ? `
-    <div class="content-card">
-      <div class="section-header">
-        <h2>Parents</h2>
-      </div>
-      ${parentHtml.replace("<h3>Parents</h3>", "")}
-    </div>
-    `
-        : ""
-    }
-
     <!-- Children Section -->
     <div class="content-card">
+
       <div class="section-header">
       <div id="filterButtons"></div>
         <h2>Children</h2>
       </div>
       ${childrenHtml}
+      
+
     </div>
 
  
 
-    <!-- Understandings Section -->
-    <div class="content-card">
-      <div class="section-header">
-        <h2>Understandings</h2>
-      </div>
-      <a
-        href="/api/root/${nodeId}/understandings${queryString}"
-        class="action-button"
-      >
-        View Understandings
-      </a>
-    </div>
+  
 
     <!-- Tree Ownership Options Section -->
     ${
@@ -965,6 +1527,86 @@ ${rootMeta.contributors
     <button id="jumpTop" title="Jump to top">TOP</button>
     <button id="jumpBottom" title="Jump to bottom">BOT</button>
   </div>
+
+
+<script>
+// Breadcrumb bubble click handling
+document.addEventListener('click', (e) => {
+  const bubble = e.target.closest('.node-bubble');
+  if (!bubble) return;
+  
+  const scrollZone = e.target.closest('.bubble-scroll-zone');
+  const link = bubble.querySelector('.node-link');
+  if (!link) return;
+  
+  // If clicked on left side (scroll zone) - scroll to it
+  if (scrollZone) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const OFFSET = 50;
+    const rect = bubble.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const targetY = rect.top + scrollTop - OFFSET;
+    
+    window.scrollTo({
+      top: targetY,
+      behavior: 'smooth'
+    });
+    
+    // Pulse animation
+    bubble.animate(
+      [
+        { boxShadow: bubble.style.boxShadow },
+        { boxShadow: '0 0 40px rgba(255,255,255,0.8)' },
+        { boxShadow: bubble.style.boxShadow }
+      ],
+      { duration: 600, easing: 'ease-out' }
+    );
+  } 
+  // If clicked on right side - navigate
+  else if (!e.target.closest('a')) {
+    e.preventDefault();
+    window.location.href = link.href;
+  }
+});
+
+// Tree node click handling (existing)
+document.addEventListener('click', (e) => {
+  const node = e.target.closest('.tree-node');
+  if (!node) return;
+
+  // Ignore real navigation
+  if (e.target.closest('a, button')) return;
+
+  const link = node.querySelector(':scope > a');
+  if (!link) return;
+
+  e.preventDefault();
+
+  const OFFSET = 50; // 👈 adjust this (px from top)
+
+  const rect = link.getBoundingClientRect();
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+  const targetY = rect.top + scrollTop - OFFSET;
+
+  window.scrollTo({
+    top: targetY,
+    behavior: 'smooth'
+  });
+
+  // Optional glow pulse
+  link.animate(
+    [
+      { boxShadow: '0 0 0 rgba(255,255,255,0)' },
+      { boxShadow: '0 0 24px rgba(255,255,255,0.6)' },
+      { boxShadow: '0 0 0 rgba(255,255,255,0)' }
+    ],
+    { duration: 900, easing: 'ease-out' }
+  );
+});
+</script>
 
   <script>
     // Jump buttons
@@ -1021,6 +1663,7 @@ ${rootMeta.contributors
       makeToggle("completed") +
       makeToggle("trimmed");
   </script>
+
 </body>
 </html>
 `);
@@ -1054,7 +1697,7 @@ router.post("/root/:rootId/invite", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`
+        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -1091,7 +1734,7 @@ router.post("/root/:rootId/transfer-owner", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`
+        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -1127,7 +1770,7 @@ router.post("/root/:rootId/remove-user", authenticate, async (req, res) => {
 
     if ("html" in req.query) {
       return res.redirect(
-        `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`
+        `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -1155,7 +1798,7 @@ router.post("/root/:rootId/retire", authenticate, async (req, res) => {
 
     if ("html" in req.query) {
       return res.redirect(
-        `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`
+        `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -1218,8 +1861,6 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       byDay[day].push(item);
     }
 
-    // Replace the HTML return in your /root/:rootId/calendar route with this:
-
     return res.send(`
 <!DOCTYPE html>
 <html lang="en">
@@ -1230,10 +1871,17 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Calendar</title>
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -1241,22 +1889,98 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       padding: 20px;
-      color: #1a1a1a;
+      color: white;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .container {
       max-width: 1200px;
       margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Glass Card Base */
+    .glass-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .glass-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        180deg,
+        rgba(255,255,255,0.18),
+        rgba(255,255,255,0.05)
+      );
+      pointer-events: none;
     }
 
     /* Header */
     .header {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 20px 24px;
+      padding: 24px 28px;
       margin-bottom: 20px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      animation: fadeInUp 0.5s ease-out;
     }
 
     .header-top {
@@ -1265,7 +1989,6 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       align-items: center;
       gap: 16px;
       flex-wrap: wrap;
-      margin-bottom: 16px;
     }
 
     .back-link {
@@ -1273,21 +1996,44 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       align-items: center;
       gap: 6px;
       padding: 10px 16px;
-      background: #f8f9fa;
-      color: #667eea;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                  background-color 0.3s ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .back-link::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
     }
 
     .back-link:hover {
-      background: white;
-      border-color: #667eea;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .back-link:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     .nav-controls {
@@ -1297,37 +2043,44 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     }
 
     .nav-button {
-      width: 36px;
-      height: 36px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
-      border: none;
-      background: #667eea;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.2);
       color: white;
       font-size: 18px;
+      font-weight: 700;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex;
       align-items: center;
       justify-content: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
     }
 
     .nav-button:hover {
-      background: #5856d6;
+      background: rgba(255, 255, 255, 0.3);
       transform: scale(1.1);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
     }
 
     .month-label {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
-      color: #1a1a1a;
-      min-width: 180px;
+      color: white;
+      min-width: 200px;
       text-align: center;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.3px;
     }
 
     .clock {
       font-size: 14px;
-      color: #666;
+      color: rgba(255, 255, 255, 0.9);
       font-weight: 500;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     /* Calendar Grid - Desktop */
@@ -1335,37 +2088,58 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 12px;
+      padding: 24px;
+      animation: fadeInUp 0.6s ease-out;
     }
 
     .day-header {
-      background: rgba(255, 255, 255, 0.95);
+      background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(10px);
       border-radius: 10px;
       padding: 12px;
       text-align: center;
       font-weight: 700;
       font-size: 14px;
-      color: #667eea;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      color: white;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     .day-cell {
-      background: rgba(255, 255, 255, 0.95);
+      background: rgba(255, 255, 255, 0.15);
       backdrop-filter: blur(10px);
       border-radius: 12px;
       padding: 12px;
       min-height: 120px;
       cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       position: relative;
       overflow: hidden;
     }
 
+    .day-cell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        180deg,
+        rgba(255,255,255,0.15),
+        rgba(255,255,255,0.05)
+      );
+      pointer-events: none;
+    }
+
     .day-cell:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
-      outline: 2px solid #667eea;
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+      background: rgba(255, 255, 255, 0.25);
+      border-color: rgba(255, 255, 255, 0.4);
     }
 
     .day-cell.other-month {
@@ -1375,20 +2149,38 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     .day-number {
       font-weight: 700;
       font-size: 16px;
-      color: #1a1a1a;
+      color: white;
       margin-bottom: 8px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      position: relative;
+      z-index: 1;
     }
 
     .day-cell.today .day-number {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: rgba(255, 255, 255, 0.3);
       color: white;
-      width: 28px;
-      height: 28px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 14px;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.5),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      }
+      50% {
+        box-shadow: 0 0 30px rgba(255, 255, 255, 0.7),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      }
     }
 
     .node-item {
@@ -1396,51 +2188,79 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       margin: 4px 0;
       padding: 6px 10px;
       border-radius: 8px;
-      background: #667eea;
+      background: rgba(255, 255, 255, 0.25);
       color: white;
       font-size: 12px;
+      font-weight: 600;
       text-decoration: none;
       transition: all 0.2s;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      position: relative;
+      z-index: 1;
     }
 
     .node-item:hover {
-      background: #5856d6;
+      background: rgba(255, 255, 255, 0.35);
       transform: translateX(2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     .node-count {
       display: inline-block;
       margin-top: 4px;
       padding: 4px 8px;
-      background: rgba(102, 126, 234, 0.15);
-      color: #667eea;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
       font-size: 11px;
       font-weight: 700;
       border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      position: relative;
+      z-index: 1;
     }
 
     /* List View - Mobile */
     .calendar-list {
       display: none;
+      padding: 16px;
+      gap: 12px;
     }
 
     .list-day {
-      background: rgba(255, 255, 255, 0.95);
+      background: rgba(255, 255, 255, 0.15);
       backdrop-filter: blur(10px);
       border-radius: 12px;
       padding: 16px;
-      margin-bottom: 12px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .list-day::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        180deg,
+        rgba(255,255,255,0.15),
+        rgba(255,255,255,0.05)
+      );
+      pointer-events: none;
     }
 
     .list-day:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      background: rgba(255, 255, 255, 0.2);
     }
 
     .list-day-header {
@@ -1448,50 +2268,54 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       justify-content: space-between;
       align-items: center;
       margin-bottom: 12px;
+      position: relative;
+      z-index: 1;
     }
 
     .list-day-date {
       font-weight: 700;
       font-size: 16px;
-      color: #1a1a1a;
+      color: white;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     .list-day-badge {
       padding: 4px 12px;
-      background: #667eea;
+      background: rgba(255, 255, 255, 0.25);
       color: white;
       border-radius: 12px;
       font-size: 12px;
       font-weight: 700;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     /* Day View */
     .day-view {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
       padding: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      animation: fadeInUp 0.6s ease-out;
     }
 
     .hour-row {
       display: flex;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
       padding: 12px 0;
       min-height: 60px;
       transition: background 0.2s;
     }
 
     .hour-row:hover {
-      background: rgba(102, 126, 234, 0.05);
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
     }
 
     .hour-label {
       width: 80px;
       font-weight: 700;
-      color: #667eea;
+      color: white;
       font-size: 14px;
       flex-shrink: 0;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     .hour-content {
@@ -1504,12 +2328,13 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     .empty-state {
       text-align: center;
       padding: 60px 40px;
-      color: #999;
+      color: rgba(255, 255, 255, 0.8);
     }
 
     .empty-state-icon {
       font-size: 64px;
       margin-bottom: 16px;
+      opacity: 0.6;
     }
 
     /* Mobile Responsive */
@@ -1541,7 +2366,8 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       }
 
       .calendar-list {
-        display: block;
+        display: flex;
+        flex-direction: column;
       }
 
       .day-view {
@@ -1554,6 +2380,12 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       }
 
       .month-label {
+        font-size: 18px;
+      }
+
+      .nav-button {
+        width: 36px;
+        height: 36px;
         font-size: 16px;
       }
     }
@@ -1562,7 +2394,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
 <body>
   <div class="container">
     <!-- Header -->
-    <div class="header">
+    <div class="glass-card header">
       <div class="header-top">
         <a href="/api/root/${rootId}${queryString}" class="back-link" id="backLink">
           ← Back to Tree
@@ -1579,7 +2411,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     </div>
 
     <!-- Calendar Container -->
-    <div id="calendarContainer"></div>
+    <div class="glass-card" id="calendarContainer"></div>
   </div>
 
   <script>
@@ -1699,7 +2531,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
                 <div class="list-day-header">
                   <div class="list-day-date">
                     \${dayOfWeek}, \${monthNames[date.getMonth()]} \${date.getDate()}
-                    \${isToday ? ' <span style="color: #667eea;">(Today)</span>' : ''}
+                    \${isToday ? ' <span style="text-shadow: 0 0 10px rgba(255,255,255,0.8);">✨ Today</span>' : ''}
                   </div>
                   \${items.length > 0 ? \`<span class="list-day-badge">\${items.length} item\${items.length !== 1 ? 's' : ''}</span>\` : ''}
                 </div>
@@ -1846,7 +2678,7 @@ router.post(
       // HTML fallback
       if ("html" in req.query) {
         return res.redirect(
-          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`
+          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -1855,8 +2687,11 @@ router.post(
       console.error("Change policy error:", err);
       res.status(400).json({ error: err.message });
     }
-  }
+  },
 );
+
+// This is the glassified version of the /root/:nodeId/values route
+// Replace your existing values route with this code
 
 router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
   try {
@@ -1890,7 +2725,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
               <div class="value-key">${key}</div>
               <div class="value-amount">${value.toLocaleString()}</div>
             </div>
-          `
+          `,
             )
             .join("")
         : `<div class="empty-state-small">No values yet</div>`;
@@ -1913,7 +2748,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
               <span class="value-key-small">${k}</span>
               <span class="value-amount-small">${v.toLocaleString()}</span>
             </div>
-          `
+          `,
           )
           .join("");
       }
@@ -1927,7 +2762,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
               <span class="value-key-small">${k}</span>
               <span class="value-amount-small">${v.toLocaleString()}</span>
             </div>
-          `
+          `,
           )
           .join("");
       }
@@ -1938,7 +2773,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
 
       const valueCount = Math.max(
         Object.keys(node.localValues || {}).length,
-        Object.keys(node.totalValues || {}).length
+        Object.keys(node.totalValues || {}).length,
       );
 
       return `
@@ -2007,10 +2842,17 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Global Values - ${rootNodeName}</title>
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -2018,12 +2860,91 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       padding: 20px;
-      color: #1a1a1a;
+      color: white;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .container {
       max-width: 1000px;
       margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Glass Card Base */
+    .glass-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .glass-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        180deg,
+        rgba(255,255,255,0.18),
+        rgba(255,255,255,0.05)
+      );
+      pointer-events: none;
     }
 
     /* Back Navigation */
@@ -2032,6 +2953,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
       gap: 12px;
       margin-bottom: 20px;
       flex-wrap: wrap;
+      animation: fadeInUp 0.5s ease-out;
     }
 
     .back-link {
@@ -2039,50 +2961,62 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
       align-items: center;
       gap: 6px;
       padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    /* Header */
-    .header {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                  background-color 0.3s ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
       position: relative;
       overflow: hidden;
     }
 
-    .header::before {
-      content: '';
+    .back-link::before {
+      content: "";
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .back-link:hover {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+      transform: translateY(-2px);
+    }
+
+    .back-link:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Header */
+    .header {
+      padding: 28px;
+      margin-bottom: 24px;
+      animation: fadeInUp 0.6s ease-out;
+      animation-delay: 0.1s;
+      animation-fill-mode: both;
     }
 
     .header h1 {
       font-size: 28px;
       font-weight: 700;
-      color: #1a1a1a;
+      color: white;
       margin-bottom: 8px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.5px;
     }
 
     .header h1::before {
@@ -2092,36 +3026,28 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
 
     .header-subtitle {
       font-size: 14px;
-      color: #888;
+      color: rgba(255, 255, 255, 0.85);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     /* Section */
     .section {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
       padding: 28px;
       margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      position: relative;
-      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out;
+      animation-fill-mode: both;
     }
 
-    .section::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    }
+    .section:nth-child(3) { animation-delay: 0.2s; }
+    .section:nth-child(4) { animation-delay: 0.3s; }
 
     .section-title {
       font-size: 20px;
       font-weight: 600;
-      color: #1a1a1a;
+      color: white;
       margin-bottom: 20px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.3px;
     }
 
     /* Flat Summary Cards */
@@ -2132,36 +3058,61 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
     }
 
     .value-card {
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
       padding: 20px;
       border-radius: 12px;
-      border: 1px solid rgba(102, 126, 234, 0.1);
-      transition: all 0.3s;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .value-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(
+        180deg,
+        rgba(255,255,255,0.15),
+        rgba(255,255,255,0.05)
+      );
+      pointer-events: none;
     }
 
     .value-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.15);
-      border-color: rgba(102, 126, 234, 0.3);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+      background: rgba(255, 255, 255, 0.25);
+      border-color: rgba(255, 255, 255, 0.4);
     }
 
     .value-key {
       font-size: 14px;
       font-weight: 600;
-      color: #667eea;
+      color: white;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 8px;
       word-break: break-all;
       overflow-wrap: break-word;
       hyphens: auto;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      position: relative;
+      z-index: 1;
     }
 
     .value-amount {
       font-size: 32px;
       font-weight: 700;
-      color: #1a1a1a;
+      color: white;
       font-family: 'SF Mono', Monaco, monospace;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      position: relative;
+      z-index: 1;
     }
 
     /* Tree View */
@@ -2179,40 +3130,48 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: #f8f9fa;
+      background: rgba(255, 255, 255, 0.12);
       border-radius: 8px;
-      transition: all 0.2s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
     .tree-node-header:hover {
-      background: white;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+      background: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       transform: translateX(4px);
+      border-color: rgba(255, 255, 255, 0.3);
     }
 
     .tree-toggle {
       width: 24px;
       height: 24px;
-      background: white;
-      border: 1px solid #e9ecef;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.25);
       border-radius: 6px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 12px;
-      transition: all 0.2s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       flex-shrink: 0;
+      color: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .tree-toggle:hover {
-      background: #667eea;
-      color: white;
-      border-color: #667eea;
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     .tree-toggle.collapsed {
       transform: rotate(-90deg);
+    }
+
+    .tree-toggle.collapsed:hover {
+      transform: rotate(-90deg) scale(1.1);
     }
 
     .tree-spacer {
@@ -2232,28 +3191,30 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
     .tree-node-name {
       font-size: 15px;
       font-weight: 600;
-      color: #667eea;
+      color: white;
       text-decoration: none;
-      transition: color 0.2s;
+      transition: all 0.2s;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 300px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     .tree-node-name:hover {
-      color: #764ba2;
-      text-decoration: underline;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+      transform: translateX(2px);
     }
 
     .value-count {
       font-size: 12px;
-      color: #888;
+      color: white;
       padding: 2px 8px;
-      background: white;
+      background: rgba(255, 255, 255, 0.15);
       border-radius: 10px;
-      border: 1px solid #e9ecef;
+      border: 1px solid rgba(255, 255, 255, 0.2);
       flex-shrink: 0;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
 
     .tree-node-values {
@@ -2262,13 +3223,13 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
       gap: 8px;
       margin: 12px 0 12px 36px;
       padding: 12px;
-      background: white;
+      background: rgba(255, 255, 255, 0.1);
       border-radius: 8px;
-      border-left: 3px solid #667eea;
+      border-left: 3px solid rgba(255, 255, 255, 0.4);
     }
 
     .tree-node-values.total-values {
-      border-left-color: #10b981;
+      border-left-color: rgba(16, 185, 129, 0.6);
     }
 
     .node-value-item {
@@ -2277,44 +3238,49 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
       align-items: flex-start;
       gap: 4px;
       padding: 10px 12px;
-      background: #f8f9fa;
+      background: rgba(255, 255, 255, 0.15);
       border-radius: 6px;
       transition: all 0.2s;
       min-height: 60px;
       cursor: help;
       overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
     .node-value-item:hover {
-      background: rgba(102, 126, 234, 0.05);
+      background: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
     .value-key-small {
       font-size: 11px;
       font-weight: 600;
-      color: #667eea;
+      color: white;
       letter-spacing: 0.3px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 100%;
       line-height: 1.3;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
 
     .value-amount-small {
       font-size: 16px;
       font-weight: 700;
-      color: #1a1a1a;
+      color: white;
       font-family: 'SF Mono', Monaco, monospace;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 100%;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     .empty-values {
       font-size: 13px;
-      color: #999;
+      color: rgba(255, 255, 255, 0.6);
       font-style: italic;
       padding: 8px;
     }
@@ -2322,7 +3288,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
     .tree-children {
       margin-left: 20px;
       padding-left: 12px;
-      border-left: 2px solid #e9ecef;
+      border-left: 2px solid rgba(255, 255, 255, 0.2);
       margin-top: 4px;
       transition: all 0.3s;
     }
@@ -2335,7 +3301,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
     .empty-state-small {
       text-align: center;
       padding: 40px;
-      color: #888;
+      color: rgba(255, 255, 255, 0.7);
       font-style: italic;
     }
 
@@ -2349,55 +3315,75 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
 
     .btn-control {
       padding: 8px 16px;
-      background: white;
-      border: 1px solid #e9ecef;
-      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 980px;
       font-size: 14px;
       font-weight: 600;
-      color: #667eea;
+      color: white;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-control::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.3),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
     }
 
     .btn-control:hover {
-      background: #667eea;
-      color: white;
-      border-color: #667eea;
+      background: rgba(255, 255, 255, 0.25);
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-control:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     .btn-control.active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border-color: #667eea;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      background: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
     }
 
     .controls-group {
       display: flex;
       gap: 8px;
-      background: #f8f9fa;
+      background: rgba(255, 255, 255, 0.1);
       padding: 4px;
-      border-radius: 10px;
-      border: 1px solid #e9ecef;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .controls-group .btn-control {
       border: none;
       background: transparent;
+      box-shadow: none;
     }
 
     .controls-group .btn-control:hover {
-      background: white;
-      color: #667eea;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+      background: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .controls-group .btn-control.active {
-      background: white;
-      color: #667eea;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+      background: rgba(255, 255, 255, 0.25);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
 
     /* Responsive */
@@ -2480,13 +3466,13 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
     </div>
 
     <!-- Header -->
-    <div class="header">
+    <div class="glass-card header">
       <h1>Global Values</h1>
       <div class="header-subtitle">Cumulative values across all nodes</div>
     </div>
 
     <!-- Flat Summary -->
-    <div class="section">
+    <div class="glass-card section">
       <div class="section-title">Total Summary</div>
       <div class="flat-grid">
         ${flatSummary}
@@ -2494,7 +3480,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
     </div>
 
     <!-- Tree View -->
-    <div class="section">
+    <div class="glass-card section">
       <div class="tree-controls">
         <div class="controls-group">
           <button class="btn-control active" id="showLocalBtn" onclick="showLocalValues()">

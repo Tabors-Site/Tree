@@ -3,12 +3,14 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 import mime from "mime-types";
+import Book from "../db/models/book.js";
 
 import {
   createNote as coreCreateNote,
   getNotes as coreGetNotes,
   deleteNoteAndFile as coreDeleteNoteAndFile,
   getBook as coreGetBook,
+  generateBook as coreGenerateBook,
 } from "../core/notes.js";
 
 import urlAuth from "../middleware/urlAuth.js";
@@ -168,7 +170,7 @@ function normalizeStatusFilters(query) {
   return hasAny ? filters : null;
 }
 
-router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
+router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -198,7 +200,6 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     // default OFF
     const isStatusTrimmed = q.trimmed === "true";
     // ---------- HTML MODE ----------
-    // Replace the HTML return in your /:nodeId/:version/notes/book route with this:
 
     if (wantHtml) {
       const title = book?.nodeName ?? book?.nodeId ?? `Node ${nodeId}`;
@@ -219,15 +220,22 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Book: ${title}</title>
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -235,17 +243,77 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+      touch-action: manipulation;
     }
 
-    /* Top Navigation Bar */
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+ html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Top Navigation Bar - Glass */
     .top-nav {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
       padding: 16px 20px;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.28);
       position: sticky;
       top: 0;
       z-index: 100;
+      animation: fadeInUp 0.5s ease-out;
     }
 
     .top-nav-content {
@@ -268,44 +336,64 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       flex-wrap: wrap;
     }
 
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .back-link, .nav-button {
+    /* Glass Navigation Buttons */
+    .nav-button {
       display: inline-flex;
       align-items: center;
       gap: 6px;
       padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
+      background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(10px);
-      color: #667eea;
+      color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
+      transition: all 0.3s;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      touch-action: manipulation;
     }
 
-    .back-link:hover, .nav-button:hover {
-      background: white;
+    .nav-button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .nav-button:hover {
+      background: rgba(255, 255, 255, 0.3);
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
     }
 
-    .page-title {
-      font-size: 20px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 12px;
+    .nav-button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
-    /* Filters */
+    .page-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 12px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.3px;
+    }
+
+    /* Glass Filter Buttons */
     .filters {
       display: flex;
       gap: 8px;
@@ -316,33 +404,55 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       padding: 8px 14px;
       font-size: 13px;
       font-weight: 600;
-      border-radius: 8px;
-      border: 2px solid #e0e0e0;
-      background: white;
-      color: #666;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      color: white;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.3s;
       font-family: inherit;
       white-space: nowrap;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .filter-button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
     }
 
     .filter-button:hover {
-      border-color: #667eea;
-      background: #f8f9fa;
+      background: rgba(255, 255, 255, 0.25);
       transform: translateY(-1px);
     }
 
+    .filter-button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
     .filter-button.active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-color: #667eea;
-      color: white;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      background: rgba(255, 255, 255, 0.35);
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
     }
 
     .filter-button.active:hover {
-      background: linear-gradient(135deg, #5856d6 0%, #6a3d8e 100%);
+      background: rgba(255, 255, 255, 0.45);
       transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+      box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
     }
 
     /* Content Container */
@@ -353,62 +463,96 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     .content {
       max-width: 900px;
       margin: 0 auto;
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(10px);
+      background: rgba(var(--glass-water-rgb), 0.25);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
       border-radius: 16px;
       padding: 48px 64px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
       font-family: "Charter", "Georgia", "Iowan Old Style", "Times New Roman", serif;
       line-height: 1.7;
       word-wrap: break-word;
       overflow-wrap: break-word;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
     }
 
-    /* Book Section Hierarchy */
+    /* Layered Glass Sections - Each depth gets more opaque glass */
     .book-section {
       margin-bottom: 40px;
+      position: relative;
     }
 
     .book-section.depth-1 {
       margin-bottom: 56px;
       margin-left: 0;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     }
 
     .book-section.depth-2 {
       margin-bottom: 40px;
       margin-left: 16px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(14px);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 3px 16px rgba(0, 0, 0, 0.06);
     }
 
     .book-section.depth-3 {
       margin-bottom: 32px;
       margin-left: 32px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(16px);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
     }
 
     .book-section.depth-4 {
       margin-bottom: 24px;
       margin-left: 48px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(18px);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
     }
 
     .book-section.depth-5 {
       margin-bottom: 20px;
       margin-left: 64px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.24);
+      backdrop-filter: blur(20px);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
     }
 
     /* Heading Hierarchy */
     h1, h2, h3, h4, h5 {
-      font-weight: 700;
+      font-weight: 600;
       line-height: 1.3;
       margin: 0 0 16px 0;
-      color: #1a1a1a;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.5px;
     }
 
     h1 {
       font-size: 36px;
       margin-top: 48px;
       margin-bottom: 24px;
-      border-bottom: 2px solid #667eea;
       padding-bottom: 16px;
-      color: #667eea;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.3);
     }
 
     .book-section.depth-1:first-child h1 {
@@ -419,8 +563,8 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       font-size: 30px;
       margin-top: 40px;
       margin-bottom: 20px;
-      border-bottom: 1px solid #e0e0e0;
       padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     h3 {
@@ -441,15 +585,16 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       margin-bottom: 10px;
     }
 
-    /* Note Content */
+    /* Note Content - Glowing Text */
     .note-content {
       margin: 16px 0 28px 0;
       padding: 0;
       font-size: 18px;
       line-height: 1.8;
-      color: #2c2c2c;
+      color: white;
       word-wrap: break-word;
       overflow-wrap: break-word;
+      font-weight: 400;
     }
 
     .note-link {
@@ -462,37 +607,76 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       padding: 12px 16px;
       margin: -12px -16px;
       border-radius: 8px;
-      transition: all 0.2s;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .note-link::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        110deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.2),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-100%);
+      pointer-events: none;
     }
 
     .note-link:hover {
-      background-color: rgba(102, 126, 234, 0.08);
+      background-color: rgba(255, 255, 255, 0.1);
       transform: translateX(4px);
     }
 
-    .note-link:active {
-      background-color: rgba(102, 126, 234, 0.12);
+    .note-link:hover::before {
+      opacity: 1;
+      animation: glassShimmer 1s ease forwards;
     }
 
-    /* File Containers */
+    @keyframes glassShimmer {
+      0% {
+        opacity: 0;
+        transform: translateX(-120%) skewX(-15deg);
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: translateX(120%) skewX(-15deg);
+      }
+    }
+
+    .note-link:active {
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* File Containers - Deeper Glass */
     .file-container {
       margin: 24px 0;
       padding: 20px;
-      background: #f8f9fa;
-      border: 2px solid #e0e0e0;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
       border-radius: 12px;
-      transition: all 0.2s;
+      transition: all 0.3s;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     }
 
     .file-container:hover {
-      border-color: #667eea;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      background: rgba(255, 255, 255, 0.2);
     }
 
     .file-container .note-link {
       display: inline-block;
       margin-bottom: 12px;
-      color: #667eea;
+      color: white;
       font-size: 16px;
       font-weight: 600;
       padding: 4px 8px;
@@ -500,7 +684,7 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     }
 
     .file-container .note-link:hover {
-      background-color: rgba(102, 126, 234, 0.1);
+      background-color: rgba(255, 255, 255, 0.15);
       text-decoration: underline;
     }
 
@@ -510,13 +694,15 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       height: auto;
       border-radius: 8px;
       margin-top: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     video, audio {
       max-width: 100%;
       margin-top: 12px;
       border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     iframe {
@@ -525,6 +711,7 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       border: none;
       border-radius: 8px;
       margin-top: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     /* Empty State */
@@ -536,18 +723,20 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     .empty-state-icon {
       font-size: 64px;
       margin-bottom: 16px;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
     }
 
     .empty-state-text {
       font-size: 24px;
-      color: #666;
+      color: white;
       margin-bottom: 8px;
       font-weight: 600;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
     .empty-state-subtext {
       font-size: 16px;
-      color: #999;
+      color: rgba(255, 255, 255, 0.8);
     }
 
     /* Responsive Design */
@@ -636,7 +825,7 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
         flex-direction: column;
       }
 
-      .nav-button, .back-link {
+      .nav-button {
         justify-content: center;
         width: 100%;
       }
@@ -645,11 +834,13 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
         padding: 24px 16px;
       }
 
+      .book-section.depth-1,
       .book-section.depth-2,
       .book-section.depth-3,
       .book-section.depth-4,
       .book-section.depth-5 {
         margin-left: 0;
+        padding: 12px;
       }
     }
   </style>
@@ -660,17 +851,16 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     <div class="top-nav-content">
       <div class="nav-buttons">
         <div class="nav-left">
-          <a href="/api/root/${nodeId}/${req.params.version}?token=${
-        req.query.token ?? ""
-      }&html" class="nav-button">
+          <a href="/api/root/${nodeId}?token=${
+            req.query.token ?? ""
+          }&html" class="nav-button">
             ← Back to Tree
           </a>
-          <a href="/api/${nodeId}/${req.params.version}?token=${
-        req.query.token ?? ""
-      }&html" class="nav-button">
-            Back to Version
-          </a>
+         
         </div>
+        <button class="nav-button" onclick="generateShare()">
+          🔗 Generate Share Link
+        </button>
       </div>
 
       <div class="page-title">Book: ${title}</div>
@@ -793,7 +983,20 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
       params.set("html", "true");
       window.location.href = url.toString();
     }
+
+    async function generateShare() {
+      const res = await fetch(
+        window.location.pathname + "/generate" + window.location.search,
+        { method: "POST" }
+      );
+
+      const data = await res.json();
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      }
+    }
   </script>
+
 </body>
 </html>
   `);
@@ -810,6 +1013,835 @@ router.get("/:nodeId/:version/notes/book", urlAuth, async (req, res) => {
     });
   }
 });
+router.post("/root/:nodeId/book/generate", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+
+    // 🔁 SAME parsing logic as GET
+    const settings = {
+      latestVersionOnly: parseBool(req.query.latestVersionOnly),
+      lastNoteOnly: parseBool(req.query.lastNoteOnly),
+      leafNotesOnly: parseBool(req.query.leafNotesOnly),
+      filesOnly: parseBool(req.query.filesOnly),
+      textOnly: parseBool(req.query.textOnly),
+
+      active:
+        req.query.active === undefined ? true : req.query.active === "true",
+
+      completed:
+        req.query.completed === undefined
+          ? true
+          : req.query.completed === "true",
+
+      true: parseBool(req.query.true),
+    };
+
+    const { shareId } = await coreGenerateBook({
+      nodeId,
+      settings,
+      userId: req.user?._id,
+    });
+
+    // ✅ Redirect to shared URL (same base format)
+    return res.json({
+      success: true,
+      redirect: `/api/root/${nodeId}/book/share/${shareId}?html`,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
+  try {
+    const { nodeId, shareId } = req.params;
+    const wantHtml = req.query.html !== undefined;
+
+    // 1. Load book from DB
+    const bookRecord = await Book.findOne({ shareId }).lean();
+    if (!bookRecord) {
+      return res.status(404).send("Book not found");
+    }
+
+    // Optional safety check
+    if (bookRecord.nodeId !== nodeId) {
+      return res.status(400).send("Invalid book link");
+    }
+
+    // 2. Build options FROM DB SETTINGS (NOT QUERY)
+    const options = {
+      latestVersionOnly: bookRecord.settings.latestVersionOnly,
+      lastNoteOnly: bookRecord.settings.lastNoteOnly,
+      leafNotesOnly: bookRecord.settings.leafNotesOnly,
+      filesOnly: bookRecord.settings.filesOnly,
+      textOnly: bookRecord.settings.textOnly,
+
+      statusFilters: bookRecord.settings,
+    };
+
+    const { book } = await coreGetBook({ nodeId, options });
+
+    const hasContent =
+      !!book && (book.notes?.length > 0 || book.children?.length > 0);
+    const q = req.query;
+
+    if (wantHtml) {
+      const title = book?.nodeName ?? book?.nodeId ?? `Node ${nodeId}`;
+      const content = hasContent
+        ? renderBookNode(book, 1, req)
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📖</div>
+      <div class="empty-state-text">No content</div>
+      <div class="empty-state-subtext">
+        This node has no notes or child notes under the current filters.
+      </div>
+    </div>
+  `;
+
+      return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Book: ${title}</title>
+  <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+       html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Top Navigation Bar - Glass */
+    .top-nav {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      padding: 16px 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      animation: fadeInUp 0.5s ease-out;
+    }
+
+    .top-nav-content {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .nav-left {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Glass Navigation Buttons */
+    .nav-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      color: white;
+      text-decoration: none;
+      border-radius: 980px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .nav-button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .nav-button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .nav-button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    .page-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 12px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.3px;
+    }
+
+    /* Glass Filter Buttons */
+    .filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter-button {
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-family: inherit;
+      white-space: nowrap;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .filter-button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .filter-button:hover {
+      background: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .filter-button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    .filter-button.active {
+      background: rgba(255, 255, 255, 0.35);
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
+
+    .filter-button.active:hover {
+      background: rgba(255, 255, 255, 0.45);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Content Container */
+    .content-wrapper {
+      padding: 32px 20px;
+    }
+
+    .content {
+      max-width: 900px;
+      margin: 0 auto;
+      background: rgba(var(--glass-water-rgb), 0.25);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      padding: 48px 64px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      font-family: "Charter", "Georgia", "Iowan Old Style", "Times New Roman", serif;
+      line-height: 1.7;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
+    }
+
+    /* Layered Glass Sections - Each depth gets more opaque glass */
+    .book-section {
+      margin-bottom: 40px;
+      position: relative;
+    }
+
+    .book-section.depth-1 {
+      margin-bottom: 56px;
+      margin-left: 0;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .book-section.depth-2 {
+      margin-bottom: 40px;
+      margin-left: 16px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(14px);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 3px 16px rgba(0, 0, 0, 0.06);
+    }
+
+    .book-section.depth-3 {
+      margin-bottom: 32px;
+      margin-left: 32px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(16px);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .book-section.depth-4 {
+      margin-bottom: 24px;
+      margin-left: 48px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(18px);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .book-section.depth-5 {
+      margin-bottom: 20px;
+      margin-left: 64px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.24);
+      backdrop-filter: blur(20px);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+    }
+
+    /* Heading Hierarchy */
+    h1, h2, h3, h4, h5 {
+      font-weight: 600;
+      line-height: 1.3;
+      margin: 0 0 16px 0;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.5px;
+    }
+
+    h1 {
+      font-size: 36px;
+      margin-top: 48px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .book-section.depth-1:first-child h1 {
+      margin-top: 0;
+    }
+
+    h2 {
+      font-size: 30px;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    h3 {
+      font-size: 24px;
+      margin-top: 32px;
+      margin-bottom: 16px;
+    }
+
+    h4 {
+      font-size: 20px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+    }
+
+    h5 {
+      font-size: 18px;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    /* Note Content - Glowing Text */
+    .note-content {
+      margin: 16px 0 28px 0;
+      padding: 0;
+      font-size: 18px;
+      line-height: 1.8;
+      color: white;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      font-weight: 400;
+    }
+
+    .note-link {
+      color: inherit;
+      text-decoration: none;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      display: block;
+      padding: 12px 16px;
+      margin: -12px -16px;
+      border-radius: 8px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .note-link::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        110deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.2),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-100%);
+      pointer-events: none;
+    }
+
+    .note-link:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      transform: translateX(4px);
+    }
+
+    .note-link:hover::before {
+      opacity: 1;
+      animation: glassShimmer 1s ease forwards;
+    }
+
+    @keyframes glassShimmer {
+      0% {
+        opacity: 0;
+        transform: translateX(-120%) skewX(-15deg);
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: translateX(120%) skewX(-15deg);
+      }
+    }
+
+    .note-link:active {
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* File Containers - Deeper Glass */
+    .file-container {
+      margin: 24px 0;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      transition: all 0.3s;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .file-container:hover {
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .file-container .note-link {
+      display: inline-block;
+      margin-bottom: 12px;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 4px 8px;
+      margin: -4px -8px 8px;
+    }
+
+    .file-container .note-link:hover {
+      background-color: rgba(255, 255, 255, 0.15);
+      text-decoration: underline;
+    }
+
+    /* Media Elements */
+    img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      margin-top: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    video, audio {
+      max-width: 100%;
+      margin-top: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+      border-radius: 8px;
+      margin-top: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 80px 40px;
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+    }
+
+    .empty-state-text {
+      font-size: 24px;
+      color: white;
+      margin-bottom: 8px;
+      font-weight: 600;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .empty-state-subtext {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 1024px) {
+      .content {
+        padding: 40px 48px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .top-nav {
+        padding: 12px 16px;
+      }
+
+      .nav-button {
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .page-title {
+        font-size: 18px;
+      }
+
+      .filter-button {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+
+      .content-wrapper {
+        padding: 24px 16px;
+      }
+
+      .content {
+        padding: 32px 24px;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      h2 {
+        font-size: 26px;
+      }
+
+      h3 {
+        font-size: 22px;
+      }
+
+      h4 {
+        font-size: 19px;
+      }
+
+      h5 {
+        font-size: 17px;
+      }
+
+      .note-content {
+        font-size: 17px;
+      }
+
+      .book-section.depth-2 {
+        margin-left: 8px;
+      }
+
+      .book-section.depth-3 {
+        margin-left: 16px;
+      }
+
+      .book-section.depth-4 {
+        margin-left: 24px;
+      }
+
+      .book-section.depth-5 {
+        margin-left: 32px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .nav-buttons {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .nav-left {
+        width: 100%;
+        flex-direction: column;
+      }
+
+      .nav-button {
+        justify-content: center;
+        width: 100%;
+      }
+
+      .content {
+        padding: 24px 16px;
+      }
+
+      .book-section.depth-1,
+      .book-section.depth-2,
+      .book-section.depth-3,
+      .book-section.depth-4,
+      .book-section.depth-5 {
+        margin-left: 0;
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+
+
+      
+
+  <!-- Content -->
+  <div class="content-wrapper">
+    <div class="content">
+      ${content}
+    </div>
+  </div>
+
+  <!-- Lazy Media Loader -->
+  <script>
+    const lazyObserver = new IntersectionObserver(
+      (entries, observer) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+
+          const el = entry.target;
+          const src = el.dataset.src;
+
+          if (src) {
+            el.src = src;
+            el.removeAttribute("data-src");
+          }
+
+          observer.unobserve(el);
+        });
+      },
+      { rootMargin: "200px" }
+    );
+
+    document
+      .querySelectorAll(".lazy-media[data-src]")
+      .forEach(el => lazyObserver.observe(el));
+  </script>
+
+  <script>
+    function toggleFlag(flag) {
+      const url = new URL(window.location.href);
+
+      if (url.searchParams.has(flag)) {
+        url.searchParams.delete(flag);
+      } else {
+        url.searchParams.set(flag, "true");
+      }
+
+      url.searchParams.set("html", "true");
+      window.location.href = url.toString();
+    }
+
+    function toggleStatus(flag) {
+      const url = new URL(window.location.href);
+      const params = url.searchParams;
+
+      const defaults = {
+        active: true,
+        completed: true,
+        trimmed: false,
+      };
+
+      const current = params.has(flag)
+        ? params.get(flag) === "true"
+        : defaults[flag];
+
+      const next = !current;
+
+      if (next === defaults[flag]) {
+        params.delete(flag);
+      } else {
+        params.set(flag, String(next));
+      }
+
+      params.set("html", "true");
+      window.location.href = url.toString();
+    }
+
+    async function generateShare() {
+      const res = await fetch(
+        window.location.pathname + "/generate" + window.location.search,
+        { method: "POST" }
+      );
+
+      const data = await res.json();
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      }
+    }
+  </script>
+
+</body>
+</html>
+  `);
+    }
+
+    return res.json({
+      success: true,
+      book,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
 /* ------------------------------------------------------------------
    GET /:nodeId/:version/notes 
    - JSON (default)
@@ -851,393 +1883,6 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
 
       const nodeName = await getNodeName(nodeId);
 
-      let html = `
-  <html>
-  <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Notes for ${nodeId} version ${version}</title>
-    <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    padding: 0;
-    margin: 0;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    background: #f5f6f7;
-  }
-
- .header {
-  padding: 20px;
-  border-bottom: 1px solid #ddd;
-  background: white;
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-  .header h1 {
-    margin: 0;
-  }
-
-  .header a {
-    color: #5865f2;
-    text-decoration: none;
-  }
-
-  .header a:hover {
-    text-decoration: underline;
-  }
-
-  .notes-container {
-    padding: 20px;
-    overflow-y: auto;
-    flex-grow: 1;
-  }
-
-  ul {
-    padding-left: 0;
-    list-style: none;
-    margin: 0;
-  }
-
-  li {
-    margin-bottom: 12px;
-    padding: 12px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  }
-
-  li a {
-    color: #5865f2;
-    text-decoration: none;
-  }
-
-  li a:hover {
-    text-decoration: underline;
-  }
-
-  .meta {
-    color: #666;
-    font-size: 13px;
-    margin-top: 4px;
-  }
-
-  .reflection {
-    background: #f3f3f3;
-  }
-
-  .file-note {
-    background: #eef7ff;
-  }
-
-  .input-bar {
-    position: sticky;
-    bottom: 0;
-    background: white;
-    padding: 16px;
-    border-top: 1px solid #ddd;
-    flex-shrink: 0;
-  }
-
-  .input-bar form {
-    max-width: 100%;
-  }
-
-  textarea {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-family: inherit;
-    font-size: 16px;
-    resize: vertical;
-    box-sizing: border-box;
-  }
-
-  input[type="file"] {
-    font-size: 14px;
-    max-width: 200px;
-  }
-
-  .submit-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    margin-top: 12px;
-  }
-
-  .submit-row > div {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  button {
-    padding: 10px 20px;
-    background: #5865f2;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 16px;
-    font-weight: 500;
-    cursor: pointer;
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-
-  button:hover {
-    background: #4752c4;
-  }
-
-  @media (max-width: 600px) {
-    .input-bar {
-      padding: 16px;
-    }
-
-    textarea {
-      font-size: 17px;
-      min-height: 80px;
-    }
-
-    button {
-      padding: 12px 24px;
-      font-size: 17px;
-    }
-  }
-
-  @media (prefers-color-scheme: dark) {
-    body {
-      background: #2f3136;
-      color: #e3e5e8;
-    }
-
-    .header {
-      background: #36393f;
-      border-bottom-color: #3a3c40;
-    }
-
-    .header a,
-    li a {
-      color: #7289da;
-    }
-
-    li {
-      background: #36393f;
-      border: 1px solid #3a3c40;
-    }
-
-    .reflection {
-      background: #2f3136;
-    }
-
-    .file-note {
-      background: #2d3e50;
-    }
-
-    .meta {
-      color: #b9bbbe;
-    }
-
-    .input-bar {
-      background: #36393f;
-      border-top-color: #3a3c40;
-    }
-
-    textarea {
-      background: #40444b;
-      color: #e3e5e8;
-      border-color: #3a3c40;
-    }
-
-    button {
-      background: #7289da;
-    }
-
-    button:hover {
-      background: #5865f2;
-    }
-  }
-
-  .note-item {
-  position: relative;
-}
-
-.delete-note {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  color: #999;
-  padding: 4px;
-}
-
-.delete-note:hover {
-  color: #e03131;
-}
-
-</style>
-  </head>
-  <body>
-
-   <div class="header">
-    <h1 style="margin:0; flex-grow:1;">
-      <a href="${base}?token=${
-        req.query.token ?? ""
-      }&html">${nodeName} v${version}</a>
-      Notes
-    </h1>
-    <a href="/api/${nodeId}/${version}/notes/book?token=${
-        req.query.token ?? ""
-      }&html" class="book-button">
-      Book View
-    </a>
-  </div>
-
-  <div class="notes-container">
-    <ul>
-  `;
-
-      for (const n of notes) {
-        const preview =
-          n.contentType === "text"
-            ? n.content.length > 169
-              ? n.content.substring(0, 160) + "..."
-              : n.content
-            : `${n.content.split("/").pop()}`;
-
-        const userLabel = n.userId
-          ? `<a href="/api/user/${n.userId}?token=${
-              req.query.token ?? ""
-            }&html">
-          ${n.username ?? n.userId}
-        </a>`
-          : n.username ?? "Unknown user";
-
-        html += `
-<li
-  class="
-    note-item
-    ${n.isReflection ? "reflection" : ""}
-    ${n.contentType === "file" ? "file-note" : ""}
-  "
-  data-note-id="${n._id}"
-  data-node-id="${n.nodeId}"
-  data-version="${n.version}"
->
-  <button class="delete-note" title="Delete note">✕</button>
-
-  <div>
-    <strong>${userLabel}:</strong>
-    <a href="${base}/notes/${n._id}?token=${req.query.token ?? ""}&html">
-      ${preview}
-    </a>
-  </div>
-
-  <div class="meta">
-    ${new Date(n.createdAt).toLocaleString()}<br />
-    <a href="${base}?token=${req.query.token ?? ""}&html">
-      ${nodeName} v${n.version}
-    </a>
-  </div>
-</li>
-`;
-      }
-
-      html += `
-    </ul>
-  </div>
-
-  <div class="input-bar">
-  <form
-    method="POST"
-    action="/api/${nodeId}/${version}/notes?token=${req.query.token ?? ""}&html"
-    enctype="multipart/form-data"
-  >
-    <textarea
-      name="content"
-      rows="4"
-      placeholder="Write a note or upload a file..."
-    ></textarea>
-
-    <div class="submit-row">
-      <div>
-        <label style="margin-right: 12px;">
-          <input type="checkbox" name="isReflection" value="true" />
-          Is Reflection
-        </label>
-        <input type="file" name="file" />
-      </div>
-      <button type="submit">Create</button>
-    </div>
-  </form>
-</div>
-
-  <script>
-    // Scroll notes container to bottom automatically
-    const container = document.querySelector('.notes-container');
-    container.scrollTop = container.scrollHeight;
-  </script>
-  <script>
-    const textarea = document.querySelector('textarea');
-    const form = textarea.closest('form');
-
-    textarea.addEventListener('keydown', (e) => {
-      // Enter without Shift = submit
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        form.submit();
-      }
-    });
-  </script>
-<script>
-document.addEventListener("click", async (e) => {
-  if (!e.target.classList.contains("delete-note")) return;
-
-  const li = e.target.closest(".note-item");
-  const noteId = li.dataset.noteId;
-  const nodeId = li.dataset.nodeId;
-  const version = li.dataset.version;
-
-  if (!confirm("Delete this note?")) return;
-
-  const token =
-    new URLSearchParams(window.location.search).get("token") || "";
-
-  const qs = token ? "?token=" + encodeURIComponent(token) : "";
-
-  try {
-    const res = await fetch(
-      "/api/" + nodeId + "/" + version + "/notes/" + noteId + qs,
-      { method: "DELETE" }
-    );
-
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || "Delete failed");
-
-    li.remove();
-  } catch (err) {
-    alert("Delete failed");
-  }
-});
-</script>
-
-
-
-  </body>
-  </html>`;
-
-      // Replace the HTML return in your /:nodeId/:version/notes route with this:
-
       // Check if we have the current user's ID (from cookie/session)
       const currentUserId = req.userId ? req.userId.toString() : null;
 
@@ -1251,449 +1896,589 @@ document.addEventListener("click", async (e) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${nodeName} — Notes</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    /* Replace the <style> content in your /:nodeId/:version/notes route with this */
 
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      color: #1a1a1a;
-      overflow: hidden;
-    }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
 
-    /* Top Navigation Bar */
-    .top-nav {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      padding: 16px 20px;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-      flex-shrink: 0;
-    }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  color: #1a1a1a;
+  overflow: hidden;
+  position: relative;
+  touch-action: manipulation;
+}
 
-    .top-nav-content {
-      max-width: 900px;
-      margin: 0 auto;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
 
-    .nav-left {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
 
-    .nav-button {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: #f8f9fa;
-      color: #667eea;
-      text-decoration: none;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-      white-space: nowrap;
-    }
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
 
-    .nav-button:hover {
-      background: white;
-      border-color: #667eea;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-    }
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
 
-    .book-button {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-    }
+/* Glass Top Navigation */
+.top-nav {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  padding: 16px 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+  flex-shrink: 0;
+}
 
-    .book-button:hover {
-      background: linear-gradient(135deg, #5856d6 0%, #6a3d8e 100%);
-      border-color: transparent;
-    }
+.top-nav-content {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
-    /* Page Title */
-    .page-title {
-      width: 100%;
-      margin-top: 12px;
-      font-size: 18px;
-      font-weight: 700;
-      color: #1a1a1a;
-    }
+.nav-left {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
-    .page-title a {
-      color: #667eea;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
+/* Glass Navigation Buttons */
+.nav-button,
+.book-button {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 980px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease;
+  white-space: nowrap;
+}
 
-    .page-title a:hover {
-      color: #764ba2;
-      text-decoration: underline;
-    }
+.nav-button::before,
+.book-button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+      120% 60% at 0% 0%,
+      rgba(255, 255, 255, 0.35),
+      transparent 60%
+    ),
+    linear-gradient(
+      120deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.25),
+      transparent 70%
+    );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
 
-    /* Notes Container */
-    .notes-container {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      background: rgba(0, 0, 0, 0.02);
-    }
+.nav-button:hover,
+.book-button:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
 
-    .notes-wrapper {
-      max-width: 900px;
-      margin: 0 auto;
-      width: 100%;
-    }
+.nav-button:hover::before,
+.book-button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-    .notes-list {
-      list-style: none;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
 
-    /* Message Bubble Styles */
-    .note-item {
-      display: flex;
-      animation: slideIn 0.3s ease-out;
-    }
+.book-button {
+  --glass-alpha: 0.34;
+  --glass-alpha-hover: 0.46;
+  font-weight: 600;
+}
 
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
+.page-title {
+  width: 100%;
+  margin-top: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  letter-spacing: -0.3px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.page-title a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.page-title a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+}
+
+/* Notes Container */
+.notes-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.notes-wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.notes-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Glass Note Messages */
+.note-item {
+  display: flex;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.note-item.self {
+  flex-direction: row-reverse;
+}
+
+.note-bubble {
+  position: relative;
+  max-width: 70%;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  color: white;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Self messages - slightly more opaque */
+.note-item.self .note-bubble {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Reflection messages - golden tint */
+.note-item.reflection .note-bubble {
+  background: rgba(255, 215, 79, 0.25);
+  border-color: rgba(255, 215, 79, 0.4);
+  box-shadow: 0 4px 16px rgba(255, 193, 7, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.file-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.note-author {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 13px;
+  opacity: 0.85;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  letter-spacing: -0.2px;
+}
+
+.note-author a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.note-author a:hover {
+  border-bottom-color: white;
+}
+
+.note-item.self .note-author {
+  display: none;
+}
+
+.note-content {
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+  font-weight: 400;
+}
+
+.note-content a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.note-content a:hover {
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+}
+
+.note-meta {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.delete-button {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.7;
+  transition: all 0.2s;
+  font-size: 12px;
+  color: white;
+}
+
+.delete-button:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: scale(1.1);
+}
+
+/* Glass Input Bar */
+.input-bar {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  padding: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+}
+
+.input-form {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: none;
+  transition: all 0.3s;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  color: white;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  height: 56px;
+  max-height: 120px;
+  overflow-y: hidden;
+}
+
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+textarea:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15),
+    0 8px 30px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.input-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.input-options {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+input[type="file"] {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+  padding: 8px 16px;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+  margin-right: 10px;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Glass Send Button */
+.send-button {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 28px;
+  border-radius: 980px;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+  transition: all 0.3s;
+}
+
+.send-button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.send-button:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.send-button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.send-button.loading .send-label {
+  opacity: 0;
+}
+
+/* Progress bar */
+.send-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.25),
+    rgba(255,255,255,0.6),
+    rgba(255,255,255,0.25)
+  );
+  transition: width 0.2s ease;
+  pointer-events: none;
+}
+
+/* Loading state */
+.send-button.loading {
+  cursor: default;
+  animation: none;
+  transform: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .top-nav {
+    padding: 12px 16px;
+  }
+
+  .nav-button,
+  .book-button {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+
+  .page-title {
+    font-size: 16px;
+  }
+
+  .notes-container {
+    padding: 16px 12px;
+  }
+
+  .note-bubble {
+    max-width: 85%;
+    padding: 12px 16px;
+  }
+
+  .input-bar {
+    padding: 16px;
+  }
+
+  .input-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .input-options {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .send-button {
+    width: 100%;
+  }
+
+  textarea {
+    font-size: 16px;
+    height: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-left {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .nav-button,
+  .book-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+     html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
       }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    /* Self messages (right aligned) */
-    .note-item.self {
-      flex-direction: row-reverse;
-    }
-
-    .note-bubble {
-      position: relative;
-      max-width: 70%;
-      padding: 12px 16px;
-      border-radius: 18px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-    }
-
-    /* Self bubble (purple gradient) */
-    .note-item.self .note-bubble {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border-bottom-right-radius: 4px;
-    }
-
-    /* Other user bubble (white) */
-    .note-item.other .note-bubble {
-      background: white;
-      color: #1a1a1a;
-      border-bottom-left-radius: 4px;
-    }
-
-    /* Reflection style */
-    .note-item.reflection .note-bubble {
-      background: #fff9e6;
-      border: 2px solid #ffd54f;
-      color: #1a1a1a;
-    }
-
-    .note-item.self.reflection .note-bubble {
-      background: linear-gradient(135deg, #ffd54f 0%, #ffb300 100%);
-      color: #1a1a1a;
-      border: none;
-    }
-
-    /* File badge */
-    .file-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      background: rgba(0, 0, 0, 0.1);
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .note-content {
-      font-size: 15px;
-      line-height: 1.5;
-      margin-bottom: 6px;
-    }
-
-    .note-content a {
-      color: inherit;
-      text-decoration: none;
-      opacity: 0.9;
-    }
-
-    .note-content a:hover {
-      opacity: 1;
-    }
-
-    .note-meta {
-      font-size: 11px;
-      opacity: 0.7;
-      margin-top: 6px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .note-author {
-      font-weight: 600;
-      margin-bottom: 4px;
-      font-size: 13px;
-    }
-
-    .note-author a {
-      color: inherit;
-      text-decoration: none;
-      opacity: 0.9;
-    }
-
-    .note-author a:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-
-    /* Self messages don't show author */
-    .note-item.self .note-author {
-      display: none;
-    }
-
-    .delete-button {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 4px;
-      opacity: 0.5;
-      transition: all 0.2s;
-      font-size: 14px;
-    }
-
-    .delete-button:hover {
-      opacity: 1;
-      transform: scale(1.2);
-    }
-
-    .note-item.self .delete-button {
-      color: white;
-    }
-
-    .note-item.other .delete-button {
-      color: #999;
-    }
-
-    .note-item.other .delete-button:hover {
-      color: #c62828;
-    }
-
-    /* Input Bar */
-    .input-bar {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      padding: 20px;
-      border-top: 1px solid rgba(0, 0, 0, 0.1);
-      box-shadow: 
-        0 -2px 12px rgba(0, 0, 0, 0.05),
-        0 -4px 20px rgba(102, 126, 234, 0);
-      flex-shrink: 0;
-      transition: box-shadow 0.3s ease;
-    }
-
-    .input-bar:focus-within {
-      box-shadow: 
-        0 -2px 12px rgba(0, 0, 0, 0.05),
-        0 -8px 30px rgba(102, 126, 234, 0.4);
-    }
-
-    .input-form {
-      max-width: 900px;
-      margin: 0 auto;
-    }
-
-    textarea {
-      width: 100%;
-      padding: 14px 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 12px;
-      font-family: inherit;
-      font-size: 15px;
-      line-height: 1.5;
-      resize: none;
-      transition: all 0.2s;
-      background: white;
-      height: 56px;
-      max-height: 120px;
-      overflow-y: hidden;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .input-controls {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-
-    .input-options {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .checkbox-label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 14px;
-      color: #666;
-      cursor: pointer;
-    }
-
-    .checkbox-label input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-    }
-
-    input[type="file"] {
-      font-size: 13px;
-      color: #666;
-    }
-
-    input[type="file"]::file-selector-button {
-      padding: 8px 14px;
-      border-radius: 8px;
-      border: 1px solid #d0d0d0;
-      background: white;
-      color: #666;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      transition: all 0.2s;
-      margin-right: 8px;
-    }
-
-    input[type="file"]::file-selector-button:hover {
-      background: #f5f5f5;
-      border-color: #999;
-    }
-
-    .send-button {
-      padding: 12px 28px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-      white-space: nowrap;
-    }
-
-    .send-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-      .top-nav {
-        padding: 12px 16px;
-      }
-
-      .nav-button {
-        padding: 8px 12px;
-        font-size: 13px;
-      }
-
-      .page-title {
-        font-size: 16px;
-      }
-
-      .notes-container {
-        padding: 16px 12px;
-      }
-
-      .note-bubble {
-        max-width: 85%;
-        padding: 10px 14px;
-      }
-
-      .input-bar {
-        padding: 16px;
-      }
-
-      .input-controls {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .input-options {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-      }
-
-      .send-button {
-        width: 100%;
-      }
-
-      textarea {
-        font-size: 16px;
-        height: 60px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .nav-left {
-        width: 100%;
-      }
-
-      .nav-button {
-        flex: 1;
-        justify-content: center;
-      }
-    }
   </style>
 </head>
 <body>
@@ -1702,25 +2487,21 @@ document.addEventListener("click", async (e) => {
     <div class="top-nav-content">
       <div class="nav-left">
         <a href="/api/root/${nodeId}?token=${
-        req.query.token ?? ""
-      }&html" class="nav-button">
+          req.query.token ?? ""
+        }&html" class="nav-button">
           ← Back to Tree
         </a>
         <a href="${base}?token=${
-        req.query.token ?? ""
-      }&html" class="nav-button">
+          req.query.token ?? ""
+        }&html" class="nav-button">
           Back to Version
         </a>
       </div>
-      <a href="/api/${nodeId}/${version}/notes/book?token=${
-        req.query.token ?? ""
-      }&html" class="nav-button book-button">
-        📖 Book View
-      </a>
+
       <div class="page-title">
         Notes for <a href="${base}?token=${
-        req.query.token ?? ""
-      }&html">${nodeName} v${version}</a>
+          req.query.token ?? ""
+        }&html">${nodeName} v${version}</a>
       </div>
     </div>
   </div>
@@ -1744,13 +2525,13 @@ document.addEventListener("click", async (e) => {
             ? `<a href="/api/user/${n.userId}?token=${
                 req.query.token ?? ""
               }&html">${n.username ?? n.userId}</a>`
-            : n.username ?? "Unknown user";
+            : (n.username ?? "Unknown user");
 
           return `
           <li
             class="note-item ${isSelf ? "self" : "other"} ${
-            n.isReflection ? "reflection" : ""
-          }"
+              n.isReflection ? "reflection" : ""
+            }"
             data-note-id="${n._id}"
             data-node-id="${n.nodeId}"
             data-version="${n.version}"
@@ -1764,8 +2545,8 @@ document.addEventListener("click", async (e) => {
               ${!isSelf ? `<div class="note-author">${userLabel}</div>` : ""}
               <div class="note-content">
                 <a href="${base}/notes/${n._id}?token=${
-            req.query.token ?? ""
-          }&html">
+                  req.query.token ?? ""
+                }&html">
                   ${preview}
                 </a>
               </div>
@@ -1807,10 +2588,13 @@ document.addEventListener("click", async (e) => {
          
           <input type="file" name="file" />
         </div>
-        <button type="submit" class="send-button">Send</button>
-      </div>
+<button type="submit" class="send-button" id="sendBtn">
+  <span class="send-label">Send</span>
+  <span class="send-progress"></span>
+</button>      </div>
     </form>
   </div>
+
 
   <script>
     // Auto-scroll to bottom on load
@@ -1832,13 +2616,7 @@ document.addEventListener("click", async (e) => {
       }
     });
 
-    // Submit on Enter (without Shift)
-    textarea.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        textarea.closest('form').submit();
-      }
-    });
+    
 
     // Delete note functionality
     document.addEventListener('click', async (e) => {
@@ -1872,6 +2650,55 @@ document.addEventListener("click", async (e) => {
       }
     });
   </script>
+
+  <script>
+  const form = document.querySelector('.input-form');
+  const sendBtn = document.getElementById('sendBtn');
+  const progressBar = sendBtn.querySelector('.send-progress');
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    // Lock UI
+    sendBtn.classList.add('loading');
+    sendBtn.disabled = true;
+
+    const formData = new FormData(form);
+    const xhr = new XMLHttpRequest();
+
+    xhr.open('POST', form.action, true);
+
+    // Upload progress (files + text)
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const percent = Math.round((e.loaded / e.total) * 100);
+      progressBar.style.width = percent + '%';
+    };
+
+    xhr.onload = () => {
+      // Let server redirect / reload naturally
+      document.location.reload();
+    };
+
+    xhr.onerror = () => {
+      alert('Send failed');
+      sendBtn.classList.remove('loading');
+      sendBtn.disabled = false;
+      progressBar.style.width = '0%';
+    };
+
+    xhr.send(formData);
+  });
+
+textarea.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    form.requestSubmit();
+  }
+});
+
+
+</script>
 </body>
 </html>
 `);
@@ -1913,7 +2740,7 @@ router.post(
 
       if (wantHtml) {
         return res.redirect(
-          `/api/${nodeId}/${version}/notes?token=${req.query.token ?? ""}&html`
+          `/api/${nodeId}/${version}/notes?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -1922,7 +2749,7 @@ router.post(
     } catch (err) {
       res.status(400).json({ success: false, error: err.message });
     }
-  }
+  },
 );
 const allowedParams = ["token", "html", "error"];
 
@@ -1965,7 +2792,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       ? `<a href="/api/user/${note.userId._id}${qs}">
        ${note.userId.username ?? "Unknown user"}
      </a>`
-      : note.username ?? "Unknown user";
+      : (note.username ?? "Unknown user");
 
     if (req.query.html !== undefined) {
       if (note.contentType === "text") {
@@ -1979,6 +2806,12 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Note by ${note.userId?.username || "User"}</title>
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -1991,11 +2824,68 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       min-height: 100vh;
       padding: 20px;
       color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+ html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .container {
       max-width: 900px;
       margin: 0 auto;
+      position: relative;
+      z-index: 1;
     }
 
     /* Back Navigation */
@@ -2004,49 +2894,68 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       gap: 12px;
       margin-bottom: 20px;
       flex-wrap: wrap;
+      animation: fadeInUp 0.5s ease-out;
     }
 
     .back-link {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
+      padding: 10px 20px;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    /* Note Card */
-    .note-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
       position: relative;
       overflow: hidden;
     }
 
-    .note-card::before {
-      content: '';
+    .back-link::before {
+      content: "";
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .back-link:hover {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    }
+
+    .back-link:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Note Card */
+    .note-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
     }
 
     /* User Info */
@@ -2056,7 +2965,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       gap: 8px;
       margin-bottom: 20px;
       padding-bottom: 16px;
-      border-bottom: 1px solid #e9ecef;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .user-info::before {
@@ -2065,16 +2974,17 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     }
 
     .user-info a {
-      color: #667eea;
+      color: white;
       text-decoration: none;
       font-weight: 600;
       font-size: 15px;
-      transition: color 0.2s;
+      transition: all 0.2s;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
     .user-info a:hover {
-      color: #764ba2;
-      text-decoration: underline;
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+      transform: translateX(2px);
     }
 
     /* Copy Button Bar */
@@ -2086,49 +2996,150 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     }
 
     .copy-btn {
-      background: rgba(102, 126, 234, 0.1);
-      border: 1px solid rgba(102, 126, 234, 0.2);
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
       cursor: pointer;
       font-size: 20px;
       padding: 8px 12px;
-      border-radius: 8px;
-      transition: all 0.2s;
+      border-radius: 980px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .copy-btn::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
     }
 
     .copy-btn:hover {
-      background: rgba(102, 126, 234, 0.2);
+      background: rgba(255, 255, 255, 0.3);
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .copy-btn:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     .copy-btn:active {
       transform: translateY(0);
     }
 
+    #copyUrlBtn {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
     /* Note Content */
     pre {
-      background: #f8f9fa;
+      background: rgba(255, 255, 255, 0.3);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
       padding: 20px;
       border-radius: 12px;
       font-size: 16px;
       line-height: 1.7;
       white-space: pre-wrap;
       word-wrap: break-word;
-      border: 1px solid #e9ecef;
+      border: 1px solid rgba(255, 255, 255, 0.3);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      color: #1a1a1a;
+      color: #3d2f8f;
+      font-weight: 600;
+      text-shadow: 
+        0 0 10px rgba(102, 126, 234, 0.4),
+        0 1px 3px rgba(255, 255, 255, 1);
+      box-shadow: 
+        0 4px 20px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
     }
-#copyUrlBtn {
-    display: inline-flex;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
-      text-decoration: none;
-      border-radius: 10px;
-     
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);}
+
+    pre::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        110deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.4),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-100%);
+      pointer-events: none;
+    }
+
+    pre:hover {
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow: 
+        0 8px 32px rgba(102, 126, 234, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+/* Programmatic shimmer trigger */
+pre.flash::before {
+  opacity: 1;
+  animation: glassShimmer 1.2s ease forwards;
+}
+
+    pre:hover::before {
+      opacity: 1;
+      animation: glassShimmer 1.2s ease forwards;
+    }
+
+    pre.copied {
+      animation: textGlow 0.8s ease-out;
+    }
+
+    @keyframes textGlow {
+      0% {
+        box-shadow: 
+          0 4px 20px rgba(0, 0, 0, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      }
+      50% {
+        box-shadow: 
+          0 0 40px rgba(102, 126, 234, 0.6),
+          0 0 60px rgba(102, 126, 234, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        text-shadow: 
+          0 0 20px rgba(102, 126, 234, 0.8),
+          0 0 30px rgba(102, 126, 234, 0.6),
+          0 1px 3px rgba(255, 255, 255, 1);
+      }
+      100% {
+        box-shadow: 
+          0 4px 20px rgba(0, 0, 0, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      }
+    }
+
+    @keyframes glassShimmer {
+      0% {
+        opacity: 0;
+        transform: translateX(-120%) skewX(-15deg);
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: translateX(120%) skewX(-15deg);
+      }
+    }
+
     /* Responsive */
     @media (max-width: 640px) {
       body {
@@ -2136,7 +3147,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       }
 
       .note-card {
-        padding: 20px;
+        padding: 24px 20px;
       }
 
       pre {
@@ -2165,8 +3176,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     <!-- Back Navigation -->
     <div class="back-nav">
       <a href="${back}" class="back-link">${backText}</a>
-              <button id="copyUrlBtn" class="copy-btn" title="Copy URL to share">🔗</button>
-
+      <button id="copyUrlBtn" class="copy-btn" title="Copy URL to share">🔗</button>
     </div>
 
     <!-- Note Card -->
@@ -2189,11 +3199,27 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     const noteContent = document.getElementById("noteContent");
 
     copyNoteBtn.addEventListener("click", () => {
-      navigator.clipboard.writeText(noteContent.textContent).then(() => {
-        copyNoteBtn.textContent = "✔️";
-        setTimeout(() => (copyNoteBtn.textContent = "📋"), 900);
-      });
-    });
+  navigator.clipboard.writeText(noteContent.textContent).then(() => {
+    copyNoteBtn.textContent = "✔️";
+    setTimeout(() => (copyNoteBtn.textContent = "📋"), 900);
+
+    // text glow (already existing)
+    noteContent.classList.add("copied");
+    setTimeout(() => noteContent.classList.remove("copied"), 800);
+
+    // 🔥 delayed glass shimmer (0.5s)
+    setTimeout(() => {
+      noteContent.classList.remove("flash"); // reset if still present
+      void noteContent.offsetWidth;          // force reflow so animation restarts
+      noteContent.classList.add("flash");
+
+      setTimeout(() => {
+        noteContent.classList.remove("flash");
+      }, 1300); // slightly longer than animation
+    }, 600);
+  });
+});
+
 
     copyUrlBtn.addEventListener("click", () => {
       const url = new URL(window.location.href);
@@ -2228,6 +3254,12 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${fileName}</title>
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -2240,11 +3272,68 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       min-height: 100vh;
       padding: 20px;
       color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+ html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .container {
       max-width: 900px;
       margin: 0 auto;
+      position: relative;
+      z-index: 1;
     }
 
     /* Back Navigation */
@@ -2253,49 +3342,68 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       gap: 12px;
       margin-bottom: 20px;
       flex-wrap: wrap;
+      animation: fadeInUp 0.5s ease-out;
     }
 
     .back-link {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
+      padding: 10px 20px;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    /* File Card */
-    .file-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
       position: relative;
       overflow: hidden;
     }
 
-    .file-card::before {
-      content: '';
+    .back-link::before {
+      content: "";
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .back-link:hover {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    }
+
+    .back-link:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* File Card */
+    .file-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
     }
 
     /* User Info */
@@ -2305,7 +3413,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       gap: 8px;
       margin-bottom: 20px;
       padding-bottom: 16px;
-      border-bottom: 1px solid #e9ecef;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .user-info::before {
@@ -2314,28 +3422,28 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     }
 
     .user-info a {
-      color: #667eea;
+      color: white;
       text-decoration: none;
       font-weight: 600;
       font-size: 15px;
-      transition: color 0.2s;
+      transition: all 0.2s;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
     .user-info a:hover {
-      color: #764ba2;
-      text-decoration: underline;
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+      transform: translateX(2px);
     }
 
     /* File Header */
     h1 {
       font-size: 24px;
       font-weight: 700;
-      color: #1a1a1a;
+      color: white;
       margin-bottom: 20px;
       word-break: break-word;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
-
- 
 
     /* Action Buttons */
     .action-bar {
@@ -2350,26 +3458,50 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       align-items: center;
       gap: 8px;
       padding: 12px 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
       color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 15px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-      border: none;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.3);
       cursor: pointer;
+      position: relative;
+      overflow: hidden;
     }
 
-    .download:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    .download::after {
+      content: '⬇️';
+      font-size: 16px;
+      margin-left: 4px;
     }
 
     .download::before {
-      content: '⬇️';
-      font-size: 16px;
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .download:hover {
+      background: rgba(255, 255, 255, 0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    }
+
+    .download:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     .copy-url-btn {
@@ -2377,32 +3509,55 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       align-items: center;
       gap: 8px;
       padding: 12px 20px;
-      background: rgba(102, 126, 234, 0.1);
-      color: #667eea;
-      border: 1px solid rgba(102, 126, 234, 0.2);
-      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 980px;
       font-weight: 600;
       font-size: 15px;
-      transition: all 0.2s;
+      transition: all 0.3s;
       cursor: pointer;
+      position: relative;
+      overflow: hidden;
     }
 
-    .copy-url-btn:hover {
-      background: rgba(102, 126, 234, 0.2);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    .copy-url-btn::after {
+      content: '🔗';
+      font-size: 16px;
+      margin-left: 4px;
     }
 
     .copy-url-btn::before {
-      content: '🔗';
-      font-size: 16px;
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .copy-url-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .copy-url-btn:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     /* Media Container */
     .media {
       margin-top: 24px;
       padding-top: 24px;
-      border-top: 1px solid #e9ecef;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .media img,
@@ -2410,7 +3565,8 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     .media audio {
       max-width: 100%;
       border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     /* Responsive */
@@ -2420,7 +3576,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       }
 
       .file-card {
-        padding: 20px;
+        padding: 24px 20px;
       }
 
       h1 {
@@ -2453,6 +3609,17 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
         max-width: 700px;
       }
     }
+      @media (max-width: 768px) {
+  .send-progress {
+    animation: shimmer 1.2s infinite linear;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+
   </style>
 </head>
 <body>
@@ -2524,7 +3691,6 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
 router.delete(
   "/:nodeId/:version/notes/:noteId",
   authenticate,
@@ -2541,7 +3707,7 @@ router.delete(
     } catch (err) {
       res.status(400).json({ success: false, error: err.message });
     }
-  }
+  },
 );
 
 export default router;

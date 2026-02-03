@@ -62,7 +62,7 @@ router.post("/:nodeId/:version/editStatus", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`
+        `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -92,7 +92,7 @@ router.post("/:nodeId/:version/prestige", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/${nodeId}/${nextVersion}?token=${req.query.token ?? ""}&html`
+        `/api/${nodeId}/${nextVersion}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -696,7 +696,7 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
               `<li><a href="/api/${nodeId}/${arr.length - 1 - i}${qs}">
 
                 Version ${arr.length - 1 - i}
-              </a></li>`
+              </a></li>`,
           )
           .join("")}
       </ul>
@@ -746,7 +746,7 @@ action="/api/${nodeId}/script/create${qs}"
             <li>
               <strong>${s.name}</strong>
               <pre>${s.script}</pre>
-            </li></a>`
+            </li></a>`,
                 )
                 .join("")
             : `<li><em>No scripts defined</em></li>`
@@ -930,346 +930,588 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${node.name} v${version}</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    /* =========================================================
+   GLOBAL VARIABLES — matches WelcomePage
+   ========================================================= */
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-    }
+/* Replace the <style> content in your /:nodeId/:version route with this */
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
+/* =========================================================
+   RESET & BASE
+   ========================================================= */
 
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
-      text-decoration: none;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
 
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
 
-    /* Header Section */
-    .header {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+/* =========================================================
+   ANIMATED BACKGROUND
+   ========================================================= */
 
-    .header h1 {
-      font-size: 28px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 8px;
-      line-height: 1.3;
-    }
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
 
-    .header h1 a {
-      color: #1a1a1a;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
 
-    .header h1 a:hover {
-      color: #667eea;
-    }
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
 
-    .version-badge {
-      display: inline-block;
-      padding: 6px 14px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border-radius: 20px;
-      font-size: 14px;
-      font-weight: 600;
-      margin-top: 8px;
-    }
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
 
-    .node-id-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
+/* =========================================================
+   LAYOUT
+   ========================================================= */
 
-    code {
-      background: #f0f0f0;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-      color: #666;
-      word-break: break-all;
-    }
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
 
-    #copyNodeIdBtn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 6px;
-      opacity: 0.6;
-      font-size: 18px;
-      transition: opacity 0.2s, transform 0.2s;
-    }
+/* =========================================================
+   UNIFIED GLASS BUTTON SYSTEM
+   ========================================================= */
 
-    #copyNodeIdBtn:hover {
-      opacity: 1;
-      transform: scale(1.1);
-    }
+.glass-btn,
+button,
+.action-button,
+.back-link,
+.nav-links a,
+.meta-value button,
+.contributors-list button,
+button[type="submit"],
+.status-button,
+.primary-button {
+  position: relative;
+  overflow: hidden;
 
-    /* Metadata Cards */
-    .meta-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
+  padding: 10px 20px;
+  border-radius: 980px;
 
-    .meta-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 16px 20px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-    }
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 
-    .meta-label {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #888;
-      margin-bottom: 6px;
-    }
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
 
-    .meta-value {
-      font-size: 15px;
-      font-weight: 600;
-      color: #1a1a1a;
-    }
+  color: white;
+  text-decoration: none;
+  font-family: inherit;
 
-    .status-badge {
-      display: inline-block;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      text-transform: capitalize;
-    }
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
 
-    .status-active {
-      background: #e3f2fd;
-      color: #1976d2;
-    }
+  border: 1px solid rgba(255, 255, 255, 0.28);
 
-    .status-completed {
-      background: #e8f5e9;
-      color: #388e3c;
-    }
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
 
-    .status-trimmed {
-      background: #fff3e0;
-      color: #f57c00;
-    }
+  cursor: pointer;
 
-    /* Navigation Links */
-    .nav-section {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 24px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+  transition:
+    background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease;
+}
 
-    .nav-section h2 {
-      font-size: 18px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 16px;
-    }
+/* Liquid light layer */
+.glass-btn::before,
+button::before,
+.action-button::before,
+.back-link::before,
+.nav-links a::before,
+.meta-value button::before,
+.contributors-list button::before,
+button[type="submit"]::before,
+.status-button::before,
+.primary-button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
 
-    .nav-links {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-    }
+  background:
+    radial-gradient(
+      120% 60% at 0% 0%,
+      rgba(255, 255, 255, 0.35),
+      transparent 60%
+    ),
+    linear-gradient(
+      120deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.25),
+      transparent 70%
+    );
 
-    .nav-links a {
-      display: block;
-      padding: 14px 18px;
-      background: #f8f9fa;
-      border-radius: 10px;
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 15px;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-      text-align: center;
-    }
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition:
+    opacity 0.35s ease,
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 
-    .nav-links a:hover {
-      background: white;
-      border-color: #667eea;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-    }
+  pointer-events: none;
+}
 
-    /* Actions Section */
-    .actions-section {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 24px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    }
+/* Hover motion */
+.glass-btn:hover,
+button:hover,
+.action-button:hover,
+.back-link:hover,
+.nav-links a:hover,
+.meta-value button:hover,
+.contributors-list button:hover,
+button[type="submit"]:hover,
+.status-button:hover,
+.primary-button:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
 
-    .actions-section h3 {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1a1a1a;
-      margin-bottom: 16px;
-    }
+.glass-btn:hover::before,
+button:hover::before,
+.action-button:hover::before,
+.back-link:hover::before,
+.nav-links a:hover::before,
+.meta-value button:hover::before,
+.contributors-list button:hover::before,
+button[type="submit"]:hover::before,
+.status-button:hover::before,
+.primary-button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
 
-    .action-form {
-      margin-bottom: 24px;
-    }
+/* Active press */
+.glass-btn:active,
+button:active,
+.status-button:active,
+.primary-button:active {
+  background: rgba(var(--glass-water-rgb), 0.45);
+  transform: translateY(0);
+  animation: none;
+}
 
-    .action-form:last-child {
-      margin-bottom: 0;
-    }
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
 
-    .button-group {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
+/* Emphasis variants */
+.primary-button {
+  --glass-alpha: 0.34;
+  --glass-alpha-hover: 0.46;
+  font-weight: 600;
+}
 
-    button[type="submit"] {
-      padding: 12px 20px;
-      border: none;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-family: inherit;
-    }
+.legacy-btn {
+  opacity: 0.85;
+}
+.legacy-btn:hover {
+  opacity: 1;
+}
 
-    .status-button {
-      background: white;
-      color: #667eea;
-      border: 2px solid #667eea !important;
-    }
+/* =========================================================
+   CONTENT CARDS
+   ========================================================= */
 
-    .status-button:hover {
-      background: #667eea;
-      color: white;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
+.header,
+.nav-section,
+.actions-section {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 14px;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  margin-bottom: 24px;
+}
 
-    .primary-button {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-    }
+.meta-card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 12px;
+  padding: 16px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
 
-    .primary-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
-    }
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  line-height: 1.3;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
 
-    /* Responsive Design */
-    @media (max-width: 640px) {
-      body {
-        padding: 16px;
+.header h1 a {
+  color: white;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.header h1 a:hover {
+  opacity: 0.8;
+}
+
+.nav-section h2,
+.actions-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 16px;
+  letter-spacing: -0.3px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* =========================================================
+   NAV + META
+   ========================================================= */
+
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.version-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  color: white;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.node-id-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: 13px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  color: white;
+  word-break: break-all;
+  flex: 1;
+}
+
+#copyNodeIdBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  opacity: 0.7;
+  font-size: 18px;
+  transition: opacity 0.2s;
+}
+
+#copyNodeIdBtn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.meta-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 6px;
+}
+
+.meta-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: white;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.nav-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.nav-links a {
+  padding: 14px 18px;
+  font-size: 15px;
+  text-align: center;
+}
+
+/* =========================================================
+   ACTIONS & FORMS
+   ========================================================= */
+
+.action-form {
+  margin-bottom: 24px;
+}
+
+.action-form:last-child {
+  margin-bottom: 0;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+button[type="submit"],
+.status-button {
+  padding: 12px 20px;
+  font-size: 14px;
+}
+
+/* =========================================================
+   MODAL
+   ========================================================= */
+
+#scheduleModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+#scheduleModal > div {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  padding: 24px;
+  border-radius: 14px;
+  width: 320px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+#scheduleModal label {
+  display: block;
+  margin-bottom: 12px;
+  color: #667eea;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.2px;
+}
+
+#scheduleModal input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 15px;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+#scheduleModal input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+#scheduleModal button {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  border: none;
+}
+
+#scheduleModal button[type="button"] {
+  background: #f0f0f0;
+  color: #666;
+  border: 1px solid #d0d0d0 !important;
+  box-shadow: none !important;
+}
+
+#scheduleModal button[type="button"]:hover {
+  background: #e0e0e0;
+}
+
+#scheduleModal button[type="button"]::before {
+  display: none;
+}
+
+#scheduleModal > div > form > div {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .container {
+    max-width: 100%;
+  }
+
+  .header,
+  .nav-section,
+  .actions-section {
+    padding: 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-links {
+    grid-template-columns: 1fr;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+
+  button,
+  .status-button,
+  .primary-button {
+    width: 100%;
+  }
+
+  code {
+    font-size: 11px;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #scheduleModal > div {
+    width: calc(100% - 40px);
+    max-width: 320px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+     html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
       }
-
-      .header,
-      .nav-section,
-      .actions-section {
-        padding: 20px;
-      }
-
-      .header h1 {
-        font-size: 24px;
-      }
-
-      .meta-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .nav-links {
-        grid-template-columns: 1fr;
-      }
-
-      .button-group {
-        flex-direction: column;
-      }
-
-      .status-button,
-      .primary-button {
-        width: 100%;
-      }
-
-      code {
-        font-size: 11px;
-        max-width: 180px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .back-nav {
-        flex-direction: column;
-      }
-
-      .back-link {
-        justify-content: center;
-      }
-    }
-
-    @media (min-width: 641px) and (max-width: 1024px) {
-      .container {
-        max-width: 700px;
-      }
-    }
   </style>
 </head>
 <body>
@@ -1355,7 +1597,7 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
             <button type="submit" name="status" value="${s}" class="status-button">
               ${STATUS_LABELS[s]}
             </button>
-          `
+          `,
             )
             .join("")}
         </div>
@@ -1516,7 +1758,7 @@ router.post("/:nodeId/createChild", authenticate, async (req, res) => {
       userId, // userId (from token)
       {}, // values
       {}, // goals
-      null // note
+      null, // note
     );
 
     // HTML redirect support (same pattern)
@@ -1544,7 +1786,7 @@ router.post("/:nodeId/delete", authenticate, async (req, res) => {
 
     if ("html" in req.query) {
       return res.redirect(
-        `/api/user/${userId}/deleted?token=${req.query.token ?? ""}&html`
+        `/api/user/${userId}/deleted?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -1619,7 +1861,7 @@ router.post(
       // ✅ HTML redirect support (same pattern as editStatus)
       if ("html" in req.query) {
         return res.redirect(
-          `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`
+          `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -1628,7 +1870,7 @@ router.post(
       console.error("editSchedule error:", err);
       res.status(err.status || 400).json({ error: err.message });
     }
-  }
+  },
 );
 
 router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
@@ -1653,7 +1895,7 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
     if ("html" in req.query) {
       const editHistory = contributions.filter((c) => c.type === "edit");
       const executionHistory = contributions.filter(
-        (c) => c.type === "execute"
+        (c) => c.type === "execute",
       );
 
       const editHistoryHtml = editHistory.length
@@ -1686,7 +1928,7 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
       : `<div class="empty-history-item">Empty script</div>`
   }
 </li>
-`
+`,
             )
             .join("")
         : `<li class="empty-history">No edit history yet</li>`;
@@ -1740,7 +1982,7 @@ router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
       : ""
   }
 </li>
-`
+`,
             )
             .join("")
         : `<li class="empty-history">No executions yet</li>`;
@@ -2419,7 +2661,7 @@ router.post(
       console.error("Error editing script:", err);
       return res.status(500).send("Failed to update script");
     }
-  }
+  },
 );
 
 router.post(
@@ -2447,11 +2689,11 @@ router.post(
 
       return res.redirect(
         `/api/${nodeId}/script/${scriptId}?${qs}&error=${encodeURIComponent(
-          err.message
-        )}`
+          err.message,
+        )}`,
       );
     }
-  }
+  },
 );
 
 router.get("/:nodeId/scripts/help", urlAuth, async (req, res) => {
@@ -2985,7 +3227,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, node.prestige + 1);`,
               <td><code>${item.property}</code></td>
               <td>${item.description}</td>
             </tr>
-          `
+          `,
             )
             .join("")}
         </tbody>
@@ -3018,7 +3260,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, node.prestige + 1);`,
                 item.example ? `: <code>${item.example}</code>` : ""
               }</td>
             </tr>
-          `
+          `,
             )
             .join("")}
         </tbody>
@@ -3046,7 +3288,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, node.prestige + 1);`,
                 item.example ? `: <code>${item.example}</code>` : ""
               }</td>
             </tr>
-          `
+          `,
             )
             .join("")}
         </tbody>
@@ -3076,7 +3318,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, node.prestige + 1);`,
               <td><code>${fn.name}</code></td>
               <td>${fn.description}</td>
             </tr>
-          `
+          `,
             )
             .join("")}
         </tbody>
