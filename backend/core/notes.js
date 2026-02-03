@@ -3,6 +3,17 @@ import fs from "fs";
 import Note from "../db/models/notes.js";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
+import Book from "../db/models/book.js";
+
+import crypto from "crypto";
+
+function hashBookSettings(settings) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(settings))
+    .digest("hex");
+}
+
 import { logContribution } from "../db/utils.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
@@ -554,7 +565,6 @@ async function getBook({ nodeId, options = {} }) {
     notesByNode,
     flags
   );
-
   return {
     message: "Book generated successfully",
     book,
@@ -626,6 +636,55 @@ function buildBookTree(node, nodeMap, notesByNode, flags = {}) {
     children: filteredChildren,
   };
 }
+function normalizeBookSettings(raw = {}) {
+  return {
+    latestVersionOnly: !!raw.latestVersionOnly,
+    lastNoteOnly: !!raw.lastNoteOnly,
+    leafNotesOnly: !!raw.leafNotesOnly,
+    filesOnly: !!raw.filesOnly,
+    textOnly: !!raw.textOnly,
+
+    active: !!raw.active,
+    completed: !!raw.completed,
+    true: !!raw["true"],
+  };
+}
+async function generateBook({ nodeId, settings, userId }) {
+  if (!nodeId) {
+    throw new Error("Missing nodeId");
+  }
+  // 1. normalize + hash
+  const normalizedSettings = normalizeBookSettings(settings);
+  const settingsHash = hashBookSettings(normalizedSettings);
+
+  // 2. check for existing book
+  let book = await Book.findOne({
+    nodeId,
+    settingsHash,
+  });
+
+  if (book) {
+    return {
+      shareId: book.shareId,
+    };
+  }
+
+  // 3. create new book
+  const shareId = crypto.randomBytes(8).toString("hex");
+
+  book = await Book.create({
+    nodeId,
+    settings: normalizedSettings,
+    settingsHash,
+    shareId,
+    createdBy: userId,
+  });
+
+  return {
+    reused: false,
+    shareId,
+  };
+}
 
 export {
   createNote,
@@ -635,4 +694,5 @@ export {
   getAllTagsForUser,
   searchNotesByUser,
   getBook,
+  generateBook,
 };
