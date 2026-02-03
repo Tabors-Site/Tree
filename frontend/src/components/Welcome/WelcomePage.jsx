@@ -3,6 +3,7 @@ import Cookies from "js-cookie";
 import "./WelcomePage.css";
 
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
+const URL = `https://tree.tabors.site`;
 
 const WelcomePage = () => {
   useEffect(() => {
@@ -44,7 +45,7 @@ const WelcomePage = () => {
         return;
       }
 
-      window.location.href = `${apiUrl}/user/${data.userId}?token=${data.HTMLShareToken}&html`;
+      window.location.href = `${URL}/app`;
     } catch (err) {
       console.error("Open App error:", err);
       window.location.href = "/login";

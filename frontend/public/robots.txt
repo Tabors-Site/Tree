@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tree.tabors.site/sitemap.xml

@@ -42,6 +42,11 @@ export default async function authenticate(req, res, next) {
         : null) ||
       req.body?.apiKey;
 
+    if (!apiKey) {
+      return res.status(401).json({
+        message: "Missing credentials",
+      });
+    }
     // Find users with active keys only
     const users = await User.find({ "apiKeys.revoked": false });
 

@@ -126,22 +126,30 @@ export function renderLoginPage(req, res) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1", viewport-fit=cover />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <meta name="theme-color" content="#736fe6">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Tree — Login</title>
+  <title>Tree - Login</title>
 
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
   
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -150,6 +158,7 @@ export function renderLoginPage(req, res) {
       position: relative;
       overflow-x: hidden;
       overflow-y: auto;
+      touch-action: manipulation;
     }
 
     /* Animated background elements */
@@ -158,7 +167,7 @@ export function renderLoginPage(req, res) {
       content: '';
       position: fixed;
       border-radius: 50%;
-      opacity: 0.1;
+      opacity: 0.08;
       animation: float 20s infinite ease-in-out;
       pointer-events: none;
     }
@@ -180,7 +189,11 @@ export function renderLoginPage(req, res) {
       left: -100px;
       animation-delay: -10s;
     }
-
+      html, body {
+        background: #736fe6;
+        margin: 0;
+        padding: 0;
+      }
     @keyframes float {
       0%, 100% {
         transform: translateY(0) rotate(0deg);
@@ -188,19 +201,6 @@ export function renderLoginPage(req, res) {
       50% {
         transform: translateY(-30px) rotate(5deg);
       }
-    }
- html, body {
-        background: #736fe6;
-        margin: 0;
-        padding: 0;
-      }
-    /* Brand Header */
-    .brand-header {
-      position: relative;
-      z-index: 1;
-      margin-bottom: 32px;
-      text-align: center;
-      animation: fadeInDown 0.8s ease-out;
     }
 
     @keyframes fadeInDown {
@@ -214,52 +214,6 @@ export function renderLoginPage(req, res) {
       }
     }
 
-    .brand-logo {
-      font-size: 80px;
-      margin-bottom: 16px;
-      display: inline-block;
-      animation: grow 2s infinite ease-in-out;
-    }
-
-    @keyframes grow {
-      0%, 100% {
-        transform: scale(1);
-      }
-      50% {
-        transform: scale(1.1);
-      }
-    }
-
-    .brand-title {
-      font-size: 56px;
-      font-weight: 800;
-      color: white;
-      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-      letter-spacing: -1px;
-      margin-bottom: 8px;
-    }
-
-    .brand-subtitle {
-      font-size: 18px;
-      color: rgba(255, 255, 255, 0.9);
-      font-weight: 500;
-    }
-
-    /* Login Container */
-    .login-container {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(20px);
-      padding: 48px;
-      border-radius: 24px;
-      width: 100%;
-      max-width: 460px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-      text-align: center;
-      position: relative;
-      z-index: 1;
-      animation: slideUp 0.6s ease-out;
-    }
-
     @keyframes slideUp {
       from {
         opacity: 0;
@@ -271,34 +225,87 @@ export function renderLoginPage(req, res) {
       }
     }
 
-    .login-container::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
+    /* Brand Header */
+    .brand-header {
+      position: relative;
+      z-index: 1;
+      margin-bottom: 32px;
+      text-align: center;
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    .brand-logo {
+      font-size: 80px;
+      margin-bottom: 16px;
+      display: inline-block;
+      filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.2));
+      animation: fadeInDown 0.5s ease-out both, grow 4.5s ease-in-out infinite;
+    }
+
+    @keyframes grow {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.06);
+      }
+    }
+
+    .brand-title {
+      font-size: 56px;
+      font-weight: 600;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -1.5px;
+      margin-bottom: 8px;
+    }
+
+    .brand-subtitle {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.85);
+      font-weight: 400;
+      letter-spacing: 0.2px;
+    }
+
+    /* Login Container - Glass */
+    .login-container {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      padding: 48px;
+      border-radius: 16px;
       width: 100%;
-      height: 6px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-      border-radius: 24px 24px 0 0;
+      max-width: 460px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      animation: slideUp 0.6s ease-out 0.2s both;
     }
 
     h2 {
       font-size: 32px;
-      font-weight: 700;
-      color: #1a1a1a;
+      font-weight: 600;
+      color: white;
       margin-bottom: 12px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.5px;
     }
 
     .oauth-hint {
       font-size: 15px;
-      color: #666;
+      color: rgba(255, 255, 255, 0.9);
       margin-bottom: 32px;
       line-height: 1.6;
       padding: 16px;
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
       border-radius: 12px;
-      border-left: 4px solid #667eea;
+      border-left: 4px solid rgba(255, 255, 255, 0.5);
       text-align: left;
+      font-weight: 400;
     }
 
     .oauth-hint::before {
@@ -320,50 +327,94 @@ export function renderLoginPage(req, res) {
       display: block;
       font-size: 14px;
       font-weight: 600;
-      color: #667eea;
+      color: white;
       margin-bottom: 8px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.2px;
     }
 
     input {
       width: 100%;
       padding: 14px 18px;
       border-radius: 12px;
-      border: 2px solid #e9ecef;
-      font-size: 15px;
-      transition: all 0.2s;
-      background: white;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      font-size: 16px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
       font-family: inherit;
+      color: white;
+      font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      touch-action: manipulation;
     }
 
     input:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+      border-color: rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(25px) saturate(160%);
+      -webkit-backdrop-filter: blur(25px) saturate(160%);
+      box-shadow: 
+        0 0 0 4px rgba(255, 255, 255, 0.15),
+        0 8px 30px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px);
     }
 
     input::placeholder {
-      color: #aaa;
+      color: rgba(255, 255, 255, 0.5);
+      font-weight: 400;
     }
 
+    /* Glass Button */
     button {
       width: 100%;
       padding: 16px;
       margin-top: 8px;
-      border-radius: 12px;
-      border: none;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
       color: white;
       font-size: 16px;
-      font-weight: 700;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
       font-family: inherit;
+      letter-spacing: -0.2px;
+      position: relative;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     button:hover {
+      background: rgba(255, 255, 255, 0.35);
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
     }
 
     button:active {
@@ -371,15 +422,16 @@ export function renderLoginPage(req, res) {
     }
 
     .error-message {
-      color: #ef4444;
+      color: white;
       margin-top: 16px;
       margin-bottom: 16px;
-      padding: 12px;
-      background: rgba(239, 68, 68, 0.1);
-      border-radius: 8px;
+      padding: 12px 16px;
+      background: rgba(239, 68, 68, 0.3);
+      backdrop-filter: blur(10px);
+      border-radius: 10px;
       font-size: 14px;
       font-weight: 600;
-      border-left: 3px solid #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.4);
       text-align: left;
     }
 
@@ -394,15 +446,15 @@ export function renderLoginPage(req, res) {
       gap: 8px;
       margin-top: 24px;
       padding-top: 24px;
-      border-top: 2px solid #e9ecef;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .back-btn,
     .secondary-btn {
       width: 100%;
-      background: transparent;
-      color: #667eea;
-      box-shadow: none;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
       font-weight: 600;
       padding: 12px;
       font-size: 15px;
@@ -410,9 +462,7 @@ export function renderLoginPage(req, res) {
 
     .back-btn:hover,
     .secondary-btn:hover {
-      background: rgba(102, 126, 234, 0.1);
-      transform: none;
-      box-shadow: none;
+      background: rgba(255, 255, 255, 0.25);
     }
 
     .secondary-btn {
@@ -431,12 +481,12 @@ export function renderLoginPage(req, res) {
     .divider::after {
       content: '';
       flex: 1;
-      border-bottom: 1px solid #e9ecef;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .divider span {
       padding: 0 16px;
-      color: #999;
+      color: rgba(255, 255, 255, 0.8);
       font-size: 13px;
       font-weight: 600;
       text-transform: uppercase;
@@ -488,6 +538,7 @@ export function renderLoginPage(req, res) {
 
       .brand-title {
         font-size: 42px;
+        letter-spacing: -1px;
       }
 
       .brand-subtitle {
@@ -500,6 +551,10 @@ export function renderLoginPage(req, res) {
 
       h2 {
         font-size: 28px;
+      }
+
+      input {
+        font-size: 16px;
       }
     }
 
@@ -536,6 +591,8 @@ export function renderLoginPage(req, res) {
           placeholder="Enter your username" 
           required 
           autocomplete="username"
+          autocapitalize="off"
+          autocorrect="off"
         />
       </div>
 
@@ -619,19 +676,15 @@ export function renderLoginPage(req, res) {
           return;
         }
 
-  if (redirectAfterLogin) {
-  window.location.href = redirectAfterLogin;
-} else if (data.htmlShareToken) {
-  window.location.href =
-    "/api/user/" +
-    data.userId +
-    "?html&token=" +
-    encodeURIComponent(data.htmlShareToken);
-} else {
-  window.location.href =
-    "/api/user/" + data.userId + "/sharetoken?html";
-}
-
+        if (redirectAfterLogin) {
+          window.location.href = redirectAfterLogin;
+        } else if (data.htmlShareToken) {
+          window.location.href =
+            "/app"
+        } else {
+          window.location.href =
+            "/api/user/" + data.userId + "/sharetoken?html";
+        }
 
       } catch (err) {
         console.error(err);
@@ -654,22 +707,30 @@ export function renderRegisterPage(req, res) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#667eea">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#736fe6">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Tree — Register</title>
+  <title>Tree - Register</title>
 
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -678,6 +739,7 @@ export function renderRegisterPage(req, res) {
       position: relative;
       overflow-x: hidden;
       overflow-y: auto;
+      touch-action: manipulation;
     }
 
     /* Animated background elements */
@@ -686,7 +748,7 @@ export function renderRegisterPage(req, res) {
       content: '';
       position: fixed;
       border-radius: 50%;
-      opacity: 0.1;
+      opacity: 0.08;
       animation: float 20s infinite ease-in-out;
       pointer-events: none;
     }
@@ -708,11 +770,12 @@ export function renderRegisterPage(req, res) {
       left: -100px;
       animation-delay: -10s;
     }
- html, body {
+            html, body {
         background: #736fe6;
         margin: 0;
         padding: 0;
       }
+
     @keyframes float {
       0%, 100% {
         transform: translateY(0) rotate(0deg);
@@ -720,15 +783,6 @@ export function renderRegisterPage(req, res) {
       50% {
         transform: translateY(-30px) rotate(5deg);
       }
-    }
-
-    /* Brand Header */
-    .brand-header {
-      position: relative;
-      z-index: 1;
-      margin-bottom: 32px;
-      text-align: center;
-      animation: fadeInDown 0.8s ease-out;
     }
 
     @keyframes fadeInDown {
@@ -742,52 +796,6 @@ export function renderRegisterPage(req, res) {
       }
     }
 
-    .brand-logo {
-      font-size: 80px;
-      margin-bottom: 16px;
-      display: inline-block;
-      animation: grow 2s infinite ease-in-out;
-    }
-
-    @keyframes grow {
-      0%, 100% {
-        transform: scale(1);
-      }
-      50% {
-        transform: scale(1.1);
-      }
-    }
-
-    .brand-title {
-      font-size: 56px;
-      font-weight: 800;
-      color: white;
-      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-      letter-spacing: -1px;
-      margin-bottom: 8px;
-    }
-
-    .brand-subtitle {
-      font-size: 18px;
-      color: rgba(255, 255, 255, 0.9);
-      font-weight: 500;
-    }
-
-    /* Register Container */
-    .register-container {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(20px);
-      padding: 48px;
-      border-radius: 24px;
-      width: 100%;
-      max-width: 460px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-      text-align: center;
-      position: relative;
-      z-index: 1;
-      animation: slideUp 0.6s ease-out;
-    }
-
     @keyframes slideUp {
       from {
         opacity: 0;
@@ -799,29 +807,81 @@ export function renderRegisterPage(req, res) {
       }
     }
 
-    .register-container::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
+    /* Brand Header */
+    .brand-header {
+      position: relative;
+      z-index: 1;
+      margin-bottom: 32px;
+      text-align: center;
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    .brand-logo {
+      font-size: 80px;
+      margin-bottom: 16px;
+      display: inline-block;
+      filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.2));
+      animation: fadeInDown 0.5s ease-out both, grow 4.5s ease-in-out infinite;
+    }
+
+    @keyframes grow {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.06);
+      }
+    }
+
+    .brand-title {
+      font-size: 56px;
+      font-weight: 600;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -1.5px;
+      margin-bottom: 8px;
+    }
+
+    .brand-subtitle {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.85);
+      font-weight: 400;
+      letter-spacing: 0.2px;
+    }
+
+    /* Register Container - Glass */
+    .register-container {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      padding: 48px;
+      border-radius: 16px;
       width: 100%;
-      height: 6px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-      border-radius: 24px 24px 0 0;
+      max-width: 460px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      animation: slideUp 0.6s ease-out 0.2s both;
     }
 
     h2 {
       font-size: 32px;
-      font-weight: 700;
-      color: #1a1a1a;
+      font-weight: 600;
+      color: white;
       margin-bottom: 8px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.5px;
     }
 
     .subtitle {
       font-size: 15px;
-      color: #666;
+      color: rgba(255, 255, 255, 0.85);
       margin-bottom: 32px;
       line-height: 1.5;
+      font-weight: 400;
     }
 
     /* Form */
@@ -838,66 +898,114 @@ export function renderRegisterPage(req, res) {
       display: block;
       font-size: 14px;
       font-weight: 600;
-      color: #667eea;
+      color: white;
       margin-bottom: 8px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.2px;
     }
 
     input {
       width: 100%;
       padding: 14px 18px;
       border-radius: 12px;
-      border: 2px solid #e9ecef;
-      font-size: 15px;
-      transition: all 0.2s;
-      background: white;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      font-size: 16px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
       font-family: inherit;
+      color: white;
+      font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      touch-action: manipulation;
     }
 
     input:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+      border-color: rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(25px) saturate(160%);
+      -webkit-backdrop-filter: blur(25px) saturate(160%);
+      box-shadow: 
+        0 0 0 4px rgba(255, 255, 255, 0.15),
+        0 8px 30px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px);
     }
 
     input::placeholder {
-      color: #aaa;
+      color: rgba(255, 255, 255, 0.5);
+      font-weight: 400;
     }
 
     input.error {
-      border-color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.6);
+      background: rgba(239, 68, 68, 0.1);
     }
 
     input.error:focus {
-      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+      box-shadow: 
+        0 0 0 4px rgba(239, 68, 68, 0.2),
+        0 8px 30px rgba(239, 68, 68, 0.2);
     }
 
     /* Password strength indicator */
     .password-hint {
       font-size: 12px;
-      color: #888;
+      color: rgba(255, 255, 255, 0.7);
       margin-top: 6px;
       text-align: left;
+      font-weight: 400;
     }
 
+    /* Glass Button */
     button {
       width: 100%;
       padding: 16px;
       margin-top: 8px;
-      border-radius: 12px;
-      border: none;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
       color: white;
       font-size: 16px;
-      font-weight: 700;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
       font-family: inherit;
+      letter-spacing: -0.2px;
+      position: relative;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     button:hover {
+      background: rgba(255, 255, 255, 0.35);
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
     }
 
     button:active {
@@ -908,8 +1016,8 @@ export function renderRegisterPage(req, res) {
     .message {
       margin-top: 16px;
       margin-bottom: 16px;
-      padding: 12px;
-      border-radius: 8px;
+      padding: 12px 16px;
+      border-radius: 10px;
       font-size: 14px;
       font-weight: 600;
       text-align: left;
@@ -917,15 +1025,17 @@ export function renderRegisterPage(req, res) {
     }
 
     .error-message {
-      color: #ef4444;
-      background: rgba(239, 68, 68, 0.1);
-      border-left: 3px solid #ef4444;
+      color: white;
+      background: rgba(239, 68, 68, 0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(239, 68, 68, 0.4);
     }
 
     .success-message {
-      color: #16a34a;
-      background: rgba(34, 197, 94, 0.1);
-      border-left: 3px solid #16a34a;
+      color: white;
+      background: rgba(16, 185, 129, 0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(16, 185, 129, 0.4);
     }
 
     .message.show {
@@ -939,14 +1049,14 @@ export function renderRegisterPage(req, res) {
       gap: 8px;
       margin-top: 24px;
       padding-top: 24px;
-      border-top: 2px solid #e9ecef;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .back-btn {
       width: 100%;
-      background: transparent;
-      color: #667eea;
-      box-shadow: none;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
       font-weight: 600;
       padding: 12px;
       font-size: 15px;
@@ -954,9 +1064,7 @@ export function renderRegisterPage(req, res) {
     }
 
     .back-btn:hover {
-      background: rgba(102, 126, 234, 0.1);
-      transform: none;
-      box-shadow: none;
+      background: rgba(255, 255, 255, 0.25);
     }
 
     /* Loading State */
@@ -1004,6 +1112,7 @@ export function renderRegisterPage(req, res) {
 
       .brand-title {
         font-size: 42px;
+        letter-spacing: -1px;
       }
 
       .brand-subtitle {
@@ -1016,6 +1125,10 @@ export function renderRegisterPage(req, res) {
 
       h2 {
         font-size: 28px;
+      }
+
+      input {
+        font-size: 16px;
       }
     }
 
@@ -1049,6 +1162,8 @@ export function renderRegisterPage(req, res) {
           placeholder="Choose a username"
           required 
           autocomplete="username"
+          autocapitalize="off"
+          autocorrect="off"
         />
       </div>
 
@@ -1060,6 +1175,7 @@ export function renderRegisterPage(req, res) {
           placeholder="Enter your email"
           required 
           autocomplete="email"
+          autocapitalize="off"
         />
       </div>
 
@@ -1167,7 +1283,7 @@ export function renderRegisterPage(req, res) {
         btn.classList.remove("loading");
         btn.disabled = false;
 
-        // Redirect to login after 3 seconds
+        // Redirect to login after 7 seconds
         setTimeout(() => {
           window.location.href = "/login";
         }, 7000);
@@ -1207,7 +1323,7 @@ export function renderForgotPasswordPage(req, res) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Tree — Reset Password</title>
+  <title>Tree - Reset Password</title>
 
   <style>
     * {
