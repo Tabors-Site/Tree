@@ -113,6 +113,10 @@ async function getTree(req, res) {
     res.status(500).json({ message: "Server error" });
   }
 }
+async function getNodeName(nodeId) {
+  const doc = await Node.findById(nodeId, "name").lean();
+  return doc?.name || null;
+}
 
 async function getNodeForAi(nodeId) {
   if (!nodeId) throw new Error("Node ID is required");
@@ -121,8 +125,10 @@ async function getNodeForAi(nodeId) {
     const node = await Node.findById(nodeId).lean().exec();
     if (!node) throw new Error(`Node ${nodeId} not found`);
 
+    // ----- versions + notes -----
     if (node.versions && node.versions.length > 0) {
       const versionsWithNotes = [];
+
       for (let i = 0; i < node.versions.length; i++) {
         const version = node.versions[i];
 
@@ -135,30 +141,54 @@ async function getNodeForAi(nodeId) {
           .lean()
           .exec();
 
-        const noteContents = notes.map((n) => ({
-          username: n.userId?.username || "Unknown",
-          content: n.content,
-        }));
-
         versionsWithNotes.push({
           ...version,
-          notes: noteContents,
+          notes: notes.map((n) => ({
+            username: n.userId?.username || "Unknown",
+            content: n.content,
+          })),
         });
       }
+
       node.versions = versionsWithNotes;
     }
+
+    // ----- parent info -----
+    const parentNodeId = node.parent ? node.parent.toString() : null;
+    const parentName = parentNodeId
+      ? await getNodeName(parentNodeId)
+      : "None. Root";
+
+    // ----- children info -----
+    const children = Array.isArray(node.children)
+      ? await Promise.all(
+          node.children.map(async (childId) => ({
+            id: childId.toString(),
+            name: (await getNodeName(childId)) || "Unknown",
+          }))
+        )
+      : [];
 
     return {
       id: node._id.toString(),
       name: node.name,
+
+      parentNodeId,
+      parentName,
+
+      children,
+
       versions: node.versions || [],
       scripts: node.scripts || [],
+      message: "Use get-tree for overall structure",
     };
   } catch (error) {
     console.error("Error fetching AI node:", error);
     throw new Error("Server error while fetching node");
   }
 }
+
+export default getNodeForAi;
 
 async function getTreeForAi(rootId, filter = null) {
   if (!rootId) {
@@ -222,7 +252,11 @@ async function getTreeForAi(rootId, filter = null) {
     };
 
     const tree = await simplifyNode(filtered);
-    return JSON.stringify(tree);
+    return JSON.stringify({
+      message:
+        "Based on the structure, use get-node to retrieve individual node values and notes.",
+      tree,
+    });
   } catch (error) {
     console.error("Error fetching AI tree:", error);
     throw new Error("Server error while fetching tree for AI");
