@@ -5,7 +5,7 @@ import { fileTypeFromBuffer } from "file-type";
 import User from "../db/models/user.js";
 import UnderstandingRun from "../db/models/understandingRun.js";
 
-import { emitNavigate } from "../routesURL/ws.js";
+import { emitNavigate } from "../ws/websocket.js";
 
 import path from "path";
 import fs from "fs";
@@ -422,11 +422,11 @@ RULES
   );
 
   server.tool(
-    "scripting-orchestrator",
-    "Entry point for node script workflows. Establishes intent before any script actions.",
+    "javascript-scripting-orchestrator",
+    "Entry point for javascript node workflows. Establishes intent before any script actions.",
     {
       nodeId: z.string().describe("Node ID where scripts are stored."),
-      userId: z.string().describe("User ID performing the operation."),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
 
     {
@@ -474,7 +474,7 @@ RULES
       rootId: z
         .string()
         .describe("The ID of the root or starting node of the tree."),
-      userId: z.string().describe("The user performing the operation."),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: true,
@@ -517,7 +517,7 @@ RULES
     "Entry point for guided 'be mode' traversal of a node branch.",
     {
       nodeId: z.string().describe("Root node ID for the guided branch."),
-      userId: z.string().describe("User ID performing the operation."),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: true,
@@ -819,7 +819,7 @@ RULES
         .describe(
           "The name of the script to execute. Found inside of get-node"
         ),
-      userId: z.string().describe("The ID of the user executing the script."),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1001,7 +1001,7 @@ RULES
     "Creates a new text note for a node. Please confirm exact wording of content and do not add anything unless asked",
     {
       content: z.string().describe("The text content of the note."),
-      userId: z.string().describe("The ID of the user creating the note."),
+      userId: z.string().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("The ID of the node the note belongs to."),
       prestige: z.number().describe("The prestige version of the node"),
     },
@@ -1089,7 +1089,7 @@ RULES
     "get-unsearched-notes-by-user",
     "Fetches all notes written by a specific user (optionally limited to the most recent N). Recommend to use limit 10 or less. Use get-searched-notes-by-user... if looking for specifics.",
     {
-      userId: z.string().describe("The ID of the user whose notes to fetch."),
+      userId: z.string().describe("Injected by server. Ignore."),
       limit: z
         .number()
         .optional()
@@ -1138,7 +1138,7 @@ RULES
     "get-all-tags-for-user",
     "Fetches all notes where a specific user was tagged (optionally limited to the most recent N). May be referenced as mail",
     {
-      userId: z.string().describe("The ID of the user who was tagged."),
+      userId: z.string().describe("Injected by server. Ignore."),
       limit: z
         .number()
         .optional()
@@ -1324,7 +1324,7 @@ RULES
         .optional()
         .describe("Time interval before reeschedule on prestife."),
       parentNodeID: z.string().describe("Parent node ID ."),
-      userId: z.string().describe("The ID of the user creating the node."),
+      userId: z.string().describe("Injected by server. Ignore."),
       values: z
         .record(z.number())
         .default({})
@@ -1434,7 +1434,7 @@ RULES
         .nullable()
         .optional()
         .describe("Parent node ID for the root of this subtree."),
-      userId: z.string().describe("ID of the user creating the nodes."),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1480,7 +1480,7 @@ RULES
     {
       nodeId: z.string().describe("The ID of the node being renamed."),
       newName: z.string().describe("The new name to assign to the node."),
-      userId: z.string().describe("The ID of the user performing the edit."),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1698,7 +1698,7 @@ RULES
     "get-searched-notes-by-user",
     "Search text notes by a user based on text matching.",
     {
-      userId: z.string().describe("User whose notes should be searched."),
+      userId: z.string().describe("Injected by server. Ignore."),
       query: z.string().describe("Search query string."),
       limit: z
         .number()
@@ -1741,7 +1741,7 @@ RULES
     "get-raw-ideas-by-user",
     "Fetches raw ideas (inbox) for a user. Read-only.",
     {
-      userId: z.string().describe("User whose raw ideas to fetch."),
+      userId: z.string().describe("Injected by server. Ignore."),
       limit: z
         .number()
         .optional()
@@ -1793,7 +1793,7 @@ RULES
     "Converts a raw idea into a note on a specific node/version.",
     {
       rawIdeaId: z.string().describe("ID of the raw idea to place."),
-      userId: z.string().describe("User performing the action."),
+      userId: z.string().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("Target node ID."),
     },
     {
@@ -1833,13 +1833,9 @@ RULES
   );
 
   server.tool(
-    "get-root-nodes-by-user",
-    "Fetches all root nodes owned by a user. READ-ONLY.",
-    {
-      userId: z
-        .string()
-        .describe("The ID of the user whose root nodes to fetch."),
-    },
+    "get-root-nodes",
+    "Fetches all root nodes (roots, trees) owned by a user. READ-ONLY.",
+    { userId: z.string().describe("Injected by server. Ignore.") },
     {
       readOnlyHint: true,
       destructiveHint: false,
@@ -2212,7 +2208,8 @@ Return ONLY the summary text. The system will handle structure.
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: false,
-      openWorldHint: false,    },
+      openWorldHint: false,
+    },
     async ({
       mode,
       understandingRunId,
@@ -2251,20 +2248,20 @@ Return ONLY the summary text. The system will handle structure.
   );
 
   server.tool(
-  "understanding-finisher",
-  "Instructs the LLM to repeatedly call understanding-next and understanding-capture until complete.",
-  {
-    understandingRunId: z.string().describe("Understanding run to finish."),
-    rootNodeId: z.string().describe("Root node of this understanding run."),
-  },
-  {
-    readOnlyHint: true,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-  },
-  async ({ understandingRunId, rootNodeId }) => {
-    const instructions = `
+    "understanding-finisher",
+    "Instructs the LLM to repeatedly call understanding-next and understanding-capture until complete.",
+    {
+      understandingRunId: z.string().describe("Understanding run to finish."),
+      rootNodeId: z.string().describe("Root node of this understanding run."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ understandingRunId, rootNodeId }) => {
+      const instructions = `
 You are now in **Understanding Finisher Mode**.
 
 GOAL  
@@ -2310,17 +2307,16 @@ ABSOLUTE RULES:
 Continue until understanding-next explicitly returns done = true.
 `.trim();
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: instructions,
-        },
-      ],
-    };
-  }
-);
-
+      return {
+        content: [
+          {
+            type: "text",
+            text: instructions,
+          },
+        ],
+      };
+    }
+  );
 
   return server;
 }

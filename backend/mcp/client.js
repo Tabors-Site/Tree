@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import dotenv from "dotenv";
-import { emitToUserAtRoot } from "../ws/websocket.js";
+//import { emitToUserAtRoot } from "../ws/websocket.js";
 
 import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
@@ -71,7 +71,7 @@ export async function connectToMCP(serverUrl, rootId, username) {
   const transport = new StreamableHTTPClientTransport(serverUrl);
   const client = new Client(
     { name: `treebuilder-client-${key}`, version: "1.0.0" },
-    { capabilities: { sampling: {} } }
+    { capabilities: { sampling: {} } },
   );
 
   await client.connect(transport);
@@ -257,7 +257,7 @@ userId = ${userId}
     while (keepLooping) {
       iteration++;
       console.log(
-        `\n🌀 [LOOP ${iteration}] Sending conversation (${conversation.length} messages)`
+        `\n🌀 [LOOP ${iteration}] Sending conversation (${conversation.length} messages)`,
       );
       console.log(
         conversation
@@ -274,7 +274,7 @@ userId = ${userId}
             }
             return `${i}. [${m.role}] ${summary}`;
           })
-          .join("\n")
+          .join("\n"),
       );
 
       response = await openai.chat.completions.create({
