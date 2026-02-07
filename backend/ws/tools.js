@@ -1,0 +1,525 @@
+// ws/tools.js
+// Complete tool catalog - modes reference these by name
+
+const TOOL_DEFS = {
+  // ── READ ──────────────────────────────────────────────────────────────
+  "get-tree": {
+    type: "function",
+    function: {
+      name: "get-tree",
+      description:
+        "Fetch a tree's structure. Use filters to show active/trimmed/completed nodes.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: {
+            type: "string",
+            description: "Root node ID to fetch tree from",
+          },
+          filters: {
+            type: "object",
+            properties: {
+              active: { type: "boolean" },
+              trimmed: { type: "boolean" },
+              completed: { type: "boolean" },
+            },
+            description: "Status filters. Default shows active and completed.",
+          },
+        },
+        required: ["nodeId"],
+      },
+    },
+  },
+
+  "get-node": {
+    type: "function",
+    function: {
+      name: "get-node",
+      description: "Fetch detailed information for a specific node.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string", description: "The node ID to fetch" },
+        },
+        required: ["nodeId"],
+      },
+    },
+  },
+
+  "get-node-notes": {
+    type: "function",
+    function: {
+      name: "get-node-notes",
+      description: "Get notes for a node at a specific prestige version.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          prestige: {
+            type: "number",
+            description: "Version number (0 = first)",
+          },
+          limit: { type: "number", description: "Max notes to return" },
+          startDate: { type: "string", description: "ISO date filter start" },
+          endDate: { type: "string", description: "ISO date filter end" },
+        },
+        required: ["nodeId", "prestige"],
+      },
+    },
+  },
+
+  "get-node-contributions": {
+    type: "function",
+    function: {
+      name: "get-node-contributions",
+      description: "Get contribution history for a node version.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          version: { type: "number" },
+          limit: { type: "number" },
+          startDate: { type: "string" },
+          endDate: { type: "string" },
+        },
+        required: ["nodeId", "version"],
+      },
+    },
+  },
+
+  "get-unsearched-notes-by-user": {
+    type: "function",
+    function: {
+      name: "get-unsearched-notes-by-user",
+      description: "Get recent notes by the user (limit 20 max).",
+      parameters: {
+        type: "object",
+        properties: {
+          userId: { type: "string" },
+          limit: { type: "number" },
+          startDate: { type: "string" },
+          endDate: { type: "string" },
+        },
+        required: ["userId"],
+      },
+    },
+  },
+
+  "get-searched-notes-by-user": {
+    type: "function",
+    function: {
+      name: "get-searched-notes-by-user",
+      description: "Search user's notes by text content.",
+      parameters: {
+        type: "object",
+        properties: {
+          userId: { type: "string" },
+          query: { type: "string", description: "Search query" },
+          limit: { type: "number" },
+          startDate: { type: "string" },
+          endDate: { type: "string" },
+        },
+        required: ["userId", "query"],
+      },
+    },
+  },
+
+  "get-all-tags-for-user": {
+    type: "function",
+    function: {
+      name: "get-all-tags-for-user",
+      description: "Get notes where user was tagged (mail).",
+      parameters: {
+        type: "object",
+        properties: {
+          userId: { type: "string" },
+          limit: { type: "number" },
+          startDate: { type: "string" },
+          endDate: { type: "string" },
+        },
+        required: ["userId"],
+      },
+    },
+  },
+
+  "get-contributions-by-user": {
+    type: "function",
+    function: {
+      name: "get-contributions-by-user",
+      description: "Get user's contribution history.",
+      parameters: {
+        type: "object",
+        properties: {
+          userId: { type: "string" },
+          limit: { type: "number" },
+          startDate: { type: "string" },
+          endDate: { type: "string" },
+        },
+        required: ["userId"],
+      },
+    },
+  },
+
+  "get-raw-ideas-by-user": {
+    type: "function",
+    function: {
+      name: "get-raw-ideas-by-user",
+      description: "Get user's raw ideas inbox.",
+      parameters: {
+        type: "object",
+        properties: {
+          userId: { type: "string" },
+          limit: { type: "number" },
+          startDate: { type: "string" },
+          endDate: { type: "string" },
+        },
+        required: ["userId"],
+      },
+    },
+  },
+
+  "get-root-nodes": {
+    type: "function",
+    function: {
+      name: "get-root-nodes",
+      description: "Get all root trees owned by user.",
+      parameters: {
+        type: "object",
+        properties: {
+          userId: { type: "string" },
+        },
+        required: ["userId"],
+      },
+    },
+  },
+
+  // ── WRITE ─────────────────────────────────────────────────────────────
+  "edit-node-version-value": {
+    type: "function",
+    function: {
+      name: "edit-node-version-value",
+      description: "Set or update a numeric value on a node version.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          key: { type: "string", description: "Value key name" },
+          value: { type: "number", description: "Numeric value" },
+          prestige: { type: "number", description: "Version index" },
+          userId: { type: "string" },
+        },
+        required: ["nodeId", "key", "value", "prestige", "userId"],
+      },
+    },
+  },
+
+  "edit-node-version-goal": {
+    type: "function",
+    function: {
+      name: "edit-node-version-goal",
+      description: "Set a goal for an existing value key.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          key: { type: "string", description: "Must match existing value key" },
+          goal: { type: "number" },
+          prestige: { type: "number" },
+          userId: { type: "string" },
+        },
+        required: ["nodeId", "key", "goal", "prestige", "userId"],
+      },
+    },
+  },
+
+  "edit-node-or-branch-status": {
+    type: "function",
+    function: {
+      name: "edit-node-or-branch-status",
+      description:
+        "Change node status. Use isInherited=true to apply to children.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          status: { type: "string", enum: ["active", "trimmed", "completed"] },
+          prestige: { type: "number" },
+          isInherited: {
+            type: "boolean",
+            description: "Apply to children recursively",
+          },
+          userId: { type: "string" },
+        },
+        required: ["nodeId", "status", "prestige", "isInherited", "userId"],
+      },
+    },
+  },
+
+  "edit-node-version-schedule": {
+    type: "function",
+    function: {
+      name: "edit-node-version-schedule",
+      description: "Update schedule and reeffect time.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          prestige: { type: "number" },
+          newSchedule: { type: "string", description: "ISO 8601 date/time" },
+          reeffectTime: {
+            type: "number",
+            description: "Hours until reschedule on prestige",
+          },
+          userId: { type: "string" },
+        },
+        required: [
+          "nodeId",
+          "prestige",
+          "newSchedule",
+          "reeffectTime",
+          "userId",
+        ],
+      },
+    },
+  },
+
+  "add-node-prestige": {
+    type: "function",
+    function: {
+      name: "add-node-prestige",
+      description: "Increment prestige, creating a new version.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          userId: { type: "string" },
+        },
+        required: ["nodeId", "userId"],
+      },
+    },
+  },
+
+  "create-node-version-note": {
+    type: "function",
+    function: {
+      name: "create-node-version-note",
+      description: "Create a text note on a node. Confirm exact wording first.",
+      parameters: {
+        type: "object",
+        properties: {
+          content: { type: "string", description: "Note text content" },
+          nodeId: { type: "string" },
+          prestige: { type: "number" },
+          userId: { type: "string" },
+        },
+        required: ["content", "nodeId", "prestige", "userId"],
+      },
+    },
+  },
+
+  "delete-node-note": {
+    type: "function",
+    function: {
+      name: "delete-node-note",
+      description: "Delete a note by ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          noteId: { type: "string" },
+        },
+        required: ["noteId"],
+      },
+    },
+  },
+
+  "create-new-node": {
+    type: "function",
+    function: {
+      name: "create-new-node",
+      description: "Create a single new node.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          parentNodeID: { type: "string" },
+          userId: { type: "string" },
+          schedule: { type: "string", description: "Optional ISO date" },
+          reeffectTime: { type: "number" },
+          values: {
+            type: "object",
+            description: "Key-value pairs for numbers",
+          },
+          goals: { type: "object", description: "Key-value pairs for goals" },
+          note: { type: "string", description: "Optional initial note" },
+        },
+        required: ["name", "parentNodeID", "userId"],
+      },
+    },
+  },
+
+  "create-new-node-branch": {
+    type: "function",
+    function: {
+      name: "create-new-node-branch",
+      description: "Create a recursive tree structure.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeData: {
+            type: "object",
+            description: "Node with optional children array",
+            properties: {
+              name: { type: "string" },
+              schedule: { type: "string" },
+              reeffectTime: { type: "number" },
+              values: { type: "object" },
+              goals: { type: "object" },
+              note: { type: "string" },
+              children: { type: "array" },
+            },
+            required: ["name"],
+          },
+          parentId: { type: "string" },
+          userId: { type: "string" },
+        },
+        required: ["nodeData", "parentId", "userId"],
+      },
+    },
+  },
+
+  "edit-node-name": {
+    type: "function",
+    function: {
+      name: "edit-node-name",
+      description: "Rename a node.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          newName: { type: "string" },
+          userId: { type: "string" },
+        },
+        required: ["nodeId", "newName", "userId"],
+      },
+    },
+  },
+
+  "update-node-branch-parent-relationship": {
+    type: "function",
+    function: {
+      name: "update-node-branch-parent-relationship",
+      description: "Move a node to a new parent.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeChildId: { type: "string" },
+          nodeNewParentId: { type: "string" },
+          userId: { type: "string" },
+        },
+        required: ["nodeChildId", "nodeNewParentId", "userId"],
+      },
+    },
+  },
+
+  "transfer-raw-idea-to-note": {
+    type: "function",
+    function: {
+      name: "transfer-raw-idea-to-note",
+      description: "Convert a raw idea to a note on a node.",
+      parameters: {
+        type: "object",
+        properties: {
+          rawIdeaId: { type: "string" },
+          nodeId: { type: "string" },
+          userId: { type: "string" },
+        },
+        required: ["rawIdeaId", "nodeId", "userId"],
+      },
+    },
+  },
+
+  // ── UNDERSTANDING ─────────────────────────────────────────────────────
+  "understanding-create": {
+    type: "function",
+    function: {
+      name: "understanding-create",
+      description: "Create an understanding run for a tree.",
+      parameters: {
+        type: "object",
+        properties: {
+          rootNodeId: { type: "string" },
+          perspective: {
+            type: "string",
+            description: "Perspective/focus for understanding",
+          },
+        },
+        required: ["rootNodeId"],
+      },
+    },
+  },
+
+  "understanding-next": {
+    type: "function",
+    function: {
+      name: "understanding-next",
+      description: "Get next summarization payload.",
+      parameters: {
+        type: "object",
+        properties: {
+          understandingRunId: { type: "string" },
+          rootNodeId: { type: "string" },
+        },
+        required: ["understandingRunId", "rootNodeId"],
+      },
+    },
+  },
+
+  "understanding-capture": {
+    type: "function",
+    function: {
+      name: "understanding-capture",
+      description: "Save summarization result.",
+      parameters: {
+        type: "object",
+        properties: {
+          mode: { type: "string", enum: ["leaf", "merge"] },
+          understandingRunId: { type: "string" },
+          rootNodeId: { type: "string" },
+          understandingNodeId: { type: "string" },
+          currentLayer: { type: "number" },
+          encoding: { type: "string", description: "Summary text" },
+        },
+        required: ["mode", "understandingRunId", "rootNodeId", "encoding"],
+      },
+    },
+  },
+
+  "understanding-finisher": {
+    type: "function",
+    function: {
+      name: "understanding-finisher",
+      description: "Auto-complete understanding run.",
+      parameters: {
+        type: "object",
+        properties: {
+          understandingRunId: { type: "string" },
+          rootNodeId: { type: "string" },
+        },
+        required: ["understandingRunId", "rootNodeId"],
+      },
+    },
+  },
+};
+
+/**
+ * Given an array of tool name strings, return the OpenAI tool definition array.
+ */
+export function resolveTools(toolNames) {
+  return toolNames.map((name) => {
+    const def = TOOL_DEFS[name];
+    if (!def) throw new Error(`Unknown tool: ${name}`);
+    return def;
+  });
+}
+
+export default TOOL_DEFS;

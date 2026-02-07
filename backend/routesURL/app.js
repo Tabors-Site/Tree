@@ -90,6 +90,31 @@ router.get("/app", authenticateLite, async (req, res) => {
     .status-dot.connecting { background: #f59e0b; }
     @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.15); } }
 
+    /* Clear chat button in header */
+    .clear-chat-btn {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--glass-border-light);
+      border-radius: 8px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      margin-left: 8px;
+      flex-shrink: 0;
+    }
+    .clear-chat-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: var(--text-primary);
+    }
+    .clear-chat-btn:active {
+      transform: scale(0.93);
+    }
+    .clear-chat-btn svg { width: 14px; height: 14px; }
+
     .chat-messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; position: relative; z-index: 1; }
     .chat-messages::-webkit-scrollbar { width: 6px; }
     .chat-messages::-webkit-scrollbar-track { background: transparent; }
@@ -110,6 +135,41 @@ router.get("/app", authenticateLite, async (req, res) => {
     .message.user .message-content { background: linear-gradient(135deg, rgba(99, 102, 241, 0.5) 0%, rgba(139, 92, 246, 0.5) 100%); border-radius: 18px 18px 6px 18px; }
     .message.assistant .message-content { border-radius: 18px 18px 18px 6px; }
     .message.error .message-content { background: rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); }
+
+    /* Carried messages from previous mode - dimmed */
+    .message.carried { opacity: 0.4; pointer-events: none; }
+    .message.carried .message-content { border-style: dashed; }
+
+    /* Mode bar locked while AI is responding */
+    .mode-bar.locked .mode-current {
+      opacity: 0.4;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+    .mobile-mode-btn.locked {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    /* Stop/cancel button - appears while sending */
+    .stop-btn {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: rgba(239, 68, 68, 0.3);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      border-radius: 10px;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+    .stop-btn.visible { display: flex; }
+    .stop-btn:hover { background: rgba(239, 68, 68, 0.5); transform: scale(1.05); }
+    .stop-btn svg { width: 14px; height: 14px; }
 
     /* Message content formatting */
     .message-content p { margin: 0 0 10px 0; word-break: break-word; }
@@ -516,10 +576,218 @@ iframe {
     .chat-panel.collapsed, .viewport-panel.collapsed { width: 0 !important; min-width: 0 !important; opacity: 0; pointer-events: none; padding: 0; border: none; overflow: hidden; }
     .chat-panel, .viewport-panel { transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
     .app-container.dragging .chat-panel, .app-container.dragging .viewport-panel { transition: none; }
+
+    /* ================================================================
+       NEW: Mode bar styles
+       ================================================================ */
+    .mode-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-top: 1px solid var(--glass-border-light);
+      flex-shrink: 0;
+      position: relative;
+      z-index: 12;
+      min-height: 40px;
+    }
+
+    .mode-current {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px 5px 8px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border-light);
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
+      transition: all var(--transition-fast);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .mode-current:hover {
+      background: rgba(255, 255, 255, 0.22);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    .mode-current:active {
+      transform: scale(0.97);
+    }
+    .mode-current-emoji {
+      font-size: 16px;
+      line-height: 1;
+    }
+    .mode-current-label {
+      white-space: nowrap;
+    }
+    .mode-current-chevron {
+      width: 12px;
+      height: 12px;
+      color: var(--text-muted);
+      transition: transform var(--transition-fast);
+      flex-shrink: 0;
+    }
+    .mode-bar.open .mode-current-chevron {
+      transform: rotate(180deg);
+    }
+
+    .mode-dropdown {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 12px;
+      min-width: 180px;
+      background: rgba(var(--glass-rgb), 0.85);
+      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 6px;
+      z-index: 100;
+      box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 var(--glass-highlight);
+      animation: dropdownIn 0.15s ease-out;
+    }
+    @keyframes dropdownIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .mode-bar.open .mode-dropdown {
+      display: block;
+    }
+
+    .mode-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .mode-option:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: var(--text-primary);
+    }
+    .mode-option:active {
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(0.97);
+    }
+    .mode-option.active {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--text-primary);
+      font-weight: 600;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .mode-option-emoji {
+      font-size: 16px;
+      width: 22px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    /* Mode alert toast */
+    .mode-alert {
+      position: fixed;
+      top: 72px;
+      left: 16px;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      background: rgba(var(--glass-rgb), 0.85);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .mode-alert.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .mode-alert-emoji {
+      font-size: 18px;
+    }
+
+    /* Mobile mode bar (inside sheet header) */
+    .mobile-mode-bar {
+      display: flex;
+      gap: 4px;
+      margin-top: 10px;
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .mobile-mode-bar::-webkit-scrollbar { display: none; }
+
+    .mobile-mode-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all var(--transition-fast);
+    }
+    .mobile-mode-btn:active {
+      transform: scale(0.95);
+    }
+    .mobile-mode-btn.active {
+      background: rgba(16, 185, 129, 0.25);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: var(--text-primary);
+    }
+    .mobile-mode-btn-emoji {
+      font-size: 14px;
+    }
+
+    @media (max-width: 768px) {
+      .mode-alert {
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-10px);
+      }
+      .mode-alert.visible {
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+    /* END: Mode bar styles */
   </style>
 </head>
 <body>
   <div class="app-bg"></div>
+
+  <!-- NEW: Mode alert toast -->
+  <div class="mode-alert" id="modeAlert">
+    <span class="mode-alert-emoji" id="modeAlertEmoji"></span>
+    <span id="modeAlertText"></span>
+  </div>
 
   <div class="app-container">
     <!-- Chat Panel -->
@@ -532,12 +800,16 @@ iframe {
     </div>
   </a>
 
-  <div class="status-badge">
-    <span class="status-dot connecting" id="statusDot"></span>
-    <span id="statusText">Connecting...</span>
+  <div style="display:flex;align-items:center;gap:0;">
+    <div class="status-badge">
+      <span class="status-dot connecting" id="statusDot"></span>
+      <span id="statusText">Connecting...</span>
+    </div>
+    <button class="clear-chat-btn" id="clearChatBtn" title="Clear conversation">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+    </button>
   </div>
 </div>
-
 
       <div class="chat-messages" id="chatMessages">
         <div class="welcome-message">
@@ -545,6 +817,19 @@ iframe {
           <h2>Welcome to Tree</h2>
           <p>Your intelligent workspace is ready</p>
         </div>
+      </div>
+
+      <!-- NEW: Desktop mode bar (above input) -->
+      <div class="mode-bar" id="modeBar">
+        <div class="mode-current" id="modeCurrent">
+          <span class="mode-current-emoji" id="modeCurrentEmoji">🏠</span>
+          <span class="mode-current-label" id="modeCurrentLabel">Home</span>
+          <svg class="mode-current-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 15l6-6 6 6"/></svg>
+        </div>
+        <button class="stop-btn" id="stopBtn" title="Stop generating">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        </button>
+        <div class="mode-dropdown" id="modeDropdown"></div>
       </div>
 
       <div class="chat-input-area">
@@ -630,6 +915,8 @@ iframe {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
       </div>
+      <!-- NEW: Mobile mode bar (horizontal pill row) -->
+      <div class="mobile-mode-bar" id="mobileModeBar"></div>
     </div>
     <div class="mobile-chat-messages" id="mobileChatMessages">
       <div class="welcome-message">
@@ -684,6 +971,12 @@ iframe {
     let isRegistered = false;
     let isSending = false;
 
+    // NEW: Mode state
+    let currentModeKey = null;
+    let availableModes = [];
+    let modeBarOpen = false;
+    let requestGeneration = 0; // bumped on cancel/mode-switch to ignore stale responses
+
     // Socket setup
     const socket = io({ transports: ["websocket", "polling"], withCredentials: true });
 
@@ -700,6 +993,8 @@ iframe {
         isRegistered = true;
         updateStatus("connected");
         console.log("[socket] registered for chat");
+        // NEW: Request available modes on registration
+        socket.emit("getAvailableModes");
       } else {
         console.error("[socket] registration failed:", error);
         updateStatus("connected");
@@ -707,18 +1002,26 @@ iframe {
       }
     });
 
-    socket.on("chatResponse", ({ answer }) => {
+    socket.on("chatResponse", ({ answer, generation }) => {
+      // Drop stale responses from before a cancel/mode-switch
+      if (generation !== undefined && generation < requestGeneration) {
+        console.log("[socket] dropping stale response, gen:", generation, "current:", requestGeneration);
+        return;
+      }
       removeTypingIndicator();
       addMessage(answer, "assistant");
       isSending = false;
       updateSendButtons();
+      lockModeBar(false);
     });
 
-    socket.on("chatError", ({ error }) => {
+    socket.on("chatError", ({ error, generation }) => {
+      if (generation !== undefined && generation < requestGeneration) return;
       removeTypingIndicator();
       addMessage("Error: " + error, "error");
       isSending = false;
       updateSendButtons();
+      lockModeBar(false);
     });
 
     socket.on("navigate", ({ url, replace }) => {
@@ -744,6 +1047,210 @@ iframe {
       isRegistered = false;
       updateStatus("disconnected");
     });
+
+    // ================================================================
+    // NEW: Mode switching socket events
+    // ================================================================
+
+    socket.on("modeSwitched", ({ modeKey, emoji, label, alert, carriedMessages }) => {
+      console.log("[mode] switched to:", modeKey, "carried:", carriedMessages?.length || 0);
+      currentModeKey = modeKey;
+      // Update desktop mode bar current display
+      $("modeCurrentEmoji").textContent = emoji;
+      $("modeCurrentLabel").textContent = label;
+      // Only re-render if availableModes already matches this big mode
+      const bigMode = modeKey.split(":")[0];
+      if (availableModes.length && availableModes[0].key.startsWith(bigMode + ":")) {
+        renderModeDropdown();
+        renderMobileModeBar();
+      }
+      // Clear chat and show carried messages dimmed
+      clearChatUI(carriedMessages || []);
+      // Show alert toast
+      showModeAlert(emoji, label);
+    });
+
+    socket.on("availableModes", ({ bigMode, modes, currentMode }) => {
+      console.log("[mode] available:", bigMode, modes);
+      availableModes = modes || [];
+      if (currentMode) currentModeKey = currentMode;
+      // If we have a current mode, update the display
+      const active = availableModes.find(m => m.key === currentModeKey);
+      if (active) {
+        $("modeCurrentEmoji").textContent = active.emoji;
+        $("modeCurrentLabel").textContent = active.label;
+      }
+      renderModeDropdown();
+      renderMobileModeBar();
+    });
+
+    socket.on("conversationCleared", () => {
+      console.log("[socket] conversation manually cleared");
+      clearChatUI();
+    });
+
+    // ================================================================
+    // NEW: Mode bar logic (desktop)
+    // ================================================================
+
+    function renderModeDropdown() {
+      const dropdown = $("modeDropdown");
+      dropdown.innerHTML = "";
+      availableModes.forEach(mode => {
+        const btn = document.createElement("button");
+        btn.className = "mode-option" + (mode.key === currentModeKey ? " active" : "");
+        btn.innerHTML = '<span class="mode-option-emoji">' + mode.emoji + '</span><span>' + mode.label + '</span>';
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (mode.key !== currentModeKey) {
+            socket.emit("switchMode", { modeKey: mode.key });
+          }
+          closeModeBar();
+        });
+        dropdown.appendChild(btn);
+      });
+    }
+
+    function toggleModeBar() {
+      modeBarOpen = !modeBarOpen;
+      $("modeBar").classList.toggle("open", modeBarOpen);
+    }
+
+    function closeModeBar() {
+      modeBarOpen = false;
+      $("modeBar").classList.remove("open");
+    }
+
+    $("modeCurrent").addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleModeBar();
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (modeBarOpen && !$("modeBar").contains(e.target)) {
+        closeModeBar();
+      }
+    });
+
+    // ================================================================
+    // NEW: Lock/unlock mode bar while AI is responding
+    // ================================================================
+
+    function lockModeBar(locked) {
+      $("modeBar").classList.toggle("locked", locked);
+      $("stopBtn").classList.toggle("visible", locked);
+      // Lock mobile mode buttons too
+      document.querySelectorAll(".mobile-mode-btn").forEach(btn => {
+        btn.classList.toggle("locked", locked);
+      });
+    }
+
+    // Stop button - cancel in-flight request
+    $("stopBtn").addEventListener("click", () => {
+      if (!isSending) return;
+      requestGeneration++; // stale responses will be dropped
+      isSending = false;
+      removeTypingIndicator();
+      lockModeBar(false);
+      updateSendButtons();
+      socket.emit("cancelRequest");
+    });
+
+    // ================================================================
+    // NEW: Mobile mode bar (horizontal pills in sheet header)
+    // ================================================================
+
+    function renderMobileModeBar() {
+      const bar = $("mobileModeBar");
+      bar.innerHTML = "";
+      availableModes.forEach(mode => {
+        const btn = document.createElement("button");
+        btn.className = "mobile-mode-btn" + (mode.key === currentModeKey ? " active" : "");
+        btn.innerHTML = '<span class="mobile-mode-btn-emoji">' + mode.emoji + '</span><span>' + mode.label + '</span>';
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation(); // Don't trigger drag
+          if (mode.key !== currentModeKey) {
+            socket.emit("switchMode", { modeKey: mode.key });
+          }
+        });
+        bar.appendChild(btn);
+      });
+    }
+
+    // ================================================================
+    // NEW: Mode alert toast
+    // ================================================================
+
+    let modeAlertTimer = null;
+    function showModeAlert(emoji, label) {
+      const el = $("modeAlert");
+      $("modeAlertEmoji").textContent = emoji;
+      $("modeAlertText").textContent = label;
+      el.classList.add("visible");
+      clearTimeout(modeAlertTimer);
+      modeAlertTimer = setTimeout(() => {
+        el.classList.remove("visible");
+      }, 2000);
+    }
+
+    // ================================================================
+    // NEW: Clear chat UI helper
+    // ================================================================
+
+    function clearChatUI(carriedMessages) {
+      // Filter out empty/blank messages
+      const valid = (carriedMessages || []).filter(m => m.content && m.content.trim());
+
+      [chatMessages, mobileChatMessages].forEach(container => {
+        container.innerHTML = '';
+
+        if (valid.length > 0) {
+          // Render carried messages dimmed
+          valid.forEach(msg => {
+            const el = document.createElement("div");
+            el.className = "message " + msg.role + " carried";
+            const formattedContent = msg.role === "assistant" ? formatMessageContent(msg.content) : escapeHtml(msg.content);
+            el.innerHTML =
+              '<div class="message-avatar">' + (msg.role === "user" ? "👤" : "🌳") + '</div>' +
+              '<div class="message-content">' + formattedContent + '</div>';
+            container.appendChild(el);
+          });
+          container.scrollTop = container.scrollHeight;
+        } else {
+          container.innerHTML = '<div class="welcome-message"><div class="welcome-icon">🌳</div><h2>Welcome to Tree</h2><p>Your intelligent workspace is ready</p></div>';
+        }
+      });
+    }
+
+    // ================================================================
+    // NEW: iframe URL change detection → emit urlChanged
+    // ================================================================
+
+    let lastEmittedUrl = "";
+    function detectIframeUrlChange() {
+      try {
+        const loc = iframe.contentWindow?.location;
+        if (!loc) return;
+        const path = loc.pathname + loc.search;
+        if (path && path !== lastEmittedUrl) {
+          lastEmittedUrl = path;
+          // Extract rootId from URL patterns - supports ObjectIds (24 hex) and UUIDs
+          const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
+          let rootId = null;
+          const rootMatch = path.match(new RegExp('(?:\\\\/api)?\\\\/root\\\\/(' + ID + ')', 'i'));
+          const bareMatch = path.match(new RegExp('(?:\\\\/api)?\\\\/(' + ID + ')(?:[?/]|$)', 'i'));
+          if (rootMatch) rootId = rootMatch[1];
+          else if (bareMatch) rootId = bareMatch[1];
+
+          if (isRegistered) {
+            socket.emit("urlChanged", { url: path, rootId });
+          }
+        }
+      } catch (e) {
+        // cross-origin - ignore
+      }
+    }
 
     // Status
     function updateStatus(status) {
@@ -976,9 +1483,12 @@ iframe {
       addMessage(message, "user");
       addTypingIndicator();
       isSending = true;
+      requestGeneration++;
+      const thisGen = requestGeneration;
       updateSendButtons();
+      lockModeBar(true);
 
-      socket.emit("chat", { message, username: CONFIG.username });
+      socket.emit("chat", { message, username: CONFIG.username, generation: thisGen });
     }
 
     function updateSendButtons() {
@@ -1227,6 +1737,22 @@ iframe {
     $("expandViewportBtn").addEventListener("click", () => setChatWidth(0));
     $("resetPanelsBtn").addEventListener("click", () => setChatWidth(getAvailable() / 2));
 
+    // Clear chat button
+    $("clearChatBtn").addEventListener("click", () => {
+      if (!isRegistered) return;
+      // Cancel any in-flight request
+      if (isSending) {
+        requestGeneration++;
+        isSending = false;
+        removeTypingIndicator();
+        lockModeBar(false);
+        updateSendButtons();
+        socket.emit("cancelRequest");
+      }
+      socket.emit("clearConversation");
+      clearChatUI();
+    });
+
     // Home button
     $("homeBtn").addEventListener("click", () => {
       loadingOverlay.classList.add("visible");
@@ -1241,6 +1767,8 @@ iframe {
         const url = new URL(iframe.contentWindow?.location.href);
         urlDisplay.textContent = url.pathname + url.search;
       } catch (e) {}
+      // NEW: Detect URL change on iframe load
+      detectIframeUrlChange();
     });
 
     $("refreshBtn").addEventListener("click", () => {
@@ -1257,10 +1785,6 @@ iframe {
 
     socket.on("toolResult", ({ tool, args, success, error }) => {
       console.log("[socket] tool:", tool, success ? "✓" : "✗", error || "");
-    });
-
-    socket.on("conversationCleared", () => {
-      console.log("[socket] conversation cleared");
     });
 
     // API
@@ -1281,7 +1805,11 @@ iframe {
       notifyNodeCreated: (nodeId, nodeName, parentId) => { if (isRegistered) socket.emit("nodeCreated", { nodeId, nodeName, parentId }); },
       notifyNodeDeleted: (nodeId, nodeName) => { if (isRegistered) socket.emit("nodeDeleted", { nodeId, nodeName }); },
       notifyNoteCreated: (nodeId, noteContent) => { if (isRegistered) socket.emit("noteCreated", { nodeId, noteContent }); },
-      clearConversation: () => { if (isRegistered) socket.emit("clearConversation"); }
+      clearConversation: () => { if (isRegistered) socket.emit("clearConversation"); },
+      // NEW: Mode switching API
+      switchMode: (modeKey) => { if (isRegistered) socket.emit("switchMode", { modeKey }); },
+      getCurrentMode: () => currentModeKey,
+      getAvailableModes: () => availableModes
     };
   </script>
 </body>
