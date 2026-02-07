@@ -5,9 +5,7 @@ import cookieParser from "cookie-parser";
 import registerRoutes from "./routes/routesHandler.js";
 import registerURLRoutes from "./routesURL/routeURLHandler.js";
 
-import { initWebSocketServer } from "./routesURL/ws.js";
-
-//import { initWebSocketServer } from "./ws/websocket.js";
+import { initWebSocketServer } from "./ws/websocket.js";
 
 import "./db/config.js"; // Initialize DB connection
 
@@ -28,7 +26,7 @@ app.use(
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
-  })
+  }),
 );
 app.use(cookieParser());
 
