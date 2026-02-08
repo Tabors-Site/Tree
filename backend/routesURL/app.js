@@ -151,25 +151,15 @@ router.get("/app", authenticateLite, async (req, res) => {
       pointer-events: none;
     }
 
-    /* Stop/cancel button - appears while sending */
-    .stop-btn {
-      display: none;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      background: rgba(239, 68, 68, 0.3);
-      border: 1px solid rgba(239, 68, 68, 0.5);
-      border-radius: 10px;
-      color: var(--text-primary);
-      cursor: pointer;
-      transition: all var(--transition-fast);
-      flex-shrink: 0;
-      margin-left: auto;
+    /* Send button in stop mode */
+    .send-btn.stop-mode {
+      background: rgba(239, 68, 68, 0.7);
+      box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
     }
-    .stop-btn.visible { display: flex; }
-    .stop-btn:hover { background: rgba(239, 68, 68, 0.5); transform: scale(1.05); }
-    .stop-btn svg { width: 14px; height: 14px; }
+    .send-btn.stop-mode:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.9);
+      box-shadow: 0 6px 25px rgba(239, 68, 68, 0.5);
+    }
 
     /* Message content formatting */
     .message-content p { margin: 0 0 10px 0; word-break: break-word; }
@@ -826,9 +816,6 @@ iframe {
           <span class="mode-current-label" id="modeCurrentLabel">Home</span>
           <svg class="mode-current-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 15l6-6 6 6"/></svg>
         </div>
-        <button class="stop-btn" id="stopBtn" title="Stop generating">
-          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-        </button>
         <div class="mode-dropdown" id="modeDropdown"></div>
       </div>
 
@@ -911,9 +898,14 @@ iframe {
           <span class="tree-icon">🌳</span>
           <h1>Tree</h1>
         </div>
-        <button class="mobile-close-btn" id="mobileCloseBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="clear-chat-btn" id="mobileClearChatBtn" title="Clear conversation">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button>
+          <button class="mobile-close-btn" id="mobileCloseBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
       <!-- NEW: Mobile mode bar (horizontal pill row) -->
       <div class="mobile-mode-bar" id="mobileModeBar"></div>
@@ -993,8 +985,20 @@ iframe {
         isRegistered = true;
         updateStatus("connected");
         console.log("[socket] registered for chat");
-        // NEW: Request available modes on registration
-        socket.emit("getAvailableModes");
+        // Get current iframe URL using multiple fallbacks
+        let currentUrl = "";
+        try { currentUrl = iframe.contentWindow?.location?.pathname + iframe.contentWindow?.location?.search; } catch(e) {}
+        if (!currentUrl) {
+          // Fallback to iframe.src attribute
+          try { const u = new URL(iframe.src); currentUrl = u.pathname + u.search; } catch(e) {}
+        }
+        if (!currentUrl) {
+          // Fallback to last known URL in display
+          currentUrl = urlDisplay.textContent || "";
+        }
+        socket.emit("getAvailableModes", { url: currentUrl });
+        // Also emit urlChanged so rootId gets set
+        if (currentUrl) detectIframeUrlChange();
       } else {
         console.error("[socket] registration failed:", error);
         updateStatus("connected");
@@ -1137,25 +1141,32 @@ iframe {
     // NEW: Lock/unlock mode bar while AI is responding
     // ================================================================
 
+    const SEND_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+    const STOP_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+
     function lockModeBar(locked) {
       $("modeBar").classList.toggle("locked", locked);
-      $("stopBtn").classList.toggle("visible", locked);
-      // Lock mobile mode buttons too
+      // Lock mobile mode buttons
       document.querySelectorAll(".mobile-mode-btn").forEach(btn => {
         btn.classList.toggle("locked", locked);
       });
+      // Toggle all send buttons to stop mode
+      [sendBtn, mobileSheetSendBtn].forEach(btn => {
+        btn.classList.toggle("stop-mode", locked);
+        btn.innerHTML = locked ? STOP_SVG : SEND_SVG;
+        if (locked) btn.disabled = false; // stop button should always be clickable
+      });
     }
 
-    // Stop button - cancel in-flight request
-    $("stopBtn").addEventListener("click", () => {
+    function cancelRequest() {
       if (!isSending) return;
-      requestGeneration++; // stale responses will be dropped
+      requestGeneration++;
       isSending = false;
       removeTypingIndicator();
       lockModeBar(false);
       updateSendButtons();
       socket.emit("cancelRequest");
-    });
+    }
 
     // ================================================================
     // NEW: Mobile mode bar (horizontal pills in sheet header)
@@ -1229,26 +1240,37 @@ iframe {
 
     let lastEmittedUrl = "";
     function detectIframeUrlChange() {
+      let path = "";
+
+      // Try contentWindow first (may fail cross-origin)
       try {
         const loc = iframe.contentWindow?.location;
-        if (!loc) return;
-        const path = loc.pathname + loc.search;
-        if (path && path !== lastEmittedUrl) {
-          lastEmittedUrl = path;
-          // Extract rootId from URL patterns - supports ObjectIds (24 hex) and UUIDs
-          const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
-          let rootId = null;
-          const rootMatch = path.match(new RegExp('(?:\\\\/api)?\\\\/root\\\\/(' + ID + ')', 'i'));
-          const bareMatch = path.match(new RegExp('(?:\\\\/api)?\\\\/(' + ID + ')(?:[?/]|$)', 'i'));
-          if (rootMatch) rootId = rootMatch[1];
-          else if (bareMatch) rootId = bareMatch[1];
+        if (loc) path = loc.pathname + loc.search;
+      } catch (e) {}
 
-          if (isRegistered) {
-            socket.emit("urlChanged", { url: path, rootId });
-          }
+      // Fallback to iframe.src attribute
+      if (!path) {
+        try { const u = new URL(iframe.src); path = u.pathname + u.search; } catch(e) {}
+      }
+
+      // Fallback to URL display text
+      if (!path) {
+        path = urlDisplay.textContent || "";
+      }
+
+      if (path && path !== lastEmittedUrl) {
+        lastEmittedUrl = path;
+        // Extract rootId from URL patterns - supports ObjectIds (24 hex) and UUIDs
+        const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
+        let rootId = null;
+        const rootMatch = path.match(new RegExp('(?:/api)?/root/(' + ID + ')', 'i'));
+        const bareMatch = path.match(new RegExp('(?:/api)?/(' + ID + ')(?:[?/]|$)', 'i'));
+        if (rootMatch) rootId = rootMatch[1];
+        else if (bareMatch) rootId = bareMatch[1];
+
+        if (isRegistered) {
+          socket.emit("urlChanged", { url: path, rootId });
         }
-      } catch (e) {
-        // cross-origin - ignore
       }
     }
 
@@ -1495,8 +1517,9 @@ iframe {
       const desktopText = chatInput.value.trim();
       const mobileSheetText = mobileSheetInput.value.trim();
       
-      sendBtn.disabled = !(desktopText && isRegistered && !isSending);
-      mobileSheetSendBtn.disabled = !(mobileSheetText && isRegistered && !isSending);
+      // When sending, buttons act as stop - keep enabled
+      sendBtn.disabled = isSending ? false : !(desktopText && isRegistered);
+      mobileSheetSendBtn.disabled = isSending ? false : !(mobileSheetText && isRegistered);
       mobileSendBtn.disabled = true;
     }
 
@@ -1521,6 +1544,10 @@ iframe {
     });
 
     sendBtn.addEventListener("click", () => {
+      if (isSending) {
+        cancelRequest();
+        return;
+      }
       const msg = chatInput.value.trim();
       if (msg && isRegistered && !isSending) {
         sendChatMessage(msg);
@@ -1605,6 +1632,10 @@ iframe {
     });
 
     mobileSheetSendBtn.addEventListener("click", () => {
+      if (isSending) {
+        cancelRequest();
+        return;
+      }
       const msg = mobileSheetInput.value.trim();
       if (msg && isRegistered && !isSending) {
         sendChatMessage(msg);
@@ -1737,21 +1768,16 @@ iframe {
     $("expandViewportBtn").addEventListener("click", () => setChatWidth(0));
     $("resetPanelsBtn").addEventListener("click", () => setChatWidth(getAvailable() / 2));
 
-    // Clear chat button
-    $("clearChatBtn").addEventListener("click", () => {
+    // Clear chat buttons (desktop + mobile)
+    function handleClearChat() {
       if (!isRegistered) return;
-      // Cancel any in-flight request
-      if (isSending) {
-        requestGeneration++;
-        isSending = false;
-        removeTypingIndicator();
-        lockModeBar(false);
-        updateSendButtons();
-        socket.emit("cancelRequest");
-      }
+      if (isSending) cancelRequest();
       socket.emit("clearConversation");
       clearChatUI();
-    });
+    }
+
+    $("clearChatBtn").addEventListener("click", handleClearChat);
+    $("mobileClearChatBtn").addEventListener("click", handleClearChat);
 
     // Home button
     $("homeBtn").addEventListener("click", () => {
