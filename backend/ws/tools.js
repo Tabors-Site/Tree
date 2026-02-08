@@ -356,6 +356,31 @@ const TOOL_DEFS = {
       },
     },
   },
+  "create-tree": {
+    type: "function",
+    function: {
+      name: "create-tree",
+      description: "Create a new tree by creating a root node.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Name of the new tree (root node).",
+          },
+          note: {
+            type: "string",
+            description: "Optional initial note for the root node.",
+          },
+          userId: {
+            type: "string",
+            description: "Injected by server. Ignore.",
+          },
+        },
+        required: ["name", "userId"],
+      },
+    },
+  },
 
   "create-new-node-branch": {
     type: "function",

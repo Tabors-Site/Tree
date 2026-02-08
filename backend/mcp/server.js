@@ -112,16 +112,24 @@ function getMcpServer() {
     "get-tree",
     "Fetch a branching tree outline (structure only). READ-ONLY.",
     {
-      nodeId: z.string().describe("Node ID to fetch the tree branch from."),
+      nodeId: z.string().describe("Root node ID to fetch the tree from."),
+
       filters: z
         .object({
-          active: z.boolean().optional(),
-          trimmed: z.boolean().optional(),
-          completed: z.boolean().optional(),
+          // keep schema LLM-friendly but permissive
+          status: z
+            .union([
+              z.array(z.enum(["active", "trimmed", "completed"])),
+              z.enum(["active", "trimmed", "completed"]),
+            ])
+            .optional()
+            .describe(
+              "Statuses to include. ALWAYS prefer array form. Example: ['active'] or ['active','completed']",
+            ),
         })
         .optional()
         .describe(
-          "Optional filtering: { active, trimmed, completed }.  call others false if only trying for one"
+          "Optional filters. If omitted, defaults to ['active', 'completed'].",
         ),
     },
     {
@@ -131,18 +139,34 @@ function getMcpServer() {
       openWorldHint: false,
     },
     async ({ nodeId, filters }) => {
-      const mergedFilter = !filters
-        ? {
-            active: true,
-            trimmed: false,
-            completed: true,
-          }
-        : {
-            active: !!filters.active,
-            trimmed: !!filters.trimmed,
-            completed: !!filters.completed,
-          };
+      // ---------- NORMALIZATION ----------
+      let status;
 
+      if (Array.isArray(filters?.status)) {
+        status = filters.status;
+      } else if (typeof filters?.status === "string") {
+        status = [filters.status];
+      } else {
+        status = ["active", "completed"];
+      }
+
+      // sanitize + dedupe
+      status = [...new Set(status)].filter(
+        (s) => s === "active" || s === "trimmed" || s === "completed",
+      );
+
+      // final safety net
+      if (status.length === 0) {
+        status = ["active", "completed"];
+      }
+
+      const mergedFilter = {
+        active: status.includes("active"),
+        trimmed: status.includes("trimmed"),
+        completed: status.includes("completed"),
+      };
+
+      // ---------- FETCH ----------
       const treeData = await getTreeForAi(nodeId, mergedFilter);
 
       if (treeData == null) {
@@ -153,7 +177,7 @@ function getMcpServer() {
               text: JSON.stringify(
                 { error: "Tree not found", nodeId },
                 null,
-                2
+                2,
               ),
             },
           ],
@@ -169,7 +193,7 @@ function getMcpServer() {
           },
         ],
       };
-    }
+    },
   );
 
   server.tool(
@@ -195,7 +219,7 @@ function getMcpServer() {
               text: JSON.stringify(
                 { error: "Node not found", nodeId },
                 null,
-                2
+                2,
               ),
             },
           ],
@@ -211,7 +235,7 @@ function getMcpServer() {
           },
         ],
       };
-    }
+    },
   );
 
   server.tool(
@@ -281,7 +305,7 @@ function getMcpServer() {
       return {
         content: [{ type: "text", text: systemInstructions }],
       };
-    }
+    },
   );
 
   server.tool(
@@ -344,7 +368,7 @@ function getMcpServer() {
           },
         ],
       };
-    }
+    },
   );
   server.tool(
     "raw-idea-filter-orchestrator",
@@ -418,7 +442,7 @@ RULES
       return {
         content: [{ type: "text", text: instructions }],
       };
-    }
+    },
   );
 
   server.tool(
@@ -465,8 +489,9 @@ RULES
       return {
         content: [{ type: "text", text: instructions }],
       };
-    }
+    },
   );
+  /*
   server.tool(
     "tree-structure-orchestrator",
     "Entry point for creating or modifying hierarchical tree structures.",
@@ -509,7 +534,7 @@ RULES
       return {
         content: [{ type: "text", text: instructions }],
       };
-    }
+    },
   );
 
   server.tool(
@@ -568,8 +593,8 @@ RULES
       return {
         content: [{ type: "text", text: instructions }],
       };
-    }
-  );
+    },
+  );*/
 
   server.tool(
     "node-script-runtime-environment",
@@ -685,7 +710,7 @@ RULES
           },
         ],
       };
-    }
+    },
   );
 
   /*server.tool(
@@ -806,7 +831,7 @@ RULES
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    },
   );
 
   server.tool(
@@ -817,7 +842,7 @@ RULES
       scriptName: z
         .string()
         .describe(
-          "The name of the script to execute. Found inside of get-node"
+          "The name of the script to execute. Found inside of get-node",
         ),
       userId: z.string().describe("Injected by server. Ignore."),
     },
@@ -837,7 +862,7 @@ RULES
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    },
   );
 
   server.tool(
@@ -855,7 +880,7 @@ RULES
       userId: z
         .string()
         .describe(
-          "The ID of the user performing the edit. Used for contribution logging."
+          "The ID of the user performing the edit. Used for contribution logging.",
         ),
     },
     {
@@ -880,7 +905,7 @@ RULES
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
-    }
+    },
   );
 
   server.tool(
@@ -891,12 +916,12 @@ RULES
       key: z
         .string()
         .describe(
-          "The key of the goal you want to modify on the node. It always matches an existing value in the nodes verion."
+          "The key of the goal you want to modify on the node. It always matches an existing value in the nodes verion.",
         ),
       goal: z
         .number()
         .describe(
-          "The numeric goal value to assign to the given key. What the corresponding value needs to reach."
+          "The numeric goal value to assign to the given key. What the corresponding value needs to reach.",
         ),
       prestige: z
         .number()
@@ -935,7 +960,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -954,12 +979,12 @@ RULES
       isInherited: z
         .boolean()
         .describe(
-          "If true, propagate the status to child nodes recursively. Typically true unless otherwise specified."
+          "If true, propagate the status to child nodes recursively. Typically true unless otherwise specified.",
         ),
       userId: z
         .string()
         .describe(
-          "ID of the user making the status edit (for contribution logging)."
+          "ID of the user making the status edit (for contribution logging).",
         ),
     },
     {
@@ -993,7 +1018,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1036,7 +1061,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1082,7 +1107,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1112,7 +1137,7 @@ RULES
           userId,
           limit,
           startDate,
-          endDate
+          endDate,
         );
         const trimmedNotes = result.notes.slice(0, 20);
 
@@ -1131,7 +1156,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1161,7 +1186,7 @@ RULES
           userId,
           limit,
           startDate,
-          endDate
+          endDate,
         );
 
         return {
@@ -1177,7 +1202,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1206,7 +1231,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1219,7 +1244,7 @@ RULES
       userId: z
         .string()
         .describe(
-          "The ID of the user performing the prestige action (for logging)."
+          "The ID of the user performing the prestige action (for logging).",
         ),
     },
     {
@@ -1242,7 +1267,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1252,12 +1277,12 @@ RULES
       nodeId: z
         .string()
         .describe(
-          "The unique ID of the node whose schedule should be updated."
+          "The unique ID of the node whose schedule should be updated.",
         ),
       prestige: z
         .number()
         .describe(
-          "The prestige of the version to update within the node's version history."
+          "The prestige of the version to update within the node's version history.",
         ),
       newSchedule: z
         .string()
@@ -1265,12 +1290,12 @@ RULES
       reeffectTime: z
         .number()
         .describe(
-          "The reeffect time in hours (must be below 1,000,000). Added to schedule when prestiging for new version."
+          "The reeffect time in hours (must be below 1,000,000). Added to schedule when prestiging for new version.",
         ),
       userId: z
         .string()
         .describe(
-          "The ID of the user making the schedule update (for contribution logging)."
+          "The ID of the user making the schedule update (for contribution logging).",
         ),
     },
     {
@@ -1306,43 +1331,22 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
-    "create-new-node",
-    "Creates a new node in the tree and logs a contribution entry.",
+    "create-tree",
+    "Creates a new tree by creating a root node.",
     {
-      name: z.string().describe("Name of the new node."),
-      schedule: z
-        .date()
-        .nullable()
-        .optional()
-        .describe("Optional date for node scheduling."),
-      reeffectTime: z
-        .number()
-        .optional()
-        .describe("Time interval before reeschedule on prestife."),
-      parentNodeID: z.string().describe("Parent node ID ."),
-      userId: z.string().describe("Injected by server. Ignore."),
-      values: z
-        .record(z.number())
-        .default({})
-        .nullable()
-        .optional()
-        .describe("Key-value pairs representing node number values."),
-      goals: z
-        .record(z.number())
-        .default({})
-        .nullable()
-        .optional()
-        .describe(
-          "Key-value pairs representing node number goals attached to values."
-        ),
+      name: z.string().describe("Name of the new tree (root node)."),
+
       note: z
         .string()
+        .nullable()
         .optional()
-        .describe("The text content of the optional note."),
+        .describe("Optional note for the root node."),
+
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1350,40 +1354,40 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({
-      name,
-      schedule,
-      reeffectTime,
-      parentNodeID,
-      userId,
-      values,
-      goals,
-      note,
-    }) => {
+    async ({ name, note, userId }) => {
       try {
-        const node = await createNewNode(
+        const rootNode = await createNewNode(
           name,
-          schedule,
-          reeffectTime,
-          parentNodeID,
-          false,
+          null, // schedule
+          0, // reeffectTime
+          null, // parentNodeID
+          true, // isRoot
           userId,
-          values,
-          goals,
-          note
+          {}, // values (forced empty)
+          {}, // goals (forced empty)
+          note ?? null,
         );
 
         return {
-          content: [{ type: "text", text: JSON.stringify(node, null, 2) }],
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(rootNode, null, 2),
+            },
+          ],
         };
       } catch (err) {
         return {
           content: [
-            { type: "text", text: `❌ Failed to create node: ${err.message}` },
+            {
+              type: "text",
+              text: `❌ Failed to create tree: ${err.message}`,
+            },
           ],
+          isError: true,
         };
       }
-    }
+    },
   );
 
   const NodeSchema = z.lazy(() =>
@@ -1419,7 +1423,7 @@ RULES
         .nullable()
         .optional()
         .describe("List of child nodes."),
-    })
+    }),
   );
 
   server.tool(
@@ -1427,7 +1431,7 @@ RULES
     "Used to create new node branch off a current node to extend its structure",
     {
       nodeData: NodeSchema.describe(
-        "JSON structure of the node branch to create."
+        "JSON structure of the node branch to create.",
       ),
       parentId: z
         .string()
@@ -1447,7 +1451,7 @@ RULES
         const { rootId, rootName, totalCreated } = await createNodesRecursive(
           nodeData,
           parentId,
-          userId
+          userId,
         );
         return {
           content: [
@@ -1471,7 +1475,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1514,7 +1518,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1538,7 +1542,7 @@ RULES
         const { nodeChild, nodeNewParent } = await updateParentRelationship(
           nodeChildId,
           nodeNewParentId,
-          userId
+          userId,
         );
 
         return {
@@ -1559,7 +1563,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   /*
@@ -1639,7 +1643,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1671,7 +1675,7 @@ RULES
           userId,
           limit,
           startDate,
-          endDate
+          endDate,
         );
         const trimmed = result.contributions.slice(0, limit);
 
@@ -1688,7 +1692,7 @@ RULES
           ],
         };
       }
-    }
+    },
   );
 
   // =====================================================================
@@ -1735,7 +1739,7 @@ RULES
           isError: true,
         };
       }
-    }
+    },
   );
   server.tool(
     "get-raw-ideas-by-user",
@@ -1786,7 +1790,7 @@ RULES
           isError: true,
         };
       }
-    }
+    },
   );
   server.tool(
     "transfer-raw-idea-to-note",
@@ -1829,7 +1833,7 @@ RULES
           isError: true,
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -1865,7 +1869,7 @@ RULES
           isError: true,
         };
       }
-    }
+    },
   );
   /*server.tool(
     "batch-operations",
@@ -2079,12 +2083,12 @@ RULES
                 ...result,
               },
               null,
-              2
+              2,
             ),
           },
         ],
       };
-    }
+    },
   );
 
   server.tool(
@@ -2111,7 +2115,7 @@ RULES
               text: JSON.stringify(
                 { error: "UnderstandingRun not found" },
                 null,
-                2
+                2,
               ),
             },
           ],
@@ -2132,7 +2136,7 @@ RULES
                   message: "No more summarization steps remaining.",
                 },
                 null,
-                2
+                2,
               ),
             },
           ],
@@ -2182,7 +2186,7 @@ Return ONLY the summary text. The system will handle structure.
           },
         ],
       };
-    }
+    },
   );
 
   server.tool(
@@ -2239,12 +2243,12 @@ Return ONLY the summary text. The system will handle structure.
                 currentLayer,
               },
               null,
-              2
+              2,
             ),
           },
         ],
       };
-    }
+    },
   );
 
   server.tool(
@@ -2315,7 +2319,7 @@ Continue until understanding-next explicitly returns done = true.
           },
         ],
       };
-    }
+    },
   );
 
   return server;
@@ -2365,7 +2369,7 @@ async function handleMcpRequest(req, res) {
               code: -32602,
               message: "You are not authorized as this user",
             },
-          })
+          }),
         );
         return;
       }
@@ -2394,7 +2398,7 @@ async function handleMcpRequest(req, res) {
                 message:
                   "Invalid nodeId, or you are not in this tree. Use get-roots-for-user to find rootId's, and then present them to me so I can choose one.",
               },
-            })
+            }),
           );
           return;
         }
@@ -2434,7 +2438,7 @@ async function handleMcpRequest(req, res) {
               jsonrpc: "2.0",
               id: req.body.id,
               error: err,
-            })
+            }),
           );
         }
         return;
@@ -2525,7 +2529,7 @@ async function handleMcpRequest(req, res) {
               code: -32602,
               message: "You are not authorized as this user",
             },
-          })
+          }),
         );
         return;
       }
@@ -2554,7 +2558,7 @@ async function handleMcpRequest(req, res) {
                 message:
                   "Invalid nodeId, or you are not in this tree. Use get-roots-for-user to find rootId's, and then present them to me so I can choose one.",
               },
-            })
+            }),
           );
           return;
         }
@@ -2642,19 +2646,19 @@ function mapToolCallToApiUrl(toolName, args) {
     case "understanding-next":
       if (!resolvedRootId || !understandingRunId) return null;
       return withToken(
-        `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}?html`
+        `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}?html`,
       );
 
     case "understanding-capture":
       if (understandingNodeId && resolvedRootId) {
         return withToken(
-          `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}/${understandingNodeId}?html`
+          `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}/${understandingNodeId}?html`,
         );
       }
 
       if (understandingRunId && resolvedRootId) {
         return withToken(
-          `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}?html`
+          `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}?html`,
         );
       }
 
