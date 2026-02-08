@@ -11,6 +11,7 @@ import {
   mcpClients,
   MCP_SERVER_URL,
 } from "./mcp.js";
+import { useEnergy } from "../core/energy.js";
 import {
   switchMode,
   switchBigMode,
@@ -165,8 +166,8 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         setRootId(visitorId, rootId);
       }
 
-      // Only switch if big mode actually changed
-      if (currentBig !== newBigMode) {
+      // Switch if big mode changed or no mode set yet
+      if (currentBig !== newBigMode || !currentMode) {
         try {
           const result = switchBigMode(visitorId, newBigMode, {
             username: socket.username,
@@ -174,27 +175,64 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             rootId,
           });
           socket.emit("modeSwitched", result);
-
-          // Send available sub-modes for the mode bar
-          const subModes = getSubModes(newBigMode);
-          socket.emit("availableModes", {
-            bigMode: newBigMode,
-            modes: subModes,
-          });
         } catch (err) {
           console.error(`❌ Big mode switch failed:`, err.message);
         }
       }
+
+      // Always send available modes so frontend stays in sync
+      const activeMode = getCurrentMode(visitorId);
+      const bigMode = activeMode?.split(":")[0] || newBigMode;
+      const subModes = getSubModes(bigMode);
+      socket.emit("availableModes", {
+        bigMode,
+        modes: subModes,
+        currentMode: activeMode,
+      });
     });
 
     /**
      * Request available modes for current big mode (e.g., on page load).
      */
-    socket.on("getAvailableModes", () => {
+    socket.on("getAvailableModes", ({ url } = {}) => {
       const visitorId = socket.visitorId;
       if (!visitorId) return;
 
-      const currentMode = getCurrentMode(visitorId);
+      let currentMode = getCurrentMode(visitorId);
+
+      // Determine correct big mode from URL (source of truth)
+      const urlBigMode = url ? bigModeFromUrl(url) : null;
+
+      // Extract rootId from URL if present
+      if (url) {
+        const ID =
+          "(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})";
+        const rootMatch = url.match(new RegExp(`(?:/api)?/root/(${ID})`, "i"));
+        const bareMatch = url.match(
+          new RegExp(`(?:/api)?/(${ID})(?:[?/]|$)`, "i"),
+        );
+        const rootId = rootMatch?.[1] || bareMatch?.[1];
+        if (rootId) setRootId(visitorId, rootId);
+      }
+
+      const currentBig = currentMode?.split(":")[0] || null;
+
+      // If no mode, or big mode doesn't match URL → switch to correct big mode
+      if (!currentMode || (urlBigMode && currentBig !== urlBigMode)) {
+        try {
+          const targetBigMode = urlBigMode || BIG_MODES.HOME;
+          const result = switchBigMode(visitorId, targetBigMode, {
+            username: socket.username,
+            userId: socket.userId,
+            rootId: getRootId(visitorId),
+          });
+          currentMode = result.modeKey;
+          socket.emit("modeSwitched", result);
+        } catch (err) {
+          console.error("❌ Failed to initialize/correct mode:", err.message);
+        }
+      }
+
       const bigMode = currentMode?.split(":")[0] || BIG_MODES.HOME;
       const subModes = getSubModes(bigMode);
 
@@ -216,6 +254,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
 
       const visitorId = socket.visitorId || `user:${socket.userId}`;
+
+      // Charge energy upfront (non-refundable even if cancelled)
+      try {
+        await useEnergy({ userId: socket.userId, action: "chat" });
+      } catch (err) {
+        socket.emit("chatError", { error: err.message, generation });
+        return;
+      }
 
       // Abort any previous in-flight request
       if (socket._chatAbort) {

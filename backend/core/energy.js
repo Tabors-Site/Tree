@@ -69,6 +69,7 @@ const BASE_ACTION_COSTS = {
   prestige: 1,
   executeScript: 1,
   invite: 1,
+  chat: 3,
 
   // 2 energy
   create: 2,
