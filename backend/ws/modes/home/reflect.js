@@ -3,7 +3,7 @@
 
 export default {
   name: "home:reflect",
-  emoji: "🪞",
+  emoji: "🔮",
   label: "Reflect",
   bigMode: "home",
 
