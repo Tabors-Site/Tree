@@ -103,7 +103,7 @@ export function switchMode(visitorId, newModeKey, ctx) {
   session.bigMode = mode.bigMode;
 
   console.log(
-    `🔄 Mode switch for ${visitorId}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`,
+    `🔄 Mode switch for ${visitorId}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`
   );
 
   return {
@@ -111,10 +111,7 @@ export function switchMode(visitorId, newModeKey, ctx) {
     emoji: mode.emoji,
     label: mode.label,
     alert: `${mode.emoji} ${mode.label}`,
-    carriedMessages: recentMessages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    })),
+    carriedMessages: recentMessages.map((m) => ({ role: m.role, content: m.content })),
   };
 }
 
@@ -147,19 +144,11 @@ export async function processMessage(visitorId, message, ctx) {
   // Ensure MCP client
   let client = mcpClients.get(visitorId);
   if (!client) {
-    client = await connectToMCP(
-      MCP_SERVER_URL,
-      visitorId,
-      ctx.username,
-      ctx.userId,
-    );
+    client = await connectToMCP(MCP_SERVER_URL, visitorId, ctx.username, ctx.userId);
   }
 
   // Check for conversation length - loop if needed (BE mode)
-  if (
-    mode.maxMessagesBeforeLoop &&
-    session.messages.length > mode.maxMessagesBeforeLoop
-  ) {
+  if (mode.maxMessagesBeforeLoop && session.messages.length > mode.maxMessagesBeforeLoop) {
     console.log(`🔁 Conversation loop for ${visitorId} in ${session.modeKey}`);
     const recentMessages = session.messages
       .filter((m) => m.role === "user" || m.role === "assistant")
@@ -239,10 +228,7 @@ export async function processMessage(visitorId, message, ctx) {
     session.messages.push(assistantMessage);
 
     // No tool calls = final response
-    if (
-      !assistantMessage.tool_calls ||
-      assistantMessage.tool_calls.length === 0
-    ) {
+    if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
       break;
     }
 
@@ -266,11 +252,7 @@ export async function processMessage(visitorId, message, ctx) {
           tool_call_id: toolCall.id,
           content: JSON.stringify({ error: "Invalid arguments" }),
         });
-        toolResults.push({
-          tool: toolName,
-          success: false,
-          error: "Invalid arguments",
-        });
+        toolResults.push({ tool: toolName, success: false, error: "Invalid arguments" });
         continue;
       }
 
@@ -280,14 +262,9 @@ export async function processMessage(visitorId, message, ctx) {
       console.log(`🔧 [${session.modeKey}] ${toolName}`, args);
 
       try {
-        const result = await client.callTool({
-          name: toolName,
-          arguments: args,
-        });
+        const result = await client.callTool({ name: toolName, arguments: args });
         const resultText =
-          result?.contents?.[0]?.text ||
-          result?.content?.[0]?.text ||
-          JSON.stringify(result);
+          result?.contents?.[0]?.text || result?.content?.[0]?.text || JSON.stringify(result);
 
         session.messages.push({
           role: "tool",
@@ -305,12 +282,7 @@ export async function processMessage(visitorId, message, ctx) {
           content: JSON.stringify({ error: err.message }),
         });
 
-        toolResults.push({
-          tool: toolName,
-          args,
-          success: false,
-          error: err.message,
-        });
+        toolResults.push({ tool: toolName, args, success: false, error: err.message });
       }
     }
 
@@ -395,9 +367,7 @@ export function resetConversation(visitorId, ctx) {
   });
 
   session.messages = [{ role: "system", content: systemPrompt }];
-  console.log(
-    `🔄 Reset conversation for ${visitorId} (mode: ${session.modeKey}, root: ${session.rootId})`,
-  );
+  console.log(`🔄 Reset conversation for ${visitorId} (mode: ${session.modeKey}, root: ${session.rootId})`);
 }
 
 export function getConversation(visitorId) {
