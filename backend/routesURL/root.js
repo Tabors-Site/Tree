@@ -108,7 +108,6 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
           <div class="breadcrumb-node ${isLast ? "current-node" : ""}" data-depth="${idx}">
             <div class="node-connector" style="background: linear-gradient(90deg, ${rainbow[(idx - 1 + rainbow.length) % rainbow.length]}, ${color});"></div>
             <div class="node-bubble" style="border-color: ${color}; box-shadow: 0 0 20px ${color}40;" data-node-id="${node._id}" data-is-current="${node.isCurrent ? "true" : "false"}">
-              <div class="bubble-scroll-zone"></div>
               ${
                 node.isCurrent
                   ? `<a href="/api/${node._id}${queryString}" class="node-link current">
@@ -608,20 +607,21 @@ transition:
        CONSTELLATION BREADCRUMB NAVIGATION
        ========================================== */
     
-    .breadcrumb-constellation {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      padding: 24px 16px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      position: relative;
-      min-height: 100px;
-      
-      /* Scrollbar styling */
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
-    }
+.breadcrumb-constellation {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 24px 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  min-height: 100px;
+  /* Remove cursor: grab; */
+  
+  /* Scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
     
     .breadcrumb-constellation::-webkit-scrollbar {
       height: 6px;
@@ -1492,22 +1492,48 @@ transition:
 
   
 
-    <!-- Tree Ownership Options Section -->
-    ${
-      inviteFormHtml
-        ? `
-    <div class="content-card">
-      <div class="section-header">
-        <h2>Tree Ownership Options</h2>
-      </div>
-      
-      ${inviteFormHtml}
-      ${contributorsHtml}
-      ${policyHtml}
-    </div>
-    `
-        : ""
-    }
+   <!-- Tree Ownership Options Section -->
+${
+  isOwner || rootMeta?.contributors?.some(c => c._id.toString() === req.userId?.toString())
+    ? `
+<div class="content-card">
+  <div class="section-header">
+    <h2>${isOwner ? 'Tree Ownership Options' : 'Contributor Options'}</h2>
+  </div>
+  
+  ${inviteFormHtml}
+  ${contributorsHtml}
+  ${policyHtml}
+  
+  ${!isOwner && req.userId ? `
+  <h2>Leave Tree</h2>
+  <form
+    method="POST"
+    action="/api/root/${nodeId}/remove-user?token=${req.query.token ?? ""}&html"
+    onsubmit="return confirm('Are you sure you want to leave this tree?')"
+    style="margin-top:12px;"
+  >
+    <input type="hidden" name="userReceiving" value="${req.userId}" />
+    <button
+      type="submit"
+      style="
+        padding:8px 14px;
+        border-radius:8px;
+        border:1px solid #900;
+        background:#fff0f0;
+        color:#900;
+        font-weight:600;
+        cursor:pointer;
+      "
+    >
+      Leave Tree
+    </button>
+  </form>
+  ` : ''}
+</div>
+`
+    : ""
+}
 
     <!-- Retire Tree Section -->
     ${
@@ -1530,44 +1556,29 @@ transition:
 
 
 <script>
-// Breadcrumb bubble click handling
+// AUTO-SCROLL BREADCRUMB TO RIGHT ON LOAD
+window.addEventListener('load', () => {
+  const breadcrumb = document.querySelector('.breadcrumb-constellation');
+  if (breadcrumb) {
+    breadcrumb.scrollLeft = breadcrumb.scrollWidth;
+  }
+});
+
+// HORIZONTAL SCROLL WITH MOUSE WHEEL - Breadcrumb
+const breadcrumb = document.querySelector('.breadcrumb-constellation');
+if (breadcrumb) {
+  breadcrumb.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    breadcrumb.scrollLeft += e.deltaY;
+  });
+}
+
+// Breadcrumb bubble click handling - links work normally
 document.addEventListener('click', (e) => {
-  const bubble = e.target.closest('.node-bubble');
-  if (!bubble) return;
-  
-  const scrollZone = e.target.closest('.bubble-scroll-zone');
-  const link = bubble.querySelector('.node-link');
-  if (!link) return;
-  
-  // If clicked on left side (scroll zone) - scroll to it
-  if (scrollZone) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const OFFSET = 50;
-    const rect = bubble.getBoundingClientRect();
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const targetY = rect.top + scrollTop - OFFSET;
-    
-    window.scrollTo({
-      top: targetY,
-      behavior: 'smooth'
-    });
-    
-    // Pulse animation
-    bubble.animate(
-      [
-        { boxShadow: bubble.style.boxShadow },
-        { boxShadow: '0 0 40px rgba(255,255,255,0.8)' },
-        { boxShadow: bubble.style.boxShadow }
-      ],
-      { duration: 600, easing: 'ease-out' }
-    );
-  } 
-  // If clicked on right side - navigate
-  else if (!e.target.closest('a')) {
-    e.preventDefault();
-    window.location.href = link.href;
+  const link = e.target.closest('.node-link');
+  if (link && !e.defaultPrevented) {
+    // Just let the link work normally
+    return;
   }
 });
 
