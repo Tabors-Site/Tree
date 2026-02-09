@@ -9,7 +9,7 @@ import homeRawIdeaPlacement from "./home/raw-idea-placement.js";
 import homeReflect from "./home/reflect.js";
 
 // ── TREE sub-modes ──────────────────────────────────────────────────────
-import treeBuild from "./tree/build.js";
+import treeStructure from "./tree/structure.js";
 import treeEdit from "./tree/edit.js";
 import treeBe from "./tree/be.js";
 import treeReflect from "./tree/reflect.js";
@@ -33,7 +33,7 @@ const ALL_MODES = {
   "home:reflect": homeReflect,
 
   // TREE
-  "tree:build": treeBuild,
+  "tree:structure": treeStructure,
   "tree:edit": treeEdit,
   "tree:be": treeBe,
   "tree:reflect": treeReflect,
@@ -44,7 +44,7 @@ const ALL_MODES = {
 // ─────────────────────────────────────────────────────────────────────────
 const DEFAULT_MODES = {
   [BIG_MODES.HOME]: "home:default",
-  [BIG_MODES.TREE]: "tree:build",
+  [BIG_MODES.TREE]: "tree:structure",
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ const DEFAULT_MODES = {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Get a mode definition by full key (e.g. "tree:build")
+ * Get a mode definition by full key (e.g. "tree:structure")
  */
 export function getMode(modeKey) {
   return ALL_MODES[modeKey] || null;
