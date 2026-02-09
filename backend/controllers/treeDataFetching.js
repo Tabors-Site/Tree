@@ -113,7 +113,7 @@ async function getTree(req, res) {
     res.status(500).json({ message: "Server error" });
   }
 }
-async function getNodeName(nodeId) {
+export async function getNodeName(nodeId) {
   const doc = await Node.findById(nodeId, "name").lean();
   return doc?.name || null;
 }
@@ -180,7 +180,6 @@ async function getNodeForAi(nodeId) {
 
       versions: node.versions || [],
       scripts: node.scripts || [],
-      message: "Use get-tree for overall structure",
     };
   } catch (error) {
     console.error("Error fetching AI node:", error);
@@ -253,8 +252,7 @@ async function getTreeForAi(rootId, filter = null) {
 
     const tree = await simplifyNode(filtered);
     return JSON.stringify({
-      message:
-        "Based on the structure, use get-node to retrieve individual node values and notes.",
+  
       tree,
     });
   } catch (error) {
