@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
-import { setValueForNode, setGoalForNode } from "../core/values.js";
 import { fileTypeFromBuffer } from "file-type";
 import User from "../db/models/user.js";
+import Node from "../db/models/node.js";
+
 import UnderstandingRun from "../db/models/understandingRun.js";
 
 import { emitNavigate } from "../ws/websocket.js";
@@ -21,6 +22,8 @@ const uploadsFolder = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadsFolder)) {
   fs.mkdirSync(uploadsFolder);
 }
+
+import { setValueForNode, setGoalForNode } from "../core/values.js";
 
 import {
   getContributionsByUser,
@@ -51,7 +54,7 @@ import {
   editNodeName,
 } from "../core/treeManagement.js";
 
-import { getRootNodesForUser } from "../core/treeFetch.js";
+import { getRootNodesForUser, getActiveLeafExecutionFrontier } from "../core/treeFetch.js";
 
 import { executeScript, updateScript } from "../core/scripts.js";
 
@@ -1477,6 +1480,48 @@ RULES
       }
     },
   );
+  server.tool(
+  "delete-node-branch",
+  "Used to retire (delete) a node branch and detach it from its parent",
+  {
+    nodeId: z.string().describe("ID of the node branch to delete."),
+    userId: z.string().describe("Injected by server. Ignore."),
+  },
+  {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  async ({ nodeId, userId }) => {
+    try {
+      const deletedNode = await deleteNodeBranch(nodeId, userId);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `🗑️ Node branch retired successfully.\n\n` +
+              `• Node ID: ${deletedNode._id.toString()}\n` +
+              `• Previous Parent: ${deletedNode.parent === "deleted" ? "N/A" : deletedNode.parent}\n` +
+              `• Prestige Version: ${deletedNode.prestige.toString()}`,
+          },
+        ],
+      };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `❌ Failed to delete node branch: ${err.message}`,
+          },
+        ],
+      };
+    }
+  },
+);
+
 
   server.tool(
     "edit-node-name",
@@ -1566,30 +1611,7 @@ RULES
     },
   );
 
-  /*
-    // 🗑️ Delete a node branch
-    server.tool(
-      "delete-node-branch",
-      "Deletes a node and removes all references from its parent and children.",
-      {
-        nodeId: z.string().describe("The ID of the node to delete."),
-        userId: z.string().optional().describe("The user performing the deletion (optional)."),
-      },
-      async ({ nodeId, userId }) => {
-        try {
-          const deleted = await deleteNodeBranch(nodeId, userId);
-          return {
-            content: [{ type: "text", text: `🗑️ Node '${deleted.name}' deleted successfully.` }],
-          };
-        } catch (err) {
-          return {
-            content: [{ type: "text", text: `❌ Failed to delete node: ${err.message}` }],
-          };
-        }
-      }
-    );
-    */
-
+  
   server.tool(
     "get-node-contributions",
     "Fetches contributions for a specific node and prestige version (optionally limited).",
@@ -2322,6 +2344,136 @@ Continue until understanding-next explicitly returns done = true.
     },
   );
 
+server.tool(
+  "get-active-leaf-execution-frontier",
+  "Get the next executable leaf node for BE mode.",
+  {
+    rootNodeId: z.string().describe("Root node of the active tree"),
+  },
+  {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  async ({ rootNodeId }) => {
+    const frontier = await getActiveLeafExecutionFrontier(rootNodeId);
+
+    if (!frontier.leaves?.length) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ done: true }, null, 2),
+          },
+        ],
+      };
+    }
+
+    const primary = frontier.leaves.find(l => l.next);
+
+    if (!primary) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              { error: "Frontier returned no primary leaf." },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }
+
+    // ---- build capped, depth-aware alternates ----
+
+    const MAX_ALTERNATES = 4;
+    const alternates = [];
+
+    const byDepth = new Map();
+    for (const leaf of frontier.leaves) {
+      if (leaf.next) continue;
+      if (!byDepth.has(leaf.depth)) {
+        byDepth.set(leaf.depth, []);
+      }
+      byDepth.get(leaf.depth).push(leaf);
+    }
+
+    const candidateDepths = [
+      primary.depth,
+      primary.depth - 1,
+      primary.depth + 1,
+    ];
+
+    for (const depth of candidateDepths) {
+      const group = byDepth.get(depth);
+      if (!group) continue;
+
+      for (const leaf of group) {
+        if (alternates.length >= MAX_ALTERNATES) break;
+        alternates.push({
+          nodeId: leaf.nodeId,
+          name: leaf.name,
+          path: leaf.path,
+          depth: leaf.depth,
+          versionPrestige: leaf.versionPrestige,
+          versionStatus: leaf.versionStatus,
+        });
+      }
+
+      if (alternates.length >= MAX_ALTERNATES) break;
+    }
+
+    // ---- return MCP payload ----
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              primary: {
+                nodeId: primary.nodeId,
+                name: primary.name,
+                path: primary.path,
+                depth: primary.depth,
+                versionPrestige: primary.versionPrestige,
+                versionStatus: primary.versionStatus,
+              },
+              alternates,
+              execution: {
+                status: "active",
+                isLeaf: true,
+              },
+              instructions: `
+You are in BE mode.
+
+This is where we are right now.
+
+Stay with this step.
+Help the user move it forward.
+Handle all system updates quietly.
+
+When the work here feels complete,
+pause and ask if it’s ready to move on.
+`.trim(),
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  },
+);
+
+
+
+
+
+
   return server;
 }
 
@@ -2604,6 +2756,7 @@ function mapToolCallToApiUrl(toolName, args) {
     htmlShareToken,
     understandingRunId,
     understandingNodeId,
+    parentId
   } = args ?? {};
 
   // 🔑 normalize root once (THIS FIXES THE BREAK)
@@ -2655,6 +2808,7 @@ function mapToolCallToApiUrl(toolName, args) {
           `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}/${understandingNodeId}?html`,
         );
       }
+      
 
       if (understandingRunId && resolvedRootId) {
         return withToken(
@@ -2672,6 +2826,19 @@ function mapToolCallToApiUrl(toolName, args) {
     case "edit-node-version-schedule":
     case "add-node-prestige":
       return withToken(`/api/${nodeId}/${prestige}?html`);
+
+
+      case "create-new-node":
+  if (!nodeId) return null;
+  return withToken(`/api/${nodeId}?html`);
+
+
+  case "create-new-node-branch":
+  if (!parentId) return null;
+  return withToken(`/api/root/${parentId}?html`);
+  case "get-active-leaf-execution-frontier":
+  if (!nodeId || prestige == null) return null;
+  return withToken(`/api/${nodeId}/${prestige}?html`)
 
     /* ---------------- NOTES ---------------- */
 
