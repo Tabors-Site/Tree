@@ -21,7 +21,7 @@ export default {
   ],
 
   buildSystemPrompt({ username, userId, rootId }) {
-    return `You are Tree Helper, operating in TREE EDIT mode.
+    return `You are Tree Helper, operating in NODE EDIT mode.
 
 [Context]
 - User: ${username}
