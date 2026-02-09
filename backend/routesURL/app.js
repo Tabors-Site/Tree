@@ -115,6 +115,35 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
     .clear-chat-btn svg { width: 14px; height: 14px; }
 
+    /* Active root name - inline after Tree in header */
+    .root-name-inline {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+      opacity: 0;
+      cursor: default;
+      transition: opacity 0.3s ease;
+    }
+    .root-name-inline.visible {
+      opacity: 1;
+    }
+    .root-name-inline::before {
+      content: ' / ';
+      color: var(--glass-border-light);
+    }
+    .root-name-inline.fade-in {
+      animation: rootNameFade 0.5s ease;
+    }
+    @keyframes rootNameFade {
+      0% { opacity: 0; transform: translateY(-4px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
     .chat-messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; position: relative; z-index: 1; }
     .chat-messages::-webkit-scrollbar { width: 6px; }
     .chat-messages::-webkit-scrollbar-track { background: transparent; }
@@ -456,7 +485,7 @@ iframe {
       margin-bottom: 12px;
     }
     .mobile-sheet-title-row { width: 100%; display: flex; align-items: center; justify-content: space-between; }
-    .mobile-sheet-title { display: flex; align-items: center; gap: 10px; }
+    .mobile-sheet-title { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
     .mobile-sheet-title .tree-icon { font-size: 24px; }
     .mobile-sheet-title h1 { font-size: 17px; font-weight: 600; }
     .mobile-close-btn { 
@@ -789,8 +818,9 @@ iframe {
       <h1>Tree</h1>
     </div>
   </a>
+  <span class="root-name-inline" id="rootNameLabel" title=""></span>
 
-  <div style="display:flex;align-items:center;gap:0;">
+  <div style="display:flex;align-items:center;gap:0;margin-left:auto;">
     <div class="status-badge">
       <span class="status-dot connecting" id="statusDot"></span>
       <span id="statusText">Connecting...</span>
@@ -897,6 +927,7 @@ iframe {
         <div class="mobile-sheet-title">
           <span class="tree-icon">🌳</span>
           <h1>Tree</h1>
+          <span class="root-name-inline" id="mobileRootNameLabel" title=""></span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <button class="clear-chat-btn" id="mobileClearChatBtn" title="Clear conversation">
@@ -1074,8 +1105,8 @@ iframe {
       showModeAlert(emoji, label);
     });
 
-    socket.on("availableModes", ({ bigMode, modes, currentMode }) => {
-      console.log("[mode] available:", bigMode, modes);
+    socket.on("availableModes", ({ bigMode, modes, currentMode, rootName }) => {
+      console.log("[mode] available:", bigMode, modes, "root:", rootName);
       availableModes = modes || [];
       if (currentMode) currentModeKey = currentMode;
       // If we have a current mode, update the display
@@ -1086,6 +1117,7 @@ iframe {
       }
       renderModeDropdown();
       renderMobileModeBar();
+      updateRootName(rootName);
     });
 
     socket.on("conversationCleared", () => {
@@ -1166,6 +1198,27 @@ iframe {
       lockModeBar(false);
       updateSendButtons();
       socket.emit("cancelRequest");
+    }
+
+    function updateRootName(name) {
+      ["rootNameLabel", "mobileRootNameLabel"].forEach(id => {
+        const el = $(id);
+        if (name) {
+          const changed = el.textContent !== name;
+          el.textContent = name;
+          el.title = name;
+          el.classList.add("visible");
+          if (changed) {
+            el.classList.remove("fade-in");
+            void el.offsetWidth; // force reflow
+            el.classList.add("fade-in");
+          }
+        } else {
+          el.classList.remove("visible", "fade-in");
+          el.textContent = "";
+          el.title = "";
+        }
+      });
     }
 
     // ================================================================
@@ -1260,16 +1313,17 @@ iframe {
 
       if (path && path !== lastEmittedUrl) {
         lastEmittedUrl = path;
-        // Extract rootId from URL patterns - supports ObjectIds (24 hex) and UUIDs
+        // Extract IDs from URL
         const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
         let rootId = null;
+        let nodeId = null;
         const rootMatch = path.match(new RegExp('(?:/api)?/root/(' + ID + ')', 'i'));
         const bareMatch = path.match(new RegExp('(?:/api)?/(' + ID + ')(?:[?/]|$)', 'i'));
         if (rootMatch) rootId = rootMatch[1];
-        else if (bareMatch) rootId = bareMatch[1];
+        else if (bareMatch) nodeId = bareMatch[1];
 
         if (isRegistered) {
-          socket.emit("urlChanged", { url: path, rootId });
+          socket.emit("urlChanged", { url: path, rootId, nodeId });
         }
       }
     }

@@ -1,3 +1,4 @@
+import { getNodeName } from "./../controllers/treeDataFetching.js";
 // ws/websocket.js
 // WebSocket server - handles socket events, delegates to conversation manager
 
@@ -5,12 +6,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
-import {
-  connectToMCP,
-  closeMCPClient,
-  mcpClients,
-  MCP_SERVER_URL,
-} from "./mcp.js";
+import { connectToMCP, closeMCPClient, mcpClients, MCP_SERVER_URL } from "./mcp.js";
 import { useEnergy } from "../core/energy.js";
 import {
   switchMode,
@@ -39,7 +35,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 let io;
 
 // Socket tracking
-const userSockets = new Map(); // visitorId → socket.id
+const userSockets = new Map();  // visitorId → socket.id
 const authSessions = new Map(); // userId → socket.id
 
 // ============================================================================
@@ -76,9 +72,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
   io.on("connection", (socket) => {
     const userId = socket.userId;
-    console.log(
-      `🔗 Socket connected: ${socket.id} (user: ${userId || "anon"})`,
-    );
+    console.log(`🔗 Socket connected: ${socket.id} (user: ${userId || "anon"})`);
 
     // Track auth session
     if (userId) {
@@ -96,10 +90,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     // ── REGISTER ──────────────────────────────────────────────────────
     socket.on("register", async ({ username }) => {
       if (!username) {
-        socket.emit("registered", {
-          success: false,
-          error: "Missing username",
-        });
+        socket.emit("registered", { success: false, error: "Missing username" });
         return;
       }
 
@@ -117,10 +108,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         await connectToMCP(MCP_SERVER_URL, visitorId, username, socket.userId);
         socket.emit("registered", { success: true, visitorId });
       } catch (err) {
-        console.error(
-          `❌ MCP connection failed for ${visitorId}:`,
-          err.message,
-        );
+        console.error(`❌ MCP connection failed for ${visitorId}:`, err.message);
         socket.emit("registered", { success: false, error: err.message });
       }
 
@@ -153,7 +141,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
      * Frontend sends this when the iframe URL changes.
      * Payload: { url: "/root/abc123", rootId?: "abc123" }
      */
-    socket.on("urlChanged", ({ url, rootId }) => {
+    socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
       const visitorId = socket.visitorId;
       if (!visitorId) return;
 
@@ -161,9 +149,18 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const currentMode = getCurrentMode(visitorId);
       const currentBig = currentMode?.split(":")[0] || null;
 
-      // Update rootId if provided
+      // Update rootId based on URL
+      // /root/:id always wins
       if (rootId) {
         setRootId(visitorId, rootId);
+      } else if (nodeId && (currentBig !== newBigMode || !getRootId(visitorId))) {
+        // Accept bare nodeId when big mode is changing OR no rootId set
+        setRootId(visitorId, nodeId);
+      }
+
+      // Clear rootId when going to home
+      if (newBigMode === BIG_MODES.HOME) {
+        setRootId(visitorId, null);
       }
 
       // Switch if big mode changed or no mode set yet
@@ -172,12 +169,19 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           const result = switchBigMode(visitorId, newBigMode, {
             username: socket.username,
             userId: socket.userId,
-            rootId,
+            rootId: getRootId(visitorId),
           });
           socket.emit("modeSwitched", result);
         } catch (err) {
           console.error(`❌ Big mode switch failed:`, err.message);
         }
+      }
+
+      // Look up root name for tree modes
+      const activeRootId = getRootId(visitorId);
+      let rootName = null;
+      if (newBigMode === BIG_MODES.TREE && activeRootId) {
+        try { rootName = await getNodeName(activeRootId); } catch(e) {}
       }
 
       // Always send available modes so frontend stays in sync
@@ -188,13 +192,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         bigMode,
         modes: subModes,
         currentMode: activeMode,
+        rootName,
       });
     });
 
     /**
      * Request available modes for current big mode (e.g., on page load).
      */
-    socket.on("getAvailableModes", ({ url } = {}) => {
+    socket.on("getAvailableModes", async ({ url } = {}) => {
       const visitorId = socket.visitorId;
       if (!visitorId) return;
 
@@ -202,20 +207,23 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       // Determine correct big mode from URL (source of truth)
       const urlBigMode = url ? bigModeFromUrl(url) : null;
-
-      // Extract rootId from URL if present
-      if (url) {
-        const ID =
-          "(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})";
-        const rootMatch = url.match(new RegExp(`(?:/api)?/root/(${ID})`, "i"));
-        const bareMatch = url.match(
-          new RegExp(`(?:/api)?/(${ID})(?:[?/]|$)`, "i"),
-        );
-        const rootId = rootMatch?.[1] || bareMatch?.[1];
-        if (rootId) setRootId(visitorId, rootId);
-      }
-
       const currentBig = currentMode?.split(":")[0] || null;
+
+      // Extract rootId from URL
+      if (url) {
+        const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
+        const rootMatch = url.match(new RegExp(`(?:/api)?/root/(${ID})`, 'i'));
+        const bareMatch = url.match(new RegExp(`(?:/api)?/(${ID})(?:[?/]|$)`, 'i'));
+        if (rootMatch?.[1]) {
+          setRootId(visitorId, rootMatch[1]);
+        } else if (bareMatch?.[1] && (currentBig !== urlBigMode || !getRootId(visitorId))) {
+          setRootId(visitorId, bareMatch[1]);
+        }
+        // Clear rootId when on home
+        if (urlBigMode === BIG_MODES.HOME) {
+          setRootId(visitorId, null);
+        }
+      }
 
       // If no mode, or big mode doesn't match URL → switch to correct big mode
       if (!currentMode || (urlBigMode && currentBig !== urlBigMode)) {
@@ -236,20 +244,25 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const bigMode = currentMode?.split(":")[0] || BIG_MODES.HOME;
       const subModes = getSubModes(bigMode);
 
+      // Look up root name for tree modes
+      const activeRootId = getRootId(visitorId);
+      let rootName = null;
+      if (bigMode === BIG_MODES.TREE && activeRootId) {
+        try { rootName = await getNodeName(activeRootId); } catch(e) {}
+      }
+
       socket.emit("availableModes", {
         bigMode,
         modes: subModes,
         currentMode,
+        rootName,
       });
     });
 
     // ── CHAT ──────────────────────────────────────────────────────────
     socket.on("chat", async ({ message, username, generation }) => {
       if (!message || !username) {
-        socket.emit("chatError", {
-          error: "Missing message or username",
-          generation,
-        });
+        socket.emit("chatError", { error: "Missing message or username", generation });
         return;
       }
 
@@ -321,50 +334,35 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     socket.on("nodeUpdated", ({ nodeId, changes }) => {
       const visitorId = socket.visitorId;
       if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Update] User modified node ${nodeId}. Changes: ${JSON.stringify(changes)}`,
-        );
+        injectContext(visitorId, `[Frontend Update] User modified node ${nodeId}. Changes: ${JSON.stringify(changes)}`);
       }
     });
 
     socket.on("nodeNavigated", ({ nodeId, nodeName }) => {
       const visitorId = socket.visitorId;
       if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Navigation] User navigated to node "${nodeName}" (${nodeId}).`,
-        );
+        injectContext(visitorId, `[Frontend Navigation] User navigated to node "${nodeName}" (${nodeId}).`);
       }
     });
 
     socket.on("nodeSelected", ({ nodeId, nodeName }) => {
       const visitorId = socket.visitorId;
       if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Selection] User is now focusing on node "${nodeName}" (${nodeId}).`,
-        );
+        injectContext(visitorId, `[Frontend Selection] User is now focusing on node "${nodeName}" (${nodeId}).`);
       }
     });
 
     socket.on("nodeCreated", ({ nodeId, nodeName, parentId }) => {
       const visitorId = socket.visitorId;
       if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Action] User created node "${nodeName}" (${nodeId}) under ${parentId}.`,
-        );
+        injectContext(visitorId, `[Frontend Action] User created node "${nodeName}" (${nodeId}) under ${parentId}.`);
       }
     });
 
     socket.on("nodeDeleted", ({ nodeId, nodeName }) => {
       const visitorId = socket.visitorId;
       if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Action] User deleted node "${nodeName}" (${nodeId}).`,
-        );
+        injectContext(visitorId, `[Frontend Action] User deleted node "${nodeName}" (${nodeId}).`);
       }
     });
 
@@ -372,10 +370,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const visitorId = socket.visitorId;
       if (visitorId) {
         const preview = String(noteContent ?? "").slice(0, 100);
-        injectContext(
-          visitorId,
-          `[Frontend Action] User added note to node ${nodeId}: "${preview}${noteContent?.length > 100 ? "..." : ""}"`,
-        );
+        injectContext(visitorId, `[Frontend Action] User added note to node ${nodeId}: "${preview}${noteContent?.length > 100 ? "..." : ""}"`);
       }
     });
 
@@ -409,11 +404,8 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         if (userSockets.get(visitorId) === socket.id) {
           userSockets.delete(visitorId);
           // Clean up MCP client
-          closeMCPClient(visitorId).catch((err) =>
-            console.error(
-              `❌ MCP cleanup failed for ${visitorId}:`,
-              err.message,
-            ),
+          closeMCPClient(visitorId).catch(err =>
+            console.error(`❌ MCP cleanup failed for ${visitorId}:`, err.message)
           );
           // Clean up conversation session
           clearSession(visitorId);
@@ -466,12 +458,11 @@ export function emitToUser(userId, event, data) {
 export function notifyTreeChange({ userId, nodeId, changeType, details }) {
   if (!io) return;
   const socketId = authSessions.get(userId);
-  if (socketId)
-    io.to(socketId).emit("treeChanged", { nodeId, changeType, details });
+  if (socketId) io.to(socketId).emit("treeChanged", { nodeId, changeType, details });
 }
 
 function logStats() {
   console.log(
-    `📊 Auth: ${authSessions.size} | Visitors: ${userSockets.size} | MCP: ${mcpClients.size} | Sessions: ${sessionCount()}`,
+    `📊 Auth: ${authSessions.size} | Visitors: ${userSockets.size} | MCP: ${mcpClients.size} | Sessions: ${sessionCount()}`
   );
 }
