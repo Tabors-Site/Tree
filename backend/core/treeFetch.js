@@ -85,3 +85,111 @@ export async function getDeletedBranchesForUser(userId) {
     name: n.name,
   }));
 }
+
+export async function getActiveLeafExecutionFrontier(rootId) {
+  if (!rootId) {
+    throw new Error("rootId is required");
+  }
+
+  const rootNode = await Node.findById(rootId)
+    .select("_id name children versions")
+    .lean()
+    .exec();
+
+  if (!rootNode) {
+    return { rootId, leaves: [] };
+  }
+
+  const leaves = [];
+
+  // ---- helpers ----
+
+  function getCurrentVersion(node) {
+    if (!Array.isArray(node.versions) || node.versions.length === 0) {
+      return null;
+    }
+    return node.versions.reduce((latest, v) =>
+      v.prestige > latest.prestige ? v : latest
+    );
+  }
+
+  function isActive(node) {
+    return getCurrentVersion(node)?.status === "active";
+  }
+
+  // ---- TRUE DFS (post-order) ----
+  async function traverse(node, depth, path) {
+    const currentVersion = getCurrentVersion(node);
+    if (!currentVersion || currentVersion.status !== "active") {
+      return false;
+    }
+
+    let foundDeeperActive = false;
+
+    const childrenIds = Array.isArray(node.children)
+      ? node.children
+      : [];
+
+    if (childrenIds.length > 0) {
+      const children = await Node.find({ _id: { $in: childrenIds } })
+        .select("_id name children versions")
+        .lean()
+        .exec();
+
+      const childrenById = new Map(
+        children.map((c) => [c._id.toString(), c])
+      );
+
+      const orderedChildren = childrenIds
+        .map((id) => childrenById.get(id.toString()))
+        .filter(Boolean);
+
+      for (const child of orderedChildren) {
+        const childHasActive = await traverse(
+          child,
+          depth + 1,
+          [...path, child.name]
+        );
+        if (childHasActive) {
+          foundDeeperActive = true;
+        }
+      }
+    }
+
+    // ✅ Leaf = no active descendants
+    if (!foundDeeperActive) {
+      leaves.push({
+        nodeId: node._id.toString(),
+        name: node.name,
+        path,
+        depth,
+
+        // 🔑 version context
+        versionPrestige: currentVersion.prestige,
+        versionStatus: currentVersion.status,
+
+        next: false,
+      });
+    }
+
+    return true;
+  }
+
+  await traverse(rootNode, 0, []);
+
+  // First leaf in post-order DFS = deepest-leftmost
+  if (leaves.length > 0) {
+    leaves[0].next = true;
+  }
+
+  return {
+    rootId,
+    leaves,
+  };
+}
+
+
+
+
+
+
