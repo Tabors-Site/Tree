@@ -1087,8 +1087,8 @@ iframe {
     // NEW: Mode switching socket events
     // ================================================================
 
-    socket.on("modeSwitched", ({ modeKey, emoji, label, alert, carriedMessages }) => {
-      console.log("[mode] switched to:", modeKey, "carried:", carriedMessages?.length || 0);
+    socket.on("modeSwitched", ({ modeKey, emoji, label, alert, carriedMessages, silent }) => {
+      console.log("[mode] switched to:", modeKey, silent ? "(silent)" : "", "carried:", carriedMessages?.length || 0);
       currentModeKey = modeKey;
       // Update desktop mode bar current display
       $("modeCurrentEmoji").textContent = emoji;
@@ -1099,10 +1099,19 @@ iframe {
         renderModeDropdown();
         renderMobileModeBar();
       }
-      // Clear chat and show carried messages dimmed
-      clearChatUI(carriedMessages || []);
-      // Show alert toast
-      showModeAlert(emoji, label);
+      if (!silent) {
+        // Reset sending state if a request was in-flight
+        if (isSending) {
+          isSending = false;
+          removeTypingIndicator();
+          lockModeBar(false);
+          updateSendButtons();
+        }
+        // Clear chat and show mode-specific welcome
+        clearChatUI(carriedMessages || [], modeKey, emoji);
+        // Show alert toast
+        showModeAlert(emoji, label);
+      }
     });
 
     socket.on("availableModes", ({ bigMode, modes, currentMode, rootName }) => {
@@ -1122,7 +1131,7 @@ iframe {
 
     socket.on("conversationCleared", () => {
       console.log("[socket] conversation manually cleared");
-      clearChatUI();
+      clearChatUI([], currentModeKey);
     });
 
     // ================================================================
@@ -1262,9 +1271,56 @@ iframe {
     // NEW: Clear chat UI helper
     // ================================================================
 
-    function clearChatUI(carriedMessages) {
+    const MODE_WELCOMES = {
+     "home:default": {
+  icon: "🌳",
+  title: "Welcome to Tree",
+  desc: "Your intelligent workspace is ready — build, explore, and reflect"
+},
+
+"home:raw-idea-placement": {
+  icon: "💡",
+  title: "Raw Ideas",
+  desc: "Capture unstructured thoughts and gradually grow them into trees (work in progress)"
+},
+
+"home:reflect": {
+  icon: "🪞",
+  title: "Reflect",
+  desc: "Review your notes, tags, and contributions across all your trees"
+},
+
+"tree:structure": {
+  icon: "🏗️",
+  title: "Structure Mode",
+  desc: "Create, reorganize, and grow the overall shape of your tree"
+},
+
+"tree:be": {
+  icon: "🎯",
+  title: "Be Mode",
+  desc: "Focus on one active leaf at a time and work through it step by step"
+},
+
+"tree:reflect": {
+  icon: "🔮",
+  title: "Reflect Mode",
+  desc: "Look at your tree as a whole to spot gaps, patterns, and opportunities"
+},
+
+"tree:edit": {
+  icon: "✏️",
+  title: "Edit Mode",
+  desc: "Refine names, values, notes, and details within your tree"
+}
+
+    };
+
+    function clearChatUI(carriedMessages, modeKey, emoji) {
       // Filter out empty/blank messages
       const valid = (carriedMessages || []).filter(m => m.content && m.content.trim());
+
+      const welcome = MODE_WELCOMES[modeKey] || { icon: emoji || "🌳", title: "Ready", desc: "How can I help?" };
 
       [chatMessages, mobileChatMessages].forEach(container => {
         container.innerHTML = '';
@@ -1282,7 +1338,7 @@ iframe {
           });
           container.scrollTop = container.scrollHeight;
         } else {
-          container.innerHTML = '<div class="welcome-message"><div class="welcome-icon">🌳</div><h2>Welcome to Tree</h2><p>Your intelligent workspace is ready</p></div>';
+          container.innerHTML = '<div class="welcome-message"><div class="welcome-icon">' + welcome.icon + '</div><h2>' + welcome.title + '</h2><p>' + welcome.desc + '</p></div>';
         }
       });
     }
@@ -1827,7 +1883,7 @@ iframe {
       if (!isRegistered) return;
       if (isSending) cancelRequest();
       socket.emit("clearConversation");
-      clearChatUI();
+      clearChatUI([], currentModeKey);
     }
 
     $("clearChatBtn").addEventListener("click", handleClearChat);

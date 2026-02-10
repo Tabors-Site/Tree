@@ -31,27 +31,25 @@ const TOOL_DEFS = {
     },
   },
   // ── READ ──────────────────────────────────────────────────────────────
-// ── READ ──────────────────────────────────────────────────────────────
-"get-active-leaf-execution-frontier": {
-  type: "function",
-  function: {
-    name: "get-active-leaf-execution-frontier",
-    description:
-      "Get the next executable leaf node for BE mode. This function is authoritative and determines what step should be worked on next.",
-    parameters: {
-      type: "object",
-      properties: {
-        rootNodeId: {
-          type: "string",
-          description: "Root node ID of the active tree",
+  // ── READ ──────────────────────────────────────────────────────────────
+  "get-active-leaf-execution-frontier": {
+    type: "function",
+    function: {
+      name: "get-active-leaf-execution-frontier",
+      description:
+        "Get the next executable leaf node for BE mode. This function is authoritative and determines what step should be worked on next.",
+      parameters: {
+        type: "object",
+        properties: {
+          rootNodeId: {
+            type: "string",
+            description: "Root node ID of the active tree",
+          },
         },
+        required: ["rootNodeId"],
       },
-      required: ["rootNodeId"],
     },
   },
-},
-
-
 
   "get-node": {
     type: "function",
@@ -378,7 +376,7 @@ const TOOL_DEFS = {
       },
     },
   },
-  
+
   "create-tree": {
     type: "function",
     function: {
@@ -434,27 +432,50 @@ const TOOL_DEFS = {
       },
     },
   },
-"delete-node-branch": {
-  type: "function",
-  function: {
-    name: "delete-node-branch",
-    description: "Retire (delete) a node branch and detach it from its parent.",
-    parameters: {
-      type: "object",
-      properties: {
-        nodeId: {
-          type: "string",
-          description: "ID of the node branch to be retired.",
+  "delete-node-branch": {
+    type: "function",
+    function: {
+      name: "delete-node-branch",
+      description:
+        "Retire (delete) a node branch and detach it from its parent.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: {
+            type: "string",
+            description: "ID of the node branch to be retired.",
+          },
+          userId: {
+            type: "string",
+            description: "User performing the delete action.",
+          },
         },
-        userId: {
-          type: "string",
-          description: "User performing the delete action.",
-        },
+        required: ["nodeId", "userId"],
       },
-      required: ["nodeId", "userId"],
     },
   },
-},
+  "navigate-tree": {
+    type: "function",
+    function: {
+      name: "navigate-tree",
+      description:
+        "Return minimal structural context for navigating a tree (current node, parent, children, siblings, root).",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: {
+            type: "string",
+            description: "The current node ID to navigate from.",
+          },
+          userId: {
+            type: "string",
+            description: "Injected by server. Ignore.",
+          },
+        },
+        required: ["nodeId", "userId"],
+      },
+    },
+  },
 
   "edit-node-name": {
     type: "function",

@@ -14,10 +14,10 @@ export default {
     "get-tree",
     "get-node",
     "get-node-contributions",
-    "understanding-create",
+    /*"understanding-create",
     "understanding-next",
     "understanding-capture",
-    "understanding-finisher",
+    "understanding-finisher",*/
   ],
 
   buildSystemPrompt({ username, userId, rootId }) {
@@ -37,13 +37,6 @@ Help the user think about and understand their tree:
 - Discuss patterns, gaps, and potential improvements
 - Help form plans that can be executed in Build or Edit modes
 
-[Understanding Runs]
-Understanding is a bottom-up summarization process:
-1. understanding-create: Start a run (optionally with a perspective/focus)
-2. understanding-next: Get the next node to summarize
-3. understanding-capture: Save your summarization (mode: "leaf" or "merge")
-4. Repeat steps 2-3 until all nodes are processed
-5. understanding-finisher: Auto-complete any remaining nodes
 
 The process goes from leaves up to root, building layered understanding.
 
@@ -71,3 +64,12 @@ this conversation will carry over to help inform those actions.
 - Convert times to Pacific Time Zone`.trim();
   },
 };
+/*
+[Understanding Runs]
+Understanding is a bottom-up summarization process:
+1. understanding-create: Start a run (optionally with a perspective/focus)
+2. understanding-next: Get the next node to summarize
+3. understanding-capture: Save your summarization (mode: "leaf" or "merge")
+4. Repeat steps 2-3 until all nodes are processed
+5. understanding-finisher: Auto-complete any remaining nodes
+*/
