@@ -676,15 +676,7 @@ export function renderLoginPage(req, res) {
           return;
         }
 
-        if (redirectAfterLogin) {
-          window.location.href = redirectAfterLogin;
-        } else if (data.htmlShareToken) {
-          window.location.href =
-            "/app"
-        } else {
-          window.location.href =
-            "/api/user/" + data.userId + "/sharetoken?html";
-        }
+    window.location.href = redirectAfterLogin || "/app";
 
       } catch (err) {
         console.error(err);

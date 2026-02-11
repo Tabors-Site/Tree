@@ -152,7 +152,7 @@ const verifyEmail = async (req, res) => {
 
     await tempUser.deleteOne();
     return res.redirect(
-      `https://tree.tabors.site/api/user/${user._id}/shareToken?html`
+      `https://tree.tabors.site/app`
     );
   } catch (err) {
     console.error("[verifyEmail]", err);

@@ -1,6 +1,12 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
+
+
 import { v4 as uuidv4 } from "uuid";
+function generateHtmlShareToken() {
+  return crypto.randomBytes(16).toString("base64url"); // URL-safe
+}
 
 const ApiKeySchema = new mongoose.Schema(
   {
@@ -66,7 +72,7 @@ const UserSchema = new mongoose.Schema({
     type: EnergySchema,
     required: true,
     default: () => ({
-      amount: 60,
+      amount: 250,//a little higher for new users. default reset is 100 for basic
       lastResetAt: new Date(),
     }),
   },
@@ -98,6 +104,17 @@ UserSchema.pre("save", async function (next) {
 UserSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+
+//generate share token on new account
+UserSchema.pre("save", async function (next) {
+  // Only set on first creation
+  if (this.isNew && !this.htmlShareToken) {
+    this.htmlShareToken = generateHtmlShareToken();
+  }
+
+  next();
+});
 
 const User = mongoose.model("User", UserSchema);
 export default User;
