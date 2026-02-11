@@ -61,19 +61,35 @@ export function switchMode(visitorId, newModeKey, ctx) {
   const oldModeKey = session.modeKey;
   const oldMessages = session.messages;
 
-  // Determine how many messages to carry over
-  let carryCount = CARRY_MESSAGES;
+  let recentMessages = [];
+  let carriedContext = [];
 
-  // Reflect modes get extra context carry for plan formation
-  const oldMode = oldModeKey ? getMode(oldModeKey) : null;
-  if (oldMode?.preserveContextOnSwitch) {
-    carryCount = Math.min(oldMessages.length, 8); // carry more from reflect
+  // Skip carry when doing a full reset (big mode switch)
+  if (!ctx.clearHistory) {
+    // Determine how many messages to carry over
+    let carryCount = CARRY_MESSAGES;
+
+    // Reflect modes get extra context carry for plan formation
+    const oldMode = oldModeKey ? getMode(oldModeKey) : null;
+    if (oldMode?.preserveContextOnSwitch) {
+      carryCount = Math.min(oldMessages.length, 8);
+    }
+
+    recentMessages = oldMessages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(-carryCount);
+
+    carriedContext =
+      recentMessages.length > 0
+        ? [
+            {
+              role: "system",
+              content: `[Mode Switch] Switched from ${oldModeKey || "none"} to ${newModeKey}. Here is recent conversation context for continuity:`,
+            },
+            ...recentMessages,
+          ]
+        : [];
   }
-
-  // Extract recent user/assistant messages (skip system & tool messages)
-  const recentMessages = oldMessages
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .slice(-carryCount);
 
   // Build new system prompt
   const systemPrompt = buildPromptForMode(newModeKey, {
@@ -81,18 +97,6 @@ export function switchMode(visitorId, newModeKey, ctx) {
     userId: ctx.userId,
     rootId: session.rootId || ctx.rootId,
   });
-
-  // Build carried context summary if there are messages to carry
-  const carriedContext =
-    recentMessages.length > 0
-      ? [
-          {
-            role: "system",
-            content: `[Mode Switch] Switched from ${oldModeKey || "none"} to ${newModeKey}. Here is recent conversation context for continuity:`,
-          },
-          ...recentMessages,
-        ]
-      : [];
 
   // Reset conversation with new system prompt + carried context
   session.messages = [
@@ -103,7 +107,7 @@ export function switchMode(visitorId, newModeKey, ctx) {
   session.bigMode = mode.bigMode;
 
   console.log(
-    `🔄 Mode switch for ${visitorId}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`
+    `🔄 Mode switch for ${visitorId}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`,
   );
 
   return {
@@ -111,7 +115,10 @@ export function switchMode(visitorId, newModeKey, ctx) {
     emoji: mode.emoji,
     label: mode.label,
     alert: `${mode.emoji} ${mode.label}`,
-    carriedMessages: recentMessages.map((m) => ({ role: m.role, content: m.content })),
+    carriedMessages: recentMessages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    })),
   };
 }
 
@@ -121,7 +128,7 @@ export function switchMode(visitorId, newModeKey, ctx) {
 export function switchBigMode(visitorId, bigMode, ctx) {
   const defaultModeKey = getDefaultMode(bigMode);
   if (!defaultModeKey) throw new Error(`No default mode for: ${bigMode}`);
-  return switchMode(visitorId, defaultModeKey, ctx);
+  return switchMode(visitorId, defaultModeKey, { ...ctx, clearHistory: true });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -133,6 +140,7 @@ export function switchBigMode(visitorId, bigMode, ctx) {
  */
 export async function processMessage(visitorId, message, ctx) {
   const session = getSession(visitorId);
+  const isInternal = ctx?.meta?.internal === true;
 
   // Ensure we have a mode - default to home:default
   if (!session.modeKey) {
@@ -144,11 +152,19 @@ export async function processMessage(visitorId, message, ctx) {
   // Ensure MCP client
   let client = mcpClients.get(visitorId);
   if (!client) {
-    client = await connectToMCP(MCP_SERVER_URL, visitorId, ctx.username, ctx.userId);
+    client = await connectToMCP(
+      MCP_SERVER_URL,
+      visitorId,
+      ctx.username,
+      ctx.userId,
+    );
   }
 
   // Check for conversation length - loop if needed (BE mode)
-  if (mode.maxMessagesBeforeLoop && session.messages.length > mode.maxMessagesBeforeLoop) {
+  if (
+    mode.maxMessagesBeforeLoop &&
+    session.messages.length > mode.maxMessagesBeforeLoop
+  ) {
     console.log(`🔁 Conversation loop for ${visitorId} in ${session.modeKey}`);
     const recentMessages = session.messages
       .filter((m) => m.role === "user" || m.role === "assistant")
@@ -188,7 +204,9 @@ export async function processMessage(visitorId, message, ctx) {
   }
 
   // Add user message
-  session.messages.push({ role: "user", content: message });
+  if (!isInternal) {
+    session.messages.push({ role: "user", content: message });
+  }
 
   // Get tools for current mode
   const tools = getToolsForMode(session.modeKey);
@@ -225,10 +243,29 @@ export async function processMessage(visitorId, message, ctx) {
     if (!choice) break;
 
     const assistantMessage = choice.message;
-    session.messages.push(assistantMessage);
 
-    // No tool calls = final response
-    if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+    // Always append assistant message for tool reasoning
+    if (!isInternal) {
+      session.messages.push(assistantMessage);
+    }
+
+    // If tools are requested, continue the loop
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      // tool execution happens below
+    } else {
+      // ✅ No tools left → now safe to return for internal mode
+      if (isInternal) {
+        const raw = assistantMessage.content;
+        try {
+          return JSON.parse(raw);
+        } catch (err) {
+          return {
+            action: "error",
+            reason: "Internal mode returned invalid JSON",
+            raw,
+          };
+        }
+      }
       break;
     }
 
@@ -252,7 +289,11 @@ export async function processMessage(visitorId, message, ctx) {
           tool_call_id: toolCall.id,
           content: JSON.stringify({ error: "Invalid arguments" }),
         });
-        toolResults.push({ tool: toolName, success: false, error: "Invalid arguments" });
+        toolResults.push({
+          tool: toolName,
+          success: false,
+          error: "Invalid arguments",
+        });
         continue;
       }
 
@@ -262,9 +303,14 @@ export async function processMessage(visitorId, message, ctx) {
       console.log(`🔧 [${session.modeKey}] ${toolName}`, args);
 
       try {
-        const result = await client.callTool({ name: toolName, arguments: args });
+        const result = await client.callTool({
+          name: toolName,
+          arguments: args,
+        });
         const resultText =
-          result?.contents?.[0]?.text || result?.content?.[0]?.text || JSON.stringify(result);
+          result?.contents?.[0]?.text ||
+          result?.content?.[0]?.text ||
+          JSON.stringify(result);
 
         session.messages.push({
           role: "tool",
@@ -282,7 +328,12 @@ export async function processMessage(visitorId, message, ctx) {
           content: JSON.stringify({ error: err.message }),
         });
 
-        toolResults.push({ tool: toolName, args, success: false, error: err.message });
+        toolResults.push({
+          tool: toolName,
+          args,
+          success: false,
+          error: err.message,
+        });
       }
     }
 
@@ -304,9 +355,11 @@ export async function processMessage(visitorId, message, ctx) {
   const finalAnswer = response?.choices?.[0]?.message?.content || "Done.";
 
   // Only push if not already the last message
-  const lastMsg = session.messages[session.messages.length - 1];
-  if (lastMsg?.role !== "assistant" || lastMsg?.content !== finalAnswer) {
-    session.messages.push({ role: "assistant", content: finalAnswer });
+  if (!isInternal) {
+    const lastMsg = session.messages[session.messages.length - 1];
+    if (lastMsg?.role !== "assistant" || lastMsg?.content !== finalAnswer) {
+      session.messages.push({ role: "assistant", content: finalAnswer });
+    }
   }
 
   return {
@@ -367,7 +420,9 @@ export function resetConversation(visitorId, ctx) {
   });
 
   session.messages = [{ role: "system", content: systemPrompt }];
-  console.log(`🔄 Reset conversation for ${visitorId} (mode: ${session.modeKey}, root: ${session.rootId})`);
+  console.log(
+    `🔄 Reset conversation for ${visitorId} (mode: ${session.modeKey}, root: ${session.rootId})`,
+  );
 }
 
 export function getConversation(visitorId) {

@@ -529,6 +529,26 @@ const TOOL_DEFS = {
   },
 
   // ── UNDERSTANDING ─────────────────────────────────────────────────────
+  // ── UNDERSTANDING ─────────────────────────────────────────────────────
+  "understanding-list": {
+    type: "function",
+    function: {
+      name: "understanding-list",
+      description:
+        "List existing understanding runs (perspectives) for a tree root.",
+      parameters: {
+        type: "object",
+        properties: {
+          rootNodeId: {
+            type: "string",
+            description: "Root node ID to list understandings for.",
+          },
+        },
+        required: ["rootNodeId"],
+      },
+    },
+  },
+
   "understanding-create": {
     type: "function",
     function: {
@@ -548,52 +568,35 @@ const TOOL_DEFS = {
     },
   },
 
-  "understanding-next": {
+  "understanding-process": {
     type: "function",
     function: {
-      name: "understanding-next",
-      description: "Get next summarization payload.",
+      name: "understanding-process",
+      description:
+        "Commits previous summary (if any) and returns next summarization task. Loop until done.",
       parameters: {
         type: "object",
         properties: {
           understandingRunId: { type: "string" },
           rootNodeId: { type: "string" },
-        },
-        required: ["understandingRunId", "rootNodeId"],
-      },
-    },
-  },
-
-  "understanding-capture": {
-    type: "function",
-    function: {
-      name: "understanding-capture",
-      description: "Save summarization result.",
-      parameters: {
-        type: "object",
-        properties: {
-          mode: { type: "string", enum: ["leaf", "merge"] },
-          understandingRunId: { type: "string" },
-          rootNodeId: { type: "string" },
-          understandingNodeId: { type: "string" },
-          currentLayer: { type: "number" },
-          encoding: { type: "string", description: "Summary text" },
-        },
-        required: ["mode", "understandingRunId", "rootNodeId", "encoding"],
-      },
-    },
-  },
-
-  "understanding-finisher": {
-    type: "function",
-    function: {
-      name: "understanding-finisher",
-      description: "Auto-complete understanding run.",
-      parameters: {
-        type: "object",
-        properties: {
-          understandingRunId: { type: "string" },
-          rootNodeId: { type: "string" },
+          previousResult: {
+            type: "object",
+            description:
+              "Omit on first call. Include your summary from previous task on subsequent calls.",
+            properties: {
+              mode: { type: "string", enum: ["leaf", "merge"] },
+              encoding: { type: "string", description: "Your summary text" },
+              understandingNodeId: {
+                type: "string",
+                description: "From target.understandingNodeId",
+              },
+              currentLayer: {
+                type: "number",
+                description: "Required for merge mode — from target.nextLayer",
+              },
+            },
+            required: ["mode", "encoding"],
+          },
         },
         required: ["understandingRunId", "rootNodeId"],
       },

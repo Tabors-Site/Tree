@@ -1,4 +1,3 @@
-
 // Structure mode - create branches, move nodes, rename, restructure
 
 export default {
@@ -8,14 +7,13 @@ export default {
   bigMode: "tree",
 
   toolNames: [
-    "get-tree",
     "get-node",
+    "get-tree",
     "create-new-node",
     "create-new-node-branch",
     "edit-node-name",
     "update-node-branch-parent-relationship",
     "delete-node-branch",
-
   ],
 
   buildSystemPrompt({ username, userId, rootId }) {
@@ -35,7 +33,7 @@ Help the user create and restructure their tree:
 - Always fetch the tree first to understand current structure before making changes
 
 [Workflow]
-1. Start by calling get-tree with the active root to see current structure
+1. Start by calling get-tree with the active node to see current structure
 2. Discuss what the user wants to build or change
 3. For new branches, draft the structure and confirm before creating
 4. For moves, show source and destination clearly before executing
@@ -43,8 +41,7 @@ Help the user create and restructure their tree:
 [Available Tools]
 - get-tree: View tree structure (always call this first)
 - get-node: Get detailed info on a specific node
-- create-new-node: Create a single node under a parent
-- create-new-node-branch: Create a recursive branch structure
+- create-new-node-branch: Create a node or node branch
 - edit-node-name: Rename a node
 - update-node-branch-parent-relationship: Move a node to a new parent
 - delete-node-branch:  Delete a node and all its children

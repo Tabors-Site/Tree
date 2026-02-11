@@ -72,12 +72,8 @@ const SIGNALS = {
       // nouns
       "plan",
       "section",
-      "branch",
-      "node",
-      "child",
-      "children",
+
       "parent",
-      "tree",
       "hierarchy",
     ],
   },
@@ -168,6 +164,57 @@ const SIGNALS = {
     ],
     words: [],
   },
+  navigate: {
+    // Locating / pointing / referencing existing nodes
+    phrases: [
+      "find",
+      "look for",
+      "search for",
+      "take me to",
+      "go to",
+      "go back",
+      "open",
+      "show",
+      "jump to",
+      "navigate to",
+      "where is",
+      "which one is",
+      "the one called",
+      "the node called",
+      "the branch called",
+    ],
+    words: [
+      // verbs
+      "find",
+      "look",
+      "search",
+      "locate",
+      "navigate",
+      "open",
+      "show",
+      "view",
+      "access",
+
+      // nouns / references
+      "node",
+      "branch",
+      "section",
+      "item",
+      "one",
+      "that",
+      "this",
+      "there",
+    ],
+  },
+  be: {
+    phrases: [
+      "enter be mode",
+      "be mode",
+      "switch to be",
+      "go to be mode",
+      "start be mode",
+    ],
+  },
 };
 
 const NEGATIONS = /\b(don't|dont|do not|doesn't|never|not|no)\b/i;
@@ -215,12 +262,29 @@ function isActionableQuestion(text) {
   ].some((pattern) => pattern.test(text));
 }
 
+function isExplicitBeCommand(text) {
+  return SIGNALS.be.phrases.some((p) => text === p || text.startsWith(p + " "));
+}
+
 // ---------------- main ----------------
 
 export function determineIntent({ message, currentMode }) {
   if (!message) return { action: "stay", confidence: 0 };
 
   const text = message.toLowerCase().trim();
+
+  // ---- BE MODE (explicit command only) ----
+  if (isExplicitBeCommand(text)) {
+    const targetMode = "tree:be";
+    if (currentMode === targetMode) {
+      return { action: "stay", confidence: 10 };
+    }
+    return {
+      action: "switch",
+      targetMode,
+      confidence: 10,
+    };
+  }
 
   // Soft negation guard
   if (
@@ -234,6 +298,7 @@ export function determineIntent({ message, currentMode }) {
     structure: scoreIntent(text, SIGNALS.structure),
     edit: scoreIntent(text, SIGNALS.edit),
     reflect: scoreIntent(text, SIGNALS.reflect),
+    navigate: scoreIntent(text, SIGNALS.navigate),
   };
 
   const nonZero = getNonZeroIntents(scores);
@@ -250,6 +315,22 @@ export function determineIntent({ message, currentMode }) {
       return { action: "stay", confidence: scores.edit };
     }
     return { action: "switch", targetMode, confidence: scores.edit };
+  }
+  // ---- NAVIGATE (location-only intent) ----
+  if (
+    scores.navigate >= 3 &&
+    scores.edit === 0 &&
+    !/(add|create|delete|remove|move|split|merge|rename)/i.test(text)
+  ) {
+    const targetMode = "tree:navigate";
+    if (currentMode === targetMode) {
+      return { action: "stay", confidence: scores.navigate };
+    }
+    return {
+      action: "switch",
+      targetMode,
+      confidence: scores.navigate,
+    };
   }
 
   // ---- STRUCTURE ----

@@ -13,6 +13,9 @@ import treeStructure from "./tree/structure.js";
 import treeEdit from "./tree/edit.js";
 import treeBe from "./tree/be.js";
 import treeReflect from "./tree/reflect.js";
+import treeNavigate from "./tree/navigate.js";
+import treeUnderstand from "./tree/understand.js";
+
 
 // ─────────────────────────────────────────────────────────────────────────
 // BIG MODES
@@ -33,10 +36,13 @@ const ALL_MODES = {
   "home:reflect": homeReflect,
 
   // TREE
+  "tree:navigate": treeNavigate, // 👈 ADD THIS
+
   "tree:structure": treeStructure,
   "tree:edit": treeEdit,
   "tree:be": treeBe,
   "tree:reflect": treeReflect,
+  "tree:understand": treeUnderstand,
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -44,7 +50,7 @@ const ALL_MODES = {
 // ─────────────────────────────────────────────────────────────────────────
 const DEFAULT_MODES = {
   [BIG_MODES.HOME]: "home:default",
-  [BIG_MODES.TREE]: "tree:structure",
+  [BIG_MODES.TREE]: "tree:navigate",
 };
 
 // ─────────────────────────────────────────────────────────────────────────

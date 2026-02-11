@@ -13,7 +13,7 @@ import {
 } from "./mcp.js";
 import { useEnergy } from "../core/energy.js";
 import { getNodeName } from "../controllers/treeDataFetching.js";
-import { determineIntent } from "./modes/intent.js";
+import { orchestrateTreeRequest } from "./orchestrator/treeOrchestrator.js";
 import {
   switchMode,
   switchBigMode,
@@ -329,41 +329,36 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       try {
         const currentMode = getCurrentMode(visitorId);
+        const bigMode = currentMode?.split(":")[0] || null;
+        let response;
 
-        // ✅ Only run intent logic inside TREE big mode
-        if (currentMode && currentMode.startsWith("tree:")) {
-          const decision = determineIntent({
+        if (bigMode === "tree") {
+          // Tree mode: full orchestration (navigate → intent → execute)
+          response = await orchestrateTreeRequest({
+            visitorId,
             message,
-            currentMode,
+            socket,
+            username,
+            userId: socket.userId,
+            signal: abort.signal,
           });
-
-          const meta = {
+        } else {
+          // Home mode: direct processing
+          response = await processMessage(visitorId, message, {
             username,
             userId: socket.userId,
             rootId: getRootId(visitorId),
-          };
-
-          // Require confidence >= 2 to prevent false positives
-          if (decision.action === "switch" && decision.confidence >= 1) {
-            const result = switchMode(visitorId, decision.targetMode, meta);
-            socket.emit("modeSwitched", { ...result, silent: true });
-          }
+            signal: abort.signal,
+            onToolResults(results) {
+              if (abort.signal.aborted) return;
+              for (const r of results) {
+                socket.emit("toolResult", r);
+              }
+            },
+          });
         }
-        const response = await processMessage(visitorId, message, {
-          username,
-          userId: socket.userId,
-          rootId: getRootId(visitorId),
-          signal: abort.signal,
-          onToolResults(results) {
-            if (abort.signal.aborted) return;
-            // Real-time tool result emission
-            for (const r of results) {
-              socket.emit("toolResult", r);
-            }
-          },
-        });
 
-        if (!abort.signal.aborted) {
+        if (response && !abort.signal.aborted) {
           socket.emit("chatResponse", { ...response, generation });
         }
       } catch (err) {

@@ -57,6 +57,7 @@ Help the user modify node data:
 - edit-node-name: Rename a node
 
 [Rules]
+- Assume root node if user doesn't exact spot
 - Always fetch node data before editing to confirm current state
 - Goals must correspond to existing value keys - check first
 - Confirm before: status changes with inheritance, deleting notes, prestige increments
