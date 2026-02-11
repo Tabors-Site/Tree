@@ -1285,7 +1285,7 @@ iframe {
 },
 
 "home:reflect": {
-  icon: "🪞",
+  icon: "🔮",
   title: "Reflect",
   desc: "Review your notes, tags, and contributions across all your trees"
 },

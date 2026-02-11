@@ -4152,8 +4152,7 @@ body::after {
         <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
       <div class="header-subtitle">
-        Organize raw ideas by placing them as notes on the appropriate node. You can use the ChatGPT connector to automate this process.
-      </div>
+Convert loose thoughts into structure.      </div>
 
       <!-- Search Form -->
       <form method="GET" action="/api/user/${userId}/raw-ideas" class="search-form">
@@ -7536,7 +7535,7 @@ input:focus {
 
           <div class="info-box">
             <div class="info-box-content">
-              Change your token anytime to revoke access.
+              Change your token anytime to revoke shared URL access.
             </div>
           </div>
 
