@@ -109,7 +109,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
       return null;
     }
     return node.versions.reduce((latest, v) =>
-      v.prestige > latest.prestige ? v : latest
+      v.prestige > latest.prestige ? v : latest,
     );
   }
 
@@ -126,9 +126,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
 
     let foundDeeperActive = false;
 
-    const childrenIds = Array.isArray(node.children)
-      ? node.children
-      : [];
+    const childrenIds = Array.isArray(node.children) ? node.children : [];
 
     if (childrenIds.length > 0) {
       const children = await Node.find({ _id: { $in: childrenIds } })
@@ -136,20 +134,17 @@ export async function getActiveLeafExecutionFrontier(rootId) {
         .lean()
         .exec();
 
-      const childrenById = new Map(
-        children.map((c) => [c._id.toString(), c])
-      );
+      const childrenById = new Map(children.map((c) => [c._id.toString(), c]));
 
       const orderedChildren = childrenIds
         .map((id) => childrenById.get(id.toString()))
         .filter(Boolean);
 
       for (const child of orderedChildren) {
-        const childHasActive = await traverse(
-          child,
-          depth + 1,
-          [...path, child.name]
-        );
+        const childHasActive = await traverse(child, depth + 1, [
+          ...path,
+          child.name,
+        ]);
         if (childHasActive) {
           foundDeeperActive = true;
         }
@@ -188,8 +183,122 @@ export async function getActiveLeafExecutionFrontier(rootId) {
   };
 }
 
+export async function getNavigationContext(nodeId) {
+  if (!nodeId) {
+    throw new Error("nodeId is required");
+  }
 
+  // ---- Load current node ----
+  const current = await Node.findById(nodeId)
+    .select("_id name parent children rootOwner")
+    .lean()
+    .exec();
 
+  if (!current) {
+    throw new Error("Node not found");
+  }
 
+  const isRoot = !!current.rootOwner;
 
+  // ---- Parent ----
+  let parent = null;
+  let siblings = [];
 
+  if (current.parent && current.parent !== "deleted") {
+    parent = await Node.findById(current.parent)
+      .select("_id name children")
+      .lean()
+      .exec();
+
+    if (parent?.children?.length) {
+      const siblingIds = parent.children.filter(
+        (id) => id.toString() !== current._id.toString(),
+      );
+
+      if (siblingIds.length > 0) {
+        const siblingNodes = await Node.find({
+          _id: { $in: siblingIds },
+        })
+          .select("_id name")
+          .lean()
+          .exec();
+
+        const siblingMap = new Map(
+          siblingNodes.map((n) => [n._id.toString(), n]),
+        );
+
+        siblings = siblingIds
+          .map((id) => siblingMap.get(id.toString()))
+          .filter(Boolean)
+          .map((n) => ({
+            id: n._id.toString(),
+            name: n.name,
+          }));
+      }
+    }
+  }
+
+  // ---- Children ----
+  let children = [];
+
+  if (Array.isArray(current.children) && current.children.length > 0) {
+    const childNodes = await Node.find({
+      _id: { $in: current.children },
+    })
+      .select("_id name")
+      .lean()
+      .exec();
+
+    const childMap = new Map(childNodes.map((n) => [n._id.toString(), n]));
+
+    children = current.children
+      .map((id) => childMap.get(id.toString()))
+      .filter(Boolean)
+      .map((n) => ({
+        id: n._id.toString(),
+        name: n.name,
+      }));
+  }
+
+  // ---- Root (if needed for reasoning) ----
+  let root = null;
+  if (!isRoot) {
+    let cursor = current;
+    while (cursor.parent) {
+      const next = await Node.findById(cursor.parent)
+        .select("_id name parent rootOwner")
+        .lean()
+        .exec();
+      if (!next) break;
+      cursor = next;
+      if (cursor.rootOwner) break;
+    }
+
+    if (cursor?.rootOwner) {
+      root = {
+        id: cursor._id.toString(),
+        name: cursor.name,
+      };
+    }
+  } else {
+    root = {
+      id: current._id.toString(),
+      name: current.name,
+    };
+  }
+
+  // ---- Final shape ----
+  return {
+    current: {
+      id: current._id.toString(),
+      name: current.name,
+      isRoot,
+    },
+
+    parent: parent ? { id: parent._id.toString(), name: parent.name } : null,
+
+    children,
+    siblings,
+    root,
+  };
+}
