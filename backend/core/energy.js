@@ -22,7 +22,7 @@ const HARD_LIMIT_MB = 1024;
 
 // daily limits (unchanged)
 const DAILY_LIMITS = {
-  basic: 100,
+  basic: 120,
   standard: 500,
   premium: 2000,
   god: 10_000_000_000,
