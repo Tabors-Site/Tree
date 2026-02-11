@@ -35,6 +35,7 @@ import {
   commitCompressionResult,
   getNextCompressionPayloadForLLM,
   createUnderstandingRun,
+  listUnderstandingRuns,
 } from "../core/understanding.js";
 import { editStatus, addPrestige } from "../core/statuses.js";
 import {
@@ -54,7 +55,10 @@ import {
   editNodeName,
 } from "../core/treeManagement.js";
 
-import { getRootNodesForUser, getActiveLeafExecutionFrontier } from "../core/treeFetch.js";
+import {
+  getRootNodesForUser,
+  getActiveLeafExecutionFrontier,
+} from "../core/treeFetch.js";
 
 import { executeScript, updateScript } from "../core/scripts.js";
 
@@ -66,6 +70,8 @@ import {
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { getTreeForAi, getNodeForAi } from "../controllers/treeDataFetching.js"; // import from your real backend
 import { resolveTreeAccess } from "../core/authenticate.js";
+
+import { getNavigationContext } from "../core/treeFetch.js";
 
 async function resolvePrestige({ nodeId, prestige }) {
   // If a valid prestige is explicitly provided, use it as-is
@@ -1481,47 +1487,46 @@ RULES
     },
   );
   server.tool(
-  "delete-node-branch",
-  "Used to retire (delete) a node branch and detach it from its parent",
-  {
-    nodeId: z.string().describe("ID of the node branch to delete."),
-    userId: z.string().describe("Injected by server. Ignore."),
-  },
-  {
-    readOnlyHint: false,
-    destructiveHint: true,
-    idempotentHint: false,
-    openWorldHint: false,
-  },
-  async ({ nodeId, userId }) => {
-    try {
-      const deletedNode = await deleteNodeBranch(nodeId, userId);
+    "delete-node-branch",
+    "Used to retire (delete) a node branch and detach it from its parent",
+    {
+      nodeId: z.string().describe("ID of the node branch to delete."),
+      userId: z.string().describe("Injected by server. Ignore."),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ nodeId, userId }) => {
+      try {
+        const deletedNode = await deleteNodeBranch(nodeId, userId);
 
-      return {
-        content: [
-          {
-            type: "text",
-            text:
-              `🗑️ Node branch retired successfully.\n\n` +
-              `• Node ID: ${deletedNode._id.toString()}\n` +
-              `• Previous Parent: ${deletedNode.parent === "deleted" ? "N/A" : deletedNode.parent}\n` +
-              `• Prestige Version: ${deletedNode.prestige.toString()}`,
-          },
-        ],
-      };
-    } catch (err) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `❌ Failed to delete node branch: ${err.message}`,
-          },
-        ],
-      };
-    }
-  },
-);
-
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `🗑️ Node branch retired successfully.\n\n` +
+                `• Node ID: ${deletedNode._id.toString()}\n` +
+                `• Previous Parent: ${deletedNode.parent === "deleted" ? "N/A" : deletedNode.parent}\n` +
+                `• Prestige Version: ${deletedNode.prestige.toString()}`,
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to delete node branch: ${err.message}`,
+            },
+          ],
+        };
+      }
+    },
+  );
 
   server.tool(
     "edit-node-name",
@@ -1611,7 +1616,6 @@ RULES
     },
   );
 
-  
   server.tool(
     "get-node-contributions",
     "Fetches contributions for a specific node and prestige version (optionally limited).",
@@ -2114,6 +2118,46 @@ RULES
   );
 
   server.tool(
+    "understanding-list",
+    "Lists existing understanding runs (perspectives) for a given root node.",
+    {
+      rootNodeId: z
+        .string()
+        .describe("Root node ID to list understandings for."),
+      userId: z.string().describe("Injected by server. Ignore."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ rootNodeId }) => {
+      try {
+        const data = await listUnderstandingRuns(rootNodeId);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(data, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to list understandings: ${err.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+  server.tool(
     "understanding-next",
     "Get the next summarization payload for the LLM.",
     {
@@ -2191,6 +2235,16 @@ Summarization Rules:
 - Output must be suitable for hierarchical merging.
 
 Return ONLY the summary text. The system will handle structure.
+Then IMMEDIATELY call understanding-capture with:
+  mode: "${payload.mode}"
+  understandingRunId: "${understandingRunId}"
+  rootNodeId: "${rootNodeId}"
+  ${
+    payload.mode === "leaf"
+      ? `understandingNodeId: "${payload.target.understandingNodeId}"`
+      : `currentLayer: ${payload.target.nextLayer}`
+  }
+  encoding: <your summary>
 `.trim();
 
       // 4️⃣ Attach instructions to payload (LLM-facing)
@@ -2274,180 +2328,262 @@ Return ONLY the summary text. The system will handle structure.
   );
 
   server.tool(
-    "understanding-finisher",
-    "Instructs the LLM to repeatedly call understanding-next and understanding-capture until complete.",
+    "understanding-process",
+    "Process understanding: commits previous summary (if any) and returns next task. IMMEDIATELY call this tool again with your summary — do not output to chat.",
     {
-      understandingRunId: z.string().describe("Understanding run to finish."),
-      rootNodeId: z.string().describe("Root node of this understanding run."),
+      understandingRunId: z.string().describe("The understanding run ID"),
+      rootNodeId: z.string().describe("Root node ID"),
+      previousResult: z
+        .object({
+          mode: z.enum(["leaf", "merge"]),
+          encoding: z.string().describe("Your summary text goes here"),
+          understandingNodeId: z
+            .string()
+            .optional()
+            .describe("From target.understandingNodeId"),
+          currentLayer: z
+            .number()
+            .optional()
+            .describe("Required for merge mode — from target.nextLayer"),
+        })
+        .optional()
+        .describe(
+          "Omit on first call. Include your summary from previous task on subsequent calls.",
+        ),
     },
     {
-      readOnlyHint: true,
+      readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ understandingRunId, rootNodeId }) => {
-      const instructions = `
-You are now in **Understanding Finisher Mode**.
+    async ({ understandingRunId, rootNodeId, previousResult }) => {
+      // 1️⃣ Commit previous result if provided
+      if (previousResult) {
+        try {
+          await commitCompressionResult({
+            mode: previousResult.mode,
+            understandingRunId,
+            understandingNodeId: previousResult.understandingNodeId,
+            currentLayer: previousResult.currentLayer,
+            encoding: previousResult.encoding,
+          });
+        } catch (err) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    error: "Failed to commit previous result",
+                    details: err.message,
+                    action: "Fix the parameters and retry.",
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          };
+        }
+      }
 
-GOAL  
-Fully complete the understanding run by repeatedly summarizing and capture results.
+      // 2️⃣ Load run
+      const run = await UnderstandingRun.findById(understandingRunId).lean();
+      if (!run) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                { error: "UnderstandingRun not found" },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
 
-STRICT LOOP (YOU MUST FOLLOW THIS EXACTLY):
+      // 3️⃣ Get next payload
+      const payload = await getNextCompressionPayloadForLLM(understandingRunId);
 
-1️⃣ Call:
-   understanding-next(
-     understandingRunId = "${understandingRunId}",
-     rootNodeId = "${rootNodeId}"
-   )
+      // 4️⃣ Done
+      if (!payload) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  done: true,
+                  understandingRunId,
+                  message:
+                    "Understanding complete. All nodes summarized to root.",
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
 
-2️⃣ If the response contains:
-   { "done": true }
-   → STOP immediately. The run is finished.
+      // 5️⃣ Build response — INSTRUCTION FIRST then data.
+      //    LLMs attend to the beginning. Leading with a clear action
+      //    prevents the model from outputting JSON as chat text.
+      const isLeaf = payload.mode === "leaf";
 
-3️⃣ Otherwise:
-   - Read the payload carefully.
-   - Produce the summary text EXACTLY as instructed.
-   - Do NOT invent IDs, layers, or metadata.
+      const lines = [
+        `ACTION: Summarize, then CALL understanding-process. Do NOT write to chat.`,
+        ``,
+        `Perspective: "${run.perspective}"`,
+        `Mode: ${payload.mode}`,
+        ``,
+        `Your next tool call MUST be:`,
+        `  understanding-process(`,
+        `    understandingRunId: "${understandingRunId}",`,
+        `    rootNodeId: "${rootNodeId}",`,
+        `    previousResult: {`,
+        `      mode: "${payload.mode}",`,
+        `      encoding: "<YOUR SUMMARY>",`,
+        `      understandingNodeId: "${payload.target.understandingNodeId}"${isLeaf ? "" : ","}`,
+      ];
 
-4️⃣ Call:
-   understanding-capture(
-     mode,
-     understandingRunId,
-     rootNodeId,
-     understandingNodeId (if provided),
-     currentLayer (ONLY if merge mode),
-     encoding = "<your summary text>"
-   )
+      if (!isLeaf) {
+        lines.push(`      currentLayer: ${payload.target.nextLayer}`);
+      }
 
-5️⃣ After capturing:
-   → Return to step 1️⃣ and repeat.
+      lines.push(`    }`);
+      lines.push(`  )`);
+      lines.push(``);
 
-ABSOLUTE RULES:
-- You MUST NOT skip steps.
-- You MUST NOT summarize multiple payloads at once.
-- You MUST NOT stop early.
-- You MUST NOT call any other tools.
-- One summarize → one capture → one loop.
+      if (isLeaf) {
+        lines.push(`Summarize these notes:`);
+      } else {
+        lines.push(
+          `Merge these child summaries into one summary for node "${payload.inputs[0]?.nodeName}":`,
+        );
+      }
 
-Continue until understanding-next explicitly returns done = true.
-`.trim();
+      lines.push(``);
+      lines.push(JSON.stringify(payload.inputs, null, 2));
 
       return {
         content: [
           {
             type: "text",
-            text: instructions,
+            text: lines.join("\n"),
           },
         ],
       };
     },
   );
 
-server.tool(
-  "get-active-leaf-execution-frontier",
-  "Get the next executable leaf node for BE mode.",
-  {
-    rootNodeId: z.string().describe("Root node of the active tree"),
-  },
-  {
-    readOnlyHint: true,
-    destructiveHint: false,
-    idempotentHint: false,
-    openWorldHint: false,
-  },
-  async ({ rootNodeId }) => {
-    const frontier = await getActiveLeafExecutionFrontier(rootNodeId);
+  server.tool(
+    "get-active-leaf-execution-frontier",
+    "Get the next executable leaf node for BE mode.",
+    {
+      rootNodeId: z.string().describe("Root node of the active tree"),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ rootNodeId }) => {
+      const frontier = await getActiveLeafExecutionFrontier(rootNodeId);
 
-    if (!frontier.leaves?.length) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ done: true }, null, 2),
-          },
-        ],
-      };
-    }
+      if (!frontier.leaves?.length) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ done: true }, null, 2),
+            },
+          ],
+        };
+      }
 
-    const primary = frontier.leaves.find(l => l.next);
+      const primary = frontier.leaves.find((l) => l.next);
 
-    if (!primary) {
+      if (!primary) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                { error: "Frontier returned no primary leaf." },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
+      // ---- build capped, depth-aware alternates ----
+
+      const MAX_ALTERNATES = 4;
+      const alternates = [];
+
+      const byDepth = new Map();
+      for (const leaf of frontier.leaves) {
+        if (leaf.next) continue;
+        if (!byDepth.has(leaf.depth)) {
+          byDepth.set(leaf.depth, []);
+        }
+        byDepth.get(leaf.depth).push(leaf);
+      }
+
+      const candidateDepths = [
+        primary.depth,
+        primary.depth - 1,
+        primary.depth + 1,
+      ];
+
+      for (const depth of candidateDepths) {
+        const group = byDepth.get(depth);
+        if (!group) continue;
+
+        for (const leaf of group) {
+          if (alternates.length >= MAX_ALTERNATES) break;
+          alternates.push({
+            nodeId: leaf.nodeId,
+            name: leaf.name,
+            path: leaf.path,
+            depth: leaf.depth,
+            versionPrestige: leaf.versionPrestige,
+            versionStatus: leaf.versionStatus,
+          });
+        }
+
+        if (alternates.length >= MAX_ALTERNATES) break;
+      }
+
+      // ---- return MCP payload ----
+
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify(
-              { error: "Frontier returned no primary leaf." },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    }
-
-    // ---- build capped, depth-aware alternates ----
-
-    const MAX_ALTERNATES = 4;
-    const alternates = [];
-
-    const byDepth = new Map();
-    for (const leaf of frontier.leaves) {
-      if (leaf.next) continue;
-      if (!byDepth.has(leaf.depth)) {
-        byDepth.set(leaf.depth, []);
-      }
-      byDepth.get(leaf.depth).push(leaf);
-    }
-
-    const candidateDepths = [
-      primary.depth,
-      primary.depth - 1,
-      primary.depth + 1,
-    ];
-
-    for (const depth of candidateDepths) {
-      const group = byDepth.get(depth);
-      if (!group) continue;
-
-      for (const leaf of group) {
-        if (alternates.length >= MAX_ALTERNATES) break;
-        alternates.push({
-          nodeId: leaf.nodeId,
-          name: leaf.name,
-          path: leaf.path,
-          depth: leaf.depth,
-          versionPrestige: leaf.versionPrestige,
-          versionStatus: leaf.versionStatus,
-        });
-      }
-
-      if (alternates.length >= MAX_ALTERNATES) break;
-    }
-
-    // ---- return MCP payload ----
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              primary: {
-                nodeId: primary.nodeId,
-                name: primary.name,
-                path: primary.path,
-                depth: primary.depth,
-                versionPrestige: primary.versionPrestige,
-                versionStatus: primary.versionStatus,
-              },
-              alternates,
-              execution: {
-                status: "active",
-                isLeaf: true,
-              },
-              instructions: `
+              {
+                primary: {
+                  nodeId: primary.nodeId,
+                  name: primary.name,
+                  path: primary.path,
+                  depth: primary.depth,
+                  versionPrestige: primary.versionPrestige,
+                  versionStatus: primary.versionStatus,
+                },
+                alternates,
+                execution: {
+                  status: "active",
+                  isLeaf: true,
+                },
+                instructions: `
 You are in BE mode.
 
 This is where we are right now.
@@ -2459,20 +2595,54 @@ Handle all system updates quietly.
 When the work here feels complete,
 pause and ask if it’s ready to move on.
 `.trim(),
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "navigate-tree",
+    "Returns minimal structural context for tree navigation decisions.",
+    {
+      nodeId: z.string().describe("Current node id to navigate from."),
+      userId: z.string().describe("Injected by server. Ignore."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ nodeId }) => {
+      try {
+        const context = await getNavigationContext(nodeId);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(context, null, 2),
             },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
-  },
-);
-
-
-
-
-
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Failed to load navigation context: ${err.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
 
   return server;
 }
@@ -2567,13 +2737,14 @@ async function handleMcpRequest(req, res) {
       const callKey = `${toolName}:${JSON.stringify(args)}`;
       const now = Date.now();
 
+      /*
       // Check completed cache
       const cached = completedCalls.get(callKey);
       if (cached && now - cached.timestamp < CACHE_MS) {
         console.log(`♻️ Returning cached response for: ${toolName}`);
         res.setHeader("Content-Type", "text/event-stream");
         return res.end(formatSseResponse(cached.response));
-      }
+      }*/
 
       // Check pending requests
       res.setHeader("Content-Type", "text/event-stream");
@@ -2756,11 +2927,13 @@ function mapToolCallToApiUrl(toolName, args) {
     htmlShareToken,
     understandingRunId,
     understandingNodeId,
-    parentId
+    parentId,
   } = args ?? {};
 
   // 🔑 normalize root once (THIS FIXES THE BREAK)
   const resolvedRootId = rootId ?? rootNodeId ?? nodeId;
+  const resolvedUnderstandingNodeId =
+    understandingNodeId ?? args?.previousResult?.understandingNodeId;
 
   // helper: always append token safely
   const withToken = (path) => {
@@ -2795,28 +2968,26 @@ function mapToolCallToApiUrl(toolName, args) {
     case "understanding-create":
       if (!resolvedRootId) return null;
       return withToken(`/api/root/${resolvedRootId}/understandings?html`);
+    case "understanding-list":
+      if (!rootNodeId) return null;
+      return withToken(`/api/root/${rootNodeId}/understandings?html`);
 
-    case "understanding-next":
-      if (!resolvedRootId || !understandingRunId) return null;
+    case "understanding-process": {
+      if (!rootNodeId || !understandingRunId) return null;
+
+      const resolvedUnderstandingNodeId =
+        understandingNodeId ?? args?.previousResult?.understandingNodeId;
+
+      if (resolvedUnderstandingNodeId != null) {
+        return withToken(
+          `/api/root/${rootNodeId}/understandings/run/${understandingRunId}/${resolvedUnderstandingNodeId}?html`,
+        );
+      }
+
       return withToken(
-        `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}?html`,
+        `/api/root/${rootNodeId}/understandings/run/${understandingRunId}?html`,
       );
-
-    case "understanding-capture":
-      if (understandingNodeId && resolvedRootId) {
-        return withToken(
-          `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}/${understandingNodeId}?html`,
-        );
-      }
-      
-
-      if (understandingRunId && resolvedRootId) {
-        return withToken(
-          `/api/root/${resolvedRootId}/understandings/run/${understandingRunId}?html`,
-        );
-      }
-
-      return null;
+    }
 
     /* ---------------- NODE VERSION ---------------- */
 
@@ -2827,18 +2998,16 @@ function mapToolCallToApiUrl(toolName, args) {
     case "add-node-prestige":
       return withToken(`/api/${nodeId}/${prestige}?html`);
 
+    case "create-new-node":
+      if (!nodeId) return null;
+      return withToken(`/api/${nodeId}?html`);
 
-      case "create-new-node":
-  if (!nodeId) return null;
-  return withToken(`/api/${nodeId}?html`);
-
-
-  case "create-new-node-branch":
-  if (!parentId) return null;
-  return withToken(`/api/root/${parentId}?html`);
-  case "get-active-leaf-execution-frontier":
-  if (!nodeId || prestige == null) return null;
-  return withToken(`/api/${nodeId}/${prestige}?html`)
+    case "create-new-node-branch":
+      if (!parentId) return null;
+      return withToken(`/api/root/${parentId}?html`);
+    case "get-active-leaf-execution-frontier":
+      if (!nodeId || prestige == null) return null;
+      return withToken(`/api/${nodeId}/${prestige}?html`);
 
     /* ---------------- NOTES ---------------- */
 
@@ -2878,6 +3047,7 @@ function mapToolCallToApiUrl(toolName, args) {
 
     case "update-node-script":
     case "execute-node-script":
+    case "edit-node-name":
       return withToken(`/api/${nodeId}?html`);
 
     /* ---------------- BATCH ---------------- */
@@ -2886,6 +3056,8 @@ function mapToolCallToApiUrl(toolName, args) {
       return withToken(`/api/user/${userId}/contributions?html`);
 
     /* ---------------- DEFAULT ---------------- */
+    case "navigate-tree":
+      return withToken(`/api/root/${nodeId}?html`);
 
     default:
       return null;
