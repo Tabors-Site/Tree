@@ -8726,6 +8726,11 @@ router.post("/user/:userId/purchase", authenticate, async (req, res) => {
   // normalize payload so your existing function works
   req.body.userId = req.params.userId;
 
+  // 🔥 TEMP BLOCK
+  return res.status(200).json({
+    blocked: true,
+message: "Purchases are currently unavailable during ongoing development. Features and data may change until the platform stabilizes."
+  });
   return createPurchaseSession(req, res);
 });
 
