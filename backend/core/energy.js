@@ -122,8 +122,39 @@ export function maybeResetEnergy(user) {
   if (!user.availableEnergy) return false;
 
   const now = Date.now();
-  const lastReset = user.availableEnergy.lastResetAt?.getTime() || 0;
   const DAY_MS = 24 * 60 * 60 * 1000;
+
+  /* ================================
+     🔥 PLAN EXPIRATION CHECK (NEW)
+  ================================ */
+
+  const expiresAt = user.planExpiresAt?.getTime() || 0;
+
+  // downgrade ONLY if:
+  // - not already basic
+  // - not god
+  // - expiry exists and passed
+  if (
+    user.profileType !== "basic" &&
+    user.profileType !== "god" &&
+    expiresAt > 0 &&
+    now > expiresAt
+  ) {
+    user.profileType = "basic";
+    user.planExpiresAt = null;
+
+    // reset base energy to basic limit immediately
+    user.availableEnergy.amount =
+      DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
+
+    user.availableEnergy.lastResetAt = new Date();
+  }
+
+  /* ================================
+     DAILY RESET (existing logic)
+  ================================ */
+
+  const lastReset = user.availableEnergy.lastResetAt?.getTime() || 0;
 
   if (now - lastReset < DAY_MS) return false;
 
@@ -134,6 +165,7 @@ export function maybeResetEnergy(user) {
 
   return true;
 }
+
 
 // core/errors/EnergyError.js
 export class EnergyError extends Error {
