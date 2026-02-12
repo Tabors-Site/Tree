@@ -8,6 +8,9 @@ import multer from "multer";
 import mime from "mime-types";
 
 import User from "../db/models/user.js";
+
+import { createPurchaseSession } from "../routes/billing/purchase.js"
+
 import {
   getAllNotesByUser as coreGetAllNotesByUser,
   getAllTagsForUser as coreGetAllTagsForUser,
@@ -43,6 +46,9 @@ import {
 } from "../controllers/users.js";
 
 import getNodeName from "./helpers/getNameById.js";
+
+import { processPurchase } from "../core/billing/processPurchase.js";
+
 
 const uploadsFolder = path.join(process.cwd(), "uploads");
 
@@ -905,6 +911,9 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         grid-template-columns: repeat(2, 1fr);
       }
     }
+      a {
+text-decoration: none;
+        color: inherit;}
   </style>
 </head>
 <body>
@@ -915,13 +924,14 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         <h1>@${user.username}</h1> 
 
         <div class="user-meta">
-      <span class="plan-badge plan-${profileType}">
+   <a href="/api/user/${userId}/energy${queryString}">
+  <span class="plan-badge plan-${profileType}">
   ${profileType === "god" ? "👑 " : ""}
   ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Plan
-</span>
+</span></a>
 
           <span class="meta-item">
-            ⚡ ${energy?.amount ?? 0} · resets ${resetTimeLabel}
+            <a href="/api/user/${userId}/energy${queryString}">⚡ ${energy?.amount ?? 0} · resets ${resetTimeLabel}</a>
           </span>
 
           <span class="meta-item">
@@ -7647,6 +7657,1081 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
     res.status(400).send(err.message || "Failed to update share token");
   }
 });
+
+function buildQueryString(req) {
+  const allowedParams = ["token", "html"];
+
+  const filtered = Object.entries(req.query)
+    .filter(([key]) => allowedParams.includes(key))
+    .map(([key, val]) =>
+      val === "" ? key : `${key}=${encodeURIComponent(val)}`,
+    )
+    .join("&");
+
+  return filtered ? `?${filtered}` : "";
+}
+router.get("/user/:userId/energy", urlAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const qs = buildQueryString(req);
+
+    const user = await User.findById(userId).lean().exec();
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    maybeResetEnergy(user);
+    const energyAmount = user.availableEnergy?.amount ?? 0;
+    const additionalEnergy = user.additionalEnergy?.amount ?? 0;
+    const profileType = (user.profileType || "basic").toLowerCase();
+    // Filler for plan expiry — backend will provide real data later
+    const planExpiresAt = user.planExpiresAt || null;
+
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+
+    if (!wantHtml) {
+      return res.json({
+        userId: user._id,
+        profileType,
+        energy: user.availableEnergy,
+        additionalEnergy: user.additionalEnergy,
+      });
+    }
+
+    return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#667eea">
+<title>Energy · @${user.username}</title>
+<style>
+  :root {
+    --glass-water-rgb: 115, 111, 230;
+    --glass-alpha: 0.28;
+    --glass-alpha-hover: 0.38;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    background: #736fe6;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+      "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 20px;
+    color: white;
+    position: relative;
+    overflow-x: hidden;
+    touch-action: manipulation;
+  }
+
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    border-radius: 50%;
+    opacity: 0.08;
+    animation: float 20s infinite ease-in-out;
+    pointer-events: none;
+  }
+
+  body::before {
+    width: 600px; height: 600px;
+    background: white; top: -300px; right: -200px;
+    animation-delay: -5s;
+  }
+
+  body::after {
+    width: 400px; height: 400px;
+    background: white; bottom: -200px; left: -100px;
+    animation-delay: -10s;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-30px) rotate(5deg); }
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* =========================================================
+     GLASS BUTTONS
+     ========================================================= */
+  .back-link,
+  .glass-btn {
+    position: relative;
+    overflow: hidden;
+    padding: 10px 20px;
+    border-radius: 980px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    color: white;
+    text-decoration: none;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.3s ease;
+  }
+
+  .back-link::before,
+  .glass-btn::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.35), transparent 60%),
+      linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.25), transparent 70%);
+    opacity: 0;
+    transform: translateX(-30%) translateY(-10%);
+    transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+
+  .back-link:hover,
+  .glass-btn:hover {
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+    transform: translateY(-2px);
+  }
+
+  .back-link:hover::before,
+  .glass-btn:hover::before {
+    opacity: 1;
+    transform: translateX(30%) translateY(10%);
+  }
+
+  .back-link:active,
+  .glass-btn:active {
+    background: rgba(var(--glass-water-rgb), 0.45);
+    transform: translateY(0);
+  }
+
+  /* =========================================================
+     GLASS CARDS
+     ========================================================= */
+  .glass-card {
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    margin-bottom: 24px;
+    animation: fadeInUp 0.6s ease-out both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
+    pointer-events: none;
+  }
+
+  .glass-card h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 16px;
+    letter-spacing: -0.3px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .back-nav {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    animation: fadeInUp 0.5s ease-out;
+  }
+
+  /* =========================================================
+     ENERGY STATUS
+     ========================================================= */
+  .energy-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+  }
+
+  .energy-stat {
+    padding: 18px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 14px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .energy-stat::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+    pointer-events: none;
+  }
+
+  .energy-stat-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 6px;
+  }
+
+  .energy-stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .energy-stat-sub {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 4px;
+  }
+
+  .energy-stat.plan-basic {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+  .energy-stat.plan-basic .energy-stat-value {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .energy-stat.plan-standard {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.35), rgba(37, 99, 235, 0.35));
+    border-color: rgba(96, 165, 250, 0.4);
+  }
+
+  .energy-stat.plan-premium {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.35), rgba(124, 58, 237, 0.35));
+    border-color: rgba(168, 85, 247, 0.4);
+  }
+
+  .energy-stat.plan-god {
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.35), rgba(245, 158, 11, 0.35));
+    border-color: rgba(250, 204, 21, 0.4);
+  }
+
+  /* =========================================================
+     PLAN CARDS
+     ========================================================= */
+  .plan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  .plan-box {
+    padding: 24px 20px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .plan-box::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent);
+    pointer-events: none;
+  }
+
+  .plan-box:hover:not(.disabled) {
+    background: rgba(255, 255, 255, 0.22);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
+  }
+
+  .plan-box.selected {
+    border-color: rgba(72, 187, 178, 0.8);
+    background: rgba(72, 187, 178, 0.2);
+    transform: translateY(-4px);
+    box-shadow: 0 0 30px rgba(72, 187, 178, 0.2), 0 8px 28px rgba(0, 0, 0, 0.15);
+  }
+
+  .plan-box.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .plan-box.current-plan {
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .plan-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 6px;
+  }
+
+  .plan-price {
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 4px;
+  }
+
+  .plan-period {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .plan-current-tag {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 4px 12px;
+    border-radius: 980px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+  }
+
+  .plan-features {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .plan-feature {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  .plan-feature.dim {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .plan-feature.highlight {
+    color: rgba(72, 187, 178, 0.95);
+    font-weight: 600;
+  }
+
+  .plan-renew-note {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.55);
+    font-style: italic;
+  }
+
+  /* =========================================================
+     ENERGY BUY
+     ========================================================= */
+  .energy-btns {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .energy-buy-btn {
+    padding: 12px 20px;
+    border-radius: 980px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .energy-buy-btn::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.35), transparent 60%),
+      linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.25), transparent 70%);
+    opacity: 0;
+    transform: translateX(-30%) translateY(-10%);
+    transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+
+  .energy-buy-btn:hover {
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+    transform: translateY(-2px);
+  }
+
+  .energy-buy-btn:hover::before {
+    opacity: 1;
+    transform: translateX(30%) translateY(10%);
+  }
+
+  .energy-buy-btn:active {
+    background: rgba(var(--glass-water-rgb), 0.45);
+    transform: translateY(0);
+  }
+
+  /* =========================================================
+     CHECKOUT
+     ========================================================= */
+  .checkout-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .checkout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+  }
+
+  .checkout-row-label {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .checkout-row-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+  }
+
+  .checkout-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: rgba(72, 187, 178, 0.2);
+    border: 1px solid rgba(72, 187, 178, 0.3);
+    border-radius: 12px;
+    margin-top: 4px;
+  }
+
+  .checkout-total-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+  }
+
+  .checkout-total-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .checkout-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 980px;
+    border: 1px solid rgba(72, 187, 178, 0.5);
+    background: rgba(72, 187, 178, 0.35);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .checkout-btn::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.35), transparent 60%),
+      linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.25), transparent 70%);
+    opacity: 0;
+    transform: translateX(-30%) translateY(-10%);
+    transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+
+  .checkout-btn:hover {
+    background: rgba(72, 187, 178, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18),
+      0 0 20px rgba(72, 187, 178, 0.2);
+  }
+
+  .checkout-btn:hover::before {
+    opacity: 1;
+    transform: translateX(30%) translateY(10%);
+  }
+
+  .checkout-btn:active {
+    transform: translateY(0);
+  }
+
+  .checkout-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .checkout-btn:disabled:hover {
+    background: rgba(72, 187, 178, 0.35);
+    transform: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .checkout-note {
+    text-align: center;
+    margin-top: 14px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+  }
+
+  .checkout-empty {
+    text-align: center;
+    padding: 20px;
+    color: rgba(255, 255, 255, 0.45);
+    font-style: italic;
+    font-size: 14px;
+  }
+
+  /* =========================================================
+     LLM INPUT
+     ========================================================= */
+  .llm-input-row {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  .llm-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 14px 16px;
+    font-size: 15px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .llm-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .llm-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+  }
+
+  .llm-save-btn {
+    padding: 14px 24px;
+    border-radius: 980px;
+    border: 1px solid rgba(72, 187, 178, 0.4);
+    background: rgba(72, 187, 178, 0.3);
+    color: white;
+    font-weight: 600;
+    font-size: 15px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  .llm-save-btn:hover {
+    background: rgba(72, 187, 178, 0.45);
+    transform: translateY(-2px);
+  }
+
+  .llm-sub {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+  }
+
+  .llm-status {
+    margin-top: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(72, 187, 120, 0.9);
+    display: none;
+  }
+
+  /* =========================================================
+     RESPONSIVE
+     ========================================================= */
+  @media (max-width: 640px) {
+    body { padding: 16px; }
+    .container { max-width: 100%; }
+    .glass-card { padding: 20px; }
+    .back-nav { flex-direction: column; }
+    .back-link { width: 100%; justify-content: center; }
+    .energy-grid { grid-template-columns: 1fr; }
+    .plan-grid { grid-template-columns: 1fr; }
+    .energy-btns { flex-direction: column; }
+    .energy-buy-btn { width: 100%; }
+    .llm-input-row { flex-direction: column; }
+    .llm-input { min-width: 0; }
+    .llm-save-btn { width: 100%; text-align: center; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="back-nav">
+    <a href="/api/user/${userId}${qs}" class="back-link">← Back to Profile</a>
+  </div>
+
+  <!-- Energy Status -->
+  <div class="glass-card" style="animation-delay: 0.1s;">
+    <h2>⚡ Energy</h2>
+    <div class="energy-grid">
+      <div class="energy-stat">
+        <div class="energy-stat-label">Plan Energy</div>
+        <div class="energy-stat-value">${energyAmount}</div>
+        <div class="energy-stat-sub">Resets every 24 hours</div>
+      </div>
+      <div class="energy-stat plan-${profileType}">
+        <div class="energy-stat-label">Current Plan</div>
+        <div class="energy-stat-value" style="font-size: 22px; text-transform: capitalize;">${profileType}</div>
+        <div class="energy-stat-sub" id="planExpirySub">${planExpiresAt ? "Expires " + new Date(planExpiresAt).toLocaleDateString() : "—"}</div>
+      </div>
+      <div class="energy-stat">
+        <div class="energy-stat-label">Additional Energy</div>
+        <div class="energy-stat-value">${additionalEnergy}</div>
+        <div class="energy-stat-sub">Used after plan energy</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plans -->
+  <div class="glass-card" style="animation-delay: 0.15s;">
+    <h2>📋 Plans</h2>
+    <div class="plan-grid">
+      <div class="plan-box disabled" data-plan="basic">
+        <div class="plan-name">Basic</div>
+        <div class="plan-price">Free</div>
+        <div class="plan-period">120 daily energy</div>
+        <div class="plan-features">
+          <div class="plan-feature">No file uploads</div>
+          <div class="plan-feature dim">Limited access</div>
+        </div>
+        ${profileType === "basic" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
+      </div>
+      <div class="plan-box" data-plan="standard">
+        <div class="plan-name">Standard</div>
+        <div class="plan-price">$20</div>
+        <div class="plan-period">per 30 days</div>
+        <div class="plan-features">
+          <div class="plan-feature">500 daily energy</div>
+          <div class="plan-feature">Full access</div>
+          <div class="plan-feature">File uploads</div>
+        </div>
+        ${profileType === "standard" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
+      </div>
+      <div class="plan-box" data-plan="premium">
+        <div class="plan-name">Premium</div>
+        <div class="plan-price">$100</div>
+        <div class="plan-period">per 30 days</div>
+        <div class="plan-features">
+          <div class="plan-feature">2,000 daily energy</div>
+          <div class="plan-feature">Full access</div>
+          <div class="plan-feature">File uploads</div>
+          <div class="plan-feature highlight">Offline LLM processing</div>
+        </div>
+        ${profileType === "premium" || profileType === "god" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
+      </div>
+    </div>
+    <div class="plan-renew-note" id="planNote" style="display:none;"></div>
+  </div>
+
+  <!-- Buy Energy -->
+  <div class="glass-card" style="animation-delay: 0.2s;">
+    <h2>🔥 Additional Energy</h2>
+    <div style="font-size: 14px; color: rgba(255,255,255,0.55); margin-bottom: 16px;">This will only be used as a reserve when your plan energy runs out.</div>
+    <div class="energy-btns" id="energyBtns">
+      <button class="energy-buy-btn" data-amount="100">+100</button>
+      <button class="energy-buy-btn" data-amount="500">+500</button>
+      <button class="energy-buy-btn" data-amount="1000">+1000</button>
+      <button class="energy-buy-btn" id="customEnergyBtn">+Custom</button>
+    </div>
+    <div id="energyAdded" style="margin-top: 14px; font-size: 14px; color: rgba(255,255,255,0.6); display: none;">
+      Added: <strong id="energyAddedVal" style="color: white;"></strong>
+      <span style="margin-left: 8px; cursor: pointer; opacity: 0.6;" onclick="resetEnergy()">✕ Clear</span>
+    </div>
+  </div>
+
+  <!-- Checkout -->
+  <div class="glass-card" style="animation-delay: 0.25s;">
+    <h2>💳 Checkout</h2>
+    <div id="checkoutContent">
+      <div class="checkout-empty">Select a plan or add energy to continue</div>
+    </div>
+  </div>
+
+  <!-- Custom LLM -->
+  <div class="glass-card" style="animation-delay: 0.3s;">
+    <h2>🤖 Custom LLM Endpoint</h2>
+    <div class="llm-sub">Connect your own OpenAI API-compatible LLM to use AI chat and bypass energy usage for conversations.</div>
+    <div class="llm-input-row">
+      <input type="text" class="llm-input" id="llmUrl" placeholder="https://your-llm-endpoint/v1" />
+      <button class="llm-save-btn" onclick="saveLLM()">Save</button>
+    </div>
+    <div class="llm-status" id="llmStatus">✓ Saved</div>
+  </div>
+
+</div>
+
+<script>
+const userId = "${userId}";
+const currentPlan = "${profileType === "god" ? "premium" : profileType}";
+const PLAN_PRICE = { basic: 0, standard: 20, premium: 100 };
+const PLAN_ORDER = ["basic", "standard", "premium"];
+const ENERGY_RATE = 0.01; // $0.01 per unit
+
+const state = {
+  energyAdded: 0,
+  selectedPlan: null  // null = no plan change
+};
+
+// =====================
+// URL STATE
+// =====================
+function readURL() {
+  const p = new URLSearchParams(location.search);
+  if (p.get("energy")) state.energyAdded = parseInt(p.get("energy")) || 0;
+  if (p.get("plan") && p.get("plan") !== currentPlan) {
+    state.selectedPlan = p.get("plan");
+  }
+}
+
+function writeURL() {
+  const p = new URLSearchParams(location.search);
+  // Clear our managed keys, preserve everything else (like $token)
+  p.delete("energy");
+  p.delete("plan");
+  if (!p.has("html")) p.set("html", "");
+  if (state.energyAdded > 0) p.set("energy", state.energyAdded);
+  if (state.selectedPlan) p.set("plan", state.selectedPlan);
+  history.replaceState(null, "", "?" + p.toString());
+}
+
+// =====================
+// PLAN LOGIC
+// =====================
+function canSelectPlan(plan) {
+  if (plan === "basic") return false;
+  const cur = PLAN_ORDER.indexOf(currentPlan);
+  const next = PLAN_ORDER.indexOf(plan);
+  return next >= cur;
+}
+
+function renderPlans() {
+  document.querySelectorAll(".plan-box").forEach(box => {
+    const plan = box.dataset.plan;
+    const isSelected = state.selectedPlan === plan;
+    const isCurrent = plan === currentPlan && !state.selectedPlan;
+
+    box.classList.toggle("selected", isSelected);
+    box.classList.toggle("current-plan", isCurrent);
+    box.classList.toggle("disabled", !canSelectPlan(plan));
+  });
+
+  const note = document.getElementById("planNote");
+  if (state.selectedPlan) {
+    if (state.selectedPlan === currentPlan) {
+      note.textContent = "Renewing " + state.selectedPlan + " for 30 more days";
+    } else {
+      note.textContent = "Upgrading to " + state.selectedPlan + " for 30 days";
+    }
+    note.style.display = "block";
+  } else {
+    note.style.display = "none";
+  }
+}
+
+// =====================
+// ENERGY
+// =====================
+function renderEnergy() {
+  const el = document.getElementById("energyAdded");
+  const val = document.getElementById("energyAddedVal");
+  if (state.energyAdded > 0) {
+    el.style.display = "block";
+    val.textContent = "+" + state.energyAdded + " ($" + (state.energyAdded * ENERGY_RATE).toFixed(2) + ")";
+  } else {
+    el.style.display = "none";
+  }
+}
+
+function resetEnergy() {
+  state.energyAdded = 0;
+  writeURL();
+  renderEnergy();
+  renderCheckout();
+}
+
+// =====================
+// CHECKOUT
+// =====================
+function renderCheckout() {
+  const container = document.getElementById("checkoutContent");
+  const energyCost = state.energyAdded * ENERGY_RATE;
+  const planCost = state.selectedPlan ? (PLAN_PRICE[state.selectedPlan] || 0) : 0;
+  const total = energyCost + planCost;
+
+  if (total <= 0) {
+    container.innerHTML = '<div class="checkout-empty">Select a plan or add energy to continue</div>';
+    return;
+  }
+
+  let rows = "";
+
+  if (state.selectedPlan) {
+    const label = state.selectedPlan === currentPlan ? "Renew " + state.selectedPlan : "Upgrade to " + state.selectedPlan;
+    rows += '<div class="checkout-row">' +
+      '<span class="checkout-row-label">' + label + ' (30 days)</span>' +
+      '<span class="checkout-row-value">$' + planCost.toFixed(2) + '</span>' +
+    '</div>';
+  }
+
+  if (state.energyAdded > 0) {
+    rows += '<div class="checkout-row">' +
+      '<span class="checkout-row-label">+' + state.energyAdded + ' additional energy</span>' +
+      '<span class="checkout-row-value">$' + energyCost.toFixed(2) + '</span>' +
+    '</div>';
+  }
+
+  container.innerHTML =
+    '<div class="checkout-summary">' +
+      rows +
+      '<div class="checkout-total">' +
+        '<span class="checkout-total-label">Total</span>' +
+        '<span class="checkout-total-value">$' + total.toFixed(2) + '</span>' +
+      '</div>' +
+    '</div>' +
+    '<button class="checkout-btn" onclick="handleCheckout()">Pay with Stripe</button>' +
+    '<div class="checkout-note">No recurring charges. Must renew manually.</div>';
+}
+
+// =====================
+// STRIPE CHECKOUT
+// =====================
+async function handleCheckout() {
+  const btn = document.querySelector(".checkout-btn");
+  btn.disabled = true;
+  btn.textContent = "Processing…";
+
+  try {
+    const body = {
+      userId: userId,
+      energyAmount: state.energyAdded > 0 ? state.energyAdded : 0,
+      plan: state.selectedPlan || null,
+      currentPlan: currentPlan,
+    };
+
+    const res = await fetch("/api/user/" + userId + "/purchase", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+
+    if (data.url) {
+
+      // 🔥 ESCAPE IFRAME + FULL PAGE REDIRECT
+      if (window.top !== window.self) {
+        window.top.location.href = data.url;
+      } else {
+        window.location.href = data.url;
+      }
+
+    } else if (data.error) {
+      alert(data.error);
+      btn.disabled = false;
+      btn.textContent = "Pay with Stripe";
+    }
+
+  } catch (err) {
+    alert("Something went wrong. Please try again.");
+    btn.disabled = false;
+    btn.textContent = "Pay with Stripe";
+  }
+}
+
+
+// =====================
+// LLM
+// =====================
+async function saveLLM() {
+  const url = document.getElementById("llmUrl").value.trim();
+  if (!url) return;
+
+  try {
+    const res = await fetch("/api/user/" + userId + "/llm-endpoint", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: url }),
+    });
+
+    const status = document.getElementById("llmStatus");
+    if (res.ok) {
+      status.style.display = "block";
+      status.textContent = "✓ Saved";
+      status.style.color = "rgba(72, 187, 120, 0.9)";
+      setTimeout(() => { status.style.display = "none"; }, 3000);
+    } else {
+      status.style.display = "block";
+      status.textContent = "✕ Failed to save";
+      status.style.color = "rgba(255, 107, 107, 0.9)";
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// =====================
+// EVENTS
+// =====================
+document.querySelectorAll(".plan-box").forEach(box => {
+  box.onclick = () => {
+    const plan = box.dataset.plan;
+    if (!canSelectPlan(plan)) return;
+
+    // Toggle: click again to deselect
+    if (state.selectedPlan === plan) {
+      state.selectedPlan = null;
+    } else {
+      state.selectedPlan = plan;
+    }
+
+    writeURL();
+    renderPlans();
+    renderCheckout();
+  };
+});
+
+document.querySelectorAll(".energy-buy-btn:not(#customEnergyBtn)").forEach(btn => {
+  btn.onclick = () => {
+    state.energyAdded += parseInt(btn.dataset.amount);
+    writeURL();
+    renderEnergy();
+    renderCheckout();
+  };
+});
+
+document.getElementById("customEnergyBtn").onclick = () => {
+  const val = parseInt(prompt("Enter energy amount:"));
+  if (!val || val <= 0) return;
+  state.energyAdded += val;
+  writeURL();
+  renderEnergy();
+  renderCheckout();
+};
+
+// =====================
+// INIT
+// =====================
+readURL();
+renderPlans();
+renderEnergy();
+renderCheckout();
+</script>
+</body>
+</html>`);
+  } catch (err) {
+    console.error("Energy page error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+router.post("/user/:userId/purchase", authenticate, async (req, res) => {
+  // normalize payload so your existing function works
+  req.body.userId = req.params.userId;
+
+  return createPurchaseSession(req, res);
+});
+
+
+
+
 
 
 export default router;

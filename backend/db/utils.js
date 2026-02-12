@@ -47,6 +47,8 @@ const logContribution = async ({
   nodeVersion,
   branchLifecycle,
   transactionMeta,
+    purchaseMeta,
+
 }) => {
   const validActions = [
     "create",
@@ -67,6 +69,7 @@ const logContribution = async ({
     "editNameNode",
     "rawIdea",
     "branchLifecycle",
+    "purchase",
   ];
 
   if (!validActions.includes(action)) {
@@ -97,6 +100,16 @@ const logContribution = async ({
     }
   }
 
+  if (action === "purchase") {
+  if (!purchaseMeta) {
+    throw new Error("purchaseMeta is required for purchase actions");
+  }
+
+  if (!purchaseMeta.stripeSessionId) {
+    throw new Error("purchaseMeta.stripeSessionId is required");
+  }
+}
+
   try {
     const newContribution = new Contribution({
       userId,
@@ -120,6 +133,8 @@ const logContribution = async ({
       editNameNode,
       branchLifecycle,
       transactionMeta,
+        purchaseMeta,
+
       date: new Date(),
     });
 

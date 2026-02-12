@@ -29,12 +29,22 @@ app.use(
   }),
 );
 app.use(cookieParser());
+import { stripeWebhook } from "./routes/billing/webhook.js";
+
+app.post(
+  "/billing/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhook
+);
 
 app.options("*", cors());
 app.use(express.static("public"));
 app.use(express.json({ limit: "1000mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.set("trust proxy", 1);
+
+
+
 
 registerRoutes(app);
 registerURLRoutes(app);

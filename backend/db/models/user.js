@@ -68,6 +68,11 @@ const UserSchema = new mongoose.Schema({
     required: true,
   },
 
+  planExpiresAt: {
+  type: Date,
+  default: null,  // null = basic/no paid plan
+},
+
   availableEnergy: {
     type: EnergySchema,
     required: true,
@@ -76,6 +81,15 @@ const UserSchema = new mongoose.Schema({
       lastResetAt: new Date(),
     }),
   },
+
+  additionalEnergy: {
+  type: EnergySchema,
+  required: true,
+  default: () => ({
+    amount: 0,
+    lastResetAt: new Date(),
+  }),
+},
   storageUsage: {
     type: Number, // in MB
     default: 0,

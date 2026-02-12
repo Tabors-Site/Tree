@@ -37,6 +37,7 @@ const ContributionSchema = new mongoose.Schema({
       "editNameNode",
       "rawIdea",
       "branchLifecycle",
+       "purchase",
     ],
     required: true,
   },
@@ -304,6 +305,58 @@ const ContributionSchema = new mongoose.Schema({
       _id: false,
     },
   },
+  purchaseMeta: {
+  type: {
+    /* ===============================
+       STRIPE IDENTITY (IDEMPOTENCY)
+    =============================== */
+
+    stripeSessionId: {
+      type: String,
+      index: true,
+      unique: true,
+    },
+
+    paymentIntentId: {
+      type: String,
+      default: null,
+    },
+
+    stripeEventId: {
+      type: String,
+      default: null,
+    },
+
+    /* ===============================
+       PURCHASE SNAPSHOT
+    =============================== */
+
+    plan: {
+      type: String,
+      enum: ["basic", "standard", "premium", null],
+      default: null,
+    },
+
+    energyAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    totalCents: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    currency: {
+      type: String,
+      default: "usd",
+    },
+
+    _id: false,
+  },
+},
 });
 
 const Contribution = mongoose.model("Contribution", ContributionSchema);

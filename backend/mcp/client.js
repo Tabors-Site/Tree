@@ -2,7 +2,7 @@
 //calling tools from MCP/server.js
 
 
-mport OpenAI from "openai";
+import OpenAI from "openai";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import dotenv from "dotenv";

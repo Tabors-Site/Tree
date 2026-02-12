@@ -243,6 +243,23 @@ async function getContributionsByUser(userId, limit, startDate, endDate) {
               }
             : null;
           break;
+              case "purchase":
+          additionalInfo = contribution.purchaseMeta
+            ? {
+                plan: contribution.purchaseMeta.plan ?? null,
+                energyAmount: contribution.purchaseMeta.energyAmount ?? 0,
+                totalCents: contribution.purchaseMeta.totalCents ?? 0,
+                currency: contribution.purchaseMeta.currency ?? "usd",
+              }
+            : null;
+
+          // 🔥 REMOVE PRIVATE STRIPE IDS
+          if (contribution.purchaseMeta) {
+            delete contribution.purchaseMeta.stripeSessionId;
+            delete contribution.purchaseMeta.paymentIntentId;
+            delete contribution.purchaseMeta.stripeEventId;
+          }
+          break;
         default:
           additionalInfo = null;
       }
