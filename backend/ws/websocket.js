@@ -69,6 +69,8 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         try {
           const decoded = jwt.verify(tokenMatch[1], JWT_SECRET);
           socket.userId = decoded.id || decoded.userId || decoded._id;
+           socket.username = decoded.username;
+          socket.jwt = tokenMatch[1];
         } catch (_) {}
       }
     }
@@ -96,14 +98,20 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
 
     // ── REGISTER ──────────────────────────────────────────────────────
-    socket.on("register", async ({ username }) => {
-      if (!username) {
-        socket.emit("registered", {
-          success: false,
-          error: "Missing username",
-        });
-        return;
-      }
+    socket.on("register", async ( ) => {
+  const userId = socket.userId;
+  const username = socket.username;
+
+// In register handler, after the jwt check:
+if (!socket.jwt) {
+  socket.emit("registered", { success: false, error: "Unauthorized" });
+  return;
+}
+if (!socket.username || !socket.userId) {
+  socket.emit("registered", { success: false, error: "Invalid token claims" });
+  return;
+}
+
 
       const visitorId = `user:${username}`;
       const oldSocketId = userSockets.get(visitorId);
@@ -116,7 +124,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       socket.username = username;
 
       try {
-        await connectToMCP(MCP_SERVER_URL, visitorId, username, socket.userId);
+        await connectToMCP(MCP_SERVER_URL, visitorId, socket.jwt);
         socket.emit("registered", { success: true, visitorId });
       } catch (err) {
         console.error(

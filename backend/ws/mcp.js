@@ -13,22 +13,32 @@ const MCP_SERVER_URL =
 // key: visitorId → MCP Client instance
 export const mcpClients = new Map();
 
-export async function connectToMCP(serverUrl, visitorId, username, userId) {
-  if (mcpClients.has(visitorId)) {
+export async function connectToMCP(serverUrl, visitorId, jwtToken) {
+  const existing = mcpClients.get(visitorId);
+  if (existing && existing._jwtToken === jwtToken) {
     console.log(`♻️  Reusing MCP client for ${visitorId}`);
-    return mcpClients.get(visitorId);
+    return existing;
+  }
+
+  // Close stale client if token changed
+  if (existing) {
+    try { await existing.close(); } catch (_) {}
+    mcpClients.delete(visitorId);
   }
 
   console.log(`🔌 Connecting MCP client for ${visitorId}...`);
 
-  const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
+const transport = new StreamableHTTPClientTransport(
+  new URL(serverUrl),
+  {
     requestInit: {
       headers: {
-        "X-User-Id": userId || "",
-        "X-Username": username || "",
+        "x-internal-token": jwtToken, // ✅ just pass the string
+        "x-internal-request": "mcp",  // ⭐ recommended flag
       },
     },
-  });
+  }
+);
 
   const client = new Client(
     { name: `tree-chat-client-${visitorId}`, version: "1.0.0" },
@@ -38,6 +48,7 @@ export async function connectToMCP(serverUrl, visitorId, username, userId) {
   await client.connect(transport);
   console.log(`✅ MCP client connected for ${visitorId}`);
 
+    client._jwtToken = jwtToken; // tag for comparison
   mcpClients.set(visitorId, client);
   return client;
 }

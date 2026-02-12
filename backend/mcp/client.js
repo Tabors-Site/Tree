@@ -1,4 +1,8 @@
-import OpenAI from "openai";
+//mostly legacy from before the RTX3090 crash of october 2025. the MCP client has moved into WS folder and broken into modes,
+//calling tools from MCP/server.js
+
+
+mport OpenAI from "openai";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import dotenv from "dotenv";
