@@ -3,6 +3,8 @@
 
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import crypto from "crypto";
+import User from "../db/models/user.js";
 import {
   getMode,
   getDefaultMode,
@@ -14,14 +16,112 @@ import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
 
 dotenv.config();
 
-const openai = new OpenAI({
+// ─────────────────────────────────────────────────────────────────────────
+// DEFAULT LLM CLIENT (your server)
+// ─────────────────────────────────────────────────────────────────────────
+
+const defaultClient = new OpenAI({
   baseURL: process.env.OPENAI_BASE_URL || "http://localhost:11434/v1",
   apiKey: process.env.OPENAI_API_KEY || "ollama",
 });
 
-const MODEL = process.env.AI_MODEL || "gpt-oss:20b";
+const DEFAULT_MODEL = process.env.AI_MODEL || "gpt-oss:20b";
+
 const MAX_MESSAGES = 30;
 const MAX_TOOL_ITERATIONS = 15;
+
+// ─────────────────────────────────────────────────────────────────────────
+// ENCRYPTION HELPERS (must match whatever you use when saving)
+// ─────────────────────────────────────────────────────────────────────────
+
+const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
+const ALGORITHM = "aes-256-cbc";
+
+function decrypt(encryptedText) {
+  const [ivHex, encrypted] = encryptedText.split(":");
+  const iv = Buffer.from(ivHex, "hex");
+  const key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  let decrypted = decipher.update(encrypted, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PER-USER LLM CLIENT CACHE
+// ─────────────────────────────────────────────────────────────────────────
+
+// Cache: userId → { client, model, fetchedAt }
+const userClientCache = new Map();
+const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+/**
+ * Returns { client, model, isCustom } for a user.
+ * Uses their custom LLM if configured, otherwise falls back to default.
+ */
+export async function getClientForUser(userId) {
+  if (!userId) return { client: defaultClient, model: DEFAULT_MODEL, isCustom: false };
+
+  // Check cache
+  const cached = userClientCache.get(userId);
+  if (cached && Date.now() - cached.fetchedAt < CLIENT_CACHE_TTL) {
+    return cached;
+  }
+
+  try {
+    const user = await User.findById(userId)
+      .select("customLlmConnection")
+      .lean();
+
+    const conn = user?.customLlmConnection;
+
+    if (conn && conn.baseUrl && conn.encryptedApiKey && !conn.revoked) {
+      const apiKey = decrypt(conn.encryptedApiKey);
+
+      // User stores full URL — derive baseURL for OpenAI SDK
+      let baseURL = conn.baseUrl.replace(/\/+$/, "");
+      if (baseURL.endsWith("/chat/completions")) {
+        baseURL = baseURL.replace(/\/chat\/completions$/, "");
+      }
+
+      const entry = {
+        client: new OpenAI({ baseURL, apiKey }),
+        model: conn.model || DEFAULT_MODEL,
+        isCustom: true,
+        fetchedAt: Date.now(),
+      };
+
+      userClientCache.set(userId, entry);
+
+      // Update lastUsedAt in background (don't await)
+      User.updateOne(
+        { _id: userId },
+        { $set: { "customLlmConnection.lastUsedAt": new Date() } }
+      ).catch(() => {});
+
+      return entry;
+    }
+  } catch (err) {
+    console.error(`⚠️ Failed to load custom LLM for user ${userId}:`, err.message);
+  }
+
+  // Fall back to default
+  const entry = {
+    client: defaultClient,
+    model: DEFAULT_MODEL,
+    isCustom: false,
+    fetchedAt: Date.now(),
+  };
+  userClientCache.set(userId, entry);
+  return entry;
+}
+
+/**
+ * Clear cached client for a user (call when they update/revoke their LLM config).
+ */
+export function clearUserClientCache(userId) {
+  userClientCache.delete(userId);
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // SESSION STATE (keyed by visitorId)
@@ -148,6 +248,13 @@ export async function processMessage(visitorId, message, ctx) {
   }
 
   const mode = getMode(session.modeKey);
+
+  // Resolve LLM client for this user (custom or default)
+  const { client: openai, model: MODEL, isCustom } = await getClientForUser(ctx.userId);
+
+  if (isCustom) {
+    console.log(`🔌 Using custom LLM for user ${ctx.userId}`);
+  }
 
   // Ensure MCP client
   let client = mcpClients.get(visitorId);
@@ -367,6 +474,7 @@ export async function processMessage(visitorId, message, ctx) {
     answer: finalAnswer,
     modeKey: session.modeKey,
     rootId: session.rootId,
+    isCustomLLM: isCustom,
   };
 }
 

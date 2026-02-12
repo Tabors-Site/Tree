@@ -31,6 +31,39 @@ const OpenAIConnectorSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const CustomLLMConnectionSchema = new mongoose.Schema(
+  {
+    baseUrl: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    encryptedApiKey: {
+      type: String,
+      required: true,
+    },
+
+    model: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    lastUsedAt: {
+      type: Date,
+      default: null,
+    },
+
+    revoked: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { _id: false } // important since it's a single embedded object
+);
+
+
 const EnergySchema = new mongoose.Schema(
   {
     amount: {
@@ -98,7 +131,12 @@ const UserSchema = new mongoose.Schema({
     type: OpenAIConnectorSchema,
     required: false,
   },
+  customLlmConnection: {
+  type: CustomLLMConnectionSchema,
+  required: false,
+},
 });
+
 
 // Hash password before saving
 UserSchema.pre("save", async function (next) {

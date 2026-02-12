@@ -10,6 +10,7 @@ import mime from "mime-types";
 import User from "../db/models/user.js";
 
 import { createPurchaseSession } from "../routes/billing/purchase.js"
+import { setCustomLlmConnection, clearCustomLlmConnection, setCustomLlmRevoked } from "../core/customLLM.js";
 
 import {
   getAllNotesByUser as coreGetAllNotesByUser,
@@ -121,6 +122,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     const roots = user.roots || [];
     const profileType = user.profileType || "basic";
     const energy = user.availableEnergy;
+    const extraEnergy = user.additionalEnergy
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml) {
@@ -931,7 +933,7 @@ text-decoration: none;
 </span></a>
 
           <span class="meta-item">
-            <a href="/api/user/${userId}/energy${queryString}">⚡ ${energy?.amount ?? 0} · resets ${resetTimeLabel}</a>
+            <a href="/api/user/${userId}/energy${queryString}">⚡ ${energy?.amount + extraEnergy.amount ?? 0} · resets ${resetTimeLabel}</a>
           </span>
 
           <span class="meta-item">
@@ -7679,12 +7681,17 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    maybeResetEnergy(user);
+
     const energyAmount = user.availableEnergy?.amount ?? 0;
     const additionalEnergy = user.additionalEnergy?.amount ?? 0;
     const profileType = (user.profileType || "basic").toLowerCase();
-    // Filler for plan expiry — backend will provide real data later
     const planExpiresAt = user.planExpiresAt || null;
+
+    // Custom LLM connection status
+    const llmConn = user.customLlmConnection || null;
+    const hasLlm = !!(llmConn && llmConn.baseUrl && !llmConn.revoked);
+    const llmRevoked = llmConn?.revoked === true;
+
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
@@ -7694,6 +7701,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
         profileType,
         energy: user.availableEnergy,
         additionalEnergy: user.additionalEnergy,
+        hasCustomLlm: hasLlm,
       });
     }
 
@@ -7752,6 +7760,54 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     background: white; top: -300px; right: -200px;
     animation-delay: -5s;
   }
+/* =========================================================
+   GLASS TOGGLE (Custom LLM)
+   ========================================================= */
+.llm-toggle-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:14px;
+}
+
+.llm-toggle-label {
+  font-size:13px;
+  font-weight:600;
+  color:rgba(255,255,255,.7);
+}
+
+.glass-toggle {
+  position:relative;
+  width:54px;
+  height:28px;
+  border-radius:999px;
+  background:rgba(255,255,255,.2);
+  border:1px solid rgba(255,255,255,.3);
+  backdrop-filter:blur(18px);
+  cursor:pointer;
+  transition:all .25s ease;
+}
+
+.glass-toggle.active {
+  background:rgba(72,187,178,.45);
+  box-shadow:0 0 16px rgba(72,187,178,.35);
+}
+
+.glass-toggle-knob {
+  position:absolute;
+  top:4px;
+  left:4px;
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:white;
+  transition:all .25s cubic-bezier(.22,1,.36,1);
+}
+
+.glass-toggle.active .glass-toggle-knob {
+  left:28px;
+}
 
   body::after {
     width: 400px; height: 400px;
@@ -8259,19 +8315,72 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   }
 
   /* =========================================================
-     LLM INPUT
+     LLM SECTION
      ========================================================= */
-  .llm-input-row {
+  .llm-sub {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+
+  .llm-connected-badge {
     display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: rgba(72, 187, 120, 0.15);
+    border: 1px solid rgba(72, 187, 120, 0.3);
+    border-radius: 10px;
+    margin-bottom: 16px;
+  }
+
+  .llm-connected-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(72, 187, 120, 0.9);
+    box-shadow: 0 0 8px rgba(72, 187, 120, 0.5);
+    flex-shrink: 0;
+  }
+
+  .llm-connected-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(72, 187, 120, 0.9);
+  }
+
+  .llm-connected-detail {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-left: auto;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 300px;
+  }
+
+  .llm-fields {
+    display: flex;
+    flex-direction: column;
     gap: 12px;
-    align-items: stretch;
-    flex-wrap: wrap;
-    margin-top: 12px;
+  }
+
+  .llm-field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .llm-field-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.55);
   }
 
   .llm-input {
-    flex: 1;
-    min-width: 200px;
     padding: 14px 16px;
     font-size: 15px;
     border-radius: 12px;
@@ -8281,10 +8390,11 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     font-family: inherit;
     font-weight: 500;
     transition: all 0.2s;
+    width: 100%;
   }
 
   .llm-input::placeholder {
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.35);
   }
 
   .llm-input:focus {
@@ -8295,11 +8405,17 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     transform: translateY(-2px);
   }
 
-  .llm-save-btn {
+  .llm-btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+  }
+
+  .llm-save-btn,
+  .llm-disconnect-btn {
     padding: 14px 24px;
     border-radius: 980px;
-    border: 1px solid rgba(72, 187, 178, 0.4);
-    background: rgba(72, 187, 178, 0.3);
+    border: 1px solid;
     color: white;
     font-weight: 600;
     font-size: 15px;
@@ -8310,22 +8426,31 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
 
+  .llm-save-btn {
+    flex: 1;
+    border-color: rgba(72, 187, 178, 0.4);
+    background: rgba(72, 187, 178, 0.3);
+  }
+
   .llm-save-btn:hover {
     background: rgba(72, 187, 178, 0.45);
     transform: translateY(-2px);
   }
 
-  .llm-sub {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1.5;
+  .llm-disconnect-btn {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.25);
+  }
+
+  .llm-disconnect-btn:hover {
+    background: rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
   }
 
   .llm-status {
     margin-top: 10px;
     font-size: 13px;
     font-weight: 600;
-    color: rgba(72, 187, 120, 0.9);
     display: none;
   }
 
@@ -8342,9 +8467,9 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     .plan-grid { grid-template-columns: 1fr; }
     .energy-btns { flex-direction: column; }
     .energy-buy-btn { width: 100%; }
-    .llm-input-row { flex-direction: column; }
-    .llm-input { min-width: 0; }
-    .llm-save-btn { width: 100%; text-align: center; }
+    .llm-btn-row { flex-direction: column; }
+    .llm-save-btn, .llm-disconnect-btn { width: 100%; text-align: center; }
+    .llm-connected-detail { max-width: 140px; }
   }
 </style>
 </head>
@@ -8446,11 +8571,48 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   <div class="glass-card" style="animation-delay: 0.3s;">
     <h2>🤖 Custom LLM Endpoint</h2>
     <div class="llm-sub">Connect your own OpenAI API-compatible LLM to use AI chat and bypass energy usage for conversations.</div>
-    <div class="llm-input-row">
-      <input type="text" class="llm-input" id="llmUrl" placeholder="https://your-llm-endpoint/v1" />
-      <button class="llm-save-btn" onclick="saveLLM()">Save</button>
+
+    ${hasLlm ? `
+    <div class="llm-connected-badge">
+      <div class="llm-connected-dot"></div>
+      <span class="llm-connected-text">Connected</span>
+      <span class="llm-connected-detail">${llmConn.model} · ${llmConn.baseUrl}</span>
     </div>
-    <div class="llm-status" id="llmStatus">✓ Saved</div>
+    ` : ""}
+    ${llmConn ? `
+<div class="llm-toggle-row">
+  <span class="llm-toggle-label">Custom LLM Active</span>
+  <div id="llmToggle" class="glass-toggle ${llmRevoked ? "" : "active"}">
+    <div class="glass-toggle-knob"></div>
+  </div>
+</div>
+` : ""}
+
+
+    <div class="llm-fields">
+      <div class="llm-field-row">
+        <label class="llm-field-label">Endpoint URL</label>
+        <input type="text" class="llm-input" id="llmBaseUrl"
+          placeholder="https://api.groq.com/openai/v1/chat/completions"
+          value="${hasLlm ? llmConn.baseUrl : ""}" />
+      </div>
+      <div class="llm-field-row">
+        <label class="llm-field-label">API Key</label>
+        <input type="password" class="llm-input" id="llmApiKey"
+          placeholder="${hasLlm ? "••••••••  (saved — enter new to change)" : "gsk_abc123..."}" />
+      </div>
+      <div class="llm-field-row">
+        <label class="llm-field-label">Model</label>
+        <input type="text" class="llm-input" id="llmModel"
+          placeholder="openai/gpt-oss-120b"
+          value="${hasLlm ? llmConn.model : ""}" />
+      </div>
+      <div class="llm-btn-row">
+        <button class="llm-save-btn" onclick="saveLLM()">${hasLlm ? "Update Connection" : "Save Connection"}</button>
+        ${hasLlm ? '<button class="llm-disconnect-btn" onclick="disconnectLLM()">Disconnect</button>' : ""}
+      </div>
+    </div>
+    <div class="llm-status" id="llmStatus"></div>
   </div>
 
 </div>
@@ -8611,20 +8773,19 @@ async function handleCheckout() {
 
     const data = await res.json();
 
-    if (data.url) {
-
-      // 🔥 ESCAPE IFRAME + FULL PAGE REDIRECT
-      if (window.top !== window.self) {
-        window.top.location.href = data.url;
-      } else {
-        window.location.href = data.url;
-      }
-
-    } else if (data.error) {
-      alert(data.error);
-      btn.disabled = false;
-      btn.textContent = "Pay with Stripe";
-    }
+   if (data.url) {
+  if (window.top !== window.self) {
+    // inside iframe → redirect parent tab
+    window.top.location.href = data.url;
+  } else {
+    // normal page
+    window.location.href = data.url;
+  }
+} else if (data.error) {
+  alert(data.error);
+  btn.disabled = false;
+  btn.textContent = "Pay with Stripe";
+}
 
   } catch (err) {
     alert("Something went wrong. Please try again.");
@@ -8633,36 +8794,94 @@ async function handleCheckout() {
   }
 }
 
+// =====================
+// CUSTOM LLM
+// =====================
+function showLlmStatus(msg, ok) {
+  const el = document.getElementById("llmStatus");
+  el.style.display = "block";
+  el.textContent = msg;
+  el.style.color = ok ? "rgba(72, 187, 120, 0.9)" : "rgba(255, 107, 107, 0.9)";
+  if (ok) setTimeout(() => { el.style.display = "none"; }, 3000);
+}
 
-// =====================
-// LLM
-// =====================
 async function saveLLM() {
-  const url = document.getElementById("llmUrl").value.trim();
-  if (!url) return;
+  const baseUrl = document.getElementById("llmBaseUrl").value.trim();
+  const apiKey = document.getElementById("llmApiKey").value.trim();
+  const model = document.getElementById("llmModel").value.trim();
+
+  if (!baseUrl || !model) {
+    showLlmStatus("Endpoint URL and Model are required", false);
+    return;
+  }
+
+  const isUpdate = ${hasLlm ? "true" : "false"};
+  if (!isUpdate && !apiKey) {
+    showLlmStatus("API Key is required for new connections", false);
+    return;
+  }
+
+  const payload = { baseUrl, model };
+  if (apiKey) payload.apiKey = apiKey;
 
   try {
-    const res = await fetch("/api/user/" + userId + "/llm-endpoint", {
+    const res = await fetch("/api/user/" + userId + "/custom-llm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: url }),
+      body: JSON.stringify(payload),
     });
 
-    const status = document.getElementById("llmStatus");
     if (res.ok) {
-      status.style.display = "block";
-      status.textContent = "✓ Saved";
-      status.style.color = "rgba(72, 187, 120, 0.9)";
-      setTimeout(() => { status.style.display = "none"; }, 3000);
+      showLlmStatus("✓ Connection saved", true);
+      setTimeout(() => location.reload(), 1200);
     } else {
-      status.style.display = "block";
-      status.textContent = "✕ Failed to save";
-      status.style.color = "rgba(255, 107, 107, 0.9)";
+      const data = await res.json().catch(() => ({}));
+      showLlmStatus("✕ " + (data.error || "Failed to save"), false);
     }
   } catch (err) {
-    console.error(err);
+    showLlmStatus("✕ Network error", false);
   }
 }
+
+async function disconnectLLM() {
+  if (!confirm("Disconnect your custom LLM? You will go back to using energy for AI chat.")) return;
+
+  try {
+    const res = await fetch("/api/user/" + userId + "/custom-llm", {
+      method: "DELETE",
+    });
+
+    if (res.ok) {
+      showLlmStatus("✓ Disconnected", true);
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showLlmStatus("✕ Failed to disconnect", false);
+    }
+  } catch (err) {
+    showLlmStatus("✕ Network error", false);
+  }
+}
+  async function toggleLLM(active) {
+  try {
+    const res = await fetch("/api/user/" + userId + "/custom-llm/revoke", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        revoked: !active   // active=true → revoked=false
+      })
+    });
+
+    if(res.ok){
+      showLlmStatus(active ? "✓ Custom LLM enabled" : "✓ Custom LLM disabled", true);
+      setTimeout(()=>location.reload(),700);
+    } else {
+      showLlmStatus("✕ Failed to update", false);
+    }
+  } catch {
+    showLlmStatus("✕ Network error", false);
+  }
+}
+
 
 // =====================
 // EVENTS
@@ -8706,6 +8925,15 @@ document.getElementById("customEnergyBtn").onclick = () => {
 // =====================
 // INIT
 // =====================
+// Glass toggle handler
+const llmToggle = document.getElementById("llmToggle");
+if (llmToggle) {
+  llmToggle.onclick = () => {
+    const isActive = llmToggle.classList.toggle("active");
+    toggleLLM(isActive);
+  };
+}
+
 readURL();
 renderPlans();
 renderEnergy();
@@ -8721,22 +8949,99 @@ renderCheckout();
 
 
 
-
 router.post("/user/:userId/purchase", authenticate, async (req, res) => {
   // normalize payload so your existing function works
   req.body.userId = req.params.userId;
 
   // 🔥 TEMP BLOCK
-  return res.status(200).json({
-    blocked: true,
-message: "Purchases are currently unavailable during ongoing development. Features and data may change until the platform stabilizes."
-  });
-  return createPurchaseSession(req, res);
+
+  //return createPurchaseSession(req, res);
 });
 
 
 
+// ─────────────────────────────────────────────────────────────────────────
+// ENCRYPTION
+// ─────────────────────────────────────────────────────────────────────────
 
+
+
+
+
+// ─────────────────────────────────────────────────────────────────────────
+// ROUTES
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
+  try {
+    req.body.userId = req.params.userId;
+
+    const { userId, baseUrl, apiKey, model } = req.body;
+
+    if (!baseUrl || !apiKey || !model) {
+      return res.status(400).json({
+        error: "Missing required fields: baseUrl, apiKey, model",
+      });
+    }
+
+    const result = await setCustomLlmConnection(userId, {
+      baseUrl,
+      apiKey,
+      model,
+    });
+
+    return res.status(200).json({
+      success: true,
+      customLlmConnection: result,
+    });
+  } catch (err) {
+    console.error("❌ Failed to save custom LLM:", err.message);
+    return res.status(500).json({
+      error: "Failed to save custom LLM connection",
+    });
+  }
+});
+
+router.delete("/user/:userId/custom-llm", authenticate, async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    await clearCustomLlmConnection(userId);
+
+    return res.status(200).json({
+      success: true,
+      removed: true,
+    });
+  } catch (err) {
+    console.error("❌ Failed to clear custom LLM:", err.message);
+    return res.status(500).json({
+      error: "Failed to remove custom LLM connection",
+    });
+  }
+});
+
+
+router.post("/user/:userId/custom-llm/revoke", authenticate, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { revoked } = req.body;
+
+    // basic validation
+    if (typeof revoked !== "boolean") {
+      return res.status(400).json({ error: "revoked must be boolean" });
+    }
+
+    const result = await setCustomLlmRevoked(userId, revoked);
+
+    return res.json({
+      success: true,
+      revoked: result.revoked,
+    });
+  } catch (err) {
+    console.error("❌ Failed to toggle custom LLM:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 export default router;

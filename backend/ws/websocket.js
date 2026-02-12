@@ -4,6 +4,7 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import { getClientForUser } from "../ws/conversation.js";
 
 import {
   connectToMCP,
@@ -322,11 +323,17 @@ if (!socket.username || !socket.userId) {
 
       // Charge energy upfront (non-refundable even if cancelled)
       try {
-        await useEnergy({ userId: socket.userId, action: "chat" });
-      } catch (err) {
-        socket.emit("chatError", { error: err.message, generation });
-        return;
-      }
+  const { isCustom } = await getClientForUser(socket.userId);
+
+  // Only charge energy when NOT using custom LLM
+  if (!isCustom) {
+    await useEnergy({ userId: socket.userId, action: "chat" });
+  }
+} catch (err) {
+  socket.emit("chatError", { error: err.message, generation });
+  return;
+}
+
 
       // Abort any previous in-flight request
       if (socket._chatAbort) {
