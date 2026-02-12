@@ -14,12 +14,21 @@ export async function createUnderstandingRun(
   const nodes = await Node.find({}).lean();
   const nodeById = new Map(nodes.map((n) => [String(n._id), n]));
 
+  
   const rootNode = nodeById.get(String(rootNodeId));
   if (!rootNode) throw new Error("Root node not found");
-  if (perspective.trim() === "") {
-    perspective = "semantically compress while maintaining meaning";
-  }
+const MAX_PERSPECTIVE_LENGTH = 400; // adjust as you want
 
+perspective = (perspective || "").trim();
+
+if (!perspective) {
+  perspective = "semantically compress while maintaining meaning";
+}
+
+// hard clamp
+if (perspective.length > MAX_PERSPECTIVE_LENGTH) {
+  perspective = perspective.slice(0, MAX_PERSPECTIVE_LENGTH);
+}
   const run = await UnderstandingRun.create({
     rootNodeId,
     perspective,
