@@ -21,7 +21,7 @@ const SOFT_LIMIT_MB = 100;
 const HARD_LIMIT_MB = 1024;
 
 // daily limits (unchanged)
-const DAILY_LIMITS = {
+export const DAILY_LIMITS = {
   basic: 120,
   standard: 500,
   premium: 2000,
@@ -201,7 +201,12 @@ export async function useEnergy({
   // ⚡ calculate cost
   const cost = calculateEnergyCost(action, payload);
 
-  if (user.availableEnergy.amount < cost) {
+  const baseEnergy = user.availableEnergy.amount || 0;
+  const extraEnergy = user.additionalEnergy?.amount || 0;
+  const totalEnergy = baseEnergy + extraEnergy;
+
+  // ❌ Not enough total energy
+  if (totalEnergy < cost) {
     if (file?.path) {
       await fs.promises.unlink(file.path).catch(() => {});
     }
@@ -209,16 +214,34 @@ export async function useEnergy({
     throw new EnergyError("Energy limit reached", {
       code: "INSUFFICIENT_ENERGY",
       required: cost,
-      remaining: user.availableEnergy.amount,
+      remaining: totalEnergy,
     });
   }
 
-  // 💸 deduct
-  user.availableEnergy.amount -= cost;
+  // 💸 deduct — PRIORITY: availableEnergy first
+  let remainingCost = cost;
+
+  if (user.availableEnergy.amount >= remainingCost) {
+    user.availableEnergy.amount -= remainingCost;
+    remainingCost = 0;
+  } else {
+    remainingCost -= user.availableEnergy.amount;
+    user.availableEnergy.amount = 0;
+  }
+
+  // if still cost left → use additionalEnergy
+  if (remainingCost > 0) {
+    user.additionalEnergy.amount -= remainingCost;
+    remainingCost = 0;
+  }
+
   await user.save();
 
   return {
     energyUsed: cost,
-    remainingEnergy: user.availableEnergy.amount,
+    remainingEnergy:
+      user.availableEnergy.amount + user.additionalEnergy.amount,
+    remainingBaseEnergy: user.availableEnergy.amount,
+    remainingAdditionalEnergy: user.additionalEnergy.amount,
   };
 }
