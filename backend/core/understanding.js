@@ -43,6 +43,8 @@ export async function createUnderstandingRun(
   const nodeMap = new Map();
   const topology = new Map();
 
+  const createdUNodes = new Set(); // 👈 track new ones
+
   const rootUNodeId = await buildRunTree({
     realNode: rootNode,
     nodeById,
@@ -50,13 +52,14 @@ export async function createUnderstandingRun(
     topology,
     parentUNodeId: null,
     depth: 0,
+    createdUNodes
   });
 
   const maxDepth = computeDerivedTopology(rootUNodeId, topology);
   const { energyUsed } = await useEnergy({
     userId,
     action: "understanding",
-    payload: nodeMap.size, // 🔥 1 energy per node
+    payload: createdUNodes.size, // 🔥 1 energy per node
   });
   run.nodeMap = Object.fromEntries(nodeMap);
   run.topology = Object.fromEntries(topology);
@@ -94,16 +97,25 @@ async function buildRunTree({
   topology,
   parentUNodeId,
   depth,
+  createdUNodes
 }) {
-  let uNode = await UnderstandingNode.findOne({
+let uNode = await UnderstandingNode.findOne({
+  realNodeId: String(realNode._id),
+});
+
+let isNew = false;
+
+if (!uNode) {
+  uNode = await UnderstandingNode.create({
     realNodeId: String(realNode._id),
   });
+  isNew = true;
+}
 
-  if (!uNode) {
-    uNode = await UnderstandingNode.create({
-      realNodeId: String(realNode._id),
-    });
-  }
+if (isNew) {
+  createdUNodes.add(String(uNode._id));
+}
+
 
   const uNodeId = String(uNode._id);
   nodeMap.set(String(realNode._id), uNodeId);
@@ -127,6 +139,7 @@ async function buildRunTree({
       topology,
       parentUNodeId: uNodeId,
       depth: depth + 1,
+      createdUNodes
     });
 
     topology.get(uNodeId).children.push(childUNodeId);

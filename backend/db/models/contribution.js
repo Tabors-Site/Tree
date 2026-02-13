@@ -381,17 +381,16 @@ const ContributionSchema = new mongoose.Schema({
       understandingNodeId: {
         type: String,
         ref: "UnderstandingNode",
-        default: null,
       },
-      rootNodeId: { type: String, ref: "Node", default: null },
+      rootNodeId: { type: String, ref: "Node" },
 
-      nodeCount: { type: Number, default: null }, // for createRun
-      layer: { type: Number, default: null }, // for processStep
-      mode: { type: String, enum: ["leaf", "merge"], default: null },
+      nodeCount: { type: Number}, // for createRun
+      layer: { type: Number }, // for processStep
+      mode: { type: String, enum: ["leaf", "merge"] },
 
-      perspective: { type: String, default: null },
+      perspective: { type: String },
     },
-    default: null,
+ 
     _id: false,
   },
 });
