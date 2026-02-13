@@ -2,6 +2,8 @@ import UnderstandingRun from "../db/models/understandingRun.js";
 import UnderstandingNode from "../db/models/understandingNode.js";
 import Node from "../db/models/node.js";
 import { getNotes } from "./notes.js";
+import { logContribution } from "../db/utils.js";
+import { useEnergy } from "../core/energy.js";
 
 /**
  * Creates the shadow understanding tree and computes merge rules.
@@ -9,27 +11,29 @@ import { getNotes } from "./notes.js";
  */
 export async function createUnderstandingRun(
   rootNodeId,
+  userId,
   perspective = "general",
+  wasAi = false,
 ) {
   const nodes = await Node.find({}).lean();
   const nodeById = new Map(nodes.map((n) => [String(n._id), n]));
 
-  
   const rootNode = nodeById.get(String(rootNodeId));
   if (!rootNode) throw new Error("Root node not found");
-const MAX_PERSPECTIVE_LENGTH = 400; // adjust as you want
+  const MAX_PERSPECTIVE_LENGTH = 400; // adjust as you want
 
-perspective = (perspective || "").trim();
+  perspective = (perspective || "").trim();
 
-if (!perspective) {
-  perspective = "semantically compress while maintaining meaning";
-}
+  if (!perspective) {
+    perspective = "semantically compress while maintaining meaning";
+  }
 
-// hard clamp
-if (perspective.length > MAX_PERSPECTIVE_LENGTH) {
-  perspective = perspective.slice(0, MAX_PERSPECTIVE_LENGTH);
-}
+  // hard clamp
+  if (perspective.length > MAX_PERSPECTIVE_LENGTH) {
+    perspective = perspective.slice(0, MAX_PERSPECTIVE_LENGTH);
+  }
   const run = await UnderstandingRun.create({
+    userId,
     rootNodeId,
     perspective,
     nodeMap: {},
@@ -49,12 +53,31 @@ if (perspective.length > MAX_PERSPECTIVE_LENGTH) {
   });
 
   const maxDepth = computeDerivedTopology(rootUNodeId, topology);
-
+  const { energyUsed } = await useEnergy({
+    userId,
+    action: "understanding",
+    payload: nodeMap.size, // 🔥 1 energy per node
+  });
   run.nodeMap = Object.fromEntries(nodeMap);
   run.topology = Object.fromEntries(topology);
   run.maxDepth = maxDepth;
   await run.save();
+  await logContribution({
+    userId: userId,
+    nodeId: rootNodeId,
+    wasAi,
+    energyUsed,
 
+    action: "understanding",
+    nodeVersion: "0",
+    understandingMeta: {
+      stage: "createRun",
+      understandingRunId: run._id,
+      rootNodeId,
+      nodeCount: nodeMap.size,
+      perspective,
+    },
+  });
   return {
     understandingRunId: run._id,
     perspective,
@@ -156,7 +179,10 @@ function getPS(node, runId) {
  * COMPLETE (at their own mergeLayer), not just min child layer.
  * Each non-leaf node merges exactly ONCE, at its own mergeLayer.
  * ================================================================ */
-export async function getNextCompressionPayloadForLLM(understandingRunId) {
+export async function getNextCompressionPayloadForLLM(
+  understandingRunId,
+  userId,
+) {
   const run = await UnderstandingRun.findById(understandingRunId).lean();
   if (!run) throw new Error("UnderstandingRun not found");
 
@@ -253,7 +279,14 @@ export async function getNextCompressionPayloadForLLM(understandingRunId) {
 
     const realNode = await Node.findById(n.realNodeId).lean();
     if (!realNode) {
-      await autoCommitLeaf(n._id, runId, perspective, "(node deleted)");
+      await autoCommitLeaf(
+        n._id,
+        runId,
+        perspective,
+        "(node deleted)",
+        userId,
+        true,
+      );
       autoCommittedAny = true;
       continue;
     }
@@ -270,6 +303,8 @@ export async function getNextCompressionPayloadForLLM(understandingRunId) {
         runId,
         perspective,
         `[${realNode.name}]: (no notes)`,
+        userId,
+        true,
       );
       autoCommittedAny = true;
       continue;
@@ -450,6 +485,8 @@ async function autoCommitLeaf(
   understandingRunId,
   perspective,
   encoding,
+  userId,
+  wasAi,
 ) {
   const node = await UnderstandingNode.findById(understandingNodeId);
   if (!node) return;
@@ -464,6 +501,21 @@ async function autoCommitLeaf(
     currentLayer: 0,
     updatedAt: new Date(),
   });
+  /*
+  await logContribution({
+    userId,
+    nodeId: node.realNodeId,
+    wasAi: true,
+    action: "understanding",
+    nodeVersion: "0",
+    understandingMeta: {
+      stage: "processStep",
+      understandingRunId,
+      understandingNodeId,
+      layer: 0,
+      mode: "leaf",
+    },
+  });*/ //dont log since these are auto-commits for empty nodes, not real contributions
 
   await node.save();
 }
@@ -477,6 +529,8 @@ export async function commitCompressionResult({
   encoding,
   understandingNodeId,
   currentLayer,
+  userId,
+  wasAi = true,
 }) {
   const run = await UnderstandingRun.findById(understandingRunId).lean();
   if (!run) throw new Error("UnderstandingRun not found");
@@ -501,6 +555,27 @@ export async function commitCompressionResult({
       encoding,
       currentLayer: 0,
       updatedAt: new Date(),
+    });
+    const { energyUsed } = await useEnergy({
+      userId,
+      action: "understanding",
+      payload: 1,
+    });
+
+    await logContribution({
+      userId,
+      nodeId: node.realNodeId,
+      wasAi,
+      energyUsed,
+      action: "understanding",
+      nodeVersion: "0",
+      understandingMeta: {
+        stage: "processStep",
+        understandingRunId,
+        understandingNodeId,
+        layer: currentLayer,
+        mode: "leaf",
+      },
     });
 
     await node.save();
@@ -550,6 +625,28 @@ export async function commitCompressionResult({
         currentLayer,
         updatedAt: new Date(),
       });
+      const { energyUsed } = await useEnergy({
+        userId,
+        action: "understanding",
+        payload: 1,
+      });
+
+      await logContribution({
+        userId,
+        nodeId: node.realNodeId,
+        wasAi,
+        energyUsed,
+        action: "understanding",
+        nodeVersion: "0",
+        understandingMeta: {
+          stage: "processStep",
+          understandingRunId,
+          understandingNodeId,
+          layer: currentLayer,
+          mode: "merge",
+        },
+      });
+
       await node.save();
     }
 

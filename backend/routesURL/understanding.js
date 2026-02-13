@@ -35,6 +35,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { perspective = "general" } = req.body;
+    const userId = req.userId;
 
     // 🔒 Validate root node
     const rootNode = await Node.findById(nodeId).lean();
@@ -45,7 +46,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
     }
 
     // 🧠 Create understanding run
-    const result = await createUnderstandingRun(nodeId, perspective);
+    const result = await createUnderstandingRun(nodeId, userId, perspective);
     if ("html" in req.query) {
       return res.redirect(
         `/api/root/${nodeId}/understandings/run/${

@@ -30,7 +30,7 @@ const RunNodeTopologySchema = new mongoose.Schema(
       required: true,
     },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const UnderstandingRunSchema = new mongoose.Schema({
@@ -76,7 +76,11 @@ const UnderstandingRunSchema = new mongoose.Schema({
     type: Number,
     index: true,
   },
-
+  userId: {
+    type: String,
+    ref: "User",
+    required: true,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

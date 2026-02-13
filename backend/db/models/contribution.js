@@ -14,8 +14,12 @@ const ContributionSchema = new mongoose.Schema({
   nodeId: {
     type: String,
     ref: "Node",
-    required: true,
   },
+  wasAi: {
+    type: Boolean,
+    default: false,
+  },
+
   action: {
     type: String,
     enum: [
@@ -37,7 +41,9 @@ const ContributionSchema = new mongoose.Schema({
       "editNameNode",
       "rawIdea",
       "branchLifecycle",
-       "purchase",
+      "understanding",
+
+      "purchase",
     ],
     required: true,
   },
@@ -306,57 +312,88 @@ const ContributionSchema = new mongoose.Schema({
     },
   },
   purchaseMeta: {
-  type: {
-    /* ===============================
-       STRIPE IDENTITY (IDEMPOTENCY)
-    =============================== */
+    type: {
+      /* ===============================
+        STRIPE IDENTITY (IDEMPOTENCY)
+      =============================== */
 
-    stripeSessionId: {
-      type: String,
-      index: true,
-      unique: true,
+      stripeSessionId: {
+        type: String,
+        index: true,
+        unique: true,
+      },
+
+      paymentIntentId: {
+        type: String,
+        default: null,
+      },
+
+      stripeEventId: {
+        type: String,
+        default: null,
+      },
+
+      /* ===============================
+        PURCHASE SNAPSHOT
+      =============================== */
+
+      plan: {
+        type: String,
+        enum: ["basic", "standard", "premium", null],
+        default: null,
+      },
+
+      energyAmount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      totalCents: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      currency: {
+        type: String,
+        default: "usd",
+      },
+
+      _id: false,
     },
+  },
+  understandingMeta: {
+    type: {
+      stage: {
+        type: String,
+        enum: ["createRun", "processStep"],
+        required: true,
+      },
 
-    paymentIntentId: {
-      type: String,
-      default: null,
+      understandingRunId: {
+        type: String,
+        ref: "UnderstandingRun",
+        required: true,
+      },
+
+      // optional depending on stage
+      understandingNodeId: {
+        type: String,
+        ref: "UnderstandingNode",
+        default: null,
+      },
+      rootNodeId: { type: String, ref: "Node", default: null },
+
+      nodeCount: { type: Number, default: null }, // for createRun
+      layer: { type: Number, default: null }, // for processStep
+      mode: { type: String, enum: ["leaf", "merge"], default: null },
+
+      perspective: { type: String, default: null },
     },
-
-    stripeEventId: {
-      type: String,
-      default: null,
-    },
-
-    /* ===============================
-       PURCHASE SNAPSHOT
-    =============================== */
-
-    plan: {
-      type: String,
-      enum: ["basic", "standard", "premium", null],
-      default: null,
-    },
-
-    energyAmount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
-    totalCents: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
-    currency: {
-      type: String,
-      default: "usd",
-    },
-
+    default: null,
     _id: false,
   },
-},
 });
 
 const Contribution = mongoose.model("Contribution", ContributionSchema);
