@@ -8,6 +8,8 @@ import multer from "multer";
 import mime from "mime-types";
 
 import User from "../db/models/user.js";
+import AiChat from "../db/models/aiChat.js";
+
 
 import { createPurchaseSession } from "../routes/billing/purchase.js"
 import { setCustomLlmConnection, clearCustomLlmConnection, setCustomLlmRevoked } from "../core/customLLM.js";
@@ -923,7 +925,8 @@ text-decoration: none;
     <!-- Header -->
     <div class="glass-card header">
       <div class="user-info">
-        <h1>@${user.username}</h1> 
+       <a href="/api/user/${userId}/energy${queryString}">
+        <h1>@${user.username}</h1> </a>
 
         <div class="user-meta">
    <a href="/api/user/${userId}/energy${queryString}">
@@ -995,6 +998,8 @@ text-decoration: none;
       <h2>Quick Links</h2>
       <ul class="nav-links">
         <li><a href="/api/user/${userId}/raw-ideas${queryString}">Raw Ideas</a></li>
+                <li><a href="/api/user/${userId}/chats${queryString}">AI Chats</a></li>
+
         <li><a href="/api/user/${userId}/notes${queryString}">Notes</a></li>
         <li><a href="/api/user/${userId}/tags${queryString}">Mail</a></li>
         <li><a href="/api/user/${userId}/contributions${queryString}">Contributions</a></li>
@@ -2796,345 +2801,7 @@ export const contributionRenderers = ({
   },
 });
 
-const contributionsCss = `<style>
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
 
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
-      'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    padding: 20px;
-    color: #1a1a1a;
-  }
-
-  .container {
-    max-width: 900px;
-    margin: 0 auto;
-  }
-
-  /* Back Navigation */
-  .back-nav {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-  }
-
-  .back-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 16px;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    color: #667eea;
-    text-decoration: none;
-    border-radius: 10px;
-    font-weight: 600;
-    font-size: 14px;
-    transition: all 0.2s;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-
-  .back-link:hover {
-    background: white;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-  }
-
-  /* Header Section */
-  .header {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border-radius: 16px;
-    padding: 28px;
-    margin-bottom: 24px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  }
-
-  .header h1 {
-    font-size: 28px;
-    font-weight: 700;
-    color: #1a1a1a;
-    margin-bottom: 8px;
-    line-height: 1.3;
-  }
-
-  .header h1::before {
-    content: '📊 ';
-    font-size: 26px;
-  }
-
-  .header h1 a {
-    color: #667eea;
-    text-decoration: none;
-    transition: color 0.2s;
-  }
-
-  .header h1 a:hover {
-    color: #764ba2;
-    text-decoration: underline;
-  }
-
-  .header-subtitle {
-    font-size: 14px;
-    color: #888;
-    margin-bottom: 16px;
-  }
-
-  /* Navigation Links */
-  .nav-links {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-
-  .nav-links a {
-    padding: 8px 16px;
-    background: #f8f9fa;
-    border-radius: 8px;
-    color: #667eea;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 14px;
-    transition: all 0.2s;
-    border: 1px solid transparent;
-  }
-
-  .nav-links a:hover {
-    background: white;
-    border-color: #667eea;
-    transform: translateY(-2px);
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
-  }
-
-  /* Contributions List */
-  .contributions-list {
-    list-style: none;
-  }
-
-  .contribution-item {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border-left: 4px solid #667eea;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .contribution-item::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, rgba(118, 75, 162, 0.03) 100%);
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
-  }
-
-  .contribution-item:hover {
-    transform: translateX(8px) translateY(-4px);
-    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.2);
-    border-left-color: #764ba2;
-  }
-
-  .contribution-item:hover::before {
-    opacity: 1;
-  }
-
-  .contribution-user {
-    font-weight: 700;
-    color: #667eea;
-    font-size: 15px;
-    margin-bottom: 4px;
-    position: relative;
-    display: inline-block;
-  }
-
-  .contribution-user::before {
-    content: '👤';
-    margin-right: 6px;
-    font-size: 14px;
-    opacity: 0.8;
-  }
-
-  .contribution-action {
-    font-size: 15px;
-    line-height: 1.6;
-    color: #1a1a1a;
-    margin-bottom: 6px;
-  }
-
-  .contribution-time {
-    font-size: 13px;
-    color: #888;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #e9ecef;
-    display: block;
-  }
-
-  .contribution-details {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #e9ecef;
-  }
-
-  .contribution-details strong {
-    color: #667eea;
-    font-size: 14px;
-    display: block;
-    margin-bottom: 8px;
-  }
-
-  .contribution-details ul {
-    list-style: none;
-    padding-left: 0;
-    margin-top: 8px;
-  }
-
-  .contribution-details li {
-    padding: 8px 12px;
-    background: #f8f9fa;
-    border-radius: 6px;
-    margin-bottom: 6px;
-    font-size: 14px;
-  }
-
-  /* Code + Links */
-  code {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    color: #667eea;
-    font-weight: 600;
-    word-break: break-word;
-  }
-
-  pre {
-    background: #2d2d2d;
-    color: #a9b7c6;
-    padding: 12px;
-    border-radius: 8px;
-    overflow-x: auto;
-    margin-top: 8px;
-    font-size: 13px;
-    line-height: 1.5;
-  }
-
-  pre code {
-    background: none;
-    color: inherit;
-    padding: 0;
-    font-weight: 400;
-  }
-
-  a {
-    color: #667eea;
-    text-decoration: none;
-    font-weight: 500;
-    transition: color 0.2s;
-  }
-
-  a:hover {
-    color: #764ba2;
-    text-decoration: underline;
-  }
-
-  /* Empty State */
-  .empty-state {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border-radius: 16px;
-    padding: 60px 40px;
-    text-align: center;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  }
-
-  .empty-state-icon {
-    font-size: 64px;
-    margin-bottom: 16px;
-  }
-
-  .empty-state-text {
-    font-size: 18px;
-    color: #666;
-    margin-bottom: 8px;
-  }
-
-  .empty-state-subtext {
-    font-size: 14px;
-    color: #999;
-  }
-
-  /* Responsive */
-  @media (max-width: 640px) {
-    body {
-      padding: 16px;
-    }
-
-    .header {
-      padding: 20px;
-    }
-
-    .header h1 {
-      font-size: 24px;
-    }
-
-    .back-nav {
-      flex-direction: column;
-    }
-
-    .back-link {
-      justify-content: center;
-    }
-
-    .nav-links {
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .nav-links a {
-      text-align: center;
-    }
-
-    .contribution-item {
-      padding: 16px;
-    }
-
-    code {
-      font-size: 12px;
-    }
-
-    pre {
-      font-size: 12px;
-    }
-
-    .empty-state {
-      padding: 40px 24px;
-    }
-  }
-
-  @media (min-width: 641px) and (max-width: 1024px) {
-    .container {
-      max-width: 700px;
-    }
-  }
-</style>`;
 
 router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
   try {
@@ -3148,16 +2815,12 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
       return res.status(400).json({ error: "Invalid limit" });
     }
 
-    const filtered = Object.entries(req.query)
-      .filter(([k]) => ["token", "html"].includes(k))
-      .map(([k, v]) => (v === "" ? k : `${k}=${v}`))
-      .join("&");
-
-    const queryString = filtered ? `?${filtered}` : "";
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
 
     const { contributions = [] } = await getContributionsByUser(
       userId,
-      limit,
+      500, // hard limit to prevent abuse
       req.query.startDate,
       req.query.endDate,
     );
@@ -3169,41 +2832,338 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
     const user = await User.findById(userId).lean();
     const username = user?.username || "Unknown user";
 
-    const renderers = contributionRenderers({
-      nodeId: null,
-      version: null,
-      nextVersion: null,
-      queryString,
-    });
+    /* ─────────────────────────────────────────────── */
+    /* HELPERS                                          */
+    /* ─────────────────────────────────────────────── */
+
+    const esc = (str = "") =>
+      String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const link = (id, label) =>
+      id
+        ? `<a href="/api/${id}${tokenQS}">${label || `<code>${esc(id)}</code>`}</a>`
+        : `<code>unknown</code>`;
+
+    const nodeLink = (id, name, version) => {
+      if (!id) return `<code>unknown node</code>`;
+      const v = version != null ? `/${version}` : "";
+      const display = name || id;
+      return `<a href="/api/${id}${v}${tokenQS}"><code>${esc(display)}</code></a>`;
+    };
+
+    const userTag = (u) => {
+      if (!u) return `<code>unknown user</code>`;
+      if (typeof u === "object" && u.username)
+        return `<a href="/api/user/${u._id}${tokenQS}"><code>${esc(u.username)}</code></a>`;
+      if (typeof u === "string")
+        return `<a href="/api/user/${u}${tokenQS}"><code>${esc(u)}</code></a>`;
+      return `<code>unknown user</code>`;
+    };
+
+    const kvMap = (data) => {
+      if (!data) return "";
+      const entries =
+        data instanceof Map
+          ? [...data.entries()]
+          : typeof data === "object"
+            ? Object.entries(data)
+            : [];
+      if (entries.length === 0) return "";
+      return entries
+        .map(
+          ([k, v]) =>
+            `<span class="kv-chip"><code>${esc(k)}</code> ${esc(String(v))}</span>`,
+        )
+        .join(" ");
+    };
+
+    /* ─────────────────────────────────────────────── */
+    /* COLOR CATEGORY                                   */
+    /* ─────────────────────────────────────────────── */
+
+    const actionColor = (action) => {
+      switch (action) {
+        case "create":
+          return "glass-green";
+        case "delete":
+        case "branchLifecycle":
+          return "glass-red";
+        case "editStatus":
+        case "editValue":
+        case "editGoal":
+        case "editSchedule":
+        case "editNameNode":
+        case "editScript":
+          return "glass-blue";
+        case "executeScript":
+          return "glass-cyan";
+        case "prestige":
+          return "glass-gold";
+        case "note":
+        case "rawIdea":
+          return "glass-purple";
+        case "invite":
+          return "glass-pink";
+        case "transaction":
+        case "trade":
+          return "glass-orange";
+        case "purchase":
+          return "glass-emerald";
+        case "updateParent":
+        case "updateChildNode":
+          return "glass-teal";
+        case "understanding":
+          return "glass-indigo";
+        default:
+          return "glass-default";
+      }
+    };
+
+    /* ─────────────────────────────────────────────── */
+    /* ACTION RENDERER                                  */
+    /* ─────────────────────────────────────────────── */
+
+    const renderAction = (c, nodeName) => {
+      const nId = c.nodeId?._id || c.nodeId;
+      const v = Number(c.nodeVersion ?? 0);
+      const nLink = nodeLink(nId, nodeName, v);
+
+      switch (c.action) {
+        case "create":
+          return `Created ${nLink}`;
+
+        case "editStatus":
+          return `Marked ${nLink} as <code>${esc(c.statusEdited)}</code>`;
+
+        case "editValue":
+          return `Adjusted values on ${nLink} ${kvMap(c.valueEdited)}`;
+
+        case "prestige":
+          return `Prestiged ${nLink} to a new version`;
+
+        case "trade":
+          return `Traded on ${nLink}`;
+
+        case "delete":
+          return `Deleted ${nLink}`;
+
+        case "invite": {
+          const ia = c.inviteAction || {};
+          const target = userTag(ia.receivingId);
+          const labels = {
+            invite: `Invited ${target} to collaborate on`,
+            acceptInvite: `Accepted an invitation from ${target} on`,
+            denyInvite: `Declined an invitation from ${target} on`,
+            removeContributor: `Removed ${target} from`,
+            switchOwner: `Transferred ownership of`,
+          };
+          const suffix = ia.action === "switchOwner" ? ` to ${target}` : "";
+          return `${labels[ia.action] || "Updated collaboration on"} ${nLink}${suffix}`;
+        }
+
+        case "editSchedule": {
+          const s = c.scheduleEdited || {};
+          const parts = [];
+          if (s.date)
+            parts.push(
+              `date to <code>${new Date(s.date).toLocaleString()}</code>`,
+            );
+          if (s.reeffectTime != null)
+            parts.push(`re-effect to <code>${s.reeffectTime}</code>`);
+          return parts.length
+            ? `Set ${parts.join(" and ")} on ${nLink}`
+            : `Updated the schedule on ${nLink}`;
+        }
+
+        case "editGoal":
+          return `Set new goals on ${nLink} ${kvMap(c.goalEdited)}`;
+
+        case "transaction": {
+          const tm = c.transactionMeta;
+          if (!tm) return `Recorded a transaction on ${nLink}`;
+          const eventLabel = esc(tm.event || "unknown").replace(/_/g, " ");
+          const counterparty = tm.counterpartyNodeId
+            ? ` with ${link(tm.counterpartyNodeId)}`
+            : "";
+          const sent = kvMap(tm.valuesSent);
+          const recv = kvMap(tm.valuesReceived);
+          let flow = "";
+          if (sent) flow += ` — sent ${sent}`;
+          if (recv) flow += `${sent ? "," : " —"} received ${recv}`;
+          return `Transaction <code>${eventLabel}</code> as ${esc(tm.role)} (side ${esc(tm.side)}) on ${nLink}${counterparty}${flow}`;
+        }
+
+        case "note": {
+          const na = c.noteAction || {};
+          const verb =
+            na.action === "add" ? "Added a note to" : "Removed a note from";
+          const noteRef = na.noteId
+            ? ` <a href="/api/${nId}/${v}/notes/${na.noteId}${tokenQS}"><code>${esc(na.noteId)}</code></a>`
+            : "";
+          return `${verb} ${nLink}${noteRef}`;
+        }
+
+        case "updateParent": {
+          const up = c.updateParent || {};
+          const from = up.oldParentId
+            ? link(up.oldParentId)
+            : `<code>none</code>`;
+          const to = up.newParentId
+            ? link(up.newParentId)
+            : `<code>none</code>`;
+          return `Moved ${nLink} from ${from} to ${to}`;
+        }
+
+        case "editScript": {
+          const es = c.editScript || {};
+          return `Edited script <code>${esc(es.scriptName || es.scriptId)}</code> on ${nLink}`;
+        }
+
+        case "executeScript": {
+          const xs = c.executeScript || {};
+          const icon = xs.success ? "✅" : "❌";
+          let text = `${icon} Ran <code>${esc(xs.scriptName || xs.scriptId)}</code> on ${nLink}`;
+          if (xs.error) text += ` — <code>${esc(xs.error)}</code>`;
+          return text;
+        }
+
+        case "updateChildNode": {
+          const uc = c.updateChildNode || {};
+          return uc.action === "added"
+            ? `Added ${link(uc.childId)} as a child of ${nLink}`
+            : `Removed child ${link(uc.childId)} from ${nLink}`;
+        }
+
+        case "editNameNode": {
+          const en = c.editNameNode || {};
+          return `Renamed ${nLink} from <code>${esc(en.oldName)}</code> to <code>${esc(en.newName)}</code>`;
+        }
+
+        case "rawIdea": {
+          const ri = c.rawIdeaAction || {};
+          const ideaRef = `<a href="/api/user/${userId}/raw-ideas/${ri.rawIdeaId}${tokenQS}"><code>${esc(ri.rawIdeaId)}</code></a>`;
+          if (ri.action === "add") return `Captured a raw idea ${ideaRef}`;
+          if (ri.action === "delete")
+            return `Discarded raw idea <code>${esc(ri.rawIdeaId)}</code>`;
+          if (ri.action === "placed") {
+            const target = ri.targetNodeId ? link(ri.targetNodeId) : nLink;
+            return `Placed raw idea ${ideaRef} into ${target}`;
+          }
+          return `Updated raw idea ${ideaRef}`;
+        }
+
+        case "branchLifecycle": {
+          const bl = c.branchLifecycle || {};
+          if (bl.action === "retired") {
+            let text = `Retired branch ${nLink}`;
+            if (bl.fromParentId) text += ` from ${link(bl.fromParentId)}`;
+            return text;
+          }
+          if (bl.action === "revived") {
+            let text = `Revived branch ${nLink}`;
+            if (bl.toParentId) text += ` under ${link(bl.toParentId)}`;
+            return text;
+          }
+          return `Revived ${nLink} as a new root`;
+        }
+
+        case "purchase": {
+          const pm = c.purchaseMeta || {};
+          const parts = [];
+          if (pm.plan) parts.push(`the <code>${esc(pm.plan)}</code> plan`);
+          if (pm.energyAmount)
+            parts.push(`<code>${pm.energyAmount}</code> energy`);
+          const price = pm.totalCents
+            ? ` for $${(pm.totalCents / 100).toFixed(2)} ${esc(pm.currency || "usd").toUpperCase()}`
+            : "";
+          return parts.length
+            ? `Purchased ${parts.join(" and ")}${price}`
+            : `Made a purchase${price}`;
+        }
+
+        case "understanding": {
+          const um = c.understandingMeta || {};
+          const rootNode = um.rootNodeId || nId;
+          const runId = um.understandingRunId;
+
+          if (um.stage === "createRun") {
+            const runLink =
+              runId && rootNode
+                ? `<a href="/api/root/${rootNode}/understandings/run/${runId}${tokenQS}"><code>${esc(runId)}</code></a>`
+                : `<code>unknown run</code>`;
+            let text = `Started understanding run ${runLink}`;
+            if (rootNode) text += ` on ${link(rootNode)}`;
+            if (um.nodeCount != null)
+              text += ` spanning <code>${um.nodeCount}</code> nodes`;
+            if (um.perspective) text += ` — "${esc(um.perspective)}"`;
+            return text;
+          }
+
+          if (um.stage === "processStep") {
+            const uNodeId = um.understandingNodeId;
+            const uNodeLink =
+              uNodeId && runId && rootNode
+                ? `<a href="/api/root/${rootNode}/understandings/run/${runId}/${uNodeId}${tokenQS}"><code>${esc(uNodeId)}</code></a>`
+                : uNodeId
+                  ? `<code>${esc(uNodeId)}</code>`
+                  : `<code>unknown</code>`;
+            let text = `Understanding encoded ${uNodeLink}`;
+            if (um.mode)
+              text += ` <span class="kv-chip">${esc(um.mode)}</span>`;
+            if (um.layer != null)
+              text += ` at layer <code>${um.layer}</code>`;
+            return text;
+          }
+
+          return `Understanding activity on ${nLink}`;
+        }
+
+        default:
+          return `<code>${esc(c.action)}</code> on ${nLink}`;
+      }
+    };
+
+    /* ─────────────────────────────────────────────── */
+    /* RENDER CARDS                                     */
+    /* ─────────────────────────────────────────────── */
 
     const items = await Promise.all(
       contributions.map(async (c) => {
-        const nodeId = c.nodeId?._id || c.nodeId;
-        const version = Number(c.nodeVersion ?? 0);
+        const nId = c.nodeId?._id || c.nodeId;
+        const nodeName = nId ? await getNodeName(nId) : null;
         const time = new Date(c.date).toLocaleString();
-        const nodeName = nodeId ? await getNodeName(nodeId) : "Unknown node";
+        const actionHtml = renderAction(c, nodeName);
+        const colorClass = actionColor(c.action);
 
-        const render = renderers[c.action] || (() => c.action);
-        const details = renderDetails(c, queryString);
+        const aiBadge = c.wasAi
+          ? `<span class="badge badge-ai">AI</span>`
+          : "";
+        const energyBadge =
+          c.energyUsed != null && c.energyUsed > 0
+            ? `<span class="badge badge-energy">⚡ ${c.energyUsed}</span>`
+            : "";
 
         return `
-<li class="contribution-item">
-  <div class="contribution-user">${username}</div>
-  <div class="contribution-action">
-    ${render(c)}
-    ${
-      nodeId
-        ? ` on <a href="/api/${nodeId}/${version}${queryString}">
-            <code>${nodeName}</code>
-          </a>`
-        : ""
-    }
-  </div>
-  <span class="contribution-time">${time}</span>
-  ${details ? `<div class="contribution-details">${details}</div>` : ""}
-</li>`;
+      <li class="note-card ${colorClass}">
+        <div class="note-content">
+          <div class="contribution-action">${actionHtml}</div>
+        </div>
+        <div class="note-meta">
+          ${time}
+          ${aiBadge}${energyBadge}
+          <span class="meta-separator">·</span>
+          <code class="contribution-id">${esc(c._id)}</code>
+        </div>
+      </li>`;
       }),
     );
+
+    /* ─────────────────────────────────────────────── */
+    /* HTML SHELL                                       */
+    /* ─────────────────────────────────────────────── */
 
     res.send(`
 <!DOCTYPE html>
@@ -3213,51 +3173,466 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${username} — Contributions</title>
-  ${contributionsCss}
-</head>
+  <title>${esc(username)} — Contributions</title>
+  <style>
+:root {
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
 
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px; height: 600px;
+  background: white;
+  top: -300px; right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px; height: 400px;
+  background: white;
+  bottom: -200px; left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Glass Back Nav ─────────────────────────────── */
+
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(115, 111, 230, var(--glass-alpha-hover));
+  transform: translateY(-1px);
+}
+
+.back-link:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Glass Header ───────────────────────────────── */
+
+.header {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.header:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.header h1 {
+  font-size: 28px; font-weight: 600; color: white;
+  margin-bottom: 8px; line-height: 1.3; letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.header h1 a {
+  color: white; text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.message-count {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.25);
+  color: white; border-radius: 980px;
+  font-size: 14px; font-weight: 600;
+  margin-left: 12px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.header-subtitle {
+  font-size: 14px; color: rgba(255,255,255,0.9);
+  margin-bottom: 16px; font-weight: 400; line-height: 1.5;
+}
+
+.nav-links {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+
+.nav-links a {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.18);
+  color: white; border-radius: 980px;
+  font-size: 13px; font-weight: 600;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.25);
+  transition: all 0.2s;
+}
+
+.nav-links a:hover {
+  background: rgba(255,255,255,0.32);
+  transform: translateY(-1px);
+}
+
+/* ── Glass Cards — base ─────────────────────────── */
+
+.notes-list {
+  list-style: none;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+.note-card {
+  --card-rgb: 115, 111, 230;
+  position: relative;
+  background: rgba(var(--card-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  color: white; overflow: hidden;
+  opacity: 0; transform: translateY(30px);
+}
+
+.note-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) forwards;
+}
+
+.note-card::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.note-card:hover {
+  background: rgba(var(--card-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+}
+
+.note-card:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Color Variants ─────────────────────────────── */
+
+.glass-default  { --card-rgb: 115, 111, 230; }
+.glass-green    { --card-rgb: 72, 187, 120;  }
+.glass-red      { --card-rgb: 200, 80, 80;   }
+.glass-blue     { --card-rgb: 80, 130, 220;  }
+.glass-cyan     { --card-rgb: 56, 189, 210;  }
+.glass-gold     { --card-rgb: 200, 170, 50;  }
+.glass-purple   { --card-rgb: 155, 100, 220; }
+.glass-pink     { --card-rgb: 210, 100, 160; }
+.glass-orange   { --card-rgb: 220, 140, 60;  }
+.glass-emerald  { --card-rgb: 52, 190, 130;  }
+.glass-teal     { --card-rgb: 60, 170, 180;  }
+.glass-indigo   { --card-rgb: 100, 100, 210; }
+
+/* ── Card Inner ─────────────────────────────────── */
+
+.note-content {
+  margin-bottom: 12px;
+}
+
+.contribution-action {
+  font-size: 15px; line-height: 1.6;
+  color: white; font-weight: 400;
+  word-wrap: break-word;
+}
+
+.contribution-action a {
+  color: white; text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.contribution-action a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.contribution-action code {
+  background: rgba(255,255,255,0.18);
+  padding: 2px 7px; border-radius: 5px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+/* ── Note Meta ──────────────────────────────────── */
+
+.note-meta {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  font-size: 12px; color: rgba(255,255,255,0.85);
+  line-height: 1.8;
+  display: flex; flex-wrap: wrap;
+  align-items: center; gap: 6px;
+}
+
+.note-meta a {
+  color: white; text-decoration: none; font-weight: 500;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.note-meta a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.meta-separator { color: rgba(255,255,255,0.5); }
+
+.contribution-id {
+  background: rgba(255,255,255,0.12);
+  padding: 2px 6px; border-radius: 4px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* ── Badges ─────────────────────────────────────── */
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 980px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.badge-ai {
+  background: rgba(255,200,50,0.35);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.badge-energy {
+  background: rgba(100,220,255,0.3);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* ── KV Chips ───────────────────────────────────── */
+
+.kv-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 6px; font-size: 12px;
+  margin: 2px 2px;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.kv-chip code {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  font-weight: 600;
+}
+
+/* ── Empty State ────────────────────────────────── */
+
+.empty-state {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.empty-state-icon {
+  font-size: 64px; margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+}
+
+.empty-state-text {
+  font-size: 20px; color: white;
+  margin-bottom: 8px; font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px; color: rgba(255,255,255,0.85);
+}
+
+/* ── Responsive ─────────────────────────────────── */
+
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .header { padding: 24px 20px; }
+  .header h1 { font-size: 24px; }
+  .message-count { display: block; margin-left: 0; margin-top: 8px; width: fit-content; }
+  .note-card { padding: 20px 16px; }
+  .back-nav { flex-direction: column; }
+  .back-link { width: 100%; justify-content: center; }
+  .empty-state { padding: 40px 24px; }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container { max-width: 700px; }
+}
+  </style>
+</head>
 <body>
   <div class="container">
-    <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/user/${userId}${queryString}" class="back-link">
-        ← Back to Profile
-      </a>
+      <a href="/api/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
     </div>
 
-    <!-- Header Section -->
     <div class="header">
       <h1>
         Contributions by
-        <a href="/api/user/${userId}${queryString}">@${username}</a>
+        <a href="/api/user/${userId}${tokenQS}">@${esc(username)}</a>
+        ${contributions.length > 0 ? `<span class="message-count">${contributions.length}</span>` : ""}
       </h1>
-      <div class="header-subtitle">Activity & change history</div>
+      <div class="header-subtitle">Activity &amp; change history</div>
 
-      <!-- Navigation Links -->
-      <div class="nav-links">
-        <a href="/api/user/${userId}/raw-ideas${queryString}">Raw Ideas</a>
-        <a href="/api/user/${userId}/notes${queryString}">Notes</a>
-        <a href="/api/user/${userId}/tags${queryString}">Mail</a>
-        <a href="/api/user/${userId}/invites${queryString}">Invites</a>
-        <a href="/api/user/${userId}/deleted${queryString}">Deleted</a>
-      </div>
     </div>
 
-    <!-- Contributions List -->
     ${
       items.length
-        ? `<ul class="contributions-list">${items.join("")}</ul>`
+        ? `<ul class="notes-list">${items.join("")}</ul>`
         : `
     <div class="empty-state">
       <div class="empty-state-icon">📊</div>
       <div class="empty-state-text">No contributions yet</div>
-      <div class="empty-state-subtext">
-        Contributions and activity will appear here
-      </div>
+      <div class="empty-state-subtext">Contributions and activity will appear here</div>
     </div>`
     }
   </div>
+
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => entry.target.classList.add('visible'), index * 50);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { root: null, rootMargin: '50px', threshold: 0.1 });
+    document.querySelectorAll('.note-card').forEach(card => observer.observe(card));
+  </script>
 </body>
 </html>
 `);
@@ -9039,6 +9414,889 @@ router.post("/user/:userId/custom-llm/revoke", authenticate, async (req, res) =>
     });
   } catch (err) {
     console.error("❌ Failed to toggle custom LLM:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/user/:userId/chats", urlAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+
+    const rawLimit = req.query.limit;
+    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+
+    if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
+      return res.status(400).json({ error: "Invalid limit" });
+    }
+
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+    /* ─────────────────────────────────────────────── */
+    /* QUERY                                            */
+    /* ─────────────────────────────────────────────── */
+
+    const query = { userId };
+
+
+
+    let chatsQuery = AiChat.find(query)
+      .populate({
+        path: "contributions",
+        select: "_id action nodeId nodeVersion wasAi energyUsed date",
+        populate: { path: "nodeId", select: "name" },
+      })
+      .sort({ "startMessage.time": -1 })
+      .lean();
+
+  
+
+    const chats = await chatsQuery;
+
+    if (!wantHtml) {
+      return res.json({ userId, count: chats.length, chats });
+    }
+
+    const user = await User.findById(userId).lean();
+    const username = user?.username || "Unknown user";
+
+    /* ─────────────────────────────────────────────── */
+    /* HELPERS                                          */
+    /* ─────────────────────────────────────────────── */
+
+    const esc = (str = "") =>
+      String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const truncate = (str, len = 200) => {
+      if (!str) return "";
+      const clean = esc(str);
+      return clean.length > len ? clean.slice(0, len) + "…" : clean;
+    };
+
+    const formatTime = (d) => (d ? new Date(d).toLocaleString() : "—");
+
+    const formatDuration = (start, end) => {
+      if (!start || !end) return null;
+      const ms = new Date(end) - new Date(start);
+      if (ms < 1000) return `${ms}ms`;
+      if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+      return `${(ms / 60000).toFixed(1)}m`;
+    };
+
+    const modeLabel = (path) => {
+      if (!path) return "unknown";
+      const parts = path.split(":");
+      const labels = {
+        home: "🏠 Home",
+        tree: "🌳 Tree",
+      };
+      const subLabels = {
+        default: "Default",
+        structure: "Structure",
+        edit: "Edit",
+        be: "Be",
+        reflect: "Reflect",
+        navigate: "Navigate",
+        understand: "Understand",
+      };
+      const big = labels[parts[0]] || parts[0];
+      const sub = subLabels[parts[1]] || parts[1] || "";
+      return sub ? `${big} → ${sub}` : big;
+    };
+
+    const sourceLabel = (src) => {
+      const map = {
+        user: "👤 User",
+        orchestrator: "🤖 Orchestrator",
+        subtask: "📋 Subtask",
+        system: "⚙️ System",
+      };
+      return map[src] || src;
+    };
+
+    const actionLabel = (action) => {
+      const map = {
+        create: "Created",
+        editStatus: "Status",
+        editValue: "Values",
+        prestige: "Prestige",
+        trade: "Trade",
+        delete: "Deleted",
+        invite: "Invite",
+        editSchedule: "Schedule",
+        editGoal: "Goal",
+        transaction: "Transaction",
+        note: "Note",
+        updateParent: "Moved",
+        editScript: "Script",
+        executeScript: "Ran script",
+        updateChildNode: "Child",
+        editNameNode: "Renamed",
+        rawIdea: "Raw idea",
+        branchLifecycle: "Branch",
+        purchase: "Purchase",
+        understanding: "Understanding",
+      };
+      return map[action] || action;
+    };
+
+    const actionColor = (action) => {
+      switch (action) {
+        case "create":
+          return "#48bb78";
+        case "delete":
+        case "branchLifecycle":
+          return "#c85050";
+        case "editStatus":
+        case "editValue":
+        case "editGoal":
+        case "editSchedule":
+        case "editNameNode":
+        case "editScript":
+          return "#5082dc";
+        case "executeScript":
+          return "#38bdd2";
+        case "prestige":
+          return "#c8aa32";
+        case "note":
+        case "rawIdea":
+          return "#9b64dc";
+        case "invite":
+          return "#d264a0";
+        case "transaction":
+        case "trade":
+          return "#dc8c3c";
+        case "purchase":
+          return "#34be82";
+        case "updateParent":
+        case "updateChildNode":
+          return "#3caab4";
+        case "understanding":
+          return "#6464d2";
+        default:
+          return "#736fe6";
+      }
+    };
+
+    /* ─────────────────────────────────────────────── */
+    /* RENDER CARDS                                     */
+    /* ─────────────────────────────────────────────── */
+
+    const items = chats.map((chat, idx) => {
+      const duration = formatDuration(
+        chat.startMessage?.time,
+        chat.endMessage?.time,
+      );
+      const stopped = chat.endMessage?.stopped;
+      const contribs = chat.contributions || [];
+      const hasContribs = contribs.length > 0;
+
+      const statusBadge = stopped
+        ? `<span class="badge badge-stopped">Stopped</span>`
+        : chat.endMessage?.time
+          ? `<span class="badge badge-done">Done</span>`
+          : `<span class="badge badge-pending">Pending</span>`;
+
+      const contribRows = contribs
+        .map((c) => {
+          const nId = c.nodeId?._id || c.nodeId;
+          const nName = c.nodeId?.name || nId || "—";
+          const nodeRef = nId
+            ? `<a href="/api/${nId}${tokenQS}">${esc(nName)}</a>`
+            : `<span style="opacity:0.5">—</span>`;
+          const aiBadge = c.wasAi
+            ? `<span class="mini-badge mini-ai">AI</span>`
+            : "";
+          const energyBadge =
+            c.energyUsed > 0
+              ? `<span class="mini-badge mini-energy">⚡${c.energyUsed}</span>`
+              : "";
+          const color = actionColor(c.action);
+
+          return `
+          <tr class="contrib-row">
+            <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}</td>
+            <td>${nodeRef}</td>
+            <td>${aiBadge}${energyBadge}</td>
+            <td class="contrib-time">${formatTime(c.date)}</td>
+          </tr>`;
+        })
+        .join("");
+
+      return `
+      <li class="note-card">
+        <div class="chat-header">
+          <div class="chat-mode">${modeLabel(chat.aiContext?.path)}</div>
+          <div class="chat-badges">
+            ${statusBadge}
+            ${duration ? `<span class="badge badge-duration">${duration}</span>` : ""}
+            <span class="badge badge-source">${sourceLabel(chat.startMessage?.source)}</span>
+          </div>
+        </div>
+
+        <div class="note-content">
+          <div class="chat-message chat-user">
+            <span class="msg-label">You</span>
+            <span class="msg-text">${truncate(chat.startMessage?.content, 300)}</span>
+          </div>
+          ${
+            chat.endMessage?.content
+              ? `
+          <div class="chat-message chat-ai">
+            <span class="msg-label">AI</span>
+            <span class="msg-text">${truncate(chat.endMessage.content, 300)}</span>
+          </div>`
+              : ""
+          }
+        </div>
+
+        ${
+          hasContribs
+            ? `
+        <details class="contrib-dropdown">
+          <summary class="contrib-summary">
+            ${contribs.length} contribution${contribs.length !== 1 ? "s" : ""} during this chat
+          </summary>
+          <div class="contrib-table-wrap">
+            <table class="contrib-table">
+              <thead>
+                <tr><th>Action</th><th>Node</th><th></th><th>Time</th></tr>
+              </thead>
+              <tbody>${contribRows}</tbody>
+            </table>
+          </div>
+        </details>`
+            : ""
+        }
+
+        <div class="note-meta">
+          ${formatTime(chat.startMessage?.time)}
+          <span class="meta-separator">·</span>
+          <code class="contribution-id">${esc(chat._id)}</code>
+        </div>
+      </li>`;
+    });
+
+    /* ─────────────────────────────────────────────── */
+    /* HTML SHELL                                       */
+    /* ─────────────────────────────────────────────── */
+
+    res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${esc(username)} — AI Chats</title>
+  <style>
+:root {
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px; height: 600px;
+  background: white;
+  top: -300px; right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px; height: 400px;
+  background: white;
+  bottom: -200px; left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Glass Back Nav ─────────────────────────────── */
+
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(115, 111, 230, var(--glass-alpha-hover));
+  transform: translateY(-1px);
+}
+
+.back-link:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Glass Header ───────────────────────────────── */
+
+.header {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.header:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.header h1 {
+  font-size: 28px; font-weight: 600; color: white;
+  margin-bottom: 8px; line-height: 1.3; letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.header h1 a {
+  color: white; text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.message-count {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.25);
+  color: white; border-radius: 980px;
+  font-size: 14px; font-weight: 600;
+  margin-left: 12px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.header-subtitle {
+  font-size: 14px; color: rgba(255,255,255,0.9);
+  margin-bottom: 16px; font-weight: 400; line-height: 1.5;
+}
+
+.nav-links {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+
+.nav-links a {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.18);
+  color: white; border-radius: 980px;
+  font-size: 13px; font-weight: 600;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.25);
+  transition: all 0.2s;
+}
+
+.nav-links a:hover {
+  background: rgba(255,255,255,0.32);
+  transform: translateY(-1px);
+}
+
+/* ── Glass Cards ────────────────────────────────── */
+
+.notes-list {
+  list-style: none;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+.note-card {
+  --card-rgb: 115, 111, 230;
+  position: relative;
+  background: rgba(var(--card-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  color: white; overflow: hidden;
+  opacity: 0; transform: translateY(30px);
+}
+
+.note-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) forwards;
+}
+
+.note-card::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.note-card:hover {
+  background: rgba(var(--card-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+}
+
+.note-card:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Chat Header Row ────────────────────────────── */
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-mode {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.95);
+  background: rgba(255,255,255,0.15);
+  padding: 4px 12px;
+  border-radius: 980px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.chat-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── Messages ───────────────────────────────────── */
+
+.note-content {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-message {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.msg-label {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 10px;
+  border-radius: 980px;
+  margin-top: 2px;
+}
+
+.chat-user .msg-label {
+  background: rgba(255,255,255,0.2);
+  color: white;
+}
+
+.chat-ai .msg-label {
+  background: rgba(100,220,255,0.25);
+  color: white;
+}
+
+.msg-text {
+  color: rgba(255,255,255,0.92);
+  word-wrap: break-word;
+  min-width: 0;
+}
+
+/* ── Contribution Dropdown ──────────────────────── */
+
+.contrib-dropdown {
+  margin-bottom: 12px;
+}
+
+.contrib-summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  transition: all 0.2s;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.contrib-summary::-webkit-details-marker { display: none; }
+
+.contrib-summary::before {
+  content: "▶";
+  font-size: 10px;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+details[open] .contrib-summary::before {
+  transform: rotate(90deg);
+}
+
+.contrib-summary:hover {
+  background: rgba(255,255,255,0.18);
+}
+
+.contrib-table-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.contrib-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.contrib-table thead th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.55);
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+
+.contrib-row td {
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.88);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.contrib-row:last-child td {
+  border-bottom: none;
+}
+
+.contrib-row a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.contrib-row a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.contrib-time {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+}
+
+.action-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ── Mini Badges (inside table) ─────────────────── */
+
+.mini-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 980px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-right: 3px;
+}
+
+.mini-ai {
+  background: rgba(255,200,50,0.35);
+  color: #fff;
+}
+
+.mini-energy {
+  background: rgba(100,220,255,0.3);
+  color: #fff;
+}
+
+/* ── Badges ─────────────────────────────────────── */
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 980px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.badge-done {
+  background: rgba(72,187,120,0.35);
+  color: #fff;
+}
+
+.badge-stopped {
+  background: rgba(200,80,80,0.35);
+  color: #fff;
+}
+
+.badge-pending {
+  background: rgba(255,200,50,0.3);
+  color: #fff;
+}
+
+.badge-duration {
+  background: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.9);
+}
+
+.badge-source {
+  background: rgba(100,100,210,0.3);
+  color: #fff;
+}
+
+/* ── Note Meta ──────────────────────────────────── */
+
+.note-meta {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  font-size: 12px; color: rgba(255,255,255,0.85);
+  line-height: 1.8;
+  display: flex; flex-wrap: wrap;
+  align-items: center; gap: 6px;
+}
+
+.meta-separator { color: rgba(255,255,255,0.5); }
+
+.contribution-id {
+  background: rgba(255,255,255,0.12);
+  padding: 2px 6px; border-radius: 4px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* ── Empty State ────────────────────────────────── */
+
+.empty-state {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.empty-state-icon {
+  font-size: 64px; margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+}
+
+.empty-state-text {
+  font-size: 20px; color: white;
+  margin-bottom: 8px; font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px; color: rgba(255,255,255,0.85);
+}
+
+/* ── Responsive ─────────────────────────────────── */
+
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .header { padding: 24px 20px; }
+  .header h1 { font-size: 24px; }
+  .message-count { display: block; margin-left: 0; margin-top: 8px; width: fit-content; }
+  .note-card { padding: 20px 16px; }
+  .back-nav { flex-direction: column; }
+  .back-link { width: 100%; justify-content: center; }
+  .empty-state { padding: 40px 24px; }
+  .chat-header { flex-direction: column; align-items: flex-start; }
+  .contrib-row td { font-size: 12px; padding: 5px 6px; }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container { max-width: 700px; }
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="back-nav">
+      <a href="/api/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
+    </div>
+
+    <div class="header">
+      <h1>
+        AI Chats for
+        <a href="/api/user/${userId}${tokenQS}">@${esc(username)}</a>
+        ${chats.length > 0 ? `<span class="message-count">${chats.length}</span>` : ""}
+      </h1>
+      <div class="header-subtitle">Every AI conversation turn and what it did</div>
+      <div class="nav-links">
+        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
+        <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
+        <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
+        <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
+        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
+      </div>
+    </div>
+
+    ${
+      items.length
+        ? `<ul class="notes-list">${items.join("")}</ul>`
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">💬</div>
+      <div class="empty-state-text">No AI chats yet</div>
+      <div class="empty-state-subtext">AI conversations and their actions will appear here</div>
+    </div>`
+    }
+  </div>
+
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => entry.target.classList.add('visible'), index * 50);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { root: null, rootMargin: '50px', threshold: 0.1 });
+    document.querySelectorAll('.note-card').forEach(card => observer.observe(card));
+  </script>
+</body>
+</html>
+`);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });

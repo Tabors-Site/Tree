@@ -7,7 +7,7 @@ async function handleSchedule(nodeVersion) {
   } else {
     const currentSchedule = new Date(nodeVersion.schedule);
     const updatedSchedule = new Date(
-      currentSchedule.getTime() + nodeVersion.reeffectTime * 60 * 60 * 1000
+      currentSchedule.getTime() + nodeVersion.reeffectTime * 60 * 60 * 1000,
     );
     return updatedSchedule.toISOString();
   }
@@ -28,6 +28,7 @@ async function findNodeById(nodeId) {
 const logContribution = async ({
   userId,
   nodeId,
+  wasAi = false,
   action,
   statusEdited,
   valueEdited,
@@ -47,8 +48,8 @@ const logContribution = async ({
   nodeVersion,
   branchLifecycle,
   transactionMeta,
-    purchaseMeta,
-
+  purchaseMeta,
+  understandingMeta,
 }) => {
   const validActions = [
     "create",
@@ -70,6 +71,7 @@ const logContribution = async ({
     "rawIdea",
     "branchLifecycle",
     "purchase",
+    "understanding",
   ];
 
   if (!validActions.includes(action)) {
@@ -101,20 +103,37 @@ const logContribution = async ({
   }
 
   if (action === "purchase") {
-  if (!purchaseMeta) {
-    throw new Error("purchaseMeta is required for purchase actions");
-  }
+    if (!purchaseMeta) {
+      throw new Error("purchaseMeta is required for purchase actions");
+    }
 
-  if (!purchaseMeta.stripeSessionId) {
-    throw new Error("purchaseMeta.stripeSessionId is required");
+    if (!purchaseMeta.stripeSessionId) {
+      throw new Error("purchaseMeta.stripeSessionId is required");
+    }
   }
-}
+  // =====================================================
+  if (action === "understanding") {
+    if (!understandingMeta) {
+      throw new Error(
+        "understandingMeta is required for understanding actions",
+      );
+    }
+
+    if (!understandingMeta.stage) {
+      throw new Error("understandingMeta.stage is required");
+    }
+
+    if (!understandingMeta.understandingRunId) {
+      throw new Error("understandingMeta.understandingRunId is required");
+    }
+  }
 
   try {
     const newContribution = new Contribution({
       userId,
       nodeId,
       action,
+      wasAi,
       energyUsed,
 
       statusEdited,
@@ -133,8 +152,8 @@ const logContribution = async ({
       editNameNode,
       branchLifecycle,
       transactionMeta,
-        purchaseMeta,
-
+      purchaseMeta,
+      understandingMeta,
       date: new Date(),
     });
 

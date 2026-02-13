@@ -34,6 +34,7 @@ import {
   getDefaultMode,
   BIG_MODES,
 } from "./modes/registry.js";
+import { recordAIChat } from "./aiChatTracker.js";
 
 dotenv.config();
 
@@ -70,7 +71,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         try {
           const decoded = jwt.verify(tokenMatch[1], JWT_SECRET);
           socket.userId = decoded.id || decoded.userId || decoded._id;
-           socket.username = decoded.username;
+          socket.username = decoded.username;
           socket.jwt = tokenMatch[1];
         } catch (_) {}
       }
@@ -99,20 +100,21 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
 
     // ── REGISTER ──────────────────────────────────────────────────────
-    socket.on("register", async ( ) => {
-  const userId = socket.userId;
-  const username = socket.username;
+    socket.on("register", async () => {
+      const userId = socket.userId;
+      const username = socket.username;
 
-// In register handler, after the jwt check:
-if (!socket.jwt) {
-  socket.emit("registered", { success: false, error: "Unauthorized" });
-  return;
-}
-if (!socket.username || !socket.userId) {
-  socket.emit("registered", { success: false, error: "Invalid token claims" });
-  return;
-}
-
+      if (!socket.jwt) {
+        socket.emit("registered", { success: false, error: "Unauthorized" });
+        return;
+      }
+      if (!socket.username || !socket.userId) {
+        socket.emit("registered", {
+          success: false,
+          error: "Invalid token claims",
+        });
+        return;
+      }
 
       const visitorId = `user:${username}`;
       const oldSocketId = userSockets.get(visitorId);
@@ -323,17 +325,16 @@ if (!socket.username || !socket.userId) {
 
       // Charge energy upfront (non-refundable even if cancelled)
       try {
-  const { isCustom } = await getClientForUser(socket.userId);
+        const { isCustom } = await getClientForUser(socket.userId);
 
-  // Only charge energy when NOT using custom LLM
-  if (!isCustom) {
-    await useEnergy({ userId: socket.userId, action: "chat" });
-  }
-} catch (err) {
-  socket.emit("chatError", { error: err.message, generation });
-  return;
-}
-
+        // Only charge energy when NOT using custom LLM
+        if (!isCustom) {
+          await useEnergy({ userId: socket.userId, action: "chat" });
+        }
+      } catch (err) {
+        socket.emit("chatError", { error: err.message, generation });
+        return;
+      }
 
       // Abort any previous in-flight request
       if (socket._chatAbort) {
@@ -341,6 +342,11 @@ if (!socket.username || !socket.userId) {
       }
       const abort = new AbortController();
       socket._chatAbort = abort;
+
+      // ── Capture start time for contribution window ─────────────────
+      // The actual AIChat record is created AFTER processing so we
+      // always have the correct final mode (orchestrator may switch it).
+      const startTime = new Date();
 
       try {
         const currentMode = getCurrentMode(visitorId);
@@ -375,11 +381,67 @@ if (!socket.username || !socket.userId) {
 
         if (response && !abort.signal.aborted) {
           socket.emit("chatResponse", { ...response, generation });
+
+          // ── Record AIChat (success) ──────────────────────────────
+          // response.modeKey is the ACTUAL mode after orchestrator ran
+          const finalMode = response.modeKey || getCurrentMode(visitorId);
+          recordAIChat({
+            userId: socket.userId,
+            message,
+            source: "user",
+            modeKey: finalMode,
+            startTime,
+            content: response.answer || null,
+            stopped: false,
+          }).catch((err) =>
+            console.error("⚠️ AIChat record failed:", err.message),
+          );
+        } else if (abort.signal.aborted) {
+          // ── Record AIChat (cancelled mid-flight) ─────────────────
+          recordAIChat({
+            userId: socket.userId,
+            message,
+            source: "user",
+            modeKey: getCurrentMode(visitorId),
+            startTime,
+            content: null,
+            stopped: true,
+          }).catch((err) =>
+            console.error("⚠️ AIChat cancel record failed:", err.message),
+          );
         }
       } catch (err) {
-        if (abort.signal.aborted) return; // cancelled, don't emit error
+        if (abort.signal.aborted) {
+          // ── Record AIChat (aborted via error path) ───────────────
+          recordAIChat({
+            userId: socket.userId,
+            message,
+            source: "user",
+            modeKey: getCurrentMode(visitorId),
+            startTime,
+            content: null,
+            stopped: true,
+          }).catch((e) =>
+            console.error("⚠️ AIChat abort record failed:", e.message),
+          );
+          return;
+        }
+
         console.error("❌ Chat error:", err);
         socket.emit("chatError", { error: err.message, generation });
+
+        // ── Record AIChat (error) ──────────────────────────────────
+        recordAIChat({
+          userId: socket.userId,
+          message,
+          source: "user",
+          modeKey: getCurrentMode(visitorId),
+          startTime,
+          content: `Error: ${err.message}`,
+          stopped: false,
+        }).catch((e) =>
+          console.error("⚠️ AIChat error record failed:", e.message),
+        );
       } finally {
         if (socket._chatAbort === abort) {
           socket._chatAbort = null;
