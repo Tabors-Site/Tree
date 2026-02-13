@@ -34,7 +34,15 @@ import {
   getDefaultMode,
   BIG_MODES,
 } from "./modes/registry.js";
-import { recordAIChat } from "./aiChatTracker.js";
+import {
+  ensureSession,
+  rotateSession,
+  startAIChat,
+  finalizeAIChat,
+  setActiveChat,
+  clearActiveChat,
+  finalizeOpenChat,
+} from "./aiChatTracker.js";
 
 dotenv.config();
 
@@ -126,6 +134,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       socket.visitorId = visitorId;
       socket.username = username;
 
+      // Initialize AI session for this connection
+      ensureSession(socket);
+
       try {
         await connectToMCP(MCP_SERVER_URL, visitorId, socket.jwt);
         socket.emit("registered", { success: true, visitorId });
@@ -146,9 +157,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
      * Manual mode switch from UI mode bar.
      * Payload: { modeKey: "tree:build" }
      */
-    socket.on("switchMode", ({ modeKey }) => {
+    socket.on("switchMode", async ({ modeKey }) => {
       const visitorId = socket.visitorId;
       if (!visitorId) return;
+
+      // Finalize any in-flight chat before switching
+      await finalizeOpenChat(socket);
 
       try {
         const result = switchMode(visitorId, modeKey, {
@@ -176,14 +190,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const currentBig = currentMode?.split(":")[0] || null;
 
       // Update rootId based on URL
-      // /root/:id always wins
       if (rootId) {
         setRootId(visitorId, rootId);
       } else if (
         nodeId &&
         (currentBig !== newBigMode || !getRootId(visitorId))
       ) {
-        // Accept bare nodeId when big mode is changing OR no rootId set
         setRootId(visitorId, nodeId);
       }
 
@@ -194,10 +206,18 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       // Switch if big mode changed or no mode set yet
       if (currentBig !== newBigMode || !currentMode) {
-        // Abort any in-flight chat request
+        // Finalize any in-flight chat
+        await finalizeOpenChat(socket);
+
+        // Abort any in-flight LLM request
         if (socket._chatAbort) {
           socket._chatAbort.abort();
           socket._chatAbort = null;
+        }
+
+        // Rotate session when returning to home
+        if (newBigMode === BIG_MODES.HOME) {
+          rotateSession(socket);
         }
 
         try {
@@ -206,7 +226,6 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             userId: socket.userId,
             rootId: getRootId(visitorId),
           });
-          // Big mode switch = full reset, no carried messages
           socket.emit("modeSwitched", { ...result, carriedMessages: [] });
         } catch (err) {
           console.error(`❌ Big mode switch failed:`, err.message);
@@ -243,7 +262,6 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       let currentMode = getCurrentMode(visitorId);
 
-      // Determine correct big mode from URL (source of truth)
       const urlBigMode = url ? bigModeFromUrl(url) : null;
       const currentBig = currentMode?.split(":")[0] || null;
 
@@ -263,7 +281,6 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         ) {
           setRootId(visitorId, bareMatch[1]);
         }
-        // Clear rootId when on home
         if (urlBigMode === BIG_MODES.HOME) {
           setRootId(visitorId, null);
         }
@@ -271,10 +288,17 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       // If no mode, or big mode doesn't match URL → switch to correct big mode
       if (!currentMode || (urlBigMode && currentBig !== urlBigMode)) {
-        // Abort any in-flight chat request
+        // Finalize any in-flight chat
+        await finalizeOpenChat(socket);
+
         if (socket._chatAbort) {
           socket._chatAbort.abort();
           socket._chatAbort = null;
+        }
+
+        // Rotate session when landing on home
+        if (urlBigMode === BIG_MODES.HOME || !urlBigMode) {
+          rotateSession(socket);
         }
 
         try {
@@ -294,7 +318,6 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const bigMode = currentMode?.split(":")[0] || BIG_MODES.HOME;
       const subModes = getSubModes(bigMode);
 
-      // Look up root name for tree modes
       const activeRootId = getRootId(visitorId);
       let rootName = null;
       if (bigMode === BIG_MODES.TREE && activeRootId) {
@@ -323,11 +346,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       const visitorId = socket.visitorId || `user:${socket.userId}`;
 
-      // Charge energy upfront (non-refundable even if cancelled)
+      // Charge energy upfront
       try {
         const { isCustom } = await getClientForUser(socket.userId);
-
-        // Only charge energy when NOT using custom LLM
         if (!isCustom) {
           await useEnergy({ userId: socket.userId, action: "chat" });
         }
@@ -343,10 +364,26 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const abort = new AbortController();
       socket._chatAbort = abort;
 
-      // ── Capture start time for contribution window ─────────────────
-      // The actual AIChat record is created AFTER processing so we
-      // always have the correct final mode (orchestrator may switch it).
-      const startTime = new Date();
+      // ── Session + AIChat tracking ──────────────────────────────────
+      // Finalize any leftover chat from a previous turn
+      await finalizeOpenChat(socket);
+
+      const sessionId = ensureSession(socket);
+      const preMode = getCurrentMode(visitorId) || "home:default";
+
+      let aiChat = null;
+      try {
+        aiChat = await startAIChat({
+          userId: socket.userId,
+          sessionId,
+          message,
+          source: "user",
+          modeKey: preMode,
+        });
+        setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
+      } catch (err) {
+        console.error("⚠️ Failed to create AIChat:", err.message);
+      }
 
       try {
         const currentMode = getCurrentMode(visitorId);
@@ -354,7 +391,6 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         let response;
 
         if (bigMode === "tree") {
-          // Tree mode: full orchestration (navigate → intent → execute)
           response = await orchestrateTreeRequest({
             visitorId,
             message,
@@ -364,7 +400,6 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             signal: abort.signal,
           });
         } else {
-          // Home mode: direct processing
           response = await processMessage(visitorId, message, {
             username,
             userId: socket.userId,
@@ -382,66 +417,61 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         if (response && !abort.signal.aborted) {
           socket.emit("chatResponse", { ...response, generation });
 
-          // ── Record AIChat (success) ──────────────────────────────
-          // response.modeKey is the ACTUAL mode after orchestrator ran
-          const finalMode = response.modeKey || getCurrentMode(visitorId);
-          recordAIChat({
-            userId: socket.userId,
-            message,
-            source: "user",
-            modeKey: finalMode,
-            startTime,
-            content: response.answer || null,
-            stopped: false,
-          }).catch((err) =>
-            console.error("⚠️ AIChat record failed:", err.message),
-          );
+          // ── Finalize AIChat (success) ────────────────────────────
+          if (aiChat) {
+            const finalMode = response.modeKey || getCurrentMode(visitorId);
+            finalizeAIChat({
+              chatId: aiChat._id,
+              content: response.answer || null,
+              stopped: false,
+              modeKey: finalMode,
+            }).catch((err) =>
+              console.error("⚠️ AIChat finalize failed:", err.message),
+            );
+          }
+          clearActiveChat(socket);
         } else if (abort.signal.aborted) {
-          // ── Record AIChat (cancelled mid-flight) ─────────────────
-          recordAIChat({
-            userId: socket.userId,
-            message,
-            source: "user",
-            modeKey: getCurrentMode(visitorId),
-            startTime,
-            content: null,
-            stopped: true,
-          }).catch((err) =>
-            console.error("⚠️ AIChat cancel record failed:", err.message),
-          );
+          // ── Finalize AIChat (cancelled mid-flight) ───────────────
+          if (aiChat) {
+            finalizeAIChat({
+              chatId: aiChat._id,
+              content: null,
+              stopped: true,
+            }).catch((err) =>
+              console.error("⚠️ AIChat cancel finalize failed:", err.message),
+            );
+          }
+          clearActiveChat(socket);
         }
       } catch (err) {
         if (abort.signal.aborted) {
-          // ── Record AIChat (aborted via error path) ───────────────
-          recordAIChat({
-            userId: socket.userId,
-            message,
-            source: "user",
-            modeKey: getCurrentMode(visitorId),
-            startTime,
-            content: null,
-            stopped: true,
-          }).catch((e) =>
-            console.error("⚠️ AIChat abort record failed:", e.message),
-          );
+          if (aiChat) {
+            finalizeAIChat({
+              chatId: aiChat._id,
+              content: null,
+              stopped: true,
+            }).catch((e) =>
+              console.error("⚠️ AIChat abort finalize failed:", e.message),
+            );
+          }
+          clearActiveChat(socket);
           return;
         }
 
         console.error("❌ Chat error:", err);
         socket.emit("chatError", { error: err.message, generation });
 
-        // ── Record AIChat (error) ──────────────────────────────────
-        recordAIChat({
-          userId: socket.userId,
-          message,
-          source: "user",
-          modeKey: getCurrentMode(visitorId),
-          startTime,
-          content: `Error: ${err.message}`,
-          stopped: false,
-        }).catch((e) =>
-          console.error("⚠️ AIChat error record failed:", e.message),
-        );
+        // ── Finalize AIChat (error) ────────────────────────────────
+        if (aiChat) {
+          finalizeAIChat({
+            chatId: aiChat._id,
+            content: `Error: ${err.message}`,
+            stopped: false,
+          }).catch((e) =>
+            console.error("⚠️ AIChat error finalize failed:", e.message),
+          );
+        }
+        clearActiveChat(socket);
       } finally {
         if (socket._chatAbort === abort) {
           socket._chatAbort = null;
@@ -456,6 +486,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         socket._chatAbort.abort();
         socket._chatAbort = null;
       }
+      // Active chat finalization is handled by the abort path in the chat handler
     });
 
     // ── ACTIVE ROOT ───────────────────────────────────────────────────
@@ -530,9 +561,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
 
     // ── CLEAR / DISCONNECT ────────────────────────────────────────────
-    socket.on("clearConversation", () => {
+    socket.on("clearConversation", async () => {
       const visitorId = socket.visitorId;
       if (visitorId) {
+        // Finalize any in-flight chat
+        await finalizeOpenChat(socket);
+
         resetConversation(visitorId, {
           username: socket.username,
           userId: socket.userId,
@@ -541,8 +575,11 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
     });
 
-    socket.on("disconnect", (reason) => {
+    socket.on("disconnect", async (reason) => {
       console.log(`🔌 Disconnected: ${socket.id} (${reason})`);
+
+      // Finalize any in-flight chat
+      await finalizeOpenChat(socket);
 
       // Abort any in-flight LLM request
       if (socket._chatAbort) {
@@ -558,14 +595,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         const visitorId = socket.visitorId;
         if (userSockets.get(visitorId) === socket.id) {
           userSockets.delete(visitorId);
-          // Clean up MCP client
           closeMCPClient(visitorId).catch((err) =>
             console.error(
               `❌ MCP cleanup failed for ${visitorId}:`,
               err.message,
             ),
           );
-          // Clean up conversation session
           clearSession(visitorId);
         }
       }

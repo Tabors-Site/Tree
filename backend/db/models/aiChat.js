@@ -18,6 +18,15 @@ const AIChatSchema = new mongoose.Schema({
   },
 
   // -----------------------------------
+  // Session grouping
+  // -----------------------------------
+  sessionId: {
+    type: String,
+    required: true,
+    index: true,
+  },
+
+  // -----------------------------------
   // Start message
   // -----------------------------------
   startMessage: {
@@ -26,7 +35,6 @@ const AIChatSchema = new mongoose.Schema({
       required: true,
     },
 
-    // ✅ FIXED: valid mongoose field
     source: {
       type: String,
       enum: ["user", "orchestrator", "subtask", "system"],

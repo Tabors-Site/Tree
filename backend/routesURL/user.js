@@ -8,11 +8,14 @@ import multer from "multer";
 import mime from "mime-types";
 
 import User from "../db/models/user.js";
-import AiChat from "../db/models/aiChat.js";
+import { getAIChats } from "../core/aichat.js";
 
-
-import { createPurchaseSession } from "../routes/billing/purchase.js"
-import { setCustomLlmConnection, clearCustomLlmConnection, setCustomLlmRevoked } from "../core/customLLM.js";
+import { createPurchaseSession } from "../routes/billing/purchase.js";
+import {
+  setCustomLlmConnection,
+  clearCustomLlmConnection,
+  setCustomLlmRevoked,
+} from "../core/customLLM.js";
 
 import {
   getAllNotesByUser as coreGetAllNotesByUser,
@@ -51,7 +54,6 @@ import {
 import getNodeName from "./helpers/getNameById.js";
 
 import { processPurchase } from "../core/billing/processPurchase.js";
-
 
 const uploadsFolder = path.join(process.cwd(), "uploads");
 
@@ -124,7 +126,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     const roots = user.roots || [];
     const profileType = user.profileType || "basic";
     const energy = user.availableEnergy;
-    const extraEnergy = user.additionalEnergy
+    const extraEnergy = user.additionalEnergy;
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml) {
@@ -2801,8 +2803,6 @@ export const contributionRenderers = ({
   },
 });
 
-
-
 router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -3113,8 +3113,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
             let text = `Understanding encoded ${uNodeLink}`;
             if (um.mode)
               text += ` <span class="kv-chip">${esc(um.mode)}</span>`;
-            if (um.layer != null)
-              text += ` at layer <code>${um.layer}</code>`;
+            if (um.layer != null) text += ` at layer <code>${um.layer}</code>`;
             return text;
           }
 
@@ -3138,9 +3137,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
         const actionHtml = renderAction(c, nodeName);
         const colorClass = actionColor(c.action);
 
-        const aiBadge = c.wasAi
-          ? `<span class="badge badge-ai">AI</span>`
-          : "";
+        const aiBadge = c.wasAi ? `<span class="badge badge-ai">AI</span>` : "";
         const energyBadge =
           c.energyUsed != null && c.energyUsed > 0
             ? `<span class="badge badge-energy">⚡ ${c.energyUsed}</span>`
@@ -8027,7 +8024,7 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
 
     // existing behavior
     return res.redirect(
-      `/api/user/${userId}?token=${u.htmlShareToken ?? ""}&html`
+      `/api/user/${userId}?token=${u.htmlShareToken ?? ""}&html`,
     );
   } catch (err) {
     console.error("shareToken update error:", err);
@@ -8066,7 +8063,6 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     const llmConn = user.customLlmConnection || null;
     const hasLlm = !!(llmConn && llmConn.baseUrl && !llmConn.revoked);
     const llmRevoked = llmConn?.revoked === true;
-
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
@@ -8947,21 +8943,29 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     <h2>🤖 Custom LLM Endpoint</h2>
     <div class="llm-sub">Connect your own OpenAI API-compatible LLM to use AI chat and bypass energy usage for conversations.</div>
 
-    ${hasLlm ? `
+    ${
+      hasLlm
+        ? `
     <div class="llm-connected-badge">
       <div class="llm-connected-dot"></div>
       <span class="llm-connected-text">Connected</span>
       <span class="llm-connected-detail">${llmConn.model} · ${llmConn.baseUrl}</span>
     </div>
-    ` : ""}
-    ${llmConn ? `
+    `
+        : ""
+    }
+    ${
+      llmConn
+        ? `
 <div class="llm-toggle-row">
   <span class="llm-toggle-label">Custom LLM Active</span>
   <div id="llmToggle" class="glass-toggle ${llmRevoked ? "" : "active"}">
     <div class="glass-toggle-knob"></div>
   </div>
 </div>
-` : ""}
+`
+        : ""
+    }
 
 
     <div class="llm-fields">
@@ -9322,8 +9326,6 @@ renderCheckout();
   }
 });
 
-
-
 router.post("/user/:userId/purchase", authenticate, async (req, res) => {
   // normalize payload so your existing function works
   req.body.userId = req.params.userId;
@@ -9333,15 +9335,9 @@ router.post("/user/:userId/purchase", authenticate, async (req, res) => {
   //return createPurchaseSession(req, res);
 });
 
-
-
 // ─────────────────────────────────────────────────────────────────────────
 // ENCRYPTION
 // ─────────────────────────────────────────────────────────────────────────
-
-
-
-
 
 // ─────────────────────────────────────────────────────────────────────────
 // ROUTES
@@ -9395,28 +9391,31 @@ router.delete("/user/:userId/custom-llm", authenticate, async (req, res) => {
   }
 });
 
+router.post(
+  "/user/:userId/custom-llm/revoke",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { revoked } = req.body;
 
-router.post("/user/:userId/custom-llm/revoke", authenticate, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { revoked } = req.body;
+      // basic validation
+      if (typeof revoked !== "boolean") {
+        return res.status(400).json({ error: "revoked must be boolean" });
+      }
 
-    // basic validation
-    if (typeof revoked !== "boolean") {
-      return res.status(400).json({ error: "revoked must be boolean" });
+      const result = await setCustomLlmRevoked(userId, revoked);
+
+      return res.json({
+        success: true,
+        revoked: result.revoked,
+      });
+    } catch (err) {
+      console.error("❌ Failed to toggle custom LLM:", err);
+      res.status(500).json({ error: err.message });
     }
-
-    const result = await setCustomLlmRevoked(userId, revoked);
-
-    return res.json({
-      success: true,
-      revoked: result.revoked,
-    });
-  } catch (err) {
-    console.error("❌ Failed to toggle custom LLM:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+  },
+);
 
 router.get("/user/:userId/chats", urlAuth, async (req, res) => {
   try {
@@ -9424,39 +9423,39 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
     const rawLimit = req.query.limit;
-    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+    let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
       return res.status(400).json({ error: "Invalid limit" });
     }
 
+    if (limit > 10) {
+      limit = 10;
+    }
+
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
+    let sessionId = req.query.sessionId;
 
-    /* ─────────────────────────────────────────────── */
-    /* QUERY                                            */
-    /* ─────────────────────────────────────────────── */
+    if (typeof sessionId === "string") {
+      sessionId = sessionId.replace(/^"+|"+$/g, "");
+    }
+    const { sessions } = await getAIChats({
+      userId,
+      sessionLimit: limit || 10,
+      sessionId,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+    });
 
-    const query = { userId };
-
-
-
-    let chatsQuery = AiChat.find(query)
-      .populate({
-        path: "contributions",
-        select: "_id action nodeId nodeVersion wasAi energyUsed date",
-        populate: { path: "nodeId", select: "name" },
-      })
-      .sort({ "startMessage.time": -1 })
-      .lean();
-
-  
-
-    const chats = await chatsQuery;
+    // Flatten for JSON response
+    const allChats = sessions.flatMap((s) => s.chats);
 
     if (!wantHtml) {
-      return res.json({ userId, count: chats.length, chats });
+      return res.json({ userId, count: allChats.length, sessions });
     }
+
+    const chats = allChats;
 
     const user = await User.findById(userId).lean();
     const username = user?.username || "Unknown user";
@@ -9583,10 +9582,12 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
     };
 
     /* ─────────────────────────────────────────────── */
-    /* RENDER CARDS                                     */
+    /* SESSION GROUPS (pre-built by core function)      */
     /* ─────────────────────────────────────────────── */
 
-    const items = chats.map((chat, idx) => {
+    const sessionGroups = sessions;
+
+    const renderChat = (chat) => {
       const duration = formatDuration(
         chat.startMessage?.time,
         chat.endMessage?.time,
@@ -9679,7 +9680,32 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
           <code class="contribution-id">${esc(chat._id)}</code>
         </div>
       </li>`;
-    });
+    };
+
+    const renderedSections = sessionGroups
+      .map((group) => {
+        const chatCount = group.chatCount;
+        const sessionTime = formatTime(group.startTime);
+        const shortId = group.sessionId.slice(0, 8);
+
+        const chatCards = group.chats.map(renderChat).join("");
+
+        return `
+      <div class="session-group">
+        <div class="session-divider">
+          <div class="session-line"></div>
+          <div class="session-label">
+            <span class="session-id">${esc(shortId)}</span>
+            <span class="session-info">${chatCount} chat${chatCount !== 1 ? "s" : ""} · ${sessionTime}</span>
+          </div>
+          <div class="session-line"></div>
+        </div>
+        <div class="session-pane">
+          <ul class="notes-list">${chatCards}</ul>
+        </div>
+      </div>`;
+      })
+      .join("");
 
     /* ─────────────────────────────────────────────── */
     /* HTML SHELL                                       */
@@ -9769,40 +9795,29 @@ body::after {
 /* ── Glass Back Nav ─────────────────────────────── */
 
 .back-nav {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  display: flex; gap: 12px;
+  margin-bottom: 20px; flex-wrap: wrap;
   animation: fadeInUp 0.5s ease-out;
 }
 
 .back-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: inline-flex; align-items: center; gap: 6px;
   padding: 10px 20px;
   background: rgba(115, 111, 230, var(--glass-alpha));
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
-  color: white;
-  text-decoration: none;
-  border-radius: 980px;
-  font-weight: 600;
-  font-size: 14px;
+  color: white; text-decoration: none;
+  border-radius: 980px; font-weight: 600; font-size: 14px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
-    inset 0 1px 0 rgba(255,255,255,0.25);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
   border: 1px solid rgba(255,255,255,0.28);
-  position: relative;
-  overflow: hidden;
+  position: relative; overflow: hidden;
 }
 
 .back-link::before {
-  content: "";
-  position: absolute; inset: -40%;
+  content: ""; position: absolute; inset: -40%;
   background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
-  opacity: 0;
-  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
   pointer-events: none;
 }
 
@@ -9820,22 +9835,17 @@ body::after {
   background: rgba(115, 111, 230, var(--glass-alpha));
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
-  border-radius: 16px;
-  padding: 32px;
-  margin-bottom: 24px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
-    inset 0 1px 0 rgba(255,255,255,0.25);
+  border-radius: 16px; padding: 32px; margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
   border: 1px solid rgba(255,255,255,0.28);
   color: white;
   animation: fadeInUp 0.6s ease-out 0.1s both;
 }
 
 .header::before {
-  content: "";
-  position: absolute; inset: -40%;
+  content: ""; position: absolute; inset: -40%;
   background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
-  opacity: 0;
-  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
   pointer-events: none;
 }
 
@@ -9859,13 +9869,10 @@ body::after {
 }
 
 .message-count {
-  display: inline-block;
-  padding: 6px 14px;
-  background: rgba(255,255,255,0.25);
-  color: white; border-radius: 980px;
-  font-size: 14px; font-weight: 600;
-  margin-left: 12px;
-  border: 1px solid rgba(255,255,255,0.3);
+  display: inline-block; padding: 6px 14px;
+  background: rgba(255,255,255,0.25); color: white;
+  border-radius: 980px; font-size: 14px; font-weight: 600;
+  margin-left: 12px; border: 1px solid rgba(255,255,255,0.3);
 }
 
 .header-subtitle {
@@ -9873,24 +9880,77 @@ body::after {
   margin-bottom: 16px; font-weight: 400; line-height: 1.5;
 }
 
-.nav-links {
-  display: flex; flex-wrap: wrap; gap: 8px;
-}
+.nav-links { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .nav-links a {
-  display: inline-block;
-  padding: 6px 14px;
-  background: rgba(255,255,255,0.18);
-  color: white; border-radius: 980px;
-  font-size: 13px; font-weight: 600;
-  text-decoration: none;
-  border: 1px solid rgba(255,255,255,0.25);
+  display: inline-block; padding: 6px 14px;
+  background: rgba(255,255,255,0.18); color: white;
+  border-radius: 980px; font-size: 13px; font-weight: 600;
+  text-decoration: none; border: 1px solid rgba(255,255,255,0.25);
   transition: all 0.2s;
 }
 
 .nav-links a:hover {
   background: rgba(255,255,255,0.32);
   transform: translateY(-1px);
+}
+
+/* ── Session Divider ────────────────────────────── */
+
+.session-group {
+  margin-bottom: 8px;
+}
+
+.session-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  margin-top: 8px;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.session-group:first-child .session-divider {
+  margin-top: 0;
+}
+
+.session-pane {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 16px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.session-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.18);
+}
+
+.session-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.session-id {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.session-info {
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  font-weight: 500;
 }
 
 /* ── Glass Cards ────────────────────────────────── */
@@ -9906,10 +9966,8 @@ body::after {
   background: rgba(var(--card-rgb), var(--glass-alpha));
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
-    inset 0 1px 0 rgba(255,255,255,0.25);
+  border-radius: 16px; padding: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
   border: 1px solid rgba(255,255,255,0.28);
   transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
   color: white; overflow: hidden;
@@ -9921,11 +9979,9 @@ body::after {
 }
 
 .note-card::before {
-  content: "";
-  position: absolute; inset: -40%;
+  content: ""; position: absolute; inset: -40%;
   background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
-  opacity: 0;
-  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
   pointer-events: none;
 }
 
@@ -9940,151 +9996,92 @@ body::after {
 /* ── Chat Header Row ────────────────────────────── */
 
 .chat-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
 }
 
 .chat-mode {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.95);
-  background: rgba(255,255,255,0.15);
-  padding: 4px 12px;
-  border-radius: 980px;
-  border: 1px solid rgba(255,255,255,0.2);
+  font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.95);
+  background: rgba(255,255,255,0.15); padding: 4px 12px;
+  border-radius: 980px; border: 1px solid rgba(255,255,255,0.2);
 }
 
-.chat-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+.chat-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* ── Messages ───────────────────────────────────── */
 
 .note-content {
   margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: flex; flex-direction: column; gap: 12px;
 }
 
 .chat-message {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  line-height: 1.6;
-  font-size: 14px;
+  display: flex; gap: 10px; align-items: flex-start;
+  line-height: 1.6; font-size: 14px;
 }
 
 .msg-label {
-  flex-shrink: 0;
-  font-weight: 700;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 3px 10px;
-  border-radius: 980px;
-  margin-top: 2px;
+  flex-shrink: 0; font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 3px 10px; border-radius: 980px; margin-top: 2px;
 }
 
-.chat-user .msg-label {
-  background: rgba(255,255,255,0.2);
-  color: white;
-}
-
-.chat-ai .msg-label {
-  background: rgba(100,220,255,0.25);
-  color: white;
-}
+.chat-user .msg-label { background: rgba(255,255,255,0.2); color: white; }
+.chat-ai .msg-label   { background: rgba(100,220,255,0.25); color: white; }
 
 .msg-text {
-  color: rgba(255,255,255,0.92);
-  word-wrap: break-word;
-  min-width: 0;
+  color: rgba(255,255,255,0.92); word-wrap: break-word; min-width: 0;
 }
 
 /* ── Contribution Dropdown ──────────────────────── */
 
-.contrib-dropdown {
-  margin-bottom: 12px;
-}
+.contrib-dropdown { margin-bottom: 12px; }
 
 .contrib-summary {
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.85);
-  padding: 8px 14px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 10px;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,0.85); padding: 8px 14px;
+  background: rgba(255,255,255,0.1); border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.15);
-  transition: all 0.2s;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  transition: all 0.2s; list-style: none;
+  display: flex; align-items: center; gap: 6px;
 }
 
 .contrib-summary::-webkit-details-marker { display: none; }
 
 .contrib-summary::before {
-  content: "▶";
-  font-size: 10px;
-  transition: transform 0.2s;
-  display: inline-block;
+  content: "▶"; font-size: 10px;
+  transition: transform 0.2s; display: inline-block;
 }
 
-details[open] .contrib-summary::before {
-  transform: rotate(90deg);
-}
+details[open] .contrib-summary::before { transform: rotate(90deg); }
 
-.contrib-summary:hover {
-  background: rgba(255,255,255,0.18);
-}
+.contrib-summary:hover { background: rgba(255,255,255,0.18); }
 
 .contrib-table-wrap {
-  margin-top: 10px;
-  overflow-x: auto;
+  margin-top: 10px; overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-.contrib-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
+.contrib-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 .contrib-table thead th {
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: rgba(255,255,255,0.55);
-  padding: 6px 10px;
+  text-align: left; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.55); padding: 6px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.15);
 }
 
 .contrib-row td {
   padding: 7px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
-  color: rgba(255,255,255,0.88);
-  vertical-align: middle;
+  color: rgba(255,255,255,0.88); vertical-align: middle;
   white-space: nowrap;
 }
 
-.contrib-row:last-child td {
-  border-bottom: none;
-}
+.contrib-row:last-child td { border-bottom: none; }
 
 .contrib-row a {
-  color: white;
-  text-decoration: none;
+  color: white; text-decoration: none;
   border-bottom: 1px solid rgba(255,255,255,0.3);
   transition: all 0.2s;
 }
@@ -10094,41 +10091,24 @@ details[open] .contrib-summary::before {
   text-shadow: 0 0 12px rgba(255,255,255,0.8);
 }
 
-.contrib-time {
-  font-size: 11px;
-  color: rgba(255,255,255,0.5);
-}
+.contrib-time { font-size: 11px; color: rgba(255,255,255,0.5); }
 
 .action-dot {
-  display: inline-block;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  margin-right: 6px;
-  vertical-align: middle;
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; margin-right: 6px; vertical-align: middle;
 }
 
-/* ── Mini Badges (inside table) ─────────────────── */
+/* ── Mini Badges ────────────────────────────────── */
 
 .mini-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 7px;
-  border-radius: 980px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
+  display: inline-flex; align-items: center;
+  padding: 1px 7px; border-radius: 980px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.2px;
   margin-right: 3px;
 }
 
-.mini-ai {
-  background: rgba(255,200,50,0.35);
-  color: #fff;
-}
-
-.mini-energy {
-  background: rgba(100,220,255,0.3);
-  color: #fff;
-}
+.mini-ai    { background: rgba(255,200,50,0.35); color: #fff; }
+.mini-energy { background: rgba(100,220,255,0.3); color: #fff; }
 
 /* ── Badges ─────────────────────────────────────── */
 
@@ -10139,30 +10119,11 @@ details[open] .contrib-summary::before {
   border: 1px solid rgba(255,255,255,0.2);
 }
 
-.badge-done {
-  background: rgba(72,187,120,0.35);
-  color: #fff;
-}
-
-.badge-stopped {
-  background: rgba(200,80,80,0.35);
-  color: #fff;
-}
-
-.badge-pending {
-  background: rgba(255,200,50,0.3);
-  color: #fff;
-}
-
-.badge-duration {
-  background: rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.9);
-}
-
-.badge-source {
-  background: rgba(100,100,210,0.3);
-  color: #fff;
-}
+.badge-done     { background: rgba(72,187,120,0.35); color: #fff; }
+.badge-stopped  { background: rgba(200,80,80,0.35); color: #fff; }
+.badge-pending  { background: rgba(255,200,50,0.3); color: #fff; }
+.badge-duration { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
+.badge-source   { background: rgba(100,100,210,0.3); color: #fff; }
 
 /* ── Note Meta ──────────────────────────────────── */
 
@@ -10171,8 +10132,7 @@ details[open] .contrib-summary::before {
   border-top: 1px solid rgba(255,255,255,0.2);
   font-size: 12px; color: rgba(255,255,255,0.85);
   line-height: 1.8;
-  display: flex; flex-wrap: wrap;
-  align-items: center; gap: 6px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
 }
 
 .meta-separator { color: rgba(255,255,255,0.5); }
@@ -10180,8 +10140,7 @@ details[open] .contrib-summary::before {
 .contribution-id {
   background: rgba(255,255,255,0.12);
   padding: 2px 6px; border-radius: 4px;
-  font-size: 11px;
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace;
   color: rgba(255,255,255,0.6);
   border: 1px solid rgba(255,255,255,0.1);
 }
@@ -10193,39 +10152,23 @@ details[open] .contrib-summary::before {
   background: rgba(115, 111, 230, var(--glass-alpha));
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
-  border-radius: 16px;
-  padding: 60px 40px; text-align: center;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
-    inset 0 1px 0 rgba(255,255,255,0.25);
-  border: 1px solid rgba(255,255,255,0.28);
-  color: white;
+  border-radius: 16px; padding: 60px 40px; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28); color: white;
 }
 
 .empty-state::before {
-  content: "";
-  position: absolute; inset: -40%;
+  content: ""; position: absolute; inset: -40%;
   background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
-  opacity: 0;
-  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
   pointer-events: none;
 }
 
 .empty-state:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
 
-.empty-state-icon {
-  font-size: 64px; margin-bottom: 16px;
-  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
-}
-
-.empty-state-text {
-  font-size: 20px; color: white;
-  margin-bottom: 8px; font-weight: 600;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-
-.empty-state-subtext {
-  font-size: 14px; color: rgba(255,255,255,0.85);
-}
+.empty-state-icon { font-size: 64px; margin-bottom: 16px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2)); }
+.empty-state-text { font-size: 20px; color: white; margin-bottom: 8px; font-weight: 600; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.empty-state-subtext { font-size: 14px; color: rgba(255,255,255,0.85); }
 
 /* ── Responsive ─────────────────────────────────── */
 
@@ -10259,19 +10202,13 @@ details[open] .contrib-summary::before {
         <a href="/api/user/${userId}${tokenQS}">@${esc(username)}</a>
         ${chats.length > 0 ? `<span class="message-count">${chats.length}</span>` : ""}
       </h1>
-      <div class="header-subtitle">Every AI conversation turn and what it did</div>
-      <div class="nav-links">
-        <a href="/api/user/${userId}/contributions${tokenQS}">Contributions</a>
-        <a href="/api/user/${userId}/raw-ideas${tokenQS}">Raw Ideas</a>
-        <a href="/api/user/${userId}/notes${tokenQS}">Notes</a>
-        <a href="/api/user/${userId}/tags${tokenQS}">Mail</a>
-        <a href="/api/user/${userId}/invites${tokenQS}">Invites</a>
-      </div>
+      <div class="header-subtitle">Your last 10 AI conversation sessions</div>
+  
     </div>
 
     ${
-      items.length
-        ? `<ul class="notes-list">${items.join("")}</ul>`
+      sessionGroups.length
+        ? renderedSections
         : `
     <div class="empty-state">
       <div class="empty-state-icon">💬</div>
@@ -10300,6 +10237,5 @@ details[open] .contrib-summary::before {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 export default router;
