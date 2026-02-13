@@ -1,7 +1,14 @@
 import { logContribution, findNodeById, handleSchedule } from "../db/utils.js";
 import { useEnergy } from "../core/energy.js";
 
-async function editStatus({ nodeId, status, version, isInherited, userId }) {
+async function editStatus({
+  nodeId,
+  status,
+  version,
+  isInherited,
+  userId,
+  wasAi = false,
+}) {
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
 
@@ -27,6 +34,7 @@ async function editStatus({ nodeId, status, version, isInherited, userId }) {
   await logContribution({
     userId,
     nodeId,
+    wasAi,
     action: "editStatus",
     statusEdited: status,
     nodeVersion: version,
@@ -35,7 +43,7 @@ async function editStatus({ nodeId, status, version, isInherited, userId }) {
 
   // Cascade if inherited
   if (isInherited) {
-    await updateNodeStatusRecursively(node, status, version, userId);
+    await updateNodeStatusRecursively(node, status, version, userId, wasAi);
   }
 
   return {
@@ -45,10 +53,16 @@ async function editStatus({ nodeId, status, version, isInherited, userId }) {
   };
 }
 
-async function updateNodeStatusRecursively(node, status, version, userId) {
+async function updateNodeStatusRecursively(
+  node,
+  status,
+  version,
+  userId,
+  wasAi,
+) {
   if (status === "divider") {
     const targetVersionIndex = node.versions.findIndex(
-      (v) => v.prestige === version
+      (v) => v.prestige === version,
     );
     if (targetVersionIndex !== -1) {
       node.versions[targetVersionIndex].status = status;
@@ -61,7 +75,7 @@ async function updateNodeStatusRecursively(node, status, version, userId) {
     for (const childId of node.children) {
       const childNode = await findNodeById(childId);
       const targetChildVersionIndex = childNode.versions.findIndex(
-        (v) => v.prestige === childNode.prestige
+        (v) => v.prestige === childNode.prestige,
       );
 
       if (targetChildVersionIndex !== -1) {
@@ -71,6 +85,7 @@ async function updateNodeStatusRecursively(node, status, version, userId) {
         await logContribution({
           userId,
           nodeId: childNode._id,
+          wasAi,
           action: "editStatus",
           statusEdited: status,
           nodeVersion: targetChildVersionIndex,
@@ -84,7 +99,7 @@ async function updateNodeStatusRecursively(node, status, version, userId) {
   }
 }
 
-async function addPrestige({ nodeId, userId }) {
+async function addPrestige({ nodeId, userId, wasAi }) {
   console.log(nodeId);
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
@@ -99,6 +114,7 @@ async function addPrestige({ nodeId, userId }) {
   await logContribution({
     userId,
     nodeId,
+    wasAi,
     action: "prestige",
     nodeVersion: targetNodeIndex,
     energyUsed,
@@ -109,7 +125,7 @@ async function addPrestige({ nodeId, userId }) {
 
 async function addPrestigeToNode(node) {
   const currentVersion = node.versions.find(
-    (v) => v.prestige === node.prestige
+    (v) => v.prestige === node.prestige,
   );
   if (!currentVersion)
     throw new Error("No version found for current prestige level");

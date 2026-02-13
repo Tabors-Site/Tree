@@ -16,7 +16,7 @@ function assertUserWritableKey(rawKey) {
 
   if (key.startsWith(SYSTEM_KEY_PREFIX)) {
     throw new Error(
-      "This key is reserved for system use and cannot be set by users"
+      "This key is reserved for system use and cannot be set by users",
     );
   }
 
@@ -45,7 +45,14 @@ function findExistingKey(map, incomingKey) {
   return null;
 }
 
-async function setValueForNode({ nodeId, key, value, version, userId }) {
+async function setValueForNode({
+  nodeId,
+  key,
+  value,
+  version,
+  userId,
+  wasAi = false,
+}) {
   key = assertUserWritableKey(key);
 
   const versionIndex = Number(version);
@@ -85,6 +92,7 @@ async function setValueForNode({ nodeId, key, value, version, userId }) {
   await logContribution({
     userId,
     nodeId,
+    wasAi,
     action: "editValue",
     valueEdited: { [finalKey]: value },
     nodeVersion: versionIndex,
@@ -94,7 +102,14 @@ async function setValueForNode({ nodeId, key, value, version, userId }) {
   return { message: "Value updated successfully." };
 }
 
-async function setGoalForNode({ nodeId, key, goal, version, userId }) {
+async function setGoalForNode({
+  nodeId,
+  key,
+  goal,
+  version,
+  userId,
+  wasAi = false,
+}) {
   const versionIndex = Number(version);
   const numericGoal = Number(goal);
 
@@ -128,6 +143,7 @@ async function setGoalForNode({ nodeId, key, goal, version, userId }) {
   await logContribution({
     userId,
     nodeId,
+    wasAi,
     action: "editGoal",
     goalEdited: { [finalKey]: goal },
     nodeVersion: versionIndex,

@@ -176,105 +176,11 @@ async function getContributionsByUser(userId, limit, startDate, endDate) {
       };
     }
 
-    const enhancedContributions = contributions.map((contribution) => {
-      let additionalInfo = null;
-
-      switch (contribution.action) {
-        case "editValue":
-          additionalInfo = { valueEdited: contribution.valueEdited };
-          break;
-        case "editStatus":
-          additionalInfo = { statusEdited: contribution.statusEdited };
-          break;
-
-        case "invite":
-          additionalInfo = contribution.inviteAction
-            ? {
-                action: contribution.inviteAction.action,
-                receivingUsername:
-                  contribution.inviteAction.receivingId?.username ?? null,
-              }
-            : null;
-          break;
-        case "editSchedule":
-          additionalInfo = { scheduleEdited: contribution.scheduleEdited };
-          break;
-        case "editGoal":
-          additionalInfo = { goalEdited: contribution.goalEdited };
-          break;
-
-        case "note":
-          additionalInfo = contribution.noteAction
-            ? {
-                action: contribution.noteAction.action,
-                noteId: contribution.noteAction.noteId,
-              }
-            : null;
-          break;
-        case "updateParent":
-          additionalInfo = contribution.updateParent
-            ? {
-                oldParentId: contribution.updateParent.oldParentId,
-                newParentId: contribution.updateParent.newParentId,
-              }
-            : null;
-          break;
-        case "editScript":
-          additionalInfo = contribution.editScript
-            ? {
-                scriptName: contribution.editScript.scriptName,
-                contents: contribution.editScript.contents,
-              }
-            : null;
-          break;
-        case "updateChildNode":
-          additionalInfo = contribution.updateChildNode
-            ? {
-                action: contribution.updateChildNode.action,
-                childId: contribution.updateChildNode.childId,
-              }
-            : null;
-          break;
-        case "editNameNode":
-          additionalInfo = contribution.editNameNode
-            ? {
-                oldName: contribution.editNameNode.oldName,
-                newName: contribution.editNameNode.newName,
-              }
-            : null;
-          break;
-              case "purchase":
-          additionalInfo = contribution.purchaseMeta
-            ? {
-                plan: contribution.purchaseMeta.plan ?? null,
-                energyAmount: contribution.purchaseMeta.energyAmount ?? 0,
-                totalCents: contribution.purchaseMeta.totalCents ?? 0,
-                currency: contribution.purchaseMeta.currency ?? "usd",
-              }
-            : null;
-
-          // 🔥 REMOVE PRIVATE STRIPE IDS
-          if (contribution.purchaseMeta) {
-            delete contribution.purchaseMeta.stripeSessionId;
-            delete contribution.purchaseMeta.paymentIntentId;
-            delete contribution.purchaseMeta.stripeEventId;
-          }
-          break;
-        default:
-          additionalInfo = null;
-      }
-
-      return {
-        ...contribution,
-        username: contribution.userId?.username ?? null,
-        additionalInfo,
-      };
-    });
+   
 
     return {
       message: "User contributions retrieved successfully",
-      contributions: enhancedContributions,
-    };
+contributions,    };
   } catch (error) {
     throw error;
   }

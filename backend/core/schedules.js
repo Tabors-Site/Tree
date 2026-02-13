@@ -8,10 +8,11 @@ async function updateSchedule({
   newSchedule,
   reeffectTime,
   userId,
+  wasAi = false,
 }) {
   if (!nodeId || versionIndex === undefined || reeffectTime === undefined) {
     const error = new Error(
-      "nodeId, versionIndex, and reeffectTime are required."
+      "nodeId, versionIndex, and reeffectTime are required.",
     );
     error.status = 400;
     throw error;
@@ -63,6 +64,7 @@ async function updateSchedule({
   await logContribution({
     userId,
     nodeId,
+    wasAi,
     action: "editSchedule",
     nodeVersion: versionIndex,
     scheduleEdited,

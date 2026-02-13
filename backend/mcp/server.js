@@ -818,6 +818,13 @@ RULES
     "Creates or updates a script attached to a specific node.",
     {
       nodeId: z.string().describe("The ID of the node to update."),
+      scriptId: z
+        .string()
+        .describe(
+          "The Id of the script to execute. Found inside of get-node. None if new script",
+        ),
+
+      userId: z.string().describe("Injected by server. Ignore."),
       name: z.string().describe("The name of the script."),
       script: z
         .string()
@@ -830,11 +837,18 @@ RULES
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, name, script }) => {
+    async ({ nodeId, scriptId, name, script, userId }) => {
       const result = await updateScript({
         nodeId,
+        scriptId: z
+          .string()
+          .describe(
+            "The Id of the script to execute. Found inside of get-node",
+          ),
         name,
         script,
+        userId,
+        wasAi: true,
       });
 
       return {
@@ -848,11 +862,9 @@ RULES
     "Always run scripting-orchestrator before to initiate. Executes a stored script attached to a specific node using the secure sandbox system.",
     {
       nodeId: z.string().describe("The ID of the node containing the script."),
-      scriptName: z
+      scriptId: z
         .string()
-        .describe(
-          "The name of the script to execute. Found inside of get-node",
-        ),
+        .describe("The Id of the script to execute. Found inside of get-node"),
       userId: z.string().describe("Injected by server. Ignore."),
     },
     {
@@ -861,11 +873,12 @@ RULES
       idempotentHint: false,
       openWorldHint: true,
     },
-    async ({ nodeId, scriptName, userId }) => {
+    async ({ nodeId, scriptId, userId }) => {
       const result = await executeScript({
         nodeId,
-        scriptName,
+        scriptId,
         userId,
+        wasAi: true,
       });
 
       return {
@@ -909,6 +922,7 @@ RULES
         value,
         version,
         userId,
+        wasAi: true,
       });
 
       return {
@@ -957,6 +971,7 @@ RULES
           goal,
           version,
           userId,
+          wasAi: true,
         });
 
         return {
@@ -1012,6 +1027,7 @@ RULES
           version,
           isInherited,
           userId,
+          wasAi: true,
         });
 
         return {
@@ -1058,6 +1074,7 @@ RULES
           nodeId,
           version,
           isReflection: true, // 🔥 Always included, always true, backend safe
+          wasAi: true,
         });
 
         return {
@@ -1219,6 +1236,7 @@ RULES
     "Deletes a text note by its ID.",
     {
       noteId: z.string().describe("The ID of the note to delete."),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1226,9 +1244,9 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ noteId }) => {
+    async ({ noteId, userId }) => {
       try {
-        const result = await deleteNoteAndFile({ noteId });
+        const result = await deleteNoteAndFile({ noteId, userId, wasAi: true });
 
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -1250,11 +1268,7 @@ RULES
       nodeId: z
         .string()
         .describe("The unique ID of the node to add prestige to."),
-      userId: z
-        .string()
-        .describe(
-          "The ID of the user performing the prestige action (for logging).",
-        ),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1264,7 +1278,7 @@ RULES
     },
     async ({ nodeId, userId }) => {
       try {
-        const result = await addPrestige({ nodeId, userId });
+        const result = await addPrestige({ nodeId, userId, wasAi: true });
 
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -1301,11 +1315,7 @@ RULES
         .describe(
           "The reeffect time in hours (must be below 1,000,000). Added to schedule when prestiging for new version.",
         ),
-      userId: z
-        .string()
-        .describe(
-          "The ID of the user making the schedule update (for contribution logging).",
-        ),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1325,6 +1335,7 @@ RULES
           newSchedule,
           reeffectTime,
           userId,
+          wasAi: true,
         });
 
         return {
@@ -1375,6 +1386,8 @@ RULES
           {}, // values (forced empty)
           {}, // goals (forced empty)
           note ?? null,
+          null,
+          true,
         );
 
         return {
@@ -1461,6 +1474,7 @@ RULES
           nodeData,
           parentId,
           userId,
+          true,
         );
         return {
           content: [
@@ -1501,7 +1515,7 @@ RULES
     },
     async ({ nodeId, userId }) => {
       try {
-        const deletedNode = await deleteNodeBranch(nodeId, userId);
+        const deletedNode = await deleteNodeBranch(nodeId, userId, true);
 
         return {
           content: [
@@ -1548,6 +1562,7 @@ RULES
           nodeId,
           newName,
           userId,
+          wasAi: true,
         });
 
         return {
@@ -1593,6 +1608,7 @@ RULES
           nodeChildId,
           nodeNewParentId,
           userId,
+          true,
         );
 
         return {
@@ -1838,6 +1854,7 @@ RULES
           rawIdeaId,
           userId,
           nodeId,
+          wasAi: true,
         });
 
         return {
@@ -1897,188 +1914,7 @@ RULES
       }
     },
   );
-  /*server.tool(
-    "batch-operations",
-    "Apply the same operation to multiple nodes, supporting uniform or per-node payloads.",
-    {
-      operation: z.enum([
-        "edit-status",
-        "add-prestige",
-        "set-value",
-        "set-goal",
-        "add-note",
-        "update-schedule",
-      ]),
 
-      userId: z.string(),
-      mode: z.enum(["uniform", "per-item"]),
-
-      // uniform mode
-      nodeIds: z.array(z.string()).optional(),
-      payload: z
-        .object({
-          status: z.enum(["active", "trimmed", "completed"]).optional(),
-          isInherited: z.boolean().optional(),
-
-          key: z.string().optional(),
-          value: z.number().optional(),
-          goal: z.number().optional(),
-          prestige: z.number().optional(),
-
-          content: z.string().optional(),
-
-          newSchedule: z.string().optional(),
-          reeffectTime: z.number().optional(),
-        })
-        .optional(),
-
-      // per-item mode
-      items: z
-        .array(
-          z.object({
-            nodeId: z.string(),
-            payload: z.object({
-              status: z.enum(["active", "trimmed", "completed"]).optional(),
-              isInherited: z.boolean().optional(),
-
-              key: z.string().optional(),
-              value: z.number().optional(),
-              goal: z.number().optional(),
-              prestige: z.number().optional(),
-
-              content: z.string().optional(),
-
-              newSchedule: z.string().optional(),
-              reeffectTime: z.number().optional(),
-            }),
-          })
-        )
-        .optional(),
-    },
-    {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    async ({ operation, userId, mode, nodeIds, payload, items }) => {
-      const results = [];
-      let tasks = [];
-
-      // normalize tasks
-      if (mode === "uniform") {
-        if (!nodeIds || !payload) {
-          throw new Error("Uniform mode requires nodeIds and payload");
-        }
-        tasks = nodeIds.map((nodeId) => ({ nodeId, payload }));
-      }
-
-      if (mode === "per-item") {
-        if (!items || items.length === 0) {
-          throw new Error("Per-item mode requires items");
-        }
-        tasks = items;
-      }
-
-      if (tasks.length > 50) {
-        throw new Error("Batch size exceeds maximum of 50");
-      }
-
-      // execute batch
-      for (const { nodeId, payload } of tasks) {
-        try {
-          let result;
-
-          switch (operation) {
-            case "edit-status":
-              result = await editStatus({
-                nodeId,
-                status: payload.status,
-                version: payload.prestige,
-                isInherited: payload.isInherited ?? true,
-                userId,
-              });
-              break;
-
-            case "add-prestige":
-              result = await addPrestige({ nodeId, userId });
-              break;
-
-            case "set-value":
-              result = await setValueForNode({
-                nodeId,
-                key: payload.key,
-                value: payload.value,
-                version: payload.prestige,
-                userId,
-              });
-              break;
-
-            case "set-goal":
-              result = await setGoalForNode({
-                nodeId,
-                key: payload.key,
-                goal: payload.goal,
-                version: payload.prestige,
-                userId,
-              });
-              break;
-
-            case "add-note":
-              result = await createNote({
-                contentType: "text",
-                content: payload.content,
-                userId,
-                nodeId,
-                isReflection: false,
-              });
-              break;
-
-            case "update-schedule":
-              result = await updateSchedule({
-                nodeId,
-                versionIndex: payload.prestige,
-                newSchedule: payload.newSchedule,
-                reeffectTime: payload.reeffectTime,
-                userId,
-              });
-              break;
-
-            default:
-              throw new Error(`Unsupported batch operation: ${operation}`);
-          }
-
-          results.push({ nodeId, success: true, result });
-        } catch (err) {
-          results.push({
-            nodeId,
-            success: false,
-            error: err.message,
-          });
-        }
-      }
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                operation,
-                mode,
-                total: results.length,
-                succeeded: results.filter((r) => r.success).length,
-                failed: results.filter((r) => !r.success).length,
-                results,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    }
-  );*/
   server.tool(
     "understanding-create",
     "Create an understanding run (shadow tree + merge rules).",
@@ -2089,6 +1925,7 @@ RULES
         .optional()
         .default("general")
         .describe("Perspective for this understanding run."),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -2096,8 +1933,13 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ rootNodeId, perspective }) => {
-      const result = await createUnderstandingRun(rootNodeId, perspective);
+    async ({ rootNodeId, perspective, userId }) => {
+      const result = await createUnderstandingRun(
+        rootNodeId,
+        userId,
+        perspective,
+        true,
+      );
 
       return {
         content: [
@@ -2350,6 +2192,7 @@ Then IMMEDIATELY call understanding-capture with:
         .describe(
           "Omit on first call. Include your summary from previous task on subsequent calls.",
         ),
+      userId: z.string().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -2357,16 +2200,18 @@ Then IMMEDIATELY call understanding-capture with:
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ understandingRunId, rootNodeId, previousResult }) => {
+    async ({ understandingRunId, rootNodeId, previousResult, userId }) => {
       // 1️⃣ Commit previous result if provided
       if (previousResult) {
         try {
           await commitCompressionResult({
             mode: previousResult.mode,
             understandingRunId,
+            encoding: previousResult.encoding,
             understandingNodeId: previousResult.understandingNodeId,
             currentLayer: previousResult.currentLayer,
-            encoding: previousResult.encoding,
+            userId,
+            wasAi: true,
           });
         } catch (err) {
           return {
@@ -2406,7 +2251,10 @@ Then IMMEDIATELY call understanding-capture with:
       }
 
       // 3️⃣ Get next payload
-      const payload = await getNextCompressionPayloadForLLM(understandingRunId);
+      const payload = await getNextCompressionPayloadForLLM(
+        understandingRunId,
+        userId,
+      );
 
       // 4️⃣ Done
       if (!payload) {

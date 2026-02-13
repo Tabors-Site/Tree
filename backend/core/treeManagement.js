@@ -30,7 +30,8 @@ export async function createNewNode(
   values = {},
   goals = {},
   note = null,
-  validatedUser = null
+  validatedUser = null,
+  wasAi = false,
 ) {
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
@@ -77,6 +78,7 @@ export async function createNewNode(
     await logContribution({
       userId: user._id,
       nodeId: parentNodeID,
+      wasAi,
       action: "updateChildNode",
       nodeVersion: parentNode.prestige.toString(),
       updateChildNode: {
@@ -89,6 +91,7 @@ export async function createNewNode(
   await logContribution({
     userId: user._id,
     nodeId: newNode._id,
+    wasAi,
     action: "create",
     nodeVersion: "0",
     energyUsed,
@@ -102,19 +105,25 @@ export async function createNewNode(
       nodeId: newNode._id,
       version: 0,
       isReflection: false,
+      wasAi,
     });
   }
 
   return newNode;
 }
 
-export async function createNodesRecursive(nodeData, parentId, userId) {
+export async function createNodesRecursive(
+  nodeData,
+  parentId,
+  userId,
+  wasAi = false,
+) {
   const user = await getUserOrThrow(userId);
 
-  return createNodesRecursiveInternal(nodeData, parentId, user);
+  return createNodesRecursiveInternal(nodeData, parentId, user, wasAi);
 }
 
-async function createNodesRecursiveInternal(nodeData, parentId, user) {
+async function createNodesRecursiveInternal(nodeData, parentId, user, wasAi) {
   const { name, schedule, values, goals, reeffectTime, effectTime, note } =
     nodeData;
 
@@ -132,7 +141,8 @@ async function createNodesRecursiveInternal(nodeData, parentId, user) {
     values || {},
     goals || {},
     note || null,
-    user // 👈 avoids re-query
+    user, // 👈 avoids re-query
+    wasAi,
   );
 
   let totalCreated = 1;
@@ -141,7 +151,8 @@ async function createNodesRecursiveInternal(nodeData, parentId, user) {
     const childResult = await createNodesRecursiveInternal(
       childData,
       newNode._id,
-      user
+      user,
+      wasAi,
     );
     totalCreated += childResult.totalCreated;
   }
@@ -153,7 +164,7 @@ async function createNodesRecursiveInternal(nodeData, parentId, user) {
   };
 }
 
-export async function deleteNodeBranch(nodeId, userId) {
+export async function deleteNodeBranch(nodeId, userId, wasAi = false) {
   const nodeToDelete = await Node.findById(nodeId);
   if (!nodeToDelete) throw new Error("Node not found");
   const access = await resolveTreeAccess(nodeId, userId);
@@ -181,13 +192,14 @@ export async function deleteNodeBranch(nodeId, userId) {
   for (const node of allNodes) {
     if (node.children && node.children.includes(nodeId)) {
       node.children = node.children.filter(
-        (childId) => childId.toString() !== nodeId.toString()
+        (childId) => childId.toString() !== nodeId.toString(),
       );
       await node.save();
 
       await logContribution({
         userId,
         nodeId: node._id.toString(),
+        wasAi,
         action: "updateChildNode",
         nodeVersion: node.prestige.toString(),
         updateChildNode: {
@@ -200,6 +212,7 @@ export async function deleteNodeBranch(nodeId, userId) {
   await logContribution({
     userId,
     nodeId: nodeId,
+    wasAi,
     action: "branchLifecycle",
     nodeVersion: nodeToDelete.prestige.toString(),
     branchLifecycle: {
@@ -214,7 +227,8 @@ export async function deleteNodeBranch(nodeId, userId) {
 export async function updateParentRelationship(
   nodeChildId,
   nodeNewParentId,
-  userId
+  userId,
+  wasAi = false,
 ) {
   const nodeChild = await Node.findById(nodeChildId);
   if (!nodeChild) throw new Error("Child node not found");
@@ -247,7 +261,7 @@ export async function updateParentRelationship(
   else {
     if (!childAccess.isOwner || !newParentAccess.isOwner) {
       throw new Error(
-        "Cannot move nodes across trees unless you own both roots"
+        "Cannot move nodes across trees unless you own both roots",
       );
     }
   }
@@ -259,13 +273,14 @@ export async function updateParentRelationship(
   // Remove from old parent
   if (oldParent) {
     oldParent.children = oldParent.children.filter(
-      (childId) => childId.toString() !== nodeChildId
+      (childId) => childId.toString() !== nodeChildId,
     );
     await oldParent.save();
 
     await logContribution({
       userId,
       nodeId: oldParent._id.toString(),
+      wasAi,
       action: "updateChildNode",
       nodeVersion: oldParent.prestige.toString(),
       updateChildNode: {
@@ -283,6 +298,7 @@ export async function updateParentRelationship(
   await logContribution({
     userId,
     nodeId: nodeChildId,
+    wasAi,
     action: "updateParent",
     nodeVersion: nodeChild.prestige.toString(),
     updateParent: {
@@ -299,6 +315,7 @@ export async function updateParentRelationship(
   await logContribution({
     userId,
     nodeId: nodeNewParentId.toString(),
+    wasAi,
     action: "updateChildNode",
     nodeVersion: nodeNewParent.prestige.toString(),
     updateChildNode: {
@@ -309,7 +326,7 @@ export async function updateParentRelationship(
 
   return { nodeChild, nodeNewParent };
 }
-export async function editNodeName({ nodeId, newName, userId }) {
+export async function editNodeName({ nodeId, newName, userId, wasAi = false }) {
   if (!newName || !newName.trim()) {
     throw new Error("Node name cannot be empty");
   }
@@ -331,6 +348,7 @@ export async function editNodeName({ nodeId, newName, userId }) {
     userId,
     nodeId,
     action: "editNameNode",
+    wasAi,
     nodeVersion: node.prestige.toString(),
     editNameNode: {
       oldName,
@@ -346,6 +364,7 @@ export async function reviveNodeBranch({
   deletedNodeId,
   targetParentId,
   userId,
+  wasAi = false,
 }) {
   const deletedNode = await Node.findById(deletedNodeId);
   if (!deletedNode) throw new Error("Deleted node not found");
@@ -387,6 +406,7 @@ export async function reviveNodeBranch({
   await logContribution({
     userId,
     nodeId: targetParentId,
+    wasAi,
     action: "updateChildNode",
     nodeVersion: targetParent.prestige.toString(),
     updateChildNode: {
@@ -397,6 +417,7 @@ export async function reviveNodeBranch({
   await logContribution({
     userId,
     nodeId: deletedNodeId,
+    wasAi,
     action: "branchLifecycle",
     nodeVersion: deletedNode.prestige.toString(),
     branchLifecycle: {
@@ -413,7 +434,11 @@ export async function reviveNodeBranch({
     newParent: targetParentId,
   };
 }
-export async function reviveNodeBranchAsRoot({ deletedNodeId, userId }) {
+export async function reviveNodeBranchAsRoot({
+  deletedNodeId,
+  userId,
+  wasAi = false,
+}) {
   const deletedNode = await Node.findById(deletedNodeId);
   if (!deletedNode) throw new Error("Deleted node not found");
 
@@ -445,6 +470,7 @@ export async function reviveNodeBranchAsRoot({ deletedNodeId, userId }) {
   await logContribution({
     userId,
     nodeId: deletedNodeId,
+    wasAi,
     action: "branchLifecycle",
     nodeVersion: deletedNode.prestige.toString(),
     branchLifecycle: {

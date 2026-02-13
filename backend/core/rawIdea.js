@@ -48,7 +48,13 @@ async function extractTaggedUsersAndRewrite(content) {
   return { tagged: uniqueTagged, rewrittenContent };
 }
 
-async function createRawIdea({ contentType, content, userId, file }) {
+async function createRawIdea({
+  contentType,
+  content,
+  userId,
+  file,
+  wasAi = false,
+}) {
   if (!contentType || !["file", "text"].includes(contentType)) {
     throw new Error("Invalid content type");
   }
@@ -74,9 +80,8 @@ async function createRawIdea({ contentType, content, userId, file }) {
       throw new Error("Content is required for text content type");
     }
 
-    const { tagged, rewrittenContent } = await extractTaggedUsersAndRewrite(
-      content
-    );
+    const { tagged, rewrittenContent } =
+      await extractTaggedUsersAndRewrite(content);
 
     taggedUserIds = tagged;
     finalContent = rewrittenContent;
@@ -128,6 +133,7 @@ async function createRawIdea({ contentType, content, userId, file }) {
   await logContribution({
     userId,
     nodeId: "deleted",
+    wasAi,
     action: "rawIdea",
     nodeVersion: "0",
     rawIdeaAction: {
@@ -143,7 +149,12 @@ async function createRawIdea({ contentType, content, userId, file }) {
   };
 }
 
-async function convertRawIdeaToNote({ rawIdeaId, userId, nodeId }) {
+async function convertRawIdeaToNote({
+  rawIdeaId,
+  userId,
+  nodeId,
+  wasAi = false,
+}) {
   if (!rawIdeaId || !userId || !nodeId) {
     throw new Error("Missing or invalid required fields");
   }
@@ -184,6 +195,7 @@ async function convertRawIdeaToNote({ rawIdeaId, userId, nodeId }) {
   await logContribution({
     userId,
     nodeId,
+    wasAi,
     action: "rawIdea",
     nodeVersion: node.prestige,
     rawIdeaAction: {
@@ -196,6 +208,7 @@ async function convertRawIdeaToNote({ rawIdeaId, userId, nodeId }) {
   await logContribution({
     userId,
     nodeId,
+    wasAi,
     action: "note",
     nodeVersion: node.prestige,
     noteAction: {
@@ -214,7 +227,7 @@ async function convertRawIdeaToNote({ rawIdeaId, userId, nodeId }) {
   };
 }
 
-async function deleteRawIdeaAndFile({ rawIdeaId, userId }) {
+async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
   const rawIdea = await RawIdea.findById(rawIdeaId);
   if (!rawIdea) {
     throw new Error("Raw idea not found");
@@ -256,8 +269,8 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId }) {
   rawIdea.content = fileDeleted
     ? "File was deleted"
     : rawIdea.contentType === "text"
-    ? rawIdea.content
-    : "File was deleted";
+      ? rawIdea.content
+      : "File was deleted";
 
   await rawIdea.save();
 
@@ -275,6 +288,7 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId }) {
   await logContribution({
     userId,
     nodeId: "deleted",
+    wasAi,
     action: "rawIdea",
     nodeVersion: "deleted",
     rawIdeaAction: {

@@ -7,7 +7,7 @@ import { useEnergy } from "../core/energy.js";
 // EXACT UUID REGEX FROM OLD CODE
 const isValidUUID = (id) =>
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
-    id
+    id,
   );
 
 async function resolveReceivingUser(userReceiving) {
@@ -35,7 +35,7 @@ export async function createInvite({
   if (!node) throw new Error("Root node not found");
   if (node.parent === "deleted") {
     throw new Error(
-      "You can’t invite users or delete a root that’s already deleted.."
+      "You can’t invite users or delete a root that’s already deleted..",
     );
   }
 
@@ -91,7 +91,7 @@ export async function createInvite({
       throw new Error("User already owns this root");
     }
     const alreadyContributor = node.contributors.some(
-      (u) => u._id.toString() === receivingUser._id.toString()
+      (u) => u._id.toString() === receivingUser._id.toString(),
     );
 
     if (alreadyContributor) {
@@ -127,7 +127,7 @@ export async function createInvite({
 
     node.rootOwner = receivingUser._id;
     node.contributors = node.contributors.filter(
-      (u) => u._id.toString() !== receivingUser._id.toString()
+      (u) => u._id.toString() !== receivingUser._id.toString(),
     );
     node.contributors.push(invitingUser);
 
@@ -164,7 +164,7 @@ export async function createInvite({
     // Case 2: Owner removes a contributor
     if (isOwner && receivingUser._id.toString() !== userInvitingId) {
       node.contributors = node.contributors.filter(
-        (u) => u._id.toString() !== receivingUser._id.toString()
+        (u) => u._id.toString() !== receivingUser._id.toString(),
       );
 
       await node.save();
@@ -230,17 +230,17 @@ export async function createInvite({
     // Case 4: Contributor removes themselves
     if (!isOwner && receivingUser._id.toString() === userInvitingId) {
       const isContributor = node.contributors.some(
-        (u) => u._id.toString() === userInvitingId
+        (u) => u._id.toString() === userInvitingId,
       );
 
       if (!isContributor) {
         throw new Error(
-          "You are not a contributor and cannot remove yourself."
+          "You are not a contributor and cannot remove yourself.",
         );
       }
 
       node.contributors = node.contributors.filter(
-        (u) => u._id.toString() !== userInvitingId
+        (u) => u._id.toString() !== userInvitingId,
       );
 
       await node.save();
@@ -281,7 +281,7 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
   }
 
   const node = await Node.findById(invite.rootId).populate(
-    "rootOwner contributors"
+    "rootOwner contributors",
   );
   if (!node) throw new Error("Node not found");
   const { energyUsed } = await useEnergy({

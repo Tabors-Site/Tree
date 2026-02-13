@@ -6,7 +6,14 @@ import { useEnergy } from "../core/energy.js";
 
 import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";
 
-export async function updateScript({ nodeId, scriptId, name, script, userId }) {
+export async function updateScript({
+  nodeId,
+  scriptId,
+  name,
+  script,
+  userId,
+  wasAi = false,
+}) {
   const isCreating = !scriptId;
 
   // ---------------------------------------------------------
@@ -99,6 +106,7 @@ export async function updateScript({ nodeId, scriptId, name, script, userId }) {
   await logContribution({
     userId,
     nodeId,
+    wasAi,
     action: "editScript",
     nodeVersion: node.prestige.toString(),
     editScript: {
@@ -118,7 +126,12 @@ export async function updateScript({ nodeId, scriptId, name, script, userId }) {
   };
 }
 
-export async function executeScript({ nodeId, scriptId, userId }) {
+export async function executeScript({
+  nodeId,
+  scriptId,
+  userId,
+  wasAi = false,
+}) {
   if (!nodeId || !scriptId || !userId) {
     throw new Error("Missing required fields: nodeId, scriptId, or userId");
   }
@@ -153,9 +166,9 @@ export async function executeScript({ nodeId, scriptId, userId }) {
           logs.push(
             args
               .map((a) =>
-                typeof a === "string" ? a : JSON.stringify(a, null, 2)
+                typeof a === "string" ? a : JSON.stringify(a, null, 2),
               )
-              .join(" ")
+              .join(" "),
           );
         },
       },
@@ -177,6 +190,7 @@ export async function executeScript({ nodeId, scriptId, userId }) {
     await logContribution({
       userId,
       nodeId,
+      wasAi,
       action: "executeScript",
       nodeVersion: node.prestige.toString(),
       executeScript: {
@@ -191,6 +205,7 @@ export async function executeScript({ nodeId, scriptId, userId }) {
     await logContribution({
       userId,
       nodeId,
+      wasAi,
       action: "executeScript",
       nodeVersion: node.prestige.toString(),
       executeScript: {

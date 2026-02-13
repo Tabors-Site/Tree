@@ -81,6 +81,7 @@ async function createNote({
   version,
   isReflection,
   file,
+  wasAi = false,
 }) {
   if (!contentType || !["file", "text"].includes(contentType)) {
     throw new Error("Invalid content type");
@@ -110,9 +111,8 @@ async function createNote({
   let finalContent = content;
 
   if (contentType === "text" && content) {
-    const { tagged, rewrittenContent } = await extractTaggedUsersAndRewrite(
-      content
-    );
+    const { tagged, rewrittenContent } =
+      await extractTaggedUsersAndRewrite(content);
 
     taggedUserIds = tagged;
     finalContent = rewrittenContent;
@@ -155,6 +155,7 @@ async function createNote({
   await logContribution({
     userId,
     nodeId,
+    wasAi,
     action: "note",
     nodeVersion: version,
     noteAction: {
@@ -230,7 +231,7 @@ async function getNotes({ nodeId, version, limit, startDate, endDate }) {
     console.error("Error in getNotes:", err);
 
     throw new Error(
-      err.message || "Database error occurred while retrieving notes."
+      err.message || "Database error occurred while retrieving notes.",
     );
   }
 }
@@ -300,7 +301,7 @@ async function getAllTagsForUser(userId, limit, startDate, endDate) {
   return { notes: notesWithTaggedBy };
 }
 
-async function deleteNoteAndFile({ noteId, userId }) {
+async function deleteNoteAndFile({ noteId, userId, wasAi = false }) {
   const note = await Note.findById(noteId);
   if (!note) throw new Error("Note not found");
 
@@ -316,7 +317,7 @@ async function deleteNoteAndFile({ noteId, userId }) {
     }
 
     throw new Error(
-      "Only the note author or the tree owner can delete this note"
+      "Only the note author or the tree owner can delete this note",
     );
   }
   let energyUsed = null;
@@ -388,6 +389,7 @@ async function deleteNoteAndFile({ noteId, userId }) {
   await logContribution({
     userId,
     nodeId, // original nodeId
+    wasAi,
     action: "note",
     nodeVersion: version,
     noteAction: {
@@ -500,7 +502,7 @@ async function collectSubtreeNodeIds(rootId) {
 }
 function nodeMatchesStatus(node, filters) {
   const currentVersion = node.versions?.find(
-    (v) => v.prestige === node.prestige
+    (v) => v.prestige === node.prestige,
   );
 
   const status = currentVersion?.status;
@@ -563,7 +565,7 @@ async function getBook({ nodeId, options = {} }) {
     nodeMap.get(nodeId.toString()),
     nodeMap,
     notesByNode,
-    flags
+    flags,
   );
   return {
     message: "Book generated successfully",
@@ -574,7 +576,7 @@ function applyNoteFilters(notes, node, flags) {
   let result = notes;
   if (flags.latestVersionOnly && result.length > 0) {
     const maxVersion = Math.max(
-      ...result.map((n) => Number(n.version)).filter((v) => !Number.isNaN(v))
+      ...result.map((n) => Number(n.version)).filter((v) => !Number.isNaN(v)),
     );
 
     result = result.filter((n) => Number(n.version) === maxVersion);
