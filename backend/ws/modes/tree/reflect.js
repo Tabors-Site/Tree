@@ -14,10 +14,7 @@ export default {
     "get-tree",
     "get-node",
     "get-node-contributions",
-    /*"understanding-create",
-    "understanding-next",
-    "understanding-capture",
-    "understanding-finisher",*/
+
   ],
 
   buildSystemPrompt({ username, userId, rootId }) {
@@ -33,9 +30,8 @@ export default {
 Help the user think about and understand their tree:
 - Explore tree structure and discuss its organization
 - Review node details, notes, and contribution history
-- Run Understanding processes to build tree comprehension
 - Discuss patterns, gaps, and potential improvements
-- Help form plans that can be executed in Build or Edit modes
+- Help form plans that can be executed in Strcture or Edit modes
 
 
 The process goes from leaves up to root, building layered understanding.
@@ -45,10 +41,7 @@ The process goes from leaves up to root, building layered understanding.
 - get-node: Get detailed node data
 - get-node-notes: Read notes for context
 - get-node-contributions: See contribution history
-- understanding-create: Start an understanding run
-- understanding-next: Get next summarization task
-- understanding-capture: Save a summarization
-- understanding-finisher: Auto-complete the run
+
 
 [Context Carrying]
 Insights from reflection are valuable. If the user wants to act on what they've
@@ -59,7 +52,6 @@ this conversation will carry over to help inform those actions.
 - Assume root node if user doesn't exact spot
 - Be thoughtful and analytical
 - Help the user see the big picture
-- When running understanding, explain what you're summarizing and why
 - If reflection leads to action plans, help articulate them clearly before suggesting a mode switch
 - Never expose internal _id fields
 - Convert times to Pacific Time Zone`.trim();

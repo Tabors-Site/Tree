@@ -1,6 +1,7 @@
 // core/energy/useEnergy.js
 import fs from "fs";
 import User from "../db/models/user.js";
+
 /* ================================
  * CONSTANTS (HALF-COST VERSION)
  * ================================ */
@@ -79,6 +80,9 @@ const BASE_ACTION_COSTS = {
 
 const CONTENT_ACTIONS = new Set(["note", "rawIdea", "editScript"]);
 
+/* 🔥 NEW — actions that scale with payload count */
+const VARIABLE_ACTIONS = new Set(["understanding"]);
+
 export function calculateEnergyCost(action, payload) {
   /* ---------- FILES ---------- */
   if (payload?.type === "file") {
@@ -106,6 +110,12 @@ export function calculateEnergyCost(action, payload) {
     return Math.max(TEXT_MIN_COST, Math.ceil(length / TEXT_CHARS_PER_ENERGY));
   }
 
+  /* ---------- VARIABLE COUNT (NEW) ---------- */
+  if (VARIABLE_ACTIONS.has(action)) {
+    const amount = typeof payload === "number" ? payload : 1;
+    return Math.max(1, amount);
+  }
+
   /* ---------- FIXED ---------- */
   const cost = BASE_ACTION_COSTS[action];
   if (!cost) {
@@ -124,16 +134,8 @@ export function maybeResetEnergy(user) {
   const now = Date.now();
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  /* ================================
-     🔥 PLAN EXPIRATION CHECK (NEW)
-  ================================ */
-
   const expiresAt = user.planExpiresAt?.getTime() || 0;
 
-  // downgrade ONLY if:
-  // - not already basic
-  // - not god
-  // - expiry exists and passed
   if (
     user.profileType !== "basic" &&
     user.profileType !== "god" &&
@@ -143,16 +145,10 @@ export function maybeResetEnergy(user) {
     user.profileType = "basic";
     user.planExpiresAt = null;
 
-    // reset base energy to basic limit immediately
-    user.availableEnergy.amount =
-      DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
+    user.availableEnergy.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
 
     user.availableEnergy.lastResetAt = new Date();
   }
-
-  /* ================================
-     DAILY RESET (existing logic)
-  ================================ */
 
   const lastReset = user.availableEnergy.lastResetAt?.getTime() || 0;
 
@@ -165,7 +161,6 @@ export function maybeResetEnergy(user) {
 
   return true;
 }
-
 
 // core/errors/EnergyError.js
 export class EnergyError extends Error {
@@ -182,7 +177,7 @@ export async function useEnergy({
   userId,
   action,
   payload = null,
-  file = null, // optional { path }
+  file = null,
 }) {
   if (!userId) {
     throw new EnergyError("Not authenticated");
@@ -196,10 +191,8 @@ export async function useEnergy({
     throw new EnergyError("User not found");
   }
 
-  // 🔁 reset window if needed
   maybeResetEnergy(user);
 
-  // 🚫 Basic plan: no files
   if (
     (action === "note" || action === "rawIdea") &&
     payload?.type === "file" &&
@@ -214,7 +207,6 @@ export async function useEnergy({
     });
   }
 
-  // 🚫 Standard plan: 1GB hard cap
   if (
     payload?.type === "file" &&
     user.profileType === "standard" &&
@@ -230,14 +222,12 @@ export async function useEnergy({
     });
   }
 
-  // ⚡ calculate cost
   const cost = calculateEnergyCost(action, payload);
 
   const baseEnergy = user.availableEnergy.amount || 0;
   const extraEnergy = user.additionalEnergy?.amount || 0;
   const totalEnergy = baseEnergy + extraEnergy;
 
-  // ❌ Not enough total energy
   if (totalEnergy < cost) {
     if (file?.path) {
       await fs.promises.unlink(file.path).catch(() => {});
@@ -250,7 +240,6 @@ export async function useEnergy({
     });
   }
 
-  // 💸 deduct — PRIORITY: availableEnergy first
   let remainingCost = cost;
 
   if (user.availableEnergy.amount >= remainingCost) {
@@ -261,7 +250,6 @@ export async function useEnergy({
     user.availableEnergy.amount = 0;
   }
 
-  // if still cost left → use additionalEnergy
   if (remainingCost > 0) {
     user.additionalEnergy.amount -= remainingCost;
     remainingCost = 0;
@@ -271,8 +259,7 @@ export async function useEnergy({
 
   return {
     energyUsed: cost,
-    remainingEnergy:
-      user.availableEnergy.amount + user.additionalEnergy.amount,
+    remainingEnergy: user.availableEnergy.amount + user.additionalEnergy.amount,
     remainingBaseEnergy: user.availableEnergy.amount,
     remainingAdditionalEnergy: user.additionalEnergy.amount,
   };

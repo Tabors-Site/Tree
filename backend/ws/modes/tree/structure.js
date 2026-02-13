@@ -9,7 +9,6 @@ export default {
   toolNames: [
     "get-node",
     "get-tree",
-    "create-new-node",
     "create-new-node-branch",
     "edit-node-name",
     "update-node-branch-parent-relationship",
