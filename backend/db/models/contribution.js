@@ -104,7 +104,7 @@ const ContributionSchema = new mongoose.Schema({
 
   noteAction: {
     type: {
-      action: { type: String, enum: ["add", "remove"], default: null },
+      action: { type: String, enum: ["add", "remove", "edit"], default: null },
       noteId: { type: String, ref: "Note", default: null },
       _id: false,
     },
@@ -384,13 +384,13 @@ const ContributionSchema = new mongoose.Schema({
       },
       rootNodeId: { type: String, ref: "Node" },
 
-      nodeCount: { type: Number}, // for createRun
+      nodeCount: { type: Number }, // for createRun
       layer: { type: Number }, // for processStep
       mode: { type: String, enum: ["leaf", "merge"] },
 
       perspective: { type: String },
     },
- 
+
     _id: false,
   },
 });

@@ -8,8 +8,9 @@ import { clearCustomLlmConnection } from "./customLLM.js";
  * ================================ */
 
 // text
-const TEXT_CHARS_PER_ENERGY = 500; // ⬅ doubled = half cost
-const TEXT_MIN_COST = 2;
+const TEXT_NOTE_CHARS_PER_ENERGY = 100;
+const TEXT_NOTE_MIN = 1;
+const TEXT_NOTE_MAX = 5;
 
 // file energy
 const FILE_MIN_COST = 5; // ⬅ was 10
@@ -62,6 +63,7 @@ const BASE_ACTION_COSTS = {
   // 1 energy
   editStatus: 1,
   editValue: 1,
+  removeNote: 1,
   editSchedule: 1,
   editGoal: 1,
   editNameNode: 1,
@@ -71,7 +73,7 @@ const BASE_ACTION_COSTS = {
   prestige: 1,
   executeScript: 1,
   invite: 1,
-  chat: 3,
+  chat: 2,
 
   // 2 energy
   create: 2,
@@ -97,6 +99,7 @@ export function calculateEnergyCost(action, payload) {
   }
 
   /* ---------- TEXT ---------- */
+  /* ---------- TEXT (notes, rawIdea, editScript) ---------- */
   if (CONTENT_ACTIONS.has(action)) {
     let length = 0;
 
@@ -106,9 +109,17 @@ export function calculateEnergyCost(action, payload) {
       length = payload;
     } else if (payload?.content) {
       length = payload.content.length;
+    } else if (payload?.type === "text") {
+      length = (payload.content || "").length;
     }
 
-    return Math.max(TEXT_MIN_COST, Math.ceil(length / TEXT_CHARS_PER_ENERGY));
+    return Math.min(
+      TEXT_NOTE_MAX,
+      Math.max(
+        TEXT_NOTE_MIN,
+        1 + Math.floor(length / TEXT_NOTE_CHARS_PER_ENERGY),
+      ),
+    );
   }
 
   /* ---------- VARIABLE COUNT (NEW) ---------- */

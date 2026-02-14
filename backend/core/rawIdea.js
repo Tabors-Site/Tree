@@ -48,6 +48,18 @@ async function extractTaggedUsersAndRewrite(content) {
   return { tagged: uniqueTagged, rewrittenContent };
 }
 
+const NOTE_TEXT_MAX_CHARS = 5000;
+
+export function assertNoteTextWithinLimit(content) {
+  if (!content) return;
+
+  if (content.length > NOTE_TEXT_MAX_CHARS) {
+    throw new Error(
+      `Note exceeds maximum length of ${NOTE_TEXT_MAX_CHARS} characters`,
+    );
+  }
+}
+
 async function createRawIdea({
   contentType,
   content,
@@ -66,15 +78,13 @@ async function createRawIdea({
   let finalContent = content;
   let taggedUserIds = [];
 
-  // --- FILE ---
+  // ── FILE ───────────────────────────────────────
   if (contentType === "file") {
-    if (!file) {
-      throw new Error("File is required for file content type");
-    }
+    if (!file) throw new Error("File is required for file content type");
     finalContent = file.filename;
   }
 
-  // --- TEXT ---
+  // ── TEXT ───────────────────────────────────────
   if (contentType === "text") {
     if (!content || typeof content !== "string") {
       throw new Error("Content is required for text content type");
@@ -85,11 +95,16 @@ async function createRawIdea({
 
     taggedUserIds = tagged;
     finalContent = rewrittenContent;
+    assertNoteTextWithinLimit(rewrittenContent);
   }
-  const payload =
-    contentType === "file"
-      ? { type: "file", sizeMB: Math.ceil(file.size / (1024 * 1024)) }
-      : { type: "text", content: content ?? "" };
+
+  // ── ENERGY ─────────────────────────────────────
+  let payload;
+  if (contentType === "file") {
+    payload = { type: "file", sizeMB: Math.ceil(file.size / (1024 * 1024)) };
+  } else {
+    payload = content.length;
+  }
 
   const { energyUsed } = await useEnergy({
     userId,
@@ -98,6 +113,7 @@ async function createRawIdea({
     file,
   });
 
+  // ── SAVE ───────────────────────────────────────
   const rawIdea = new RawIdea({
     contentType,
     content: finalContent,
@@ -106,23 +122,17 @@ async function createRawIdea({
   });
 
   await rawIdea.save();
-  // ---- STORAGE ACCOUNTING ----
-  // ---- STORAGE ACCOUNTING ----
 
-  // FILE → KB
+  // ── STORAGE ────────────────────────────────────
   if (contentType === "file" && file?.size) {
     const sizeKB = Math.ceil(file.size / 1024);
-
     await User.findByIdAndUpdate(userId, {
       $inc: { storageUsage: sizeKB },
     });
   }
 
-  // TEXT → KB
   if (contentType === "text" && finalContent) {
-    const bytes = Buffer.byteLength(finalContent, "utf8");
-    const sizeKB = Math.ceil(bytes / 1024);
-
+    const sizeKB = Math.ceil(Buffer.byteLength(finalContent, "utf8") / 1024);
     if (sizeKB > 0) {
       await User.findByIdAndUpdate(userId, {
         $inc: { storageUsage: sizeKB },
@@ -130,6 +140,7 @@ async function createRawIdea({
     }
   }
 
+  // ── LOG ────────────────────────────────────────
   await logContribution({
     userId,
     nodeId: "deleted",
@@ -146,6 +157,7 @@ async function createRawIdea({
   return {
     message: "Raw idea captured",
     rawIdea,
+    energyUsed,
   };
 }
 
@@ -242,7 +254,7 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
   if (rawIdea.contentType === "text") {
     const energyResult = await useEnergy({
       userId,
-      action: "rawIdea",
+      action: "removeNote",
     });
     energyUsed = energyResult.energyUsed;
   }

@@ -72,6 +72,17 @@ async function extractTaggedUsersAndRewrite(content) {
     rewrittenContent,
   };
 }
+export const NOTE_TEXT_MAX_CHARS = 5000;
+
+export function assertNoteTextWithinLimit(content) {
+  if (!content) return;
+
+  if (content.length > NOTE_TEXT_MAX_CHARS) {
+    throw new Error(
+      `Note exceeds maximum length of ${NOTE_TEXT_MAX_CHARS} characters`,
+    );
+  }
+}
 
 async function createNote({
   contentType,
@@ -89,23 +100,32 @@ async function createNote({
   if (!userId || !nodeId) {
     throw new Error("Missing required fields");
   }
+
   let filePath = null;
   if (contentType === "file") {
     if (!file) throw new Error("File is required for file content type");
     filePath = file.filename;
+  } else {
+    // ⬅️ ADD HERE
+    assertNoteTextWithinLimit(content || "");
   }
-  const payload =
-    contentType === "file"
-      ? { type: "file", sizeMB: Math.ceil(file.size / (1024 * 1024)) }
-      : { type: "text", content: content ?? "" };
+
+  // ── ENERGY ──────────────────────────────────────
+  let payload;
+  if (contentType === "file") {
+    payload = { type: "file", sizeMB: Math.ceil(file.size / (1024 * 1024)) };
+  } else {
+    payload = (content || "").length; // char count for text scaling
+  }
 
   const { energyUsed } = await useEnergy({
     userId,
     action: "note",
     payload,
-    file, // allows cleanup on failure
+    file,
   });
 
+  // ── TAG EXTRACTION ──────────────────────────────
   const isReflectionBool = isReflection === "true" || isReflection === true;
   let taggedUserIds = [];
   let finalContent = content;
@@ -113,11 +133,11 @@ async function createNote({
   if (contentType === "text" && content) {
     const { tagged, rewrittenContent } =
       await extractTaggedUsersAndRewrite(content);
-
     taggedUserIds = tagged;
     finalContent = rewrittenContent;
   }
 
+  // ── SAVE ────────────────────────────────────────
   const newNote = new Note({
     contentType,
     content: contentType === "file" ? filePath : finalContent,
@@ -129,45 +149,128 @@ async function createNote({
   });
 
   await newNote.save();
-  // ---- STORAGE ACCOUNTING ----
 
-  // FILE → KB
+  // ── STORAGE ─────────────────────────────────────
   if (contentType === "file" && file?.size) {
     const sizeKB = Math.ceil(file.size / 1024);
-
-    await User.findByIdAndUpdate(userId, {
-      $inc: { storageUsage: sizeKB },
-    });
+    await User.findByIdAndUpdate(userId, { $inc: { storageUsage: sizeKB } });
   }
 
-  // TEXT → KB
   if (contentType === "text" && finalContent) {
-    const bytes = Buffer.byteLength(finalContent, "utf8");
-    const sizeKB = Math.ceil(bytes / 1024);
-
+    const sizeKB = Math.ceil(Buffer.byteLength(finalContent, "utf8") / 1024);
     if (sizeKB > 0) {
-      await User.findByIdAndUpdate(userId, {
-        $inc: { storageUsage: sizeKB },
-      });
+      await User.findByIdAndUpdate(userId, { $inc: { storageUsage: sizeKB } });
     }
   }
 
+  // ── LOG ─────────────────────────────────────────
   await logContribution({
     userId,
     nodeId,
     wasAi,
     action: "note",
     nodeVersion: version,
-    noteAction: {
-      action: "add",
-      noteId: newNote._id.toString(),
-    },
+    noteAction: { action: "add", noteId: newNote._id.toString() },
     energyUsed,
   });
-  return {
-    message: "Note created successfully",
-    Note: newNote,
-  };
+
+  return { message: "Note created successfully", Note: newNote, energyUsed };
+}
+
+async function editNote({
+  noteId,
+  content,
+  userId,
+  version,
+  isReflection,
+  wasAi = false,
+}) {
+  if (!noteId || !userId) {
+    throw new Error("Missing required fields");
+  }
+
+  const note = await Note.findById(noteId);
+  if (!note) throw new Error("Note not found");
+
+  if (note.userId.toString() !== userId.toString()) {
+    throw new Error("Unauthorized");
+  }
+
+  if (note.contentType !== "text") {
+    throw new Error("File notes cannot be edited");
+  }
+
+  const oldContent = note.content || "";
+  const newContent = content ?? "";
+  assertNoteTextWithinLimit(newContent);
+
+  if (oldContent === newContent) {
+    return {
+      message: "No changes",
+      Note: note,
+      energyUsed: 0,
+    };
+  }
+
+  // ── ENERGY — charge on net growth using same formula as create ──
+  const oldChars = oldContent.length;
+  const newChars = newContent.length;
+  const deltaChars = Math.max(0, newChars - oldChars);
+
+  let energyUsed = 0;
+
+  if (deltaChars > 0) {
+    const energyResult = await useEnergy({
+      userId,
+      action: "note",
+      payload: deltaChars, // same formula: min 1, max 5, 500 chars/energy
+    });
+    energyUsed = energyResult.energyUsed;
+  }
+
+  // ── TAG EXTRACTION ──────────────────────────────
+  let finalContent = newContent;
+  let taggedUserIds = [];
+
+  if (newContent) {
+    const { tagged, rewrittenContent } =
+      await extractTaggedUsersAndRewrite(newContent);
+    taggedUserIds = tagged;
+    finalContent = rewrittenContent;
+  }
+
+  // ── STORAGE DELTA ───────────────────────────────
+  const oldSizeKB = Math.ceil(Buffer.byteLength(oldContent, "utf8") / 1024);
+  const newSizeKB = Math.ceil(
+    Buffer.byteLength(finalContent || "", "utf8") / 1024,
+  );
+  const deltaKB = newSizeKB - oldSizeKB;
+
+  if (deltaKB !== 0) {
+    await User.findByIdAndUpdate(userId, { $inc: { storageUsage: deltaKB } });
+  }
+
+  // ── APPLY ───────────────────────────────────────
+  note.content = finalContent;
+  note.tagged = taggedUserIds;
+  note.isReflection = isReflection === "true" || isReflection === true;
+  note.version = version;
+  note.sizeKB = newSizeKB;
+
+  await note.save();
+
+  // ── LOG ─────────────────────────────────────────
+  await logContribution({
+    userId,
+    nodeId: note.nodeId,
+    wasAi,
+    action: "note",
+    nodeVersion: version,
+    noteAction: { action: "edit", noteId: note._id.toString() },
+    energyUsed,
+  });
+
+  return { message: "Note updated successfully", Note: note, energyUsed };
 }
 
 async function getNotes({ nodeId, version, limit, startDate, endDate }) {
@@ -325,7 +428,7 @@ async function deleteNoteAndFile({ noteId, userId, wasAi = false }) {
   if (note.contentType === "text") {
     const energyResult = await useEnergy({
       userId,
-      action: "rawIdea",
+      action: "removeNote",
     });
     energyUsed = energyResult.energyUsed;
   }
@@ -690,6 +793,7 @@ async function generateBook({ nodeId, settings, userId }) {
 
 export {
   createNote,
+  editNote,
   getNotes,
   deleteNoteAndFile,
   getAllNotesByUser,
