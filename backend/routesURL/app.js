@@ -144,6 +144,16 @@ router.get("/app", authenticateLite, async (req, res) => {
       100% { opacity: 1; transform: translateY(0); }
     }
 
+    /* Mobile root path - no prefix slash, styled as path */
+    .mobile-root-path {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .mobile-root-path::before {
+      content: '/';
+      color: var(--text-muted);
+    }
+
     .chat-messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; position: relative; z-index: 1; }
     .chat-messages::-webkit-scrollbar { width: 6px; }
     .chat-messages::-webkit-scrollbar-track { background: transparent; }
@@ -356,35 +366,62 @@ router.get("/app", authenticateLite, async (req, res) => {
     .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .send-btn svg { width: 20px; height: 20px; }
 
-    .viewport-panel { flex: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; }
-    .viewport-header { height: var(--header-height); padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--glass-border-light); flex-shrink: 0; position: relative; z-index: 1; }
-    .viewport-info { display: flex; align-items: center; gap: 12px; overflow: hidden; flex: 1; min-width: 0; }
-    .url-display { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--glass-border-light); border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-secondary); max-width: 100%; overflow: hidden; }
-    .url-display svg { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
-    .url-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .panel-controls { display: flex; gap: 8px; }
-    .panel-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--glass-border-light); border-radius: 10px; color: var(--text-secondary); cursor: pointer; transition: all var(--transition-fast); }
-    .panel-btn:hover { background: rgba(255, 255, 255, 0.2); color: var(--text-primary); transform: scale(1.05); }
-    .panel-btn svg { width: 18px; height: 18px; }
+    .viewport-panel { flex: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; position: relative; }
+
+    /* Floating viewport controls */
+    .viewport-floating-controls {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+    }
+    .floating-btn {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(var(--glass-rgb), 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border-light);
+      border-radius: 10px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .floating-btn:hover {
+      background: rgba(var(--glass-rgb), 0.9);
+      color: var(--text-primary);
+      transform: scale(1.05);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    }
+    .floating-btn:active {
+      transform: scale(0.95);
+    }
+    .floating-btn svg { width: 18px; height: 18px; }
 
     .iframe-container {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  border-radius: 0;
-  margin: 0;
-}
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      border-radius: 0;
+      margin: 0;
+    }
 
-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  display: block;
-  background: transparent;
-  border-radius: 0;
-}
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      background: transparent;
+      border-radius: 0;
+    }
 
-    .loading-overlay { position: absolute; inset: 0; background: rgba(var(--glass-rgb), 0.8); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 5; border-radius: 0 0 24px 24px; }
+    .loading-overlay { position: absolute; inset: 0; background: rgba(var(--glass-rgb), 0.8); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 5; border-radius: 0; }
     .loading-overlay.visible { opacity: 1; pointer-events: auto; }
     .spinner-ring { width: 44px; height: 44px; border: 3px solid rgba(255, 255, 255, 0.2); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -394,8 +431,7 @@ iframe {
     .divider-handle { width: 6px; height: 80px; background: rgba(var(--glass-rgb), 0.5); backdrop-filter: blur(var(--glass-blur)); border: 1px solid var(--glass-border); border-radius: 4px; transition: all var(--transition-fast); }
     .panel-divider:hover .divider-handle { background: rgba(var(--glass-rgb), 0.7); width: 8px; }
 .chat-header,
-.chat-input-area,
-.viewport-header {
+.chat-input-area {
   border-bottom: none;
   border-top: none;
 }
@@ -415,7 +451,7 @@ iframe {
       right: 0;
       z-index: 150;
       padding: 10px 12px;
-      padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
       background: transparent;
       transition: opacity 0.3s ease;
     }
@@ -430,6 +466,57 @@ iframe {
     }
     .mobile-input-bar .chat-input { font-size: 16px; }
     .mobile-input-bar .send-btn { width: 38px; height: 38px; border-radius: 50%; }
+
+    /* Mobile connection status indicator - inside sheet header */
+    .mobile-status-indicator {
+      display: none;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .mobile-status-indicator.connected {
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent-glow);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .mobile-status-indicator.disconnected {
+      background: var(--error);
+      animation: none;
+    }
+    .mobile-status-indicator.connecting {
+      background: #f59e0b;
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    /* Tree icon with status dot wrapper */
+    .mobile-tree-icon-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      transition: transform 0.15s ease;
+    }
+    .mobile-tree-icon-wrapper:active {
+      transform: scale(0.92);
+    }
+    .mobile-tree-icon-wrapper .mobile-status-indicator {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .mobile-tree-icon-wrapper .tree-icon {
+      font-size: 24px;
+    }
+
+    /* Mobile header action buttons */
+    .mobile-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
     .mobile-chat-sheet {
       display: none;
@@ -473,16 +560,17 @@ iframe {
       flex-shrink: 0;
       cursor: grab;
       touch-action: none;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.08);
       user-select: none;
+      position: relative;
     }
     .mobile-sheet-header:active { cursor: grabbing; }
     .mobile-sheet-header .drag-handle { 
-      width: 40px; 
-      height: 5px; 
-      background: rgba(255, 255, 255, 0.4); 
-      border-radius: 3px; 
-      margin-bottom: 12px;
+      width: 36px; 
+      height: 4px; 
+      background: rgba(255, 255, 255, 0.25); 
+      border-radius: 2px; 
+      margin-bottom: 10px;
     }
     .mobile-sheet-title-row { width: 100%; display: flex; align-items: center; justify-content: space-between; }
     .mobile-sheet-title { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
@@ -556,7 +644,7 @@ iframe {
       .chat-panel { display: none !important; }
       .viewport-panel { width: 100% !important; height: 100%; }
       .viewport-panel.glass-panel { border-radius: 0; }
-      .viewport-header { display: none; }
+      .viewport-floating-controls { display: none; }
       .iframe-container { border-radius: 0; margin: 0; flex: 1; }
       iframe, .loading-overlay { border-radius: 0; }
       .panel-divider { display: none; }
@@ -755,6 +843,7 @@ iframe {
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
       padding-bottom: 2px;
+      scroll-behavior: smooth;
     }
     .mobile-mode-bar::-webkit-scrollbar { display: none; }
 
@@ -879,21 +968,17 @@ iframe {
 
     <!-- Viewport Panel -->
     <div class="viewport-panel glass-panel" id="viewportPanel">
-      <div class="viewport-header">
-        <div class="viewport-info">
-          <div class="url-display">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            <span class="url-text" id="urlDisplay">/api/user/${req.userId}?html&token=${htmlShareToken}</span>
-          </div>
-        </div>
-        <div class="panel-controls">
-          <button class="panel-btn" id="homeBtn" title="Home (Profile)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          </button>
-          <button class="panel-btn" id="refreshBtn" title="Refresh">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          </button>
-        </div>
+      <!-- Floating controls -->
+      <div class="viewport-floating-controls">
+        <button class="floating-btn" id="homeBtn" title="Home (Profile)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </button>
+        <button class="floating-btn" id="refreshBtn" title="Refresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+        <button class="floating-btn" id="openTabBtn" title="Open in new tab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
       </div>
 
       <div class="iframe-container">
@@ -925,11 +1010,19 @@ iframe {
       <div class="drag-handle"></div>
       <div class="mobile-sheet-title-row">
         <div class="mobile-sheet-title">
-          <span class="tree-icon">🌳</span>
-          <h1>Tree</h1>
-          <span class="root-name-inline" id="mobileRootNameLabel" title=""></span>
+          <a href="/" class="mobile-tree-icon-wrapper" title="Back to Tree">
+            <div class="mobile-status-indicator connecting" id="mobileStatusIndicator"></div>
+            <span class="tree-icon">🌳</span>
+          </a>
+          <span class="root-name-inline mobile-root-path" id="mobileRootNameLabel" title=""></span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div class="mobile-header-actions">
+          <button class="clear-chat-btn" id="mobileHomeBtn" title="Home">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </button>
+          <button class="clear-chat-btn" id="mobileRefreshBtn" title="Refresh">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
           <button class="clear-chat-btn" id="mobileClearChatBtn" title="Clear conversation">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
           </button>
@@ -938,7 +1031,7 @@ iframe {
           </button>
         </div>
       </div>
-      <!-- NEW: Mobile mode bar (horizontal pill row) -->
+      <!-- Mobile mode bar (horizontal pill row) -->
       <div class="mobile-mode-bar" id="mobileModeBar"></div>
     </div>
     <div class="mobile-chat-messages" id="mobileChatMessages">
@@ -975,9 +1068,9 @@ iframe {
     const sendBtn = $("sendBtn");
     const statusDot = $("statusDot");
     const statusText = $("statusText");
+    const mobileStatusIndicator = $("mobileStatusIndicator");
     const iframe = $("viewport");
     const loadingOverlay = $("loadingOverlay");
-    const urlDisplay = $("urlDisplay");
     const mobileChatMessages = $("mobileChatMessages");
     const mobileBottomInput = $("mobileBottomInput");
     const mobileSendBtn = $("mobileSendBtn");
@@ -993,6 +1086,7 @@ iframe {
     let isConnected = false;
     let isRegistered = false;
     let isSending = false;
+    let currentIframeUrl = CONFIG.homeUrl;
 
     // NEW: Mode state
     let currentModeKey = null;
@@ -1024,8 +1118,8 @@ iframe {
           try { const u = new URL(iframe.src); currentUrl = u.pathname + u.search; } catch(e) {}
         }
         if (!currentUrl) {
-          // Fallback to last known URL in display
-          currentUrl = urlDisplay.textContent || "";
+          // Fallback to last known URL
+          currentUrl = currentIframeUrl || "";
         }
         socket.emit("getAvailableModes", { url: currentUrl });
         // Also emit urlChanged so rootId gets set
@@ -1062,7 +1156,7 @@ iframe {
     socket.on("navigate", ({ url, replace }) => {
       console.log("[socket] navigate:", url);
       loadingOverlay.classList.add("visible");
-      urlDisplay.textContent = url;
+      currentIframeUrl = url;
       // Add inApp param if not present
       const navUrl = url.includes('inApp=') ? url : url + (url.includes('?') ? '&' : '?') + 'inApp=1';
       if (replace) {
@@ -1240,6 +1334,7 @@ iframe {
       availableModes.forEach(mode => {
         const btn = document.createElement("button");
         btn.className = "mobile-mode-btn" + (mode.key === currentModeKey ? " active" : "");
+        btn.dataset.modeKey = mode.key;
         btn.innerHTML = '<span class="mobile-mode-btn-emoji">' + mode.emoji + '</span><span>' + mode.label + '</span>';
         btn.addEventListener("click", (e) => {
           e.stopPropagation(); // Don't trigger drag
@@ -1249,6 +1344,20 @@ iframe {
         });
         bar.appendChild(btn);
       });
+      // Auto-scroll to active mode
+      scrollToActiveMode();
+    }
+
+    function scrollToActiveMode() {
+      const bar = $("mobileModeBar");
+      const activeBtn = bar.querySelector(".mobile-mode-btn.active");
+      if (activeBtn) {
+        // Calculate scroll position to center the active button
+        const barRect = bar.getBoundingClientRect();
+        const btnRect = activeBtn.getBoundingClientRect();
+        const scrollLeft = activeBtn.offsetLeft - (barRect.width / 2) + (btnRect.width / 2);
+        bar.scrollTo({ left: Math.max(0, scrollLeft), behavior: "smooth" });
+      }
     }
 
     // ================================================================
@@ -1362,13 +1471,14 @@ iframe {
         try { const u = new URL(iframe.src); path = u.pathname + u.search; } catch(e) {}
       }
 
-      // Fallback to URL display text
+      // Fallback to stored URL
       if (!path) {
-        path = urlDisplay.textContent || "";
+        path = currentIframeUrl || "";
       }
 
       if (path && path !== lastEmittedUrl) {
         lastEmittedUrl = path;
+        currentIframeUrl = path;
         // Extract IDs from URL
         const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
         let rootId = null;
@@ -1387,6 +1497,7 @@ iframe {
     // Status
     function updateStatus(status) {
       statusDot.className = "status-dot " + status;
+      mobileStatusIndicator.className = "mobile-status-indicator " + status;
       statusText.textContent = status === "connected" ? "Connected" : status === "connecting" ? "Connecting..." : "Disconnected";
       isConnected = status === "connected";
     }
@@ -1688,6 +1799,8 @@ iframe {
       setTimeout(() => {
         mobileSheetInput.focus();
         updateSendButtons();
+        // Scroll to active mode after sheet opens
+        scrollToActiveMode();
       }, 420);
     }
 
@@ -1889,27 +2002,72 @@ iframe {
     $("clearChatBtn").addEventListener("click", handleClearChat);
     $("mobileClearChatBtn").addEventListener("click", handleClearChat);
 
-    // Home button
-    $("homeBtn").addEventListener("click", () => {
+    // Get current iframe URL for opening in new tab
+    function getCurrentIframeUrl() {
+      let url = "";
+      try {
+        url = iframe.contentWindow?.location?.href;
+      } catch (e) {}
+      if (!url) {
+        try { url = iframe.src; } catch(e) {}
+      }
+      if (!url) {
+        url = window.location.origin + currentIframeUrl;
+      }
+      // Remove inApp param for clean URL
+      try {
+        const u = new URL(url, window.location.origin);
+        u.searchParams.delete('inApp');
+        return u.href;
+      } catch(e) {
+        return url.replace(/[&?]inApp=1/g, '');
+      }
+    }
+
+    // Home buttons
+    function goHome() {
       loadingOverlay.classList.add("visible");
       iframe.src = CONFIG.homeUrl;
-      urlDisplay.textContent = CONFIG.homeUrl;
+      currentIframeUrl = CONFIG.homeUrl;
+    }
+
+    $("homeBtn").addEventListener("click", goHome);
+    $("mobileHomeBtn").addEventListener("click", () => {
+      closeMobileSheet();
+      goHome();
     });
+
+    // Refresh buttons
+    function doRefresh() {
+      loadingOverlay.classList.add("visible");
+      iframe.contentWindow?.location.reload();
+    }
+
+    $("refreshBtn").addEventListener("click", doRefresh);
+    $("mobileRefreshBtn").addEventListener("click", () => {
+      closeMobileSheet();
+      doRefresh();
+    });
+
+    // Open in new tab buttons
+    function openInNewTab() {
+      const url = getCurrentIframeUrl();
+      window.open(url, '_blank');
+    }
+
+    $("openTabBtn").addEventListener("click", openInNewTab);
 
     // Iframe
     iframe.addEventListener("load", () => {
       loadingOverlay.classList.remove("visible");
       try {
-        const url = new URL(iframe.contentWindow?.location.href);
-        urlDisplay.textContent = url.pathname + url.search;
+        const loc = iframe.contentWindow?.location;
+        if (loc) {
+          currentIframeUrl = loc.pathname + loc.search;
+        }
       } catch (e) {}
       // NEW: Detect URL change on iframe load
       detectIframeUrlChange();
-    });
-
-    $("refreshBtn").addEventListener("click", () => {
-      loadingOverlay.classList.add("visible");
-      iframe.contentWindow?.location.reload();
     });
 
     // Socket events
@@ -1930,9 +2088,10 @@ iframe {
       navigate: (url) => { 
         loadingOverlay.classList.add("visible"); 
         const navUrl = url.includes('inApp=') ? url : url + (url.includes('?') ? '&' : '?') + 'inApp=1';
-        iframe.src = navUrl; 
+        iframe.src = navUrl;
+        currentIframeUrl = url;
       },
-      goHome: () => { loadingOverlay.classList.add("visible"); iframe.src = CONFIG.homeUrl; },
+      goHome: () => { loadingOverlay.classList.add("visible"); iframe.src = CONFIG.homeUrl; currentIframeUrl = CONFIG.homeUrl; },
       isConnected: () => isConnected,
       isRegistered: () => isRegistered,
       notifyNodeUpdated: (nodeId, changes) => { if (isRegistered) socket.emit("nodeUpdated", { nodeId, changes }); },
