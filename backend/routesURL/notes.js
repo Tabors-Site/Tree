@@ -8,6 +8,7 @@ import Book from "../db/models/book.js";
 import {
   createNote as coreCreateNote,
   getNotes as coreGetNotes,
+  editNote,
   deleteNoteAndFile as coreDeleteNoteAndFile,
   getBook as coreGetBook,
   generateBook as coreGenerateBook,
@@ -169,6 +170,68 @@ function normalizeStatusFilters(query) {
   // 👇 THIS IS KEY
   return hasAny ? filters : null;
 }
+router.get("/:nodeId/:version/notes/editor", async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const queryString = filterQuery(req);
+    const qs = queryString ? `?${queryString}` : "";
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : "?html";
+
+    return res.send(
+      renderEditorPage({
+        nodeId,
+        version,
+        noteId: null,
+        noteContent: "",
+        qs,
+        tokenQS,
+        originalLength: 0,
+      }),
+    );
+  } catch (err) {
+    console.error("Editor page error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── EDIT EXISTING NOTE EDITOR (GET) ───────────────────────────────────
+router.get("/:nodeId/:version/notes/:noteId/editor", async (req, res) => {
+  try {
+    const { nodeId, version, noteId } = req.params;
+    const queryString = filterQuery(req);
+    const qs = queryString ? `?${queryString}` : "";
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : "?html";
+
+    const Note = (await import("../db/models/notes.js")).default;
+    const note = await Note.findById(noteId).lean();
+
+    if (!note) return res.status(404).send("Note not found");
+
+    // File notes can't be edited — redirect to view
+    if (note.contentType !== "text") {
+      return res.redirect(
+        `/api/${nodeId}/${version}/notes/${noteId}${tokenQS}`,
+      );
+    }
+
+    return res.send(
+      renderEditorPage({
+        nodeId,
+        version,
+        noteId,
+        noteContent: note.content || "",
+        qs,
+        tokenQS,
+        originalLength: (note.content || "").length,
+      }),
+    );
+  } catch (err) {
+    console.error("Editor page error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
   try {
@@ -2238,6 +2301,110 @@ body::after {
   color: white;
 }
 
+/* Character counter */
+.char-counter {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.char-counter.warning {
+  color: rgba(255, 193, 7, 0.9);
+}
+
+.char-counter.danger {
+  color: rgba(239, 68, 68, 0.9);
+  font-weight: 600;
+}
+
+.char-counter.disabled {
+  opacity: 0.4;
+}
+
+/* Energy display (shared between text and file) */
+.energy-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  padding: 2px 8px;
+  background: rgba(255, 215, 79, 0.2);
+  border: 1px solid rgba(255, 215, 79, 0.3);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 215, 79, 1);
+  transition: all 0.2s;
+}
+
+.energy-display:empty {
+  display: none;
+}
+
+.energy-display.file-energy {
+  background: rgba(255, 220, 100, 0.9);
+  border-color: rgba(255, 200, 50, 1);
+  color: #1a1a1a;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  box-shadow: 0 2px 8px rgba(255, 200, 50, 0.4);
+}
+
+/* File selected indicator */
+.file-selected-badge {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+}
+
+.file-selected-badge.visible {
+  display: inline-flex;
+}
+
+.file-selected-badge .file-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-selected-badge .clear-file {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  color: white;
+  transition: all 0.2s;
+}
+
+.file-selected-badge .clear-file:hover {
+  background: rgba(239, 68, 68, 0.4);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .delete-button:hover {
   opacity: 1;
   background: rgba(239, 68, 68, 0.3);
@@ -2298,6 +2465,17 @@ textarea:focus {
   transform: translateY(-2px);
 }
 
+textarea:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.08);
+  transform: none;
+}
+
+textarea:disabled::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
 .input-controls {
   display: flex;
   justify-content: space-between;
@@ -2310,7 +2488,7 @@ textarea:focus {
 .input-options {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -2337,6 +2515,11 @@ input[type="file"]::file-selector-button {
 input[type="file"]::file-selector-button:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
+}
+
+/* Hide file input when file is selected, show badge instead */
+input[type="file"].hidden-input {
+  display: none;
 }
 
 /* Glass Send Button */
@@ -2479,6 +2662,55 @@ input[type="file"]::file-selector-button:hover {
         margin: 0;
         padding: 0;
       }
+        .editor-open-btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  color: white; font-size: 18px;
+  cursor: pointer; transition: all 0.3s;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.editor-open-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+  @media (max-width: 768px) {
+  .input-controls {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+  }
+
+  .input-options {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .input-options input[type="file"] {
+    max-width: 140px;
+    font-size: 0;
+  }
+
+  .input-options input[type="file"]::file-selector-button {
+    margin-right: 0;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .send-button {
+    width: auto;
+    padding: 10px 20px;
+    flex-shrink: 0;
+  }
+}
   </style>
 </head>
 <body>
@@ -2575,48 +2807,169 @@ input[type="file"]::file-selector-button:hover {
       }&html"
       enctype="multipart/form-data"
       class="input-form"
+      id="noteForm"
     >
       <textarea
         name="content"
         rows="1"
         placeholder="Write a note..."
         id="noteTextarea"
+        maxlength="5000"
       ></textarea>
+      <div class="char-counter" id="charCounter">
+        <span id="charCount">0</span> / 5000
+        <span class="energy-display" id="energyDisplay"></span>
+      </div>
 
       <div class="input-controls">
         <div class="input-options">
-         
-          <input type="file" name="file" />
+          <input type="file" name="file" id="fileInput" />
+          <div class="file-selected-badge" id="fileSelectedBadge">
+            <span>📎</span>
+            <span class="file-name" id="fileName"></span>
+            <button type="button" class="clear-file" id="clearFileBtn" title="Remove file">✕</button>
+          </div>
+          <button type="button" class="editor-open-btn" id="openEditorBtn" title="Open in Editor">✏️</button>
         </div>
-<button type="submit" class="send-button" id="sendBtn">
-  <span class="send-label">Send</span>
-  <span class="send-progress"></span>
-</button>      </div>
+        <button type="submit" class="send-button" id="sendBtn">
+          <span class="send-label">Send</span>
+          <span class="send-progress"></span>
+        </button>
+      </div>
     </form>
   </div>
-
 
   <script>
     // Auto-scroll to bottom on load
     const container = document.querySelector('.notes-container');
     container.scrollTop = container.scrollHeight;
 
-    // Auto-resize textarea with smooth overflow handling
+    // Elements
+    const form = document.getElementById('noteForm');
     const textarea = document.getElementById('noteTextarea');
+    const charCounter = document.getElementById('charCounter');
+    const charCount = document.getElementById('charCount');
+    const energyDisplay = document.getElementById('energyDisplay');
+    const fileInput = document.getElementById('fileInput');
+    const fileSelectedBadge = document.getElementById('fileSelectedBadge');
+    const fileName = document.getElementById('fileName');
+    const clearFileBtn = document.getElementById('clearFileBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    const progressBar = sendBtn.querySelector('.send-progress');
+
+    const MAX_CHARS = 5000;
+    let hasFile = false;
+
+    // Auto-resize textarea
     textarea.addEventListener('input', function() {
       this.style.height = 'auto';
       const newHeight = Math.min(this.scrollHeight, 120);
       this.style.height = newHeight + 'px';
+      this.style.overflowY = this.scrollHeight > 120 ? 'auto' : 'hidden';
+      updateCharCounter();
+    });
+
+    // Character counter with energy (1 energy per 1000 chars)
+    function updateCharCounter() {
+      const len = textarea.value.length;
+      charCount.textContent = len;
       
-      // Show scrollbar only when content exceeds max height
-      if (this.scrollHeight > 120) {
-        this.style.overflowY = 'auto';
-      } else {
-        this.style.overflowY = 'hidden';
+      // Styling based on remaining
+      const remaining = MAX_CHARS - len;
+      charCounter.classList.remove('warning', 'danger', 'disabled');
+      
+      if (hasFile) {
+        charCounter.classList.add('disabled');
+      } else if (remaining <= 100) {
+        charCounter.classList.add('danger');
+      } else if (remaining <= 500) {
+        charCounter.classList.add('warning');
+      }
+      
+      // Energy cost: 1 per 1000 chars (minimum 1 if any text)
+      if (len > 0 && !hasFile) {
+        const cost = Math.max(1, Math.ceil(len / 1000));
+        energyDisplay.textContent = '⚡' + cost;
+        energyDisplay.classList.remove('file-energy');
+      } else if (!hasFile) {
+        energyDisplay.textContent = '';
+      }
+    }
+
+    // File energy calculation
+    const FILE_MIN_COST = 5;
+    const FILE_BASE_RATE = 1.5;
+    const FILE_MID_RATE = 3;
+    const SOFT_LIMIT_MB = 100;
+    const HARD_LIMIT_MB = 1024;
+
+    function calculateFileEnergy(sizeMB) {
+      if (sizeMB <= SOFT_LIMIT_MB) {
+        return Math.max(FILE_MIN_COST, Math.ceil(sizeMB * FILE_BASE_RATE));
+      }
+      if (sizeMB <= HARD_LIMIT_MB) {
+        const base = SOFT_LIMIT_MB * FILE_BASE_RATE;
+        const extra = (sizeMB - SOFT_LIMIT_MB) * FILE_MID_RATE;
+        return Math.ceil(base + extra);
+      }
+      const base = SOFT_LIMIT_MB * FILE_BASE_RATE + 
+                   (HARD_LIMIT_MB - SOFT_LIMIT_MB) * FILE_MID_RATE;
+      const overGB = sizeMB - HARD_LIMIT_MB;
+      return Math.ceil(base + Math.pow(overGB / 50, 2) * 50);
+    }
+
+    // File selection - blocks text input
+    fileInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) {
+        const file = this.files[0];
+        hasFile = true;
+        
+        // Disable textarea
+        textarea.disabled = true;
+        textarea.value = '';
+        textarea.placeholder = 'File selected - text disabled';
+        
+        // Show file badge, hide file input
+        fileInput.classList.add('hidden-input');
+        fileSelectedBadge.classList.add('visible');
+        
+        // Truncate filename for display
+        let displayName = file.name;
+        if (displayName.length > 20) {
+          displayName = displayName.substring(0, 17) + '...';
+        }
+        fileName.textContent = displayName;
+        fileSelectedBadge.title = file.name;
+        
+        // Calculate and show energy (+1 for the note itself)
+        const sizeMB = file.size / (1024 * 1024);
+        const fileCost = calculateFileEnergy(sizeMB);
+        const totalCost = fileCost + 1;
+        energyDisplay.textContent = '~⚡' + totalCost;
+        energyDisplay.classList.add('file-energy');
+        
+        // Update char counter state
+        updateCharCounter();
       }
     });
 
-    
+    // Clear file selection
+    clearFileBtn.addEventListener('click', function() {
+      hasFile = false;
+      fileInput.value = '';
+      fileInput.classList.remove('hidden-input');
+      fileSelectedBadge.classList.remove('visible');
+      
+      // Re-enable textarea
+      textarea.disabled = false;
+      textarea.placeholder = 'Write a note...';
+      
+      // Clear energy display
+      energyDisplay.textContent = '';
+      energyDisplay.classList.remove('file-energy');
+      
+      updateCharCounter();
+    });
 
     // Delete note functionality
     document.addEventListener('click', async (e) => {
@@ -2634,14 +2987,13 @@ input[type="file"]::file-selector-button:hover {
 
       try {
         const res = await fetch(
-          \`/api/\${nodeId}/\${version}/notes/\${noteId}\${qs}\`,
+          '/api/' + nodeId + '/' + version + '/notes/' + noteId + qs,
           { method: 'DELETE' }
         );
 
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Delete failed');
 
-        // Fade out animation
         noteItem.style.opacity = '0';
         noteItem.style.transform = 'translateY(-10px)';
         setTimeout(() => noteItem.remove(), 300);
@@ -2649,56 +3001,74 @@ input[type="file"]::file-selector-button:hover {
         alert('Failed to delete: ' + (err.message || 'Unknown error'));
       }
     });
+
+    // Form submission with progress
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      sendBtn.classList.add('loading');
+      sendBtn.disabled = true;
+
+      const formData = new FormData(form);
+      const xhr = new XMLHttpRequest();
+
+      xhr.open('POST', form.action, true);
+
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        const percent = Math.round((e.loaded / e.total) * 100);
+        progressBar.style.width = percent + '%';
+      };
+
+      xhr.onload = () => {
+        document.location.reload();
+      };
+
+      xhr.onerror = () => {
+        alert('Send failed');
+        sendBtn.classList.remove('loading');
+        sendBtn.disabled = false;
+        progressBar.style.width = '0%';
+      };
+
+      xhr.send(formData);
+    });
+
+    // Enter to submit
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    // Editor button
+    document.getElementById("openEditorBtn").addEventListener("click", function() {
+      var token = new URLSearchParams(window.location.search).get("token") || "";
+      var qs = token ? "?token=" + encodeURIComponent(token) + "&html" : "?html";
+      var content = textarea.value.trim();
+      var editorUrl = "/api/${nodeId}/${version}/notes/editor" + qs;
+
+      if (content) {
+        sessionStorage.setItem("tree-editor-draft", content);
+      }
+
+      window.location.href = editorUrl;
+    });
+
+    // Form reset handler
+    form.addEventListener('reset', () => {
+      hasFile = false;
+      fileInput.classList.remove('hidden-input');
+      fileSelectedBadge.classList.remove('visible');
+      textarea.disabled = false;
+      textarea.placeholder = 'Write a note...';
+      energyDisplay.textContent = '';
+      energyDisplay.classList.remove('file-energy');
+      charCount.textContent = '0';
+      charCounter.classList.remove('warning', 'danger', 'disabled');
+    });
   </script>
-
-  <script>
-  const form = document.querySelector('.input-form');
-  const sendBtn = document.getElementById('sendBtn');
-  const progressBar = sendBtn.querySelector('.send-progress');
-
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-
-    // Lock UI
-    sendBtn.classList.add('loading');
-    sendBtn.disabled = true;
-
-    const formData = new FormData(form);
-    const xhr = new XMLHttpRequest();
-
-    xhr.open('POST', form.action, true);
-
-    // Upload progress (files + text)
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return;
-      const percent = Math.round((e.loaded / e.total) * 100);
-      progressBar.style.width = percent + '%';
-    };
-
-    xhr.onload = () => {
-      // Let server redirect / reload naturally
-      document.location.reload();
-    };
-
-    xhr.onerror = () => {
-      alert('Send failed');
-      sendBtn.classList.remove('loading');
-      sendBtn.disabled = false;
-      progressBar.style.width = '0%';
-    };
-
-    xhr.send(formData);
-  });
-
-textarea.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    form.requestSubmit();
-  }
-});
-
-
-</script>
 </body>
 </html>
 `);
@@ -2751,6 +3121,46 @@ router.post(
     }
   },
 );
+
+// ── UPDATE EXISTING NOTE (editor PUT) ─────────────────────────────────
+router.put(
+  "/:nodeId/:version/notes/:noteId",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { nodeId, version, noteId } = req.params;
+      const { content } = req.body;
+      const userId = req.userId || req.body.userId;
+
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+      const result = await editNote({
+        noteId,
+        content: content ?? "",
+        userId,
+        version,
+        isReflection: false,
+        wasAi: false,
+      });
+
+      return res.json({
+        _id: result.Note._id,
+        message: result.message,
+        energyUsed: result.energyUsed,
+      });
+    } catch (err) {
+      const status =
+        err.message === "Unauthorized"
+          ? 403
+          : err.message === "Note not found"
+            ? 404
+            : err.name === "EnergyError"
+              ? 403
+              : 400;
+      return res.status(status).json({ error: err.message });
+    }
+  },
+);
 const allowedParams = ["token", "html", "error"];
 
 function filterQuery(req) {
@@ -2787,6 +3197,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
       : "https://tree.tabors.site";
     const backText = hasToken ? "← Back to Notes" : "← Back to Home";
     const nodeUrl = `/api/${nodeId}${qs}`;
+    const editorUrl = `/api/${nodeId}/${version}/notes/${noteId}/editor${qs}`;
 
     const userLink = note.userId
       ? `<a href="/api/user/${note.userId._id}${qs}">
@@ -3169,6 +3580,17 @@ pre.flash::before {
         max-width: 700px;
       }
     }
+      .editor-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
   </style>
 </head>
 <body>
@@ -3186,8 +3608,17 @@ pre.flash::before {
       </div>
 
       <div class="copy-bar">
-        <button id="copyNoteBtn" class="copy-btn" title="Copy note">📋</button>
-      </div>
+  <a
+    href="${editorUrl}"
+    class="copy-btn editor-btn"
+    title="Open editor"
+  >
+    ✏️
+  </a>
+
+  <button id="copyNoteBtn" class="copy-btn" title="Copy note">📋</button>
+</div>
+
 
       <pre id="noteContent">${note.content}</pre>
     </div>
@@ -3709,5 +4140,871 @@ router.delete(
     }
   },
 );
+
+// ─────────────────────────────────────────────────────────────────────────
+// NOTE EDITOR ROUTES
+// /:nodeId/:version/notes/editor        → new note
+// /:nodeId/:version/notes/:noteId/editor → edit existing note
+// ─────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────
+// FILE 4: renderEditorPage() — paste near top of your router file
+// ─────────────────────────────────────────────────────────────────────────
+
+function renderEditorPage({
+  nodeId,
+  version,
+  noteId,
+  noteContent,
+  qs,
+  tokenQS,
+  originalLength,
+}) {
+  const isNew = !noteId;
+  const safeContent = (noteContent || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#667eea">
+<title>${isNew ? "New Note" : "Edit Note"} · Editor</title>
+<style>
+:root {
+  --glass-rgb: 115, 111, 230;
+  --sidebar-w: 280px;
+  --toolbar-h: 52px;
+  --bottombar-h: 44px;
+  --editor-font-size: 16px;
+  --editor-line-height: 1.7;
+  --editor-max-width: 720px;
+  --editor-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { background: #736fe6; height: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--editor-font);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white; display: flex; flex-direction: column;
+  height: 100vh; height: 100dvh;
+  position: relative;
+  margin: 0; padding: 0;
+  overflow: hidden;
+}
+
+body::before {
+  content: ''; position: fixed; width: 600px; height: 600px;
+  border-radius: 50%; background: white; opacity: 0.05;
+  top: -300px; right: -200px; pointer-events: none;
+  animation: float 25s infinite ease-in-out;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(3deg); }
+}
+
+/* ── TOOLBAR ─────────────────── */
+.toolbar {
+  height: var(--toolbar-h); display: flex; align-items: center; gap: 6px;
+  padding: 0 12px;
+  background: rgba(var(--glass-rgb), 0.35);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  flex-shrink: 0; z-index: 20;
+  overflow-x: auto; overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+.toolbar::-webkit-scrollbar { display: none; }
+
+.tb-btn {
+  padding: 6px 12px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.8);
+  font-size: 13px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: all 0.2s;
+  white-space: nowrap; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.tb-btn:hover { background: rgba(255,255,255,0.18); color: white; }
+.tb-btn.active { background: rgba(72,187,178,0.35); border-color: rgba(72,187,178,0.5); color: white; }
+
+.tb-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.12); flex-shrink: 0; margin: 0 4px; }
+.tb-range-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.tb-range-label { font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+
+.tb-range {
+  -webkit-appearance: none; appearance: none;
+  width: 80px; height: 4px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px; outline: none; cursor: pointer;
+}
+.tb-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer; }
+.tb-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.2); border: none; cursor: pointer; }
+
+.tb-spacer { flex: 1; min-width: 8px; }
+
+.tb-back {
+  padding: 6px 14px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.8);
+  font-size: 13px; font-weight: 600; font-family: inherit;
+  cursor: pointer; text-decoration: none; transition: all 0.2s;
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+}
+.tb-back:hover { background: rgba(255,255,255,0.18); color: white; }
+
+/* ── MAIN ────────────────────── */
+.main { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+/* ── SIDEBAR ─────────────────── */
+.sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  display: flex; flex-direction: column;
+  background: rgba(var(--glass-rgb), 0.22);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid rgba(255,255,255,0.12);
+  overflow: hidden;
+  transition: margin-left 0.3s cubic-bezier(0.4,0,0.2,1);
+  z-index: 15;
+}
+.sidebar.hidden { margin-left: calc(-1 * var(--sidebar-w)); }
+
+.sidebar-header {
+  padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.sidebar-title { font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.9); }
+
+.sidebar-close {
+  width: 28px; height: 28px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.6); font-size: 14px;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.sidebar-close:hover { background: rgba(255,255,255,0.2); color: white; }
+
+.sidebar-list { flex: 1; overflow-y: auto; padding: 8px; }
+.sidebar-list::-webkit-scrollbar { width: 4px; }
+.sidebar-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+.note-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  cursor: pointer; transition: all 0.2s;
+  border: 1px solid transparent; margin-bottom: 2px;
+}
+.note-item:hover { background: rgba(255,255,255,0.1); }
+.note-item.active { background: rgba(72,187,178,0.2); border-color: rgba(72,187,178,0.35); }
+
+.note-item-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+}
+.note-item-info { min-width: 0; flex: 1; }
+.note-item-preview { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-item-meta { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+
+.sidebar-new {
+  margin: 8px; padding: 10px; border-radius: 10px;
+  border: 2px dashed rgba(255,255,255,0.15); background: transparent;
+  color: rgba(255,255,255,0.5); font-size: 13px; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: all 0.2s;
+  text-align: center; flex-shrink: 0;
+}
+.sidebar-new:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.25); color: rgba(255,255,255,0.8); }
+
+/* ── EDITOR ──────────────────── */
+.editor-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.editor-scroll {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 40px 24px; display: flex; justify-content: center;
+}
+.editor-scroll::-webkit-scrollbar { width: 6px; }
+.editor-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 6px; }
+
+.editor-container { width: 100%; max-width: var(--editor-max-width); }
+
+#editor {
+  width: 100%;
+  min-height: calc(100vh - var(--toolbar-h) - var(--bottombar-h) - 120px);
+  background: transparent; border: none; outline: none; resize: none;
+  color: rgba(255,255,255,0.95);
+  font-family: var(--editor-font);
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+  caret-color: rgba(72,187,178,0.9);
+  padding: 0; -webkit-font-smoothing: antialiased;
+}
+#editor::placeholder { color: rgba(255,255,255,0.25); font-style: italic; }
+#editor.mono { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; }
+
+/* ── BOTTOM BAR ──────────────── */
+.bottombar {
+  height: var(--bottombar-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(var(--glass-rgb), 0.3);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-top: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0; z-index: 20; gap: 12px;
+}
+.bb-left, .bb-right { display: flex; align-items: center; gap: 12px; }
+.bb-stat { font-size: 12px; color: rgba(255,255,255,0.4); font-weight: 500; white-space: nowrap; }
+
+.bb-energy {
+  color: rgba(100,220,255,0.7); font-weight: 600;
+  padding: 2px 8px; background: rgba(100,220,255,0.1);
+  border-radius: 980px; border: 1px solid rgba(100,220,255,0.15);
+}
+
+.bb-status { font-size: 12px; font-weight: 600; white-space: nowrap; transition: color 0.3s; }
+.bb-status.saved { color: rgba(72,187,120,0.8); }
+.bb-status.unsaved { color: rgba(250,204,21,0.8); }
+.bb-status.saving { color: rgba(100,220,255,0.8); }
+.bb-status.error { color: rgba(239,68,68,0.8); }
+
+.save-btn {
+  padding: 6px 20px; border-radius: 980px;
+  border: 1px solid rgba(72,187,178,0.45); background: rgba(72,187,178,0.3);
+  color: white; font-size: 13px; font-weight: 700;
+  font-family: inherit; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.save-btn:hover { background: rgba(72,187,178,0.45); transform: translateY(-1px); }
+.save-btn:active { transform: translateY(0); }
+.save-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.delete-btn {
+  padding: 6px 16px; border-radius: 980px;
+  border: 1px solid rgba(239,68,68,0.4); background: rgba(239,68,68,0.2);
+  color: rgba(255,255,255,0.8); font-size: 13px; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: all 0.2s;
+  white-space: nowrap; display: none;
+}
+.delete-btn:hover { background: rgba(239,68,68,0.35); color: white; }
+.delete-btn.show { display: inline-flex; }
+
+/* ── DELETE MODAL ────────────── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.show { display: flex; }
+
+.modal-box {
+  background: rgba(var(--glass-rgb), 0.5);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 20px; padding: 32px;
+  border: 1px solid rgba(255,255,255,0.28);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  max-width: 420px; width: 100%; text-align: center;
+}
+.modal-icon { font-size: 48px; margin-bottom: 16px; }
+.modal-title { font-size: 20px; font-weight: 700; color: white; margin-bottom: 8px; }
+.modal-text { font-size: 14px; color: rgba(255,255,255,0.7); line-height: 1.6; margin-bottom: 24px; }
+.modal-actions { display: flex; gap: 12px; justify-content: center; }
+
+.modal-btn {
+  padding: 10px 24px; border-radius: 980px;
+  font-size: 14px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: all 0.2s; border: 1px solid;
+}
+.modal-btn-cancel { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.8); }
+.modal-btn-cancel:hover { background: rgba(255,255,255,0.22); color: white; }
+.modal-btn-delete { background: rgba(239,68,68,0.3); border-color: rgba(239,68,68,0.5); color: white; }
+.modal-btn-delete:hover { background: rgba(239,68,68,0.5); }
+
+/* ── ZEN ─────────────────────── */
+body.zen .toolbar { display: none; }
+body.zen .sidebar { display: none; }
+body.zen .bottombar { opacity: 0; transition: opacity 0.3s; }
+body.zen:hover .bottombar { opacity: 1; }
+body.zen .editor-scroll { padding: 60px 24px; }
+
+/* ── MOBILE ──────────────────── */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 280px; }
+
+  .sidebar {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    margin-left: 0;
+    background: rgba(var(--glass-rgb), 0.95);
+    backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    z-index: 50;
+  }
+
+  .sidebar.hidden { margin-left: 0; transform: translateX(-100%); }
+  .sidebar.show { transform: translateX(0); }
+  .toolbar { gap: 4px; padding: 0 8px; }
+  .tb-range-wrap { display: flex; }
+  .tb-range-label { display: none; }
+  .tb-range { width: 60px; }
+  .tb-sep { display: none; }
+  .editor-scroll { padding: 24px 16px; }
+  body.zen .bottombar { opacity: 1; }
+}
+
+@media (max-width: 480px) {
+  .bb-stat:not(.bb-energy) { display: none; }
+  .save-btn { padding: 6px 16px; }
+  .tb-range { width: 50px; }
+}
+  @media (max-width: 768px) {
+  .toolbar { gap: 4px; padding: 0 8px; }
+  .tb-sep { display: none; }
+  .tb-range-label { display: none; }
+  .tb-range { width: 60px; }
+  .tb-lineheight { display: none; }
+}
+
+@media (max-width: 480px) {
+  .tb-range { width: 46px; }
+  .tb-maxwidth { display: none; }
+}
+</style>  
+</head>
+<body>
+
+<!-- ── TOOLBAR ──────────────────────────────── -->
+<div class="toolbar">
+  <a href="/api/${nodeId}/${version}/notes${qs}" class="tb-back">\u2190 Notes</a>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="sidebarToggle" title="Toggle sidebar">\u2630</button>
+  <button class="tb-btn" id="zenToggle" title="Zen mode">\ud83e\uddd8</button>
+  <button class="tb-btn" id="monoToggle" title="Monospace font">{ }</button>
+  <div class="tb-sep"></div>
+  <div class="tb-range-wrap tb-fontsize">
+  <span class="tb-range-label">Size</span>
+  <input type="range" class="tb-range" id="fontSizeRange" min="13" max="28" value="16">
+</div>
+<div class="tb-range-wrap tb-lineheight">
+  <span class="tb-range-label">Height</span>
+  <input type="range" class="tb-range" id="lineHeightRange" min="12" max="30" value="17" step="1">
+</div>
+<div class="tb-range-wrap tb-maxwidth">
+  <span class="tb-range-label">Width</span>
+  <input type="range" class="tb-range" id="maxWidthRange" min="400" max="1400" value="720" step="20">
+</div>
+  <div class="tb-spacer"></div>
+</div>
+
+<!-- ── MAIN ─────────────────────────────────── -->
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar hidden" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Notes</span>
+      <button class="sidebar-close" id="sidebarCloseBtn">\u2715</button>
+    </div>
+    <div class="sidebar-list" id="notesList">
+      <div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">Loading\u2026</div>
+    </div>
+    <button class="sidebar-new" id="newNoteBtn">+ New Note</button>
+  </div>
+
+  <!-- EDITOR -->
+  <div class="editor-wrap">
+    <div class="editor-scroll">
+      <div class="editor-container">
+        <textarea id="editor" placeholder="Start writing\u2026">${safeContent}</textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── BOTTOM BAR ──────────────────────────── -->
+<div class="bottombar">
+  <div class="bb-left">
+    <span class="bb-stat" id="charCount">0 chars</span>
+    <span class="bb-stat" id="wordCount">0 words</span>
+    <span class="bb-stat" id="lineCount">0 lines</span>
+    <span class="bb-stat bb-energy" id="energyCost">\u26A10</span>
+  </div>
+  <div class="bb-right">
+    <span class="bb-status" id="saveStatus">${isNew ? "New note" : "Loaded"}</span>
+    <button class="delete-btn" id="deleteBtn">Delete</button>
+    <button class="save-btn" id="saveBtn">Save</button>
+  </div>
+</div>
+
+<!-- ── DELETE MODAL ─────────────────────────── -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal-box">
+    <div class="modal-icon">\ud83d\uddd1\ufe0f</div>
+    <div class="modal-title">Delete this note?</div>
+    <div class="modal-text">
+      It looks like you cleared everything out.<br>
+      Would you like to delete this note entirely?<br>
+      This cannot be undone.
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-cancel" id="deleteCancelBtn">Cancel</button>
+      <button class="modal-btn modal-btn-delete" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════ */
+var nodeId      = "${nodeId}";
+var version     = "${version}";
+var currentNoteId = ${noteId ? '"' + noteId + '"' : "null"};
+var qs          = "${qs}";
+var tokenQS     = "${tokenQS}";
+var isNew       = ${isNew};
+var originalLen = ${originalLength || 0};
+var lastSaved   = ${isNew ? '""' : 'document.getElementById("editor").value'};
+var saving      = false;
+
+/* ═══════════════════════════════════════════════════
+   DOM REFS
+   ═══════════════════════════════════════════════════ */
+var editor       = document.getElementById("editor");
+var saveBtn      = document.getElementById("saveBtn");
+var deleteBtn    = document.getElementById("deleteBtn");
+var saveStatus   = document.getElementById("saveStatus");
+var charCountEl  = document.getElementById("charCount");
+var wordCountEl  = document.getElementById("wordCount");
+var lineCountEl  = document.getElementById("lineCount");
+var energyCostEl = document.getElementById("energyCost");
+var sidebar      = document.getElementById("sidebar");
+var notesList    = document.getElementById("notesList");
+
+/* ═══════════════════════════════════════════════════
+   SETTINGS (persisted in localStorage)
+   ═══════════════════════════════════════════════════ */
+function loadSettings() {
+  try {
+    var s = JSON.parse(localStorage.getItem("tree-editor-settings") || "{}");
+    if (s.fontSize)   document.getElementById("fontSizeRange").value   = s.fontSize;
+    if (s.lineHeight) document.getElementById("lineHeightRange").value = s.lineHeight;
+    if (s.maxWidth)   document.getElementById("maxWidthRange").value   = s.maxWidth;
+    if (s.mono) {
+      editor.classList.add("mono");
+      document.getElementById("monoToggle").classList.add("active");
+    }
+    applySettings();
+  } catch (e) {}
+}
+
+function persistSettings() {
+  try {
+    localStorage.setItem("tree-editor-settings", JSON.stringify({
+      fontSize:   document.getElementById("fontSizeRange").value,
+      lineHeight: document.getElementById("lineHeightRange").value,
+      maxWidth:   document.getElementById("maxWidthRange").value,
+      mono:       editor.classList.contains("mono")
+    }));
+  } catch (e) {}
+}
+
+function applySettings() {
+  document.documentElement.style.setProperty("--editor-font-size",  document.getElementById("fontSizeRange").value + "px");
+  document.documentElement.style.setProperty("--editor-line-height", document.getElementById("lineHeightRange").value / 10);
+  document.documentElement.style.setProperty("--editor-max-width",  document.getElementById("maxWidthRange").value + "px");
+}
+
+document.getElementById("fontSizeRange").oninput   = function() { applySettings(); persistSettings(); };
+document.getElementById("lineHeightRange").oninput  = function() { applySettings(); persistSettings(); };
+document.getElementById("maxWidthRange").oninput    = function() { applySettings(); persistSettings(); };
+
+document.getElementById("monoToggle").onclick = function() {
+  editor.classList.toggle("mono");
+  this.classList.toggle("active");
+  persistSettings();
+};
+
+/* ═══════════════════════════════════════════════════
+   ZEN MODE
+   ═══════════════════════════════════════════════════ */
+document.getElementById("zenToggle").onclick = function() {
+  document.body.classList.toggle("zen");
+  this.classList.toggle("active");
+};
+
+/* ═══════════════════════════════════════════════════
+   SIDEBAR TOGGLE
+   ═══════════════════════════════════════════════════ */
+function toggleSidebar() {
+  if (window.innerWidth <= 768) sidebar.classList.toggle("show");
+  else sidebar.classList.toggle("hidden");
+  document.getElementById("sidebarToggle").classList.toggle("active");
+}
+
+document.getElementById("sidebarToggle").onclick = toggleSidebar;
+
+document.getElementById("sidebarCloseBtn").onclick = function() {
+  if (window.innerWidth <= 768) sidebar.classList.remove("show");
+  else sidebar.classList.add("hidden");
+  document.getElementById("sidebarToggle").classList.remove("active");
+};
+
+/* ═══════════════════════════════════════════════════
+   ENERGY ESTIMATE (mirrors server: min 1, max 5)
+   ═══════════════════════════════════════════════════ */
+function estimateEnergy(chars) {
+  return Math.min(5, Math.max(1, 1 + Math.floor(chars / 1000)));
+}
+
+/* ═══════════════════════════════════════════════════
+   STATS + ENERGY + EMPTY DETECTION
+   ═══════════════════════════════════════════════════ */
+function updateStats() {
+  var text    = editor.value;
+  var len     = text.length;
+  var trimmed = text.trim().length;
+
+  charCountEl.textContent = len + " chars";
+  wordCountEl.textContent = (text.trim() ? text.trim().split(/\\s+/).length : 0) + " words";
+  lineCountEl.textContent = text.split("\\n").length + " lines";
+
+  /* Energy preview */
+  var cost;
+  if (isNew && !currentNoteId) {
+    /* new note → full content cost */
+    cost = len > 0 ? estimateEnergy(len) : 0;
+  } else {
+    /* existing note → net-growth cost, minimum 1 */
+    var delta = Math.max(0, len - originalLen);
+    cost = delta > 0 ? estimateEnergy(delta) : 1;
+  }
+  energyCostEl.textContent = "\\u26A1" + cost;
+
+  /* Empty detection: existing note emptied → show Delete, hide Save */
+  if (!isNew && currentNoteId) {
+    if (trimmed === 0) {
+      deleteBtn.classList.add("show");
+      saveBtn.disabled = true;
+    } else {
+      deleteBtn.classList.remove("show");
+      saveBtn.disabled = false;
+    }
+  } else {
+    /* new note: just disable save when empty */
+    saveBtn.disabled = trimmed === 0;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   DIRTY TRACKING
+   ═══════════════════════════════════════════════════ */
+function markDirty() {
+  if (editor.value !== lastSaved) {
+    saveStatus.textContent = "Unsaved changes";
+    saveStatus.className = "bb-status unsaved";
+  }
+}
+
+editor.addEventListener("input", function() {
+  updateStats();
+  markDirty();
+});
+
+/* ═══════════════════════════════════════════════════
+   SAVE → POST (new) or PUT (existing)
+   ═══════════════════════════════════════════════════ */
+async function doSave() {
+  if (saving) return;
+  var content = editor.value;
+
+  /* existing note emptied → open delete modal instead */
+  if (!isNew && currentNoteId && !content.trim()) {
+    openDeleteModal();
+    return;
+  }
+
+  /* new note can't be empty */
+  if (!content.trim()) {
+    saveStatus.textContent = "Cannot save empty note";
+    saveStatus.className = "bb-status error";
+    return;
+  }
+
+  saving = true;
+  saveBtn.disabled = true;
+  saveStatus.textContent = "Saving\\u2026";
+  saveStatus.className = "bb-status saving";
+
+  try {
+    var url, method;
+
+    if (currentNoteId) {
+      /* PUT → editNote */
+      url    = "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId;
+      method = "PUT";
+    } else {
+      /* POST → createNote */
+      url    = "/api/" + nodeId + "/" + version + "/notes";
+      method = "POST";
+    }
+
+    var res = await fetch(url, {
+      method: method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: content, contentType: "text" }),
+      credentials: "include"
+    });
+
+    if (!res.ok) {
+      var errData = await res.json().catch(function() { return {}; });
+      throw new Error(errData.error || "Save failed (" + res.status + ")");
+    }
+
+    var data = await res.json();
+
+    /* first save of new note → becomes edit from now on */
+    if (!currentNoteId) {
+      var newId = data._id || (data.note && data.note._id);
+      if (newId) {
+        currentNoteId = newId;
+        isNew = false;
+        originalLen = content.length;
+        history.replaceState(null, "",
+          "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId + "/editor" + qs
+        );
+      }
+    } else {
+      /* update baseline for future delta calcs */
+      originalLen = content.length;
+    }
+
+    lastSaved = content;
+
+    var msg = "Saved";
+    var eu  = data.energyUsed || 0;
+    if (eu > 0) msg += " \\u00b7 \\u26A1" + eu;
+    saveStatus.textContent = msg;
+    saveStatus.className   = "bb-status saved";
+
+     if (currentNoteId) {
+  // existing note → go to note view
+  window.location.href =
+    "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId + qs;
+} else {
+  // new note → go to notes list
+  window.location.href =
+    "/api/" + nodeId + "/" + version + "/notes" + qs;
+}
+
+
+    loadNotes();
+
+  } catch (err) {
+    saveStatus.textContent = err.message;
+    saveStatus.className   = "bb-status error";
+  } finally {
+    saving = false;
+    saveBtn.disabled = false;
+    updateStats();
+  }
+}
+
+saveBtn.onclick = doSave;
+
+/* ═══════════════════════════════════════════════════
+   DELETE → DELETE route
+   ═══════════════════════════════════════════════════ */
+function openDeleteModal()  { document.getElementById("deleteModal").classList.add("show"); }
+function closeDeleteModal() { document.getElementById("deleteModal").classList.remove("show"); }
+
+document.getElementById("deleteCancelBtn").onclick = closeDeleteModal;
+document.getElementById("deleteModal").onclick = function(e) { if (e.target === this) closeDeleteModal(); };
+
+document.getElementById("deleteConfirmBtn").onclick = async function() {
+  if (!currentNoteId) return;
+  this.disabled   = true;
+  this.textContent = "Deleting\\u2026";
+
+  try {
+    var res = await fetch(
+      "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId,
+      { method: "DELETE", credentials: "include" }
+    );
+
+    if (!res.ok) {
+      var errData = await res.json().catch(function() { return {}; });
+      throw new Error(errData.error || "Delete failed");
+    }
+
+    /* success → redirect to notes list */
+    window.location.href = "/api/" + nodeId + "/" + version + "/notes" + qs;
+
+  } catch (err) {
+    closeDeleteModal();
+    saveStatus.textContent = err.message;
+    saveStatus.className   = "bb-status error";
+    this.disabled   = false;
+    this.textContent = "Delete";
+  }
+};
+
+deleteBtn.onclick = openDeleteModal;
+
+/* ═══════════════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+   ═══════════════════════════════════════════════════ */
+document.addEventListener("keydown", function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); doSave(); }
+  if (e.key === "Escape") {
+    if (document.getElementById("deleteModal").classList.contains("show")) closeDeleteModal();
+    else if (document.body.classList.contains("zen")) {
+      document.body.classList.remove("zen");
+      document.getElementById("zenToggle").classList.remove("active");
+    }
+  }
+});
+
+/* Tab → 2 spaces, Shift+Tab → outdent */
+editor.addEventListener("keydown", function(e) {
+  if (e.key !== "Tab") return;
+  e.preventDefault();
+  var s = this.selectionStart, end = this.selectionEnd, v = this.value;
+
+  if (e.shiftKey) {
+    var ls = v.lastIndexOf("\\n", s - 1) + 1;
+    if (v.substring(ls, ls + 2) === "  ") {
+      this.value = v.substring(0, ls) + v.substring(ls + 2);
+      this.selectionStart = Math.max(s - 2, ls);
+      this.selectionEnd   = Math.max(end - 2, ls);
+    }
+  } else {
+    this.value = v.substring(0, s) + "  " + v.substring(end);
+    this.selectionStart = this.selectionEnd = s + 2;
+  }
+  updateStats(); markDirty();
+});
+
+/* ═══════════════════════════════════════════════════
+   SIDEBAR: LOAD NOTES LIST
+   ═══════════════════════════════════════════════════ */
+async function loadNotes() {
+  try {
+var token = new URLSearchParams(qs.replace("?","")).get("token");
+var fetchUrl = "/api/" + nodeId + "/" + version + "/notes";
+if (token) fetchUrl += "?token=" + encodeURIComponent(token);
+var res = await fetch(fetchUrl, { credentials: "include" });
+    var data  = await res.json();
+    var notes = data.notes || data || [];
+    if (!Array.isArray(notes)) notes = [];
+    if (!notes.length) { notesList.innerHTML = emptyMsg("No notes yet"); return; }
+
+    var html = "";
+    for (var i = 0; i < notes.length; i++) {
+      var n      = notes[i];
+      var nId    = n._id || n.id;
+      var isFile = n.contentType === "file";
+      var icon   = isFile ? "\\ud83d\\udcce" : "\\ud83d\\udcdd";
+      var preview;
+
+      if (isFile) preview = n.content ? n.content.split("/").pop() : "File";
+      else        preview = (n.content || "").slice(0, 60) || "Empty note";
+
+      var active = nId === currentNoteId;
+      var date   = n.createdAt ? new Date(n.createdAt).toLocaleDateString() : "";
+
+      html +=
+        '<div class="note-item' + (active ? " active" : "") +
+        '" data-id="' + nId + '" data-type="' + (n.contentType || "text") + '">' +
+          '<div class="note-item-icon">' + icon + '</div>' +
+          '<div class="note-item-info">' +
+            '<div class="note-item-preview">' + esc(preview) + '</div>' +
+            '<div class="note-item-meta">' + date + '</div>' +
+          '</div>' +
+        '</div>';
+    }
+    notesList.innerHTML = html;
+
+    notesList.querySelectorAll(".note-item").forEach(function(item) {
+      item.onclick = function() {
+        var nId   = item.dataset.id;
+        var nType = item.dataset.type;
+        if (nId === currentNoteId) return;
+        if (editor.value !== lastSaved && !confirm("Unsaved changes. Discard?")) return;
+
+        if (nType === "file")
+          window.location.href = "/api/" + nodeId + "/" + version + "/notes/" + nId + tokenQS;
+        else
+          window.location.href = "/api/" + nodeId + "/" + version + "/notes/" + nId + "/editor" + qs;
+      };
+    });
+
+  } catch (err) {
+    notesList.innerHTML = emptyMsg("Error loading notes");
+  }
+}
+
+function emptyMsg(t) {
+  return '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">' + t + '</div>';
+}
+
+function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+/* ═══════════════════════════════════════════════════
+   NEW NOTE BUTTON
+   ═══════════════════════════════════════════════════ */
+document.getElementById("newNoteBtn").onclick = function() {
+  if (editor.value !== lastSaved && !confirm("Unsaved changes. Discard?")) return;
+  window.location.href = "/api/" + nodeId + "/" + version + "/notes/editor" + qs;
+};
+
+/* ═══════════════════════════════════════════════════
+   WARN ON LEAVE
+   ═══════════════════════════════════════════════════ */
+window.addEventListener("beforeunload", function(e) {
+  if (editor.value !== lastSaved) { e.preventDefault(); e.returnValue = ""; }
+});
+
+/* ═══════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════ */
+loadSettings();
+updateStats();
+loadNotes();
+if (!isNew) lastSaved = editor.value;
+setTimeout(function() { editor.focus(); }, 100);
+
+/* Pick up draft from notes page */
+try {
+  var draft = sessionStorage.getItem("tree-editor-draft");
+  if (draft && isNew && !editor.value) {
+    editor.value = draft;
+    sessionStorage.removeItem("tree-editor-draft");
+    updateStats();
+    markDirty();
+  }
+} catch (e) {}
+</script>
+</body>
+</html>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ROUTE HANDLERS — paste these into your router file
+// ─────────────────────────────────────────────────────────────────────────
+
+// NEW NOTE EDITOR
 
 export default router;
