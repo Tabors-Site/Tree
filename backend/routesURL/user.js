@@ -561,6 +561,117 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       text-shadow: 0 0 6px rgba(102, 126, 234, 0.25);
     }
 
+    #rawIdeaInput:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      background: rgba(255, 255, 255, 0.1);
+      transform: none;
+    }
+
+    #rawIdeaInput:disabled::placeholder {
+      color: rgba(80, 68, 201, 0.25);
+    }
+
+    /* Character counter */
+    .char-counter {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      margin-top: -8px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .char-counter.warning {
+      color: rgba(255, 193, 7, 0.9);
+    }
+
+    .char-counter.danger {
+      color: rgba(239, 68, 68, 0.9);
+      font-weight: 600;
+    }
+
+    .char-counter.disabled {
+      opacity: 0.4;
+    }
+
+    /* Energy display */
+    .energy-display {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 10px;
+      padding: 2px 8px;
+      background: rgba(255, 215, 79, 0.2);
+      border: 1px solid rgba(255, 215, 79, 0.3);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255, 215, 79, 1);
+      transition: all 0.2s;
+    }
+
+    .energy-display:empty {
+      display: none;
+    }
+
+    .energy-display.file-energy {
+      background: rgba(255, 220, 100, 0.9);
+      border-color: rgba(255, 200, 50, 1);
+      color: #1a1a1a;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 12px;
+      box-shadow: 0 2px 8px rgba(255, 200, 50, 0.4);
+    }
+
+    /* File selected badge */
+    .file-selected-badge {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      color: white;
+    }
+
+    .file-selected-badge.visible {
+      display: inline-flex;
+    }
+
+    .file-selected-badge .file-name {
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-selected-badge .clear-file {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 10px;
+      color: white;
+      transition: all 0.2s;
+    }
+
+    .file-selected-badge .clear-file:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
     .form-actions {
       display: flex;
       justify-content: space-between;
@@ -572,6 +683,9 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     .file-input-wrapper {
       flex: 1;
       min-width: 180px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     input[type="file"] {
@@ -597,6 +711,10 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     input[type="file"]::file-selector-button:hover {
       background: rgba(255, 255, 255, 0.3);
       transform: translateY(-1px);
+    }
+
+    input[type="file"].hidden-input {
+      display: none;
     }
 
     .send-button {
@@ -974,24 +1092,35 @@ text-decoration: none;
         action="/api/user/${userId}/raw-ideas${queryString}"
         enctype="multipart/form-data"
         class="raw-idea-form"
+        id="rawIdeaForm"
       >
         <textarea
           name="content"
           placeholder="What's on your mind?"
           id="rawIdeaInput"
           rows="1"
+          maxlength="5000"
           autofocus
         ></textarea>
 
+        <div class="char-counter" id="charCounter">
+          <span id="charCount">0</span> / 5000
+          <span class="energy-display" id="energyDisplay"></span>
+        </div>
+
         <div class="form-actions">
           <div class="file-input-wrapper">
-            <input type="file" name="file" />
+            <input type="file" name="file" id="fileInput" />
+            <div class="file-selected-badge" id="fileSelectedBadge">
+              <span>📎</span>
+              <span class="file-name" id="fileName"></span>
+              <button type="button" class="clear-file" id="clearFileBtn" title="Remove file">✕</button>
+            </div>
           </div>
-<button type="submit" class="send-button" title="Save raw idea" id="rawIdeaSendBtn">
-  <span class="send-label">Send</span>
-  <span class="send-progress"></span>
-</button>
-         
+          <button type="submit" class="send-button" title="Save raw idea" id="rawIdeaSendBtn">
+            <span class="send-label">Send</span>
+            <span class="send-progress"></span>
+          </button>
         </div>
       </form>
     </div>
@@ -1107,90 +1236,196 @@ text-decoration: none;
       }
     });
 
+    // Elements
+    const form = document.getElementById('rawIdeaForm');
+    const textarea = document.getElementById('rawIdeaInput');
+    const charCounter = document.getElementById('charCounter');
+    const charCount = document.getElementById('charCount');
+    const energyDisplay = document.getElementById('energyDisplay');
+    const fileInput = document.getElementById('fileInput');
+    const fileSelectedBadge = document.getElementById('fileSelectedBadge');
+    const fileName = document.getElementById('fileName');
+    const clearFileBtn = document.getElementById('clearFileBtn');
+    const sendBtn = document.getElementById('rawIdeaSendBtn');
+    const progressBar = sendBtn.querySelector('.send-progress');
+
+    const MAX_CHARS = 5000;
+    let hasFile = false;
+
     // Auto-resize textarea
-    const textarea = document.getElementById("rawIdeaInput");
-    
     function autoResize() {
-      textarea.style.height ='auto';
+      textarea.style.height = 'auto';
       const maxHeight = 400;
       const newHeight = Math.min(textarea.scrollHeight, maxHeight);
       textarea.style.height = newHeight + 'px';
       textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+      updateCharCounter();
     }
     
     textarea.addEventListener('input', autoResize);
     autoResize();
-    
+
+    // Character counter with energy (1 per 1000 chars)
+    function updateCharCounter() {
+      const len = textarea.value.length;
+      charCount.textContent = len;
+      
+      const remaining = MAX_CHARS - len;
+      charCounter.classList.remove('warning', 'danger', 'disabled');
+      
+      if (hasFile) {
+        charCounter.classList.add('disabled');
+      } else if (remaining <= 100) {
+        charCounter.classList.add('danger');
+      } else if (remaining <= 500) {
+        charCounter.classList.add('warning');
+      }
+      
+      // Energy cost: 1 per 1000 chars (minimum 1 if any text)
+      if (len > 0 && !hasFile) {
+        const cost = Math.max(1, Math.ceil(len / 1000));
+        energyDisplay.textContent = '⚡' + cost;
+        energyDisplay.classList.remove('file-energy');
+      } else if (!hasFile) {
+        energyDisplay.textContent = '';
+      }
+    }
+
+    // File energy calculation
+    const FILE_MIN_COST = 5;
+    const FILE_BASE_RATE = 1.5;
+    const FILE_MID_RATE = 3;
+    const SOFT_LIMIT_MB = 100;
+    const HARD_LIMIT_MB = 1024;
+
+    function calculateFileEnergy(sizeMB) {
+      if (sizeMB <= SOFT_LIMIT_MB) {
+        return Math.max(FILE_MIN_COST, Math.ceil(sizeMB * FILE_BASE_RATE));
+      }
+      if (sizeMB <= HARD_LIMIT_MB) {
+        const base = SOFT_LIMIT_MB * FILE_BASE_RATE;
+        const extra = (sizeMB - SOFT_LIMIT_MB) * FILE_MID_RATE;
+        return Math.ceil(base + extra);
+      }
+      const base = SOFT_LIMIT_MB * FILE_BASE_RATE + 
+                   (HARD_LIMIT_MB - SOFT_LIMIT_MB) * FILE_MID_RATE;
+      const overGB = sizeMB - HARD_LIMIT_MB;
+      return Math.ceil(base + Math.pow(overGB / 50, 2) * 50);
+    }
+
+    // File selection - blocks text input
+    fileInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) {
+        const file = this.files[0];
+        hasFile = true;
+        
+        // Disable textarea
+        textarea.disabled = true;
+        textarea.value = '';
+        textarea.placeholder = 'File selected - text disabled';
+        
+        // Show file badge, hide file input
+        fileInput.classList.add('hidden-input');
+        fileSelectedBadge.classList.add('visible');
+        
+        // Truncate filename
+        let displayName = file.name;
+        if (displayName.length > 20) {
+          displayName = displayName.substring(0, 17) + '...';
+        }
+        fileName.textContent = displayName;
+        fileSelectedBadge.title = file.name;
+        
+        // Calculate and show energy (+1 for the note itself)
+        const sizeMB = file.size / (1024 * 1024);
+        const fileCost = calculateFileEnergy(sizeMB);
+        const totalCost = fileCost + 1;
+        energyDisplay.textContent = '~⚡' + totalCost;
+        energyDisplay.classList.add('file-energy');
+        
+        updateCharCounter();
+      }
+    });
+
+    // Clear file selection
+    clearFileBtn.addEventListener('click', function() {
+      hasFile = false;
+      fileInput.value = '';
+      fileInput.classList.remove('hidden-input');
+      fileSelectedBadge.classList.remove('visible');
+      
+      textarea.disabled = false;
+      textarea.placeholder = "What's on your mind?";
+      
+      energyDisplay.textContent = '';
+      energyDisplay.classList.remove('file-energy');
+      
+      updateCharCounter();
+    });
+
     // Submit with Enter (desktop only)
     textarea.addEventListener("keydown", (e) => {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      
       if (!isMobile && e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        textarea.closest("form").submit();
+        form.requestSubmit();
       }
     });
-  </script>
 
-  <script>
-  const form = document.querySelector('.raw-idea-form');
-  const sendBtn = document.getElementById('rawIdeaSendBtn');
-  const progressBar = sendBtn.querySelector('.send-progress');
-
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-
-    // Lock UI
-    sendBtn.classList.add('loading');
-    sendBtn.disabled = true;
-    progressBar.style.width = '15%'; // start slightly filled
-
-    const formData = new FormData(form);
-    const xhr = new XMLHttpRequest();
-
-    xhr.open('POST', form.action, true);
-
-    // Upload progress (lagged on purpose)
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return;
-
-      // lag progress ~20%
-      const realPercent = (e.loaded / e.total) * 100;
-      const lagged = Math.min(90, Math.round(realPercent * 0.8));
-
-      progressBar.style.width = lagged + '%';
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        progressBar.style.width = '100%';
-        setTimeout(() => document.location.reload(), 150);
-      } else {
-        fail();
-      }
-    };
-
-    xhr.onerror = fail;
-
-    function fail() {
-      alert('Send failed');
-      sendBtn.classList.remove('loading');
-      sendBtn.disabled = false;
-      progressBar.style.width = '0%';
-    }
-
-    xhr.send(formData);
-  });
-
-  textarea.addEventListener('keydown', (e) => {
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (!isMobile && e.key === 'Enter' && !e.shiftKey) {
+    // Form submission with progress
+    form.addEventListener('submit', (e) => {
       e.preventDefault();
-      form.requestSubmit();
-    }
-  });
-</script>
 
+      sendBtn.classList.add('loading');
+      sendBtn.disabled = true;
+      progressBar.style.width = '15%';
+
+      const formData = new FormData(form);
+      const xhr = new XMLHttpRequest();
+
+      xhr.open('POST', form.action, true);
+
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        const realPercent = (e.loaded / e.total) * 100;
+        const lagged = Math.min(90, Math.round(realPercent * 0.8));
+        progressBar.style.width = lagged + '%';
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          progressBar.style.width = '100%';
+          setTimeout(() => document.location.reload(), 150);
+        } else {
+          fail();
+        }
+      };
+
+      xhr.onerror = fail;
+
+      function fail() {
+        alert('Send failed');
+        sendBtn.classList.remove('loading');
+        sendBtn.disabled = false;
+        progressBar.style.width = '0%';
+      }
+
+      xhr.send(formData);
+    });
+
+    // Form reset handler
+    form.addEventListener('reset', () => {
+      hasFile = false;
+      fileInput.classList.remove('hidden-input');
+      fileSelectedBadge.classList.remove('visible');
+      textarea.disabled = false;
+      textarea.placeholder = "What's on your mind?";
+      energyDisplay.textContent = '';
+      energyDisplay.classList.remove('file-energy');
+      charCount.textContent = '0';
+      charCounter.classList.remove('warning', 'danger', 'disabled');
+    });
+  </script>
 </body>
 </html>
 `);
@@ -8054,7 +8289,6 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-
     const energyAmount = user.availableEnergy?.amount ?? 0;
     const additionalEnergy = user.additionalEnergy?.amount ?? 0;
     const profileType = (user.profileType || "basic").toLowerCase();
@@ -9809,7 +10043,6 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       endDate: req.query.endDate,
     });
 
-    // Flatten for JSON response
     const allChats = sessions.flatMap((s) => s.chats);
 
     if (!wantHtml) {
@@ -9820,10 +10053,6 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
 
     const user = await User.findById(userId).lean();
     const username = user?.username || "Unknown user";
-
-    /* ─────────────────────────────────────────────── */
-    /* HELPERS                                          */
-    /* ─────────────────────────────────────────────── */
 
     const esc = (str = "") =>
       String(str)
@@ -9942,10 +10171,6 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       }
     };
 
-    /* ─────────────────────────────────────────────── */
-    /* SESSION GROUPS (pre-built by core function)      */
-    /* ─────────────────────────────────────────────── */
-
     const sessionGroups = sessions;
 
     const renderChat = (chat) => {
@@ -9957,11 +10182,18 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       const contribs = chat.contributions || [];
       const hasContribs = contribs.length > 0;
 
+      const isCustomLlm = chat.llmProvider?.isCustom === true;
+      const modelName = chat.llmProvider?.model || "default";
+
       const statusBadge = stopped
         ? `<span class="badge badge-stopped">Stopped</span>`
         : chat.endMessage?.time
           ? `<span class="badge badge-done">Done</span>`
           : `<span class="badge badge-pending">Pending</span>`;
+
+      const energyBadge = isCustomLlm
+        ? `<span class="badge badge-external">External</span>`
+        : `<span class="badge badge-energy">⚡2</span>`;
 
       const contribRows = contribs
         .map((c) => {
@@ -9973,7 +10205,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
           const aiBadge = c.wasAi
             ? `<span class="mini-badge mini-ai">AI</span>`
             : "";
-          const energyBadge =
+          const cEnergyBadge =
             c.energyUsed > 0
               ? `<span class="mini-badge mini-energy">⚡${c.energyUsed}</span>`
               : "";
@@ -9983,7 +10215,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
           <tr class="contrib-row">
             <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}</td>
             <td>${nodeRef}</td>
-            <td>${aiBadge}${energyBadge}</td>
+            <td>${aiBadge}${cEnergyBadge}</td>
             <td class="contrib-time">${formatTime(c.date)}</td>
           </tr>`;
         })
@@ -9992,8 +10224,12 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       return `
       <li class="note-card">
         <div class="chat-header">
-          <div class="chat-mode">${modeLabel(chat.aiContext?.path)}</div>
+          <div class="chat-header-left">
+            <span class="chat-mode">${modeLabel(chat.aiContext?.path)}</span>
+            <span class="chat-model">${esc(modelName)}</span>
+          </div>
           <div class="chat-badges">
+            ${energyBadge}
             ${statusBadge}
             ${duration ? `<span class="badge badge-duration">${duration}</span>` : ""}
             <span class="badge badge-source">${sourceLabel(chat.startMessage?.source)}</span>
@@ -10003,14 +10239,14 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
         <div class="note-content">
           <div class="chat-message chat-user">
             <span class="msg-label">You</span>
-            <span class="msg-text">${truncate(chat.startMessage?.content, 300)}</span>
+            <div class="msg-text">${truncate(chat.startMessage?.content, 400)}</div>
           </div>
           ${
             chat.endMessage?.content
               ? `
           <div class="chat-message chat-ai">
             <span class="msg-label">AI</span>
-            <span class="msg-text">${truncate(chat.endMessage.content, 300)}</span>
+            <div class="msg-text">${truncate(chat.endMessage.content, 400)}</div>
           </div>`
               : ""
           }
@@ -10053,24 +10289,19 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
 
         return `
       <div class="session-group">
-        <div class="session-divider">
-          <div class="session-line"></div>
-          <div class="session-label">
-            <span class="session-id">${esc(shortId)}</span>
-            <span class="session-info">${chatCount} chat${chatCount !== 1 ? "s" : ""} · ${sessionTime}</span>
-          </div>
-          <div class="session-line"></div>
-        </div>
         <div class="session-pane">
+          <div class="session-pane-header">
+            <div class="session-header-left">
+              <span class="session-id">${esc(shortId)}</span>
+              <span class="session-info">${chatCount} chat${chatCount !== 1 ? "s" : ""}</span>
+            </div>
+            <span class="session-time">${sessionTime}</span>
+          </div>
           <ul class="notes-list">${chatCards}</ul>
         </div>
       </div>`;
       })
       .join("");
-
-    /* ─────────────────────────────────────────────── */
-    /* HTML SHELL                                       */
-    /* ─────────────────────────────────────────────── */
 
     res.send(`
 <!DOCTYPE html>
@@ -10238,70 +10469,45 @@ body::after {
 
 .header-subtitle {
   font-size: 14px; color: rgba(255,255,255,0.9);
-  margin-bottom: 16px; font-weight: 400; line-height: 1.5;
+  margin-bottom: 8px; font-weight: 400; line-height: 1.5;
 }
 
-.nav-links { display: flex; flex-wrap: wrap; gap: 8px; }
-
-.nav-links a {
-  display: inline-block; padding: 6px 14px;
-  background: rgba(255,255,255,0.18); color: white;
-  border-radius: 980px; font-size: 13px; font-weight: 600;
-  text-decoration: none; border: 1px solid rgba(255,255,255,0.25);
-  transition: all 0.2s;
-}
-
-.nav-links a:hover {
-  background: rgba(255,255,255,0.32);
-  transform: translateY(-1px);
-}
-
-/* ── Session Divider ────────────────────────────── */
+/* ── Session Pane with Header ───────────────────── */
 
 .session-group {
-  margin-bottom: 8px;
-}
-
-.session-divider {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 16px;
-  margin-top: 8px;
-  animation: fadeInUp 0.5s ease-out;
-}
-
-.session-group:first-child .session-divider {
-  margin-top: 0;
+  margin-bottom: 20px;
+  animation: fadeInUp 0.6s ease-out both;
 }
 
 .session-pane {
   background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 20px;
-  padding: 16px;
+  overflow: hidden;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
-.session-line {
-  flex: 1;
-  height: 1px;
-  background: rgba(255,255,255,0.18);
-}
-
-.session-label {
+.session-pane-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.session-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .session-id {
   font-family: 'SF Mono', 'Fira Code', monospace;
   font-size: 11px;
   font-weight: 600;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.55);
   background: rgba(255,255,255,0.1);
   padding: 3px 8px;
   border-radius: 6px;
@@ -10309,8 +10515,14 @@ body::after {
 }
 
 .session-info {
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 600;
+}
+
+.session-time {
   font-size: 12px;
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.4);
   font-weight: 500;
 }
 
@@ -10319,6 +10531,7 @@ body::after {
 .notes-list {
   list-style: none;
   display: flex; flex-direction: column; gap: 16px;
+  padding: 16px;
 }
 
 .note-card {
@@ -10357,41 +10570,87 @@ body::after {
 /* ── Chat Header Row ────────────────────────────── */
 
 .chat-header {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .chat-mode {
-  font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.95);
-  background: rgba(255,255,255,0.15); padding: 4px 12px;
-  border-radius: 980px; border: 1px solid rgba(255,255,255,0.2);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.1);
+  padding: 3px 10px;
+  border-radius: 980px;
+  border: 1px solid rgba(255,255,255,0.15);
 }
 
-.chat-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.chat-model {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.45);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.chat-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 
 /* ── Messages ───────────────────────────────────── */
 
 .note-content {
   margin-bottom: 16px;
-  display: flex; flex-direction: column; gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .chat-message {
-  display: flex; gap: 10px; align-items: flex-start;
-  line-height: 1.6; font-size: 14px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
 }
 
 .msg-label {
-  flex-shrink: 0; font-weight: 700; font-size: 11px;
-  text-transform: uppercase; letter-spacing: 0.5px;
-  padding: 3px 10px; border-radius: 980px; margin-top: 2px;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 10px;
+  border-radius: 980px;
+  margin-top: 3px;
 }
 
 .chat-user .msg-label { background: rgba(255,255,255,0.2); color: white; }
 .chat-ai .msg-label   { background: rgba(100,220,255,0.25); color: white; }
 
 .msg-text {
-  color: rgba(255,255,255,0.92); word-wrap: break-word; min-width: 0;
+  color: rgba(255,255,255,0.95);
+  word-wrap: break-word;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  font-weight: 400;
+}
+
+.chat-user .msg-text {
+  font-weight: 500;
 }
 
 /* ── Contribution Dropdown ──────────────────────── */
@@ -10485,6 +10744,8 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 .badge-pending  { background: rgba(255,200,50,0.3); color: #fff; }
 .badge-duration { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
 .badge-source   { background: rgba(100,100,210,0.3); color: #fff; }
+.badge-energy   { background: rgba(100,220,255,0.25); color: #fff; border-color: rgba(100,220,255,0.3); }
+.badge-external { background: rgba(168,85,247,0.25); color: #fff; border-color: rgba(168,85,247,0.3); }
 
 /* ── Note Meta ──────────────────────────────────── */
 
@@ -10544,6 +10805,10 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
   .empty-state { padding: 40px 24px; }
   .chat-header { flex-direction: column; align-items: flex-start; }
   .contrib-row td { font-size: 12px; padding: 5px 6px; }
+  .session-pane-header { flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 16px; }
+  .notes-list { padding: 12px; gap: 12px; }
+  .chat-model { max-width: 140px; }
+  .msg-text { font-size: 14px; }
 }
 
 @media (min-width: 641px) and (max-width: 1024px) {
@@ -10564,7 +10829,6 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
         ${chats.length > 0 ? `<span class="message-count">${chats.length}</span>` : ""}
       </h1>
       <div class="header-subtitle">Your last 10 AI conversation sessions</div>
-  
     </div>
 
     ${
@@ -10580,15 +10844,15 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
   </div>
 
   <script>
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry, index) => {
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry, index) {
         if (entry.isIntersecting) {
-          setTimeout(() => entry.target.classList.add('visible'), index * 50);
+          setTimeout(function() { entry.target.classList.add('visible'); }, index * 50);
           observer.unobserve(entry.target);
         }
       });
     }, { root: null, rootMargin: '50px', threshold: 0.1 });
-    document.querySelectorAll('.note-card').forEach(card => observer.observe(card));
+    document.querySelectorAll('.note-card').forEach(function(card) { observer.observe(card); });
   </script>
 </body>
 </html>

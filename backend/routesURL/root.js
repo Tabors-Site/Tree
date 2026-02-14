@@ -1494,18 +1494,23 @@ transition:
 
    <!-- Tree Ownership Options Section -->
 ${
-  isOwner || rootMeta?.contributors?.some(c => c._id.toString() === req.userId?.toString())
+  isOwner ||
+  rootMeta?.contributors?.some(
+    (c) => c._id.toString() === req.userId?.toString(),
+  )
     ? `
 <div class="content-card">
   <div class="section-header">
-    <h2>${isOwner ? 'Tree Ownership Options' : 'Contributor Options'}</h2>
+    <h2>${isOwner ? "Tree Ownership Options" : "Contributor Options"}</h2>
   </div>
   
   ${inviteFormHtml}
   ${contributorsHtml}
   ${policyHtml}
   
-  ${!isOwner && req.userId ? `
+  ${
+    !isOwner && req.userId
+      ? `
   <h2>Leave Tree</h2>
   <form
     method="POST"
@@ -1529,7 +1534,9 @@ ${
       Leave Tree
     </button>
   </form>
-  ` : ''}
+  `
+      : ""
+  }
 </div>
 `
     : ""
