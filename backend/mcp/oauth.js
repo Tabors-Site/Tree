@@ -446,7 +446,6 @@ export function renderLoginPage(req, res) {
       gap: 8px;
       margin-top: 24px;
       padding-top: 24px;
-      border-top: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .back-btn,
@@ -617,13 +616,14 @@ export function renderLoginPage(req, res) {
     </div>
 
     <div class="secondary-actions">
+        <button type="button" id="registerBtn" class="secondary-btn">
+        Create an account
+      </button>
       <button type="button" id="forgotPasswordBtn" class="secondary-btn">
         Forgot your password?
       </button>
 
-      <button type="button" id="registerBtn" class="secondary-btn">
-        Create an account
-      </button>
+  
 
       <button class="back-btn" onclick="goBack()">← Back to Home</button>
     </div>
@@ -1008,7 +1008,6 @@ export function renderRegisterPage(req, res) {
       gap: 8px;
       margin-top: 24px;
       padding-top: 24px;
-      border-top: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .back-btn {
@@ -1267,6 +1266,7 @@ export function renderRegisterPage(req, res) {
           autocomplete="new-password"
         />
       </div>
+      <button type="submit" id="registerBtn">Create Account</button>
 
       <div class="agreement-text">
         By creating an account, you agree to our
@@ -1275,7 +1275,6 @@ export function renderRegisterPage(req, res) {
         <span class="agreement-link" onclick="openModal('privacy')">Privacy Policy</span>.
       </div>
 
-      <button type="submit" id="registerBtn">Create Account</button>
     </form>
 
     <div id="errorMessage" class="message error-message"></div>
