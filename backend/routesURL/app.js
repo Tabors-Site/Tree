@@ -76,19 +76,37 @@ router.get("/app", authenticateLite, async (req, res) => {
     .glass-panel::before { content: ""; position: absolute; inset: -40%; background: radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%); pointer-events: none; z-index: 0; }
 
     .chat-panel { width: 400px; min-width: 0; height: 100%; display: flex; flex-direction: column; z-index: 10; flex-shrink: 0; }
-    .chat-header { height: var(--header-height); padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--glass-border-light); flex-shrink: 0; position: relative; z-index: 1; }
+    .chat-header { height: var(--header-height); padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--glass-border-light); flex-shrink: 0; position: relative; z-index: 1; }
     .chat-header a { text-decoration: none; color: inherit; }
-    .chat-title { display: flex; align-items: center; gap: 12px; }
+    .chat-title { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
     .tree-icon { font-size: 28px; filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3)); animation: grow 4.5s infinite ease-in-out; }
     @keyframes grow { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
     .chat-title h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+    
+    .chat-header-controls { display: flex; align-items: center; gap: 0; margin-left: auto; }
+    .chat-header-buttons { display: flex; align-items: center; gap: 6px; margin-right: 12px; }
+    .chat-header-right { display: flex; align-items: center; gap: 0; }
 
     .status-badge { display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 100px; border: 1px solid var(--glass-border-light); font-size: 12px; font-weight: 600; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 12px var(--accent-glow); animation: pulse 2s ease-in-out infinite; }
+    .status-badge .status-text { display: inline; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 12px var(--accent-glow); animation: pulse 2s ease-in-out infinite; flex-shrink: 0; }
     .status-dot.connected { background: var(--accent); }
     .status-dot.disconnected { background: var(--error); animation: none; }
     .status-dot.connecting { background: #f59e0b; }
     @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.15); } }
+    
+    /* Compact mode for narrow panels */
+    .chat-panel:not(.collapsed) { container-type: inline-size; }
+    @container (max-width: 420px) {
+      #desktopOpenTabBtn { display: none; }
+    }
+    @container (max-width: 360px) {
+      .status-badge .status-text { display: none; }
+      .status-badge { padding: 6px; min-width: 20px; justify-content: center; }
+    }
+    @container (max-width: 320px) {
+      .chat-title h1 { display: none; }
+    }
 
     /* Clear chat button in header */
     .clear-chat-btn {
@@ -103,8 +121,10 @@ router.get("/app", authenticateLite, async (req, res) => {
       color: var(--text-muted);
       cursor: pointer;
       transition: all var(--transition-fast);
-      margin-left: 8px;
       flex-shrink: 0;
+    }
+    #clearChatBtn {
+      margin-left: 8px;
     }
     .clear-chat-btn:hover {
       background: rgba(255, 255, 255, 0.2);
@@ -160,6 +180,8 @@ router.get("/app", authenticateLite, async (req, res) => {
     .chat-messages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
 
     .welcome-message { text-align: center; padding: 40px 20px; }
+    .welcome-message.disconnected { opacity: 0.7; }
+    .welcome-message.disconnected .welcome-icon { filter: grayscale(0.5) drop-shadow(0 8px 32px rgba(0, 0, 0, 0.3)); animation: none; }
     .welcome-icon { font-size: 64px; margin-bottom: 20px; display: inline-block; filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.3)); animation: floatIcon 3s ease-in-out infinite; }
     @keyframes floatIcon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
     .welcome-message h2 { font-size: 24px; font-weight: 600; margin-bottom: 12px; }
@@ -368,42 +390,6 @@ router.get("/app", authenticateLite, async (req, res) => {
 
     .viewport-panel { flex: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; position: relative; }
 
-    /* Floating viewport controls */
-    .viewport-floating-controls {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      z-index: 20;
-      display: flex;
-      gap: 8px;
-    }
-    .floating-btn {
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(var(--glass-rgb), 0.7);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--glass-border-light);
-      border-radius: 10px;
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: all var(--transition-fast);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-    .floating-btn:hover {
-      background: rgba(var(--glass-rgb), 0.9);
-      color: var(--text-primary);
-      transform: scale(1.05);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-    }
-    .floating-btn:active {
-      transform: scale(0.95);
-    }
-    .floating-btn svg { width: 18px; height: 18px; }
-
     .iframe-container {
       flex: 1;
       position: relative;
@@ -450,22 +436,106 @@ router.get("/app", authenticateLite, async (req, res) => {
       left: 0;
       right: 0;
       z-index: 150;
-      padding: 10px 12px;
-      padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      padding: 18px 12px 10px 12px;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
       background: transparent;
-      transition: opacity 0.3s ease;
+      transition: all 0.3s ease;
     }
     .mobile-input-bar .input-container {
-      padding: 12px 16px;
-      border-radius: 24px;
-      background: rgba(255, 255, 255, 0.15);
+      position: relative;
+    }
+    .mobile-input-bar.collapsed {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(100%);
+    }
+    
+    /* Collapsed folder tab - sideways file on right edge */
+    .mobile-chat-tab {
+      display: none;
+      position: fixed;
+      bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+      right: 0;
+      z-index: 150;
+      width: 32px;
+      height: 56px;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-right: none;
+      border-radius: 12px 0 0 12px;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: -2px 0 12px rgba(0, 0, 0, 0.1);
+      font-size: 18px;
+    }
+    .mobile-chat-tab.visible {
+      display: flex;
+    }
+    .mobile-chat-tab:active {
+      width: 38px;
+      background: rgba(255, 255, 255, 0.2);
+    }
+    
+    /* Collapse button on input bar - handle with red x */
+    .mobile-input-collapse {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 56px;
+      height: 22px;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+      gap: 4px;
+    }
+    .mobile-input-collapse:active .collapse-x {
+      transform: scale(1.2);
+    }
+    .mobile-input-collapse .collapse-x {
+      font-size: 13px;
+      font-weight: 700;
+      color: #ef4444;
+      text-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+      line-height: 1;
+      transition: all 0.15s ease;
+    }
+    .mobile-input-collapse::after {
+      content: '';
+      width: 16px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+    }
+    .mobile-input-bar .input-container {
+      padding: 14px 18px;
+      border-radius: 26px;
+      background: rgba(255, 255, 255, 0.12);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      border: 1px solid var(--glass-border-light);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      min-height: 52px;
+    }
+    .mobile-input-bar .input-container:focus-within {
+      box-shadow: none;
     }
     .mobile-input-bar .chat-input { font-size: 16px; }
-    .mobile-input-bar .send-btn { width: 38px; height: 38px; border-radius: 50%; }
+    .mobile-input-bar .send-btn { 
+      width: 42px; 
+      height: 42px; 
+      border-radius: 50%; 
+      box-shadow: none;
+    }
+    .mobile-input-bar .send-btn:hover:not(:disabled) {
+      box-shadow: none;
+    }
 
     /* Mobile connection status indicator - inside sheet header */
     .mobile-status-indicator {
@@ -509,13 +579,25 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
     .mobile-tree-icon-wrapper .tree-icon {
       font-size: 24px;
+      text-shadow: none;
+      filter: none;
     }
 
     /* Mobile header action buttons */
     .mobile-header-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 2px;
+    }
+    .mobile-header-actions .mobile-close-btn {
+      margin-left: 10px;
+    }
+    .mobile-header-actions .clear-chat-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .mobile-header-actions .clear-chat-btn:active {
+      background: rgba(255, 255, 255, 0.15);
     }
 
     .mobile-chat-sheet {
@@ -527,14 +609,14 @@ router.get("/app", authenticateLite, async (req, res) => {
       height: 85vh;
       max-height: calc(100vh - 40px);
       z-index: 200;
-      background: rgba(var(--glass-rgb), 0.75);
-      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      background: rgba(var(--glass-rgb), 0.22);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-top-left-radius: 24px;
       border-top-right-radius: 24px;
-      border: 1px solid var(--glass-border);
+      border: 1px solid rgba(255, 255, 255, 0.18);
       border-bottom: none;
-      box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--glass-highlight);
+      box-shadow: 0 -15px 50px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.25);
       transform: translateY(100%);
       flex-direction: column;
       will-change: transform;
@@ -556,19 +638,23 @@ router.get("/app", authenticateLite, async (req, res) => {
       display: flex;
       flex-direction: column;
       align-items: center;
-      border-bottom: 1px solid var(--glass-border-light);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       flex-shrink: 0;
       cursor: grab;
       touch-action: none;
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
       user-select: none;
       position: relative;
+    }
+    .mobile-sheet-header h1,
+    .mobile-sheet-header .root-name-inline {
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
     }
     .mobile-sheet-header:active { cursor: grabbing; }
     .mobile-sheet-header .drag-handle { 
       width: 36px; 
       height: 4px; 
-      background: rgba(255, 255, 255, 0.25); 
+      background: rgba(255, 255, 255, 0.2); 
       border-radius: 2px; 
       margin-bottom: 10px;
     }
@@ -582,15 +668,15 @@ router.get("/app", authenticateLite, async (req, res) => {
       display: flex; 
       align-items: center; 
       justify-content: center; 
-      background: rgba(255, 255, 255, 0.1); 
-      border: 1px solid var(--glass-border-light); 
+      background: rgba(255, 255, 255, 0.08); 
+      border: 1px solid rgba(255, 255, 255, 0.12); 
       border-radius: 50%; 
-      color: var(--text-secondary); 
+      color: var(--text-primary); 
       cursor: pointer;
       transition: all 0.15s ease;
     }
     .mobile-close-btn:active {
-      background: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.15);
       transform: scale(0.95);
     }
     .mobile-close-btn svg { width: 16px; height: 16px; }
@@ -605,33 +691,61 @@ router.get("/app", authenticateLite, async (req, res) => {
       background: transparent;
       -webkit-overflow-scrolling: touch;
     }
+    
+    /* Glass-printed text style for mobile */
+    .mobile-chat-messages .message-content {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    }
+    .mobile-chat-messages .message.user .message-content {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+    .mobile-chat-messages .message-avatar {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .mobile-chat-messages .welcome-message {
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+    }
 
     .mobile-chat-input-area {
-      padding: 12px 16px;
-      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-      border-top: 1px solid var(--glass-border-light);
+      padding: 14px 16px;
+      padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
       flex-shrink: 0;
-      background: rgba(255, 255, 255, 0.05);
+      background: transparent;
     }
     .mobile-chat-input-area .input-container { 
-      padding: 12px 16px; 
-      border-radius: 24px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--glass-border-light);
+      padding: 14px 18px; 
+      border-radius: 26px;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      min-height: 52px;
     }
     .mobile-chat-input-area .input-container:focus-within {
-      background: rgba(255, 255, 255, 0.2);
-      border-color: rgba(255, 255, 255, 0.4);
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.25);
     }
     .mobile-chat-input-area .chat-input { font-size: 16px; }
+    .mobile-chat-input-area .send-btn { 
+      width: 42px; 
+      height: 42px; 
+      border-radius: 14px;
+      box-shadow: none;
+    }
+    .mobile-chat-input-area .send-btn:hover:not(:disabled) {
+      box-shadow: none;
+    }
 
     .mobile-backdrop {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.3);
+      background: rgba(0, 0, 0, 0.1);
       z-index: 190;
       opacity: 0;
       transition: opacity 0.3s ease;
@@ -644,7 +758,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       .chat-panel { display: none !important; }
       .viewport-panel { width: 100% !important; height: 100%; }
       .viewport-panel.glass-panel { border-radius: 0; }
-      .viewport-floating-controls { display: none; }
       .iframe-container { border-radius: 0; margin: 0; flex: 1; }
       iframe, .loading-overlay { border-radius: 0; }
       .panel-divider { display: none; }
@@ -852,23 +965,24 @@ router.get("/app", authenticateLite, async (req, res) => {
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.08);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 20px;
       font-size: 12px;
       font-weight: 600;
-      color: var(--text-secondary);
+      color: var(--text-primary);
       cursor: pointer;
       white-space: nowrap;
       flex-shrink: 0;
       transition: all var(--transition-fast);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
     .mobile-mode-btn:active {
       transform: scale(0.95);
     }
     .mobile-mode-btn.active {
-      background: rgba(16, 185, 129, 0.25);
-      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.2);
+      border-color: rgba(16, 185, 129, 0.3);
       color: var(--text-primary);
     }
     .mobile-mode-btn-emoji {
@@ -909,14 +1023,27 @@ router.get("/app", authenticateLite, async (req, res) => {
   </a>
   <span class="root-name-inline" id="rootNameLabel" title=""></span>
 
-  <div style="display:flex;align-items:center;gap:0;margin-left:auto;">
-    <div class="status-badge">
-      <span class="status-dot connecting" id="statusDot"></span>
-      <span id="statusText">Connecting...</span>
+  <div class="chat-header-controls">
+    <div class="chat-header-buttons">
+      <button class="clear-chat-btn" id="desktopHomeBtn" title="Home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </button>
+      <button class="clear-chat-btn" id="desktopRefreshBtn" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <button class="clear-chat-btn" id="desktopOpenTabBtn" title="Open in new tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </button>
     </div>
-    <button class="clear-chat-btn" id="clearChatBtn" title="Clear conversation">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-    </button>
+    <div class="chat-header-right">
+      <div class="status-badge">
+        <span class="status-dot connecting" id="statusDot"></span>
+        <span class="status-text" id="statusText">Connecting...</span>
+      </div>
+      <button class="clear-chat-btn" id="clearChatBtn" title="Clear conversation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -968,19 +1095,6 @@ router.get("/app", authenticateLite, async (req, res) => {
 
     <!-- Viewport Panel -->
     <div class="viewport-panel glass-panel" id="viewportPanel">
-      <!-- Floating controls -->
-      <div class="viewport-floating-controls">
-        <button class="floating-btn" id="homeBtn" title="Home (Profile)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        </button>
-        <button class="floating-btn" id="refreshBtn" title="Refresh">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        </button>
-        <button class="floating-btn" id="openTabBtn" title="Open in new tab">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        </button>
-      </div>
-
       <div class="iframe-container">
         <div class="loading-overlay" id="loadingOverlay">
           <div class="loading-spinner">
@@ -996,12 +1110,16 @@ router.get("/app", authenticateLite, async (req, res) => {
   <!-- Mobile Elements -->
   <div class="mobile-input-bar" id="mobileInputBar">
     <div class="input-container" id="mobileInputTrigger">
+      <div class="mobile-input-collapse" id="mobileInputCollapse"><span class="collapse-x">✕</span></div>
       <textarea class="chat-input" id="mobileBottomInput" placeholder="Message Tree..." rows="1" readonly></textarea>
       <button class="send-btn" id="mobileSendBtn" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
       </button>
     </div>
   </div>
+
+  <!-- Collapsed chat tab - sideways file tab -->
+  <div class="mobile-chat-tab" id="mobileChatTab">🌳</div>
 
   <div class="mobile-backdrop" id="mobileBackdrop"></div>
 
@@ -1081,12 +1199,15 @@ router.get("/app", authenticateLite, async (req, res) => {
     const mobileInputBar = $("mobileInputBar");
     const mobileSheetHeader = $("mobileSheetHeader");
     const mobileInputTrigger = $("mobileInputTrigger");
+    const mobileInputCollapse = $("mobileInputCollapse");
+    const mobileChatTab = $("mobileChatTab");
 
     // State
     let isConnected = false;
     let isRegistered = false;
     let isSending = false;
     let currentIframeUrl = CONFIG.homeUrl;
+    let isInputBarCollapsed = false;
 
     // NEW: Mode state
     let currentModeKey = null;
@@ -1175,6 +1296,11 @@ router.get("/app", authenticateLite, async (req, res) => {
       isConnected = false;
       isRegistered = false;
       updateStatus("disconnected");
+      
+      // Show disconnected message in chat
+      [chatMessages, mobileChatMessages].forEach(container => {
+        container.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from Tree. Please refresh to reconnect.</p></div>';
+      });
     });
 
     // ================================================================
@@ -1795,6 +1921,11 @@ router.get("/app", authenticateLite, async (req, res) => {
       mobileInputBar.style.opacity = "0";
       mobileInputBar.style.pointerEvents = "none";
       
+      // Sync any draft text from bottom input to sheet input
+      if (mobileBottomInput.value.trim()) {
+        mobileSheetInput.value = mobileBottomInput.value;
+      }
+      
       // Focus the sheet input after animation
       setTimeout(() => {
         mobileSheetInput.focus();
@@ -1811,11 +1942,24 @@ router.get("/app", authenticateLite, async (req, res) => {
       mobileChatSheet.classList.remove("open");
       mobileChatSheet.classList.add("closing");
       mobileBackdrop.classList.remove("visible");
+      
+      // Sync draft text to bottom input before closing
+      const draftText = mobileSheetInput.value.trim();
+      if (draftText) {
+        mobileBottomInput.value = draftText;
+        mobileBottomInput.placeholder = "";
+      } else {
+        mobileBottomInput.value = "";
+        mobileBottomInput.placeholder = "Message Tree...";
+      }
+      
       mobileSheetInput.blur();
       
-      // Clean up after animation
+      // Clean up after animation and restore input bar
       setTimeout(() => { 
         mobileChatSheet.classList.remove("closing");
+        // Always restore input bar when closing sheet
+        expandInputBar();
         mobileInputBar.style.opacity = "1";
         mobileInputBar.style.pointerEvents = "auto";
       }, 300);
@@ -1834,6 +1978,32 @@ router.get("/app", authenticateLite, async (req, res) => {
       openMobileSheet();
     });
 
+    // Collapse/expand mobile input bar
+    function collapseInputBar() {
+      isInputBarCollapsed = true;
+      mobileInputBar.classList.add("collapsed");
+      mobileChatTab.classList.add("visible");
+    }
+
+    function expandInputBar() {
+      isInputBarCollapsed = false;
+      mobileInputBar.classList.remove("collapsed");
+      mobileChatTab.classList.remove("visible");
+    }
+
+    mobileInputCollapse.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      collapseInputBar();
+    });
+
+    mobileChatTab.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      expandInputBar();
+      openMobileSheet();
+    });
+
     // Mobile sheet input listeners
     mobileSheetInput.addEventListener("input", () => {
       updateSendButtons();
@@ -1848,6 +2018,8 @@ router.get("/app", authenticateLite, async (req, res) => {
         if (msg && isRegistered && !isSending) {
           sendChatMessage(msg);
           mobileSheetInput.value = "";
+          mobileBottomInput.value = "";
+          mobileBottomInput.placeholder = "Message Tree...";
           mobileSheetInput.style.height = "auto";
           updateSendButtons();
         }
@@ -1863,6 +2035,8 @@ router.get("/app", authenticateLite, async (req, res) => {
       if (msg && isRegistered && !isSending) {
         sendChatMessage(msg);
         mobileSheetInput.value = "";
+        mobileBottomInput.value = "";
+        mobileBottomInput.placeholder = "Message Tree...";
         mobileSheetInput.style.height = "auto";
         updateSendButtons();
       }
@@ -2031,7 +2205,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       currentIframeUrl = CONFIG.homeUrl;
     }
 
-    $("homeBtn").addEventListener("click", goHome);
+    $("desktopHomeBtn").addEventListener("click", goHome);
     $("mobileHomeBtn").addEventListener("click", () => {
       closeMobileSheet();
       goHome();
@@ -2043,7 +2217,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       iframe.contentWindow?.location.reload();
     }
 
-    $("refreshBtn").addEventListener("click", doRefresh);
+    $("desktopRefreshBtn").addEventListener("click", doRefresh);
     $("mobileRefreshBtn").addEventListener("click", () => {
       closeMobileSheet();
       doRefresh();
@@ -2055,7 +2229,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       window.open(url, '_blank');
     }
 
-    $("openTabBtn").addEventListener("click", openInNewTab);
+    $("desktopOpenTabBtn").addEventListener("click", openInNewTab);
 
     // Iframe
     iframe.addEventListener("load", () => {
