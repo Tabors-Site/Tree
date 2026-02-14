@@ -367,6 +367,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       // ── Session + AIChat tracking ──────────────────────────────────
       // Finalize any leftover chat from a previous turn
       await finalizeOpenChat(socket);
+      const clientInfo = await getClientForUser(socket.userId);
 
       const sessionId = ensureSession(socket);
       const preMode = getCurrentMode(visitorId) || "home:default";
@@ -379,6 +380,11 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           message,
           source: "user",
           modeKey: preMode,
+          llmProvider: {
+            isCustom: clientInfo.isCustom,
+            model: clientInfo.model,
+            baseUrl: clientInfo.isCustom ? clientInfo.client.baseURL : null,
+          },
         });
         setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
       } catch (err) {

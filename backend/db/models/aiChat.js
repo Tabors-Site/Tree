@@ -87,6 +87,21 @@ const AIChatSchema = new mongoose.Schema({
 
     _id: false,
   },
+  llmProvider: {
+    isCustom: {
+      type: Boolean,
+      default: false,
+    },
+    model: {
+      type: String,
+      default: null,
+    },
+    baseUrl: {
+      type: String,
+      default: null,
+    },
+    _id: false,
+  },
 
   // -----------------------------------
   // Contributions made during session
