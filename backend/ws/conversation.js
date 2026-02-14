@@ -14,6 +14,9 @@ import {
 } from "./modes/registry.js";
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
 
+import { resolveAndValidateHost } from "../core/customLLM.js";
+
+
 dotenv.config();
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -59,33 +62,48 @@ const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
  * Returns { client, model, isCustom } for a user.
  * Uses their custom LLM if configured, otherwise falls back to default.
  */
+
 export async function getClientForUser(userId) {
   if (!userId) return { client: defaultClient, model: DEFAULT_MODEL, isCustom: false };
 
-  // Check cache
-  const cached = userClientCache.get(userId);
+  var cached = userClientCache.get(userId);
   if (cached && Date.now() - cached.fetchedAt < CLIENT_CACHE_TTL) {
     return cached;
   }
 
   try {
-    const user = await User.findById(userId)
+    var user = await User.findById(userId)
       .select("customLlmConnection")
       .lean();
 
-    const conn = user?.customLlmConnection;
+    var conn = user && user.customLlmConnection;
 
     if (conn && conn.baseUrl && conn.encryptedApiKey && !conn.revoked) {
-      const apiKey = decrypt(conn.encryptedApiKey);
+      // Re-validate DNS at request time to prevent DNS rebinding
+      try {
+        var hostname = new URL(conn.baseUrl).hostname;
+        await resolveAndValidateHost(hostname);
+      } catch (err) {
+        console.error("Blocked custom LLM for " + userId + ": " + err.message);
+        var fallback = {
+          client: defaultClient,
+          model: DEFAULT_MODEL,
+          isCustom: false,
+          fetchedAt: Date.now(),
+        };
+        userClientCache.set(userId, fallback);
+        return fallback;
+      }
 
-      // User stores full URL — derive baseURL for OpenAI SDK
-      let baseURL = conn.baseUrl.replace(/\/+$/, "");
+      var apiKey = decrypt(conn.encryptedApiKey);
+
+      var baseURL = conn.baseUrl.replace(/\/+$/, "");
       if (baseURL.endsWith("/chat/completions")) {
         baseURL = baseURL.replace(/\/chat\/completions$/, "");
       }
 
-      const entry = {
-        client: new OpenAI({ baseURL, apiKey }),
+      var entry = {
+        client: new OpenAI({ baseURL: baseURL, apiKey: apiKey }),
         model: conn.model || DEFAULT_MODEL,
         isCustom: true,
         fetchedAt: Date.now(),
@@ -93,27 +111,25 @@ export async function getClientForUser(userId) {
 
       userClientCache.set(userId, entry);
 
-      // Update lastUsedAt in background (don't await)
       User.updateOne(
         { _id: userId },
         { $set: { "customLlmConnection.lastUsedAt": new Date() } }
-      ).catch(() => {});
+      ).catch(function () {});
 
       return entry;
     }
   } catch (err) {
-    console.error(`⚠️ Failed to load custom LLM for user ${userId}:`, err.message);
+    console.error("Failed to load custom LLM for user " + userId + ": " + err.message);
   }
 
-  // Fall back to default
-  const entry = {
+  var defaultEntry = {
     client: defaultClient,
     model: DEFAULT_MODEL,
     isCustom: false,
     fetchedAt: Date.now(),
   };
-  userClientCache.set(userId, entry);
-  return entry;
+  userClientCache.set(userId, defaultEntry);
+  return defaultEntry;
 }
 
 /**
