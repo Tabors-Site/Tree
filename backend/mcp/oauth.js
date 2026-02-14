@@ -83,7 +83,7 @@ export async function oauthAuthorize(req, res) {
 
   if (!userId) {
     return res.redirect(
-      `/login?redirect=${encodeURIComponent(req.originalUrl)}`
+      `/login?redirect=${encodeURIComponent(req.originalUrl)}`,
     );
   }
 
@@ -91,7 +91,7 @@ export async function oauthAuthorize(req, res) {
   const user = await User.findById(userId);
   if (!user) {
     return res.redirect(
-      `/login?redirect=${encodeURIComponent(req.originalUrl)}`
+      `/login?redirect=${encodeURIComponent(req.originalUrl)}`,
     );
   }
 
@@ -734,7 +734,6 @@ export function renderRegisterPage(req, res) {
       touch-action: manipulation;
     }
 
-    /* Animated background elements */
     body::before,
     body::after {
       content: '';
@@ -762,44 +761,28 @@ export function renderRegisterPage(req, res) {
       left: -100px;
       animation-delay: -10s;
     }
-            html, body {
-        background: #736fe6;
-        margin: 0;
-        padding: 0;
-      }
+
+    html, body {
+      background: #736fe6;
+      margin: 0;
+      padding: 0;
+    }
 
     @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-30px) rotate(5deg); }
     }
 
     @keyframes fadeInDown {
-      from {
-        opacity: 0;
-        transform: translateY(-30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Brand Header */
     .brand-header {
       position: relative;
       z-index: 1;
@@ -817,12 +800,8 @@ export function renderRegisterPage(req, res) {
     }
 
     @keyframes grow {
-      0%, 100% {
-        transform: scale(1);
-      }
-      50% {
-        transform: scale(1.06);
-      }
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
     }
 
     .brand-title {
@@ -841,7 +820,6 @@ export function renderRegisterPage(req, res) {
       letter-spacing: 0.2px;
     }
 
-    /* Register Container - Glass */
     .register-container {
       background: rgba(var(--glass-water-rgb), var(--glass-alpha));
       backdrop-filter: blur(22px) saturate(140%);
@@ -876,10 +854,7 @@ export function renderRegisterPage(req, res) {
       font-weight: 400;
     }
 
-    /* Form */
-    form {
-      margin-bottom: 16px;
-    }
+    form { margin-bottom: 16px; }
 
     .input-group {
       margin-bottom: 16px;
@@ -943,7 +918,6 @@ export function renderRegisterPage(req, res) {
         0 8px 30px rgba(239, 68, 68, 0.2);
     }
 
-    /* Password strength indicator */
     .password-hint {
       font-size: 12px;
       color: rgba(255, 255, 255, 0.7);
@@ -952,7 +926,6 @@ export function renderRegisterPage(req, res) {
       font-weight: 400;
     }
 
-    /* Glass Button */
     button {
       width: 100%;
       padding: 16px;
@@ -1000,11 +973,8 @@ export function renderRegisterPage(req, res) {
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
     }
 
-    button:active {
-      transform: translateY(0);
-    }
+    button:active { transform: translateY(0); }
 
-    /* Messages */
     .message {
       margin-top: 16px;
       margin-bottom: 16px;
@@ -1030,11 +1000,8 @@ export function renderRegisterPage(req, res) {
       border: 1px solid rgba(16, 185, 129, 0.4);
     }
 
-    .message.show {
-      display: block;
-    }
+    .message.show { display: block; }
 
-    /* Secondary Actions */
     .secondary-actions {
       display: flex;
       flex-direction: column;
@@ -1055,11 +1022,8 @@ export function renderRegisterPage(req, res) {
       margin-top: 0;
     }
 
-    .back-btn:hover {
-      background: rgba(255, 255, 255, 0.25);
-    }
+    .back-btn:hover { background: rgba(255, 255, 255, 0.25); }
 
-    /* Loading State */
     button.loading {
       position: relative;
       color: transparent;
@@ -1081,66 +1045,176 @@ export function renderRegisterPage(req, res) {
       animation: spin 0.8s linear infinite;
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Agreement text */
+    .agreement-text {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.65);
+      line-height: 1.5;
+      margin-top: 20px;
+      margin-bottom: 4px;
+      text-align: center;
     }
 
-    /* Responsive */
+    .agreement-link {
+      color: rgba(255, 255, 255, 0.9);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .agreement-link:hover {
+      color: white;
+    }
+
+    /* Modal overlay */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: modalFadeIn 0.25s ease-out;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal-container {
+      width: 100%;
+      max-width: 720px;
+      height: 85vh;
+      height: 85dvh;
+      background: rgba(var(--glass-water-rgb), 0.35);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: modalSlideUp 0.3s ease-out;
+    }
+
+    @keyframes modalSlideUp {
+      from { opacity: 0; transform: translateY(40px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      flex-shrink: 0;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      margin: 0;
+      transition: background 0.2s;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+
+    .modal-close:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: none;
+      box-shadow: none;
+    }
+
+    .modal-close::before { display: none; }
+
+    .modal-body {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .modal-body iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+    }
+
     @media (max-width: 640px) {
       body {
         padding: 20px 16px;
         justify-content: center;
       }
 
-      .brand-header {
-        margin-bottom: 24px;
-      }
-
-      .brand-logo {
-        font-size: 64px;
-      }
+      .brand-header { margin-bottom: 24px; }
+      .brand-logo { font-size: 64px; }
 
       .brand-title {
         font-size: 42px;
         letter-spacing: -1px;
       }
 
-      .brand-subtitle {
-        font-size: 16px;
+      .brand-subtitle { font-size: 16px; }
+      .register-container { padding: 32px 24px; }
+      h2 { font-size: 28px; }
+      input { font-size: 16px; }
+
+      .modal-container {
+        height: 90vh;
+        height: 90dvh;
+        border-radius: 16px;
       }
 
-      .register-container {
-        padding: 32px 24px;
-      }
-
-      h2 {
-        font-size: 28px;
-      }
-
-      input {
-        font-size: 16px;
+      .modal-overlay {
+        padding: 10px;
       }
     }
 
     @media (min-width: 641px) and (max-width: 1024px) {
-      .register-container {
-        max-width: 420px;
-      }
+      .register-container { max-width: 420px; }
     }
   </style>
 </head>
 
 <body>
-  <!-- Brand Header -->
   <div class="brand-header">
     <div class="brand-logo">🌳</div>
     <h1 class="brand-title">Tree</h1>
     <div class="brand-subtitle">Organize your life, efficiently</div>
   </div>
 
-  <!-- Register Container -->
   <div class="register-container">
     <h2>Create Account</h2>
     <p class="subtitle">Sign up to get started with Tree</p>
@@ -1194,6 +1268,13 @@ export function renderRegisterPage(req, res) {
         />
       </div>
 
+      <div class="agreement-text">
+        By creating an account, you agree to our
+        <span class="agreement-link" onclick="openModal('terms')">Terms of Service</span>
+        and
+        <span class="agreement-link" onclick="openModal('privacy')">Privacy Policy</span>.
+      </div>
+
       <button type="submit" id="registerBtn">Create Account</button>
     </form>
 
@@ -1209,8 +1290,66 @@ export function renderRegisterPage(req, res) {
     </div>
   </div>
 
+  <!-- Terms Modal -->
+  <div class="modal-overlay" id="termsModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <span class="modal-title">Terms of Service</span>
+        <button class="modal-close" onclick="closeModal('terms')">✕</button>
+      </div>
+      <div class="modal-body">
+        <iframe src="/terms" title="Terms of Service"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacy Modal -->
+  <div class="modal-overlay" id="privacyModal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <span class="modal-title">Privacy Policy</span>
+        <button class="modal-close" onclick="closeModal('privacy')">✕</button>
+      </div>
+      <div class="modal-body">
+        <iframe src="/privacy-policy" title="Privacy Policy"></iframe>
+      </div>
+    </div>
+  </div>
+
   <script>
     const apiUrl = "https://tree.tabors.site/api";
+
+    function openModal(type) {
+      const id = type === 'terms' ? 'termsModal' : 'privacyModal';
+      document.getElementById(id).classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal(type) {
+      const id = type === 'terms' ? 'termsModal' : 'privacyModal';
+      document.getElementById(id).classList.remove('show');
+      document.body.style.overflow = '';
+    }
+
+    // Close modal on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.remove('show');
+          document.body.style.overflow = '';
+        }
+      });
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.show').forEach(m => {
+          m.classList.remove('show');
+        });
+        document.body.style.overflow = '';
+      }
+    });
 
     document.getElementById("registerForm").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1226,13 +1365,11 @@ export function renderRegisterPage(req, res) {
       const passwordInput = document.getElementById("password");
       const confirmPasswordInput = document.getElementById("confirmPassword");
 
-      // Clear previous states
       errorEl.classList.remove("show");
       successEl.classList.remove("show");
       passwordInput.classList.remove("error");
       confirmPasswordInput.classList.remove("error");
 
-      // Client-side validation
       if (password.length < 8) {
         errorEl.textContent = "Password must be at least 8 characters long.";
         errorEl.classList.add("show");
@@ -1269,13 +1406,11 @@ export function renderRegisterPage(req, res) {
           return;
         }
 
-        // Success
         document.getElementById("registerForm").reset();
         successEl.classList.add("show");
         btn.classList.remove("loading");
         btn.disabled = false;
 
-        // Redirect to login after 7 seconds
         setTimeout(() => {
           window.location.href = "/login";
         }, 7000);
@@ -1289,16 +1424,13 @@ export function renderRegisterPage(req, res) {
       }
     });
 
-    // Real-time password match validation
     document.getElementById("confirmPassword").addEventListener("input", (e) => {
       const password = document.getElementById("password").value;
       const confirmPassword = e.target.value;
-      const confirmPasswordInput = e.target;
-
       if (confirmPassword && password !== confirmPassword) {
-        confirmPasswordInput.classList.add("error");
+        e.target.classList.add("error");
       } else {
-        confirmPasswordInput.classList.remove("error");
+        e.target.classList.remove("error");
       }
     });
   </script>

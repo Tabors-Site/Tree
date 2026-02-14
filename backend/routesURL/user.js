@@ -938,7 +938,8 @@ text-decoration: none;
 </span></a>
 
           <span class="meta-item">
-            <a href="/api/user/${userId}/energy${queryString}">⚡ ${energy?.amount + extraEnergy.amount ?? 0} · resets ${resetTimeLabel}</a>
+            <a href="/api/user/${userId}/energy${queryString}">⚡ ${(energy?.amount ?? 0) + (extraEnergy?.amount ?? 0)} · resets ${resetTimeLabel}
+</a>
           </span>
 
           <span class="meta-item">
@@ -8048,21 +8049,22 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const qs = buildQueryString(req);
-
-    const user = await User.findById(userId).lean().exec();
+    let user = await User.findById(userId).lean().exec();
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+
 
     const energyAmount = user.availableEnergy?.amount ?? 0;
     const additionalEnergy = user.additionalEnergy?.amount ?? 0;
     const profileType = (user.profileType || "basic").toLowerCase();
     const planExpiresAt = user.planExpiresAt || null;
 
-    // Custom LLM connection status
     const llmConn = user.customLlmConnection || null;
     const hasLlm = !!(llmConn && llmConn.baseUrl && !llmConn.revoked);
     const llmRevoked = llmConn?.revoked === true;
+    const hasLlmConfig = !!(llmConn && llmConn.baseUrl);
+    const isBasic = profileType === "basic";
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
@@ -8131,54 +8133,6 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     background: white; top: -300px; right: -200px;
     animation-delay: -5s;
   }
-/* =========================================================
-   GLASS TOGGLE (Custom LLM)
-   ========================================================= */
-.llm-toggle-row {
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:14px;
-  margin-bottom:14px;
-}
-
-.llm-toggle-label {
-  font-size:13px;
-  font-weight:600;
-  color:rgba(255,255,255,.7);
-}
-
-.glass-toggle {
-  position:relative;
-  width:54px;
-  height:28px;
-  border-radius:999px;
-  background:rgba(255,255,255,.2);
-  border:1px solid rgba(255,255,255,.3);
-  backdrop-filter:blur(18px);
-  cursor:pointer;
-  transition:all .25s ease;
-}
-
-.glass-toggle.active {
-  background:rgba(72,187,178,.45);
-  box-shadow:0 0 16px rgba(72,187,178,.35);
-}
-
-.glass-toggle-knob {
-  position:absolute;
-  top:4px;
-  left:4px;
-  width:20px;
-  height:20px;
-  border-radius:50%;
-  background:white;
-  transition:all .25s cubic-bezier(.22,1,.36,1);
-}
-
-.glass-toggle.active .glass-toggle-knob {
-  left:28px;
-}
 
   body::after {
     width: 400px; height: 400px;
@@ -8233,7 +8187,10 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
       transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       box-shadow 0.3s ease;
   }
-
+  .glass-card > * {
+    position: relative;
+    z-index: 1;
+  }
   .back-link::before,
   .glass-btn::before {
     content: "";
@@ -8361,26 +8318,23 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   }
 
   .energy-stat.plan-basic {
-    background: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.35);
-  }
-  .energy-stat.plan-basic .energy-stat-value {
-    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   .energy-stat.plan-standard {
-    background: linear-gradient(135deg, rgba(96, 165, 250, 0.35), rgba(37, 99, 235, 0.35));
-    border-color: rgba(96, 165, 250, 0.4);
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.2), rgba(37, 99, 235, 0.2));
+    border-color: rgba(96, 165, 250, 0.3);
   }
 
   .energy-stat.plan-premium {
-    background: linear-gradient(135deg, rgba(168, 85, 247, 0.35), rgba(124, 58, 237, 0.35));
-    border-color: rgba(168, 85, 247, 0.4);
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(124, 58, 237, 0.2));
+    border-color: rgba(168, 85, 247, 0.3);
   }
 
   .energy-stat.plan-god {
-    background: linear-gradient(135deg, rgba(250, 204, 21, 0.35), rgba(245, 158, 11, 0.35));
-    border-color: rgba(250, 204, 21, 0.4);
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(245, 158, 11, 0.2));
+    border-color: rgba(250, 204, 21, 0.3);
   }
 
   /* =========================================================
@@ -8395,8 +8349,6 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   .plan-box {
     padding: 24px 20px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.12);
-    border: 2px solid rgba(255, 255, 255, 0.2);
     text-align: center;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -8409,30 +8361,73 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent);
     pointer-events: none;
+    transition: all 0.3s;
+  }
+
+  .plan-box[data-plan="basic"] {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.18);
+  }
+  .plan-box[data-plan="basic"]::before {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent);
+  }
+
+  .plan-box[data-plan="standard"] {
+    background: rgba(96, 165, 250, 0.08);
+    border: 2px solid rgba(96, 165, 250, 0.25);
+  }
+  .plan-box[data-plan="standard"]::before {
+    background: linear-gradient(180deg, rgba(96, 165, 250, 0.1), transparent);
+  }
+
+  .plan-box[data-plan="premium"] {
+    background: rgba(168, 85, 247, 0.08);
+    border: 2px solid rgba(168, 85, 247, 0.25);
+  }
+  .plan-box[data-plan="premium"]::before {
+    background: linear-gradient(180deg, rgba(168, 85, 247, 0.1), transparent);
   }
 
   .plan-box:hover:not(.disabled) {
-    background: rgba(255, 255, 255, 0.22);
     transform: translateY(-4px);
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
   }
 
+  .plan-box[data-plan="standard"]:hover:not(.disabled) {
+    background: rgba(96, 165, 250, 0.16);
+    border-color: rgba(96, 165, 250, 0.4);
+  }
+
+  .plan-box[data-plan="premium"]:hover:not(.disabled) {
+    background: rgba(168, 85, 247, 0.16);
+    border-color: rgba(168, 85, 247, 0.4);
+  }
+
   .plan-box.selected {
-    border-color: rgba(72, 187, 178, 0.8);
-    background: rgba(72, 187, 178, 0.2);
     transform: translateY(-4px);
-    box-shadow: 0 0 30px rgba(72, 187, 178, 0.2), 0 8px 28px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 0 0 3px rgba(72, 187, 178, 0.6), 0 8px 28px rgba(0, 0, 0, 0.15), 0 0 30px rgba(72, 187, 178, 0.15);
+  }
+
+  .plan-box[data-plan="standard"].selected {
+    border-color: rgba(72, 187, 178, 0.9);
+    background: rgba(96, 165, 250, 0.18);
+  }
+
+  .plan-box[data-plan="premium"].selected {
+    border-color: rgba(72, 187, 178, 0.9);
+    background: rgba(168, 85, 247, 0.18);
   }
 
   .plan-box.disabled {
-    opacity: 0.4;
+    opacity: 0.65;
     cursor: not-allowed;
   }
 
-  .plan-box.current-plan {
-    border-color: rgba(255, 255, 255, 0.4);
+ .plan-box.current-plan {
+    border-color: rgba(255, 255, 255, 0.6);
+    border-width: 3px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 20px rgba(255, 255, 255, 0.08);
   }
 
   .plan-name {
@@ -8480,9 +8475,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     color: rgba(255, 255, 255, 0.75);
   }
 
-  .plan-feature.dim {
-    color: rgba(255, 255, 255, 0.4);
-  }
+  .plan-feature.dim { color: rgba(255, 255, 255, 0.4); }
 
   .plan-feature.highlight {
     color: rgba(72, 187, 178, 0.95);
@@ -8559,22 +8552,76 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   .checkout-summary {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
 
   .checkout-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
+    padding: 14px 16px;
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    transition: background 0.2s;
+  }
+
+  .checkout-row:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .checkout-row-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .checkout-row-icon {
+    width: 36px;
+    height: 36px;
     border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .checkout-row-icon.plan-icon {
+    background: rgba(168, 85, 247, 0.2);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+
+  .checkout-row-icon.energy-icon {
+    background: rgba(250, 204, 21, 0.2);
+    border: 1px solid rgba(250, 204, 21, 0.3);
+  }
+
+  .checkout-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
   }
 
   .checkout-row-label {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
+    font-weight: 600;
+    color: white;
+  }
+
+  .checkout-row-desc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .checkout-row-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
   }
 
   .checkout-row-value {
@@ -8583,15 +8630,42 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     color: white;
   }
 
+  .checkout-remove {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(239, 68, 68, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    line-height: 1;
+  }
+
+  .checkout-remove:hover {
+    background: rgba(239, 68, 68, 0.35);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: white;
+  }
+
+  .checkout-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 4px 0;
+  }
+
   .checkout-total {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
-    background: rgba(72, 187, 178, 0.2);
-    border: 1px solid rgba(72, 187, 178, 0.3);
-    border-radius: 12px;
-    margin-top: 4px;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, rgba(72, 187, 178, 0.2), rgba(56, 163, 155, 0.15));
+    border: 1px solid rgba(72, 187, 178, 0.35);
+    border-radius: 14px;
   }
 
   .checkout-total-label {
@@ -8601,7 +8675,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   }
 
   .checkout-total-value {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 700;
     color: white;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
@@ -8609,23 +8683,25 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
 
   .checkout-btn {
     width: 100%;
-    padding: 16px;
+    padding: 18px;
     border-radius: 980px;
     border: 1px solid rgba(72, 187, 178, 0.5);
-    background: rgba(72, 187, 178, 0.35);
+    background: linear-gradient(135deg, rgba(72, 187, 178, 0.4), rgba(56, 163, 155, 0.35));
     backdrop-filter: blur(22px) saturate(140%);
     -webkit-backdrop-filter: blur(22px) saturate(140%);
     color: white;
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 700;
     font-family: inherit;
     cursor: pointer;
     margin-top: 16px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+      0 0 20px rgba(72, 187, 178, 0.1),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
     position: relative;
     overflow: hidden;
+    letter-spacing: -0.2px;
   }
 
   .checkout-btn::before {
@@ -8642,10 +8718,10 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   }
 
   .checkout-btn:hover {
-    background: rgba(72, 187, 178, 0.5);
+    background: linear-gradient(135deg, rgba(72, 187, 178, 0.55), rgba(56, 163, 155, 0.5));
     transform: translateY(-2px);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18),
-      0 0 20px rgba(72, 187, 178, 0.2);
+      0 0 30px rgba(72, 187, 178, 0.2);
   }
 
   .checkout-btn:hover::before {
@@ -8653,9 +8729,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     transform: translateX(30%) translateY(10%);
   }
 
-  .checkout-btn:active {
-    transform: translateY(0);
-  }
+  .checkout-btn:active { transform: translateY(0); }
 
   .checkout-btn:disabled {
     opacity: 0.4;
@@ -8664,35 +8738,144 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   }
 
   .checkout-btn:disabled:hover {
-    background: rgba(72, 187, 178, 0.35);
+    background: linear-gradient(135deg, rgba(72, 187, 178, 0.4), rgba(56, 163, 155, 0.35));
     transform: none;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   }
 
-  .checkout-note {
+  .checkout-legal {
     text-align: center;
     margin-top: 14px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.45);
+    line-height: 1.5;
+  }
+
+  .checkout-legal-link {
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+
+  .checkout-legal-link:hover { color: white; }
+
+  .checkout-note {
+    text-align: center;
+    margin-top: 10px;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.45);
     font-style: italic;
   }
 
   .checkout-empty {
     text-align: center;
-    padding: 20px;
-    color: rgba(255, 255, 255, 0.45);
+    padding: 28px 20px;
+    color: rgba(255, 255, 255, 0.4);
     font-style: italic;
     font-size: 14px;
+    border: 2px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
   }
 
   /* =========================================================
      LLM SECTION
      ========================================================= */
+  .llm-section-wrapper {
+    position: relative;
+  }
+
+  .llm-section-wrapper.locked .llm-section-content {
+    opacity: 0.2;
+    pointer-events: none;
+    filter: blur(2px);
+  }
+
+  .llm-upgrade-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    border-radius: inherit;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .llm-section-wrapper.locked .llm-upgrade-overlay {
+    display: flex;
+  }
+
+  .llm-upgrade-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .llm-upgrade-sub {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
   .llm-sub {
     font-size: 14px;
     color: rgba(255, 255, 255, 0.6);
     line-height: 1.5;
     margin-bottom: 16px;
+  }
+
+  .llm-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+  }
+
+  .llm-toggle-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .glass-toggle {
+    position: relative;
+    width: 54px;
+    height: 28px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(18px);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    flex-shrink: 0;
+  }
+
+  .glass-toggle.active {
+    background: rgba(72, 187, 178, 0.45);
+    box-shadow: 0 0 16px rgba(72, 187, 178, 0.35);
+  }
+
+  .glass-toggle-knob {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .glass-toggle.active .glass-toggle-knob {
+    left: 28px;
   }
 
   .llm-connected-badge {
@@ -8735,6 +8918,12 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    transition: opacity 0.3s;
+  }
+
+  .llm-fields.disabled {
+    opacity: 0.35;
+    pointer-events: none;
   }
 
   .llm-field-row {
@@ -8764,9 +8953,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     width: 100%;
   }
 
-  .llm-input::placeholder {
-    color: rgba(255, 255, 255, 0.35);
-  }
+  .llm-input::placeholder { color: rgba(255, 255, 255, 0.35); }
 
   .llm-input:focus {
     outline: none;
@@ -8795,6 +8982,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     transition: all 0.3s;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    background: none;
   }
 
   .llm-save-btn {
@@ -8826,6 +9014,86 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   }
 
   /* =========================================================
+     MODAL (Terms / Privacy)
+     ========================================================= */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal-container {
+    width: 100%;
+    max-width: 720px;
+    height: 85vh;
+    height: 85dvh;
+    background: rgba(var(--glass-water-rgb), 0.35);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+  }
+
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    line-height: 1;
+  }
+
+  .modal-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .modal-body {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .modal-body iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+
+  /* =========================================================
      RESPONSIVE
      ========================================================= */
   @media (max-width: 640px) {
@@ -8841,6 +9109,8 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     .llm-btn-row { flex-direction: column; }
     .llm-save-btn, .llm-disconnect-btn { width: 100%; text-align: center; }
     .llm-connected-detail { max-width: 140px; }
+    .modal-container { height: 90vh; height: 90dvh; border-radius: 16px; }
+    .modal-overlay { padding: 10px; }
   }
 </style>
 </head>
@@ -8863,7 +9133,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
       <div class="energy-stat plan-${profileType}">
         <div class="energy-stat-label">Current Plan</div>
         <div class="energy-stat-value" style="font-size: 22px; text-transform: capitalize;">${profileType}</div>
-        <div class="energy-stat-sub" id="planExpirySub">${planExpiresAt ? "Expires " + new Date(planExpiresAt).toLocaleDateString() : "—"}</div>
+        ${!isBasic && planExpiresAt ? '<div class="energy-stat-sub">Expires ' + new Date(planExpiresAt).toLocaleDateString() + "</div>" : ""}
       </div>
       <div class="energy-stat">
         <div class="energy-stat-label">Additional Energy</div>
@@ -8893,7 +9163,6 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
         <div class="plan-period">per 30 days</div>
         <div class="plan-features">
           <div class="plan-feature">500 daily energy</div>
-          <div class="plan-feature">Full access</div>
           <div class="plan-feature">File uploads</div>
         </div>
         ${profileType === "standard" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
@@ -8905,7 +9174,6 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
         <div class="plan-features">
           <div class="plan-feature">2,000 daily energy</div>
           <div class="plan-feature">Full access</div>
-          <div class="plan-feature">File uploads</div>
           <div class="plan-feature highlight">Offline LLM processing</div>
         </div>
         ${profileType === "premium" || profileType === "god" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
@@ -8917,7 +9185,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   <!-- Buy Energy -->
   <div class="glass-card" style="animation-delay: 0.2s;">
     <h2>🔥 Additional Energy</h2>
-    <div style="font-size: 14px; color: rgba(255,255,255,0.55); margin-bottom: 16px;">This will only be used as a reserve when your plan energy runs out.</div>
+    <div style="font-size: 14px; color: rgba(255,255,255,0.55); margin-bottom: 16px;">Reserve energy — only used when your plan energy runs out.</div>
     <div class="energy-btns" id="energyBtns">
       <button class="energy-buy-btn" data-amount="100">+100</button>
       <button class="energy-buy-btn" data-amount="500">+500</button>
@@ -8941,78 +9209,124 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   <!-- Custom LLM -->
   <div class="glass-card" style="animation-delay: 0.3s;">
     <h2>🤖 Custom LLM Endpoint</h2>
-    <div class="llm-sub">Connect your own OpenAI API-compatible LLM to use AI chat and bypass energy usage for conversations.</div>
+    <div class="llm-section-wrapper ${isBasic ? "locked" : ""}">
+      <div class="llm-upgrade-overlay">
+        <div class="llm-upgrade-text">🔒 Upgrade Required</div>
+        <div class="llm-upgrade-sub">Custom LLM connections require a Standard or Premium plan</div>
+      </div>
+      <div class="llm-section-content">
+        <div class="llm-sub">Connect your own OpenAI API-compatible LLM to use AI chat and bypass energy usage for conversations.</div>
 
-    ${
-      hasLlm
-        ? `
-    <div class="llm-connected-badge">
-      <div class="llm-connected-dot"></div>
-      <span class="llm-connected-text">Connected</span>
-      <span class="llm-connected-detail">${llmConn.model} · ${llmConn.baseUrl}</span>
+        ${hasLlmConfig ? '<div class="llm-connected-badge" id="llmBadge" style="' + (llmRevoked ? "display:none;" : "") + '"><div class="llm-connected-dot"></div><span class="llm-connected-text">Connected</span><span class="llm-connected-detail">' + llmConn.model + " · " + llmConn.baseUrl + "</span></div>" : ""}
+
+        ${hasLlmConfig ? '<div class="llm-toggle-row"><span class="llm-toggle-label">Custom LLM Active</span><div id="llmToggle" class="glass-toggle ' + (llmRevoked ? "" : "active") + '"><div class="glass-toggle-knob"></div></div></div>' : ""}
+
+        <div class="llm-fields ${hasLlmConfig && llmRevoked ? "disabled" : ""}" id="llmFields">
+          <div class="llm-field-row">
+            <label class="llm-field-label">Endpoint URL</label>
+            <input type="text" class="llm-input" id="llmBaseUrl"
+              placeholder="https://api.groq.com/openai/v1/chat/completions"
+              value="${hasLlmConfig ? llmConn.baseUrl : ""}" />
+          </div>
+          <div class="llm-field-row">
+            <label class="llm-field-label">API Key</label>
+            <input type="password" class="llm-input" id="llmApiKey"
+              placeholder="${hasLlmConfig ? "••••••••  (saved — enter new to change)" : "gsk_abc123..."}" />
+          </div>
+          <div class="llm-field-row">
+            <label class="llm-field-label">Model</label>
+            <input type="text" class="llm-input" id="llmModel"
+              placeholder="openai/gpt-oss-120b"
+              value="${hasLlmConfig ? llmConn.model : ""}" />
+          </div>
+          <div class="llm-btn-row">
+            <button class="llm-save-btn" onclick="saveLLM()">${hasLlmConfig ? "Update Connection" : "Save Connection"}</button>
+            ${hasLlmConfig ? '<button class="llm-disconnect-btn" onclick="disconnectLLM()">Disconnect</button>' : ""}
+          </div>
+        </div>
+        <div class="llm-status" id="llmStatus"></div>
+      </div>
     </div>
-    `
-        : ""
-    }
-    ${
-      llmConn
-        ? `
-<div class="llm-toggle-row">
-  <span class="llm-toggle-label">Custom LLM Active</span>
-  <div id="llmToggle" class="glass-toggle ${llmRevoked ? "" : "active"}">
-    <div class="glass-toggle-knob"></div>
+  </div>
+
+</div>
+
+<!-- Terms Modal -->
+<div class="modal-overlay" id="termsModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <span class="modal-title">Terms of Service</span>
+      <span class="modal-close" onclick="closeModal('terms')">✕</span>
+    </div>
+    <div class="modal-body">
+      <iframe src="/terms" title="Terms of Service"></iframe>
+    </div>
   </div>
 </div>
-`
-        : ""
-    }
 
-
-    <div class="llm-fields">
-      <div class="llm-field-row">
-        <label class="llm-field-label">Endpoint URL</label>
-        <input type="text" class="llm-input" id="llmBaseUrl"
-          placeholder="https://api.groq.com/openai/v1/chat/completions"
-          value="${hasLlm ? llmConn.baseUrl : ""}" />
-      </div>
-      <div class="llm-field-row">
-        <label class="llm-field-label">API Key</label>
-        <input type="password" class="llm-input" id="llmApiKey"
-          placeholder="${hasLlm ? "••••••••  (saved — enter new to change)" : "gsk_abc123..."}" />
-      </div>
-      <div class="llm-field-row">
-        <label class="llm-field-label">Model</label>
-        <input type="text" class="llm-input" id="llmModel"
-          placeholder="openai/gpt-oss-120b"
-          value="${hasLlm ? llmConn.model : ""}" />
-      </div>
-      <div class="llm-btn-row">
-        <button class="llm-save-btn" onclick="saveLLM()">${hasLlm ? "Update Connection" : "Save Connection"}</button>
-        ${hasLlm ? '<button class="llm-disconnect-btn" onclick="disconnectLLM()">Disconnect</button>' : ""}
-      </div>
+<!-- Privacy Modal -->
+<div class="modal-overlay" id="privacyModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <span class="modal-title">Privacy Policy</span>
+      <span class="modal-close" onclick="closeModal('privacy')">✕</span>
     </div>
-    <div class="llm-status" id="llmStatus"></div>
+    <div class="modal-body">
+      <iframe src="/privacy-policy" title="Privacy Policy"></iframe>
+    </div>
   </div>
-
 </div>
 
 <script>
-const userId = "${userId}";
-const currentPlan = "${profileType === "god" ? "premium" : profileType}";
-const PLAN_PRICE = { basic: 0, standard: 20, premium: 100 };
-const PLAN_ORDER = ["basic", "standard", "premium"];
-const ENERGY_RATE = 0.01; // $0.01 per unit
+var userId = "${userId}";
+var currentPlan = "${profileType === "god" ? "premium" : profileType}";
+var PLAN_PRICE = { basic: 0, standard: 20, premium: 100 };
+var PLAN_ORDER = ["basic", "standard", "premium"];
+var ENERGY_RATE = 0.01;
 
-const state = {
+var state = {
   energyAdded: 0,
-  selectedPlan: null  // null = no plan change
+  selectedPlan: null
 };
+
+// =====================
+// MODAL
+// =====================
+function openModal(type) {
+  var id = type === "terms" ? "termsModal" : "privacyModal";
+  document.getElementById(id).classList.add("show");
+  document.body.style.overflow = "hidden";
+}
+
+function closeModal(type) {
+  var id = type === "terms" ? "termsModal" : "privacyModal";
+  document.getElementById(id).classList.remove("show");
+  document.body.style.overflow = "";
+}
+
+document.querySelectorAll(".modal-overlay").forEach(function(overlay) {
+  overlay.addEventListener("click", function(e) {
+    if (e.target === overlay) {
+      overlay.classList.remove("show");
+      document.body.style.overflow = "";
+    }
+  });
+});
+
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") {
+    document.querySelectorAll(".modal-overlay.show").forEach(function(m) {
+      m.classList.remove("show");
+    });
+    document.body.style.overflow = "";
+  }
+});
 
 // =====================
 // URL STATE
 // =====================
 function readURL() {
-  const p = new URLSearchParams(location.search);
+  var p = new URLSearchParams(location.search);
   if (p.get("energy")) state.energyAdded = parseInt(p.get("energy")) || 0;
   if (p.get("plan") && p.get("plan") !== currentPlan) {
     state.selectedPlan = p.get("plan");
@@ -9020,8 +9334,7 @@ function readURL() {
 }
 
 function writeURL() {
-  const p = new URLSearchParams(location.search);
-  // Clear our managed keys, preserve everything else (like $token)
+  var p = new URLSearchParams(location.search);
   p.delete("energy");
   p.delete("plan");
   if (!p.has("html")) p.set("html", "");
@@ -9035,23 +9348,23 @@ function writeURL() {
 // =====================
 function canSelectPlan(plan) {
   if (plan === "basic") return false;
-  const cur = PLAN_ORDER.indexOf(currentPlan);
-  const next = PLAN_ORDER.indexOf(plan);
+  var cur = PLAN_ORDER.indexOf(currentPlan);
+  var next = PLAN_ORDER.indexOf(plan);
   return next >= cur;
 }
 
 function renderPlans() {
-  document.querySelectorAll(".plan-box").forEach(box => {
-    const plan = box.dataset.plan;
-    const isSelected = state.selectedPlan === plan;
-    const isCurrent = plan === currentPlan && !state.selectedPlan;
+  document.querySelectorAll(".plan-box").forEach(function(box) {
+    var plan = box.dataset.plan;
+    var isSelected = state.selectedPlan === plan;
+    var isCurrent = plan === currentPlan && !state.selectedPlan;
 
     box.classList.toggle("selected", isSelected);
     box.classList.toggle("current-plan", isCurrent);
     box.classList.toggle("disabled", !canSelectPlan(plan));
   });
 
-  const note = document.getElementById("planNote");
+  var note = document.getElementById("planNote");
   if (state.selectedPlan) {
     if (state.selectedPlan === currentPlan) {
       note.textContent = "Renewing " + state.selectedPlan + " for 30 more days";
@@ -9068,8 +9381,8 @@ function renderPlans() {
 // ENERGY
 // =====================
 function renderEnergy() {
-  const el = document.getElementById("energyAdded");
-  const val = document.getElementById("energyAddedVal");
+  var el = document.getElementById("energyAdded");
+  var val = document.getElementById("energyAddedVal");
   if (state.energyAdded > 0) {
     el.style.display = "block";
     val.textContent = "+" + state.energyAdded + " ($" + (state.energyAdded * ENERGY_RATE).toFixed(2) + ")";
@@ -9085,87 +9398,124 @@ function resetEnergy() {
   renderCheckout();
 }
 
+function removePlan() {
+  state.selectedPlan = null;
+  writeURL();
+  renderPlans();
+  renderCheckout();
+}
+
 // =====================
 // CHECKOUT
 // =====================
 function renderCheckout() {
-  const container = document.getElementById("checkoutContent");
-  const energyCost = state.energyAdded * ENERGY_RATE;
-  const planCost = state.selectedPlan ? (PLAN_PRICE[state.selectedPlan] || 0) : 0;
-  const total = energyCost + planCost;
+  var container = document.getElementById("checkoutContent");
+  var energyCost = state.energyAdded * ENERGY_RATE;
+  var planCost = state.selectedPlan ? (PLAN_PRICE[state.selectedPlan] || 0) : 0;
+  var total = energyCost + planCost;
 
   if (total <= 0) {
     container.innerHTML = '<div class="checkout-empty">Select a plan or add energy to continue</div>';
     return;
   }
 
-  let rows = "";
+  var rows = "";
 
   if (state.selectedPlan) {
-    const label = state.selectedPlan === currentPlan ? "Renew " + state.selectedPlan : "Upgrade to " + state.selectedPlan;
-    rows += '<div class="checkout-row">' +
-      '<span class="checkout-row-label">' + label + ' (30 days)</span>' +
-      '<span class="checkout-row-value">$' + planCost.toFixed(2) + '</span>' +
-    '</div>';
+    var label = state.selectedPlan === currentPlan
+      ? "Renew " + state.selectedPlan
+      : "Upgrade to " + state.selectedPlan;
+    var desc = state.selectedPlan === currentPlan
+      ? "+30 days added to remaining time"
+      : "30-day plan starts immediately";
+
+    rows +=
+      '<div class="checkout-row">' +
+        '<div class="checkout-row-left">' +
+          '<div class="checkout-row-icon plan-icon">📋</div>' +
+          '<div class="checkout-row-info">' +
+            '<div class="checkout-row-label">' + label + '</div>' +
+            '<div class="checkout-row-desc">' + desc + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="checkout-row-right">' +
+          '<div class="checkout-row-value">$' + planCost.toFixed(2) + '</div>' +
+          '<span class="checkout-remove" onclick="removePlan()">✕</span>' +
+        '</div>' +
+      '</div>';
   }
 
   if (state.energyAdded > 0) {
-    rows += '<div class="checkout-row">' +
-      '<span class="checkout-row-label">+' + state.energyAdded + ' additional energy</span>' +
-      '<span class="checkout-row-value">$' + energyCost.toFixed(2) + '</span>' +
-    '</div>';
+    rows +=
+      '<div class="checkout-row">' +
+        '<div class="checkout-row-left">' +
+          '<div class="checkout-row-icon energy-icon">🔥</div>' +
+          '<div class="checkout-row-info">' +
+            '<div class="checkout-row-label">+' + state.energyAdded + ' Additional Energy</div>' +
+            '<div class="checkout-row-desc">Reserve — used after plan energy</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="checkout-row-right">' +
+          '<div class="checkout-row-value">$' + energyCost.toFixed(2) + '</div>' +
+          '<span class="checkout-remove" onclick="resetEnergy()">✕</span>' +
+        '</div>' +
+      '</div>';
   }
 
   container.innerHTML =
     '<div class="checkout-summary">' +
       rows +
+      '<div class="checkout-divider"></div>' +
       '<div class="checkout-total">' +
-        '<span class="checkout-total-label">Total</span>' +
-        '<span class="checkout-total-value">$' + total.toFixed(2) + '</span>' +
+        '<div class="checkout-total-label">Total</div>' +
+        '<div class="checkout-total-value">$' + total.toFixed(2) + '</div>' +
       '</div>' +
     '</div>' +
     '<button class="checkout-btn" onclick="handleCheckout()">Pay with Stripe</button>' +
-    '<div class="checkout-note">No recurring charges. Must renew manually.</div>';
+    '<div class="checkout-legal">' +
+      'By purchasing, you agree to our ' +
+      '<span class="checkout-legal-link" onclick="openModal(\\'terms\\')">Terms of Service</span>' +
+      ' and ' +
+      '<span class="checkout-legal-link" onclick="openModal(\\'privacy\\')">Privacy Policy</span>.' +
+    '</div>' +
+    '<div class="checkout-note">No recurring charges · No refunds · Renew manually</div>';
 }
 
 // =====================
 // STRIPE CHECKOUT
 // =====================
 async function handleCheckout() {
-  const btn = document.querySelector(".checkout-btn");
+  var btn = document.querySelector(".checkout-btn");
   btn.disabled = true;
   btn.textContent = "Processing…";
 
   try {
-    const body = {
+    var body = {
       userId: userId,
       energyAmount: state.energyAdded > 0 ? state.energyAdded : 0,
       plan: state.selectedPlan || null,
       currentPlan: currentPlan,
     };
 
-    const res = await fetch("/api/user/" + userId + "/purchase", {
+    var res = await fetch("/api/user/" + userId + "/purchase", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
+    var data = await res.json();
 
-   if (data.url) {
-  if (window.top !== window.self) {
-    // inside iframe → redirect parent tab
-    window.top.location.href = data.url;
-  } else {
-    // normal page
-    window.location.href = data.url;
-  }
-} else if (data.error) {
-  alert(data.error);
-  btn.disabled = false;
-  btn.textContent = "Pay with Stripe";
-}
-
+    if (data.url) {
+      if (window.top !== window.self) {
+        window.top.location.href = data.url;
+      } else {
+        window.location.href = data.url;
+      }
+    } else if (data.error) {
+      alert(data.error);
+      btn.disabled = false;
+      btn.textContent = "Pay with Stripe";
+    }
   } catch (err) {
     alert("Something went wrong. Please try again.");
     btn.disabled = false;
@@ -9177,34 +9527,34 @@ async function handleCheckout() {
 // CUSTOM LLM
 // =====================
 function showLlmStatus(msg, ok) {
-  const el = document.getElementById("llmStatus");
+  var el = document.getElementById("llmStatus");
   el.style.display = "block";
   el.textContent = msg;
   el.style.color = ok ? "rgba(72, 187, 120, 0.9)" : "rgba(255, 107, 107, 0.9)";
-  if (ok) setTimeout(() => { el.style.display = "none"; }, 3000);
+  if (ok) setTimeout(function() { el.style.display = "none"; }, 3000);
 }
 
 async function saveLLM() {
-  const baseUrl = document.getElementById("llmBaseUrl").value.trim();
-  const apiKey = document.getElementById("llmApiKey").value.trim();
-  const model = document.getElementById("llmModel").value.trim();
+  var baseUrl = document.getElementById("llmBaseUrl").value.trim();
+  var apiKey = document.getElementById("llmApiKey").value.trim();
+  var model = document.getElementById("llmModel").value.trim();
 
   if (!baseUrl || !model) {
     showLlmStatus("Endpoint URL and Model are required", false);
     return;
   }
 
-  const isUpdate = ${hasLlm ? "true" : "false"};
+  var isUpdate = ${hasLlmConfig ? "true" : "false"};
   if (!isUpdate && !apiKey) {
     showLlmStatus("API Key is required for new connections", false);
     return;
   }
 
-  const payload = { baseUrl, model };
+  var payload = { baseUrl: baseUrl, model: model };
   if (apiKey) payload.apiKey = apiKey;
 
   try {
-    const res = await fetch("/api/user/" + userId + "/custom-llm", {
+    var res = await fetch("/api/user/" + userId + "/custom-llm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -9212,9 +9562,9 @@ async function saveLLM() {
 
     if (res.ok) {
       showLlmStatus("✓ Connection saved", true);
-      setTimeout(() => location.reload(), 1200);
+      setTimeout(function() { location.reload(); }, 1200);
     } else {
-      const data = await res.json().catch(() => ({}));
+      var data = await res.json().catch(function() { return {}; });
       showLlmStatus("✕ " + (data.error || "Failed to save"), false);
     }
   } catch (err) {
@@ -9223,16 +9573,16 @@ async function saveLLM() {
 }
 
 async function disconnectLLM() {
-  if (!confirm("Disconnect your custom LLM? You will go back to using energy for AI chat.")) return;
+  if (!confirm("Disconnect your custom LLM? This will remove the saved connection.")) return;
 
   try {
-    const res = await fetch("/api/user/" + userId + "/custom-llm", {
+    var res = await fetch("/api/user/" + userId + "/custom-llm", {
       method: "DELETE",
     });
 
     if (res.ok) {
       showLlmStatus("✓ Disconnected", true);
-      setTimeout(() => location.reload(), 1000);
+      setTimeout(function() { location.reload(); }, 1000);
     } else {
       showLlmStatus("✕ Failed to disconnect", false);
     }
@@ -9240,37 +9590,48 @@ async function disconnectLLM() {
     showLlmStatus("✕ Network error", false);
   }
 }
-  async function toggleLLM(active) {
+
+async function toggleLLM(active) {
+  var fields = document.getElementById("llmFields");
+  var badge = document.getElementById("llmBadge");
+
+  if (fields) fields.classList.toggle("disabled", !active);
+  if (badge) badge.style.display = active ? "flex" : "none";
+
   try {
-    const res = await fetch("/api/user/" + userId + "/custom-llm/revoke", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        revoked: !active   // active=true → revoked=false
-      })
+    var res = await fetch("/api/user/" + userId + "/custom-llm/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ revoked: !active })
     });
 
-    if(res.ok){
-      showLlmStatus(active ? "✓ Custom LLM enabled" : "✓ Custom LLM disabled", true);
-      setTimeout(()=>location.reload(),700);
+    if (res.ok) {
+      showLlmStatus(active ? "✓ Custom LLM enabled" : "✓ Custom LLM paused", true);
     } else {
       showLlmStatus("✕ Failed to update", false);
+      // Revert
+      var toggle = document.getElementById("llmToggle");
+      if (toggle) toggle.classList.toggle("active");
+      if (fields) fields.classList.toggle("disabled");
+      if (badge) badge.style.display = active ? "none" : "flex";
     }
-  } catch {
+  } catch (err) {
     showLlmStatus("✕ Network error", false);
+    var toggle2 = document.getElementById("llmToggle");
+    if (toggle2) toggle2.classList.toggle("active");
+    if (fields) fields.classList.toggle("disabled");
+    if (badge) badge.style.display = active ? "none" : "flex";
   }
 }
-
 
 // =====================
 // EVENTS
 // =====================
-document.querySelectorAll(".plan-box").forEach(box => {
-  box.onclick = () => {
-    const plan = box.dataset.plan;
+document.querySelectorAll(".plan-box").forEach(function(box) {
+  box.onclick = function() {
+    var plan = box.dataset.plan;
     if (!canSelectPlan(plan)) return;
 
-    // Toggle: click again to deselect
     if (state.selectedPlan === plan) {
       state.selectedPlan = null;
     } else {
@@ -9283,8 +9644,8 @@ document.querySelectorAll(".plan-box").forEach(box => {
   };
 });
 
-document.querySelectorAll(".energy-buy-btn:not(#customEnergyBtn)").forEach(btn => {
-  btn.onclick = () => {
+document.querySelectorAll(".energy-buy-btn:not(#customEnergyBtn)").forEach(function(btn) {
+  btn.onclick = function() {
     state.energyAdded += parseInt(btn.dataset.amount);
     writeURL();
     renderEnergy();
@@ -9292,8 +9653,8 @@ document.querySelectorAll(".energy-buy-btn:not(#customEnergyBtn)").forEach(btn =
   };
 });
 
-document.getElementById("customEnergyBtn").onclick = () => {
-  const val = parseInt(prompt("Enter energy amount:"));
+document.getElementById("customEnergyBtn").onclick = function() {
+  var val = parseInt(prompt("Enter energy amount:"));
   if (!val || val <= 0) return;
   state.energyAdded += val;
   writeURL();
@@ -9301,18 +9662,18 @@ document.getElementById("customEnergyBtn").onclick = () => {
   renderCheckout();
 };
 
-// =====================
-// INIT
-// =====================
 // Glass toggle handler
-const llmToggle = document.getElementById("llmToggle");
+var llmToggle = document.getElementById("llmToggle");
 if (llmToggle) {
-  llmToggle.onclick = () => {
-    const isActive = llmToggle.classList.toggle("active");
+  llmToggle.onclick = function() {
+    var isActive = llmToggle.classList.toggle("active");
     toggleLLM(isActive);
   };
 }
 
+// =====================
+// INIT
+// =====================
 readURL();
 renderPlans();
 renderEnergy();
@@ -10235,6 +10596,853 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/terms", async (req, res) => {
+  try {
+    const tokenQS = req.query.token
+      ? `?token=${req.query.token}&html`
+      : "?html";
+
+    return res.send(`
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Terms of Service — Tree</title>
+    <style>
+  :root {
+    --glass-water-rgb: 115, 111, 230;
+    --glass-alpha: 0.28;
+    --glass-alpha-hover: 0.38;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    background: #736fe6;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #1a1a1a;
+    position: relative;
+    overflow-x: hidden;
+    touch-action: manipulation;
+  }
+
+  body::before,
+  body::after {
+    content: '';
+    position: fixed;
+    border-radius: 50%;
+    opacity: 0.08;
+    animation: float 20s infinite ease-in-out;
+    pointer-events: none;
+  }
+
+  body::before {
+    width: 600px;
+    height: 600px;
+    background: white;
+    top: -300px;
+    right: -200px;
+    animation-delay: -5s;
+  }
+
+  body::after {
+    width: 400px;
+    height: 400px;
+    background: white;
+    bottom: -200px;
+    left: -100px;
+    animation-delay: -10s;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-30px) rotate(5deg); }
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .container {
+    max-width: 700px;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+  }
+
+  .card {
+    position: relative;
+    overflow: hidden;
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border-radius: 24px;
+    padding: 48px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: white;
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    display: inline-block;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+  }
+
+  h1 {
+    font-size: 32px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .last-updated {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+  }
+
+  .section {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 24px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 12px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  .section-text {
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  .section-text strong {
+    color: white;
+    font-weight: 600;
+  }
+
+  .highlight-box {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 14px 18px;
+    border-radius: 12px;
+    border-left: 3px solid rgba(255, 255, 255, 0.5);
+    margin-top: 12px;
+  }
+
+  .highlight-box .section-text {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .back-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    text-decoration: none;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 980px;
+    transition: all 0.3s;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+  }
+
+  .back-link:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  @media (max-width: 640px) {
+    body {
+      padding: 16px;
+      align-items: flex-start;
+      padding-top: 40px;
+    }
+    .card {
+      padding: 32px 24px;
+    }
+    h1 {
+      font-size: 28px;
+    }
+    .icon {
+      font-size: 56px;
+    }
+  }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+
+        <div class="header">
+          <div class="icon">📜</div>
+          <h1>Terms of Service</h1>
+          <div class="last-updated">Last Updated: February 13, 2025</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">1. Overview</div>
+          <div class="section-text">
+            Welcome to Tree ("Service", "we", "us", or "our"). By accessing or using the Service at tree.tabors.site, you agree to these Terms of Service ("Terms"). If you do not agree, please do not use the Service.
+            <br><br>
+            Tree is a web-based platform that provides digital organizational features including trees, notes, and usage-based energy credits. All purchases grant access to features within the Service and do not represent ownership of any real-world asset.
+            <br><br>
+  You must be at least 18 years old to use the Service.        </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">2. Accounts</div>
+          <div class="section-text">
+            You are responsible for maintaining the security of your account and any activity that occurs under it. You agree to provide accurate information and keep your login credentials confidential.
+            <br><br>
+            We reserve the right to suspend or terminate accounts that violate these Terms or engage in abuse, fraud, or harmful activity.
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">3. Energy System & Digital Purchases</div>
+          <div class="section-text">
+  Tree operates on an energy-based usage system. Energy is consumed as you interact with the Service. Your daily energy allowance resets automatically once every 24 hours. If more than 24 hours have passed since your last reset, the reset will occur the next time you access the Service, and the 24-hour reset period will then be measured from that reset time.        <br><br>
+The Service offers the following purchasable options:
+<br><br>
+Plan names and features, daily energy amounts, usage limits, energy costs, and pricing are described within the Service interface and may change from time to time at our discretion.
+<br><br>
+<strong>30-Day Energy Plans</strong> — Time-limited plans that grant access to enhanced features and a higher daily energy allowance for 30 days from the date of purchase. Plans automatically expire after 30 days. Upon expiration, your account reverts to the basic tier.
+<br><br>
+<strong>Additional Energy (Reserve)</strong> — One-time purchases of bonus energy that supplements your plan. Reserve energy is only consumed after your plan's daily available energy has been fully used. Reserve energy does not expire and remains available unless the account is terminated for violation of these Terms.
+<br><br>
+All purchases are digital, non-transferable, and non-redeemable for cash. They are provided solely for use within the Service and are subject to change or modification at our discretion.
+<br><br>
+Payments are securely processed by Stripe. We do not store full payment card details. Prices, taxes, and availability may vary by region and may change at any time.
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">4. Plans, Expiration & Usage Limits</div>
+          <div class="section-text">
+        <strong>Plan Duration:</strong> 30-day plans grant 30 days of enhanced access from the date of purchase.
+  <br><br>
+  <strong>Stacking Plans:</strong> If you purchase the same plan you already have, the new 30 days are added to your remaining time. For example, if you have 12 days left and buy another 30-day plan, you will have 42 days remaining.
+  <br><br>
+  <strong>Upgrading Plans:</strong> If you upgrade to a higher-tier plan, your remaining days on the current plan are converted into additional (reserve) energy. The conversion is calculated as: days remaining × the daily energy allowance of your current plan. The new higher-tier plan then begins immediately with its own 30-day duration.
+  <br><br>
+  <strong>Daily Energy Reset:</strong> Your plan's daily energy allowance resets every 24 hours from the time of your last daily reset. Unused daily energy does not roll over after the reset.
+  <br><br>
+  <strong>Reserve Energy:</strong> Additional purchased energy acts as a reserve and is only drawn upon once your plan's daily energy allocation is fully consumed.
+  <br><br>
+  <strong>Downgrade on Expiration:</strong> When a plan expires, your account returns to the basic tier with standard energy limits and feature access. Any remaining additional (reserve) energy you have purchased will carry over and remain available after downgrade. No partial refunds are given for unused time.<br><br>
+  By purchasing, you acknowledge that digital features may be consumed immediately upon access.
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">5. Refund Policy</div>
+       <div class="section-text">
+  All purchases are final and non-refundable. Because purchases provide immediate access to digital features and energy, no refunds will be issued under any circumstances, including unused plan time, unused reserve energy, dissatisfaction with the Service, or cases where the Service is modified, suspended, or discontinued.
+</div>
+
+          <div class="highlight-box">
+            <div class="section-text">
+              <strong>No refunds.</strong> By completing a purchase, you acknowledge and agree that all sales are final.
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">6. Acceptable Use</div>
+          <div class="section-text">
+            You agree not to: abuse, exploit, or interfere with the Service; attempt to reverse engineer or disrupt platform functionality; use automated scraping, bots, or unauthorized automation; manipulate the energy system or exploit bugs for unearned credits; or upload or distribute illegal or harmful content.
+            <br><br>
+            Violation may result in suspension or permanent account termination without notice or refund.
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">7. Intellectual Property</div>
+          <div class="section-text">
+            All content, software, design, and branding within the Service remain the property of Tree or its licensors. You are granted a limited, non-exclusive license to use the Service for personal or authorized purposes.
+          </div>
+        </div>
+
+        <div class="section">
+  <div class="section-title">8. Service Availability</div>
+  <div class="section-text">
+    The Service is provided on an "as-is" and "as-available" basis. We may update, modify, suspend, or discontinue features or the Service at any time without liability. We do not guarantee uninterrupted availability or error-free operation.
+    <br><br>
+    <strong>Service Discontinuation:</strong> Tree reserves the right to suspend or permanently discontinue the Service, in whole or in part, at any time, with or without notice. In the event of service discontinuation, you acknowledge that access to the Service, including any unused plan time or energy, may be lost and no refunds will be issued.
+  </div>
+</div>
+
+
+        <div class="section">
+          <div class="section-title">9. Limitation of Liability</div>
+          <div class="section-text">
+            To the maximum extent permitted by law, Tree shall not be liable for indirect, incidental, or consequential damages, including loss of data, profits, or access resulting from use of the Service.
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">10. Termination</div>
+          <div class="section-text">
+            We may suspend or terminate access if you violate these Terms, engage in fraud, or create risk to the platform or other users. You may stop using the Service at any time. Termination does not entitle you to refunds for previously purchased digital features or unused energy.
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">11. Privacy</div>
+          <div class="section-text">
+  Your use of the Service is also governed by our
+  <a href="/privacy-policy" target="_top" style="color: #fff; text-decoration: underline; font-weight: 600;">
+    Privacy Policy
+  </a>,
+  which explains how we collect, use, store, and protect your information.
+</div>
+
+        </div>
+
+        <div class="section">
+          <div class="section-title">12. Changes to These Terms</div>
+          <div class="section-text">
+            We may update these Terms periodically. Continued use of the Service after changes means you accept the updated Terms.
+          </div>
+        </div>
+        <div class="section">
+  <div class="section-title">13. Governing Law</div>
+  <div class="section-text">
+    These Terms shall be governed by and construed in accordance with the laws of the State of <strong>Oregon</strong>, United States, without regard to its conflict of law principles.
+  </div>
+</div>
+
+
+        <div class="section">
+          <div class="section-title">14. Contact</div>
+          <div class="section-text">
+            If you have questions about these Terms, contact us:
+            <br><br>
+            <strong>Tree</strong><br>
+            Email: treeffiency@gmail.com<br>
+            Website: tree.tabors.site
+          </div>
+        </div>
+
+         <div class="back-links">
+          <a class="back-link" href="/privacy-policy">
+            Privacy Policy
+          </a>
+        </div>
+        <div class="back-links">
+          <a class="back-link" target="_top" href="/">
+            ← Back to tree.tabors.site
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </body>
+  </html>
+      `);
+  } catch (err) {
+    console.error("terms page error:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+router.get("/privacy-policy", async (req, res) => {
+  try {
+    return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Privacy Policy — Tree</title>
+  <style>
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.container {
+  max-width: 700px;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 24px;
+  padding: 48px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  display: inline-block;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.last-updated {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.section-text {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.7;
+  font-size: 15px;
+}
+
+.section-text strong {
+  color: white;
+  font-weight: 600;
+}
+
+.highlight-box {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 14px 18px;
+  border-radius: 12px;
+  border-left: 3px solid rgba(255, 255, 255, 0.5);
+  margin-top: 12px;
+}
+
+.highlight-box .section-text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.back-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 980px;
+  transition: all 0.3s;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.back-link:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 40px;
+  }
+  .card {
+    padding: 32px 24px;
+  }
+  h1 {
+    font-size: 28px;
+  }
+  .icon {
+    font-size: 56px;
+  }
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+
+      <div class="header">
+        <div class="icon">🔒</div>
+        <h1>Privacy Policy</h1>
+        <div class="last-updated">Last Updated: February 13, 2025</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">1. Introduction</div>
+        <div class="section-text">
+          This Privacy Policy explains how Tree ("Service", "we", "us", or "our") at tree.tabors.site collects, uses, stores, and protects your information when you use the Service.
+          <br><br>
+          By using the Service, you consent to the data practices described in this policy. If you do not agree, please do not use the Service.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">2. Information We Collect</div>
+        <div class="section-text">
+          <strong>Account Information:</strong> When you create an account, we collect your username and email address.
+          <br><br>
+<strong>User Content:</strong> We store files, trees (node-based organizational structures), notes, AI chat conversations, and other content you create or upload through the Service.          <br><br>
+          <strong>Payment Information:</strong> When you make a purchase, payment is processed by Stripe. We store Stripe payment session IDs to track transaction status, but we do not store your credit card number, CVV, or other full payment card details. Stripe's handling of your payment data is governed by <a href="https://stripe.com/privacy" style="color: rgba(255,255,255,0.95); text-decoration: underline;" target="_blank" rel="noopener">Stripe's Privacy Policy</a>.
+          <br><br>
+          <strong>Passwords:</strong> We store your account password in an encrypted (hashed) format. We never store or have access to your plaintext password.
+<br><br>
+<strong>API Keys:</strong> If you use custom LLM connections or programmatic API access, we store associated API keys. All API keys and passwords are encrypted at rest on our backend servers.
+<br><br>
+<strong>Cryptocurrency Wallets:</strong> If you use Solana-related features, your wallet private keys are stored securely on our backend servers. We use the Jupiter API to facilitate Solana transactions and actions.
+          <strong>Technical Information:</strong> We may collect your IP address, browser type, device information, and general usage data to operate and improve the Service.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">3. Cookies & Authentication</div>
+        <div class="section-text">
+          We use cookies and similar browser storage to operate the Service. For example, we store:
+          <br><br>
+          <strong>Authentication Token (JWT):</strong> A secure token used to keep you logged in across sessions.
+          <br><br>
+          <strong>Username:</strong> Stored locally for display and session purposes.
+          <br><br>
+          <strong>Share Token:</strong> Used to enable shared URL access to your content for others you choose to share with.
+          <br><br>
+          These cookies are essential to the functioning of the Service. We do not use advertising cookies or third-party tracking cookies. By using the Service, you consent to the use of these essential cookies.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">4. How We Use Your Information</div>
+        <div class="section-text">
+          We use the information we collect to: provide, operate, and maintain the Service; authenticate your identity and manage your sessions; process purchases and manage your plan and energy status; store and serve your uploaded files and user content; communicate with you regarding your account or the Service; and detect and prevent fraud, abuse, or violations of our Terms of Service.
+          <br><br>
+          We do not sell, rent, or trade your personal information to third parties.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">5. File Storage</div>
+        <div class="section-text">
+Files, trees (which are composed of individual nodes), notes, AI chat conversations, and other content you upload or generate through the Service are stored on our servers to provide the Service to you. Your content is associated with your account and is not publicly accessible unless you explicitly share it via a share token or other sharing feature.          <br><br>
+          We do not access, review, or use your uploaded content for any purpose other than providing the Service, unless required by law.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">6. Data Retention</div>
+        <div class="section-text">
+          We retain your account information, user content, and uploaded files for as long as your account is active or as needed to provide the Service.
+          <br><br>
+          If you delete your account, we will make reasonable efforts to delete your personal data and uploaded files within 30 days, except where we are required to retain certain information by law or for legitimate business purposes (such as fraud prevention or resolving disputes).
+          <br><br>
+          Stripe payment session IDs may be retained for record-keeping and dispute resolution purposes.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">7. Data Security</div>
+        <div class="section-text">
+We take reasonable measures to protect your information, including: using HTTPS encryption for all data transmitted between your browser and our servers; storing authentication tokens securely; hashing all account passwords so plaintext passwords are never stored or accessible; encrypting all API keys (including custom LLM connection keys and programmatic access keys) at rest on our backend; securely storing Solana wallet private keys on our backend infrastructure; and relying on Stripe for PCI-compliant payment processing.
+<br><br>
+However, no method of transmission or storage is 100% secure. We cannot guarantee absolute security and are not liable for unauthorized access resulting from circumstances beyond our reasonable control.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">8. Third-Party Services</div>
+        <div class="section-text">
+          The Service uses the following third-party provider:
+          <br><br>
+          <strong>Stripe</strong> — for payment processing. Stripe may collect and process your payment information in accordance with their own privacy policy. We encourage you to review <a href="https://stripe.com/privacy" style="color: rgba(255,255,255,0.95); text-decoration: underline;" target="_blank" rel="noopener">Stripe's Privacy Policy</a>.
+          <br><br>
+          <strong>Jupiter API</strong> — for facilitating Solana blockchain transactions and actions. Jupiter may process transaction data in accordance with their own policies.<br><br>
+
+          We do not embed third-party advertising, analytics, or social media trackers.
+        </div>
+      </div>
+      <div class="section">
+  <div class="section-title">9. Cryptocurrency & Solana Wallet Disclaimer</div>
+  <div class="section-text">
+    The Service may provide features that interact with the Solana blockchain via the Jupiter API. Solana wallet private keys are stored securely on our backend servers to facilitate these features on your behalf.
+    <br><br>
+    By using any cryptocurrency-related features, you acknowledge and agree that:
+    <br><br>
+    <strong>No Liability for Loss:</strong> Tree is not responsible for any loss, theft, or unauthorized access to cryptocurrency funds, whether resulting from technical failures, security breaches, blockchain network issues, market volatility, smart contract errors, or any other cause.
+    <br><br>
+    <strong>No Financial Advice:</strong> The Service does not provide financial, investment, or trading advice. Any cryptocurrency transactions you initiate through the Service are made at your own risk and discretion.
+    <br><br>
+    <strong>Blockchain Irreversibility:</strong> Transactions on the Solana blockchain are irreversible. Once a transaction is confirmed on-chain, it cannot be undone, cancelled, or refunded by Tree.
+    <br><br>
+    <strong>Use at Your Own Risk:</strong> Cryptocurrency features are provided on an "as-is" basis. You are solely responsible for evaluating the risks associated with using these features and for any resulting gains or losses.
+  </div>
+  <div class="highlight-box">
+    <div class="section-text">
+      <strong>Tree is not liable for any loss of cryptocurrency funds under any circumstances.</strong> By using wallet or blockchain features, you accept full responsibility for all associated risks.
+    </div>
+  </div>
+</div>
+
+     <div class="section">
+  <div class="section-title">10. Your Rights</div>
+  <div class="section-text">
+    You have the right to:
+    <br><br>
+    <strong>Access:</strong> Request a copy of the personal data we hold about you.
+    <br><br>
+    <strong>Correction:</strong> Request correction of inaccurate personal data.
+    <br><br>
+    <strong>Account Deletion:</strong> Request deletion of your account profile data, including your password, email address, and other personal identifiers. We will process deletion requests within 30 days, subject to any legal retention requirements.
+    <br><br>
+    <strong>Content Retention:</strong> Please be aware that trees (nodes), notes, AI chat conversations, and other user-generated content cannot be deleted upon account deletion. This content is interconnected with other users' structures and plans within the Service, and removing it would compromise the integrity of shared and dependent data. By using the Service and creating content, you acknowledge and accept this limitation.
+    <br><br>
+
+    To exercise any of these rights, contact us at treeffiency@gmail.com.
+  </div>
+  <div class="highlight-box">
+    <div class="section-text">
+      <strong>Profile data (password, email, etc.) can be deleted on request.</strong> Trees, nodes, notes, AI chats, and other interconnected content are retained permanently as they are integral to the Service's shared data structures.
+    </div>
+  </div>
+</div>
+
+      <div class="section">
+        <div class="section-title">11. EU Users (GDPR)</div>
+        <div class="section-text">
+          If you are located in the European Economic Area (EEA), the United Kingdom, or Switzerland, you have additional rights under the General Data Protection Regulation (GDPR):
+          <br><br>
+          <strong>Legal Basis for Processing:</strong> We process your data based on: contractual necessity (to provide the Service and fulfill purchases), legitimate interests (to operate, secure, and improve the Service), and your consent (where applicable, such as accepting cookies).
+          <br><br>
+          <strong>Additional Rights:</strong> In addition to the rights listed in Section 10, you may have the right to restrict processing of your data, object to processing based on legitimate interests, withdraw consent at any time where processing is based on consent, and lodge a complaint with your local data protection authority.
+          <br><br>
+          <strong>Data Transfers:</strong> Your data may be transferred to and stored on servers located outside the EEA. By using the Service, you consent to this transfer. We take reasonable steps to ensure your data is treated securely and in accordance with this policy.
+          <br><br>
+          To exercise your GDPR rights, contact us at treeffiency@gmail.com.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">12. California Users (CCPA)</div>
+        <div class="section-text">
+          If you are a California resident, you have rights under the California Consumer Privacy Act (CCPA):
+          <br><br>
+          <strong>Right to Know:</strong> You may request what personal information we collect, use, and disclose.
+          <br><br>
+          <strong>Right to Delete:</strong> You may request deletion of your personal information, subject to certain exceptions.
+          <br><br>
+          <strong>Right to Non-Discrimination:</strong> We will not discriminate against you for exercising your CCPA rights.
+          <br><br>
+          <strong>No Sale of Personal Information:</strong> We do not sell your personal information to third parties as defined under the CCPA.
+          <br><br>
+          To submit a CCPA request, contact us at treeffiency@gmail.com.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">13. Children's Privacy</div>
+        <div class="section-text">
+          The Service is not directed to children under 18. We do not knowingly collect personal information from anyone under 18. If we become aware that we have collected data from a minor, we will take steps to delete it promptly. If you believe a minor has provided us with personal data, please contact us at treeffiency@gmail.com.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">14. Changes to This Policy</div>
+        <div class="section-text">
+          We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated "Last Updated" date. Continued use of the Service after changes means you accept the updated policy.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">15. Contact</div>
+        <div class="section-text">
+          If you have questions about this Privacy Policy or wish to exercise your rights, contact us:
+          <br><br>
+          <strong>Tree</strong><br>
+          Email: treeffiency@gmail.com<br>
+          Website: tree.tabors.site
+        </div>
+      </div>
+
+      <div class="back-links">
+        <a class="back-link" href="/terms">
+          Terms of Service
+        </a>
+        <a class="back-link" target="_top" href="/">
+          ← Back to tree.tabors.site
+        </a>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
+    `);
+  } catch (err) {
+    console.error("privacy page error:", err);
+    res.status(500).send("Server error");
   }
 });
 

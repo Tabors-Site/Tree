@@ -20,15 +20,16 @@ body {
 /* Page Container */
 .welcome-page {
   min-height: 100vh;
-  min-height: 100dvh; /* Dynamic viewport height for mobile */
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -93,10 +94,11 @@ body {
   padding: 0 48px;
   position: relative;
   z-index: 1;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .hero-top {
@@ -113,19 +115,22 @@ body {
 
 .hero-center {
   flex: 1;
-  padding: 200px 0 120px;
+  padding: 200px 0 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
+  min-height: 0;
 }
+
 .hero-logo {
   font-size: 120px;
   margin-bottom: 40px;
   filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.2));
-
-  animation: fadeInDown 0.5s, ease-out both, heroGrow 4.5s ease-in-out infinite;
+  animation:
+    fadeInDown 0.5s ease-out both,
+    heroGrow 4.5s ease-in-out infinite;
 }
 
 @keyframes heroGrow {
@@ -137,22 +142,19 @@ body {
     transform: scale(1.06);
   }
 }
+
 /* =========================
    Hero Title – Living Glass
    ========================= */
 
 .hero-center h1 {
   position: relative;
-
   font-size: 96px;
   font-weight: 600;
   letter-spacing: -2.5px;
   margin-bottom: 20px;
-
   color: white;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-
-  /* Safe entrance animation */
   animation: fadeInDown 0.9s ease-out both;
 }
 
@@ -164,10 +166,9 @@ body {
   content: attr(data-text);
   position: absolute;
   inset: 0;
-
   color: transparent;
-
-  background: linear-gradient(
+  background:
+    linear-gradient(
       120deg,
       rgba(var(--glass-water-rgb), 0.55),
       rgba(255, 255, 255, 0.9),
@@ -178,21 +179,22 @@ body {
       rgba(255, 255, 255, 0.35),
       transparent 60%
     );
-
-  background-size: 200% 200%, 120% 120%;
-  background-position: 0% 50%, 20% 20%;
-
+  background-size:
+    200% 200%,
+    120% 120%;
+  background-position:
+    0% 50%,
+    20% 20%;
   -webkit-background-clip: text;
   background-clip: text;
-
-  text-shadow: 0 0 32px rgba(115, 111, 230, 0.55), 0 2px 6px rgba(0, 0, 0, 0.2);
-
-  animation: glassFlow 6s ease-in-out infinite,
+  text-shadow:
+    0 0 32px rgba(115, 111, 230, 0.55),
+    0 2px 6px rgba(0, 0, 0, 0.2);
+  animation:
+    glassFlow 6s ease-in-out infinite,
     glassBreath 4.5s ease-in-out infinite;
-
   animation-delay: 0.9s;
   animation-fill-mode: both;
-
   pointer-events: none;
   will-change: background-position, opacity, transform;
 }
@@ -203,7 +205,9 @@ body {
 
 .hero-center h1:hover::after {
   animation-duration: 3s, 2.5s;
-  text-shadow: 0 0 48px rgba(115, 111, 230, 0.8), 0 4px 10px rgba(0, 0, 0, 0.25);
+  text-shadow:
+    0 0 48px rgba(115, 111, 230, 0.8),
+    0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
 /* =========================
@@ -214,14 +218,12 @@ body {
   content: "";
   position: absolute;
   inset: -20%;
-
   background: linear-gradient(
     110deg,
     transparent 40%,
     rgba(255, 255, 255, 0.25),
     transparent 60%
   );
-
   opacity: 0;
   transform: translateX(-100%);
   pointer-events: none;
@@ -238,15 +240,21 @@ body {
 
 @keyframes glassFlow {
   0% {
-    background-position: 0% 50%, 20% 20%;
+    background-position:
+      0% 50%,
+      20% 20%;
     transform: translateY(0);
   }
   50% {
-    background-position: 100% 50%, 80% 30%;
+    background-position:
+      100% 50%,
+      80% 30%;
     transform: translateY(-1px);
   }
   100% {
-    background-position: 0% 50%, 20% 20%;
+    background-position:
+      0% 50%,
+      20% 20%;
     transform: translateY(0);
   }
 }
@@ -276,17 +284,13 @@ body {
 }
 
 .hero-center h2 {
-  animation: fadeInDown 1s ease-out 0.15s both;
-}
-
-.hero-center h2 {
   font-size: 28px;
   font-weight: 450;
   letter-spacing: -0.3px;
-
-  color: rgba(235, 238, 255, 0.85); /* glass-tinted white */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 12px rgba(115, 111, 230, 0.25);
-
+  color: rgba(235, 238, 255, 0.85);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 0 12px rgba(115, 111, 230, 0.25);
   animation: fadeInDown 1s ease-out 0.15s both;
 }
 
@@ -312,40 +316,32 @@ body {
    ========================= */
 
 .back-to-site-btn {
-  /* Layout */
   position: relative;
   overflow: hidden;
-
   padding: 10px 20px;
   border-radius: 980px;
-
   display: inline-flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;
-
-  /* Glass material */
   background: rgba(var(--glass-water-rgb), var(--glass-alpha));
   backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
-
   color: white;
   text-decoration: none;
   font-family: inherit;
-
   font-size: 15px;
   font-weight: 500;
   letter-spacing: -0.2px;
-
   border: 1px solid rgba(255, 255, 255, 0.28);
-
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
-
   cursor: pointer;
-
-  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+  transition:
+    background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease;
 }
 
 /* =========================
@@ -356,8 +352,8 @@ body {
   content: "";
   position: absolute;
   inset: -40%;
-
-  background: radial-gradient(
+  background:
+    radial-gradient(
       120% 60% at 0% 0%,
       rgba(255, 255, 255, 0.35),
       transparent 60%
@@ -368,11 +364,11 @@ body {
       rgba(255, 255, 255, 0.25),
       transparent 70%
     );
-
   opacity: 0;
   transform: translateX(-30%) translateY(-10%);
-  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-
+  transition:
+    opacity 0.35s ease,
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
 }
 
@@ -413,12 +409,12 @@ body {
     transform: translateY(1px);
   }
 }
+
 @keyframes openAppHoverShimmerClone {
   0% {
     opacity: 0;
     transform: translateX(-100%);
   }
-
   100% {
     opacity: 1;
     transform: translateX(100%);
@@ -444,7 +440,6 @@ body {
 .open-app-btn {
   --glass-alpha: 0.34;
   --glass-alpha-hover: 0.46;
-
   font-weight: 600;
 }
 
@@ -453,22 +448,21 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-
   background: linear-gradient(
     100deg,
     transparent 40%,
     rgba(255, 255, 255, 0.35),
     transparent 60%
   );
-
   opacity: 0;
   transform: translateX(-100%);
-  transition: transform 0.8s ease, opacity 0.3s ease;
-
-  animation: openAppHoverShimmerClone 1.6s ease forwards,
+  transition:
+    transform 0.8s ease,
+    opacity 0.3s ease;
+  animation:
+    openAppHoverShimmerClone 1.6s ease forwards,
     waterDriftOnce 1.8s ease-in-out;
   animation-delay: 1.5s;
-
   pointer-events: none;
 }
 
@@ -477,7 +471,56 @@ body {
   transform: translateX(100%);
 }
 
-/* Responsive Design */
+/* =========================
+   Footer
+   ========================= */
+
+.hero-footer {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  flex-shrink: 0;
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 24px));
+  animation: fadeInDown 1.2s ease-out 0.3s both;
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  margin-bottom: 8px;
+}
+
+.footer-link {
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  transition: color 0.3s ease;
+}
+
+.footer-link:hover {
+  color: rgba(255, 255, 255, 1);
+}
+
+.footer-divider {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 13px;
+  user-select: none;
+}
+
+.footer-copy {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* =========================
+   Responsive Design
+   ========================= */
+
 @media (max-width: 1024px) {
   .hero {
     padding: 0 32px;
@@ -489,7 +532,7 @@ body {
   }
 
   .hero-center {
-    padding: 180px 0 100px;
+    padding: 180px 0 0;
   }
 
   .hero-center h1 {
@@ -508,9 +551,10 @@ body {
 @media (max-width: 768px) {
   .hero {
     padding: 0 20px;
-    min-height: 100vh;
-    min-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
     justify-content: space-between;
+    overflow: hidden;
   }
 
   .hero-top {
@@ -524,14 +568,14 @@ body {
     gap: 12px;
     width: 100%;
     order: 2;
-    padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
   }
 
   .hero-center {
     flex: 1;
-    padding: max(40px, env(safe-area-inset-top, 40px)) 0 40px;
+    padding: max(40px, env(safe-area-inset-top, 40px)) 0 20px;
     justify-content: center;
     order: 1;
+    min-height: 0;
   }
 
   .hero-center h1 {
@@ -562,6 +606,16 @@ body {
     width: 100%;
     text-align: center;
   }
+
+  .open-app-btn {
+    order: -1;
+  }
+
+  .hero-footer {
+    order: 0;
+    padding-bottom: 0;
+    padding-top: max(16px, env(safe-area-inset-top, 16px));
+  }
 }
 
 @media (max-width: 480px) {
@@ -591,14 +645,4 @@ html {
 ::selection {
   background: rgba(102, 126, 234, 0.3);
   color: #1a1a1a;
-}
-@media (max-width: 768px) {
-  .hero-top {
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .open-app-btn {
-    order: -1; /* 👈 moves it to the top */
-  }
 }

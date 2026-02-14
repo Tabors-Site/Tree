@@ -81,8 +81,15 @@ const WelcomePage = () => {
           <h2>A Context Management System</h2>
 
         </div>
-
+        <footer className="hero-footer">
+          <div className="footer-links">
+            <p className="footer-link">About</p>
+            <a href={`/terms`} className="footer-link">Terms</a>
+            <a href={`/privacy-policy`} className="footer-link">Privacy</a>
+          </div>
+        </footer>
       </section>
+
     </div>
   );
 };
