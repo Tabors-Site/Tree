@@ -268,9 +268,7 @@ export async function processMessage(visitorId, message, ctx) {
   // Resolve LLM client for this user (custom or default)
   const { client: openai, model: MODEL, isCustom } = await getClientForUser(ctx.userId);
 
-  if (isCustom) {
-    console.log(`🔌 Using custom LLM for user ${ctx.userId}`);
-  }
+ 
 
   // Ensure MCP client
   let client = mcpClients.get(visitorId);
