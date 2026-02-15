@@ -170,7 +170,7 @@ function normalizeStatusFilters(query) {
   // 👇 THIS IS KEY
   return hasAny ? filters : null;
 }
-router.get("/:nodeId/:version/notes/editor", async (req, res) => {
+router.get("/:nodeId/:version/notes/editor", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const queryString = filterQuery(req);
@@ -196,7 +196,7 @@ router.get("/:nodeId/:version/notes/editor", async (req, res) => {
 });
 
 // ── EDIT EXISTING NOTE EDITOR (GET) ───────────────────────────────────
-router.get("/:nodeId/:version/notes/:noteId/editor", async (req, res) => {
+router.get("/:nodeId/:version/notes/:noteId/editor",urlAuth, async (req, res) => {
   try {
     const { nodeId, version, noteId } = req.params;
     const queryString = filterQuery(req);
@@ -3198,6 +3198,18 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     const backText = hasToken ? "← Back to Notes" : "← Back to Home";
     const nodeUrl = `/api/${nodeId}${qs}`;
     const editorUrl = `/api/${nodeId}/${version}/notes/${noteId}/editor${qs}`;
+    const editorButton = !hasToken
+  ? ""
+  : `
+    <a
+      href="${editorUrl}"
+      class="copy-btn editor-btn"
+      title="Open editor"
+    >
+      ✏️
+    </a>
+  `;
+
 
     const userLink = note.userId
       ? `<a href="/api/user/${note.userId._id}${qs}">
@@ -3606,16 +3618,8 @@ pre.flash::before {
       <div class="user-info">
         ${userLink}
       </div>
-
-      <div class="copy-bar">
-  <a
-    href="${editorUrl}"
-    class="copy-btn editor-btn"
-    title="Open editor"
-  >
-    ✏️
-  </a>
-
+<div class="copy-bar">
+  ${editorButton}
   <button id="copyNoteBtn" class="copy-btn" title="Copy note">📋</button>
 </div>
 
@@ -4180,9 +4184,9 @@ function renderEditorPage({
   --sidebar-w: 280px;
   --toolbar-h: 52px;
   --bottombar-h: 44px;
-  --editor-font-size: 16px;
-  --editor-line-height: 1.7;
-  --editor-max-width: 720px;
+  --editor-font-size: 13px;
+  --editor-line-height: 2.1;
+  --editor-max-width: 100%;
   --editor-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 }
 
@@ -4275,10 +4279,9 @@ body::before {
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   border-right: 1px solid rgba(255,255,255,0.12);
   overflow: hidden;
-  transition: margin-left 0.3s cubic-bezier(0.4,0,0.2,1);
   z-index: 15;
 }
-.sidebar.hidden { margin-left: calc(-1 * var(--sidebar-w)); }
+.sidebar.hidden { display: none; }
 
 .sidebar-header {
   padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -4314,6 +4317,7 @@ body::before {
   font-size: 14px; flex-shrink: 0;
 }
 .note-item-info { min-width: 0; flex: 1; }
+.note-item-username { font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
 .note-item-preview { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-item-meta { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; }
 
@@ -4331,16 +4335,93 @@ body::before {
 
 .editor-scroll {
   flex: 1; overflow-y: auto; overflow-x: hidden;
-  padding: 40px 24px; display: flex; justify-content: center;
+  padding: 16px 16px; display: flex; justify-content: center;
+  -webkit-overflow-scrolling: touch;
 }
-.editor-scroll::-webkit-scrollbar { width: 6px; }
-.editor-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 6px; }
+.editor-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.editor-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+.editor-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+.editor-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+/* On mobile, outer container handles horizontal scroll in code mode */
+@media (max-width: 768px) {
+  .editor-scroll.code-scroll-enabled {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+}
 
 .editor-container { width: 100%; max-width: var(--editor-max-width); }
 
+/* On mobile in code mode, containers expand for outer scroll */
+@media (max-width: 768px) {
+  .editor-container.code-mode-active {
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+  }
+  .editor-container.code-mode-active .editor-with-lines {
+    width: max-content;
+    min-width: 100%;
+  }
+  .editor-container.code-mode-active .editor-code-scroll {
+    flex: none;
+    width: auto;
+  }
+}
+
+/* ── LINE NUMBERS + EDITOR LAYOUT ── */
+.editor-with-lines {
+  display: flex;
+  width: 100%;
+}
+
+.line-numbers {
+  display: none;
+  flex-shrink: 0;
+  padding-right: 12px;
+  margin-right: 12px;
+  border-right: 1px solid rgba(255,255,255,0.1);
+  text-align: right;
+  user-select: none;
+  pointer-events: none;
+  color: rgba(255,255,255,0.3);
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+}
+
+.line-numbers.show {
+  display: block;
+}
+
+.line-numbers span {
+  display: block;
+}
+
+.editor-code-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* On desktop, inner container handles horizontal scroll */
+@media (min-width: 769px) {
+  .editor-code-scroll.mono-active {
+    overflow-x: auto;
+  }
+}
+
+.editor-code-scroll::-webkit-scrollbar { height: 8px; }
+.editor-code-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+.editor-code-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+.editor-code-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
 #editor {
   width: 100%;
-  min-height: calc(100vh - var(--toolbar-h) - var(--bottombar-h) - 120px);
+  min-height: calc(100vh - var(--toolbar-h) - var(--bottombar-h) - 32px);
   background: transparent; border: none; outline: none; resize: none;
   color: rgba(255,255,255,0.95);
   font-family: var(--editor-font);
@@ -4348,9 +4429,17 @@ body::before {
   line-height: var(--editor-line-height);
   caret-color: rgba(72,187,178,0.9);
   padding: 0; -webkit-font-smoothing: antialiased;
+  overflow: hidden;
 }
 #editor::placeholder { color: rgba(255,255,255,0.25); font-style: italic; }
-#editor.mono { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; }
+#editor.mono {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
+  width: max-content;
+  min-width: 100%;
+}
 
 /* ── BOTTOM BAR ──────────────── */
 .bottombar {
@@ -4436,31 +4525,62 @@ body.zen .toolbar { display: none; }
 body.zen .sidebar { display: none; }
 body.zen .bottombar { opacity: 0; transition: opacity 0.3s; }
 body.zen:hover .bottombar { opacity: 1; }
-body.zen .editor-scroll { padding: 60px 24px; }
+body.zen .editor-scroll { padding: 24px; }
+
+/* ── ZEN EXIT BUTTON (mobile only) ── */
+.zen-exit-btn {
+  display: none;
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(var(--glass-rgb), 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: rgba(255,255,255,0.8);
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 30;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+.zen-exit-btn:hover {
+  background: rgba(var(--glass-rgb), 0.7);
+  color: white;
+  transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+  body.zen .zen-exit-btn {
+    display: flex;
+  }
+}
 
 /* ── MOBILE ──────────────────── */
 @media (max-width: 768px) {
   :root { --sidebar-w: 280px; }
 
   .sidebar {
-    position: absolute; top: 0; left: 0; bottom: 0;
+    position: fixed; top: 0; left: 0; bottom: 0;
     width: var(--sidebar-w);
-    margin-left: 0;
     background: rgba(var(--glass-rgb), 0.95);
     backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
-    transform: translateX(-100%);
-    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
     z-index: 50;
+    display: flex;
   }
 
-  .sidebar.hidden { margin-left: 0; transform: translateX(-100%); }
-  .sidebar.show { transform: translateX(0); }
+  .sidebar.hidden { display: none; }
   .toolbar { gap: 4px; padding: 0 8px; }
   .tb-range-wrap { display: flex; }
   .tb-range-label { display: none; }
   .tb-range { width: 60px; }
   .tb-sep { display: none; }
-  .editor-scroll { padding: 24px 16px; }
+  .editor-scroll { padding: 16px; }
   body.zen .bottombar { opacity: 1; }
 }
 
@@ -4485,25 +4605,28 @@ body.zen .editor-scroll { padding: 60px 24px; }
 </head>
 <body>
 
+<!-- ── ZEN EXIT BUTTON (mobile) ─────────────── -->
+<button class="zen-exit-btn" id="zenExitBtn" title="Exit Zen Mode">✕</button>
+
 <!-- ── TOOLBAR ──────────────────────────────── -->
 <div class="toolbar">
-  <a href="/api/${nodeId}/${version}/notes${qs}" class="tb-back">\u2190 Notes</a>
+  <a href="/api/${nodeId}/${version}/notes${qs}" class="tb-back" id="backBtn">← Notes</a>
   <div class="tb-sep"></div>
-  <button class="tb-btn" id="sidebarToggle" title="Toggle sidebar">\u2630</button>
-  <button class="tb-btn" id="zenToggle" title="Zen mode">\ud83e\uddd8</button>
+  <button class="tb-btn" id="sidebarToggle" title="Toggle sidebar">☰</button>
+  <button class="tb-btn" id="zenToggle" title="Zen mode">🧘</button>
   <button class="tb-btn" id="monoToggle" title="Monospace font">{ }</button>
   <div class="tb-sep"></div>
   <div class="tb-range-wrap tb-fontsize">
   <span class="tb-range-label">Size</span>
-  <input type="range" class="tb-range" id="fontSizeRange" min="13" max="28" value="16">
+  <input type="range" class="tb-range" id="fontSizeRange" min="13" max="28" value="20">
 </div>
 <div class="tb-range-wrap tb-lineheight">
   <span class="tb-range-label">Height</span>
-  <input type="range" class="tb-range" id="lineHeightRange" min="12" max="30" value="17" step="1">
+  <input type="range" class="tb-range" id="lineHeightRange" min="12" max="30" value="21" step="1">
 </div>
 <div class="tb-range-wrap tb-maxwidth">
   <span class="tb-range-label">Width</span>
-  <input type="range" class="tb-range" id="maxWidthRange" min="400" max="1400" value="720" step="20">
+  <input type="range" class="tb-range" id="maxWidthRange" min="400" max="2000" value="2000" step="20">
 </div>
   <div class="tb-spacer"></div>
 </div>
@@ -4515,19 +4638,24 @@ body.zen .editor-scroll { padding: 60px 24px; }
   <div class="sidebar hidden" id="sidebar">
     <div class="sidebar-header">
       <span class="sidebar-title">Notes</span>
-      <button class="sidebar-close" id="sidebarCloseBtn">\u2715</button>
+      <button class="sidebar-close" id="sidebarCloseBtn">✕</button>
     </div>
     <div class="sidebar-list" id="notesList">
-      <div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">Loading\u2026</div>
+      <div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">Loading…</div>
     </div>
     <button class="sidebar-new" id="newNoteBtn">+ New Note</button>
   </div>
 
   <!-- EDITOR -->
   <div class="editor-wrap">
-    <div class="editor-scroll">
+    <div class="editor-scroll" id="editorScroll">
       <div class="editor-container">
-        <textarea id="editor" placeholder="Start writing\u2026">${safeContent}</textarea>
+        <div class="editor-with-lines" id="editorWithLines">
+          <div class="line-numbers" id="lineNumbers"></div>
+          <div class="editor-code-scroll" id="editorCodeScroll">
+            <textarea id="editor" placeholder="Start writing…">${safeContent}</textarea>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -4539,7 +4667,7 @@ body.zen .editor-scroll { padding: 60px 24px; }
     <span class="bb-stat" id="charCount">0 chars</span>
     <span class="bb-stat" id="wordCount">0 words</span>
     <span class="bb-stat" id="lineCount">0 lines</span>
-    <span class="bb-stat bb-energy" id="energyCost">\u26A10</span>
+    <span class="bb-stat bb-energy" id="energyCost">⚡0</span>
   </div>
   <div class="bb-right">
     <span class="bb-status" id="saveStatus">${isNew ? "New note" : "Loaded"}</span>
@@ -4551,7 +4679,7 @@ body.zen .editor-scroll { padding: 60px 24px; }
 <!-- ── DELETE MODAL ─────────────────────────── -->
 <div class="modal-overlay" id="deleteModal">
   <div class="modal-box">
-    <div class="modal-icon">\ud83d\uddd1\ufe0f</div>
+    <div class="modal-icon">🗑️</div>
     <div class="modal-title">Delete this note?</div>
     <div class="modal-text">
       It looks like you cleared everything out.<br>
@@ -4578,6 +4706,7 @@ var isNew       = ${isNew};
 var originalLen = ${originalLength || 0};
 var lastSaved   = ${isNew ? '""' : 'document.getElementById("editor").value'};
 var saving      = false;
+var navigatingAway = false; // Flag to prevent double warnings
 
 /* ═══════════════════════════════════════════════════
    DOM REFS
@@ -4592,6 +4721,11 @@ var lineCountEl  = document.getElementById("lineCount");
 var energyCostEl = document.getElementById("energyCost");
 var sidebar      = document.getElementById("sidebar");
 var notesList    = document.getElementById("notesList");
+var lineNumbersEl = document.getElementById("lineNumbers");
+var editorScroll = document.getElementById("editorScroll");
+var editorWithLines = document.getElementById("editorWithLines");
+var editorCodeScroll = document.getElementById("editorCodeScroll");
+var editorContainer = document.querySelector(".editor-container");
 
 /* ═══════════════════════════════════════════════════
    SETTINGS (persisted in localStorage)
@@ -4604,6 +4738,10 @@ function loadSettings() {
     if (s.maxWidth)   document.getElementById("maxWidthRange").value   = s.maxWidth;
     if (s.mono) {
       editor.classList.add("mono");
+      lineNumbersEl.classList.add("show");
+      editorCodeScroll.classList.add("mono-active");
+      editorScroll.classList.add("code-scroll-enabled");
+      editorContainer.classList.add("code-mode-active");
       document.getElementById("monoToggle").classList.add("active");
     }
     applySettings();
@@ -4624,7 +4762,14 @@ function persistSettings() {
 function applySettings() {
   document.documentElement.style.setProperty("--editor-font-size",  document.getElementById("fontSizeRange").value + "px");
   document.documentElement.style.setProperty("--editor-line-height", document.getElementById("lineHeightRange").value / 10);
-  document.documentElement.style.setProperty("--editor-max-width",  document.getElementById("maxWidthRange").value + "px");
+  var maxW = parseInt(document.getElementById("maxWidthRange").value);
+  // At max value, remove width constraint entirely (edge to edge)
+  if (maxW >= 2000) {
+    document.documentElement.style.setProperty("--editor-max-width", "100%");
+  } else {
+    document.documentElement.style.setProperty("--editor-max-width", maxW + "px");
+  }
+  autoGrowEditor();
 }
 
 document.getElementById("fontSizeRange").oninput   = function() { applySettings(); persistSettings(); };
@@ -4633,32 +4778,77 @@ document.getElementById("maxWidthRange").oninput    = function() { applySettings
 
 document.getElementById("monoToggle").onclick = function() {
   editor.classList.toggle("mono");
+  lineNumbersEl.classList.toggle("show");
+  editorCodeScroll.classList.toggle("mono-active");
+  editorScroll.classList.toggle("code-scroll-enabled");
+  editorContainer.classList.toggle("code-mode-active");
   this.classList.toggle("active");
+  autoGrowEditor();
   persistSettings();
 };
 
 /* ═══════════════════════════════════════════════════
+   AUTO-GROW EDITOR (like VS Code / Word)
+   ═══════════════════════════════════════════════════ */
+function autoGrowEditor() {
+  // Get minimum height (viewport minus chrome)
+  var minH = window.innerHeight - 52 - 44 - 32; // toolbar + bottombar + padding
+  
+  // Reset height to recalculate scrollHeight
+  editor.style.height = 'auto';
+  
+  // Set to max of scrollHeight and minimum height
+  var newHeight = Math.max(editor.scrollHeight, minH);
+  editor.style.height = newHeight + 'px';
+  
+  // Update line numbers
+  updateLineNumbers();
+}
+
+/* ═══════════════════════════════════════════════════
+   LINE NUMBERS
+   ═══════════════════════════════════════════════════ */
+function updateLineNumbers() {
+  if (!editor.classList.contains("mono")) return;
+  
+  var lines = editor.value.split("\\n");
+  var count = lines.length;
+  var html = "";
+  for (var i = 1; i <= count; i++) {
+    html += "<span>" + i + "</span>";
+  }
+  lineNumbersEl.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════
    ZEN MODE
    ═══════════════════════════════════════════════════ */
+function exitZenMode() {
+  document.body.classList.remove("zen");
+  document.getElementById("zenToggle").classList.remove("active");
+  autoGrowEditor();
+}
+
 document.getElementById("zenToggle").onclick = function() {
   document.body.classList.toggle("zen");
   this.classList.toggle("active");
+  autoGrowEditor();
 };
+
+document.getElementById("zenExitBtn").onclick = exitZenMode;
 
 /* ═══════════════════════════════════════════════════
    SIDEBAR TOGGLE
    ═══════════════════════════════════════════════════ */
 function toggleSidebar() {
-  if (window.innerWidth <= 768) sidebar.classList.toggle("show");
-  else sidebar.classList.toggle("hidden");
+  sidebar.classList.toggle("hidden");
   document.getElementById("sidebarToggle").classList.toggle("active");
 }
 
 document.getElementById("sidebarToggle").onclick = toggleSidebar;
 
 document.getElementById("sidebarCloseBtn").onclick = function() {
-  if (window.innerWidth <= 768) sidebar.classList.remove("show");
-  else sidebar.classList.add("hidden");
+  sidebar.classList.add("hidden");
   document.getElementById("sidebarToggle").classList.remove("active");
 };
 
@@ -4711,8 +4901,12 @@ function updateStats() {
 /* ═══════════════════════════════════════════════════
    DIRTY TRACKING
    ═══════════════════════════════════════════════════ */
+function isDirty() {
+  return editor.value !== lastSaved;
+}
+
 function markDirty() {
-  if (editor.value !== lastSaved) {
+  if (isDirty()) {
     saveStatus.textContent = "Unsaved changes";
     saveStatus.className = "bb-status unsaved";
   }
@@ -4721,7 +4915,33 @@ function markDirty() {
 editor.addEventListener("input", function() {
   updateStats();
   markDirty();
+  autoGrowEditor();
 });
+
+/* Handle paste for auto-grow */
+editor.addEventListener("paste", function() {
+  setTimeout(autoGrowEditor, 0);
+});
+
+/* ═══════════════════════════════════════════════════
+   NAVIGATION WITH UNSAVED CHECK
+   ═══════════════════════════════════════════════════ */
+function navigateWithCheck(url) {
+  if (isDirty()) {
+    if (!confirm("Unsaved changes. Discard?")) {
+      return false;
+    }
+  }
+  navigatingAway = true;
+  window.location.href = url;
+  return true;
+}
+
+/* Back button handler */
+document.getElementById("backBtn").onclick = function(e) {
+  e.preventDefault();
+  navigateWithCheck("/api/" + nodeId + "/" + version + "/notes" + qs);
+};
 
 /* ═══════════════════════════════════════════════════
    SAVE → POST (new) or PUT (existing)
@@ -4799,16 +5019,16 @@ async function doSave() {
     saveStatus.textContent = msg;
     saveStatus.className   = "bb-status saved";
 
-     if (currentNoteId) {
-  // existing note → go to note view
-  window.location.href =
-    "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId + qs;
-} else {
-  // new note → go to notes list
-  window.location.href =
-    "/api/" + nodeId + "/" + version + "/notes" + qs;
-}
-
+    navigatingAway = true;
+    if (currentNoteId) {
+      // existing note → go to note view
+      window.location.href =
+        "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId + qs;
+    } else {
+      // new note → go to notes list
+      window.location.href =
+        "/api/" + nodeId + "/" + version + "/notes" + qs;
+    }
 
     loadNotes();
 
@@ -4850,6 +5070,7 @@ document.getElementById("deleteConfirmBtn").onclick = async function() {
     }
 
     /* success → redirect to notes list */
+    navigatingAway = true;
     window.location.href = "/api/" + nodeId + "/" + version + "/notes" + qs;
 
   } catch (err) {
@@ -4871,8 +5092,7 @@ document.addEventListener("keydown", function(e) {
   if (e.key === "Escape") {
     if (document.getElementById("deleteModal").classList.contains("show")) closeDeleteModal();
     else if (document.body.classList.contains("zen")) {
-      document.body.classList.remove("zen");
-      document.getElementById("zenToggle").classList.remove("active");
+      exitZenMode();
     }
   }
 });
@@ -4894,7 +5114,7 @@ editor.addEventListener("keydown", function(e) {
     this.value = v.substring(0, s) + "  " + v.substring(end);
     this.selectionStart = this.selectionEnd = s + 2;
   }
-  updateStats(); markDirty();
+  updateStats(); markDirty(); autoGrowEditor();
 });
 
 /* ═══════════════════════════════════════════════════
@@ -4902,10 +5122,10 @@ editor.addEventListener("keydown", function(e) {
    ═══════════════════════════════════════════════════ */
 async function loadNotes() {
   try {
-var token = new URLSearchParams(qs.replace("?","")).get("token");
-var fetchUrl = "/api/" + nodeId + "/" + version + "/notes";
-if (token) fetchUrl += "?token=" + encodeURIComponent(token);
-var res = await fetch(fetchUrl, { credentials: "include" });
+    var token = new URLSearchParams(qs.replace("?","")).get("token");
+    var fetchUrl = "/api/" + nodeId + "/" + version + "/notes";
+    if (token) fetchUrl += "?token=" + encodeURIComponent(token);
+    var res = await fetch(fetchUrl, { credentials: "include" });
     var data  = await res.json();
     var notes = data.notes || data || [];
     if (!Array.isArray(notes)) notes = [];
@@ -4918,6 +5138,7 @@ var res = await fetch(fetchUrl, { credentials: "include" });
       var isFile = n.contentType === "file";
       var icon   = isFile ? "\\ud83d\\udcce" : "\\ud83d\\udcdd";
       var preview;
+      var username = n.username || n.user || n.author || "Unknown";
 
       if (isFile) preview = n.content ? n.content.split("/").pop() : "File";
       else        preview = (n.content || "").slice(0, 60) || "Empty note";
@@ -4930,6 +5151,7 @@ var res = await fetch(fetchUrl, { credentials: "include" });
         '" data-id="' + nId + '" data-type="' + (n.contentType || "text") + '">' +
           '<div class="note-item-icon">' + icon + '</div>' +
           '<div class="note-item-info">' +
+            '<div class="note-item-username">' + esc(username) + '</div>' +
             '<div class="note-item-preview">' + esc(preview) + '</div>' +
             '<div class="note-item-meta">' + date + '</div>' +
           '</div>' +
@@ -4942,12 +5164,14 @@ var res = await fetch(fetchUrl, { credentials: "include" });
         var nId   = item.dataset.id;
         var nType = item.dataset.type;
         if (nId === currentNoteId) return;
-        if (editor.value !== lastSaved && !confirm("Unsaved changes. Discard?")) return;
 
+        var targetUrl;
         if (nType === "file")
-          window.location.href = "/api/" + nodeId + "/" + version + "/notes/" + nId + tokenQS;
+          targetUrl = "/api/" + nodeId + "/" + version + "/notes/" + nId + tokenQS;
         else
-          window.location.href = "/api/" + nodeId + "/" + version + "/notes/" + nId + "/editor" + qs;
+          targetUrl = "/api/" + nodeId + "/" + version + "/notes/" + nId + "/editor" + qs;
+        
+        navigateWithCheck(targetUrl);
       };
     });
 
@@ -4966,15 +5190,24 @@ function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>
    NEW NOTE BUTTON
    ═══════════════════════════════════════════════════ */
 document.getElementById("newNoteBtn").onclick = function() {
-  if (editor.value !== lastSaved && !confirm("Unsaved changes. Discard?")) return;
-  window.location.href = "/api/" + nodeId + "/" + version + "/notes/editor" + qs;
+  navigateWithCheck("/api/" + nodeId + "/" + version + "/notes/editor" + qs);
 };
 
 /* ═══════════════════════════════════════════════════
    WARN ON LEAVE
    ═══════════════════════════════════════════════════ */
 window.addEventListener("beforeunload", function(e) {
-  if (editor.value !== lastSaved) { e.preventDefault(); e.returnValue = ""; }
+  if (!navigatingAway && isDirty()) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
+
+/* ═══════════════════════════════════════════════════
+   WINDOW RESIZE
+   ═══════════════════════════════════════════════════ */
+window.addEventListener("resize", function() {
+  autoGrowEditor();
 });
 
 /* ═══════════════════════════════════════════════════
@@ -4984,6 +5217,7 @@ loadSettings();
 updateStats();
 loadNotes();
 if (!isNew) lastSaved = editor.value;
+autoGrowEditor();
 setTimeout(function() { editor.focus(); }, 100);
 
 /* Pick up draft from notes page */
@@ -4994,6 +5228,7 @@ try {
     sessionStorage.removeItem("tree-editor-draft");
     updateStats();
     markDirty();
+    autoGrowEditor();
   }
 } catch (e) {}
 </script>
