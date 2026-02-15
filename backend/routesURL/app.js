@@ -1299,7 +1299,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       
       // Show disconnected message in chat
       [chatMessages, mobileChatMessages].forEach(container => {
-        container.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from Tree. Please refresh to reconnect.</p></div>';
+        container.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from Tree. Please refresh the whole website to reconnect.</p></div>';
       });
     });
 
