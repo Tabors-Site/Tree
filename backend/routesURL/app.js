@@ -65,17 +65,17 @@ router.get("/app", authenticateLite, async (req, res) => {
     @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-30px) rotate(5deg); } }
 
     .app-container { display: flex; height: 100%; width: 100%; padding: 0px; gap: 0px; }
-.glass-panel {
-  background: rgba(var(--glass-rgb), var(--glass-alpha));
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  border-radius: 0;
-  border: none;
-  box-shadow: none;
-}
+    .glass-panel {
+      background: rgba(var(--glass-rgb), var(--glass-alpha));
+      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      border-radius: 0;
+      border: none;
+      box-shadow: none;
+    }
     .glass-panel::before { content: ""; position: absolute; inset: -40%; background: radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%); pointer-events: none; z-index: 0; }
 
-    .chat-panel { width: 400px; min-width: 0; height: 100%; display: flex; flex-direction: column; z-index: 10; flex-shrink: 0; }
+    .chat-panel { width: 400px; min-width: 0; height: 100%; display: flex; flex-direction: column; z-index: 10; flex-shrink: 0; position: relative; }
     .chat-header { height: var(--header-height); padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--glass-border-light); flex-shrink: 0; position: relative; z-index: 1; }
     .chat-header a { text-decoration: none; color: inherit; }
     .chat-title { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
@@ -172,6 +172,125 @@ router.get("/app", authenticateLite, async (req, res) => {
     .mobile-root-path::before {
       content: '/';
       color: var(--text-muted);
+    }
+
+    /* ================================================================
+       RECENT ROOTS DROPDOWN (Top-left overlay, doesn't push content)
+       ================================================================ */
+    .recent-roots-dropdown {
+      position: absolute;
+      top: calc(var(--header-height) + 6px);
+      left: 12px;
+      z-index: 50;
+    }
+    .recent-roots-dropdown.hidden {
+      display: none;
+    }
+    
+    .recent-roots-trigger {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid var(--glass-border-light);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      color: var(--text-muted);
+    }
+    .recent-roots-trigger:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: var(--text-primary);
+    }
+    .recent-roots-trigger:active {
+      transform: scale(0.94);
+    }
+    .recent-roots-trigger svg {
+      width: 14px;
+      height: 14px;
+      transition: transform 0.2s ease;
+    }
+    .recent-roots-dropdown.open .recent-roots-trigger svg {
+      transform: rotate(180deg);
+    }
+    .recent-roots-dropdown.open .recent-roots-trigger {
+      background: rgba(255, 255, 255, 0.2);
+      color: var(--text-primary);
+    }
+    
+    .recent-roots-menu {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 160px;
+      max-width: 200px;
+      background: rgba(var(--glass-rgb), 0.92);
+      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 6px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      animation: recentMenuIn 0.15s ease-out;
+    }
+    @keyframes recentMenuIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .recent-roots-dropdown.open .recent-roots-menu {
+      display: block;
+    }
+    
+    .recent-roots-menu-header {
+      padding: 6px 10px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--glass-border-light);
+      margin-bottom: 4px;
+    }
+    
+    .recent-root-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .recent-root-item:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text-primary);
+    }
+    .recent-root-item:active {
+      background: rgba(255, 255, 255, 0.18);
+      transform: scale(0.98);
+    }
+    .recent-root-item.active {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--text-primary);
+      border-left: 2px solid var(--accent);
+      padding-left: 8px;
+    }
+    .recent-root-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .chat-messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; position: relative; z-index: 1; }
@@ -416,11 +535,11 @@ router.get("/app", authenticateLite, async (req, res) => {
     .panel-divider { width: 16px; height: 100%; display: flex; align-items: center; justify-content: center; cursor: col-resize; position: relative; z-index: 20; flex-shrink: 0; }
     .divider-handle { width: 6px; height: 80px; background: rgba(var(--glass-rgb), 0.5); backdrop-filter: blur(var(--glass-blur)); border: 1px solid var(--glass-border); border-radius: 4px; transition: all var(--transition-fast); }
     .panel-divider:hover .divider-handle { background: rgba(var(--glass-rgb), 0.7); width: 8px; }
-.chat-header,
-.chat-input-area {
-  border-bottom: none;
-  border-top: none;
-}
+    .chat-header,
+    .chat-input-area {
+      border-bottom: none;
+      border-top: none;
+    }
     .expand-buttons { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); }
     .panel-divider:hover .expand-buttons { opacity: 1; pointer-events: auto; }
     .panel-divider:hover .divider-handle { opacity: 0; }
@@ -753,6 +872,64 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
     .mobile-backdrop.visible { opacity: 1; pointer-events: auto; }
 
+    /* Mobile recent roots dropdown */
+    .mobile-recent-roots {
+      display: none;
+      width: 100%;
+      margin-top: 6px;
+    }
+    .mobile-recent-roots.visible {
+      display: block;
+    }
+    .mobile-recent-roots-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      margin: 0 auto;
+      transition: all var(--transition-fast);
+    }
+    .mobile-recent-roots-toggle:active {
+      background: rgba(255, 255, 255, 0.15);
+      transform: scale(0.97);
+    }
+    .mobile-recent-roots-toggle svg {
+      width: 10px;
+      height: 10px;
+      transition: transform 0.2s ease;
+    }
+    .mobile-recent-roots.expanded .mobile-recent-roots-toggle svg {
+      transform: rotate(180deg);
+    }
+    .mobile-recent-roots-list {
+      display: none;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+      padding: 0 4px;
+      justify-content: center;
+    }
+    .mobile-recent-roots.expanded .mobile-recent-roots-list {
+      display: flex;
+    }
+    .mobile-recent-roots-list .recent-root-item {
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 12px;
+      width: auto;
+      flex: 0 0 auto;
+    }
+
     @media (max-width: 768px) {
       .app-container { padding: 0; gap: 0; flex-direction: column; }
       .chat-panel { display: none !important; }
@@ -798,7 +975,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     .app-container.dragging .chat-panel, .app-container.dragging .viewport-panel { transition: none; }
 
     /* ================================================================
-       NEW: Mode bar styles
+       Mode bar styles
        ================================================================ */
     .mode-bar {
       display: flex;
@@ -999,13 +1176,12 @@ router.get("/app", authenticateLite, async (req, res) => {
         transform: translateX(-50%) translateY(0);
       }
     }
-    /* END: Mode bar styles */
   </style>
 </head>
 <body>
   <div class="app-bg"></div>
 
-  <!-- NEW: Mode alert toast -->
+  <!-- Mode alert toast -->
   <div class="mode-alert" id="modeAlert">
     <span class="mode-alert-emoji" id="modeAlertEmoji"></span>
     <span id="modeAlertText"></span>
@@ -1014,38 +1190,49 @@ router.get("/app", authenticateLite, async (req, res) => {
   <div class="app-container">
     <!-- Chat Panel -->
     <div class="chat-panel glass-panel" id="chatPanel">
-     <div class="chat-header">
-  <a href="/" class="tree-home-link">
-    <div class="chat-title">
-      <span class="tree-icon">🌳</span>
-      <h1>Tree</h1>
-    </div>
-  </a>
-  <span class="root-name-inline" id="rootNameLabel" title=""></span>
+      <div class="chat-header">
+        <a href="/" class="tree-home-link">
+          <div class="chat-title">
+            <span class="tree-icon">🌳</span>
+            <h1>Tree</h1>
+          </div>
+        </a>
+        <span class="root-name-inline" id="rootNameLabel" title=""></span>
 
-  <div class="chat-header-controls">
-    <div class="chat-header-buttons">
-      <button class="clear-chat-btn" id="desktopHomeBtn" title="Home">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      </button>
-      <button class="clear-chat-btn" id="desktopRefreshBtn" title="Refresh">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-      </button>
-      <button class="clear-chat-btn" id="desktopOpenTabBtn" title="Open in new tab">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-      </button>
-    </div>
-    <div class="chat-header-right">
-      <div class="status-badge">
-        <span class="status-dot connecting" id="statusDot"></span>
-        <span class="status-text" id="statusText">Connecting...</span>
+        <div class="chat-header-controls">
+          <div class="chat-header-buttons">
+            <button class="clear-chat-btn" id="desktopHomeBtn" title="Home">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </button>
+            <button class="clear-chat-btn" id="desktopRefreshBtn" title="Refresh">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+            <button class="clear-chat-btn" id="desktopOpenTabBtn" title="Open in new tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </button>
+          </div>
+          <div class="chat-header-right">
+            <div class="status-badge">
+              <span class="status-dot connecting" id="statusDot"></span>
+              <span class="status-text" id="statusText">Connecting...</span>
+            </div>
+            <button class="clear-chat-btn" id="clearChatBtn" title="Clear conversation">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            </button>
+          </div>
+        </div>
       </div>
-      <button class="clear-chat-btn" id="clearChatBtn" title="Clear conversation">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-      </button>
-    </div>
-  </div>
-</div>
+
+      <!-- Recent Roots Dropdown (absolute positioned, top-left overlay) -->
+      <div class="recent-roots-dropdown hidden" id="recentRootsDropdown">
+        <div class="recent-roots-trigger" id="recentRootsTrigger">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="recent-roots-menu" id="recentRootsMenu">
+          <div class="recent-roots-menu-header">Recent Trees</div>
+          <div id="recentRootsList"></div>
+        </div>
+      </div>
 
       <div class="chat-messages" id="chatMessages">
         <div class="welcome-message">
@@ -1055,7 +1242,7 @@ router.get("/app", authenticateLite, async (req, res) => {
         </div>
       </div>
 
-      <!-- NEW: Desktop mode bar (above input) -->
+      <!-- Desktop mode bar (above input) -->
       <div class="mode-bar" id="modeBar">
         <div class="mode-current" id="modeCurrent">
           <span class="mode-current-emoji" id="modeCurrentEmoji">🏠</span>
@@ -1118,7 +1305,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     </div>
   </div>
 
-  <!-- Collapsed chat tab - sideways file tab -->
+  <!-- Collapsed chat tab -->
   <div class="mobile-chat-tab" id="mobileChatTab">🌳</div>
 
   <div class="mobile-backdrop" id="mobileBackdrop"></div>
@@ -1151,6 +1338,14 @@ router.get("/app", authenticateLite, async (req, res) => {
       </div>
       <!-- Mobile mode bar (horizontal pill row) -->
       <div class="mobile-mode-bar" id="mobileModeBar"></div>
+      <!-- Mobile recent roots dropdown -->
+      <div class="mobile-recent-roots" id="mobileRecentRoots">
+        <div class="mobile-recent-roots-toggle" id="mobileRecentRootsToggle">
+          <span>Recent Trees</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="mobile-recent-roots-list" id="mobileRecentRootsList"></div>
+      </div>
     </div>
     <div class="mobile-chat-messages" id="mobileChatMessages">
       <div class="welcome-message">
@@ -1202,6 +1397,14 @@ router.get("/app", authenticateLite, async (req, res) => {
     const mobileInputCollapse = $("mobileInputCollapse");
     const mobileChatTab = $("mobileChatTab");
 
+    // Recent roots elements
+    const recentRootsDropdown = $("recentRootsDropdown");
+    const recentRootsTrigger = $("recentRootsTrigger");
+    const recentRootsList = $("recentRootsList");
+    const mobileRecentRoots = $("mobileRecentRoots");
+    const mobileRecentRootsToggle = $("mobileRecentRootsToggle");
+    const mobileRecentRootsList = $("mobileRecentRootsList");
+
     // State
     let isConnected = false;
     let isRegistered = false;
@@ -1209,11 +1412,16 @@ router.get("/app", authenticateLite, async (req, res) => {
     let currentIframeUrl = CONFIG.homeUrl;
     let isInputBarCollapsed = false;
 
-    // NEW: Mode state
+    // Mode state
     let currentModeKey = null;
     let availableModes = [];
     let modeBarOpen = false;
-    let requestGeneration = 0; // bumped on cancel/mode-switch to ignore stale responses
+    let requestGeneration = 0;
+
+    // Recent roots state
+    let recentRoots = [];
+    let recentRootsOpen = false;
+    let mobileRecentRootsExpanded = false;
 
     // Socket setup
     const socket = io({ transports: ["websocket", "polling"], withCredentials: true });
@@ -1231,19 +1439,16 @@ router.get("/app", authenticateLite, async (req, res) => {
         isRegistered = true;
         updateStatus("connected");
         console.log("[socket] registered for chat");
-        // Get current iframe URL using multiple fallbacks
         let currentUrl = "";
         try { currentUrl = iframe.contentWindow?.location?.pathname + iframe.contentWindow?.location?.search; } catch(e) {}
         if (!currentUrl) {
-          // Fallback to iframe.src attribute
           try { const u = new URL(iframe.src); currentUrl = u.pathname + u.search; } catch(e) {}
         }
         if (!currentUrl) {
-          // Fallback to last known URL
           currentUrl = currentIframeUrl || "";
         }
         socket.emit("getAvailableModes", { url: currentUrl });
-        // Also emit urlChanged so rootId gets set
+        socket.emit("getRecentRoots");
         if (currentUrl) detectIframeUrlChange();
       } else {
         console.error("[socket] registration failed:", error);
@@ -1253,7 +1458,6 @@ router.get("/app", authenticateLite, async (req, res) => {
     });
 
     socket.on("chatResponse", ({ answer, generation }) => {
-      // Drop stale responses from before a cancel/mode-switch
       if (generation !== undefined && generation < requestGeneration) {
         console.log("[socket] dropping stale response, gen:", generation, "current:", requestGeneration);
         return;
@@ -1278,7 +1482,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       console.log("[socket] navigate:", url);
       loadingOverlay.classList.add("visible");
       currentIframeUrl = url;
-      // Add inApp param if not present
       const navUrl = url.includes('inApp=') ? url : url + (url.includes('?') ? '&' : '?') + 'inApp=1';
       if (replace) {
         iframe.contentWindow?.location.replace(navUrl);
@@ -1297,39 +1500,153 @@ router.get("/app", authenticateLite, async (req, res) => {
       isRegistered = false;
       updateStatus("disconnected");
       
-      // Show disconnected message in chat
       [chatMessages, mobileChatMessages].forEach(container => {
         container.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from Tree. Please refresh the whole website to reconnect.</p></div>';
       });
     });
 
     // ================================================================
-    // NEW: Mode switching socket events
+    // Recent Roots
+    // ================================================================
+
+    socket.on("recentRoots", ({ roots }) => {
+      console.log("[socket] recent roots:", roots);
+      recentRoots = roots || [];
+      renderRecentRoots();
+    });
+
+    function getCurrentRootId() {
+      const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
+      const rootMatch = currentIframeUrl.match(new RegExp('(?:/api)?/root/(' + ID + ')', 'i'));
+      return rootMatch ? rootMatch[1] : null;
+    }
+
+    function truncateName(str, maxLen = 18) {
+      if (!str) return '';
+      return str.length > maxLen ? str.slice(0, maxLen) + '…' : str;
+    }
+
+    function renderRecentRoots() {
+      const currentRootId = getCurrentRootId();
+
+      // Hide if no roots
+      if (recentRoots.length === 0) {
+        recentRootsDropdown.classList.add("hidden");
+        mobileRecentRoots.classList.remove("visible");
+        return;
+      }
+
+      // Show dropdown trigger
+      recentRootsDropdown.classList.remove("hidden");
+      mobileRecentRoots.classList.add("visible");
+      mobileRecentRoots.classList.toggle("expanded", mobileRecentRootsExpanded);
+
+      // Render list HTML (truncated names, no emoji)
+      const listHtml = recentRoots.map(root => {
+        const isActive = root.rootId === currentRootId;
+        return \`
+          <button class="recent-root-item\${isActive ? ' active' : ''}" data-root-id="\${root.rootId}">
+            <span class="recent-root-name">\${escapeHtml(truncateName(root.name))}</span>
+          </button>
+        \`;
+      }).join('');
+
+      recentRootsList.innerHTML = listHtml;
+      mobileRecentRootsList.innerHTML = listHtml;
+
+      // Add click handlers
+      [recentRootsList, mobileRecentRootsList].forEach(list => {
+        list.querySelectorAll('.recent-root-item').forEach(item => {
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const rootId = item.dataset.rootId;
+            if (rootId) {
+              navigateToRoot(rootId);
+              closeRecentRoots();
+              // On mobile, just collapse recent trees, not the whole sheet
+              if (window.innerWidth <= 768) {
+                mobileRecentRootsExpanded = false;
+                mobileRecentRoots.classList.remove("expanded");
+              }
+            }
+          });
+        });
+      });
+    }
+
+    function navigateToRoot(rootId) {
+      const url = '/api/root/' + rootId + '?html&token=' + CONFIG.htmlShareToken + '&inApp=1';
+      loadingOverlay.classList.add("visible");
+      iframe.src = url;
+      currentIframeUrl = '/api/root/' + rootId;
+    }
+
+    function closeRecentRoots() {
+      recentRootsOpen = false;
+      recentRootsDropdown.classList.remove("open");
+    }
+
+    function toggleRecentRoots() {
+      recentRootsOpen = !recentRootsOpen;
+      recentRootsDropdown.classList.toggle("open", recentRootsOpen);
+    }
+
+    // Desktop trigger click
+    recentRootsTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleRecentRoots();
+    });
+
+    // Mobile toggle
+    mobileRecentRootsToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      mobileRecentRootsExpanded = !mobileRecentRootsExpanded;
+      mobileRecentRoots.classList.toggle("expanded", mobileRecentRootsExpanded);
+    });
+
+    // Close recent roots when clicking outside
+    document.addEventListener("click", (e) => {
+      if (recentRootsOpen && !recentRootsDropdown.contains(e.target)) {
+        closeRecentRoots();
+      }
+      if (modeBarOpen && !$("modeBar").contains(e.target)) {
+        closeModeBar();
+      }
+    });
+
+    // Close recent roots when focusing chat input
+    chatInput.addEventListener("focus", () => {
+      closeRecentRoots();
+    });
+
+    // Close mobile recent roots when focusing input
+    mobileSheetInput.addEventListener("focus", () => {
+      mobileRecentRootsExpanded = false;
+      mobileRecentRoots.classList.remove("expanded");
+    });
+
+    // ================================================================
+    // Mode switching socket events
     // ================================================================
 
     socket.on("modeSwitched", ({ modeKey, emoji, label, alert, carriedMessages, silent }) => {
       console.log("[mode] switched to:", modeKey, silent ? "(silent)" : "", "carried:", carriedMessages?.length || 0);
       currentModeKey = modeKey;
-      // Update desktop mode bar current display
       $("modeCurrentEmoji").textContent = emoji;
       $("modeCurrentLabel").textContent = label;
-      // Only re-render if availableModes already matches this big mode
       const bigMode = modeKey.split(":")[0];
       if (availableModes.length && availableModes[0].key.startsWith(bigMode + ":")) {
         renderModeDropdown();
         renderMobileModeBar();
       }
       if (!silent) {
-        // Reset sending state if a request was in-flight
         if (isSending) {
           isSending = false;
           removeTypingIndicator();
           lockModeBar(false);
           updateSendButtons();
         }
-        // Clear chat and show mode-specific welcome
         clearChatUI(carriedMessages || [], modeKey, emoji);
-        // Show alert toast
         showModeAlert(emoji, label);
       }
     });
@@ -1338,7 +1655,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       console.log("[mode] available:", bigMode, modes, "root:", rootName);
       availableModes = modes || [];
       if (currentMode) currentModeKey = currentMode;
-      // If we have a current mode, update the display
       const active = availableModes.find(m => m.key === currentModeKey);
       if (active) {
         $("modeCurrentEmoji").textContent = active.emoji;
@@ -1355,7 +1671,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     });
 
     // ================================================================
-    // NEW: Mode bar logic (desktop)
+    // Mode bar logic (desktop)
     // ================================================================
 
     function renderModeDropdown() {
@@ -1391,15 +1707,8 @@ router.get("/app", authenticateLite, async (req, res) => {
       toggleModeBar();
     });
 
-    // Close dropdown when clicking outside
-    document.addEventListener("click", (e) => {
-      if (modeBarOpen && !$("modeBar").contains(e.target)) {
-        closeModeBar();
-      }
-    });
-
     // ================================================================
-    // NEW: Lock/unlock mode bar while AI is responding
+    // Lock/unlock mode bar while AI is responding
     // ================================================================
 
     const SEND_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
@@ -1407,15 +1716,13 @@ router.get("/app", authenticateLite, async (req, res) => {
 
     function lockModeBar(locked) {
       $("modeBar").classList.toggle("locked", locked);
-      // Lock mobile mode buttons
       document.querySelectorAll(".mobile-mode-btn").forEach(btn => {
         btn.classList.toggle("locked", locked);
       });
-      // Toggle all send buttons to stop mode
       [sendBtn, mobileSheetSendBtn].forEach(btn => {
         btn.classList.toggle("stop-mode", locked);
         btn.innerHTML = locked ? STOP_SVG : SEND_SVG;
-        if (locked) btn.disabled = false; // stop button should always be clickable
+        if (locked) btn.disabled = false;
       });
     }
 
@@ -1439,7 +1746,7 @@ router.get("/app", authenticateLite, async (req, res) => {
           el.classList.add("visible");
           if (changed) {
             el.classList.remove("fade-in");
-            void el.offsetWidth; // force reflow
+            void el.offsetWidth;
             el.classList.add("fade-in");
           }
         } else {
@@ -1451,7 +1758,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     // ================================================================
-    // NEW: Mobile mode bar (horizontal pills in sheet header)
+    // Mobile mode bar (horizontal pills in sheet header)
     // ================================================================
 
     function renderMobileModeBar() {
@@ -1463,14 +1770,13 @@ router.get("/app", authenticateLite, async (req, res) => {
         btn.dataset.modeKey = mode.key;
         btn.innerHTML = '<span class="mobile-mode-btn-emoji">' + mode.emoji + '</span><span>' + mode.label + '</span>';
         btn.addEventListener("click", (e) => {
-          e.stopPropagation(); // Don't trigger drag
+          e.stopPropagation();
           if (mode.key !== currentModeKey) {
             socket.emit("switchMode", { modeKey: mode.key });
           }
         });
         bar.appendChild(btn);
       });
-      // Auto-scroll to active mode
       scrollToActiveMode();
     }
 
@@ -1478,7 +1784,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       const bar = $("mobileModeBar");
       const activeBtn = bar.querySelector(".mobile-mode-btn.active");
       if (activeBtn) {
-        // Calculate scroll position to center the active button
         const barRect = bar.getBoundingClientRect();
         const btnRect = activeBtn.getBoundingClientRect();
         const scrollLeft = activeBtn.offsetLeft - (barRect.width / 2) + (btnRect.width / 2);
@@ -1487,7 +1792,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     // ================================================================
-    // NEW: Mode alert toast
+    // Mode alert toast
     // ================================================================
 
     let modeAlertTimer = null;
@@ -1503,65 +1808,27 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     // ================================================================
-    // NEW: Clear chat UI helper
+    // Clear chat UI helper
     // ================================================================
 
     const MODE_WELCOMES = {
-     "home:default": {
-  icon: "🌳",
-  title: "Welcome to Tree",
-  desc: "Your intelligent workspace is ready — build, explore, and reflect"
-},
-
-"home:raw-idea-placement": {
-  icon: "💡",
-  title: "Raw Ideas",
-  desc: "Capture unstructured thoughts and gradually grow them into trees (work in progress)"
-},
-
-"home:reflect": {
-  icon: "🔮",
-  title: "Reflect",
-  desc: "Review your notes, tags, and contributions across all your trees"
-},
-
-"tree:structure": {
-  icon: "🏗️",
-  title: "Structure Mode",
-  desc: "Create, reorganize, and grow the overall shape of your tree"
-},
-
-"tree:be": {
-  icon: "🎯",
-  title: "Be Mode",
-  desc: "Focus on one active leaf at a time and work through it step by step"
-},
-
-"tree:reflect": {
-  icon: "🔮",
-  title: "Reflect Mode",
-  desc: "Look at your tree as a whole to spot gaps, patterns, and opportunities"
-},
-
-"tree:edit": {
-  icon: "✏️",
-  title: "Edit Mode",
-  desc: "Refine names, values, notes, and details within your tree"
-}
-
+      "home:default": { icon: "🌳", title: "Welcome to Tree", desc: "Your intelligent workspace is ready — build, explore, and reflect" },
+      "home:raw-idea-placement": { icon: "💡", title: "Raw Ideas", desc: "Capture unstructured thoughts and gradually grow them into trees (work in progress)" },
+      "home:reflect": { icon: "🔮", title: "Reflect", desc: "Review your notes, tags, and contributions across all your trees" },
+      "tree:structure": { icon: "🏗️", title: "Structure Mode", desc: "Create, reorganize, and grow the overall shape of your tree" },
+      "tree:be": { icon: "🎯", title: "Be Mode", desc: "Focus on one active leaf at a time and work through it step by step" },
+      "tree:reflect": { icon: "🔮", title: "Reflect Mode", desc: "Look at your tree as a whole to spot gaps, patterns, and opportunities" },
+      "tree:edit": { icon: "✏️", title: "Edit Mode", desc: "Refine names, values, notes, and details within your tree" }
     };
 
     function clearChatUI(carriedMessages, modeKey, emoji) {
-      // Filter out empty/blank messages
       const valid = (carriedMessages || []).filter(m => m.content && m.content.trim());
-
       const welcome = MODE_WELCOMES[modeKey] || { icon: emoji || "🌳", title: "Ready", desc: "How can I help?" };
 
       [chatMessages, mobileChatMessages].forEach(container => {
         container.innerHTML = '';
 
         if (valid.length > 0) {
-          // Render carried messages dimmed
           valid.forEach(msg => {
             const el = document.createElement("div");
             el.className = "message " + msg.role + " carried";
@@ -1579,25 +1846,22 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     // ================================================================
-    // NEW: iframe URL change detection → emit urlChanged
+    // iframe URL change detection
     // ================================================================
 
     let lastEmittedUrl = "";
     function detectIframeUrlChange() {
       let path = "";
 
-      // Try contentWindow first (may fail cross-origin)
       try {
         const loc = iframe.contentWindow?.location;
         if (loc) path = loc.pathname + loc.search;
       } catch (e) {}
 
-      // Fallback to iframe.src attribute
       if (!path) {
         try { const u = new URL(iframe.src); path = u.pathname + u.search; } catch(e) {}
       }
 
-      // Fallback to stored URL
       if (!path) {
         path = currentIframeUrl || "";
       }
@@ -1605,7 +1869,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       if (path && path !== lastEmittedUrl) {
         lastEmittedUrl = path;
         currentIframeUrl = path;
-        // Extract IDs from URL
         const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
         let rootId = null;
         let nodeId = null;
@@ -1617,6 +1880,9 @@ router.get("/app", authenticateLite, async (req, res) => {
         if (isRegistered) {
           socket.emit("urlChanged", { url: path, rootId, nodeId });
         }
+
+        // Re-render recent roots to update active state
+        renderRecentRoots();
       }
     }
 
@@ -1634,19 +1900,16 @@ router.get("/app", authenticateLite, async (req, res) => {
       
       let html = text;
       
-      // Decode HTML entities
       html = html.replace(/&nbsp;/g, ' ');
       html = html.replace(/&amp;/g, '&');
       html = html.replace(/&lt;/g, '<');
       html = html.replace(/&gt;/g, '>');
-      html = html.replace(/\u00A0/g, ' ');
+      html = html.replace(/\\u00A0/g, ' ');
       html = html.replace(/–/g, '-');
       html = html.replace(/—/g, '--');
       
-      // Escape HTML
       html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       
-      // Detect markdown tables and convert to clickable items
       const tableRegex = /^\\|(.+)\\|\\s*\\n\\|[-:\\s|]+\\|\\s*\\n((?:\\|.+\\|\\s*\\n?)+)/gm;
       html = html.replace(tableRegex, (match, headerRow, bodyRows) => {
         const rows = bodyRows.trim().split('\\n').map(row => 
@@ -1671,42 +1934,33 @@ router.get("/app", authenticateLite, async (req, res) => {
         return items;
       });
       
-      // Convert pipe-separated lists (only if first cell is a number 1-99)
       html = html.replace(/^\\|\\s*(\\d{1,2})\\s*\\|\\s*(.+?)\\s*\\|\\s*$/gm, (match, num, name) => {
         return '<div class="menu-item clickable" data-action="' + num + '" data-name="' + name.replace(/"/g, '&quot;') + '">' +
           '<span class="menu-number">' + num + '</span>' +
           '<span class="menu-text">' + name + '</span></div>';
       });
       
-      // Remove table artifacts
       html = html.replace(/^\\|\\s*#\\s*\\|.*\\|\\s*$/gm, '');
       html = html.replace(/^\\|[-:\\s|]+\\|\\s*$/gm, '');
       
-      // Code blocks
       html = html.replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre><code>$1</code></pre>');
       html = html.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
       
-      // Bold
       html = html.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
       html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
       
-      // Italic
       html = html.replace(/(?<![\\w\\*])\\*([^\\*]+)\\*(?![\\w\\*])/g, '<em>$1</em>');
       
-      // Headers
       html = html.replace(/^####\\s*(.+)$/gm, '<h4>$1</h4>');
       html = html.replace(/^###\\s*(.+)$/gm, '<h3>$1</h3>');
       html = html.replace(/^##\\s*(.+)$/gm, '<h2>$1</h2>');
       html = html.replace(/^#\\s*(.+)$/gm, '<h1>$1</h1>');
       
-      // Horizontal rules
       html = html.replace(/^-{3,}$/gm, '<hr>');
       html = html.replace(/^\\*{3,}$/gm, '<hr>');
       
-      // Blockquotes
       html = html.replace(/^&gt;\\s*(.+)$/gm, '<blockquote>$1</blockquote>');
       
-      // Emoji numbered items - clickable
       html = html.replace(/^([1-9]️⃣)\\s*<strong>(.+?)<\\/strong>(.*)$/gm, (m, emoji, title, rest) => {
         const num = emoji.match(/[1-9]/)?.[0] || '1';
         return '<div class="menu-item clickable" data-action="' + num + '" data-name="' + title.replace(/"/g, '&quot;') + '">' +
@@ -1720,24 +1974,19 @@ router.get("/app", authenticateLite, async (req, res) => {
           '<span class="menu-text">' + text + '</span></div>';
       });
       
-      // Only numbered items with bold title are clickable (1-20)
       html = html.replace(/^([1-9]|1[0-9]|20)\\.\\s*<strong>(.+?)<\\/strong>(.*)$/gm, (m, num, title, rest) => {
         return '<div class="menu-item clickable" data-action="' + num + '" data-name="' + title.replace(/"/g, '&quot;') + '">' +
           '<span class="menu-number">' + num + '</span>' +
           '<span class="menu-text"><strong>' + title + '</strong>' + rest + '</span></div>';
       });
       
-      // Dash/bullet items with bold title - NOT clickable
       html = html.replace(/^[-–•]\\s*<strong>(.+?)<\\/strong>(.*)$/gm, 
         '<div class="menu-item"><span class="menu-number">•</span><span class="menu-text"><strong>$1</strong>$2</span></div>');
       
-      // Plain dash items - regular list
       html = html.replace(/^[-–•]\\s+([^<].*)$/gm, '<li>$1</li>');
       
-      // Plain numbered items WITHOUT bold - not clickable
       html = html.replace(/^(\\d+)\\.\\s+([^<*].*)$/gm, '<li><span class="list-num">$1.</span> $2</li>');
       
-      // Wrap li in ul
       let inList = false;
       const lines = html.split('\\n');
       const processed = [];
@@ -1751,10 +2000,8 @@ router.get("/app", authenticateLite, async (req, res) => {
       if (inList) processed.push('</ul>');
       html = processed.join('\\n');
       
-      // Links
       html = html.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank">$1</a>');
       
-      // Paragraphs
       const blocks = html.split(/\\n\\n+/);
       html = blocks.map(block => {
         const trimmed = block.trim();
@@ -1764,7 +2011,6 @@ router.get("/app", authenticateLite, async (req, res) => {
         return '<p>' + withBreaks + '</p>';
       }).filter(b => b).join('');
       
-      // Cleanup
       html = html.replace(/<p><\\/p>/g, '');
       html = html.replace(/<p>(<div|<ul|<ol|<h[1-4]|<hr|<pre|<blockquote|<table)/g, '$1');
       html = html.replace(/(<\\/div>|<\\/ul>|<\\/ol>|<\\/h[1-4]>|<\\/pre>|<\\/blockquote>|<\\/table>)<\\/p>/g, '$1');
@@ -1790,7 +2036,6 @@ router.get("/app", authenticateLite, async (req, res) => {
           <div class="message-content">\${formattedContent}</div>
         \`;
         
-        // Add click handlers for menu items
         if (role === "assistant") {
           msg.querySelectorAll('.menu-item.clickable').forEach(item => {
             item.addEventListener('click', () => handleMenuItemClick(item));
@@ -1802,18 +2047,15 @@ router.get("/app", authenticateLite, async (req, res) => {
       });
     }
 
-    // Handle clicking on menu items
     function handleMenuItemClick(item) {
       const action = item.dataset.action;
       const name = item.dataset.name;
       
       if (!action || isSending) return;
       
-      // Visual feedback
       item.classList.add('clicking');
       setTimeout(() => item.classList.remove('clicking'), 300);
       
-      // Send the number/action as a message
       sendChatMessage(action);
     }
 
@@ -1864,7 +2106,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       const desktopText = chatInput.value.trim();
       const mobileSheetText = mobileSheetInput.value.trim();
       
-      // When sending, buttons act as stop - keep enabled
       sendBtn.disabled = isSending ? false : !(desktopText && isRegistered);
       mobileSheetSendBtn.disabled = isSending ? false : !(mobileSheetText && isRegistered);
       mobileSendBtn.disabled = true;
@@ -1921,16 +2162,13 @@ router.get("/app", authenticateLite, async (req, res) => {
       mobileInputBar.style.opacity = "0";
       mobileInputBar.style.pointerEvents = "none";
       
-      // Sync any draft text from bottom input to sheet input
       if (mobileBottomInput.value.trim()) {
         mobileSheetInput.value = mobileBottomInput.value;
       }
       
-      // Focus the sheet input after animation
       setTimeout(() => {
         mobileSheetInput.focus();
         updateSendButtons();
-        // Scroll to active mode after sheet opens
         scrollToActiveMode();
       }, 420);
     }
@@ -1943,7 +2181,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       mobileChatSheet.classList.add("closing");
       mobileBackdrop.classList.remove("visible");
       
-      // Sync draft text to bottom input before closing
       const draftText = mobileSheetInput.value.trim();
       if (draftText) {
         mobileBottomInput.value = draftText;
@@ -1955,17 +2192,14 @@ router.get("/app", authenticateLite, async (req, res) => {
       
       mobileSheetInput.blur();
       
-      // Clean up after animation and restore input bar
       setTimeout(() => { 
         mobileChatSheet.classList.remove("closing");
-        // Always restore input bar when closing sheet
         expandInputBar();
         mobileInputBar.style.opacity = "1";
         mobileInputBar.style.pointerEvents = "auto";
       }, 300);
     }
 
-    // Tap on mobile input bar to open sheet
     mobileInputTrigger.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1978,7 +2212,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       openMobileSheet();
     });
 
-    // Collapse/expand mobile input bar
     function collapseInputBar() {
       isInputBarCollapsed = true;
       mobileInputBar.classList.add("collapsed");
@@ -2004,7 +2237,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       openMobileSheet();
     });
 
-    // Mobile sheet input listeners
     mobileSheetInput.addEventListener("input", () => {
       updateSendButtons();
       mobileSheetInput.style.height = "auto";
@@ -2063,12 +2295,10 @@ router.get("/app", authenticateLite, async (req, res) => {
       const touch = e.touches ? e.touches[0] : e;
       const deltaY = touch.clientY - sheetDragStartY;
       
-      // Only allow dragging down (positive deltaY)
       if (deltaY > 0) {
         currentDragY = deltaY;
         mobileChatSheet.style.transform = \`translateY(\${deltaY}px)\`;
         
-        // Fade backdrop based on drag progress
         const progress = Math.min(deltaY / (sheetHeight * 0.5), 1);
         mobileBackdrop.style.opacity = String(1 - progress * 0.7);
       }
@@ -2080,28 +2310,23 @@ router.get("/app", authenticateLite, async (req, res) => {
       isDraggingSheet = false;
       mobileChatSheet.classList.remove("dragging");
       
-      // Reset inline styles
       mobileChatSheet.style.transform = "";
       mobileBackdrop.style.opacity = "";
       
-      // If dragged more than 25% of sheet height, close it
       if (currentDragY > sheetHeight * 0.25) {
         closeMobileSheet();
       } else {
-        // Snap back - sheet is already open, just re-add the class
         mobileChatSheet.classList.add("open");
       }
       
       currentDragY = 0;
     }
 
-    // Touch listeners for header drag
     mobileSheetHeader.addEventListener("touchstart", handleSheetDragStart, { passive: true });
     mobileSheetHeader.addEventListener("touchmove", handleSheetDragMove, { passive: true });
     mobileSheetHeader.addEventListener("touchend", handleSheetDragEnd, { passive: true });
     mobileSheetHeader.addEventListener("touchcancel", handleSheetDragEnd, { passive: true });
 
-    // Mouse support for testing on desktop
     let mouseIsDown = false;
     mobileSheetHeader.addEventListener("mousedown", (e) => {
       mouseIsDown = true;
@@ -2165,7 +2390,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     $("expandViewportBtn").addEventListener("click", () => setChatWidth(0));
     $("resetPanelsBtn").addEventListener("click", () => setChatWidth(getAvailable() / 2));
 
-    // Clear chat buttons (desktop + mobile)
+    // Clear chat buttons
     function handleClearChat() {
       if (!isRegistered) return;
       if (isSending) cancelRequest();
@@ -2176,7 +2401,6 @@ router.get("/app", authenticateLite, async (req, res) => {
     $("clearChatBtn").addEventListener("click", handleClearChat);
     $("mobileClearChatBtn").addEventListener("click", handleClearChat);
 
-    // Get current iframe URL for opening in new tab
     function getCurrentIframeUrl() {
       let url = "";
       try {
@@ -2188,7 +2412,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       if (!url) {
         url = window.location.origin + currentIframeUrl;
       }
-      // Remove inApp param for clean URL
       try {
         const u = new URL(url, window.location.origin);
         u.searchParams.delete('inApp');
@@ -2198,7 +2421,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       }
     }
 
-    // Home buttons
     function goHome() {
       loadingOverlay.classList.add("visible");
       iframe.src = CONFIG.homeUrl;
@@ -2211,7 +2433,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       goHome();
     });
 
-    // Refresh buttons
     function doRefresh() {
       loadingOverlay.classList.add("visible");
       iframe.contentWindow?.location.reload();
@@ -2223,7 +2444,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       doRefresh();
     });
 
-    // Open in new tab buttons
     function openInNewTab() {
       const url = getCurrentIframeUrl();
       window.open(url, '_blank');
@@ -2240,7 +2460,6 @@ router.get("/app", authenticateLite, async (req, res) => {
           currentIframeUrl = loc.pathname + loc.search;
         }
       } catch (e) {}
-      // NEW: Detect URL change on iframe load
       detectIframeUrlChange();
     });
 
@@ -2275,10 +2494,11 @@ router.get("/app", authenticateLite, async (req, res) => {
       notifyNodeDeleted: (nodeId, nodeName) => { if (isRegistered) socket.emit("nodeDeleted", { nodeId, nodeName }); },
       notifyNoteCreated: (nodeId, noteContent) => { if (isRegistered) socket.emit("noteCreated", { nodeId, noteContent }); },
       clearConversation: () => { if (isRegistered) socket.emit("clearConversation"); },
-      // NEW: Mode switching API
       switchMode: (modeKey) => { if (isRegistered) socket.emit("switchMode", { modeKey }); },
       getCurrentMode: () => currentModeKey,
-      getAvailableModes: () => availableModes
+      getAvailableModes: () => availableModes,
+      getRecentRoots: () => recentRoots,
+      navigateToRoot: navigateToRoot
     };
   </script>
 </body>

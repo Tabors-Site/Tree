@@ -8,6 +8,29 @@ function generateHtmlShareToken() {
   return crypto.randomBytes(16).toString("base64url"); // URL-safe
 }
 
+
+const RecentRootSchema = new mongoose.Schema(
+  {
+    rootId: {
+      type: String,
+      required: true,
+      ref: "Node"
+    },
+
+    rootName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    lastVisitedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const ApiKeySchema = new mongoose.Schema(
   {
     _id: { type: String, default: uuidv4 },
@@ -93,7 +116,11 @@ const UserSchema = new mongoose.Schema({
   apiKeys: [ApiKeySchema],
 
   roots: [{ type: String, ref: "Node" }],
-
+  
+  recentRoots: {
+    type: [RecentRootSchema],
+    default: [],
+  },
   profileType: {
     type: String,
     enum: ["basic", "standard", "premium", "god"],

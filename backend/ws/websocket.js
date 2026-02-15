@@ -5,7 +5,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { getClientForUser } from "../ws/conversation.js";
-
+import {updateRecentRoots, getRecentRootsByUserId} from "../core/user.js";
 import {
   connectToMCP,
   closeMCPClient,
@@ -192,6 +192,22 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       // Update rootId based on URL
       if (rootId) {
         setRootId(visitorId, rootId);
+         if (socket.userId) {
+    updateRecentRoots(socket.userId, rootId)
+      .then(async () => {
+        // Emit updated list back to client
+        const recentRoots = await getRecentRootsByUserId(socket.userId);
+        const rootsWithNames = await Promise.all(
+          recentRoots.map(async (r) => {
+            let name = null;
+            try { name = await getNodeName(r.rootId); } catch (e) {}
+            return { rootId: r.rootId, name: name || r.rootId.slice(0, 8) + "...", lastVisitedAt: r.lastVisitedAt };
+          })
+        );
+        socket.emit("recentRoots", { roots: rootsWithNames });
+      })
+      .catch(err => console.error("Failed to update recent roots:", err.message));
+  }
       } else if (
         nodeId &&
         (currentBig !== newBigMode || !getRootId(visitorId))
@@ -501,9 +517,40 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (visitorId && rootId) {
         setRootId(visitorId, rootId);
         console.log(`🌳 Set active root for ${visitorId}: ${rootId}`);
+        
+      }
+       
+    });
+ socket.on("getRecentRoots", async () => {
+      if (!socket.userId) {
+        socket.emit("recentRoots", { roots: [] });
+        return;
+      }
+
+      try {
+        const recentRoots = await getRecentRootsByUserId(socket.userId);
+
+        // Fetch names for each root
+        const rootsWithNames = await Promise.all(
+          recentRoots.map(async (r) => {
+            let name = null;
+            try {
+              name = await getNodeName(r.rootId);
+            } catch (e) {}
+            return {
+              rootId: r.rootId,
+              name: name || r.rootId.slice(0, 8) + "...",
+              lastVisitedAt: r.lastVisitedAt,
+            };
+          })
+        );
+
+        socket.emit("recentRoots", { roots: rootsWithNames });
+      } catch (err) {
+        console.error("Failed to get recent roots:", err.message);
+        socket.emit("recentRoots", { roots: [] });
       }
     });
-
     // ── FRONTEND SYNC (context injection) ─────────────────────────────
     socket.on("nodeUpdated", ({ nodeId, changes }) => {
       const visitorId = socket.visitorId;

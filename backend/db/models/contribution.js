@@ -319,8 +319,6 @@ const ContributionSchema = new mongoose.Schema({
 
       stripeSessionId: {
         type: String,
-        index: true,
-        unique: true,
       },
 
       paymentIntentId: {
