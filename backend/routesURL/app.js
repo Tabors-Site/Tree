@@ -107,6 +107,54 @@ router.get("/app", authenticateLite, async (req, res) => {
     @container (max-width: 320px) {
       .chat-title h1 { display: none; }
     }
+    
+    /* Wide panel mode - constrain content when panel is very wide */
+    @container (min-width: 750px) {
+      .chat-messages {
+        width: 100%;
+        max-width: 720px;
+        margin-left: auto;
+        margin-right: auto;
+        padding-left: 24px;
+        padding-right: 24px;
+      }
+      .chat-input-area {
+        width: 100%;
+        max-width: 760px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .mode-bar {
+        width: 100%;
+        max-width: 760px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+    }
+    @container (min-width: 950px) {
+      .chat-messages {
+        max-width: 840px;
+      }
+      .chat-input-area {
+        max-width: 880px;
+      }
+      .mode-bar {
+        max-width: 880px;
+      }
+    }
+    @container (min-width: 1150px) {
+      .chat-messages {
+        max-width: 920px;
+        padding-left: 32px;
+        padding-right: 32px;
+      }
+      .chat-input-area {
+        max-width: 960px;
+      }
+      .mode-bar {
+        max-width: 960px;
+      }
+    }
 
     /* Clear chat button in header */
     .clear-chat-btn {
@@ -180,7 +228,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     .recent-roots-dropdown {
       position: absolute;
       top: calc(var(--header-height) + 6px);
-      left: 12px;
+      left: 16px;
       z-index: 50;
     }
     .recent-roots-dropdown.hidden {
@@ -547,29 +595,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     .expand-btn:hover { background: rgba(255, 255, 255, 0.25); color: var(--text-primary); transform: scale(1.1); }
     .expand-btn svg { width: 16px; height: 16px; }
 
-    /* Mobile */
-    .mobile-input-bar {
-      display: none;
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 150;
-      padding: 18px 12px 10px 12px;
-      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-      background: transparent;
-      transition: all 0.3s ease;
-    }
-    .mobile-input-bar .input-container {
-      position: relative;
-    }
-    .mobile-input-bar.collapsed {
-      opacity: 0;
-      pointer-events: none;
-      transform: translateX(100%);
-    }
-    
-    /* Collapsed folder tab - sideways file on right edge */
+    /* Collapsed chat tab - visible by default on mobile */
     .mobile-chat-tab {
       display: none;
       position: fixed;
@@ -591,69 +617,9 @@ router.get("/app", authenticateLite, async (req, res) => {
       box-shadow: -2px 0 12px rgba(0, 0, 0, 0.1);
       font-size: 18px;
     }
-    .mobile-chat-tab.visible {
-      display: flex;
-    }
     .mobile-chat-tab:active {
       width: 38px;
       background: rgba(255, 255, 255, 0.2);
-    }
-    
-    /* Collapse button on input bar - handle with red x */
-    .mobile-input-collapse {
-      position: absolute;
-      top: -20px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 56px;
-      height: 22px;
-      background: transparent;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      z-index: 10;
-      gap: 4px;
-    }
-    .mobile-input-collapse:active .collapse-x {
-      transform: scale(1.2);
-    }
-    .mobile-input-collapse .collapse-x {
-      font-size: 13px;
-      font-weight: 700;
-      color: #ef4444;
-      text-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
-      line-height: 1;
-      transition: all 0.15s ease;
-    }
-    .mobile-input-collapse::after {
-      content: '';
-      width: 16px;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 2px;
-    }
-    .mobile-input-bar .input-container {
-      padding: 14px 18px;
-      border-radius: 26px;
-      background: rgba(255, 255, 255, 0.12);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      min-height: 52px;
-    }
-    .mobile-input-bar .input-container:focus-within {
-      box-shadow: none;
-    }
-    .mobile-input-bar .chat-input { font-size: 16px; }
-    .mobile-input-bar .send-btn { 
-      width: 42px; 
-      height: 42px; 
-      border-radius: 50%; 
-      box-shadow: none;
-    }
-    .mobile-input-bar .send-btn:hover:not(:disabled) {
-      box-shadow: none;
     }
 
     /* Mobile connection status indicator - inside sheet header */
@@ -743,6 +709,16 @@ router.get("/app", authenticateLite, async (req, res) => {
     .mobile-chat-sheet.open { 
       transform: translateY(0); 
       transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .mobile-chat-sheet.peeked {
+      transform: translateY(calc(100% - 90px));
+      transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .mobile-chat-sheet.peeked .mobile-chat-messages,
+    .mobile-chat-sheet.peeked .mobile-chat-input-area,
+    .mobile-chat-sheet.peeked .mobile-recent-roots,
+    .mobile-chat-sheet.peeked .mobile-mode-bar {
+      display: none;
     }
     .mobile-chat-sheet.closing {
       transform: translateY(100%);
@@ -938,8 +914,10 @@ router.get("/app", authenticateLite, async (req, res) => {
       .iframe-container { border-radius: 0; margin: 0; flex: 1; }
       iframe, .loading-overlay { border-radius: 0; }
       .panel-divider { display: none; }
-      .mobile-input-bar, .mobile-chat-sheet, .mobile-backdrop { display: block; }
+      .mobile-chat-sheet, .mobile-backdrop { display: block; }
       .mobile-chat-sheet { display: flex; }
+      .mobile-chat-tab { display: flex; }
+      .mobile-chat-tab.hidden { display: none; }
       
       .message-content {
         max-width: 90%;
@@ -1001,6 +979,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       cursor: pointer;
       user-select: none;
       transition: all var(--transition-fast);
+      position: relative;
       font-size: 13px;
       font-weight: 600;
       color: var(--text-primary);
@@ -1033,9 +1012,10 @@ router.get("/app", authenticateLite, async (req, res) => {
     .mode-dropdown {
       display: none;
       position: absolute;
-      bottom: calc(100% + 4px);
-      left: 12px;
+      bottom: calc(100% + 8px);
+      left: 0;
       min-width: 180px;
+      max-width: 280px;
       background: rgba(var(--glass-rgb), 0.85);
       backdrop-filter: blur(var(--glass-blur)) saturate(140%);
       -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
@@ -1094,25 +1074,25 @@ router.get("/app", authenticateLite, async (req, res) => {
     /* Mode alert toast */
     .mode-alert {
       position: fixed;
-      top: 72px;
-      left: 16px;
+      bottom: 165px;
+      left: 10px;
       z-index: 9999;
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 18px;
+      gap: 6px;
+      padding: 7px 14px;
       background: rgba(var(--glass-rgb), 0.85);
       backdrop-filter: blur(var(--glass-blur));
       -webkit-backdrop-filter: blur(var(--glass-blur));
       border: 1px solid var(--glass-border);
-      border-radius: 12px;
+      border-radius: 10px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--text-primary);
       pointer-events: none;
       opacity: 0;
-      transform: translateY(-10px);
+      transform: translateY(10px);
       transition: opacity 0.25s ease, transform 0.25s ease;
     }
     .mode-alert.visible {
@@ -1120,7 +1100,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       transform: translateY(0);
     }
     .mode-alert-emoji {
-      font-size: 18px;
+      font-size: 14px;
     }
 
     /* Mobile mode bar (inside sheet header) */
@@ -1169,6 +1149,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     @media (max-width: 768px) {
       .mode-alert {
         top: 10px;
+        bottom: auto;
         left: 50%;
         transform: translateX(-50%) translateY(-10px);
       }
@@ -1248,8 +1229,8 @@ router.get("/app", authenticateLite, async (req, res) => {
           <span class="mode-current-emoji" id="modeCurrentEmoji">🏠</span>
           <span class="mode-current-label" id="modeCurrentLabel">Home</span>
           <svg class="mode-current-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 15l6-6 6 6"/></svg>
+          <div class="mode-dropdown" id="modeDropdown"></div>
         </div>
-        <div class="mode-dropdown" id="modeDropdown"></div>
       </div>
 
       <div class="chat-input-area">
@@ -1269,13 +1250,13 @@ router.get("/app", authenticateLite, async (req, res) => {
       <div class="divider-handle"></div>
       <div class="expand-buttons">
         <button class="expand-btn" id="expandChatBtn" title="Expand chat">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7"/><path d="M19 19l-7-7 7-7"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 5l7 7-7 7"/><path d="M5 5l7 7-7 7"/></svg>
         </button>
         <button class="expand-btn" id="resetPanelsBtn" title="Reset">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
         </button>
         <button class="expand-btn" id="expandViewportBtn" title="Expand viewport">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 5l7 7-7 7"/><path d="M5 5l7 7-7 7"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7"/><path d="M19 19l-7-7 7-7"/></svg>
         </button>
       </div>
     </div>
@@ -1291,17 +1272,6 @@ router.get("/app", authenticateLite, async (req, res) => {
         </div>
         <iframe id="viewport" src="/api/user/${req.userId}?html&token=${htmlShareToken}&inApp=1" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation"></iframe>
       </div>
-    </div>
-  </div>
-
-  <!-- Mobile Elements -->
-  <div class="mobile-input-bar" id="mobileInputBar">
-    <div class="input-container" id="mobileInputTrigger">
-      <div class="mobile-input-collapse" id="mobileInputCollapse"><span class="collapse-x">✕</span></div>
-      <textarea class="chat-input" id="mobileBottomInput" placeholder="Message Tree..." rows="1" readonly></textarea>
-      <button class="send-btn" id="mobileSendBtn" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-      </button>
     </div>
   </div>
 
@@ -1385,16 +1355,11 @@ router.get("/app", authenticateLite, async (req, res) => {
     const iframe = $("viewport");
     const loadingOverlay = $("loadingOverlay");
     const mobileChatMessages = $("mobileChatMessages");
-    const mobileBottomInput = $("mobileBottomInput");
-    const mobileSendBtn = $("mobileSendBtn");
     const mobileSheetInput = $("mobileSheetInput");
     const mobileSheetSendBtn = $("mobileSheetSendBtn");
     const mobileChatSheet = $("mobileChatSheet");
     const mobileBackdrop = $("mobileBackdrop");
-    const mobileInputBar = $("mobileInputBar");
     const mobileSheetHeader = $("mobileSheetHeader");
-    const mobileInputTrigger = $("mobileInputTrigger");
-    const mobileInputCollapse = $("mobileInputCollapse");
     const mobileChatTab = $("mobileChatTab");
 
     // Recent roots elements
@@ -1410,7 +1375,9 @@ router.get("/app", authenticateLite, async (req, res) => {
     let isRegistered = false;
     let isSending = false;
     let currentIframeUrl = CONFIG.homeUrl;
-    let isInputBarCollapsed = false;
+
+    // Mobile sheet state: 'closed' | 'peeked' | 'open'
+    let mobileSheetState = 'closed';
 
     // Mode state
     let currentModeKey = null;
@@ -1558,6 +1525,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       [recentRootsList, mobileRecentRootsList].forEach(list => {
         list.querySelectorAll('.recent-root-item').forEach(item => {
           item.addEventListener('click', (e) => {
+            e.preventDefault();
             e.stopPropagation();
             const rootId = item.dataset.rootId;
             if (rootId) {
@@ -1599,7 +1567,9 @@ router.get("/app", authenticateLite, async (req, res) => {
 
     // Mobile toggle
     mobileRecentRootsToggle.addEventListener("click", (e) => {
+      e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
       mobileRecentRootsExpanded = !mobileRecentRootsExpanded;
       mobileRecentRoots.classList.toggle("expanded", mobileRecentRootsExpanded);
     });
@@ -1705,6 +1675,11 @@ router.get("/app", authenticateLite, async (req, res) => {
     $("modeCurrent").addEventListener("click", (e) => {
       e.stopPropagation();
       toggleModeBar();
+    });
+
+    // Prevent clicks inside dropdown from toggling mode bar
+    $("modeDropdown").addEventListener("click", (e) => {
+      e.stopPropagation();
     });
 
     // ================================================================
@@ -2108,7 +2083,6 @@ router.get("/app", authenticateLite, async (req, res) => {
       
       sendBtn.disabled = isSending ? false : !(desktopText && isRegistered);
       mobileSheetSendBtn.disabled = isSending ? false : !(mobileSheetText && isRegistered);
-      mobileSendBtn.disabled = true;
     }
 
     // Input handlers - Desktop
@@ -2146,95 +2120,71 @@ router.get("/app", authenticateLite, async (req, res) => {
     });
 
     // Mobile handlers
-    let isSheetOpen = false;
     let sheetDragStartY = 0;
     let isDraggingSheet = false;
     let sheetHeight = 0;
     let currentDragY = 0;
+    let dragStartState = 'closed';
 
-    function openMobileSheet() {
-      if (isSheetOpen) return;
+    function setMobileSheetState(newState, force = false) {
+      // Don't re-run if already in this state (unless forced)
+      if (mobileSheetState === newState && !force) return;
       
-      isSheetOpen = true;
-      mobileChatSheet.classList.remove("closing");
-      mobileChatSheet.classList.add("open");
-      mobileBackdrop.classList.add("visible");
-      mobileInputBar.style.opacity = "0";
-      mobileInputBar.style.pointerEvents = "none";
+      mobileSheetState = newState;
+      mobileChatSheet.classList.remove("open", "peeked", "closing");
       
-      if (mobileBottomInput.value.trim()) {
-        mobileSheetInput.value = mobileBottomInput.value;
+      if (newState === 'open') {
+        mobileChatSheet.classList.add("open");
+        mobileBackdrop.classList.add("visible");
+        mobileChatTab.classList.add("hidden");
+        setTimeout(() => {
+          mobileSheetInput.focus();
+          updateSendButtons();
+          scrollToActiveMode();
+        }, 350);
+      } else if (newState === 'peeked') {
+        mobileChatSheet.classList.add("peeked");
+        mobileBackdrop.classList.remove("visible");
+        mobileChatTab.classList.add("hidden");
+        mobileSheetInput.blur();
+      } else {
+        // closed - go to side tab
+        mobileChatSheet.classList.add("closing");
+        mobileBackdrop.classList.remove("visible");
+        mobileSheetInput.blur();
+        setTimeout(() => {
+          mobileChatSheet.classList.remove("closing");
+          mobileChatTab.classList.remove("hidden");
+        }, 300);
       }
-      
-      setTimeout(() => {
-        mobileSheetInput.focus();
-        updateSendButtons();
-        scrollToActiveMode();
-      }, 420);
+    }
+
+    function openMobileSheetFull() {
+      setMobileSheetState('open');
+    }
+
+    function peekMobileSheet() {
+      setMobileSheetState('peeked');
     }
 
     function closeMobileSheet() {
-      if (!isSheetOpen) return;
-      
-      isSheetOpen = false;
-      mobileChatSheet.classList.remove("open");
-      mobileChatSheet.classList.add("closing");
-      mobileBackdrop.classList.remove("visible");
-      
-      const draftText = mobileSheetInput.value.trim();
-      if (draftText) {
-        mobileBottomInput.value = draftText;
-        mobileBottomInput.placeholder = "";
-      } else {
-        mobileBottomInput.value = "";
-        mobileBottomInput.placeholder = "Message Tree...";
-      }
-      
-      mobileSheetInput.blur();
-      
-      setTimeout(() => { 
-        mobileChatSheet.classList.remove("closing");
-        expandInputBar();
-        mobileInputBar.style.opacity = "1";
-        mobileInputBar.style.pointerEvents = "auto";
-      }, 300);
+      setMobileSheetState('closed');
     }
 
-    mobileInputTrigger.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      openMobileSheet();
-    });
-
-    mobileBottomInput.addEventListener("focus", (e) => {
-      e.preventDefault();
-      mobileBottomInput.blur();
-      openMobileSheet();
-    });
-
-    function collapseInputBar() {
-      isInputBarCollapsed = true;
-      mobileInputBar.classList.add("collapsed");
-      mobileChatTab.classList.add("visible");
-    }
-
-    function expandInputBar() {
-      isInputBarCollapsed = false;
-      mobileInputBar.classList.remove("collapsed");
-      mobileChatTab.classList.remove("visible");
-    }
-
-    mobileInputCollapse.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      collapseInputBar();
-    });
-
+    // Side tab opens to full
     mobileChatTab.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      expandInputBar();
-      openMobileSheet();
+      openMobileSheetFull();
+    });
+
+    // Header tap in peeked state opens full
+    mobileSheetHeader.addEventListener("click", (e) => {
+      if (mobileSheetState === 'peeked' && !isDraggingSheet) {
+        e.preventDefault();
+        e.stopPropagation();
+        openMobileSheetFull();
+      }
     });
 
     mobileSheetInput.addEventListener("input", () => {
@@ -2250,8 +2200,6 @@ router.get("/app", authenticateLite, async (req, res) => {
         if (msg && isRegistered && !isSending) {
           sendChatMessage(msg);
           mobileSheetInput.value = "";
-          mobileBottomInput.value = "";
-          mobileBottomInput.placeholder = "Message Tree...";
           mobileSheetInput.style.height = "auto";
           updateSendButtons();
         }
@@ -2267,25 +2215,30 @@ router.get("/app", authenticateLite, async (req, res) => {
       if (msg && isRegistered && !isSending) {
         sendChatMessage(msg);
         mobileSheetInput.value = "";
-        mobileBottomInput.value = "";
-        mobileBottomInput.placeholder = "Message Tree...";
         mobileSheetInput.style.height = "auto";
         updateSendButtons();
       }
     });
 
-    $("mobileCloseBtn").addEventListener("click", closeMobileSheet);
+    // X button always closes to side tab
+    $("mobileCloseBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      closeMobileSheet();
+    });
+    // Backdrop click closes to side tab
     mobileBackdrop.addEventListener("click", closeMobileSheet);
 
-    // Sheet drag to dismiss
+    // Sheet drag handling
     function handleSheetDragStart(e) {
-      if (!isSheetOpen) return;
+      if (mobileSheetState === 'closed') return;
       
       const touch = e.touches ? e.touches[0] : e;
       sheetDragStartY = touch.clientY;
       sheetHeight = mobileChatSheet.offsetHeight;
       currentDragY = 0;
       isDraggingSheet = true;
+      dragStartState = mobileSheetState;
       mobileChatSheet.classList.add("dragging");
     }
 
@@ -2295,12 +2248,36 @@ router.get("/app", authenticateLite, async (req, res) => {
       const touch = e.touches ? e.touches[0] : e;
       const deltaY = touch.clientY - sheetDragStartY;
       
-      if (deltaY > 0) {
+      // Calculate base offset based on current state
+      let baseOffset = 0;
+      if (dragStartState === 'peeked') {
+        baseOffset = sheetHeight - 90; // peeked position
+      }
+      
+      if (dragStartState === 'open') {
+        // Dragging down from open
+        if (deltaY > 0) {
+          currentDragY = deltaY;
+          mobileChatSheet.style.transform = \`translateY(\${deltaY}px)\`;
+          const progress = Math.min(deltaY / (sheetHeight * 0.5), 1);
+          mobileBackdrop.style.opacity = String(1 - progress);
+        } else if (deltaY < 0) {
+          // Allow slight overdrag up
+          currentDragY = deltaY;
+          mobileChatSheet.style.transform = \`translateY(\${Math.max(deltaY, -20)}px)\`;
+        }
+      } else if (dragStartState === 'peeked') {
+        // Dragging from peeked state
         currentDragY = deltaY;
-        mobileChatSheet.style.transform = \`translateY(\${deltaY}px)\`;
+        const newOffset = Math.max(0, Math.min(baseOffset + deltaY, sheetHeight));
+        mobileChatSheet.style.transform = \`translateY(\${newOffset}px)\`;
         
-        const progress = Math.min(deltaY / (sheetHeight * 0.5), 1);
-        mobileBackdrop.style.opacity = String(1 - progress * 0.7);
+        // Show backdrop when dragging up
+        if (deltaY < 0) {
+          const progress = Math.min(Math.abs(deltaY) / (sheetHeight - 90), 1);
+          mobileBackdrop.style.opacity = String(progress);
+          mobileBackdrop.classList.add("visible");
+        }
       }
     }
 
@@ -2309,14 +2286,27 @@ router.get("/app", authenticateLite, async (req, res) => {
       
       isDraggingSheet = false;
       mobileChatSheet.classList.remove("dragging");
-      
       mobileChatSheet.style.transform = "";
       mobileBackdrop.style.opacity = "";
       
-      if (currentDragY > sheetHeight * 0.25) {
-        closeMobileSheet();
-      } else {
-        mobileChatSheet.classList.add("open");
+      const peekThreshold = sheetHeight - 200; // pixels from top to trigger peek
+      
+      if (dragStartState === 'open') {
+        // From open: drag down far = peek, drag down very far = still peek (not close)
+        if (currentDragY > peekThreshold) {
+          peekMobileSheet();
+        } else if (currentDragY > 50) {
+          peekMobileSheet();
+        } else {
+          setMobileSheetState('open');
+        }
+      } else if (dragStartState === 'peeked') {
+        // From peeked: drag up = open, drag down = stay peeked
+        if (currentDragY < -50) {
+          openMobileSheetFull();
+        } else {
+          setMobileSheetState('peeked');
+        }
       }
       
       currentDragY = 0;
@@ -2341,6 +2331,11 @@ router.get("/app", authenticateLite, async (req, res) => {
         if (isDraggingSheet) handleSheetDragEnd(e);
       }
     });
+
+    // Start in peeked state on mobile
+    if (window.innerWidth <= 768) {
+      setTimeout(() => setMobileSheetState('peeked'), 100);
+    }
 
     // Panel resizing (desktop)
     const appContainer = document.querySelector(".app-container");
@@ -2399,7 +2394,11 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     $("clearChatBtn").addEventListener("click", handleClearChat);
-    $("mobileClearChatBtn").addEventListener("click", handleClearChat);
+    $("mobileClearChatBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      handleClearChat();
+    });
 
     function getCurrentIframeUrl() {
       let url = "";
@@ -2428,9 +2427,12 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     $("desktopHomeBtn").addEventListener("click", goHome);
-    $("mobileHomeBtn").addEventListener("click", () => {
-      closeMobileSheet();
+    $("mobileHomeBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
       goHome();
+      // Always reset to peeked/dragged-down mode on mobile (use timeout to ensure it happens last)
+      setTimeout(() => setMobileSheetState('peeked', true), 10);
     });
 
     function doRefresh() {
@@ -2439,8 +2441,9 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     $("desktopRefreshBtn").addEventListener("click", doRefresh);
-    $("mobileRefreshBtn").addEventListener("click", () => {
-      closeMobileSheet();
+    $("mobileRefreshBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
       doRefresh();
     });
 
