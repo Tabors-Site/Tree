@@ -1448,8 +1448,11 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     const tokenQS = token ? `?token=${token}&html` : `?html`;
 
     const rawLimit = req.query.limit;
-    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+    let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
+       if (limit >= 200 || limit == undefined) {
+      limit = 200;
+    }
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
       return res.status(400).json({
         success: false,
@@ -1473,10 +1476,11 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
 
     const notes = result.notes.map((n) => ({
       ...n,
+      // Normalize _id (some queries return id, others _id)
+      _id: n._id || n.id,
       content:
         n.contentType === "file" ? `/api/uploads/${n.content}` : n.content,
     }));
-
     // JSON MODE (no HTML)
     if (!wantHtml) {
       return res.json({ success: true, notes, query });
@@ -1488,6 +1492,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     // Process notes outside the template literal
     const processedNotes = await Promise.all(
       notes.map(async (n) => {
+        const noteId = n._id || n.id;
         const preview =
           n.contentType === "text"
             ? n.content.length > 120
@@ -1500,16 +1505,23 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
         return `
     <li
       class="note-card"
-      data-note-id="${n._id}"
+      data-note-id="${noteId}"
       data-node-id="${n.nodeId}"
       data-version="${n.version}"
     >
-      <button class="delete-button" title="Delete note">✕</button>
+      <div class="card-actions">
+        ${
+          n.contentType === "text"
+            ? `<a href="/api/${n.nodeId}/${n.version}/notes/${noteId}/editor${tokenQS}" class="edit-button" title="Edit note">✎</a>`
+            : ""
+        }
+        <button class="delete-button" title="Delete note">✕</button>
+      </div>
 
       <div class="note-content">
         <div class="note-author">${user.username}</div>
         <a
-          href="/api/${n.nodeId}/${n.version}/notes/${n._id}${tokenQS}"
+          href="/api/${n.nodeId}/${n.version}/notes/${noteId}${tokenQS}"
           class="note-link"
         >
           ${
@@ -1864,10 +1876,18 @@ body::after {
   transform: translateX(30%) translateY(10%);
 }
 
-.delete-button {
+/* Card Actions (Edit + Delete buttons) */
+.card-actions {
   position: absolute;
   top: 20px;
   right: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.edit-button,
+.delete-button {
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
@@ -1876,14 +1896,22 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
   color: white;
   padding: 0;
   line-height: 1;
   opacity: 0.8;
   transition: all 0.3s;
-  z-index: 10;
+  text-decoration: none;
+}
+
+.edit-button:hover {
+  opacity: 1;
+  background: rgba(72, 187, 178, 0.4);
+  border-color: rgba(72, 187, 178, 0.6);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(72, 187, 178, 0.3);
 }
 
 .delete-button:hover {
@@ -1895,7 +1923,7 @@ body::after {
 }
 
 .note-content {
-  padding-right: 48px;
+  padding-right: 80px;
   margin-bottom: 12px;
 }
 
@@ -2030,12 +2058,21 @@ body::after {
     padding: 20px 16px;
   }
 
-  .delete-button {
+  .card-actions {
     top: 16px;
     right: 16px;
+    gap: 6px;
+  }
+
+  .edit-button,
+  .delete-button {
     width: 28px;
     height: 28px;
-    font-size: 16px;
+    font-size: 14px;
+  }
+
+  .note-content {
+    padding-right: 70px;
   }
 
   .back-nav {
@@ -2076,7 +2113,7 @@ body::after {
         <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
       <div class="header-subtitle">
-        View and manage all of your notes across every tree
+        View and manage your last 200notes across every tree
       </div>
 
       <!-- Search Form -->
@@ -2126,16 +2163,22 @@ body::after {
       const nodeId = card.dataset.nodeId;
       const version = card.dataset.version;
 
+      // Debug: log what we're trying to delete
+
+      if (!noteId || !nodeId || !version) {
+        alert("Error: Missing note data. Please refresh and try again.");
+        return;
+      }
+
       if (!confirm("Delete this note? This cannot be undone.")) return;
 
       const token = new URLSearchParams(window.location.search).get("token") || "";
       const qs = token ? "?token=" + encodeURIComponent(token) : "";
 
       try {
-        const res = await fetch(
-          \`/api/\${nodeId}/\${version}/notes/\${noteId}\${qs}\`,
-          { method: "DELETE" }
-        );
+        const url = "/api/" + nodeId + "/" + version + "/notes/" + noteId + qs;
+
+        const res = await fetch(url, { method: "DELETE" });
 
         const data = await res.json();
         if (!data.success) throw new Error(data.error || "Delete failed");
@@ -4063,8 +4106,10 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
     const endDate = req.query.endDate;
 
     const rawLimit = req.query.limit;
-    const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
-
+    let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+    if (limit >= 200 || limit == undefined) {
+      limit = 200;
+    }
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
       return res.status(400).json({
         success: false,
@@ -4772,7 +4817,7 @@ body::after {
         <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
       <div class="header-subtitle">
-Convert loose thoughts into structure.      </div>
+Convert loose thoughts into structure (viewing last 200)      </div>
 
       <!-- Search Form -->
       <form method="GET" action="/api/user/${userId}/raw-ideas" class="search-form">
