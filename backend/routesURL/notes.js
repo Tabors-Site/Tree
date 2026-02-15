@@ -4186,7 +4186,6 @@ function renderEditorPage({
   --bottombar-h: 44px;
   --editor-font-size: 13px;
   --editor-line-height: 2.1;
-  --editor-max-width: 100%;
   --editor-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 }
 
@@ -4256,6 +4255,24 @@ body::before {
 .tb-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.2); border: none; cursor: pointer; }
 
 .tb-spacer { flex: 1; min-width: 8px; }
+
+.tb-copy {
+  padding: 6px 12px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.8);
+  font-size: 13px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: all 0.2s;
+  white-space: nowrap; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 4px;
+  min-width: 36px; justify-content: center;
+}
+.tb-copy:hover { background: rgba(255,255,255,0.18); color: white; }
+.tb-copy.copied { background: rgba(72,187,120,0.3); border-color: rgba(72,187,120,0.5); color: white; }
+
+@media (max-width: 768px) {
+  .tb-copy { padding: 6px 10px; }
+}
 
 .tb-back {
   padding: 6px 14px; border-radius: 8px;
@@ -4343,31 +4360,19 @@ body::before {
 .editor-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
 .editor-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
 
-/* On mobile, outer container handles horizontal scroll in code mode */
-@media (max-width: 768px) {
-  .editor-scroll.code-scroll-enabled {
-    overflow-x: auto;
-    justify-content: flex-start;
-  }
+/* Code mode: enable horizontal scroll on outer container */
+.editor-scroll.code-scroll-enabled {
+  overflow-x: auto;
+  justify-content: flex-start;
 }
 
-.editor-container { width: 100%; max-width: var(--editor-max-width); }
+.editor-container { width: 100%; max-width: 100%; }
 
-/* On mobile in code mode, containers expand for outer scroll */
-@media (max-width: 768px) {
-  .editor-container.code-mode-active {
-    width: max-content;
-    min-width: 100%;
-    max-width: none;
-  }
-  .editor-container.code-mode-active .editor-with-lines {
-    width: max-content;
-    min-width: 100%;
-  }
-  .editor-container.code-mode-active .editor-code-scroll {
-    flex: none;
-    width: auto;
-  }
+/* Code mode: container expands to fit content */
+.editor-container.code-mode-active {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
 }
 
 /* ── LINE NUMBERS + EDITOR LAYOUT ── */
@@ -4376,12 +4381,17 @@ body::before {
   width: 100%;
 }
 
+.editor-container.code-mode-active .editor-with-lines {
+  width: max-content;
+  min-width: 100%;
+}
+
 .line-numbers {
   display: none;
   flex-shrink: 0;
   padding-right: 12px;
   margin-right: 12px;
-  border-right: 1px solid rgba(255,255,255,0.1);
+  border-right: 1px solid rgba(255,255,255,0.03);
   text-align: right;
   user-select: none;
   pointer-events: none;
@@ -4402,16 +4412,8 @@ body::before {
 .editor-code-scroll {
   flex: 1;
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: visible;
   overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* On desktop, inner container handles horizontal scroll */
-@media (min-width: 769px) {
-  .editor-code-scroll.mono-active {
-    overflow-x: auto;
-  }
 }
 
 .editor-code-scroll::-webkit-scrollbar { height: 8px; }
@@ -4437,8 +4439,6 @@ body::before {
   white-space: pre;
   word-wrap: normal;
   overflow-wrap: normal;
-  width: max-content;
-  min-width: 100%;
 }
 
 /* ── BOTTOM BAR ──────────────── */
@@ -4578,57 +4578,61 @@ body.zen .editor-scroll { padding: 24px; }
   .toolbar { gap: 4px; padding: 0 8px; }
   .tb-range-wrap { display: flex; }
   .tb-range-label { display: none; }
-  .tb-range { width: 60px; }
+  .tb-range { width: 80px; }
   .tb-sep { display: none; }
   .editor-scroll { padding: 16px; }
   body.zen .bottombar { opacity: 1; }
+  .tb-back span { display: none; }
+  .tb-copy span { display: none; }
 }
 
 @media (max-width: 480px) {
   .bb-stat:not(.bb-energy) { display: none; }
   .save-btn { padding: 6px 16px; }
-  .tb-range { width: 50px; }
-}
-  @media (max-width: 768px) {
-  .toolbar { gap: 4px; padding: 0 8px; }
-  .tb-sep { display: none; }
-  .tb-range-label { display: none; }
   .tb-range { width: 60px; }
-  .tb-lineheight { display: none; }
 }
 
-@media (max-width: 480px) {
-  .tb-range { width: 46px; }
-  .tb-maxwidth { display: none; }
+/* ── Hidden text measurer ── */
+#textMeasurer {
+  position: absolute;
+  visibility: hidden;
+  height: auto;
+  width: auto;
+  white-space: pre;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+  pointer-events: none;
 }
 </style>  
 </head>
 <body>
+
+<!-- Hidden element for measuring text width -->
+<div id="textMeasurer"></div>
 
 <!-- ── ZEN EXIT BUTTON (mobile) ─────────────── -->
 <button class="zen-exit-btn" id="zenExitBtn" title="Exit Zen Mode">✕</button>
 
 <!-- ── TOOLBAR ──────────────────────────────── -->
 <div class="toolbar">
-  <a href="/api/${nodeId}/${version}/notes${qs}" class="tb-back" id="backBtn">← Notes</a>
+  <a href="/api/${nodeId}/${version}/notes${qs}" class="tb-back" id="backBtn">← <span>Notes</span></a>
   <div class="tb-sep"></div>
   <button class="tb-btn" id="sidebarToggle" title="Toggle sidebar">☰</button>
   <button class="tb-btn" id="zenToggle" title="Zen mode">🧘</button>
-  <button class="tb-btn" id="monoToggle" title="Monospace font">{ }</button>
+  <button class="tb-btn" id="monoToggle" title="Code mode (monospace)">{ }</button>
   <div class="tb-sep"></div>
   <div class="tb-range-wrap tb-fontsize">
-  <span class="tb-range-label">Size</span>
-  <input type="range" class="tb-range" id="fontSizeRange" min="13" max="28" value="20">
-</div>
-<div class="tb-range-wrap tb-lineheight">
-  <span class="tb-range-label">Height</span>
-  <input type="range" class="tb-range" id="lineHeightRange" min="12" max="30" value="21" step="1">
-</div>
-<div class="tb-range-wrap tb-maxwidth">
-  <span class="tb-range-label">Width</span>
-  <input type="range" class="tb-range" id="maxWidthRange" min="400" max="2000" value="2000" step="20">
-</div>
+    <span class="tb-range-label">Font</span>
+    <input type="range" class="tb-range" id="fontSizeRange" min="13" max="28" value="20" title="Font Size">
+  </div>
+  <div class="tb-range-wrap tb-lineheight">
+    <span class="tb-range-label">Spacing</span>
+    <input type="range" class="tb-range" id="lineHeightRange" min="12" max="30" value="16" step="1" title="Line Spacing">
+  </div>
+
   <div class="tb-spacer"></div>
+  <button class="tb-copy" id="copyBtn" title="Copy all text">📋 <span>Copy</span></button>
 </div>
 
 <!-- ── MAIN ─────────────────────────────────── -->
@@ -4649,7 +4653,7 @@ body.zen .editor-scroll { padding: 24px; }
   <!-- EDITOR -->
   <div class="editor-wrap">
     <div class="editor-scroll" id="editorScroll">
-      <div class="editor-container">
+      <div class="editor-container" id="editorContainer">
         <div class="editor-with-lines" id="editorWithLines">
           <div class="line-numbers" id="lineNumbers"></div>
           <div class="editor-code-scroll" id="editorCodeScroll">
@@ -4706,7 +4710,7 @@ var isNew       = ${isNew};
 var originalLen = ${originalLength || 0};
 var lastSaved   = ${isNew ? '""' : 'document.getElementById("editor").value'};
 var saving      = false;
-var navigatingAway = false; // Flag to prevent double warnings
+var navigatingAway = false;
 
 /* ═══════════════════════════════════════════════════
    DOM REFS
@@ -4725,7 +4729,8 @@ var lineNumbersEl = document.getElementById("lineNumbers");
 var editorScroll = document.getElementById("editorScroll");
 var editorWithLines = document.getElementById("editorWithLines");
 var editorCodeScroll = document.getElementById("editorCodeScroll");
-var editorContainer = document.querySelector(".editor-container");
+var editorContainer = document.getElementById("editorContainer");
+var textMeasurer = document.getElementById("textMeasurer");
 
 /* ═══════════════════════════════════════════════════
    SETTINGS (persisted in localStorage)
@@ -4735,11 +4740,9 @@ function loadSettings() {
     var s = JSON.parse(localStorage.getItem("tree-editor-settings") || "{}");
     if (s.fontSize)   document.getElementById("fontSizeRange").value   = s.fontSize;
     if (s.lineHeight) document.getElementById("lineHeightRange").value = s.lineHeight;
-    if (s.maxWidth)   document.getElementById("maxWidthRange").value   = s.maxWidth;
     if (s.mono) {
       editor.classList.add("mono");
       lineNumbersEl.classList.add("show");
-      editorCodeScroll.classList.add("mono-active");
       editorScroll.classList.add("code-scroll-enabled");
       editorContainer.classList.add("code-mode-active");
       document.getElementById("monoToggle").classList.add("active");
@@ -4753,33 +4756,27 @@ function persistSettings() {
     localStorage.setItem("tree-editor-settings", JSON.stringify({
       fontSize:   document.getElementById("fontSizeRange").value,
       lineHeight: document.getElementById("lineHeightRange").value,
-      maxWidth:   document.getElementById("maxWidthRange").value,
       mono:       editor.classList.contains("mono")
     }));
   } catch (e) {}
 }
 
 function applySettings() {
-  document.documentElement.style.setProperty("--editor-font-size",  document.getElementById("fontSizeRange").value + "px");
-  document.documentElement.style.setProperty("--editor-line-height", document.getElementById("lineHeightRange").value / 10);
-  var maxW = parseInt(document.getElementById("maxWidthRange").value);
-  // At max value, remove width constraint entirely (edge to edge)
-  if (maxW >= 2000) {
-    document.documentElement.style.setProperty("--editor-max-width", "100%");
-  } else {
-    document.documentElement.style.setProperty("--editor-max-width", maxW + "px");
-  }
+  var fontSize = document.getElementById("fontSizeRange").value;
+  var lineHeight = document.getElementById("lineHeightRange").value;
+  
+  document.documentElement.style.setProperty("--editor-font-size", fontSize + "px");
+  document.documentElement.style.setProperty("--editor-line-height", lineHeight / 10);
+  
   autoGrowEditor();
 }
 
 document.getElementById("fontSizeRange").oninput   = function() { applySettings(); persistSettings(); };
 document.getElementById("lineHeightRange").oninput  = function() { applySettings(); persistSettings(); };
-document.getElementById("maxWidthRange").oninput    = function() { applySettings(); persistSettings(); };
 
 document.getElementById("monoToggle").onclick = function() {
   editor.classList.toggle("mono");
   lineNumbersEl.classList.toggle("show");
-  editorCodeScroll.classList.toggle("mono-active");
   editorScroll.classList.toggle("code-scroll-enabled");
   editorContainer.classList.toggle("code-mode-active");
   this.classList.toggle("active");
@@ -4788,21 +4785,56 @@ document.getElementById("monoToggle").onclick = function() {
 };
 
 /* ═══════════════════════════════════════════════════
+   MEASURE TEXT WIDTH FOR CODE MODE
+   ═══════════════════════════════════════════════════ */
+function measureTextWidth(text) {
+  // Update measurer styles to match editor
+  var computedStyle = getComputedStyle(editor);
+  textMeasurer.style.fontFamily = computedStyle.fontFamily;
+  textMeasurer.style.fontSize = computedStyle.fontSize;
+  textMeasurer.style.lineHeight = computedStyle.lineHeight;
+  textMeasurer.style.letterSpacing = computedStyle.letterSpacing;
+  
+  // Find the longest line
+  var lines = text.split("\\n");
+  var maxWidth = 0;
+  
+  for (var i = 0; i < lines.length; i++) {
+    textMeasurer.textContent = lines[i] || " ";
+    var width = textMeasurer.offsetWidth;
+    if (width > maxWidth) maxWidth = width;
+  }
+  
+  return maxWidth;
+}
+
+function updateEditorWidth() {
+  if (!editor.classList.contains("mono")) {
+    // Normal mode: reset width
+    editor.style.width = "100%";
+    return;
+  }
+  
+  // Code mode: measure and set width to fit longest line
+  var contentWidth = measureTextWidth(editor.value);
+  var minWidth = editorScroll.clientWidth - 80; // Account for padding and line numbers
+  var newWidth = Math.max(contentWidth + 20, minWidth); // Add some padding
+  
+  editor.style.width = newWidth + "px";
+}
+
+/* ═══════════════════════════════════════════════════
    AUTO-GROW EDITOR (like VS Code / Word)
    ═══════════════════════════════════════════════════ */
 function autoGrowEditor() {
-  // Get minimum height (viewport minus chrome)
-  var minH = window.innerHeight - 52 - 44 - 32; // toolbar + bottombar + padding
+  var minH = window.innerHeight - 52 - 44 - 32;
   
-  // Reset height to recalculate scrollHeight
   editor.style.height = 'auto';
-  
-  // Set to max of scrollHeight and minimum height
   var newHeight = Math.max(editor.scrollHeight, minH);
   editor.style.height = newHeight + 'px';
   
-  // Update line numbers
   updateLineNumbers();
+  updateEditorWidth();
 }
 
 /* ═══════════════════════════════════════════════════
@@ -4838,6 +4870,51 @@ document.getElementById("zenToggle").onclick = function() {
 document.getElementById("zenExitBtn").onclick = exitZenMode;
 
 /* ═══════════════════════════════════════════════════
+   COPY ALL TEXT
+   ═══════════════════════════════════════════════════ */
+document.getElementById("copyBtn").onclick = function() {
+  var btn = this;
+  var btnSpan = btn.querySelector("span");
+  
+  // Select all text
+  editor.select();
+  editor.setSelectionRange(0, editor.value.length);
+  
+  // Copy to clipboard
+  navigator.clipboard.writeText(editor.value).then(function() {
+    btn.firstChild.textContent = "✓ ";
+    if (btnSpan) btnSpan.textContent = "Copied";
+    btn.classList.add("copied");
+    
+    setTimeout(function() {
+      btn.firstChild.textContent = "📋 ";
+      if (btnSpan) btnSpan.textContent = "Copy";
+      btn.classList.remove("copied");
+    }, 1500);
+  }).catch(function() {
+    // Fallback for older browsers
+    try {
+      document.execCommand("copy");
+      btn.firstChild.textContent = "✓ ";
+      if (btnSpan) btnSpan.textContent = "Copied";
+      btn.classList.add("copied");
+      
+      setTimeout(function() {
+        btn.firstChild.textContent = "📋 ";
+        if (btnSpan) btnSpan.textContent = "Copy";
+        btn.classList.remove("copied");
+      }, 1500);
+    } catch (e) {
+      if (btnSpan) btnSpan.textContent = "Failed";
+      setTimeout(function() {
+        btn.firstChild.textContent = "📋 ";
+        if (btnSpan) btnSpan.textContent = "Copy";
+      }, 1500);
+    }
+  });
+};
+
+/* ═══════════════════════════════════════════════════
    SIDEBAR TOGGLE
    ═══════════════════════════════════════════════════ */
 function toggleSidebar() {
@@ -4871,19 +4948,15 @@ function updateStats() {
   wordCountEl.textContent = (text.trim() ? text.trim().split(/\\s+/).length : 0) + " words";
   lineCountEl.textContent = text.split("\\n").length + " lines";
 
-  /* Energy preview */
   var cost;
   if (isNew && !currentNoteId) {
-    /* new note → full content cost */
     cost = len > 0 ? estimateEnergy(len) : 0;
   } else {
-    /* existing note → net-growth cost, minimum 1 */
     var delta = Math.max(0, len - originalLen);
     cost = delta > 0 ? estimateEnergy(delta) : 1;
   }
   energyCostEl.textContent = "\\u26A1" + cost;
 
-  /* Empty detection: existing note emptied → show Delete, hide Save */
   if (!isNew && currentNoteId) {
     if (trimmed === 0) {
       deleteBtn.classList.add("show");
@@ -4893,7 +4966,6 @@ function updateStats() {
       saveBtn.disabled = false;
     }
   } else {
-    /* new note: just disable save when empty */
     saveBtn.disabled = trimmed === 0;
   }
 }
@@ -4918,7 +4990,6 @@ editor.addEventListener("input", function() {
   autoGrowEditor();
 });
 
-/* Handle paste for auto-grow */
 editor.addEventListener("paste", function() {
   setTimeout(autoGrowEditor, 0);
 });
@@ -4937,7 +5008,6 @@ function navigateWithCheck(url) {
   return true;
 }
 
-/* Back button handler */
 document.getElementById("backBtn").onclick = function(e) {
   e.preventDefault();
   navigateWithCheck("/api/" + nodeId + "/" + version + "/notes" + qs);
@@ -4950,13 +5020,11 @@ async function doSave() {
   if (saving) return;
   var content = editor.value;
 
-  /* existing note emptied → open delete modal instead */
   if (!isNew && currentNoteId && !content.trim()) {
     openDeleteModal();
     return;
   }
 
-  /* new note can't be empty */
   if (!content.trim()) {
     saveStatus.textContent = "Cannot save empty note";
     saveStatus.className = "bb-status error";
@@ -4972,11 +5040,9 @@ async function doSave() {
     var url, method;
 
     if (currentNoteId) {
-      /* PUT → editNote */
       url    = "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId;
       method = "PUT";
     } else {
-      /* POST → createNote */
       url    = "/api/" + nodeId + "/" + version + "/notes";
       method = "POST";
     }
@@ -4995,7 +5061,6 @@ async function doSave() {
 
     var data = await res.json();
 
-    /* first save of new note → becomes edit from now on */
     if (!currentNoteId) {
       var newId = data._id || (data.note && data.note._id);
       if (newId) {
@@ -5007,7 +5072,6 @@ async function doSave() {
         );
       }
     } else {
-      /* update baseline for future delta calcs */
       originalLen = content.length;
     }
 
@@ -5021,11 +5085,9 @@ async function doSave() {
 
     navigatingAway = true;
     if (currentNoteId) {
-      // existing note → go to note view
       window.location.href =
         "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId + qs;
     } else {
-      // new note → go to notes list
       window.location.href =
         "/api/" + nodeId + "/" + version + "/notes" + qs;
     }
@@ -5069,7 +5131,6 @@ document.getElementById("deleteConfirmBtn").onclick = async function() {
       throw new Error(errData.error || "Delete failed");
     }
 
-    /* success → redirect to notes list */
     navigatingAway = true;
     window.location.href = "/api/" + nodeId + "/" + version + "/notes" + qs;
 
@@ -5097,8 +5158,14 @@ document.addEventListener("keydown", function(e) {
   }
 });
 
-/* Tab → 2 spaces, Shift+Tab → outdent */
 editor.addEventListener("keydown", function(e) {
+  // Enter key in code mode: scroll to left to see line numbers
+  if (e.key === "Enter" && editor.classList.contains("mono")) {
+    setTimeout(function() {
+      editorScroll.scrollLeft = 0;
+    }, 0);
+  }
+  
   if (e.key !== "Tab") return;
   e.preventDefault();
   var s = this.selectionStart, end = this.selectionEnd, v = this.value;
@@ -5220,7 +5287,6 @@ if (!isNew) lastSaved = editor.value;
 autoGrowEditor();
 setTimeout(function() { editor.focus(); }, 100);
 
-/* Pick up draft from notes page */
 try {
   var draft = sessionStorage.getItem("tree-editor-draft");
   if (draft && isNew && !editor.value) {
@@ -5235,6 +5301,9 @@ try {
 </body>
 </html>`;
 }
+
+
+
 
 // ─────────────────────────────────────────────────────────────────────────
 // ROUTE HANDLERS — paste these into your router file
