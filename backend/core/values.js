@@ -44,6 +44,7 @@ function findExistingKey(map, incomingKey) {
 
   return null;
 }
+const truncate6 = n => Math.trunc(n * 1e6) / 1e6;
 
 async function setValueForNode({
   nodeId,
@@ -54,9 +55,11 @@ async function setValueForNode({
   wasAi = false,
 }) {
   key = assertUserWritableKey(key);
+  if (key.length > 60) throw new Error("Title must be 60 characters or less");
+
 
   const versionIndex = Number(version);
-  const numericValue = Number(value);
+let numericValue = Number(value);
 
   if (
     isNaN(numericValue) ||
@@ -64,6 +67,12 @@ async function setValueForNode({
   ) {
     throw new Error("Value must be a valid number");
   }
+
+    if (Math.abs(numericValue) > 10_000_000_000)
+  throw new Error("Number must be less than 10 billion");
+numericValue = truncate6(numericValue);
+
+
 
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
@@ -86,7 +95,7 @@ async function setValueForNode({
     action: "editValue",
   });
 
-  currentVersion.values.set(finalKey, value);
+  currentVersion.values.set(finalKey, numericValue);
 
   await node.save();
   await logContribution({
@@ -94,7 +103,7 @@ async function setValueForNode({
     nodeId,
     wasAi,
     action: "editValue",
-    valueEdited: { [finalKey]: value },
+    valueEdited: { [finalKey]: numericValue },
     nodeVersion: versionIndex,
     energyUsed,
   });
@@ -111,19 +120,36 @@ async function setGoalForNode({
   wasAi = false,
 }) {
   const versionIndex = Number(version);
-  const numericGoal = Number(goal);
+  let  numericGoal = Number(goal);
+
+  key = assertUserWritableKey(key);
+if (key.length > 60) throw new Error("Title must be 60 characters or less");
+
 
   if (isNaN(numericGoal) || (typeof goal === "string" && goal.includes("e"))) {
     throw new Error("Goal must be a valid number");
   }
+    if (Math.abs(numericGoal) > 10_000_000_000)
+  throw new Error("Number must be less than 10 billion");
+  numericGoal = truncate6(numericGoal);
 
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
 
   const currentVersion = node.versions?.[versionIndex];
+  
   if (!currentVersion) {
     throw new Error("Version index does not exist");
   }
+  if (!currentVersion.values) {
+  throw new Error("Cannot set a goal without an existing value");
+}
+
+const valueKey = findExistingKey(currentVersion.values, key);
+if (!valueKey) {
+  throw new Error("Goal must match an existing value");
+}
+
 
   if (!currentVersion.goals) {
     currentVersion.goals = new Map();
@@ -137,7 +163,7 @@ async function setGoalForNode({
     action: "editGoal",
   });
 
-  currentVersion.goals.set(finalKey, goal);
+  currentVersion.goals.set(finalKey, numericGoal);
 
   await node.save();
   await logContribution({
@@ -145,7 +171,7 @@ async function setGoalForNode({
     nodeId,
     wasAi,
     action: "editGoal",
-    goalEdited: { [finalKey]: goal },
+    goalEdited: { [finalKey]: numericGoal },
     nodeVersion: versionIndex,
     energyUsed,
   });
