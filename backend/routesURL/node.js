@@ -29,7 +29,7 @@ function filterQuery(req) {
     .join("&");
 }
 
-router.post("/:nodeId/:version/editStatus", authenticate, async (req, res) => {
+router.post("/node/:nodeId/:version/editStatus", authenticate, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const userId = req.userId;
@@ -62,7 +62,7 @@ router.post("/:nodeId/:version/editStatus", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
+        `/api/v1/node/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -73,7 +73,7 @@ router.post("/:nodeId/:version/editStatus", authenticate, async (req, res) => {
   }
 });
 
-router.post("/:nodeId/:version/prestige", authenticate, async (req, res) => {
+router.post("/node/:nodeId/:version/prestige", authenticate, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const userId = req.userId;
@@ -92,7 +92,7 @@ router.post("/:nodeId/:version/prestige", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/${nodeId}/${nextVersion}?token=${req.query.token ?? ""}&html`,
+        `/api/v1/node/${nodeId}/${nextVersion}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -103,7 +103,7 @@ router.post("/:nodeId/:version/prestige", authenticate, async (req, res) => {
   }
 });
 
-router.post("/:nodeId/updateParent", authenticate, async (req, res) => {
+router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params; // child
     const userId = req.userId;
@@ -125,7 +125,7 @@ router.post("/:nodeId/updateParent", authenticate, async (req, res) => {
 
     // HTML redirect support
     if ("html" in req.query) {
-      return res.redirect(`/api/${nodeId}?token=${req.query.token ?? ""}&html`);
+      return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
     }
 
     res.json({
@@ -139,12 +139,12 @@ router.post("/:nodeId/updateParent", authenticate, async (req, res) => {
   }
 });
 // -----------------------------------------------------------------------------
-// GET /api/:nodeId
+// GET /api/v1/node/:nodeId
 // Returns the node + all versions (no notes)
 // Supports JSON or ?html mode
 // Shows full node data, parent + children clickable
 // -----------------------------------------------------------------------------
-router.get("/:nodeId", urlAuth, async (req, res) => {
+router.get("/node/:nodeId", urlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const node = await Node.findById(nodeId).lean();
@@ -183,7 +183,7 @@ router.get("/:nodeId", urlAuth, async (req, res) => {
       // ---------------------------------------------------------
       // NEW: Root View button
       // ---------------------------------------------------------
-      const rootUrl = `/api/root/${nodeId}${qs}`;
+      const rootUrl = `/api/v1/root/${nodeId}${qs}`;
 
       return res.send(`
 <!DOCTYPE html>
@@ -897,13 +897,13 @@ html, body {
           .reverse()
           .map(
             (_, i, arr) =>
-              `<li><a href="/api/${nodeId}/${arr.length - 1 - i}${qs}">Version ${arr.length - 1 - i}</a></li>`,
+              `<li><a href="/api/v1/node/${nodeId}/${arr.length - 1 - i}${qs}">Version ${arr.length - 1 - i}</a></li>`,
           )
           .join("")}
       </ul>
       <form
         method="POST"
-        action="/api/${nodeId}/${node.prestige}/prestige${qs}"
+        action="/api/v1/node/${nodeId}/${node.prestige}/prestige${qs}"
         onsubmit="return confirm('This will complete the current version and create a new prestige level. Continue?')"
         style="margin-top: 16px;"
       >
@@ -918,14 +918,14 @@ html, body {
       <h2>Parent</h2>
       ${
         node.parent
-          ? `<a href="/api/${node.parent}${qs}" style="display:block;padding:12px 16px;margin-bottom:16px;">${parentName}</a>`
+          ? `<a href="/api/v1/node/${node.parent}${qs}" style="display:block;padding:12px 16px;margin-bottom:16px;">${parentName}</a>`
           : `<p style="margin-bottom:16px;"><em>None (This is a root node)</em></p>`
       }
 
       <h3>Change Parent</h3>
       <form
         method="POST"
-        action="/api/${nodeId}/updateParent${qs}"
+        action="/api/v1/node/${nodeId}/updateParent${qs}"
         class="action-form"
       >
         <input
@@ -950,7 +950,7 @@ html, body {
                 .map((c) => {
                   const child = children.find((child) => child._id === c);
                   const name = child ? child.name : c;
-                  return `<li><a href="/api/${c}${qs}">${name}</a></li>`;
+                  return `<li><a href="/api/v1/node/${c}${qs}">${name}</a></li>`;
                 })
                 .join("")
             : `<li><em>No children yet</em></li>`
@@ -960,7 +960,7 @@ html, body {
       <h3>Add Child</h3>
       <form
         method="POST"
-        action="/api/${nodeId}/createChild${qs}"
+        action="/api/v1/node/${nodeId}/createChild${qs}"
         class="action-form"
       >
         <input
@@ -977,10 +977,10 @@ html, body {
 
     <!-- Scripts Section -->
     <div class="scripts-section">
-      <h2><a href="/api/${node._id}/scripts/help${qs}">Scripts</a></h2>
+      <h2><a href="/api/v1/node/${node._id}/scripts/help${qs}">Scripts</a></h2>
       <form
         method="POST"
-        action="/api/${nodeId}/script/create${qs}"
+        action="/api/v1/node/${nodeId}/script/create${qs}"
         style="display:flex;gap:8px;align-items:center;margin-bottom:16px;"
       >
         <input
@@ -1014,7 +1014,7 @@ html, body {
             ? node.scripts
                 .map(
                   (s) => `
-            <a href="/api/${node._id}/script/${s._id}${qs}">
+            <a href="/api/v1/node/${node._id}/script/${s._id}${qs}">
               <li>
                 <strong>${s.name}</strong>
                 <pre>${s.script}</pre>
@@ -1032,7 +1032,7 @@ html, body {
       <h3>Delete</h3>
       <form
         method="POST"
-        action="/api/${nodeId}/delete${qs}"
+        action="/api/v1/node/${nodeId}/delete${qs}"
         onsubmit="return confirm('Delete this node and its branch? This can be revived later.')"
       >
         <button type="submit" class="danger-button">
@@ -1070,11 +1070,11 @@ html, body {
 });
 
 // -----------------------------------------------------------------------------
-// GET /api/:nodeId/:version
+// GET /api/v1/node/:nodeId/:version
 // Returns a single version (includes Notes link)
 // Supports JSON or ?html mode
 // -----------------------------------------------------------------------------
-router.get("/:nodeId/:version", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version", urlAuth, async (req, res) => {
   try {
     const { nodeId, version, parent } = req.params;
     const v = Number(version);
@@ -1116,8 +1116,8 @@ router.get("/:nodeId/:version", urlAuth, async (req, res) => {
       const queryString = filterQuery(req);
       const qs = queryString ? `?${queryString}` : "";
 
-      const backUrl = `/api/${nodeId}${qs}`;
-      const backTreeUrl = `/api/root/${nodeId}${qs}`;
+      const backUrl = `/api/v1/node/${nodeId}${qs}`;
+      const backTreeUrl = `/api/v1/root/${nodeId}${qs}`;
 
       const createdDate = data.dateCreated
         ? new Date(data.dateCreated).toLocaleString()
@@ -2047,10 +2047,10 @@ html, body {
     <div class="nav-section">
       <h2>Quick Access</h2>
       <div class="nav-links">
-        <a href="/api/${nodeId}/${version}/notes${qs}">Notes</a>
-        <a href="/api/${nodeId}/${version}/values${qs}">Values / Goals</a>
-        <a href="/api/${nodeId}/${version}/contributions${qs}">Contributions</a>
-        <a href="/api/${nodeId}/${version}/transactions${qs}">Transactions</a>
+        <a href="/api/v1/node/${nodeId}/${version}/notes${qs}">Notes</a>
+        <a href="/api/v1/node/${nodeId}/${version}/values${qs}">Values / Goals</a>
+        <a href="/api/v1/node/${nodeId}/${version}/contributions${qs}">Contributions</a>
+        <a href="/api/v1/node/${nodeId}/${version}/transactions${qs}">Transactions</a>
       </div>
     </div>
 
@@ -2064,7 +2064,7 @@ html, body {
         </div>
         <form
           method="POST"
-          action="/api/${nodeId}/${version}/editStatus${qs}"
+          action="/api/v1/node/${nodeId}/${version}/editStatus${qs}"
           onsubmit="return confirm('This will apply to all children. Is that ok?')"
           class="status-controls"
         >
@@ -2104,7 +2104,7 @@ html, body {
       <h3>Version Control</h3>
       <form
         method="POST"
-        action="/api/${nodeId}/${version}/prestige${qs}"
+        action="/api/v1/node/${nodeId}/${version}/prestige${qs}"
         onsubmit="return confirm('This will complete the current version and create a new prestige level. Continue?')"
         class="action-form"
       >
@@ -2123,7 +2123,7 @@ html, body {
     <div>
       <form
         method="POST"
-        action="/api/${nodeId}/${version}/editSchedule${qs}"
+        action="/api/v1/node/${nodeId}/${version}/editSchedule${qs}"
       >
         <label>
           TIME
@@ -2204,7 +2204,7 @@ html, body {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-router.post("/:nodeId/createChild", authenticate, async (req, res) => {
+router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params; // parent id
     const { name } = req.body;
@@ -2241,7 +2241,7 @@ router.post("/:nodeId/createChild", authenticate, async (req, res) => {
 
     // HTML redirect support (same pattern)
     if ("html" in req.query) {
-      return res.redirect(`/api/${nodeId}?token=${req.query.token ?? ""}&html`);
+      return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
     }
 
     res.status(201).json({
@@ -2255,7 +2255,7 @@ router.post("/:nodeId/createChild", authenticate, async (req, res) => {
   }
 });
 
-router.post("/:nodeId/delete", authenticate, async (req, res) => {
+router.post("/node/:nodeId/delete", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const userId = req.userId;
@@ -2264,7 +2264,7 @@ router.post("/:nodeId/delete", authenticate, async (req, res) => {
 
     if ("html" in req.query) {
       return res.redirect(
-        `/api/user/${userId}/deleted?token=${req.query.token ?? ""}&html`,
+        `/api/v1/user/${userId}/deleted?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -2278,7 +2278,7 @@ router.post("/:nodeId/delete", authenticate, async (req, res) => {
   }
 });
 
-router.post("/:nodeId/:version/editName", authenticate, async (req, res) => {
+router.post("/node/:nodeId/:version/editName", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const userId = req.userId;
@@ -2297,7 +2297,7 @@ router.post("/:nodeId/:version/editName", authenticate, async (req, res) => {
 
     // HTML redirect support
     if ("html" in req.query) {
-      return res.redirect(`/api/${nodeId}?token=${req.query.token ?? ""}&html`);
+      return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
     }
 
     res.json({
@@ -2311,7 +2311,7 @@ router.post("/:nodeId/:version/editName", authenticate, async (req, res) => {
 });
 
 router.post(
-  "/:nodeId/:version/editSchedule",
+  "/node/:nodeId/:version/editSchedule",
   authenticate,
   async (req, res) => {
     try {
@@ -2339,7 +2339,7 @@ router.post(
       // ✅ HTML redirect support (same pattern as editStatus)
       if ("html" in req.query) {
         return res.redirect(
-          `/api/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
+          `/api/v1/node/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -2351,7 +2351,7 @@ router.post(
   },
 );
 
-router.get("/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
   try {
     const { nodeId, scriptId } = req.params;
 
@@ -3133,10 +3133,10 @@ html, body {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/${nodeId}${qsWithQ}" class="back-link">
+      <a href="/api/v1/node/${nodeId}${qsWithQ}" class="back-link">
         ← Back to Node
       </a>
-      <a href="/api/${nodeId}/scripts/help${qsWithQ}" class="back-link">
+      <a href="/api/v1/node/${nodeId}/scripts/help${qsWithQ}" class="back-link">
         📚 Help
       </a>
     </div>
@@ -3161,7 +3161,7 @@ html, body {
       <div class="action-bar">
         <form
           method="POST"
-          action="/api/${nodeId}/script/${script.id}/execute${qsWithQ}"
+          action="/api/v1/node/${nodeId}/script/${script.id}/execute${qsWithQ}"
           onsubmit="return confirm('Execute this script now?')"
           style="margin: 0;"
         >
@@ -3175,7 +3175,7 @@ html, body {
       <div class="section-title">Edit Script</div>
       <form
         method="POST"
-        action="/api/${nodeId}/script/${script.id}/edit${qsWithQ}"
+        action="/api/v1/node/${nodeId}/script/${script.id}/edit${qsWithQ}"
         class="edit-form"
       >
         <div class="form-group">
@@ -3257,7 +3257,7 @@ html, body {
 });
 
 router.post(
-  "/:nodeId/script/:scriptId/edit",
+  "/node/:nodeId/script/:scriptId/edit",
   authenticate,
   async (req, res) => {
     try {
@@ -3274,7 +3274,7 @@ router.post(
       });
       const qs = filterQuery(req);
 
-      return res.redirect(`/api/${nodeId}/script/${scriptId}?${qs}`);
+      return res.redirect(`/api/v1/node/${nodeId}/script/${scriptId}?${qs}`);
     } catch (err) {
       console.error("Error editing script:", err);
       return res.status(500).send("Failed to update script");
@@ -3283,7 +3283,7 @@ router.post(
 );
 
 router.post(
-  "/:nodeId/script/:scriptId/execute",
+  "/node/:nodeId/script/:scriptId/execute",
   authenticate,
   async (req, res) => {
     try {
@@ -3293,7 +3293,7 @@ router.post(
       await executeScript({ nodeId, scriptId, userId });
 
       const qs = filterQuery(req);
-      return res.redirect(`/api/${nodeId}/script/${scriptId}?${qs}`);
+      return res.redirect(`/api/v1/node/${nodeId}/script/${scriptId}?${qs}`);
     } catch (err) {
       console.error("Error executing script:", err);
 
@@ -3306,7 +3306,7 @@ router.post(
       const { nodeId, scriptId } = req.params;
 
       return res.redirect(
-        `/api/${nodeId}/script/${scriptId}?${qs}&error=${encodeURIComponent(
+        `/api/v1/node/${nodeId}/script/${scriptId}?${qs}&error=${encodeURIComponent(
           err.message,
         )}`,
       );
@@ -3314,7 +3314,7 @@ router.post(
   },
 );
 
-router.get("/:nodeId/scripts/help", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/scripts/help", urlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -3938,7 +3938,7 @@ html, body {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/${nodeId}${qsWithQ}" class="back-link">
+      <a href="/api/v1/node/${nodeId}${qsWithQ}" class="back-link">
         ← Back to Node
       </a>
     </div>
@@ -4141,7 +4141,7 @@ html, body {
   }
 });
 
-router.post("/:nodeId/script/create", authenticate, async (req, res) => {
+router.post("/node/:nodeId/script/create", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { name } = req.body;
@@ -4159,7 +4159,7 @@ router.post("/:nodeId/script/create", authenticate, async (req, res) => {
 
     const qs = filterQuery(req);
 
-    return res.redirect(`/api/${nodeId}/script/${result.scriptId}?${qs}`);
+    return res.redirect(`/api/v1/node/${nodeId}/script/${result.scriptId}?${qs}`);
   } catch (err) {
     console.error("Create script error:", err);
     return res.status(500).send("Failed to create script");

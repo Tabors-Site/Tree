@@ -285,9 +285,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (url) {
         const ID =
           "(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})";
-        const rootMatch = url.match(new RegExp(`(?:/api)?/root/(${ID})`, "i"));
+        const rootMatch = url.match(new RegExp(`(?:/api/v1)?/root/(${ID})`, "i"));
         const bareMatch = url.match(
-          new RegExp(`(?:/api)?/(${ID})(?:[?/]|$)`, "i"),
+          new RegExp(`(?:/api/v1)?/(${ID})(?:[?/]|$)`, "i"),
         );
         if (rootMatch?.[1]) {
           setRootId(visitorId, rootMatch[1]);

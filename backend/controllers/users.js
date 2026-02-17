@@ -77,7 +77,7 @@ const register = async (req, res) => {
        SEND EMAIL
     -------------------------- */
 
-    const verifyUrl = `https://tree.tabors.site/api/user/verify/${verificationToken}`;
+    const verifyUrl = `https://tree.tabors.site/api/v1/user/verify/${verificationToken}`;
     await sendVerificationEmail(email, verifyUrl, temp.username);
 
     res.status(201).json({
@@ -394,7 +394,7 @@ const forgotPassword = async (req, res) => {
   user.resetPasswordExpiry = Date.now() + 1000 * 60 * 15; // 15 min
   await user.save();
 
-  const resetURL = `https://tree.tabors.site/api/user/reset-password/${token}`;
+  const resetURL = `https://tree.tabors.site/api/v1/user/reset-password/${token}`;
 
   await sendResetEmail(user.email, resetURL);
 

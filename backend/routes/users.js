@@ -72,7 +72,7 @@ router.post("/verify-token", authenticate, getHtmlShareToken, (req, res) => {
   });
 });
 
-router.post("/user/forgot-password", emailLimiter, forgotPassword);
+router.post("/forgot-password", emailLimiter, forgotPassword);
 router.post("/user/reset-password", resetPassword);
 router.get("/user/verify/:token", verifyEmail);
 

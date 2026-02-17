@@ -37,7 +37,7 @@ const renderUser = (user) => {
 
 const renderLink = (id, queryString) =>
   id
-    ? `<a href="/api/${id}${queryString}"><code>${id}</code></a>`
+    ? `<a href="/api/v1/node/${id}${queryString}"><code>${id}</code></a>`
     : `<code>unknown</code>`;
 
 const renderVersionLink = (
@@ -46,7 +46,7 @@ const renderVersionLink = (
   queryString,
   label = `Version ${version}`
 ) =>
-  `<a href="/api/${nodeId}/${version}${queryString}">
+  `<a href="/api/v1/node/${nodeId}/${version}${queryString}">
     <code>${label}</code>
   </a>`;
 
@@ -163,7 +163,7 @@ const renderDetails = (c, queryString) => {
 
 /* --------------------------- ROUTE --------------------------- */
 
-router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/contributions", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const parsedVersion = Number(version);
@@ -219,7 +219,7 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
         )}`,
 
       transaction: () =>
-        `completed <a href="/api/${nodeId}/${parsedVersion}/transactions${queryString}">
+        `completed <a href="/api/v1/node/${nodeId}/${parsedVersion}/transactions${queryString}">
           <code>transaction</code>
         </a>`,
       delete: () => `deleted node`,
@@ -239,7 +239,7 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
         )}`,
       note: (c) =>
         `${c.noteAction?.action === "add" ? "added" : "removed"} note
-        <a href="/api/${nodeId}/${parsedVersion}/notes/${
+        <a href="/api/v1/node/${nodeId}/${parsedVersion}/notes/${
           c.noteAction?.noteId
         }${queryString}">
           <code>${c.noteAction?.noteId}</code>
@@ -303,10 +303,10 @@ router.get("/:nodeId/:version/contributions", urlAuth, async (req, res) => {
           </ul>`
         : `<p>No contributions found</p>`;
 
-    // Replace the HTML send in your /:nodeId/:version/contributions route with this:
+    // Replace the HTML send in your /node/:nodeId/:version/contributions route with this:
     const qs = queryString || "";
-    const backTreeUrl = `/api/root/${nodeId}${qs}`;
-    const backUrl = `/api/${nodeId}/${version}${qs}`;
+    const backTreeUrl = `/api/v1/root/${nodeId}${qs}`;
+    const backUrl = `/api/v1/node/${nodeId}/${version}${qs}`;
     res.send(`
 <!DOCTYPE html>
 <html lang="en">

@@ -122,7 +122,7 @@ function renderBookNode(node, depth, req, version) {
   `;
 
   for (const note of node.notes) {
-    const noteUrl = `/api/${node.nodeId}/${note.version}/notes/${note.noteId}?token=${token}&html`;
+    const noteUrl = `/api/v1/node/${node.nodeId}/${note.version}/notes/${note.noteId}?token=${token}&html`;
 
     if (note.type === "text") {
       html += `
@@ -133,7 +133,7 @@ function renderBookNode(node, depth, req, version) {
     }
 
     if (note.type === "file") {
-      const fileUrl = `/api/uploads/${note.content}${
+      const fileUrl = `/api/v1/uploads/${note.content}${
         token ? `?token=${token}` : ""
       }`;
       const mimeType = mime.lookup(note.content) || "";
@@ -170,7 +170,7 @@ function normalizeStatusFilters(query) {
   // 👇 THIS IS KEY
   return hasAny ? filters : null;
 }
-router.get("/:nodeId/:version/notes/editor", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/notes/editor", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const queryString = filterQuery(req);
@@ -196,7 +196,7 @@ router.get("/:nodeId/:version/notes/editor", urlAuth, async (req, res) => {
 });
 
 // ── EDIT EXISTING NOTE EDITOR (GET) ───────────────────────────────────
-router.get("/:nodeId/:version/notes/:noteId/editor",urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/notes/:noteId/editor",urlAuth, async (req, res) => {
   try {
     const { nodeId, version, noteId } = req.params;
     const queryString = filterQuery(req);
@@ -212,7 +212,7 @@ router.get("/:nodeId/:version/notes/:noteId/editor",urlAuth, async (req, res) =>
     // File notes can't be edited — redirect to view
     if (note.contentType !== "text") {
       return res.redirect(
-        `/api/${nodeId}/${version}/notes/${noteId}${tokenQS}`,
+        `/api/v1/node/${nodeId}/${version}/notes/${noteId}${tokenQS}`,
       );
     }
 
@@ -914,7 +914,7 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
     <div class="top-nav-content">
       <div class="nav-buttons">
         <div class="nav-left">
-          <a href="/api/root/${nodeId}?token=${
+          <a href="/api/v1/root/${nodeId}?token=${
             req.query.token ?? ""
           }&html" class="nav-button">
             ← Back to Tree
@@ -1108,7 +1108,7 @@ router.post("/root/:nodeId/book/generate", authenticate, async (req, res) => {
     // ✅ Redirect to shared URL (same base format)
     return res.json({
       success: true,
-      redirect: `/api/root/${nodeId}/book/share/${shareId}?html`,
+      redirect: `/api/v1/root/${nodeId}/book/share/${shareId}?html`,
     });
   } catch (err) {
     return res.status(400).json({
@@ -1910,7 +1910,7 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
    - JSON (default)
    - HTML (when ?html is used)
 ------------------------------------------------------------------- */
-router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/notes", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const rawLimit = req.query.limit;
@@ -1937,12 +1937,12 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
     const notes = [...result.notes].reverse().map((n) => ({
       ...n,
       content:
-        n.contentType === "file" ? `/api/uploads/${n.content}` : n.content,
+        n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
     }));
 
     // ---------- OPTIONAL HTML MODE ----------
     if (req.query.html !== undefined) {
-      const base = `/api/${nodeId}/${version}`;
+      const base = `/api/v1/node/${nodeId}/${version}`;
 
       const nodeName = await getNodeName(nodeId);
 
@@ -1959,7 +1959,7 @@ router.get("/:nodeId/:version/notes", urlAuth, async (req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${nodeName} — Notes</title>
   <style>
-    /* Replace the <style> content in your /:nodeId/:version/notes route with this */
+    /* Replace the <style> content in your /node/:nodeId/:version/notes route with this */
 
 :root {
   --glass-water-rgb: 115, 111, 230;
@@ -2718,7 +2718,7 @@ input[type="file"].hidden-input {
   <div class="top-nav">
     <div class="top-nav-content">
       <div class="nav-left">
-        <a href="/api/root/${nodeId}?token=${
+        <a href="/api/v1/root/${nodeId}?token=${
           req.query.token ?? ""
         }&html" class="nav-button">
           ← Back to Tree
@@ -2754,7 +2754,7 @@ input[type="file"].hidden-input {
               : n.content.split("/").pop();
 
           const userLabel = n.userId
-            ? `<a href="/api/user/${n.userId}?token=${
+            ? `<a href="/api/v1/user/${n.userId}?token=${
                 req.query.token ?? ""
               }&html">${n.username ?? n.userId}</a>`
             : (n.username ?? "Unknown user");
@@ -2802,7 +2802,7 @@ input[type="file"].hidden-input {
   <div class="input-bar">
     <form
       method="POST"
-      action="/api/${nodeId}/${version}/notes?token=${
+      action="/api/v1/node/${nodeId}/${version}/notes?token=${
         req.query.token ?? ""
       }&html"
       enctype="multipart/form-data"
@@ -2987,7 +2987,7 @@ input[type="file"].hidden-input {
 
       try {
         const res = await fetch(
-          '/api/' + nodeId + '/' + version + '/notes/' + noteId + qs,
+          '/api/v1/' + nodeId + '/' + version + '/notes/' + noteId + qs,
           { method: 'DELETE' }
         );
 
@@ -3047,7 +3047,7 @@ input[type="file"].hidden-input {
       var token = new URLSearchParams(window.location.search).get("token") || "";
       var qs = token ? "?token=" + encodeURIComponent(token) + "&html" : "?html";
       var content = textarea.value.trim();
-      var editorUrl = "/api/${nodeId}/${version}/notes/editor" + qs;
+      var editorUrl = "/api/v1/node/${nodeId}/${version}/notes/editor" + qs;
 
       if (content) {
         sessionStorage.setItem("tree-editor-draft", content);
@@ -3082,10 +3082,10 @@ input[type="file"].hidden-input {
 });
 
 /* ------------------------------------------------------------------
-   POST /:nodeId/:version/notes
+   POST /node/:nodeId/:version/notes
 ------------------------------------------------------------------- */
 router.post(
-  "/:nodeId/:version/notes",
+  "/node/:nodeId/:version/notes",
   authenticate,
   upload.single("file"),
 
@@ -3110,7 +3110,7 @@ router.post(
 
       if (wantHtml) {
         return res.redirect(
-          `/api/${nodeId}/${version}/notes?token=${req.query.token ?? ""}&html`,
+          `/api/v1/node/${nodeId}/${version}/notes?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -3124,7 +3124,7 @@ router.post(
 
 // ── UPDATE EXISTING NOTE (editor PUT) ─────────────────────────────────
 router.put(
-  "/:nodeId/:version/notes/:noteId",
+  "/node/:nodeId/:version/notes/:noteId",
   authenticate,
   async (req, res) => {
     try {
@@ -3170,12 +3170,12 @@ function filterQuery(req) {
     .join("&");
 }
 /* ------------------------------------------------------------------
-   GET /:nodeId/:version/notes/:noteId
+   GET /node/:nodeId/:version/notes/:noteId
    - JSON (old behavior)
    - raw file download (old behavior)
    - HTML viewer (optional)
 ------------------------------------------------------------------- */
-router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
+router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
   try {
     const { nodeId, version, noteId } = req.params;
 
@@ -3193,11 +3193,11 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
     if (!note) return res.status(404).send("Note not found");
 
     const back = hasToken
-      ? `/api/${nodeId}/${version}/notes${qs}`
+      ? `/api/v1/node/${nodeId}/${version}/notes${qs}`
       : "https://tree.tabors.site";
     const backText = hasToken ? "← Back to Notes" : "← Back to Home";
-    const nodeUrl = `/api/${nodeId}${qs}`;
-    const editorUrl = `/api/${nodeId}/${version}/notes/${noteId}/editor${qs}`;
+    const nodeUrl = `/api/v1/node/${nodeId}${qs}`;
+    const editorUrl = `/api/v1/node/${nodeId}/${version}/notes/${noteId}/editor${qs}`;
     const editorButton = !hasToken
   ? ""
   : `
@@ -3212,7 +3212,7 @@ router.get("/:nodeId/:version/notes/:noteId", async (req, res) => {
 
 
     const userLink = note.userId
-      ? `<a href="/api/user/${note.userId._id}${qs}">
+      ? `<a href="/api/v1/user/${note.userId._id}${qs}">
        ${note.userId.username ?? "Unknown user"}
      </a>`
       : (note.username ?? "Unknown user");
@@ -3673,7 +3673,7 @@ pre.flash::before {
 `);
       }
 
-      const fileUrl = `/api/uploads/${note.content}`;
+      const fileUrl = `/api/v1/uploads/${note.content}`;
       const filePath = path.join(uploadsFolder, note.content);
       const mimeType = mime.lookup(filePath) || "application/octet-stream";
       const mediaHtml = renderMediaImmediate(fileUrl, mimeType);
@@ -4127,7 +4127,7 @@ pre.flash::before {
   }
 });
 router.delete(
-  "/:nodeId/:version/notes/:noteId",
+  "/node/:nodeId/:version/notes/:noteId",
   authenticate,
   async (req, res) => {
     try {
@@ -4147,8 +4147,8 @@ router.delete(
 
 // ─────────────────────────────────────────────────────────────────────────
 // NOTE EDITOR ROUTES
-// /:nodeId/:version/notes/editor        → new note
-// /:nodeId/:version/notes/:noteId/editor → edit existing note
+// /node/:nodeId/:version/notes/editor        → new note
+// /node/:nodeId/:version/notes/:noteId/editor → edit existing note
 // ─────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -4616,7 +4616,7 @@ body.zen .editor-scroll { padding: 24px; }
 
 <!-- ── TOOLBAR ──────────────────────────────── -->
 <div class="toolbar">
-  <a href="/api/${nodeId}/${version}/notes${qs}" class="tb-back" id="backBtn">← <span>Notes</span></a>
+  <a href="/api/v1/node/${nodeId}/${version}/notes${qs}" class="tb-back" id="backBtn">← <span>Notes</span></a>
   <div class="tb-sep"></div>
   <button class="tb-btn" id="sidebarToggle" title="Toggle sidebar">☰</button>
   <button class="tb-btn" id="zenToggle" title="Zen mode">🧘</button>
@@ -5010,7 +5010,7 @@ function navigateWithCheck(url) {
 
 document.getElementById("backBtn").onclick = function(e) {
   e.preventDefault();
-  navigateWithCheck("/api/" + nodeId + "/" + version + "/notes" + qs);
+  navigateWithCheck("/api/v1/" + nodeId + "/" + version + "/notes" + qs);
 };
 
 /* ═══════════════════════════════════════════════════
@@ -5040,10 +5040,10 @@ async function doSave() {
     var url, method;
 
     if (currentNoteId) {
-      url    = "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId;
+      url    = "/api/v1/" + nodeId + "/" + version + "/notes/" + currentNoteId;
       method = "PUT";
     } else {
-      url    = "/api/" + nodeId + "/" + version + "/notes";
+      url    = "/api/v1/" + nodeId + "/" + version + "/notes";
       method = "POST";
     }
 
@@ -5068,7 +5068,7 @@ async function doSave() {
         isNew = false;
         originalLen = content.length;
         history.replaceState(null, "",
-          "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId + "/editor" + qs
+          "/api/v1/" + nodeId + "/" + version + "/notes/" + currentNoteId + "/editor" + qs
         );
       }
     } else {
@@ -5086,10 +5086,10 @@ async function doSave() {
     navigatingAway = true;
     if (currentNoteId) {
       window.location.href =
-        "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId + qs;
+        "/api/v1/" + nodeId + "/" + version + "/notes/" + currentNoteId + qs;
     } else {
       window.location.href =
-        "/api/" + nodeId + "/" + version + "/notes" + qs;
+        "/api/v1/" + nodeId + "/" + version + "/notes" + qs;
     }
 
     loadNotes();
@@ -5122,7 +5122,7 @@ document.getElementById("deleteConfirmBtn").onclick = async function() {
 
   try {
     var res = await fetch(
-      "/api/" + nodeId + "/" + version + "/notes/" + currentNoteId,
+      "/api/v1/" + nodeId + "/" + version + "/notes/" + currentNoteId,
       { method: "DELETE", credentials: "include" }
     );
 
@@ -5132,7 +5132,7 @@ document.getElementById("deleteConfirmBtn").onclick = async function() {
     }
 
     navigatingAway = true;
-    window.location.href = "/api/" + nodeId + "/" + version + "/notes" + qs;
+    window.location.href = "/api/v1/" + nodeId + "/" + version + "/notes" + qs;
 
   } catch (err) {
     closeDeleteModal();
@@ -5190,7 +5190,7 @@ editor.addEventListener("keydown", function(e) {
 async function loadNotes() {
   try {
     var token = new URLSearchParams(qs.replace("?","")).get("token");
-    var fetchUrl = "/api/" + nodeId + "/" + version + "/notes";
+    var fetchUrl = "/api/v1/" + nodeId + "/" + version + "/notes";
     if (token) fetchUrl += "?token=" + encodeURIComponent(token);
     var res = await fetch(fetchUrl, { credentials: "include" });
     var data  = await res.json();
@@ -5234,9 +5234,9 @@ async function loadNotes() {
 
         var targetUrl;
         if (nType === "file")
-          targetUrl = "/api/" + nodeId + "/" + version + "/notes/" + nId + tokenQS;
+          targetUrl = "/api/v1/" + nodeId + "/" + version + "/notes/" + nId + tokenQS;
         else
-          targetUrl = "/api/" + nodeId + "/" + version + "/notes/" + nId + "/editor" + qs;
+          targetUrl = "/api/v1/" + nodeId + "/" + version + "/notes/" + nId + "/editor" + qs;
         
         navigateWithCheck(targetUrl);
       };
@@ -5257,7 +5257,7 @@ function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>
    NEW NOTE BUTTON
    ═══════════════════════════════════════════════════ */
 document.getElementById("newNoteBtn").onclick = function() {
-  navigateWithCheck("/api/" + nodeId + "/" + version + "/notes/editor" + qs);
+  navigateWithCheck("/api/v1/" + nodeId + "/" + version + "/notes/editor" + qs);
 };
 
 /* ═══════════════════════════════════════════════════

@@ -630,7 +630,7 @@ export function renderLoginPage(req, res) {
   </div>
 
   <script>
-    const apiUrl = "https://tree.tabors.site/api";
+    const apiUrl = "https://tree.tabors.site";
     const redirectAfterLogin = "${redirect}" ? decodeURIComponent("${redirect}") : null;
 
     if (redirectAfterLogin) {
@@ -1310,13 +1310,13 @@ export function renderRegisterPage(req, res) {
         <button class="modal-close" onclick="closeModal('privacy')">✕</button>
       </div>
       <div class="modal-body">
-        <iframe src="/privacy-policy" title="Privacy Policy"></iframe>
+        <iframe src="/privacy" title="Privacy Policy"></iframe>
       </div>
     </div>
   </div>
 
   <script>
-    const apiUrl = "https://tree.tabors.site/api";
+    const apiUrl = "https://tree.tabors.site";
 
     function openModal(type) {
       const id = type === 'terms' ? 'termsModal' : 'privacyModal';
@@ -1867,7 +1867,7 @@ export function renderForgotPasswordPage(req, res) {
   </div>
 
   <script>
-    const apiUrl = "https://tree.tabors.site/api";
+    const apiUrl = "https://tree.tabors.site";
 
     document.getElementById("forgotForm").addEventListener("submit", async (e) => {
       e.preventDefault();

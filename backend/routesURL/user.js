@@ -1045,18 +1045,18 @@ text-decoration: none;
     <!-- Header -->
     <div class="glass-card header">
       <div class="user-info">
-       <a href="/api/user/${userId}/energy${queryString}">
+       <a href="/api/v1/user/${userId}/energy${queryString}">
         <h1>@${user.username}</h1> </a>
 
         <div class="user-meta">
-   <a href="/api/user/${userId}/energy${queryString}">
+   <a href="/api/v1/user/${userId}/energy${queryString}">
   <span class="plan-badge plan-${profileType}">
   ${profileType === "god" ? "👑 " : ""}
   ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Plan
 </span></a>
 
           <span class="meta-item">
-            <a href="/api/user/${userId}/energy${queryString}">⚡ ${(energy?.amount ?? 0) + (extraEnergy?.amount ?? 0)} · resets ${resetTimeLabel}
+            <a href="/api/v1/user/${userId}/energy${queryString}">⚡ ${(energy?.amount ?? 0) + (extraEnergy?.amount ?? 0)} · resets ${resetTimeLabel}
 </a>
           </span>
 
@@ -1089,7 +1089,7 @@ text-decoration: none;
       <h2>Capture a Raw Idea</h2>
       <form
         method="POST"
-        action="/api/user/${userId}/raw-ideas${queryString}"
+        action="/api/v1/user/${userId}/raw-ideas${queryString}"
         enctype="multipart/form-data"
         class="raw-idea-form"
         id="rawIdeaForm"
@@ -1129,16 +1129,16 @@ text-decoration: none;
     <div class="glass-card nav-section">
       <h2>Quick Links</h2>
       <ul class="nav-links">
-        <li><a href="/api/user/${userId}/raw-ideas${queryString}">Raw Ideas</a></li>
-                <li><a href="/api/user/${userId}/chats${queryString}">AI Chats</a></li>
+        <li><a href="/api/v1/user/${userId}/raw-ideas${queryString}">Raw Ideas</a></li>
+                <li><a href="/api/v1/user/${userId}/chats${queryString}">AI Chats</a></li>
 
-        <li><a href="/api/user/${userId}/notes${queryString}">Notes</a></li>
-        <li><a href="/api/user/${userId}/tags${queryString}">Mail</a></li>
-        <li><a href="/api/user/${userId}/contributions${queryString}">Contributions</a></li>
-        <li><a href="/api/user/${userId}/invites${queryString}">Invites</a></li>
-        <li><a href="/api/user/${userId}/deleted${queryString}">Deleted</a></li>
-        <li><a href="/api/user/${userId}/api-keys${queryString}">API Keys</a></li>
-        <li><a href="/api/user/${userId}/sharetoken${queryString}">Share Token</a></li>
+        <li><a href="/api/v1/user/${userId}/notes${queryString}">Notes</a></li>
+        <li><a href="/api/v1/user/${userId}/tags${queryString}">Mail</a></li>
+        <li><a href="/api/v1/user/${userId}/contributions${queryString}">Contributions</a></li>
+        <li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>
+        <li><a href="/api/v1/user/${userId}/deleted${queryString}">Deleted</a></li>
+        <li><a href="/api/v1/user/${userId}/api-keys${queryString}">API Keys</a></li>
+        <li><a href="/api/v1/user/${userId}/sharetoken${queryString}">Share Token</a></li>
       </ul>
     </div>
 
@@ -1153,7 +1153,7 @@ text-decoration: none;
             .map(
               (r) => `
             <li>
-              <a href="/api/root/${r._id}${queryString}">
+              <a href="/api/v1/root/${r._id}${queryString}">
                 ${r.name || "Untitled"}
               </a>
             </li>
@@ -1167,7 +1167,7 @@ text-decoration: none;
       
       <form
         method="POST"
-        action="/api/user/${userId}/createRoot${queryString}"
+        action="/api/v1/user/${userId}/createRoot${queryString}"
         class="create-root-form"
       >
         <input
@@ -1225,7 +1225,7 @@ text-decoration: none;
     // Logout
     document.getElementById("logoutBtn").addEventListener("click", async () => {
       try {
-        await fetch("/api/logout", {
+        await fetch("/api/v1/logout", {
           method: "POST",
           credentials: "include",
         });
@@ -1479,7 +1479,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
       // Normalize _id (some queries return id, others _id)
       _id: n._id || n.id,
       content:
-        n.contentType === "file" ? `/api/uploads/${n.content}` : n.content,
+        n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
     }));
     // JSON MODE (no HTML)
     if (!wantHtml) {
@@ -1512,7 +1512,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
       <div class="card-actions">
         ${
           n.contentType === "text"
-            ? `<a href="/api/${n.nodeId}/${n.version}/notes/${noteId}/editor${tokenQS}" class="edit-button" title="Edit note">✎</a>`
+            ? `<a href="/api/v1/node/${n.nodeId}/${n.version}/notes/${noteId}/editor${tokenQS}" class="edit-button" title="Edit note">✎</a>`
             : ""
         }
         <button class="delete-button" title="Delete note">✕</button>
@@ -1521,7 +1521,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
       <div class="note-content">
         <div class="note-author">${user.username}</div>
         <a
-          href="/api/${n.nodeId}/${n.version}/notes/${noteId}${tokenQS}"
+          href="/api/v1/node/${n.nodeId}/${n.version}/notes/${noteId}${tokenQS}"
           class="note-link"
         >
           ${
@@ -1535,11 +1535,11 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
       <div class="note-meta">
         ${new Date(n.createdAt).toLocaleString()}
         <span class="meta-separator">•</span>
-        <a href="/api/${n.nodeId}/${n.version}${tokenQS}">
+        <a href="/api/v1/node/${n.nodeId}/${n.version}${tokenQS}">
           ${nodeName} v${n.version}
         </a>
         <span class="meta-separator">•</span>
-        <a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
+        <a href="/api/v1/node/${n.nodeId}/${n.version}/notes${tokenQS}">
           View Notes
         </a>
       </div>
@@ -2101,7 +2101,7 @@ body::after {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
         ← Back to Profile
       </a>
     </div>
@@ -2110,14 +2110,14 @@ body::after {
     <div class="header">
       <h1>
         Notes by
-        <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
+        <a href="/api/v1/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
       <div class="header-subtitle">
         View and manage your last 200notes across every tree
       </div>
 
       <!-- Search Form -->
-      <form method="GET" action="/api/user/${userId}/notes" class="search-form">
+      <form method="GET" action="/api/v1/user/${userId}/notes" class="search-form">
         <input type="hidden" name="token" value="${token}">
         <input type="hidden" name="html" value="">
         <input
@@ -2176,7 +2176,7 @@ body::after {
       const qs = token ? "?token=" + encodeURIComponent(token) : "";
 
       try {
-        const url = "/api/" + nodeId + "/" + version + "/notes/" + noteId + qs;
+        const url = "/api/v1/" + nodeId + "/" + version + "/notes/" + noteId + qs;
 
         const res = await fetch(url, { method: "DELETE" });
 
@@ -2235,7 +2235,7 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
     const notes = result.notes.map((n) => ({
       ...n,
       content:
-        n.contentType === "file" ? `/api/uploads/${n.content}` : n.content,
+        n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
     }));
 
     if (!wantHtml) {
@@ -2724,7 +2724,7 @@ body::after {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
         ← Back to Profile
       </a>
     </div>
@@ -2733,7 +2733,7 @@ body::after {
     <div class="header">
       <h1>
         Mail for
-        <a href="/api/user/${userId}${tokenQS}">@${user.username}</a>
+        <a href="/api/v1/user/${userId}${tokenQS}">@${user.username}</a>
         ${
           notes.length > 0
             ? `<span class="message-count">${notes.length}</span>`
@@ -2764,11 +2764,11 @@ body::after {
           <li class="note-card">
             <div class="note-content">
               <div class="note-author">
-                <a href="/api/user/${n.userId._id}${tokenQS}">
+                <a href="/api/v1/user/${n.userId._id}${tokenQS}">
                   ${author}
                 </a>
               </div>
-              <a href="/api/${n.nodeId}/${n.version}/notes/${
+              <a href="/api/v1/node/${n.nodeId}/${n.version}/notes/${
                 n._id
               }${tokenQS}" class="note-link">
                 ${
@@ -2782,11 +2782,11 @@ body::after {
             <div class="note-meta">
               ${new Date(n.createdAt).toLocaleString()}
               <span class="meta-separator">•</span>
-              <a href="/api/${n.nodeId}/${n.version}${tokenQS}">
+              <a href="/api/v1/node/${n.nodeId}/${n.version}${tokenQS}">
                 ${nodeName} v${n.version}
               </a>
               <span class="meta-separator">•</span>
-              <a href="/api/${n.nodeId}/${n.version}/notes${tokenQS}">
+              <a href="/api/v1/node/${n.nodeId}/${n.version}/notes${tokenQS}">
                 View Notes
               </a>
             </div>
@@ -2979,7 +2979,7 @@ const renderUser = (user) => {
 
 const renderLink = (id, queryString) =>
   id
-    ? `<a href="/api/${id}${queryString}"><code>${id}</code></a>`
+    ? `<a href="/api/v1/node/${id}${queryString}"><code>${id}</code></a>`
     : `<code>unknown</code>`;
 
 const renderVersionLink = (
@@ -2988,7 +2988,7 @@ const renderVersionLink = (
   queryString,
   label = `Version ${version}`,
 ) =>
-  `<a href="/api/${nodeId}/${version}${queryString}">
+  `<a href="/api/v1/node/${nodeId}/${version}${queryString}">
     <code>${label}</code>
   </a>`;
 
@@ -3011,7 +3011,7 @@ export const contributionRenderers = ({
       : `added new version`,
   transaction: () =>
     nodeId
-      ? `completed <a href="/api/${nodeId}/${version}/transactions${queryString}">
+      ? `completed <a href="/api/v1/node/${nodeId}/${version}/transactions${queryString}">
           <code>transaction</code>
         </a>`
       : `completed <code>transaction</code>`,
@@ -3032,7 +3032,7 @@ export const contributionRenderers = ({
     )}`,
   note: (c) =>
     `${c.noteAction?.action === "add" ? "added" : "removed"} note
-   <a href="/api/${c.nodeId}/${c.nodeVersion}/notes/${
+   <a href="/api/v1/node/${c.nodeId}/${c.nodeVersion}/notes/${
      c.noteAction?.noteId
    }${queryString}">
      <code>${c.noteAction?.noteId}</code>
@@ -3045,7 +3045,7 @@ export const contributionRenderers = ({
 
     if (action === "add") {
       return `added raw idea
-      <a href="/api/user/${c.userId?._id}/raw-ideas/${rawIdeaId}${queryString}">
+      <a href="/api/v1/user/${c.userId?._id}/raw-ideas/${rawIdeaId}${queryString}">
         <code>${rawIdeaId}</code>
       </a>`;
     }
@@ -3123,22 +3123,22 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
 
     const link = (id, label) =>
       id
-        ? `<a href="/api/${id}${tokenQS}">${label || `<code>${esc(id)}</code>`}</a>`
+        ? `<a href="/api/v1/node/${id}${tokenQS}">${label || `<code>${esc(id)}</code>`}</a>`
         : `<code>unknown</code>`;
 
     const nodeLink = (id, name, version) => {
       if (!id) return `<code>unknown node</code>`;
       const v = version != null ? `/${version}` : "";
       const display = name || id;
-      return `<a href="/api/${id}${v}${tokenQS}"><code>${esc(display)}</code></a>`;
+      return `<a href="/api/v1/node/${id}${v}${tokenQS}"><code>${esc(display)}</code></a>`;
     };
 
     const userTag = (u) => {
       if (!u) return `<code>unknown user</code>`;
       if (typeof u === "object" && u.username)
-        return `<a href="/api/user/${u._id}${tokenQS}"><code>${esc(u.username)}</code></a>`;
+        return `<a href="/api/v1/user/${u._id}${tokenQS}"><code>${esc(u.username)}</code></a>`;
       if (typeof u === "string")
-        return `<a href="/api/user/${u}${tokenQS}"><code>${esc(u)}</code></a>`;
+        return `<a href="/api/v1/user/${u}${tokenQS}"><code>${esc(u)}</code></a>`;
       return `<code>unknown user</code>`;
     };
 
@@ -3280,7 +3280,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
           const verb =
             na.action === "add" ? "Added a note to" : "Removed a note from";
           const noteRef = na.noteId
-            ? ` <a href="/api/${nId}/${v}/notes/${na.noteId}${tokenQS}"><code>${esc(na.noteId)}</code></a>`
+            ? ` <a href="/api/v1/node/${nId}/${v}/notes/${na.noteId}${tokenQS}"><code>${esc(na.noteId)}</code></a>`
             : "";
           return `${verb} ${nLink}${noteRef}`;
         }
@@ -3323,7 +3323,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
 
         case "rawIdea": {
           const ri = c.rawIdeaAction || {};
-          const ideaRef = `<a href="/api/user/${userId}/raw-ideas/${ri.rawIdeaId}${tokenQS}"><code>${esc(ri.rawIdeaId)}</code></a>`;
+          const ideaRef = `<a href="/api/v1/user/${userId}/raw-ideas/${ri.rawIdeaId}${tokenQS}"><code>${esc(ri.rawIdeaId)}</code></a>`;
           if (ri.action === "add") return `Captured a raw idea ${ideaRef}`;
           if (ri.action === "delete")
             return `Discarded raw idea <code>${esc(ri.rawIdeaId)}</code>`;
@@ -3371,7 +3371,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
           if (um.stage === "createRun") {
             const runLink =
               runId && rootNode
-                ? `<a href="/api/root/${rootNode}/understandings/run/${runId}${tokenQS}"><code>${esc(runId)}</code></a>`
+                ? `<a href="/api/v1/root/${rootNode}/understandings/run/${runId}${tokenQS}"><code>${esc(runId)}</code></a>`
                 : `<code>unknown run</code>`;
             let text = `Started understanding run ${runLink}`;
             if (rootNode) text += ` on ${link(rootNode)}`;
@@ -3385,7 +3385,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
             const uNodeId = um.understandingNodeId;
             const uNodeLink =
               uNodeId && runId && rootNode
-                ? `<a href="/api/root/${rootNode}/understandings/run/${runId}/${uNodeId}${tokenQS}"><code>${esc(uNodeId)}</code></a>`
+                ? `<a href="/api/v1/root/${rootNode}/understandings/run/${runId}/${uNodeId}${tokenQS}"><code>${esc(uNodeId)}</code></a>`
                 : uNodeId
                   ? `<code>${esc(uNodeId)}</code>`
                   : `<code>unknown</code>`;
@@ -3873,13 +3873,13 @@ body::after {
 <body>
   <div class="container">
     <div class="back-nav">
-      <a href="/api/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
     </div>
 
     <div class="header">
       <h1>
         Contributions by
-        <a href="/api/user/${userId}${tokenQS}">@${esc(username)}</a>
+        <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
         ${contributions.length > 0 ? `<span class="message-count">${contributions.length}</span>` : ""}
       </h1>
       <div class="header-subtitle">Activity &amp; change history</div>
@@ -3943,7 +3943,7 @@ router.get("/user/reset-password/:token", async (req, res) => {
       <html>
       <body style="font-family: sans-serif; padding: 20px;">
         <h2>Reset Password</h2>
-        <form method="POST" action="/api/user/reset-password/${token}">
+        <form method="POST" action="/api/v1/user/reset-password/${token}">
           <input type="password" name="password" placeholder="New Password" style="padding:8px; width:250px;" required />
           <br/><br/>
           <input type="password" name="confirm" placeholder="Confirm Password" style="padding:8px; width:250px;" required />
@@ -3971,7 +3971,7 @@ router.post("/user/reset-password/:token", async (req, res) => {
       return res.send(`
         <html><body style="font-family:sans-serif; padding:20px;">
         <h2>Passwords Do Not Match</h2>
-        <p><a href="/api/user/reset-password/${token}">Try Again</a></p>
+        <p><a href="/api/v1/user/reset-password/${token}">Try Again</a></p>
         </body></html>
       `);
     }
@@ -4040,7 +4040,7 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/root/${rootNode._id}?token=${req.query.token ?? ""}&html`,
+        `/api/v1/root/${rootNode._id}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -4083,7 +4083,7 @@ router.post(
 
       if (wantHtml) {
         return res.redirect(
-          `/api/user/${userId}?token=${req.query.token ?? ""}&html`,
+          `/api/v1/user/${userId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -4140,7 +4140,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
     const rawIdeas = result.rawIdeas.map((r) => ({
       ...r,
       content:
-        r.contentType === "file" ? `/api/uploads/${r.content}` : r.content,
+        r.contentType === "file" ? `/api/v1/uploads/${r.content}` : r.content,
     }));
 
     // ---------- JSON MODE ----------
@@ -4805,7 +4805,7 @@ body::after {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
         ← Back to Profile
       </a>
     </div>
@@ -4814,13 +4814,13 @@ body::after {
     <div class="header">
       <h1>
         Raw Ideas for
-        <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
+        <a href="/api/v1/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
       <div class="header-subtitle">
 Convert loose thoughts into structure (viewing last 200)      </div>
 
       <!-- Search Form -->
-      <form method="GET" action="/api/user/${userId}/raw-ideas" class="search-form">
+      <form method="GET" action="/api/v1/user/${userId}/raw-ideas" class="search-form">
         <input type="hidden" name="token" value="${token}">
         <input type="hidden" name="html" value="">
         <input
@@ -4846,7 +4846,7 @@ Convert loose thoughts into structure (viewing last 200)      </div>
 
           <div class="idea-content">
             <a
-              href="/api/user/${userId}/raw-ideas/${r._id}${tokenQS}"
+              href="/api/v1/user/${userId}/raw-ideas/${r._id}${tokenQS}"
               class="idea-link"
             >
               ${
@@ -4859,7 +4859,7 @@ Convert loose thoughts into structure (viewing last 200)      </div>
 
           <form
             method="POST"
-            action="/api/user/${userId}/raw-ideas/${
+            action="/api/v1/user/${userId}/raw-ideas/${
               r._id
             }/transfer?token=${token}&html"
             class="transfer-form"
@@ -4946,7 +4946,7 @@ Convert loose thoughts into structure (viewing last 200)      </div>
 
       try {
         const res = await fetch(
-          "/api/user/${userId}/raw-ideas/" + rawIdeaId + qs,
+          "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + qs,
           { method: "DELETE" }
         );
 
@@ -5029,7 +5029,7 @@ router.post(
       // 🌐 HTML redirect support
       if ("html" in req.query) {
         return res.redirect(
-          `/api/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html`,
+          `/api/v1/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -5071,11 +5071,11 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
 
-    const back = `/api/user/${userId}/raw-ideas${tokenQS}`;
+    const back = `/api/v1/user/${userId}/raw-ideas${tokenQS}`;
 
     const userLink =
       rawIdea.userId && rawIdea.userId !== "empty"
-        ? `<a href="/api/user/${rawIdea.userId._id}${tokenQS}">
+        ? `<a href="/api/v1/user/${rawIdea.userId._id}${tokenQS}">
                ${rawIdea.userId.username ?? rawIdea.userId}
              </a>`
         : "Unknown user";
@@ -5302,7 +5302,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       }
 
       // ---------- FILE ----------
-      const fileUrl = `/api/uploads/${rawIdea.content}`;
+      const fileUrl = `/api/v1/uploads/${rawIdea.content}`;
       const filePath = path.join(process.cwd(), "uploads", rawIdea.content);
       const mimeType = mime.lookup(filePath) || "application/octet-stream";
       const mediaHtml = renderMedia(fileUrl, mimeType);
@@ -6033,7 +6033,7 @@ body::after {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
         ← Back to Profile
       </a>
     </div>
@@ -6062,7 +6062,7 @@ body::after {
           <div class="invite-actions">
             <form
               method="POST"
-              action="/api/user/${userId}/invites/${i._id}${tokenQS}"
+              action="/api/v1/user/${userId}/invites/${i._id}${tokenQS}"
             >
               <input type="hidden" name="accept" value="true" />
               <button type="submit" class="accept-button">Accept</button>
@@ -6070,7 +6070,7 @@ body::after {
 
             <form
               method="POST"
-              action="/api/user/${userId}/invites/${i._id}${tokenQS}"
+              action="/api/v1/user/${userId}/invites/${i._id}${tokenQS}"
             >
               <input type="hidden" name="accept" value="false" />
               <button type="submit" class="decline-button">Decline</button>
@@ -6151,7 +6151,7 @@ router.post(
       // 🌐 HTML redirect support
       if ("html" in req.query) {
         return res.redirect(
-          `/api/user/${userId}/invites?token=${req.query.token ?? ""}&html`,
+          `/api/v1/user/${userId}/invites?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -6732,7 +6732,7 @@ body::after {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
         ← Back to Profile
       </a>
     </div>
@@ -6741,7 +6741,7 @@ body::after {
     <div class="header">
       <h1>
         Deleted Branches for
-        <a href="/api/user/${userId}${tokenQS}">${user.username}</a>
+        <a href="/api/v1/user/${userId}${tokenQS}">${user.username}</a>
       </h1>
       <div class="header-subtitle">
         Recover deleted trees and branches as new trees or merge them into existing ones.
@@ -6759,7 +6759,7 @@ body::after {
         <li class="deleted-card">
           <div class="deleted-info">
             <div class="deleted-name">
-              <a href="/api/root/${_id}${tokenQS}">
+              <a href="/api/v1/root/${_id}${tokenQS}">
                 ${name || "Untitled"}
               </a>
             </div>
@@ -6770,7 +6770,7 @@ body::after {
             <!-- Revive as Root -->
             <form
               method="POST"
-              action="/api/user/${userId}/deleted/${_id}/reviveAsRoot?token=${token}&html"
+              action="/api/v1/user/${userId}/deleted/${_id}/reviveAsRoot?token=${token}&html"
               class="revive-as-root-form"
             >
               <button type="submit">Revive as Root</button>
@@ -6779,7 +6779,7 @@ body::after {
             <!-- Revive into Branch -->
             <form
               method="POST"
-              action="/api/user/${userId}/deleted/${_id}/revive?token=${token}&html"
+              action="/api/v1/user/${userId}/deleted/${_id}/revive?token=${token}&html"
               class="revive-into-branch-form"
             >
               <input
@@ -6871,7 +6871,7 @@ router.post(
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`,
+          `/api/v1/root/${nodeId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -6905,7 +6905,7 @@ router.post(
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`,
+          `/api/v1/root/${nodeId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -7553,7 +7553,7 @@ body::after {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/user/${req.userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${req.userId}${tokenQS}" class="back-link">
         ← Back to Profile
       </a>
     </div>
@@ -7568,7 +7568,7 @@ body::after {
 
     <!-- Create API Key -->
     <div class="create-card">
-      <form class="create-form" method="POST" action="/api/user/${
+      <form class="create-form" method="POST" action="/api/v1/user/${
         req.userId
       }/api-keys?token=${token}&html">
         <input type="text" name="name" placeholder="Key name (optional)" />
@@ -7670,7 +7670,7 @@ body::after {
 
       try {
         const res = await fetch(
-          "/api/user/${req.userId}/api-keys/" + keyId + qs,
+          "/api/v1/user/${req.userId}/api-keys/" + keyId + qs,
           { method: "DELETE" }
         );
 
@@ -8206,7 +8206,7 @@ input:focus {
 
           <div class="form-section">
             <div class="form-title">Update Token</div>
-            <form method="POST" action="/api/user/${userId}/shareToken${tokenQS}">
+            <form method="POST" action="/api/v1/user/${userId}/shareToken${tokenQS}">
               <div class="form-row">
                 <input
                   name="htmlShareToken"
@@ -8229,7 +8229,7 @@ input:focus {
 
           <div class="form-section">
             <div class="form-title">Choose Your Token</div>
-            <form method="POST" action="/api/user/${userId}/shareToken${tokenQS}">
+            <form method="POST" action="/api/v1/user/${userId}/shareToken${tokenQS}">
               <div class="form-row">
                 <input
                   name="htmlShareToken"
@@ -8244,7 +8244,7 @@ input:focus {
       }
 
       <div class="back-links">
-        <a class="back-link" href="/api/user/${userId}${tokenQS}">
+        <a class="back-link" href="/api/v1/user/${userId}${tokenQS}">
           ← Back to Profile
         </a>
         <a class="back-link" target="_top" href="/">
@@ -8305,7 +8305,7 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
 
     // existing behavior
     return res.redirect(
-      `/api/user/${userId}?token=${u.htmlShareToken ?? ""}&html`,
+      `/api/v1/user/${userId}?token=${u.htmlShareToken ?? ""}&html`,
     );
   } catch (err) {
     console.error("shareToken update error:", err);
@@ -9397,7 +9397,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
 <div class="container">
 
   <div class="back-nav">
-    <a href="/api/user/${userId}${qs}" class="back-link">← Back to Profile</a>
+    <a href="/api/v1/user/${userId}${qs}" class="back-link">← Back to Profile</a>
   </div>
 
   <!-- Energy Status -->
@@ -9551,7 +9551,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
       <span class="modal-close" onclick="closeModal('privacy')">✕</span>
     </div>
     <div class="modal-body">
-      <iframe src="/privacy-policy" title="Privacy Policy"></iframe>
+      <iframe src="/privacy" title="Privacy Policy"></iframe>
     </div>
   </div>
 </div>
@@ -9776,7 +9776,7 @@ async function handleCheckout() {
       currentPlan: currentPlan,
     };
 
-    var res = await fetch("/api/user/" + userId + "/purchase", {
+    var res = await fetch("/api/v1/user/" + userId + "/purchase", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -9833,7 +9833,7 @@ async function saveLLM() {
   if (apiKey) payload.apiKey = apiKey;
 
   try {
-    var res = await fetch("/api/user/" + userId + "/custom-llm", {
+    var res = await fetch("/api/v1/user/" + userId + "/custom-llm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -9855,7 +9855,7 @@ async function disconnectLLM() {
   if (!confirm("Disconnect your custom LLM? This will remove the saved connection.")) return;
 
   try {
-    var res = await fetch("/api/user/" + userId + "/custom-llm", {
+    var res = await fetch("/api/v1/user/" + userId + "/custom-llm", {
       method: "DELETE",
     });
 
@@ -9878,7 +9878,7 @@ async function toggleLLM(active) {
   if (badge) badge.style.display = active ? "flex" : "none";
 
   try {
-    var res = await fetch("/api/user/" + userId + "/custom-llm/revoke", {
+    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/revoke", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ revoked: !active })
@@ -10245,7 +10245,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
           const nId = c.nodeId?._id || c.nodeId;
           const nName = c.nodeId?.name || nId || "—";
           const nodeRef = nId
-            ? `<a href="/api/${nId}${tokenQS}">${esc(nName)}</a>`
+            ? `<a href="/api/v1/node/${nId}${tokenQS}">${esc(nName)}</a>`
             : `<span style="opacity:0.5">—</span>`;
           const aiBadge = c.wasAi
             ? `<span class="mini-badge mini-ai">AI</span>`
@@ -10864,13 +10864,13 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 <body>
   <div class="container">
     <div class="back-nav">
-      <a href="/api/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
     </div>
 
     <div class="header">
       <h1>
         AI Chats for
-        <a href="/api/user/${userId}${tokenQS}">@${esc(username)}</a>
+        <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
         ${chats.length > 0 ? `<span class="message-count">${chats.length}</span>` : ""}
       </h1>
       <div class="header-subtitle">Your last 10 AI conversation sessions</div>
@@ -10908,851 +10908,5 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
   }
 });
 
-router.get("/terms", async (req, res) => {
-  try {
-    const tokenQS = req.query.token
-      ? `?token=${req.query.token}&html`
-      : "?html";
-
-    return res.send(`
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#667eea">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Terms of Service — Tree</title>
-    <style>
-  :root {
-    --glass-water-rgb: 115, 111, 230;
-    --glass-alpha: 0.28;
-    --glass-alpha-hover: 0.38;
-  }
-
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  html, body {
-    background: #736fe6;
-    margin: 0;
-    padding: 0;
-  }
-
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    min-height: 100dvh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    color: #1a1a1a;
-    position: relative;
-    overflow-x: hidden;
-    touch-action: manipulation;
-  }
-
-  body::before,
-  body::after {
-    content: '';
-    position: fixed;
-    border-radius: 50%;
-    opacity: 0.08;
-    animation: float 20s infinite ease-in-out;
-    pointer-events: none;
-  }
-
-  body::before {
-    width: 600px;
-    height: 600px;
-    background: white;
-    top: -300px;
-    right: -200px;
-    animation-delay: -5s;
-  }
-
-  body::after {
-    width: 400px;
-    height: 400px;
-    background: white;
-    bottom: -200px;
-    left: -100px;
-    animation-delay: -10s;
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-30px) rotate(5deg); }
-  }
-
-  @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(30px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .container {
-    max-width: 700px;
-    width: 100%;
-    position: relative;
-    z-index: 1;
-  }
-
-  .card {
-    position: relative;
-    overflow: hidden;
-    background: rgba(var(--glass-water-rgb), var(--glass-alpha));
-    backdrop-filter: blur(22px) saturate(140%);
-    -webkit-backdrop-filter: blur(22px) saturate(140%);
-    border-radius: 24px;
-    padding: 48px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    color: white;
-    animation: fadeInUp 0.6s ease-out;
-  }
-
-  .header {
-    text-align: center;
-    margin-bottom: 32px;
-  }
-
-  .icon {
-    font-size: 64px;
-    margin-bottom: 20px;
-    display: inline-block;
-    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
-  }
-
-  h1 {
-    font-size: 32px;
-    font-weight: 600;
-    color: white;
-    margin-bottom: 8px;
-    letter-spacing: -0.5px;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  }
-
-  .last-updated {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
-    font-weight: 500;
-  }
-
-  .section {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    padding: 24px;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    margin-bottom: 16px;
-  }
-
-  .section-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: white;
-    margin-bottom: 12px;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  }
-
-  .section-text {
-    color: rgba(255, 255, 255, 0.9);
-    line-height: 1.7;
-    font-size: 15px;
-  }
-
-  .section-text strong {
-    color: white;
-    font-weight: 600;
-  }
-
-  .highlight-box {
-    background: rgba(255, 255, 255, 0.15);
-    padding: 14px 18px;
-    border-radius: 12px;
-    border-left: 3px solid rgba(255, 255, 255, 0.5);
-    margin-top: 12px;
-  }
-
-  .highlight-box .section-text {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.85);
-  }
-
-  .back-links {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 24px;
-  }
-
-  .back-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 12px 20px;
-    text-decoration: none;
-    color: white;
-    font-weight: 600;
-    font-size: 14px;
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    border-radius: 980px;
-    transition: all 0.3s;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-  }
-
-  .back-link:hover {
-    background: rgba(255, 255, 255, 0.25);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-
-  @media (max-width: 640px) {
-    body {
-      padding: 16px;
-      align-items: flex-start;
-      padding-top: 40px;
-    }
-    .card {
-      padding: 32px 24px;
-    }
-    h1 {
-      font-size: 28px;
-    }
-    .icon {
-      font-size: 56px;
-    }
-  }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="card">
-
-        <div class="header">
-          <div class="icon">📜</div>
-          <h1>Terms of Service</h1>
-          <div class="last-updated">Last Updated: February 13, 2025</div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">1. Overview</div>
-          <div class="section-text">
-            Welcome to Tree ("Service", "we", "us", or "our"). By accessing or using the Service at tree.tabors.site, you agree to these Terms of Service ("Terms"). If you do not agree, please do not use the Service.
-            <br><br>
-            Tree is a web-based platform that provides digital organizational features including trees, notes, and usage-based energy credits. All purchases grant access to features within the Service and do not represent ownership of any real-world asset.
-            <br><br>
-  You must be at least 18 years old to use the Service.        </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">2. Accounts</div>
-          <div class="section-text">
-            You are responsible for maintaining the security of your account and any activity that occurs under it. You agree to provide accurate information and keep your login credentials confidential.
-            <br><br>
-            We reserve the right to suspend or terminate accounts that violate these Terms or engage in abuse, fraud, or harmful activity.
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">3. Energy System & Digital Purchases</div>
-          <div class="section-text">
-  Tree operates on an energy-based usage system. Energy is consumed as you interact with the Service. Your daily energy allowance resets automatically once every 24 hours. If more than 24 hours have passed since your last reset, the reset will occur the next time you access the Service, and the 24-hour reset period will then be measured from that reset time.        <br><br>
-The Service offers the following purchasable options:
-<br><br>
-Plan names and features, daily energy amounts, usage limits, energy costs, and pricing are described within the Service interface and may change from time to time at our discretion.
-<br><br>
-<strong>30-Day Energy Plans</strong> — Time-limited plans that grant access to enhanced features and a higher daily energy allowance for 30 days from the date of purchase. Plans automatically expire after 30 days. Upon expiration, your account reverts to the basic tier.
-<br><br>
-<strong>Additional Energy (Reserve)</strong> — One-time purchases of bonus energy that supplements your plan. Reserve energy is only consumed after your plan's daily available energy has been fully used. Reserve energy does not expire and remains available unless the account is terminated for violation of these Terms.
-<br><br>
-All purchases are digital, non-transferable, and non-redeemable for cash. They are provided solely for use within the Service and are subject to change or modification at our discretion.
-<br><br>
-Payments are securely processed by Stripe. We do not store full payment card details. Prices, taxes, and availability may vary by region and may change at any time.
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">4. Plans, Expiration & Usage Limits</div>
-          <div class="section-text">
-        <strong>Plan Duration:</strong> 30-day plans grant 30 days of enhanced access from the date of purchase.
-  <br><br>
-  <strong>Stacking Plans:</strong> If you purchase the same plan you already have, the new 30 days are added to your remaining time. For example, if you have 12 days left and buy another 30-day plan, you will have 42 days remaining.
-  <br><br>
-  <strong>Upgrading Plans:</strong> If you upgrade to a higher-tier plan, your remaining days on the current plan are converted into additional (reserve) energy. The conversion is calculated as: days remaining × the daily energy allowance of your current plan. The new higher-tier plan then begins immediately with its own 30-day duration.
-  <br><br>
-  <strong>Daily Energy Reset:</strong> Your plan's daily energy allowance resets every 24 hours from the time of your last daily reset. Unused daily energy does not roll over after the reset.
-  <br><br>
-  <strong>Reserve Energy:</strong> Additional purchased energy acts as a reserve and is only drawn upon once your plan's daily energy allocation is fully consumed.
-  <br><br>
-  <strong>Downgrade on Expiration:</strong> When a plan expires, your account returns to the basic tier with standard energy limits and feature access. Any remaining additional (reserve) energy you have purchased will carry over and remain available after downgrade. No partial refunds are given for unused time.<br><br>
-  By purchasing, you acknowledge that digital features may be consumed immediately upon access.
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">5. Refund Policy</div>
-       <div class="section-text">
-  All purchases are final and non-refundable. Because purchases provide immediate access to digital features and energy, no refunds will be issued under any circumstances, including unused plan time, unused reserve energy, dissatisfaction with the Service, or cases where the Service is modified, suspended, or discontinued.
-</div>
-
-          <div class="highlight-box">
-            <div class="section-text">
-              <strong>No refunds.</strong> By completing a purchase, you acknowledge and agree that all sales are final.
-            </div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">6. Acceptable Use</div>
-          <div class="section-text">
-            You agree not to: abuse, exploit, or interfere with the Service; attempt to reverse engineer or disrupt platform functionality; use automated scraping, bots, or unauthorized automation; manipulate the energy system or exploit bugs for unearned credits; or upload or distribute illegal or harmful content.
-            <br><br>
-            Violation may result in suspension or permanent account termination without notice or refund.
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">7. Intellectual Property</div>
-          <div class="section-text">
-            All content, software, design, and branding within the Service remain the property of Tree or its licensors. You are granted a limited, non-exclusive license to use the Service for personal or authorized purposes.
-          </div>
-        </div>
-
-        <div class="section">
-  <div class="section-title">8. Service Availability</div>
-  <div class="section-text">
-    The Service is provided on an "as-is" and "as-available" basis. We may update, modify, suspend, or discontinue features or the Service at any time without liability. We do not guarantee uninterrupted availability or error-free operation.
-    <br><br>
-    <strong>Service Discontinuation:</strong> Tree reserves the right to suspend or permanently discontinue the Service, in whole or in part, at any time, with or without notice. In the event of service discontinuation, you acknowledge that access to the Service, including any unused plan time or energy, may be lost and no refunds will be issued.
-  </div>
-</div>
-
-
-        <div class="section">
-          <div class="section-title">9. Limitation of Liability</div>
-          <div class="section-text">
-            To the maximum extent permitted by law, Tree shall not be liable for indirect, incidental, or consequential damages, including loss of data, profits, or access resulting from use of the Service.
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">10. Termination</div>
-          <div class="section-text">
-            We may suspend or terminate access if you violate these Terms, engage in fraud, or create risk to the platform or other users. You may stop using the Service at any time. Termination does not entitle you to refunds for previously purchased digital features or unused energy.
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">11. Privacy</div>
-          <div class="section-text">
-  Your use of the Service is also governed by our
-  <a href="/privacy-policy" target="_top" style="color: #fff; text-decoration: underline; font-weight: 600;">
-    Privacy Policy
-  </a>,
-  which explains how we collect, use, store, and protect your information.
-</div>
-
-        </div>
-
-        <div class="section">
-          <div class="section-title">12. Changes to These Terms</div>
-          <div class="section-text">
-            We may update these Terms periodically. Continued use of the Service after changes means you accept the updated Terms.
-          </div>
-        </div>
-        <div class="section">
-  <div class="section-title">13. Governing Law</div>
-  <div class="section-text">
-    These Terms shall be governed by and construed in accordance with the laws of the State of <strong>Oregon</strong>, United States, without regard to its conflict of law principles.
-  </div>
-</div>
-
-
-        <div class="section">
-          <div class="section-title">14. Contact</div>
-          <div class="section-text">
-            If you have questions about these Terms, contact us:
-            <br><br>
-            <strong>Tree</strong><br>
-            Email: treeffiency@gmail.com<br>
-            Website: tree.tabors.site
-          </div>
-        </div>
-
-         <div class="back-links">
-          <a class="back-link" href="/privacy-policy">
-            Privacy Policy
-          </a>
-        </div>
-        <div class="back-links">
-          <a class="back-link" target="_top" href="/">
-            ← Back to tree.tabors.site
-          </a>
-        </div>
-
-      </div>
-    </div>
-  </body>
-  </html>
-      `);
-  } catch (err) {
-    console.error("terms page error:", err);
-    res.status(500).send("Server error");
-  }
-});
-
-router.get("/privacy-policy", async (req, res) => {
-  try {
-    return res.send(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#667eea">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Privacy Policy — Tree</title>
-  <style>
-:root {
-  --glass-water-rgb: 115, 111, 230;
-  --glass-alpha: 0.28;
-  --glass-alpha-hover: 0.38;
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-
-html, body {
-  background: #736fe6;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  color: #1a1a1a;
-  position: relative;
-  overflow-x: hidden;
-  touch-action: manipulation;
-}
-
-body::before,
-body::after {
-  content: '';
-  position: fixed;
-  border-radius: 50%;
-  opacity: 0.08;
-  animation: float 20s infinite ease-in-out;
-  pointer-events: none;
-}
-
-body::before {
-  width: 600px;
-  height: 600px;
-  background: white;
-  top: -300px;
-  right: -200px;
-  animation-delay: -5s;
-}
-
-body::after {
-  width: 400px;
-  height: 400px;
-  background: white;
-  bottom: -200px;
-  left: -100px;
-  animation-delay: -10s;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-30px) rotate(5deg); }
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.container {
-  max-width: 700px;
-  width: 100%;
-  position: relative;
-  z-index: 1;
-}
-
-.card {
-  position: relative;
-  overflow: hidden;
-  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-  border-radius: 24px;
-  padding: 48px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  color: white;
-  animation: fadeInUp 0.6s ease-out;
-}
-
-.header {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.icon {
-  font-size: 64px;
-  margin-bottom: 20px;
-  display: inline-block;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
-}
-
-h1 {
-  font-size: 32px;
-  font-weight: 600;
-  color: white;
-  margin-bottom: 8px;
-  letter-spacing: -0.5px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.last-updated {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-  font-weight: 500;
-}
-
-.section {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  padding: 24px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  margin-bottom: 16px;
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: white;
-  margin-bottom: 12px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-
-.section-text {
-  color: rgba(255, 255, 255, 0.9);
-  line-height: 1.7;
-  font-size: 15px;
-}
-
-.section-text strong {
-  color: white;
-  font-weight: 600;
-}
-
-.highlight-box {
-  background: rgba(255, 255, 255, 0.15);
-  padding: 14px 18px;
-  border-radius: 12px;
-  border-left: 3px solid rgba(255, 255, 255, 0.5);
-  margin-top: 12px;
-}
-
-.highlight-box .section-text {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.back-links {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 24px;
-}
-
-.back-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 20px;
-  text-decoration: none;
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border-radius: 980px;
-  transition: all 0.3s;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-}
-
-.back-link:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-@media (max-width: 640px) {
-  body {
-    padding: 16px;
-    align-items: flex-start;
-    padding-top: 40px;
-  }
-  .card {
-    padding: 32px 24px;
-  }
-  h1 {
-    font-size: 28px;
-  }
-  .icon {
-    font-size: 56px;
-  }
-}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="card">
-
-      <div class="header">
-        <div class="icon">🔒</div>
-        <h1>Privacy Policy</h1>
-        <div class="last-updated">Last Updated: February 13, 2025</div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">1. Introduction</div>
-        <div class="section-text">
-          This Privacy Policy explains how Tree ("Service", "we", "us", or "our") at tree.tabors.site collects, uses, stores, and protects your information when you use the Service.
-          <br><br>
-          By using the Service, you consent to the data practices described in this policy. If you do not agree, please do not use the Service.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">2. Information We Collect</div>
-        <div class="section-text">
-          <strong>Account Information:</strong> When you create an account, we collect your username and email address.
-          <br><br>
-<strong>User Content:</strong> We store files, trees (node-based organizational structures), notes, AI chat conversations, and other content you create or upload through the Service.          <br><br>
-          <strong>Payment Information:</strong> When you make a purchase, payment is processed by Stripe. We store Stripe payment session IDs to track transaction status, but we do not store your credit card number, CVV, or other full payment card details. Stripe's handling of your payment data is governed by <a href="https://stripe.com/privacy" style="color: rgba(255,255,255,0.95); text-decoration: underline;" target="_blank" rel="noopener">Stripe's Privacy Policy</a>.
-          <br><br>
-          <strong>Passwords:</strong> We store your account password in an encrypted (hashed) format. We never store or have access to your plaintext password.
-<br><br>
-<strong>API Keys:</strong> If you use custom LLM connections or programmatic API access, we store associated API keys. All API keys and passwords are encrypted at rest on our backend servers.
-<br><br>
-<strong>Cryptocurrency Wallets:</strong> If you use Solana-related features, your wallet private keys are stored securely on our backend servers. We use the Jupiter API to facilitate Solana transactions and actions.
-          <strong>Technical Information:</strong> We may collect your IP address, browser type, device information, and general usage data to operate and improve the Service.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">3. Cookies & Authentication</div>
-        <div class="section-text">
-          We use cookies and similar browser storage to operate the Service. For example, we store:
-          <br><br>
-          <strong>Authentication Token (JWT):</strong> A secure token used to keep you logged in across sessions.
-          <br><br>
-          <strong>Username:</strong> Stored locally for display and session purposes.
-          <br><br>
-          <strong>Share Token:</strong> Used to enable shared URL access to your content for others you choose to share with.
-          <br><br>
-          These cookies are essential to the functioning of the Service. We do not use advertising cookies or third-party tracking cookies. By using the Service, you consent to the use of these essential cookies.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">4. How We Use Your Information</div>
-        <div class="section-text">
-          We use the information we collect to: provide, operate, and maintain the Service; authenticate your identity and manage your sessions; process purchases and manage your plan and energy status; store and serve your uploaded files and user content; communicate with you regarding your account or the Service; and detect and prevent fraud, abuse, or violations of our Terms of Service.
-          <br><br>
-          We do not sell, rent, or trade your personal information to third parties.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">5. File Storage</div>
-        <div class="section-text">
-Files, trees (which are composed of individual nodes), notes, AI chat conversations, and other content you upload or generate through the Service are stored on our servers to provide the Service to you. Your content is associated with your account and is not publicly accessible unless you explicitly share it via a share token or other sharing feature.          <br><br>
-          We do not access, review, or use your uploaded content for any purpose other than providing the Service, unless required by law.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">6. Data Retention</div>
-        <div class="section-text">
-          We retain your account information, user content, and uploaded files for as long as your account is active or as needed to provide the Service.
-          <br><br>
-          If you delete your account, we will make reasonable efforts to delete your personal data and uploaded files within 30 days, except where we are required to retain certain information by law or for legitimate business purposes (such as fraud prevention or resolving disputes).
-          <br><br>
-          Stripe payment session IDs may be retained for record-keeping and dispute resolution purposes.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">7. Data Security</div>
-        <div class="section-text">
-We take reasonable measures to protect your information, including: using HTTPS encryption for all data transmitted between your browser and our servers; storing authentication tokens securely; hashing all account passwords so plaintext passwords are never stored or accessible; encrypting all API keys (including custom LLM connection keys and programmatic access keys) at rest on our backend; securely storing Solana wallet private keys on our backend infrastructure; and relying on Stripe for PCI-compliant payment processing.
-<br><br>
-However, no method of transmission or storage is 100% secure. We cannot guarantee absolute security and are not liable for unauthorized access resulting from circumstances beyond our reasonable control.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">8. Third-Party Services</div>
-        <div class="section-text">
-          The Service uses the following third-party provider:
-          <br><br>
-          <strong>Stripe</strong> — for payment processing. Stripe may collect and process your payment information in accordance with their own privacy policy. We encourage you to review <a href="https://stripe.com/privacy" style="color: rgba(255,255,255,0.95); text-decoration: underline;" target="_blank" rel="noopener">Stripe's Privacy Policy</a>.
-          <br><br>
-          <strong>Jupiter API</strong> — for facilitating Solana blockchain transactions and actions. Jupiter may process transaction data in accordance with their own policies.<br><br>
-
-          We do not embed third-party advertising, analytics, or social media trackers.
-        </div>
-      </div>
-      <div class="section">
-  <div class="section-title">9. Cryptocurrency & Solana Wallet Disclaimer</div>
-  <div class="section-text">
-    The Service may provide features that interact with the Solana blockchain via the Jupiter API. Solana wallet private keys are stored securely on our backend servers to facilitate these features on your behalf.
-    <br><br>
-    By using any cryptocurrency-related features, you acknowledge and agree that:
-    <br><br>
-    <strong>No Liability for Loss:</strong> Tree is not responsible for any loss, theft, or unauthorized access to cryptocurrency funds, whether resulting from technical failures, security breaches, blockchain network issues, market volatility, smart contract errors, or any other cause.
-    <br><br>
-    <strong>No Financial Advice:</strong> The Service does not provide financial, investment, or trading advice. Any cryptocurrency transactions you initiate through the Service are made at your own risk and discretion.
-    <br><br>
-    <strong>Blockchain Irreversibility:</strong> Transactions on the Solana blockchain are irreversible. Once a transaction is confirmed on-chain, it cannot be undone, cancelled, or refunded by Tree.
-    <br><br>
-    <strong>Use at Your Own Risk:</strong> Cryptocurrency features are provided on an "as-is" basis. You are solely responsible for evaluating the risks associated with using these features and for any resulting gains or losses.
-  </div>
-  <div class="highlight-box">
-    <div class="section-text">
-      <strong>Tree is not liable for any loss of cryptocurrency funds under any circumstances.</strong> By using wallet or blockchain features, you accept full responsibility for all associated risks.
-    </div>
-  </div>
-</div>
-
-     <div class="section">
-  <div class="section-title">10. Your Rights</div>
-  <div class="section-text">
-    You have the right to:
-    <br><br>
-    <strong>Access:</strong> Request a copy of the personal data we hold about you.
-    <br><br>
-    <strong>Correction:</strong> Request correction of inaccurate personal data.
-    <br><br>
-    <strong>Account Deletion:</strong> Request deletion of your account profile data, including your password, email address, and other personal identifiers. We will process deletion requests within 30 days, subject to any legal retention requirements.
-    <br><br>
-    <strong>Content Retention:</strong> Please be aware that trees (nodes), notes, AI chat conversations, and other user-generated content cannot be deleted upon account deletion. This content is interconnected with other users' structures and plans within the Service, and removing it would compromise the integrity of shared and dependent data. By using the Service and creating content, you acknowledge and accept this limitation.
-    <br><br>
-
-    To exercise any of these rights, contact us at treeffiency@gmail.com.
-  </div>
-  <div class="highlight-box">
-    <div class="section-text">
-      <strong>Profile data (password, email, etc.) can be deleted on request.</strong> Trees, nodes, notes, AI chats, and other interconnected content are retained permanently as they are integral to the Service's shared data structures.
-    </div>
-  </div>
-</div>
-
-      <div class="section">
-        <div class="section-title">11. EU Users (GDPR)</div>
-        <div class="section-text">
-          If you are located in the European Economic Area (EEA), the United Kingdom, or Switzerland, you have additional rights under the General Data Protection Regulation (GDPR):
-          <br><br>
-          <strong>Legal Basis for Processing:</strong> We process your data based on: contractual necessity (to provide the Service and fulfill purchases), legitimate interests (to operate, secure, and improve the Service), and your consent (where applicable, such as accepting cookies).
-          <br><br>
-          <strong>Additional Rights:</strong> In addition to the rights listed in Section 10, you may have the right to restrict processing of your data, object to processing based on legitimate interests, withdraw consent at any time where processing is based on consent, and lodge a complaint with your local data protection authority.
-          <br><br>
-          <strong>Data Transfers:</strong> Your data may be transferred to and stored on servers located outside the EEA. By using the Service, you consent to this transfer. We take reasonable steps to ensure your data is treated securely and in accordance with this policy.
-          <br><br>
-          To exercise your GDPR rights, contact us at treeffiency@gmail.com.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">12. California Users (CCPA)</div>
-        <div class="section-text">
-          If you are a California resident, you have rights under the California Consumer Privacy Act (CCPA):
-          <br><br>
-          <strong>Right to Know:</strong> You may request what personal information we collect, use, and disclose.
-          <br><br>
-          <strong>Right to Delete:</strong> You may request deletion of your personal information, subject to certain exceptions.
-          <br><br>
-          <strong>Right to Non-Discrimination:</strong> We will not discriminate against you for exercising your CCPA rights.
-          <br><br>
-          <strong>No Sale of Personal Information:</strong> We do not sell your personal information to third parties as defined under the CCPA.
-          <br><br>
-          To submit a CCPA request, contact us at treeffiency@gmail.com.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">13. Children's Privacy</div>
-        <div class="section-text">
-          The Service is not directed to children under 18. We do not knowingly collect personal information from anyone under 18. If we become aware that we have collected data from a minor, we will take steps to delete it promptly. If you believe a minor has provided us with personal data, please contact us at treeffiency@gmail.com.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">14. Changes to This Policy</div>
-        <div class="section-text">
-          We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated "Last Updated" date. Continued use of the Service after changes means you accept the updated policy.
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">15. Contact</div>
-        <div class="section-text">
-          If you have questions about this Privacy Policy or wish to exercise your rights, contact us:
-          <br><br>
-          <strong>Tree</strong><br>
-          Email: treeffiency@gmail.com<br>
-          Website: tree.tabors.site
-        </div>
-      </div>
-
-      <div class="back-links">
-        <a class="back-link" href="/terms">
-          Terms of Service
-        </a>
-        <a class="back-link" target="_top" href="/">
-          ← Back to tree.tabors.site
-        </a>
-      </div>
-
-    </div>
-  </div>
-</body>
-</html>
-    `);
-  } catch (err) {
-    console.error("privacy page error:", err);
-    res.status(500).send("Server error");
-  }
-});
 
 export default router;

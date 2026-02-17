@@ -49,7 +49,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
     const result = await createUnderstandingRun(nodeId, userId, perspective);
     if ("html" in req.query) {
       return res.redirect(
-        `/api/root/${nodeId}/understandings/run/${
+        `/api/v1/root/${nodeId}/understandings/run/${
           result.understandingRunId
         }?token=${req.query.token ?? ""}&html`,
       );
@@ -216,10 +216,10 @@ router.get(
 
             <div class="pane-body" id="body-${node._id}">
               <div class="pane-detail-grid">
-                <a href="/api/${node.realNodeId}${qs}" class="pane-id-link" onclick="event.stopPropagation();">
+                <a href="/api/v1/node/${node.realNodeId}${qs}" class="pane-id-link" onclick="event.stopPropagation();">
                   📄 View Node
                 </a>
-                <a href="/api/root/${run.rootNodeId}/understandings/${node._id}${qs}" class="pane-id-link" onclick="event.stopPropagation();">
+                <a href="/api/v1/root/${run.rootNodeId}/understandings/${node._id}${qs}" class="pane-id-link" onclick="event.stopPropagation();">
                   🧠 Understanding
                 </a>
               </div>
@@ -795,8 +795,8 @@ router.get(
   <div class="container">
 
     <div class="back-nav">
-      <a href="/api/root/${run.rootNodeId}${qs}" class="back-link">← Back to Tree</a>
-      <a href="/api/root/${run.rootNodeId}/understandings${qs}" class="back-link">🧠 All Runs</a>
+      <a href="/api/v1/root/${run.rootNodeId}${qs}" class="back-link">← Back to Tree</a>
+      <a href="/api/v1/root/${run.rootNodeId}/understandings${qs}" class="back-link">🧠 All Runs</a>
     </div>
 
     <!-- Header -->
@@ -986,9 +986,9 @@ router.get(
       const qs = buildQueryString(req);
       const hasEncodings = encodingHistory.length > 0;
 
-      const backTreeUrl = `/api/root/${nodeId}${qs}`;
-      const backUnderstandingsUrl = `/api/root/${nodeId}/understandings${qs}`;
-      const realNodeUrl = `/api/${data.realNode.id}${qs}`;
+      const backTreeUrl = `/api/v1/root/${nodeId}${qs}`;
+      const backUnderstandingsUrl = `/api/v1/root/${nodeId}/understandings${qs}`;
+      const realNodeUrl = `/api/v1/node/${data.realNode.id}${qs}`;
 
       return res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -1606,7 +1606,7 @@ router.get(
         <div class="encoding-list">
           ${encodingHistory
             .map((e, i) => {
-              const runUrl = `/api/root/${nodeId}/understandings/run/${e.runId}${qs}`;
+              const runUrl = `/api/v1/root/${nodeId}/understandings/run/${e.runId}${qs}`;
               const runIdClean = e.runId.replace(/-/g, "");
               return `
             <div class="enc-card ${e.isCurrentRun ? "current" : ""}" style="animation: fadeInUp 0.4s ease-out both; animation-delay: ${0.25 + i * 0.06}s;">
@@ -1729,7 +1729,7 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
     const runCards = data.understandings
       .map(
         (r, i) => `
-        <a href="/api/root/${nodeId}/understandings/run/${r._id}${queryString}" 
+        <a href="/api/v1/root/${nodeId}/understandings/run/${r._id}${queryString}" 
            class="run-card" 
            style="animation-delay: ${0.15 + i * 0.06}s;">
           <div class="run-card-header">
@@ -2136,7 +2136,7 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
   <div class="container">
 
     <div class="back-nav">
-      <a href="/api/root/${nodeId}${queryString}" class="back-link">← Back to Tree</a>
+      <a href="/api/v1/root/${nodeId}${queryString}" class="back-link">← Back to Tree</a>
     </div>
 
     <!-- Header -->
@@ -2166,7 +2166,7 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
     <!-- Create -->
     <div class="glass-card" style="animation-delay: 0.2s;">
       <h2>New Understanding</h2>
-      <form method="POST" action="/api/root/${nodeId}/understandings${queryString}" class="create-form">
+      <form method="POST" action="/api/v1/root/${nodeId}/understandings${queryString}" class="create-form">
         <input
           type="text"
           name="perspective"
@@ -2317,8 +2317,8 @@ router.get(
       /* =========================
          HTML Rendering
          ========================= */
-      const backTreeUrl = `/api/root/${nodeId}${qs}`;
-      const backRunUrl = `/api/root/${nodeId}/understandings/run/${runId}${qs}`;
+      const backTreeUrl = `/api/v1/root/${nodeId}${qs}`;
+      const backRunUrl = `/api/v1/root/${nodeId}/understandings/run/${runId}${qs}`;
 
       // Build the inputs section based on leaf vs merge
       let inputsHtml = "";
@@ -2375,7 +2375,7 @@ router.get(
                       <div class="empty-state" style="padding: 16px;">No encoding yet</div>
                     `
                     }
-                    <a href="/api/root/${nodeId}/understandings/run/${runId}/${child.understandingNodeId}${qs}" class="child-detail-link" onclick="event.stopPropagation();">
+                    <a href="/api/v1/root/${nodeId}/understandings/run/${runId}/${child.understandingNodeId}${qs}" class="child-detail-link" onclick="event.stopPropagation();">
                       View Details →
                     </a>
                   </div>

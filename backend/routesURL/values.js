@@ -44,7 +44,7 @@ function formatAutoValue(key, value) {
 }
 
 // SET VALUE
-router.post("/:nodeId/:version/value", authenticate, async (req, res) => {
+router.post("/node/:nodeId/:version/value", authenticate, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const { key, value } = req.body;
@@ -59,7 +59,7 @@ router.post("/:nodeId/:version/value", authenticate, async (req, res) => {
 
     if ("html" in req.query) {
       return res.redirect(
-        `/api/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`,
+        `/api/v1/node/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -70,7 +70,7 @@ router.post("/:nodeId/:version/value", authenticate, async (req, res) => {
 });
 
 // SET GOAL
-router.post("/:nodeId/:version/goal", authenticate, async (req, res) => {
+router.post("/node/:nodeId/:version/goal", authenticate, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const { key, goal } = req.body;
@@ -85,7 +85,7 @@ router.post("/:nodeId/:version/goal", authenticate, async (req, res) => {
 
     if ("html" in req.query) {
       return res.redirect(
-        `/api/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`,
+        `/api/v1/node/${nodeId}/${version}/values?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -95,7 +95,7 @@ router.post("/:nodeId/:version/goal", authenticate, async (req, res) => {
   }
 });
 
-router.get("/:nodeId/:version/values", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/values", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
 
@@ -800,14 +800,14 @@ html, body {
     <div class="container">
       <!-- Back Navigation -->
       <div class="back-nav">
-        <a href="/api/root/${nodeId}${queryString}" class="back-link">
+        <a href="/api/v1/root/${nodeId}${queryString}" class="back-link">
           ← Back to Tree
         </a>
-        <a href="/api/${nodeId}/${nodeVersion}${queryString}" class="back-link">
+        <a href="/api/v1/node/${nodeId}/${nodeVersion}${queryString}" class="back-link">
           Back to Version
         </a>
         <a
-          href="/api/${nodeId}/${parsedVersion}/values/solana${queryString}"
+          href="/api/v1/node/${nodeId}/${parsedVersion}/values/solana${queryString}"
           class="back-link"
         >
           Solana Wallet
@@ -817,7 +817,7 @@ html, body {
       <!-- Header -->
       <div class="header">
         <h1>
-          <a href="/api/${nodeId}/${nodeVersion}${queryString}">
+          <a href="/api/v1/node/${nodeId}/${nodeVersion}${queryString}">
             ${nodeName}
           </a>
         </h1>
@@ -865,7 +865,7 @@ html, body {
               : `
                 <form
                   method="POST"
-                  action="/api/${nodeId}/${parsedVersion}/value?token=${
+                  action="/api/v1/node/${nodeId}/${parsedVersion}/value?token=${
                     req.query.token ?? ""
                   }&html"
                   class="value-form"
@@ -889,7 +889,7 @@ html, body {
         <td>
           <form
             method="POST"
-            action="/api/${nodeId}/${parsedVersion}/goal?token=${
+            action="/api/v1/node/${nodeId}/${parsedVersion}/goal?token=${
               req.query.token ?? ""
             }&html"
             class="value-form"
@@ -924,7 +924,7 @@ html, body {
               <td colspan="3">
                 <form
                   method="POST"
-                  action="/api/${nodeId}/${parsedVersion}/value?token=${
+                  action="/api/v1/node/${nodeId}/${parsedVersion}/value?token=${
                     req.query.token ?? ""
                   }&html"
                   class="value-form"
@@ -1044,13 +1044,13 @@ html, body {
   </html>
   `);
   } catch (err) {
-    console.error("Error in /:nodeId/:version/values:", err);
+    console.error("Error in /node/:nodeId/:version/values:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 router.get(
-  "/:nodeId/:version/values/solana",
+  "/node/:nodeId/:version/values/solana",
   authenticate,
   async (req, res) => {
     try {
@@ -1412,8 +1412,8 @@ html, body {
 <body>
   <div class="container">
     <div class="back-nav">
-      <a href="/api/root/${nodeId}${queryString}" class="back-link">← Back to Tree</a>
-      <a href="/api/${nodeId}/${parsedVersion}/values${queryString}" class="back-link">Back to Values</a>
+      <a href="/api/v1/root/${nodeId}${queryString}" class="back-link">← Back to Tree</a>
+      <a href="/api/v1/node/${nodeId}/${parsedVersion}/values${queryString}" class="back-link">Back to Values</a>
     </div>
 
     <div class="header">
@@ -1424,7 +1424,7 @@ html, body {
     <div class="empty-state">
       <div class="empty-state-icon">👛</div>
       <div class="empty-state-text">No wallet exists for this version</div>
-      <form method="POST" action="/api/${nodeId}/${parsedVersion}/values/solana?token=${
+      <form method="POST" action="/api/v1/node/${nodeId}/${parsedVersion}/values/solana?token=${
         req.query.token ?? ""
       }&html">
         <button type="submit" class="create-button">Create Wallet</button>
@@ -2057,8 +2057,8 @@ ${
 }
 
     <div class="back-nav">
-      <a href="/api/root/${nodeId}${queryString}" class="back-link">← Back to Tree</a>
-      <a href="/api/${nodeId}/${parsedVersion}/values${queryString}" class="back-link">Back to Values</a>
+      <a href="/api/v1/root/${nodeId}${queryString}" class="back-link">← Back to Tree</a>
+      <a href="/api/v1/node/${nodeId}/${parsedVersion}/values${queryString}" class="back-link">Back to Values</a>
     </div>
 
     <div class="header">
@@ -2133,7 +2133,7 @@ ${
     <!-- Send SOL -->
     <div class="card">
       <h3>💸 Send SOL</h3>
-      <form method="POST" action="/api/${nodeId}/${parsedVersion}/values/solana/send?token=${
+      <form method="POST" action="/api/v1/node/${nodeId}/${parsedVersion}/values/solana/send?token=${
         req.query.token ?? ""
       }&html">
         <div class="form-group">
@@ -2150,7 +2150,7 @@ ${
     <!-- Swap -->
     <div class="card">
       <h3>🔄 Swap Tokens</h3>
-      <form method="POST" action="/api/${nodeId}/${parsedVersion}/values/solana/transaction?token=${
+      <form method="POST" action="/api/v1/node/${nodeId}/${parsedVersion}/values/solana/transaction?token=${
         req.query.token ?? ""
       }&html">
         <div class="swap-container">
@@ -2234,14 +2234,14 @@ ${
 </html>
 `);
     } catch (err) {
-      console.error("Error in /:nodeId/:version/values/solana:", err);
+      console.error("Error in /node/:nodeId/:version/values/solana:", err);
       res.status(500).json({ error: err.message });
     }
   },
 );
 
 router.post(
-  "/:nodeId/:version/values/solana",
+  "/node/:nodeId/:version/values/solana",
   authenticate,
 
   async (req, res) => {
@@ -2257,7 +2257,7 @@ router.post(
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/${nodeId}/${parsedVersion}/values/solana?token=${
+          `/api/v1/node/${nodeId}/${parsedVersion}/values/solana?token=${
             req.query.token ?? ""
           }&html`,
         );
@@ -2280,7 +2280,7 @@ function isLikelyNodeId(value) {
   return typeof value === "string" && value.length === 36;
 }
 router.post(
-  "/:nodeId/:version/values/solana/send",
+  "/node/:nodeId/:version/values/solana/send",
   authenticate,
 
   async (req, res) => {
@@ -2330,7 +2330,7 @@ router.post(
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/${nodeId}/${parsedVersion}/values/solana?token=${
+          `/api/v1/node/${nodeId}/${parsedVersion}/values/solana?token=${
             req.query.token ?? ""
           }&html`,
         );
@@ -2349,7 +2349,7 @@ router.post(
 );
 
 router.post(
-  "/:nodeId/:version/values/solana/transaction",
+  "/node/:nodeId/:version/values/solana/transaction",
   authenticate,
 
   async (req, res) => {
@@ -2395,7 +2395,7 @@ router.post(
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/${nodeId}/${parsedVersion}/values/solana?` +
+          `/api/v1/node/${nodeId}/${parsedVersion}/values/solana?` +
             `success=1&sig=${result.signature}&token=${
               req.query.token ?? ""
             }&html`,
@@ -2410,7 +2410,7 @@ router.post(
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/${nodeId}/${parsedVersion}/values/solana?` +
+          `/api/v1/node/${nodeId}/${parsedVersion}/values/solana?` +
             `error=${encodeURIComponent(err.message)}&token=${
               req.query.token ?? ""
             }&html`,

@@ -107,7 +107,7 @@ export function buildPromptForMode(modeKey, ctx) {
 /**
  * Determine big mode from a URL path.
  *   /user/:userId  → HOME
- *   /:nodeId       → TREE
+ *   /node/:nodeId       → TREE
  *   /root/:nodeId  → TREE
  */
 
@@ -115,20 +115,20 @@ const NODE_ID_PATTERN =
   "(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})";
 // Matches both MongoDB ObjectIds (24 hex) and UUIDs (8-4-4-4-12 hex with dashes)
 const NODE_PREFIX_PATTERN = new RegExp(
-  `^(/api)?/(${NODE_ID_PATTERN})(/|$)`,
+  `^(/api/v1)?/node/(${NODE_ID_PATTERN})(/|$)`,
   "i",
 );
 
 export function bigModeFromUrl(urlPath) {
   if (!urlPath) return BIG_MODES.HOME;
   const clean = urlPath.split("?")[0]; // strip query
-  // Match with or without /api prefix
+  // Match with or without /api/v1 prefix
   if (NODE_PREFIX_PATTERN.test(clean)) {
     return BIG_MODES.TREE;
   }
-  if (clean.match(/^(\/api)?\/user\//)) return BIG_MODES.HOME;
-  if (clean.match(/^(\/api)?\/root\//)) return BIG_MODES.TREE;
-  // bare /:nodeId or /api/:nodeId
+if (clean.match(/^(\/api\/v1)?\/user\//)) return BIG_MODES.HOME;
+  if (clean.match(/^(\/api\/v1)?\/root\//)) return BIG_MODES.TREE;
+  // bare /:nodeId or /api/v1/:nodeId
 
   return BIG_MODES.HOME;
 }

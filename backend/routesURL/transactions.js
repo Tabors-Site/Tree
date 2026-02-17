@@ -108,7 +108,7 @@ function validateTransactionSemantics(normalized) {
 /**
  * LIST TRANSACTIONS FOR NODE + VERSION
  */
-router.get("/:nodeId/:version/transactions", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/transactions", urlAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const parsedVersion = Number(version);
@@ -183,7 +183,7 @@ router.get("/:nodeId/:version/transactions", urlAuth, async (req, res) => {
 <ul class="transactions-list">
 ${sortedTransactions
   .map((tx) => {
-    const txHref = `/api/${nodeId}/${parsedVersion}/transactions/${tx._id}${queryString}`;
+    const txHref = `/api/v1/node/${nodeId}/${parsedVersion}/transactions/${tx._id}${queryString}`;
 
     return `
 <li>
@@ -212,7 +212,7 @@ ${sortedTransactions
         <div class="party">
           <div class="party-label">You</div>
           <a
-            href="/api/${nodeId}/${tx.versionSelf}${queryString}"
+            href="/api/v1/node/${nodeId}/${tx.versionSelf}${queryString}"
             class="party-link"
             onclick="event.stopPropagation()"
           >
@@ -230,7 +230,7 @@ ${sortedTransactions
             tx.counterparty
               ? `
           <a
-            href="/api/${tx.counterparty._id}/${
+            href="/api/v1/node/${tx.counterparty._id}/${
                   tx.versionCounterparty
                 }${queryString}"
             class="party-link"
@@ -265,7 +265,7 @@ ${sortedTransactions
       <div class="transaction-actions" onclick="event.stopPropagation()">
         <form
           method="POST"
-          action="/api/${nodeId}/${parsedVersion}/transactions/${tx._id}/approve${queryString}"
+          action="/api/v1/node/${nodeId}/${parsedVersion}/transactions/${tx._id}/approve${queryString}"
           style="display:inline;"
         >
           <button type="submit" class="btn-approve">✓ Approve</button>
@@ -273,7 +273,7 @@ ${sortedTransactions
 
         <form
           method="POST"
-          action="/api/${nodeId}/${parsedVersion}/transactions/${tx._id}/deny${queryString}"
+          action="/api/v1/node/${nodeId}/${parsedVersion}/transactions/${tx._id}/deny${queryString}"
           style="display:inline;"
         >
           <button type="submit" class="btn-deny">✗ Deny</button>
@@ -864,17 +864,17 @@ ${sortedTransactions
     <div class="container">
       <!-- Header -->
       <div class="back-nav">
-  <a href="/api/root/${nodeId}${queryString}" class="back-link">
+  <a href="/api/v1/root/${nodeId}${queryString}" class="back-link">
     ← Back to Tree
   </a>
-  <a href="/api/${nodeId}/${parsedVersion}${queryString}" class="back-link">
+  <a href="/api/v1/node/${nodeId}/${parsedVersion}${queryString}" class="back-link">
     Back to Version
   </a>
 </div>
 
    <div class="header">
   <h1>
-    <a href="/api/${nodeId}${queryString}">
+    <a href="/api/v1/node/${nodeId}${queryString}">
       ${nodeName} v${parsedVersion}
     </a>
   </h1>
@@ -885,7 +885,7 @@ ${sortedTransactions
       <div class="create-form-container">
             <div class="section-title">Create Transaction</div>
 
-        <form method="POST" action="/api/${nodeId}/${parsedVersion}/transactions${queryString}">
+        <form method="POST" action="/api/v1/node/${nodeId}/${parsedVersion}/transactions${queryString}">
           <input type="hidden" name="sideA.kind" value="NODE" />
           <input type="hidden" name="sideA.nodeId" value="${nodeId}" />
           <input type="hidden" name="versionAIndex" value="${parsedVersion}" />
@@ -978,7 +978,7 @@ ${sortedTransactions
  * CREATE TRANSACTION
  */
 router.post(
-  "/:nodeId/:version/transactions",
+  "/node/:nodeId/:version/transactions",
   authenticate,
 
   async (req, res) => {
@@ -995,7 +995,7 @@ router.post(
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/${req.params.nodeId}/${req.params.version}/transactions${
+          `/api/v1/node/${req.params.nodeId}/${req.params.version}/transactions${
             req.query.token ? `?token=${req.query.token}&html` : "?html"
           }`
         );
@@ -1012,7 +1012,7 @@ router.post(
  * APPROVE TRANSACTION
  */
 router.post(
-  "/:nodeId/:version/transactions/:transactionId/approve",
+  "/node/:nodeId/:version/transactions/:transactionId/approve",
   authenticate,
 
   async (req, res) => {
@@ -1024,7 +1024,7 @@ router.post(
         if (req.query.token) qs.push(`token=${req.query.token}`);
         qs.push("html");
         return res.redirect(
-          `/api/${req.params.nodeId}/${
+          `/api/v1/node/${req.params.nodeId}/${
             req.params.version
           }/transactions?${qs.join("&")}`
         );
@@ -1037,7 +1037,7 @@ router.post(
   }
 );
 router.post(
-  "/:nodeId/:version/transactions/:transactionId/deny",
+  "/node/:nodeId/:version/transactions/:transactionId/deny",
   authenticate,
 
   async (req, res) => {
@@ -1050,7 +1050,7 @@ router.post(
         qs.push("html");
 
         return res.redirect(
-          `/api/${req.params.nodeId}/${
+          `/api/v1/node/${req.params.nodeId}/${
             req.params.version
           }/transactions?${qs.join("&")}`
         );
@@ -1110,7 +1110,7 @@ function normalizeTransactionBody(body) {
  * GET /transactions/:transactionId
  */
 router.get(
-  "/:nodeId/:version/transactions/:transactionId",
+  "/node/:nodeId/:version/transactions/:transactionId",
   urlAuth,
   async (req, res) => {
     try {
@@ -1191,7 +1191,7 @@ router.get(
       <span class="approver-icon">
         ${hasApproved ? "✓" : hasDenied ? "✗" : "○"}
       </span>
-      <a href="/api/user/${userId}${queryString}" class="approver-name">
+      <a href="/api/v1/user/${userId}${queryString}" class="approver-name">
         @${username}
       </a>
     </div>
@@ -1272,7 +1272,7 @@ router.get(
           <div class="timeline-icon">${icon}</div>
           <div class="timeline-content">
             <div class="timeline-header">
-              <a href="/api/user/${
+              <a href="/api/v1/user/${
                 contrib.userId._id
               }${queryString}" class="timeline-user">
                 @${username}
@@ -1837,7 +1837,7 @@ router.get(
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/${nodeId}/${version}/transactions${queryString}" class="back-link">
+      <a href="/api/v1/node/${nodeId}/${version}/transactions${queryString}" class="back-link">
         ← Back to Transactions
       </a>
     </div>

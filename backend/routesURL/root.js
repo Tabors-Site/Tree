@@ -110,12 +110,12 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
             <div class="node-bubble" style="border-color: ${color}; box-shadow: 0 0 20px ${color}40;" data-node-id="${node._id}" data-is-current="${node.isCurrent ? "true" : "false"}">
               ${
                 node.isCurrent
-                  ? `<a href="/api/${node._id}${queryString}" class="node-link current">
+                  ? `<a href="/api/v1/node/${node._id}${queryString}" class="node-link current">
                       <span class="node-icon">●</span>
                       <span class="node-name">${node.name}</span>
                       <span class="node-badge">YOU ARE HERE</span>
                     </a>`
-                  : `<a href="/api/root/${node._id}${queryString}" class="node-link">
+                  : `<a href="/api/v1/root/${node._id}${queryString}" class="node-link">
                       <span class="node-icon">○</span>
                       <span class="node-name">${node.name}</span>
                       <span class="depth-badge">Level ${idx + 1}</span>
@@ -147,7 +147,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     >
 
     
-      <a href="/api/${node._id}/${node.prestige}${queryString}">
+      <a href="/api/v1/node/${node._id}/${node.prestige}${queryString}">
         ${node.name}
       </a>
   `;
@@ -173,7 +173,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 
 <form
   method="POST"
-  action="/api/root/${nodeId}/invite?token=${req.query.token ?? ""}&html"
+  action="/api/v1/root/${nodeId}/invite?token=${req.query.token ?? ""}&html"
   style="display:flex; gap:8px; max-width:420px; margin-top:8px;"
 >
   <input
@@ -211,7 +211,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 
 <form
   method="POST"
-  action="/api/root/${nodeId}/transaction-policy?token=${
+  action="/api/v1/root/${nodeId}/transaction-policy?token=${
     req.query.token ?? ""
   }&html"
   style="max-width: 420px;"
@@ -261,7 +261,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     const ownerHtml = rootMeta?.rootOwner
       ? `
    
-      Root Owner: <a href="/api/user/${rootMeta.rootOwner._id}${queryString}">
+      Root Owner: <a href="/api/v1/user/${rootMeta.rootOwner._id}${queryString}">
         ${rootMeta.rootOwner.username}
       </a>
 
@@ -279,7 +279,7 @@ ${rootMeta.contributors
 
     return `
 <li>
-  <a href="/api/user/${u._id}${queryString}">
+  <a href="/api/v1/user/${u._id}${queryString}">
     ${u.username}
   </a>
 
@@ -289,7 +289,7 @@ ${rootMeta.contributors
         ? `
       <form
         method="POST"
-        action="/api/root/${nodeId}/transfer-owner?token=${
+        action="/api/v1/root/${nodeId}/transfer-owner?token=${
           req.query.token ?? ""
         }&html"
         onsubmit="return confirm('Transfer ownership to ${u.username}?')"
@@ -306,7 +306,7 @@ ${rootMeta.contributors
         ? `
       <form
         method="POST"
-        action="/api/root/${nodeId}/remove-user?token=${
+        action="/api/v1/root/${nodeId}/remove-user?token=${
           req.query.token ?? ""
         }&html"
         onsubmit="return confirm('${
@@ -335,7 +335,7 @@ ${rootMeta.contributors
       ? `
 <form
   method="POST"
-  action="/api/root/${nodeId}/retire?token=${req.query.token ?? ""}&html"
+  action="/api/v1/root/${nodeId}/retire?token=${req.query.token ?? ""}&html"
   onsubmit="return confirm('This will retire the root. Continue?')"
   style="margin-top:12px;"
 >
@@ -1419,22 +1419,22 @@ transition:
         ? `
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/user/${currentUserId}${queryString}" class="back-link">
+      <a href="/api/v1/user/${currentUserId}${queryString}" class="back-link">
         ← Back to Profile
       </a>
-        <a href="/api/root/${allData._id}/calendar${queryString}" class="back-link">
+        <a href="/api/v1/root/${allData._id}/calendar${queryString}" class="back-link">
         Calendar
       </a>
       </a>
-        <a href="/api/root/${allData._id}/book${queryString}" class="back-link">
+        <a href="/api/v1/root/${allData._id}/book${queryString}" class="back-link">
         Book
       </a>
        </a>
-        <a href="/api/root/${allData._id}/values${queryString}" class="back-link">
+        <a href="/api/v1/root/${allData._id}/values${queryString}" class="back-link">
         Global Values
       </a>
       </a>
-        <a href="/api/root/${allData._id}/understandings${queryString}" class="back-link">
+        <a href="/api/v1/root/${allData._id}/understandings${queryString}" class="back-link">
         Understandings
       </a>
     </div>
@@ -1463,7 +1463,7 @@ transition:
         <div class="owner-info">${ownerHtml}</div>
         
         <h1>
-          <a href="/api/${allData._id}/${allData.prestige}${queryString}">
+          <a href="/api/v1/node/${allData._id}/${allData.prestige}${queryString}">
             ${allData.name}
           </a>
         </h1>
@@ -1514,7 +1514,7 @@ ${
   <h2>Leave Tree</h2>
   <form
     method="POST"
-    action="/api/root/${nodeId}/remove-user?token=${req.query.token ?? ""}&html"
+    action="/api/v1/root/${nodeId}/remove-user?token=${req.query.token ?? ""}&html"
     onsubmit="return confirm('Are you sure you want to leave this tree?')"
     style="margin-top:12px;"
   >
@@ -1715,7 +1715,7 @@ router.post("/root/:rootId/invite", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`,
+        `/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -1752,7 +1752,7 @@ router.post("/root/:rootId/transfer-owner", authenticate, async (req, res) => {
     // HTML redirect support
     if ("html" in req.query) {
       return res.redirect(
-        `/api/root/${rootId}?token=${req.query.token ?? ""}&html`,
+        `/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -1788,7 +1788,7 @@ router.post("/root/:rootId/remove-user", authenticate, async (req, res) => {
 
     if ("html" in req.query) {
       return res.redirect(
-        `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`,
+        `/api/v1/user/${req.userId}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -1816,7 +1816,7 @@ router.post("/root/:rootId/retire", authenticate, async (req, res) => {
 
     if ("html" in req.query) {
       return res.redirect(
-        `/api/user/${req.userId}?token=${req.query.token ?? ""}&html`,
+        `/api/v1/user/${req.userId}?token=${req.query.token ?? ""}&html`,
       );
     }
 
@@ -2414,7 +2414,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     <!-- Header -->
     <div class="glass-card header">
       <div class="header-top">
-        <a href="/api/root/${rootId}${queryString}" class="back-link" id="backLink">
+        <a href="/api/v1/root/${rootId}${queryString}" class="back-link" id="backLink">
           ← Back to Tree
         </a>
 
@@ -2497,7 +2497,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
           \`;
 
           (byHour[h] || []).forEach(item => {
-            html += \`<a class="node-item" href="/api/\${item.nodeId}/\${item.versionIndex}${queryString}">\${item.name}</a>\`;
+            html += \`<a class="node-item" href="/api/v1/node/\${item.nodeId}/\${item.versionIndex}${queryString}">\${item.name}</a>\`;
           });
 
           html += '</div></div>';
@@ -2557,7 +2557,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
 
             if (items.length > 0) {
               items.slice(0, 3).forEach(item => {
-                html += \`<a class="node-item" href="/api/\${item.nodeId}/\${item.versionIndex}${queryString}" onclick="event.stopPropagation()">\${item.name}</a>\`;
+                html += \`<a class="node-item" href="/api/v1/node/\${item.nodeId}/\${item.versionIndex}${queryString}" onclick="event.stopPropagation()">\${item.name}</a>\`;
               });
 
               if (items.length > 3) {
@@ -2595,7 +2595,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
           \`;
 
           items.slice(0, 3).forEach(item => {
-            html += \`<a class="node-item" href="/api/\${item.nodeId}/\${item.versionIndex}${queryString}" onclick="event.stopPropagation()">\${item.name}</a>\`;
+            html += \`<a class="node-item" href="/api/v1/node/\${item.nodeId}/\${item.versionIndex}${queryString}" onclick="event.stopPropagation()">\${item.name}</a>\`;
           });
 
           if (items.length > 3) {
@@ -2696,7 +2696,7 @@ router.post(
       // HTML fallback
       if ("html" in req.query) {
         return res.redirect(
-          `/api/root/${nodeId}?token=${req.query.token ?? ""}&html`,
+          `/api/v1/root/${nodeId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -2803,7 +2803,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
                 : '<span class="tree-spacer"></span>'
             }
             <div class="tree-node-info">
-              <a href="/api/${
+              <a href="/api/v1/node/${
                 node.nodeId
               }${queryString}" class="tree-node-name" title="${node.nodeName}">
                 ${node.nodeName}
@@ -3478,7 +3478,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/root/${nodeId}${queryString}" class="back-link">
+      <a href="/api/v1/root/${nodeId}${queryString}" class="back-link">
         ← Back to Tree
       </a>
     </div>

@@ -2795,13 +2795,13 @@ function mapToolCallToApiUrl(toolName, args) {
 
     case "tree-start":
     case "get-tree":
-      return withToken(`/api/root/${resolvedRootId}?html`);
+      return withToken(`/api/v1/root/${resolvedRootId}?html`);
 
     case "tree-actions-menu":
-      return withToken(`/api/root/${resolvedRootId}?html`);
+      return withToken(`/api/v1/root/${resolvedRootId}?html`);
 
     case "tree-structure-orchestrator":
-      return withToken(`/api/root/${resolvedRootId}?html`);
+      return withToken(`/api/v1/root/${resolvedRootId}?html`);
 
     /* ---------------- NODE ---------------- */
 
@@ -2809,16 +2809,16 @@ function mapToolCallToApiUrl(toolName, args) {
     case "be-mode-orchestrator":
     case "scripting-orchestrator":
     case "node-script-runtime-environment":
-      return withToken(`/api/${nodeId}?html`);
+      return withToken(`/api/v1/node/${nodeId}?html`);
 
     /* ---------------- UNDERSTANDINGS ---------------- */
 
     case "understanding-create":
       if (!resolvedRootId) return null;
-      return withToken(`/api/root/${resolvedRootId}/understandings?html`);
+      return withToken(`/api/v1/root/${resolvedRootId}/understandings?html`);
     case "understanding-list":
       if (!rootNodeId) return null;
-      return withToken(`/api/root/${rootNodeId}/understandings?html`);
+      return withToken(`/api/v1/root/${rootNodeId}/understandings?html`);
 
     case "understanding-process": {
       if (!rootNodeId || !understandingRunId) return null;
@@ -2828,12 +2828,12 @@ function mapToolCallToApiUrl(toolName, args) {
 
       if (resolvedUnderstandingNodeId != null) {
         return withToken(
-          `/api/root/${rootNodeId}/understandings/run/${understandingRunId}/${resolvedUnderstandingNodeId}?html`,
+          `/api/v1/root/${rootNodeId}/understandings/run/${understandingRunId}/${resolvedUnderstandingNodeId}?html`,
         );
       }
 
       return withToken(
-        `/api/root/${rootNodeId}/understandings/run/${understandingRunId}?html`,
+        `/api/v1/root/${rootNodeId}/understandings/run/${understandingRunId}?html`,
       );
     }
 
@@ -2844,18 +2844,18 @@ function mapToolCallToApiUrl(toolName, args) {
     case "edit-node-or-branch-status":
     case "edit-node-version-schedule":
     case "add-node-prestige":
-      return withToken(`/api/${nodeId}/${prestige}?html`);
+      return withToken(`/api/v1/node/${nodeId}/${prestige}?html`);
 
     case "create-new-node":
       if (!nodeId) return null;
-      return withToken(`/api/${nodeId}?html`);
+      return withToken(`/api/v1/node/${nodeId}?html`);
 
     case "create-new-node-branch":
       if (!parentId) return null;
-      return withToken(`/api/root/${parentId}?html`);
+      return withToken(`/api/v1/root/${parentId}?html`);
     case "get-active-leaf-execution-frontier":
       if (!nodeId || prestige == null) return null;
-      return withToken(`/api/${nodeId}/${prestige}?html`);
+      return withToken(`/api/v1/node/${nodeId}/${prestige}?html`);
 
     /* ---------------- NOTES ---------------- */
 
@@ -2863,49 +2863,49 @@ function mapToolCallToApiUrl(toolName, args) {
     case "create-node-version-note":
     case "create-node-version-image-note":
     case "delete-node-note":
-      return withToken(`/api/${nodeId}/${prestige}/notes?html`);
+      return withToken(`/api/v1/node/${nodeId}/${prestige}/notes?html`);
 
     /* ---------------- CONTRIBUTIONS ---------------- */
 
     case "get-node-contributions":
-      return withToken(`/api/${nodeId}/${version}/contributions?html`);
+      return withToken(`/api/v1/node/${nodeId}/${version}/contributions?html`);
 
     case "get-contributions-by-user":
-      return withToken(`/api/user/${userId}/contributions?html`);
+      return withToken(`/api/v1/user/${userId}/contributions?html`);
 
     /* ---------------- USER ---------------- */
 
     case "get-root-nodes-by-user":
-      return withToken(`/api/user/${userId}?html`);
+      return withToken(`/api/v1/user/${userId}?html`);
 
     case "get-unsearched-notes-by-user":
     case "get-searched-notes-by-user":
-      return withToken(`/api/user/${userId}/notes?html`);
+      return withToken(`/api/v1/user/${userId}/notes?html`);
 
     case "get-all-tags-for-user":
-      return withToken(`/api/user/${userId}/tags?html`);
+      return withToken(`/api/v1/user/${userId}/tags?html`);
 
     /* ---------------- RAW IDEAS ---------------- */
 
     case "get-raw-ideas-by-user":
     case "raw-idea-filter-orchestrator":
-      return withToken(`/api/user/${userId}/raw-ideas?html`);
+      return withToken(`/api/v1/user/${userId}/raw-ideas?html`);
 
     /* ---------------- SCRIPTS ---------------- */
 
     case "update-node-script":
     case "execute-node-script":
     case "edit-node-name":
-      return withToken(`/api/${nodeId}?html`);
+      return withToken(`/api/v1/node/${nodeId}?html`);
 
     /* ---------------- BATCH ---------------- */
 
     case "batch-operations":
-      return withToken(`/api/user/${userId}/contributions?html`);
+      return withToken(`/api/v1/user/${userId}/contributions?html`);
 
     /* ---------------- DEFAULT ---------------- */
     case "navigate-tree":
-      return withToken(`/api/root/${nodeId}?html`);
+      return withToken(`/api/v1/root/${nodeId}?html`);
 
     default:
       return null;

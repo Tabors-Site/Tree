@@ -1270,7 +1270,7 @@ router.get("/app", authenticateLite, async (req, res) => {
             <span class="loading-text">Loading...</span>
           </div>
         </div>
-        <iframe id="viewport" src="/api/user/${req.userId}?html&token=${htmlShareToken}&inApp=1" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation"></iframe>
+        <iframe id="viewport" src="/api/v1/user/${req.userId}?html&token=${htmlShareToken}&inApp=1" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation"></iframe>
       </div>
     </div>
   </div>
@@ -1341,7 +1341,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       userId: "${req.userId}",
       username: "${username || req.userId}",
       htmlShareToken: "${htmlShareToken}",
-      homeUrl: "/api/user/${req.userId}?html&token=${htmlShareToken}&inApp=1"
+      homeUrl: "/api/v1/user/${req.userId}?html&token=${htmlShareToken}&inApp=1"
     };
 
     // Elements
@@ -1484,7 +1484,7 @@ router.get("/app", authenticateLite, async (req, res) => {
 
     function getCurrentRootId() {
       const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
-      const rootMatch = currentIframeUrl.match(new RegExp('(?:/api)?/root/(' + ID + ')', 'i'));
+      const rootMatch = currentIframeUrl.match(new RegExp('(?:/api/v1)?/root/(' + ID + ')', 'i'));
       return rootMatch ? rootMatch[1] : null;
     }
 
@@ -1543,10 +1543,10 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     function navigateToRoot(rootId) {
-      const url = '/api/root/' + rootId + '?html&token=' + CONFIG.htmlShareToken + '&inApp=1';
+      const url = '/api/v1/root/' + rootId + '?html&token=' + CONFIG.htmlShareToken + '&inApp=1';
       loadingOverlay.classList.add("visible");
       iframe.src = url;
-      currentIframeUrl = '/api/root/' + rootId;
+      currentIframeUrl = '/api/v1/root/' + rootId;
     }
 
     function closeRecentRoots() {
@@ -1847,8 +1847,8 @@ router.get("/app", authenticateLite, async (req, res) => {
         const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
         let rootId = null;
         let nodeId = null;
-        const rootMatch = path.match(new RegExp('(?:/api)?/root/(' + ID + ')', 'i'));
-        const bareMatch = path.match(new RegExp('(?:/api)?/(' + ID + ')(?:[?/]|$)', 'i'));
+        const rootMatch = path.match(new RegExp('(?:/api/v1)?/root/(' + ID + ')', 'i'));
+        const bareMatch = path.match(new RegExp('(?:/api/v1)?/(' + ID + ')(?:[?/]|$)', 'i'));
         if (rootMatch) rootId = rootMatch[1];
         else if (bareMatch) nodeId = bareMatch[1];
 
