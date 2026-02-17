@@ -83,9 +83,9 @@ const WelcomePage = () => {
         </div>
         <footer className="hero-footer">
           <div className="footer-links">
-            <p className="footer-link">About</p>
+            <a href="/about" className="footer-link">About</a>
             <a href={`/terms`} className="footer-link">Terms</a>
-            <a href={`/privacy-policy`} className="footer-link">Privacy</a>
+            <a href={`/privacy`} className="footer-link">Privacy</a>
           </div>
         </footer>
       </section>

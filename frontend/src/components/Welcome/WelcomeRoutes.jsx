@@ -1,44 +1,46 @@
 import { Routes, Route } from "react-router-dom";
 import WelcomePage from "./WelcomePage.jsx";
 
-import WhySection from "./WhySection.jsx";
-import StructureSection from "./StructureSection.jsx";
-import HowAIFitsInSection from "./HowAIFits.jsx";
-import HowToUseSection from "./HowUseSection.jsx";
-import UsingAllThePiecesSection from "./UsingPiecesSection.jsx";
-import WhatToDoNextSection from "./WhatNextSection.jsx";
-import BeSection from "./BeSection.jsx";
-import ApiAccessSection from "./API.jsx";
+
+import EnergySection from "./About/EnergySection.jsx";
+
+import ApiAccessSection from "./About/API.jsx";
 import MustLogin from "./MustLogin.jsx";
 
+import PrivacySection from "./PrivacySection.jsx";
+import TermsSection from "./TermsSections.jsx";
 
+import AboutHome from "./About/AboutHome.jsx";
+import AboutLayout from "./About/AboutLayout.jsx";
 
 const WelcomeRoutes = () => {
   return (
     <Routes>
 
-      <Route path="/" element={<WelcomePage />}>
-        <Route index element={<WhatToDoNextSection />} />
+      {/* Welcome layout */}
+      <Route element={<WelcomePage />}>
+        <Route path="/"  />
       </Route>
+      <Route path="/privacy" element={<AboutLayout />} >
+        <Route index element={<PrivacySection />} />
+</Route>
+    <Route path="/terms" element={<AboutLayout />} >
+        <Route index element={<TermsSection />} />
+</Route>
 
       <Route path="/must-login" element={<MustLogin />} />
 
-
-
-      <Route path="/welcome" element={<WelcomePage />}>
-        <Route index element={<WhatToDoNextSection />} />
-        <Route path="gettingstarted" element={<WhatToDoNextSection />} />
-        <Route path="why" element={<WhySection />} />
-        <Route path="structure" element={<StructureSection />} />
-        <Route path="ai" element={<HowAIFitsInSection />} />
-        <Route path="workflow" element={<HowToUseSection />} />
-        <Route path="pieces" element={<UsingAllThePiecesSection />} />
-        <Route path="be" element={<BeSection />} />
+      {/* Help layout */}
+      <Route path="/about" element={<AboutLayout />}>
+        <Route index element={<AboutHome />} />
         <Route path="api" element={<ApiAccessSection />} />
+        <Route path="energy" element={<EnergySection />} />
 
       </Route>
+
     </Routes>
   );
 };
+
 
 export default WelcomeRoutes;

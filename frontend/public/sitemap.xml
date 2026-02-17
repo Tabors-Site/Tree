@@ -9,6 +9,27 @@
   </url>
 
   <url>
+    <loc>https://tree.tabors.site/about</loc>
+    <lastmod>2026-02-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://tree.tabors.site/about/api</loc>
+    <lastmod>2026-02-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://tree.tabors.site/about/energy</loc>
+    <lastmod>2026-02-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <url>
     <loc>https://tree.tabors.site/terms</loc>
     <lastmod>2026-02-13</lastmod>
     <changefreq>yearly</changefreq>
@@ -16,7 +37,7 @@
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/privacy-policy</loc>
+    <loc>https://tree.tabors.site/privacy</loc>
     <lastmod>2026-02-13</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>

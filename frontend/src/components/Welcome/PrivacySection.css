@@ -1,0 +1,142 @@
+/* ── PRIVACY DOCS — scoped under .privacy-docs ── */
+
+.privacy-docs {
+  max-width: 700px;
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+  padding: 20px;
+}
+
+.privacy-docs-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(115, 111, 230, 0.28);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 24px;
+  padding: 48px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+  animation: privacyDocsIn 0.6s ease-out;
+}
+
+@keyframes privacyDocsIn {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── HEADER ── */
+.privacy-docs-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.prv-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  display: inline-block;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+}
+.privacy-docs-title {
+  font-size: 32px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.prv-last-updated {
+  font-size: 14px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 500;
+}
+
+/* ── SECTIONS ── */
+.prv-section {
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.2);
+  margin-bottom: 16px;
+}
+
+.prv-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 12px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.prv-section-text {
+  color: rgba(255,255,255,0.9);
+  line-height: 1.7;
+  font-size: 15px;
+}
+.prv-section-text strong {
+  color: white;
+  font-weight: 600;
+}
+
+/* ── LINKS ── */
+.prv-link {
+  color: rgba(255,255,255,0.95);
+  text-decoration: underline;
+}
+.prv-link:hover {
+  color: white;
+}
+
+/* ── HIGHLIGHT BOX ── */
+.prv-highlight {
+  background: rgba(255,255,255,0.15);
+  padding: 14px 18px;
+  border-radius: 12px;
+  border-left: 3px solid rgba(255,255,255,0.5);
+  margin-top: 12px;
+}
+.prv-highlight .prv-section-text {
+  font-size: 14px;
+  color: rgba(255,255,255,0.85);
+}
+
+/* ── BACK LINK ── */
+.prv-back-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}
+.prv-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 980px;
+  transition: all 0.3s;
+  border: 1px solid rgba(255,255,255,0.25);
+}
+.prv-back-link:hover {
+  background: rgba(255,255,255,0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 640px) {
+  .privacy-docs { padding: 16px; }
+  .privacy-docs-card { padding: 32px 24px; }
+  .privacy-docs-title { font-size: 28px; }
+  .prv-icon { font-size: 56px; }
+  .prv-section { padding: 20px 16px; }
+}
