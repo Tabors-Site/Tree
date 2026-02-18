@@ -177,13 +177,18 @@ async function createNote({
   return { message: "Note created successfully", Note: newNote, energyUsed };
 }
 
+// services/editNote.js
+// Updated with line-range editing support
+
 async function editNote({
   noteId,
   content,
   userId,
-  version,
-  isReflection,
+  lineStart = null,
+  lineEnd = null,
   wasAi = false,
+  isReflection = false,
+
 }) {
   if (!noteId || !userId) {
     throw new Error("Missing required fields");
@@ -201,7 +206,43 @@ async function editNote({
   }
 
   const oldContent = note.content || "";
-  const newContent = content ?? "";
+
+  // ── LINE-RANGE EDITING ──────────────────────────
+  let newContent;
+
+  if (lineStart !== null && lineEnd !== null) {
+    // Replace specific line range
+    const lines = oldContent.split("\n");
+
+    // Clamp to valid range
+    const start = Math.max(0, lineStart);
+    const end = Math.min(lines.length, lineEnd);
+
+    if (start > end) {
+      throw new Error(`Invalid line range: ${start}-${end}`);
+    }
+
+    // Split replacement content into lines
+    const replacementLines = (content ?? "").split("\n");
+
+    // Splice: remove lines [start, end), insert replacement
+    lines.splice(start, end - start, ...replacementLines);
+
+    newContent = lines.join("\n");
+  } else if (lineStart !== null && lineEnd === null) {
+    // Insert at a specific line (no lines removed)
+    const lines = oldContent.split("\n");
+    const start = Math.max(0, Math.min(lineStart, lines.length));
+    const replacementLines = (content ?? "").split("\n");
+
+    lines.splice(start, 0, ...replacementLines);
+
+    newContent = lines.join("\n");
+  } else {
+    // Full replacement (default behavior)
+    newContent = content ?? "";
+  }
+
   assertNoteTextWithinLimit(newContent);
 
   if (oldContent === newContent) {
@@ -223,7 +264,7 @@ async function editNote({
     const energyResult = await useEnergy({
       userId,
       action: "note",
-      payload: deltaChars, // same formula: min 1, max 5, 500 chars/energy
+      payload: deltaChars,
     });
     energyUsed = energyResult.energyUsed;
   }
@@ -254,7 +295,6 @@ async function editNote({
   note.content = finalContent;
   note.tagged = taggedUserIds;
   note.isReflection = isReflection === "true" || isReflection === true;
-  note.version = version;
   note.sizeKB = newSizeKB;
 
   await note.save();
@@ -265,7 +305,7 @@ async function editNote({
     nodeId: note.nodeId,
     wasAi,
     action: "note",
-    nodeVersion: version,
+    nodeVersion: note.version,
     noteAction: { action: "edit", noteId: note._id.toString() },
     energyUsed,
   });
