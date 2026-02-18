@@ -22,23 +22,22 @@ export async function connectToMCP(serverUrl, visitorId, jwtToken) {
 
   // Close stale client if token changed
   if (existing) {
-    try { await existing.close(); } catch (_) {}
+    try {
+      await existing.close();
+    } catch (_) {}
     mcpClients.delete(visitorId);
   }
 
   console.log(`🔌 Connecting MCP client for ${visitorId}...`);
 
-const transport = new StreamableHTTPClientTransport(
-  new URL(serverUrl),
-  {
+  const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
     requestInit: {
       headers: {
         "x-internal-token": jwtToken, // ✅ just pass the string
-        "x-internal-request": "mcp",  // ⭐ recommended flag
+        "x-internal-request": "mcp", // ⭐ recommended flag
       },
     },
-  }
-);
+  });
 
   const client = new Client(
     { name: `tree-chat-client-${visitorId}`, version: "1.0.0" },
@@ -48,7 +47,7 @@ const transport = new StreamableHTTPClientTransport(
   await client.connect(transport);
   console.log(`✅ MCP client connected for ${visitorId}`);
 
-    client._jwtToken = jwtToken; // tag for comparison
+  client._jwtToken = jwtToken; // tag for comparison
   mcpClients.set(visitorId, client);
   return client;
 }

@@ -2987,7 +2987,7 @@ input[type="file"].hidden-input {
 
       try {
         const res = await fetch(
-          '/api/v1/' + nodeId + '/' + version + '/notes/' + noteId + qs,
+          '/api/v1/node/' + nodeId + '/' + version + '/notes/' + noteId + qs,
           { method: 'DELETE' }
         );
 
@@ -5010,7 +5010,7 @@ function navigateWithCheck(url) {
 
 document.getElementById("backBtn").onclick = function(e) {
   e.preventDefault();
-  navigateWithCheck("/api/v1/" + nodeId + "/" + version + "/notes" + qs);
+  navigateWithCheck("/api/v1/node/" + nodeId + "/" + version + "/notes" + qs);
 };
 
 /* ═══════════════════════════════════════════════════
@@ -5040,10 +5040,10 @@ async function doSave() {
     var url, method;
 
     if (currentNoteId) {
-      url    = "/api/v1/" + nodeId + "/" + version + "/notes/" + currentNoteId;
+      url    = "/api/v1/node/" + nodeId + "/" + version + "/notes/" + currentNoteId;
       method = "PUT";
     } else {
-      url    = "/api/v1/" + nodeId + "/" + version + "/notes";
+      url    = "/api/v1/node/" + nodeId + "/" + version + "/notes";
       method = "POST";
     }
 
@@ -5068,7 +5068,7 @@ async function doSave() {
         isNew = false;
         originalLen = content.length;
         history.replaceState(null, "",
-          "/api/v1/" + nodeId + "/" + version + "/notes/" + currentNoteId + "/editor" + qs
+          "/api/v1/node/" + nodeId + "/" + version + "/notes/" + currentNoteId + "/editor" + qs
         );
       }
     } else {
@@ -5086,10 +5086,10 @@ async function doSave() {
     navigatingAway = true;
     if (currentNoteId) {
       window.location.href =
-        "/api/v1/" + nodeId + "/" + version + "/notes/" + currentNoteId + qs;
+        "/api/v1/node/" + nodeId + "/" + version + "/notes/" + currentNoteId + qs;
     } else {
       window.location.href =
-        "/api/v1/" + nodeId + "/" + version + "/notes" + qs;
+        "/api/v1/node/" + nodeId + "/" + version + "/notes" + qs;
     }
 
     loadNotes();
@@ -5122,7 +5122,7 @@ document.getElementById("deleteConfirmBtn").onclick = async function() {
 
   try {
     var res = await fetch(
-      "/api/v1/" + nodeId + "/" + version + "/notes/" + currentNoteId,
+      "/api/v1/node/" + nodeId + "/" + version + "/notes/" + currentNoteId,
       { method: "DELETE", credentials: "include" }
     );
 
@@ -5190,7 +5190,7 @@ editor.addEventListener("keydown", function(e) {
 async function loadNotes() {
   try {
     var token = new URLSearchParams(qs.replace("?","")).get("token");
-    var fetchUrl = "/api/v1/" + nodeId + "/" + version + "/notes";
+    var fetchUrl = "/api/v1/node/" + nodeId + "/" + version + "/notes";
     if (token) fetchUrl += "?token=" + encodeURIComponent(token);
     var res = await fetch(fetchUrl, { credentials: "include" });
     var data  = await res.json();
@@ -5234,9 +5234,9 @@ async function loadNotes() {
 
         var targetUrl;
         if (nType === "file")
-          targetUrl = "/api/v1/" + nodeId + "/" + version + "/notes/" + nId + tokenQS;
+          targetUrl = "/api/v1/node/" + nodeId + "/" + version + "/notes/" + nId + tokenQS;
         else
-          targetUrl = "/api/v1/" + nodeId + "/" + version + "/notes/" + nId + "/editor" + qs;
+          targetUrl = "/api/v1/node/" + nodeId + "/" + version + "/notes/" + nId + "/editor" + qs;
         
         navigateWithCheck(targetUrl);
       };
@@ -5257,7 +5257,7 @@ function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>
    NEW NOTE BUTTON
    ═══════════════════════════════════════════════════ */
 document.getElementById("newNoteBtn").onclick = function() {
-  navigateWithCheck("/api/v1/" + nodeId + "/" + version + "/notes/editor" + qs);
+  navigateWithCheck("/api/v1/node/" + nodeId + "/" + version + "/notes/editor" + qs);
 };
 
 /* ═══════════════════════════════════════════════════

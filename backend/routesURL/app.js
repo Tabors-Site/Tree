@@ -54,6 +54,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       --mobile-input-height: 70px;
       --min-panel-width: 280px;
     }
+      
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text-primary); background: #736fe6; }
@@ -155,7 +156,43 @@ router.get("/app", authenticateLite, async (req, res) => {
         max-width: 960px;
       }
     }
-
+/* Orchestrator step messages */
+.message.orchestrator-step .message-content {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 10px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  max-width: 95%;
+}
+.message.orchestrator-step .message-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.message.orchestrator-step .step-mode {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  display: block;
+}
+.message.orchestrator-step .step-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+  display: block;
+}
+.message.orchestrator-step .step-body::-webkit-scrollbar { width: 4px; }
+.message.orchestrator-step .step-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 2px; }
     /* Clear chat button in header */
     .clear-chat-btn {
       width: 30px;
@@ -1445,17 +1482,20 @@ router.get("/app", authenticateLite, async (req, res) => {
       lockModeBar(false);
     });
 
-    socket.on("navigate", ({ url, replace }) => {
-      console.log("[socket] navigate:", url);
-      loadingOverlay.classList.add("visible");
-      currentIframeUrl = url;
-      const navUrl = url.includes('inApp=') ? url : url + (url.includes('?') ? '&' : '?') + 'inApp=1';
-      if (replace) {
-        iframe.contentWindow?.location.replace(navUrl);
-      } else {
-        iframe.src = navUrl;
-      }
-    });
+socket.on("navigate", ({ url, replace }) => {
+    console.log("[socket] navigate:", url);
+    loadingOverlay.classList.add("visible");
+    currentIframeUrl = url;
+    let navUrl = url.includes('inApp=') ? url : url + (url.includes('?') ? '&' : '?') + 'inApp=1';
+    if (!navUrl.includes('token=')) {
+      navUrl += '&token=' + CONFIG.htmlShareToken;
+    }
+    if (replace) {
+      iframe.contentWindow?.location.replace(navUrl);
+    } else {
+      iframe.src = navUrl;
+    }
+  });
 
     socket.on("reload", () => {
       loadingOverlay.classList.add("visible");
@@ -1632,6 +1672,11 @@ router.get("/app", authenticateLite, async (req, res) => {
       }
       renderModeDropdown();
       renderMobileModeBar();
+
+      // Hide mode switching UI in tree mode (orchestrator handles it)
+      const isTree = bigMode === 'tree';
+      $("modeBar").style.display = isTree ? 'none' : '';
+      $("mobileModeBar").style.display = isTree ? 'none' : '';
       updateRootName(rootName);
     });
 
@@ -1772,14 +1817,7 @@ router.get("/app", authenticateLite, async (req, res) => {
 
     let modeAlertTimer = null;
     function showModeAlert(emoji, label) {
-      const el = $("modeAlert");
-      $("modeAlertEmoji").textContent = emoji;
-      $("modeAlertText").textContent = label;
-      el.classList.add("visible");
-      clearTimeout(modeAlertTimer);
-      modeAlertTimer = setTimeout(() => {
-        el.classList.remove("visible");
-      }, 2000);
+     //handled behind scenes
     }
 
     // ================================================================
@@ -1798,7 +1836,7 @@ router.get("/app", authenticateLite, async (req, res) => {
 
     function clearChatUI(carriedMessages, modeKey, emoji) {
       const valid = (carriedMessages || []).filter(m => m.content && m.content.trim());
-      const welcome = MODE_WELCOMES[modeKey] || { icon: emoji || "🌳", title: "Ready", desc: "How can I help?" };
+      const welcome = MODE_WELCOMES[modeKey] || { icon: "🌳" || "🌳", title: "Ready?", desc: "Let's grow." };
 
       [chatMessages, mobileChatMessages].forEach(container => {
         container.innerHTML = '';
@@ -2386,11 +2424,18 @@ router.get("/app", authenticateLite, async (req, res) => {
     $("resetPanelsBtn").addEventListener("click", () => setChatWidth(getAvailable() / 2));
 
     // Clear chat buttons
-    function handleClearChat() {
+   function handleClearChat() {
       if (!isRegistered) return;
       if (isSending) cancelRequest();
       socket.emit("clearConversation");
       clearChatUI([], currentModeKey);
+      // Navigate iframe back to tree root
+      const rootId = getCurrentRootId();
+      if (rootId) {
+        navigateToRoot(rootId);
+      } else {
+        goHome();
+      }
     }
 
     $("clearChatBtn").addEventListener("click", handleClearChat);
@@ -2476,7 +2521,62 @@ router.get("/app", authenticateLite, async (req, res) => {
     socket.on("toolResult", ({ tool, args, success, error }) => {
       console.log("[socket] tool:", tool, success ? "✓" : "✗", error || "");
     });
+socket.on("executionStatus", ({ phase, text }) => {
+  if (!text || phase === "done") return;
+  console.log("[status]", phase, text);
+  // Optionally show as a subtle inline status
+  addOrchestratorStep("status:" + phase, text);
+});
+socket.on("orchestratorStep", ({ modeKey, result, timestamp }) => {
+  console.log("[orchestrator]", modeKey, result);
+  addOrchestratorStep(modeKey, result);
+});
 
+function addOrchestratorStep(modeKey, result) {
+  // Truncate long results for display
+  let displayResult = result;
+  if (displayResult.length > 500) {
+    displayResult = displayResult.slice(0, 500) + "\\n… (truncated)";
+  }
+
+  const MODE_EMOJIS = {
+    "intent": "🎯",
+    "tree:navigate": "🧭",
+    "tree:getContext": "📖",
+    "tree:structure": "🏗️",
+    "tree:edit": "✏️",
+    "tree:notes": "📝",
+    "tree:respond": "💬",
+  };
+
+  const emoji = MODE_EMOJIS[modeKey] || "⚙️";
+  const label = modeKey.replace("tree:", "");
+
+  [chatMessages, mobileChatMessages].forEach(container => {
+    // Remove welcome if present
+    const welcome = container.querySelector(".welcome-message");
+    if (welcome) welcome.remove();
+
+    // Insert before the typing indicator if it exists
+    const typing = container.querySelector(".typing-indicator")?.closest(".message");
+
+    const msg = document.createElement("div");
+    msg.className = "message orchestrator-step";
+    msg.innerHTML =
+      '<div class="message-avatar">' + emoji + '</div>' +
+      '<div class="message-content">' +
+        '<span class="step-mode">' + escapeHtml(label) + '</span>' +
+        '<span class="step-body">' + escapeHtml(displayResult) + '</span>' +
+      '</div>';
+
+    if (typing) {
+      container.insertBefore(msg, typing);
+    } else {
+      container.appendChild(msg);
+    }
+    container.scrollTop = container.scrollHeight;
+  });
+}
     // API
     window.TreeApp = {
       sendMessage: sendChatMessage,

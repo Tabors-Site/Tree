@@ -41,6 +41,7 @@ import { editStatus, addPrestige } from "../core/statuses.js";
 import {
   createNote,
   getNotes,
+  editNote,
   getAllNotesByUser,
   getAllTagsForUser,
   deleteNoteAndFile,
@@ -58,6 +59,8 @@ import {
 import {
   getRootNodesForUser,
   getActiveLeafExecutionFrontier,
+  getContextForAi,
+  getNavigationContext
 } from "../core/treeFetch.js";
 
 import { executeScript, updateScript } from "../core/scripts.js";
@@ -71,7 +74,6 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { getTreeForAi, getNodeForAi } from "../controllers/treeDataFetching.js"; // import from your real backend
 import { resolveTreeAccess } from "../core/authenticate.js";
 
-import { getNavigationContext } from "../core/treeFetch.js";
 
 async function resolvePrestige({ nodeId, prestige }) {
   // If a valid prestige is explicitly provided, use it as-is
@@ -1089,6 +1091,73 @@ RULES
       }
     },
   );
+  server.tool(
+    "edit-node-note",
+    "Edit an existing text note. Replaces all content by default. Specify lineStart/lineEnd to replace a specific range, or lineStart alone to insert.",
+    {
+       nodeId: z
+        .string()
+        .describe("The unique ID of the node whose status will be edited."),
+         prestige: z
+        .number()
+        .describe("Prestige version number of the node to modify."),
+      noteId: z.string().describe("The ID of the note to edit."),
+      content: z
+        .string()
+        .describe(
+          "New content. Replaces entire note or the specified line range.",
+        ),
+      lineStart: z
+        .number()
+        .optional()
+        .describe(
+          "Start line (0-indexed). With lineEnd: replaces range. Alone: inserts at line.",
+        ),
+      lineEnd: z
+        .number()
+        .optional()
+        .describe(
+          "End line (0-indexed, exclusive). Lines [lineStart, lineEnd) are replaced.",
+        ),
+        userId: z
+        .string()
+        .describe(
+          "ID of the user making the status edit (for contribution logging).",
+        ),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ noteId, content, lineStart, lineEnd, userId }) => {
+      try {
+        const result = await editNote({
+          noteId,
+          content,
+          userId,
+          lineStart: lineStart ?? null,
+          lineEnd: lineEnd ?? null,
+          wasAi: true,
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to edit note: ${err.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
 
   server.tool(
     "get-node-notes",
@@ -1237,6 +1306,8 @@ RULES
     {
       noteId: z.string().describe("The ID of the note to delete."),
       userId: z.string().describe("Injected by server. Ignore."),
+      nodeId: z.string().describe("The ID of the node the note belongs to."),
+       prestige: z.number().describe("The prestige version of the node"),
     },
     {
       readOnlyHint: false,
@@ -2455,10 +2526,13 @@ pause and ask if it’s ready to move on.
 
   server.tool(
     "navigate-tree",
-    "Returns minimal structural context for tree navigation decisions.",
+    "Returns structural context for tree navigation. Optionally searches by name or shows deeper children.",
     {
-      nodeId: z.string().describe("Current node id to navigate from."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      nodeId: z.string().describe("Node ID to inspect from."),
+      search: z
+        .string()
+        .optional()
+        .describe("Search node names across the tree. Returns up to 10 matches with paths."),
     },
     {
       readOnlyHint: true,
@@ -2466,9 +2540,9 @@ pause and ask if it’s ready to move on.
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId }) => {
+    async ({ nodeId, search }) => {
       try {
-        const context = await getNavigationContext(nodeId);
+        const context = await getNavigationContext(nodeId, { search });
 
         return {
           content: [
@@ -2483,7 +2557,7 @@ pause and ask if it’s ready to move on.
           content: [
             {
               type: "text",
-              text: `❌ Failed to load navigation context: ${err.message}`,
+              text: `Failed to load navigation context: ${err.message}`,
             },
           ],
           isError: true,
@@ -2491,7 +2565,68 @@ pause and ask if it’s ready to move on.
       }
     },
   );
+  
+   server.tool(
+    "get-tree-context",
+    "Reads node data with configurable scope. Returns current version, notes, and optionally siblings, parent chain, scripts.",
+    {
+      nodeId: z.string().describe("Node ID to read."),
+      includeNotes: z
+        .boolean()
+        .optional()
+        .describe("Include notes for current version. Default true."),
+      includeSiblings: z
+        .boolean()
+        .optional()
+        .describe("Include sibling node names. Default false."),
+      includeParentChain: z
+        .boolean()
+        .optional()
+        .describe("Include full path from root. Default false."),
+      includeChildren: z
+        .boolean()
+        .optional()
+        .describe("Include children names. Default true."),
+      includeValues: z
+        .boolean()
+        .optional()
+        .describe("Include version values and goals. Default true."),
+      includeScripts: z
+        .boolean()
+        .optional()
+        .describe("Include script names. Default false."),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ nodeId, ...flags }) => {
+      try {
+        const context = await getContextForAi(nodeId, flags);
 
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(context, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to load context: ${err.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
   return server;
 }
 
@@ -2566,7 +2701,7 @@ async function handleMcpRequest(req, res) {
               error: {
                 code: -32602,
                 message:
-                  "Invalid nodeId, or you are not in this tree. Use get-roots-for-user to find rootId's, and then present them to me so I can choose one.",
+                  "Invalid nodeId, or you are not in this tree.",
               },
             }),
           );
@@ -2770,6 +2905,7 @@ function mapToolCallToApiUrl(toolName, args) {
     rootId,
     rootNodeId,
     userId,
+    noteId,
     prestige,
     version,
     htmlShareToken,
@@ -2864,6 +3000,9 @@ function mapToolCallToApiUrl(toolName, args) {
     case "create-node-version-image-note":
     case "delete-node-note":
       return withToken(`/api/v1/node/${nodeId}/${prestige}/notes?html`);
+       case "get-node-notes":
+    case "edit-node-note":
+      return withToken(`/api/v1/node/${nodeId}/${prestige}/notes/${noteId}/editor?html`);
 
     /* ---------------- CONTRIBUTIONS ---------------- */
 

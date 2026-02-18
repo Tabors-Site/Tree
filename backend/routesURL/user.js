@@ -3276,14 +3276,30 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
         }
 
         case "note": {
-          const na = c.noteAction || {};
-          const verb =
-            na.action === "add" ? "Added a note to" : "Removed a note from";
-          const noteRef = na.noteId
-            ? ` <a href="/api/v1/node/${nId}/${v}/notes/${na.noteId}${tokenQS}"><code>${esc(na.noteId)}</code></a>`
-            : "";
-          return `${verb} ${nLink}${noteRef}`;
-        }
+  const na = c.noteAction || {};
+
+  let verb;
+  switch (na.action) {
+    case "add":
+      verb = "Added a note to";
+      break;
+    case "edit":
+      verb = "Edited a note in";
+      break;
+    case "remove":
+      verb = "Removed a note from";
+      break;
+    default:
+      verb = "Updated a note in";
+  }
+
+  const noteRef = na.noteId
+    ? ` <a href="/api/v1/node/${nId}/${v}/notes/${na.noteId}${tokenQS}"><code>${esc(na.noteId)}</code></a>`
+    : "";
+
+  return `${verb} ${nLink}${noteRef}`;
+}
+
 
         case "updateParent": {
           const up = c.updateParent || {};
