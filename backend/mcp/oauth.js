@@ -568,8 +568,9 @@ export function renderLoginPage(req, res) {
 <body>
   <!-- Brand Header -->
   <div class="brand-header">
+  <a href="/" style="text-decoration: none;">
     <div class="brand-logo">🌳</div>
-    <h1 class="brand-title">Tree</h1>
+    <h1 class="brand-title">Tree</h1></a>
     <div class="brand-subtitle">Organize your life, efficiently</div>
   </div>
 
@@ -1209,8 +1210,10 @@ export function renderRegisterPage(req, res) {
 
 <body>
   <div class="brand-header">
+    <a href="/" style="text-decoration: none;">
+
     <div class="brand-logo">🌳</div>
-    <h1 class="brand-title">Tree</h1>
+    <h1 class="brand-title">Tree</h1></a>
     <div class="brand-subtitle">Organize your life, efficiently</div>
   </div>
 
@@ -1822,8 +1825,10 @@ export function renderForgotPasswordPage(req, res) {
 <body>
   <!-- Brand Header -->
   <div class="brand-header">
+    <a href="/" style="text-decoration: none;">
+
     <div class="brand-logo">🌳</div>
-    <h1 class="brand-title">Tree</h1>
+    <h1 class="brand-title">Tree</h1></a>
     <div class="brand-subtitle">Organize your life, efficiently</div>
   </div>
 

@@ -49,21 +49,29 @@ const AboutHome = () => {
         {/* ── INTRO ── */}
         <div className="ah-section">
           <div className="ah-section-title">
-            <span className="ah-section-icon">💡</span> What is Tree?
+             What is Tree?
           </div>
           <div className="ah-section-text">
-            Tree is a workspace where you and AI share the same data. You build
-            trees out of nodes, and each node can be whatever you need it to be.
-            A project plan, a set of instructions, a knowledge base, a folder of
-            notes, a tracked metric. You organize it, the AI reads it, and you
-            both work from the same source of truth. The Tree can also grow on its own
-            as the AI embodies the knowledge and processes with in.
+        Tree is a shared workspace where you and the AI operate in the same context.
+It is structured as a tree of nodes, which can represent things like plans, instructions, knowledge, code, or tracked metrics.
+Both you and the AI can read from and write to the Tree, allowing the context to evolve over time as work progresses.
             <br /><br />
             Invite collaborators to build together, use it solo to stay
             organized, or design systems that others can follow. Tree works
             however you need it to.
           </div>
         </div>
+
+        <div className="ah-section">
+  <div className="ah-section-title">
+    Why This Project Exists
+  </div>
+  <div className="ah-section-text">
+    This is a personal project by Tabor Holly.
+    <br /><br />
+It's my attempt at building what I believe large language model technology will need going forward: persistent memory, a navigable and fluid GUI driven by text input, and a unified structure where instructions, knowledge, and history all live together — readable by both humans and LLMs.
+</div>
+
 
         {/* ── EXPLORE ── */}
         <div className="ah-section">
@@ -96,7 +104,7 @@ const AboutHome = () => {
 
         {/* ── CTA ── */}
         <div className="ah-cta">
-          <a className="ah-cta-btn primary" href="/login">Open Tree</a>
+          <a className="ah-cta-btn primary" href="/">Back To Home</a>
         </div>
 
       </div>
