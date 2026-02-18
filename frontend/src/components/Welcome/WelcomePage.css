@@ -4,7 +4,73 @@
   --glass-alpha: 0.28;
   --glass-alpha-hover: 0.38;
 }
+/* =========================
+   Development Banner
+   ========================= */
 
+.dev-banner {
+  position: absolute;
+  top: 110px;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 10px 24px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  color: rgba(255, 255, 255, 0.9);
+background:
+  repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.04) 10px,
+    transparent 10px,
+    transparent 20px
+  ),
+  
+  rgba(var(--glass-water-rgb), 0.22);  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  animation:stripeScroll 1.5s linear infinite;
+
+}
+@keyframes stripeScroll {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 28px 0;
+  }
+}
+
+
+.dev-banner {
+  overflow: hidden;
+}
+
+.dev-banner-text {
+  display: inline-block;
+  white-space: normal;
+  text-decoration: none;
+  transition: transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.5s ease;
+}
+
+.dev-banner-text.enter {
+  transform: translateX(-110vw);
+  opacity: 1;
+}
+
+.dev-banner-text.hold {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.dev-banner-text.exit {
+  transform: translateX(110vw);
+  opacity: 1;
+}
 .welcome-page { overflow: hidden; }
 .welcome-page * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -453,7 +519,7 @@
   animation:
     openAppHoverShimmerClone 1.6s ease forwards,
     waterDriftOnce 1.8s ease-in-out;
-  animation-delay: 1.5s;
+  animation-delay: 5s;
   pointer-events: none;
 }
 

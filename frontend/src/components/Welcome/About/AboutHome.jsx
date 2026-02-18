@@ -72,7 +72,7 @@ Both you and the AI can read from and write to the Tree, allowing the context to
 It's my attempt at building what I believe large language model technology will need going forward: persistent memory, a navigable and fluid GUI driven by text input, and a unified structure where instructions, knowledge, and history all live together — readable by both humans and LLMs.
 </div>
 
-
+</div>
         {/* ── EXPLORE ── */}
         <div className="ah-section">
           <div className="ah-section-title">
