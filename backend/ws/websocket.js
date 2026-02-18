@@ -5,7 +5,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { getClientForUser } from "../ws/conversation.js";
-import {updateRecentRoots, getRecentRootsByUserId} from "../core/user.js";
+import { updateRecentRoots, getRecentRootsByUserId } from "../core/user.js";
 import {
   connectToMCP,
   closeMCPClient,
@@ -45,6 +45,7 @@ import {
   clearActiveChat,
   finalizeOpenChat,
 } from "./aiChatTracker.js";
+import { clearMemory } from "./orchestrator/treeOrchestrator.js";
 
 dotenv.config();
 
@@ -183,7 +184,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
      * Frontend sends this when the iframe URL changes.
      * Payload: { url: "/root/abc123", rootId?: "abc123" }
      */
-socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
+    socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
       const visitorId = socket.visitorId;
       if (!visitorId) return;
 
@@ -202,13 +203,21 @@ socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
               const rootsWithNames = await Promise.all(
                 recentRoots.map(async (r) => {
                   let name = null;
-                  try { name = await getNodeName(r.rootId); } catch (e) {}
-                  return { rootId: r.rootId, name: name || r.rootId.slice(0, 8) + "...", lastVisitedAt: r.lastVisitedAt };
-                })
+                  try {
+                    name = await getNodeName(r.rootId);
+                  } catch (e) {}
+                  return {
+                    rootId: r.rootId,
+                    name: name || r.rootId.slice(0, 8) + "...",
+                    lastVisitedAt: r.lastVisitedAt,
+                  };
+                }),
               );
               socket.emit("recentRoots", { roots: rootsWithNames });
             })
-            .catch(err => console.error("Failed to update recent roots:", err.message));
+            .catch((err) =>
+              console.error("Failed to update recent roots:", err.message),
+            );
         }
       } else if (nodeId) {
         // Viewing a non-root node — update currentNodeId only
@@ -223,6 +232,7 @@ socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
       if (newBigMode === BIG_MODES.HOME) {
         setRootId(visitorId, null);
         setCurrentNodeId(visitorId, null);
+        clearMemory(visitorId);
       }
 
       // Switch if big mode changed or no mode set yet
@@ -290,7 +300,9 @@ socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
       if (url) {
         const ID =
           "(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})";
-        const rootMatch = url.match(new RegExp(`(?:/api/v1)?/root/(${ID})`, "i"));
+        const rootMatch = url.match(
+          new RegExp(`(?:/api/v1)?/root/(${ID})`, "i"),
+        );
         const bareMatch = url.match(
           new RegExp(`(?:/api/v1)?/(${ID})(?:[?/]|$)`, "i"),
         );
@@ -522,11 +534,9 @@ socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
       if (visitorId && rootId) {
         setRootId(visitorId, rootId);
         console.log(`🌳 Set active root for ${visitorId}: ${rootId}`);
-        
       }
-       
     });
- socket.on("getRecentRoots", async () => {
+    socket.on("getRecentRoots", async () => {
       if (!socket.userId) {
         socket.emit("recentRoots", { roots: [] });
         return;
@@ -547,7 +557,7 @@ socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
               name: name || r.rootId.slice(0, 8) + "...",
               lastVisitedAt: r.lastVisitedAt,
             };
-          })
+          }),
         );
 
         socket.emit("recentRoots", { roots: rootsWithNames });
@@ -631,6 +641,7 @@ socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
         });
         socket.emit("conversationCleared", { success: true });
       }
+      clearMemory(socket.visitorId);
     });
 
     socket.on("disconnect", async (reason) => {

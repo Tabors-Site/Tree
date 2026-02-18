@@ -1,13 +1,13 @@
 // ws/orchestrator/treeOrchestrator.js
-// Orchestrates tree requests: intent → navigate → getContext → execute → respond
+// Orchestrates tree requests: translator → navigate → getContext → execute → respond
 
 import {
   switchMode,
   processMessage,
   getRootId,
-  getClientForUser,
-  getCurrentNodeId
+  getCurrentNodeId,
 } from "../conversation.js";
+import { translate } from "./translator.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
@@ -51,87 +51,20 @@ export { clearMemory };
 function formatMemoryContext(visitorId) {
   const mem = getMemory(visitorId);
   if (mem.length === 0) return "";
-  const lines = mem.map(m =>
-    m.role === "user" ? `User: ${m.content}` : `Assistant: ${m.content}`
+  const lines = mem.map((m) =>
+    m.role === "user" ? `User: ${m.content}` : `Assistant: ${m.content}`,
   );
   return `\n\nRecent conversation:\n${lines.join("\n")}`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// INTENT CLASSIFICATION
-// ─────────────────────────────────────────────────────────────────────────
-
-const INTENT_SYSTEM_PROMPT = `
-You are an intent classifier for a tree-based knowledge system.
-Given a user message, classify what operation is needed.
-
-Return ONLY this JSON. No markdown. No explanation.
-
-{
-  "intent": "navigate" | "query" | "structure" | "edit" | "notes" | "reflect",
-  "needsNavigation": boolean,
-  "needsContext": boolean,
-  "isDestructive": boolean,
-  "targetHint": string | null,
-  "summary": string
-}
-
-DEFINITIONS:
-- "navigate": user wants to go to or find a node
-- "query": user wants to know something about the tree/node (read-only)
-- "structure": user wants to create, move, or delete nodes
-- "edit": user wants to change node fields (name, values, goals, status, schedule, prestige)
-- "notes": user wants to read, create, edit, or delete notes
-- "reflect": user wants to analyze, discuss patterns, or plan
-
-RULES:
-- needsNavigation = true if the user references a node by name/description
-  and we need to find it. false if operating on "current node" or root.
-- needsContext = true for almost everything except pure navigation requests
-- isDestructive = true for: delete, status changes with cascade, bulk edits
-- targetHint = extracted node name/keyword if mentioned, null otherwise
-- summary = one-line description of what the user wants
-`.trim();
-
-/**
- * Classify user intent using a direct lightweight LLM call.
- * Includes conversation memory so follow-ups like "add a note to it" resolve correctly.
- */
-async function classifyIntent({ message, visitorId, userId, signal }) {
-  const { client: openai, model } = await getClientForUser(userId);
-
-  const memoryContext = formatMemoryContext(visitorId);
-  const userContent = memoryContext
-    ? `${memoryContext}\n\nCurrent request: ${message}`
-    : message;
-
-  const response = await openai.chat.completions.create(
-    {
-      model,
-      messages: [
-        { role: "system", content: INTENT_SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-    },
-    signal ? { signal } : {},
-  );
-
-  const raw = response.choices?.[0]?.message?.content;
-  if (!raw) throw new Error("Empty intent response");
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw new Error(`Intent parse failed: ${raw}`);
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIRMATION CHECK
 // ─────────────────────────────────────────────────────────────────────────
 
-const CONFIRM_WORDS = /^(yes|yeah|yep|y|confirm|proceed|do it|go ahead|ok|sure|approved?)\s*[.!]?$/i;
-const DENY_WORDS = /^(no|nah|nope|n|cancel|stop|don'?t|abort|never\s*mind)\s*[.!]?$/i;
+const CONFIRM_WORDS =
+  /^(yes|yeah|yep|y|confirm|proceed|do it|go ahead|ok|sure|approved?)\s*[.!]?$/i;
+const DENY_WORDS =
+  /^(no|nah|nope|n|cancel|stop|don'?t|abort|never\s*mind)\s*[.!]?$/i;
 
 function isConfirmation(message) {
   return CONFIRM_WORDS.test(message.trim());
@@ -158,7 +91,8 @@ function emitStatus(socket, phase, text) {
 function emitModeResult(socket, modeKey, result) {
   socket.emit("orchestratorStep", {
     modeKey,
-    result: typeof result === "string" ? result : JSON.stringify(result, null, 2),
+    result:
+      typeof result === "string" ? result : JSON.stringify(result, null, 2),
     timestamp: Date.now(),
   });
 }
@@ -209,36 +143,63 @@ export async function orchestrateTreeRequest({
   }
 
   // ────────────────────────────────────────────────────────
-  // STEP 1: CLASSIFY INTENT
+  // STEP 1: TRANSLATE (natural language → tree operations)
   // ────────────────────────────────────────────────────────
 
   emitStatus(socket, "intent", "Understanding request…");
 
-  let intent;
+  let translation;
   try {
-    intent = await classifyIntent({
-      visitorId,
+    translation = await translate({
       message,
-      ...meta,
+      userId,
+      conversationMemory: formatMemoryContext(visitorId),
+      treeSummary: null, // TODO: light tree summary for better context
       signal,
     });
   } catch (err) {
     if (signal?.aborted) return null;
-    console.error("❌ Intent classification failed:", err.message);
-    // Fallback: treat as a query
-    intent = {
-      intent: "query",
-      needsNavigation: false,
-      needsContext: true,
-      isDestructive: false,
-      targetHint: null,
+    console.error("❌ Translation failed:", err.message);
+    translation = {
+      plan: [
+        {
+          intent: "query",
+          targetHint: null,
+          directive: message,
+          needsNavigation: false,
+          isDestructive: false,
+        },
+      ],
+      responseHint: "Respond naturally to the user's message.",
       summary: message,
     };
   }
 
   if (signal?.aborted) return null;
-  console.log(`🎯 Intent: ${intent.intent} | nav=${intent.needsNavigation} | ctx=${intent.needsContext} | destructive=${intent.isDestructive}`);
-  emitModeResult(socket, "intent", intent);
+
+  // For now, execute plan[0] as primary operation. Multi-step plans come later.
+  const primaryOp = translation.plan[0];
+  const responseHint = translation.responseHint || "";
+
+  // Map translator output to the intent shape the rest of the orchestrator expects
+  const intent = {
+    intent: primaryOp.intent,
+    needsNavigation: primaryOp.needsNavigation,
+    needsContext: !["navigate"].includes(primaryOp.intent), // everything except pure nav needs context
+    isDestructive: primaryOp.isDestructive,
+    targetHint: primaryOp.targetHint,
+    directive: primaryOp.directive,
+    summary: translation.summary,
+  };
+
+  console.log(
+    `🎯 Translated: ${intent.intent} | nav=${intent.needsNavigation} | destructive=${intent.isDestructive} | "${intent.summary}"`,
+  );
+  emitModeResult(socket, "intent", {
+    ...intent,
+    responseHint,
+    fullPlan: translation.plan,
+  });
 
   // ────────────────────────────────────────────────────────
   // STEP 2: NAVIGATE (if needed)
@@ -252,14 +213,16 @@ export async function orchestrateTreeRequest({
 
     switchMode(visitorId, "tree:navigate", {
       ...meta,
-  currentNodeId: getCurrentNodeId(visitorId) || rootId,
+      currentNodeId: getCurrentNodeId(visitorId) || rootId,
       clearHistory: true,
     });
 
+    // Use the translator's directive for navigation (more precise than raw message)
+    const navDirective = intent.directive || message;
     const memCtx = formatMemoryContext(visitorId);
     const navMessage = memCtx
-      ? `${memCtx}\n\nCurrent request: ${message}`
-      : message;
+      ? `${memCtx}\n\nCurrent request: ${navDirective}`
+      : navDirective;
 
     const navResult = await processMessage(visitorId, navMessage, {
       ...meta,
@@ -287,8 +250,11 @@ export async function orchestrateTreeRequest({
         signal,
         ...meta,
         nodeContext: JSON.stringify(navResult, null, 2),
-        operationContext: "Navigation found multiple matches. Need user to disambiguate.",
+        operationContext:
+          "Navigation found multiple matches. Need user to disambiguate.",
         originalMessage: message,
+        responseHint:
+          "Ask the user to clarify which node they mean. List the options clearly.",
       });
     } else if (navResult?.action === "not_found") {
       return await runRespond({
@@ -299,6 +265,8 @@ export async function orchestrateTreeRequest({
         nodeContext: null,
         operationContext: `Could not find a node matching the request. Target hint: "${intent.targetHint || message}"`,
         originalMessage: message,
+        responseHint:
+          "Let the user know the node wasn't found. Suggest alternatives if possible.",
       });
     }
   }
@@ -315,6 +283,7 @@ export async function orchestrateTreeRequest({
       rootId,
     };
   }
+
   // ────────────────────────────────────────────────────────
   // STEP 3: GET CONTEXT (if needed)
   // ────────────────────────────────────────────────────────
@@ -366,6 +335,8 @@ export async function orchestrateTreeRequest({
       operationContext: `Destructive operation requested: ${intent.summary}`,
       confirmNeeded: true,
       originalMessage: message,
+      responseHint:
+        "Clearly describe the destructive action and ask for explicit confirmation.",
     });
   }
 
@@ -402,8 +373,13 @@ export async function orchestrateTreeRequest({
       clearHistory: true,
     });
 
-    // Build a directive execution message — tell the mode WHAT to do, not just context
-    const executionMessage = buildExecutionMessage(intent, message, targetNodeId, nodeContext);
+    // Build a directive execution message — use translator's directive for precision
+    const executionMessage = buildExecutionMessage(
+      intent,
+      intent.directive || message,
+      targetNodeId,
+      nodeContext,
+    );
 
     const execResult = await processMessage(visitorId, executionMessage, {
       ...meta,
@@ -436,6 +412,7 @@ export async function orchestrateTreeRequest({
     nodeContext,
     operationContext,
     originalMessage: message,
+    responseHint,
   });
 }
 
@@ -542,6 +519,7 @@ async function runRespond({
   operationContext,
   confirmNeeded = false,
   originalMessage = null,
+  responseHint = "",
 }) {
   emitStatus(socket, "respond", "");
 
@@ -555,17 +533,24 @@ async function runRespond({
     nodeContext: nodeContext || null,
     operationContext: operationContext || null,
     conversationMemory: memCtx || null,
+    responseHint: responseHint || null,
     confirmNeeded,
     clearHistory: true,
   });
 
-  // For respond, we don't send the original user message — the context is
-  // already in the system prompt. We send a minimal trigger.
-  const trigger = confirmNeeded
-    ? "Present the pending operation and ask for confirmation."
-    : operationContext
-      ? "Summarize what was done."
+  // Build trigger with responseHint for tone/content guidance
+  let trigger;
+  if (confirmNeeded) {
+    trigger = "Present the pending operation and ask for confirmation.";
+  } else if (operationContext) {
+    trigger = responseHint
+      ? `Summarize what was done. Tone guidance: ${responseHint}`
+      : "Summarize what was done.";
+  } else {
+    trigger = responseHint
+      ? `Respond to the user. Guidance: ${responseHint}`
       : "Respond to the user based on the provided context.";
+  }
 
   const response = await processMessage(visitorId, trigger, {
     username,
