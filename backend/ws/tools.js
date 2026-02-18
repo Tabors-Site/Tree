@@ -336,6 +336,41 @@ const TOOL_DEFS = {
       },
     },
   },
+  "edit-node-note" : {
+  type: "function",
+  function: {
+    name: "edit-node-note",
+    description:
+      "Edit an existing text note. By default replaces all content. Optionally specify a line range to replace or insert at specific lines.",
+    parameters: {
+      type: "object",
+      properties: {
+        noteId: {
+          type: "string",
+          description: "The ID of the note to edit.",
+        },
+        content: {
+          type: "string",
+          description:
+            "New content. Replaces entire note, or replaces the specified line range.",
+        },
+        lineStart: {
+          type: "number",
+          description:
+            "Start line (0-indexed). If provided with lineEnd, replaces lines [start, end). If provided alone, inserts at that line.",
+        },
+        lineEnd: {
+          type: "number",
+          description:
+            "End line (0-indexed, exclusive). Lines from lineStart to lineEnd are replaced with the new content.",
+        },
+        nodeId: { type: "string" },
+          prestige: { type: "number" },
+      },
+      required: ["noteId", "content", "nodeId", "prestige"  ],
+    },
+  },
+},
 
   "delete-node-note": {
     type: "function",
@@ -346,8 +381,10 @@ const TOOL_DEFS = {
         type: "object",
         properties: {
           noteId: { type: "string" },
+           nodeId: { type: "string" },
+          prestige: { type: "number" },
         },
-        required: ["noteId"],
+        required: ["noteId", "nodeId", "prestige"],
       },
     },
   },
@@ -467,15 +504,59 @@ const TOOL_DEFS = {
             type: "string",
             description: "The current node ID to navigate from.",
           },
-          userId: {
+         
+          search: {
             type: "string",
-            description: "Injected by server. Ignore.",
+            description: "Search node names across the tree. Returns up to 10 matches with paths",
           },
+          
         },
-        required: ["nodeId", "userId"],
+        required: ["nodeId"],
       },
     },
   },
+ "get-tree-context" : {
+  type: "function",
+  function: {
+    name: "get-tree-context",
+    description:
+      "Reads node data with configurable scope. Returns current version, notes, and optionally siblings, parent chain, scripts.",
+    parameters: {
+      type: "object",
+      properties: {
+        nodeId: {
+          type: "string",
+          description: "Node ID to read.",
+        },
+        includeNotes: {
+          type: "boolean",
+          description: "Include notes for current version. Default true.",
+        },
+        includeSiblings: {
+          type: "boolean",
+          description: "Include sibling node names. Default false.",
+        },
+        includeParentChain: {
+          type: "boolean",
+          description: "Include full path from root. Default false.",
+        },
+        includeChildren: {
+          type: "boolean",
+          description: "Include children names. Default true.",
+        },
+        includeValues: {
+          type: "boolean",
+          description: "Include version values and goals. Default true.",
+        },
+        includeScripts: {
+          type: "boolean",
+          description: "Include script names. Default false.",
+        },
+      },
+      required: ["nodeId"],
+    },
+  },
+},
 
   "edit-node-name": {
     type: "function",

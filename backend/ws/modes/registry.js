@@ -12,9 +12,11 @@ import homeReflect from "./home/reflect.js";
 import treeStructure from "./tree/structure.js";
 import treeEdit from "./tree/edit.js";
 import treeBe from "./tree/be.js";
-import treeReflect from "./tree/reflect.js";
 import treeNavigate from "./tree/navigate.js";
 import treeUnderstand from "./tree/understand.js";
+import treeGetContext from "./tree/getContext.js";
+import treeEditNotes from "./tree/notes.js";
+import treeRespond from "./tree/respond.js";
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -41,8 +43,10 @@ const ALL_MODES = {
   "tree:structure": treeStructure,
   "tree:edit": treeEdit,
   "tree:be": treeBe,
-  "tree:reflect": treeReflect,
   "tree:understand": treeUnderstand,
+  "tree:getContext": treeGetContext,
+  "tree:notes": treeEditNotes,
+  "tree:respond": treeRespond,
 };
 
 // ─────────────────────────────────────────────────────────────────────────

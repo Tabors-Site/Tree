@@ -209,10 +209,9 @@ export function switchMode(visitorId, newModeKey, ctx) {
 
   // Build new system prompt
   const systemPrompt = buildPromptForMode(newModeKey, {
-    username: ctx.username,
-    userId: ctx.userId,
-    rootId: session.rootId || ctx.rootId,
-  });
+  ...ctx,
+  rootId: session.rootId || ctx.rootId,
+});
 
   // Reset conversation with new system prompt + carried context
   session.messages = [
@@ -325,9 +324,9 @@ export async function processMessage(visitorId, message, ctx) {
   }
 
   // Add user message
-  if (!isInternal) {
+
     session.messages.push({ role: "user", content: message });
-  }
+  
 
   // Get tools for current mode
   const tools = getToolsForMode(session.modeKey);
@@ -366,9 +365,9 @@ export async function processMessage(visitorId, message, ctx) {
     const assistantMessage = choice.message;
 
     // Always append assistant message for tool reasoning
-    if (!isInternal) {
-      session.messages.push(assistantMessage);
-    }
+    // Always append assistant message to maintain conversation integrity.
+    // Tool results MUST follow their corresponding assistant tool_call message.
+    session.messages.push(assistantMessage);
 
     // If tools are requested, continue the loop
     if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
@@ -516,6 +515,16 @@ export function setRootId(visitorId, rootId) {
 
 export function getRootId(visitorId) {
   return getSession(visitorId).rootId;
+}
+
+export function setCurrentNodeId(visitorId, nodeId) {
+  const session = getSession(visitorId);
+  session.currentNodeId = nodeId;
+}
+
+export function getCurrentNodeId(visitorId) {
+  const session = getSession(visitorId);
+  return session.currentNodeId || session.rootId || null;
 }
 
 export function getCurrentMode(visitorId) {

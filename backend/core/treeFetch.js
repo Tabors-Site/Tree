@@ -1,6 +1,40 @@
 import Node from "../db/models/node.js";
+import Note from "../db/models/notes.js"; // adjust import
 
 import User from "../db/models/user.js";
+export async function buildPathString(nodeId) {
+  const segments = [];
+  let cursor = nodeId;
+  const maxDepth = 50; // safety guard against circular refs
+  let depth = 0;
+
+  while (cursor && depth < maxDepth) {
+    const node = await Node.findById(cursor)
+      .select("_id name parent")
+      .lean()
+      .exec();
+
+    if (!node) break;
+
+    segments.unshift(node.name);
+
+    if (!node.parent) break; // no parent = root, stop
+    cursor = node.parent;
+    depth++;
+  }
+
+  return segments.join(" > ");
+}
+
+// Batch version: returns path for multiple node IDs
+// Useful when navigate returns candidates
+export async function buildPathStrings(nodeIds) {
+  const results = {};
+  for (const id of nodeIds) {
+    results[id] = await buildPathString(id);
+  }
+  return results;
+}
 
 export async function getRootNodesForUser(userId) {
   if (!userId) {
@@ -183,14 +217,15 @@ export async function getActiveLeafExecutionFrontier(rootId) {
   };
 }
 
-export async function getNavigationContext(nodeId) {
+
+export async function getNavigationContext(nodeId, { search } = {}) {
   if (!nodeId) {
     throw new Error("nodeId is required");
   }
 
   // ---- Load current node ----
   const current = await Node.findById(nodeId)
-    .select("_id name parent children rootOwner")
+    .select("_id name parent children")
     .lean()
     .exec();
 
@@ -198,7 +233,34 @@ export async function getNavigationContext(nodeId) {
     throw new Error("Node not found");
   }
 
-  const isRoot = !!current.rootOwner;
+  const isRoot = !current.parent;
+
+  // ---- If search is provided, find matching nodes globally ----
+  if (search) {
+    const regex = new RegExp(search, "i");
+    const matches = await Node.find({ name: { $regex: regex } })
+      .select("_id name parent")
+      .limit(10)
+      .lean()
+      .exec();
+
+    const results = await Promise.all(
+      matches.map(async (n) => ({
+        id: n._id.toString(),
+        name: n.name,
+        path: await buildPathString(n._id),
+      })),
+    );
+
+    return {
+      current: {
+        id: current._id.toString(),
+        name: current.name,
+        isRoot,
+      },
+      searchResults: results,
+    };
+  }
 
   // ---- Parent ----
   let parent = null;
@@ -238,48 +300,28 @@ export async function getNavigationContext(nodeId) {
     }
   }
 
-  // ---- Children ----
-  let children = [];
+  // ---- Children (adaptive depth based on budget) ----
+  const maxNodes = 50;
+  const children = await getChildrenAdaptive(current.children, maxNodes);
 
-  if (Array.isArray(current.children) && current.children.length > 0) {
-    const childNodes = await Node.find({
-      _id: { $in: current.children },
-    })
-      .select("_id name")
-      .lean()
-      .exec();
-
-    const childMap = new Map(childNodes.map((n) => [n._id.toString(), n]));
-
-    children = current.children
-      .map((id) => childMap.get(id.toString()))
-      .filter(Boolean)
-      .map((n) => ({
-        id: n._id.toString(),
-        name: n.name,
-      }));
-  }
-
-  // ---- Root (if needed for reasoning) ----
+  // ---- Root ----
   let root = null;
   if (!isRoot) {
     let cursor = current;
     while (cursor.parent) {
       const next = await Node.findById(cursor.parent)
-        .select("_id name parent rootOwner")
+        .select("_id name parent")
         .lean()
         .exec();
       if (!next) break;
       cursor = next;
-      if (cursor.rootOwner) break;
+      // cursor.parent === null means we reached root
     }
 
-    if (cursor?.rootOwner) {
-      root = {
-        id: cursor._id.toString(),
-        name: cursor.name,
-      };
-    }
+    root = {
+      id: cursor._id.toString(),
+      name: cursor.name,
+    };
   } else {
     root = {
       id: current._id.toString(),
@@ -294,11 +336,247 @@ export async function getNavigationContext(nodeId) {
       name: current.name,
       isRoot,
     },
-
     parent: parent ? { id: parent._id.toString(), name: parent.name } : null,
-
     children,
     siblings,
     root,
   };
+}
+
+// ---- Adaptive child fetcher with node budget ----
+async function getChildrenAdaptive(childIds, budget) {
+  if (!Array.isArray(childIds) || childIds.length === 0 || budget <= 0) {
+    return [];
+  }
+
+  const childNodes = await Node.find({ _id: { $in: childIds } })
+    .select("_id name children")
+    .lean()
+    .exec();
+
+  const childMap = new Map(childNodes.map((n) => [n._id.toString(), n]));
+
+  // First pass: build entries, count how many nodes this level costs
+  const entries = [];
+  for (const id of childIds) {
+    const node = childMap.get(id.toString());
+    if (!node) continue;
+    entries.push({
+      id: node._id.toString(),
+      name: node.name,
+      childCount: node.children?.length || 0,
+      rawChildren: node.children || [],
+    });
+  }
+
+  const thisLevelCost = entries.length;
+  const remaining = budget - thisLevelCost;
+
+  // If no budget left for deeper levels, return flat
+  if (remaining <= 0) {
+    return entries.map(({ id, name, childCount }) => ({
+      id,
+      name,
+      ...(childCount > 0 ? { childCount } : {}),
+    }));
+  }
+
+  // Count total grandchildren across all entries
+  const totalGrandchildren = entries.reduce((sum, e) => sum + e.childCount, 0);
+
+  // If all grandchildren fit in remaining budget, expand everything
+  // Otherwise, don't expand any (keeps it consistent rather than partial)
+  const canExpand = totalGrandchildren > 0 && totalGrandchildren <= remaining;
+
+  const results = [];
+  for (const entry of entries) {
+    const result = { id: entry.id, name: entry.name };
+
+    if (canExpand && entry.rawChildren.length > 0) {
+      // Distribute remaining budget proportionally
+      const share = Math.floor(
+        (entry.rawChildren.length / totalGrandchildren) * remaining,
+      );
+      result.children = await getChildrenAdaptive(
+        entry.rawChildren,
+        Math.max(share, entry.rawChildren.length), // at minimum show names
+      );
+    } else if (entry.childCount > 0) {
+      // Can't expand, just show count so agent knows there's more
+      result.childCount = entry.childCount;
+    }
+
+    results.push(result);
+  }
+
+  return results;
+}
+
+
+export async function getContextForAi(nodeId, options = {}) {
+  if (!nodeId) throw new Error("nodeId is required");
+
+  const {
+    includeNotes = true,
+    includeSiblings = false,
+    includeChildren = true,
+    includeParentChain = false,
+    includeValues = true,
+    includeScripts = false,
+    includeDirectives = false,
+  } = options;
+
+  // ---- Load node ----
+  const node = await Node.findById(nodeId).lean().exec();
+  if (!node) throw new Error(`Node ${nodeId} not found`);
+
+  const currentPrestige = node.prestige || 0;
+  const currentVersion = node.versions?.[currentPrestige] || null;
+
+  // ---- Base context ----
+  const context = {
+    id: node._id.toString(),
+    name: node.name,
+    isRoot: !node.parent,
+    prestige: currentPrestige,
+    totalVersions: node.versions?.length || 0,
+  };
+
+  // ---- Current version data ----
+  if (currentVersion) {
+    context.version = {
+      status: currentVersion.status,
+      dateCreated: currentVersion.dateCreated,
+    };
+
+    if (currentVersion.schedule) {
+      context.version.schedule = currentVersion.schedule;
+    }
+
+    if (includeValues) {
+      const values = currentVersion.values instanceof Map
+        ? Object.fromEntries(currentVersion.values)
+        : currentVersion.values || {};
+
+      const goals = currentVersion.goals instanceof Map
+        ? Object.fromEntries(currentVersion.goals)
+        : currentVersion.goals || {};
+
+      // Only include if there's actual data
+      if (Object.keys(values).length > 0) {
+        context.version.values = values;
+      }
+      if (Object.keys(goals).length > 0) {
+        context.version.goals = goals;
+      }
+    }
+  }
+
+  // ---- Notes (current version only) ----
+  if (includeNotes) {
+    const notes = await Note.find({
+      nodeId: node._id,
+      version: currentPrestige,
+      contentType: "text",
+    })
+      .populate("userId", "username -_id")
+      .lean()
+      .exec();
+
+    if (notes.length > 0) {
+      context.notes = notes.map((n) => ({
+        id: n._id.toString(),
+        username: n.userId?.username || "Unknown",
+        content: n.content,
+      }));
+    }
+  }
+
+  // ---- Parent ----
+  if (node.parent) {
+    const parentNode = await Node.findById(node.parent)
+      .select("_id name")
+      .lean()
+      .exec();
+
+    if (parentNode) {
+      context.parent = {
+        id: parentNode._id.toString(),
+        name: parentNode.name,
+      };
+    }
+  } else {
+    context.parent = null; // root node
+  }
+
+  // ---- Parent chain (full path) ----
+  if (includeParentChain) {
+    context.path = await buildPathString(nodeId);
+  }
+
+  // ---- Children ----
+  if (includeChildren && node.children?.length > 0) {
+    const childNodes = await Node.find({ _id: { $in: node.children } })
+      .select("_id name")
+      .lean()
+      .exec();
+
+    const childMap = new Map(childNodes.map((n) => [n._id.toString(), n]));
+
+    context.children = node.children
+      .map((id) => childMap.get(id.toString()))
+      .filter(Boolean)
+      .map((n) => ({
+        id: n._id.toString(),
+        name: n.name,
+      }));
+  } else {
+    context.children = [];
+  }
+
+  // ---- Siblings ----
+  if (includeSiblings && node.parent) {
+    const parentNode = await Node.findById(node.parent)
+      .select("children")
+      .lean()
+      .exec();
+
+    if (parentNode?.children?.length > 1) {
+      const siblingIds = parentNode.children.filter(
+        (id) => id.toString() !== node._id.toString(),
+      );
+
+      const siblingNodes = await Node.find({ _id: { $in: siblingIds } })
+        .select("_id name")
+        .lean()
+        .exec();
+
+      const siblingMap = new Map(
+        siblingNodes.map((n) => [n._id.toString(), n]),
+      );
+
+      context.siblings = siblingIds
+        .map((id) => siblingMap.get(id.toString()))
+        .filter(Boolean)
+        .map((n) => ({
+          id: n._id.toString(),
+          name: n.name,
+        }));
+    }
+  }
+
+  // ---- Scripts ----
+  if (includeScripts && node.scripts?.length > 0) {
+    context.scripts = node.scripts.map((s) => ({
+      id: s._id,
+      name: s.name,
+    }));
+  }
+
+  // ---- Directives (future) ----
+  if (includeDirectives && node.directives?.length > 0) {
+    context.directives = node.directives;
+  }
+
+  return context;
 }

@@ -27,6 +27,8 @@ import {
   resetConversation,
   getConversation,
   sessionCount,
+  setCurrentNodeId,
+  getCurrentNodeId,
 } from "./conversation.js";
 import {
   getSubModes,
@@ -181,7 +183,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
      * Frontend sends this when the iframe URL changes.
      * Payload: { url: "/root/abc123", rootId?: "abc123" }
      */
-    socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
+socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
       const visitorId = socket.visitorId;
       if (!visitorId) return;
 
@@ -189,35 +191,38 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const currentMode = getCurrentMode(visitorId);
       const currentBig = currentMode?.split(":")[0] || null;
 
-      // Update rootId based on URL
+      // Update rootId when viewing a root URL
       if (rootId) {
         setRootId(visitorId, rootId);
-         if (socket.userId) {
-    updateRecentRoots(socket.userId, rootId)
-      .then(async () => {
-        // Emit updated list back to client
-        const recentRoots = await getRecentRootsByUserId(socket.userId);
-        const rootsWithNames = await Promise.all(
-          recentRoots.map(async (r) => {
-            let name = null;
-            try { name = await getNodeName(r.rootId); } catch (e) {}
-            return { rootId: r.rootId, name: name || r.rootId.slice(0, 8) + "...", lastVisitedAt: r.lastVisitedAt };
-          })
-        );
-        socket.emit("recentRoots", { roots: rootsWithNames });
-      })
-      .catch(err => console.error("Failed to update recent roots:", err.message));
-  }
-      } else if (
-        nodeId &&
-        (currentBig !== newBigMode || !getRootId(visitorId))
-      ) {
-        setRootId(visitorId, nodeId);
+        setCurrentNodeId(visitorId, rootId); // root is also current node
+        if (socket.userId) {
+          updateRecentRoots(socket.userId, rootId)
+            .then(async () => {
+              const recentRoots = await getRecentRootsByUserId(socket.userId);
+              const rootsWithNames = await Promise.all(
+                recentRoots.map(async (r) => {
+                  let name = null;
+                  try { name = await getNodeName(r.rootId); } catch (e) {}
+                  return { rootId: r.rootId, name: name || r.rootId.slice(0, 8) + "...", lastVisitedAt: r.lastVisitedAt };
+                })
+              );
+              socket.emit("recentRoots", { roots: rootsWithNames });
+            })
+            .catch(err => console.error("Failed to update recent roots:", err.message));
+        }
+      } else if (nodeId) {
+        // Viewing a non-root node — update currentNodeId only
+        setCurrentNodeId(visitorId, nodeId);
+        // Only set rootId if we don't have one yet (first load via /node/ URL)
+        if (!getRootId(visitorId)) {
+          setRootId(visitorId, nodeId);
+        }
       }
 
-      // Clear rootId when going to home
+      // Clear both when going home
       if (newBigMode === BIG_MODES.HOME) {
         setRootId(visitorId, null);
+        setCurrentNodeId(visitorId, null);
       }
 
       // Switch if big mode changed or no mode set yet
