@@ -6,6 +6,9 @@ import { resolveTreeAccess } from "./authenticate.js";
 import { isDescendant } from "./treeFetch.js";
 import { useEnergy } from "../core/energy.js";
 
+function containsHtml(str) {
+  return /<[a-zA-Z\/][^>]*>/.test(str);
+}
 //validate once during recursive branches
 async function getUserOrThrow(userId) {
   if (!userId) {
@@ -33,6 +36,17 @@ export async function createNewNode(
   validatedUser = null,
   wasAi = false,
 ) {
+
+  if (!name || typeof name !== "string" || !name.trim()) {
+    throw new Error("Node name is required");
+  }
+  name = name.trim();
+  if (name.length > 150) {
+    throw new Error("Node name must be 150 characters or fewer");
+  }
+  if (containsHtml(name)) {
+  throw new Error("Node name cannot contain HTML tags");
+}
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
   const { energyUsed } = await useEnergy({
@@ -327,10 +341,16 @@ export async function updateParentRelationship(
   return { nodeChild, nodeNewParent };
 }
 export async function editNodeName({ nodeId, newName, userId, wasAi = false }) {
-  if (!newName || !newName.trim()) {
+  if (!newName || typeof newName !== "string" || !newName.trim()) {
     throw new Error("Node name cannot be empty");
   }
-
+  newName = newName.trim();
+  if (newName.length > 150) {
+    throw new Error("Node name must be 150 characters or fewer");
+  }
+  if (containsHtml(name)) {
+  throw new Error("Node name cannot contain HTML tags");
+}
   const node = await Node.findById(nodeId);
   if (!node) {
     throw new Error("Node not found");

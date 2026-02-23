@@ -4,6 +4,11 @@ import Invite from "../db/models/invite.js";
 import { logContribution } from "../db/utils.js";
 import { useEnergy } from "../core/energy.js";
 
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // EXACT UUID REGEX FROM OLD CODE
 const isValidUUID = (id) =>
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
@@ -18,7 +23,9 @@ async function resolveReceivingUser(userReceiving) {
   }
 
   if (!receivingUser) {
-    receivingUser = await User.findOne({ username: userReceiving });
+    receivingUser = await User.findOne({
+      username: { $regex: `^${escapeRegex(userReceiving)}$`, $options: "i" },
+    });
   }
 
   return receivingUser;

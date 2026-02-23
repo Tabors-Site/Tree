@@ -5,7 +5,29 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function containsHtml(str) {
+  return /<[a-zA-Z\/][^>]*>/.test(str);
+}
+function isValidEmail(email) {
+  if (typeof email !== "string") return false;
+  email = email.trim();
+  if (email.length > 320) return false;
+  return EMAIL_REGEX.test(email);
+}
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 /* ===========================
     REGISTER
 =========================== */
@@ -24,6 +46,11 @@ const register = async (req, res) => {
         message: "Username, email, and password are required",
       });
     }
+    if (!/^[a-zA-Z0-9_\-]{1,32}$/.test(username)) {
+  return res.status(400).json({
+    message: "Username may only contain letters, numbers, hyphens, and underscores (1–32 chars)",
+  });
+}
     if (password.length < 8) {
       return res.status(400).json({
         message: "Password must be at least 8 characters long",
@@ -31,12 +58,21 @@ const register = async (req, res) => {
     }
     username = username.trim();
 
+    if (!isValidEmail(email)) {
+  return res.status(400).json({
+    message: "Please enter a valid email address",
+  });
+}
+email = email.trim().toLowerCase();
+
+    
+
     /* -------------------------
        CHECK REAL USERS (EXACT MATCH)
     -------------------------- */
 
     const existingUser = await User.findOne({
-      username: { $regex: `^${username}$`, $options: "i" },
+      username: { $regex: `^${escapeRegex(username)}$`, $options: "i" },
     });
 
     if (existingUser) {
@@ -52,10 +88,11 @@ const register = async (req, res) => {
        CLEAN OLD TEMP USERS
     -------------------------- */
 
+      // ✅ FIXED — escaped regex in cleanup query too
     await TempUser.deleteMany({
       $or: [
         { email },
-        { username: { $regex: `^${username}$`, $options: "i" } },
+        { username: { $regex: `^${escapeRegex(username)}$`, $options: "i" } },
       ],
     });
 
@@ -109,8 +146,8 @@ const verifyEmail = async (req, res) => {
     -------------------------- */
 
     const existingUser = await User.findOne({
-      username: { $regex: `^${tempUser.username}$`, $options: "i" },
-    });
+  username: { $regex: `^${escapeRegex(tempUser.username)}$`, $options: "i" },
+});
 
     if (existingUser) {
       await tempUser.deleteOne();
@@ -173,8 +210,8 @@ const login = async (req, res) => {
         .json({ message: "Username and password are required" });
     }
 
-    const user = await User.findOne({
-      username: { $regex: `^${username}$`, $options: "i" },
+const user = await User.findOne({
+      username: { $regex: `^${escapeRegex(username)}$`, $options: "i" },
     });
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
@@ -324,23 +361,46 @@ async function sendResetEmail(to, link) {
     service: "gmail",
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS, // Google App Password
+      pass: process.env.EMAIL_PASS,
     },
   });
 
   await transporter.sendMail({
-    from: `<${process.env.EMAIL_USER}>`,
+    from: `"Tree" <${process.env.EMAIL_USER}>`,
     to,
     subject: "Password Reset",
     html: `
-      <p>You requested a password reset.</p>
-      <p>Click the link below to reset your password:</p>
-      <a href="${link}">${link}</a>
-      <p>This link expires in 15 minutes.</p>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+        <div style="text-align: center; margin-bottom: 32px;">
+          <span style="font-size: 48px;">🌳</span>
+          <h1 style="font-size: 24px; color: #1a1a1a; margin: 8px 0 0;">Tree</h1>
+        </div>
 
-      <p>Sincerely,</p>
-      <p>Tree Helper</p>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          We received a request to reset your password.
+        </p>
 
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Click the button below to choose a new password:
+        </p>
+
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${link}" style="display: inline-block; background-color: #736fe6; color: white; text-decoration: none; padding: 14px 32px; border-radius: 980px; font-size: 16px; font-weight: 600;">
+            Reset My Password
+          </a>
+        </div>
+
+        <p style="font-size: 13px; color: #888; line-height: 1.5;">
+          This link expires in 15 minutes. If you didn't request a password reset, you can safely ignore this email — your password won't change.
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0 16px;" />
+
+        <p style="font-size: 12px; color: #aaa; line-height: 1.5;">
+          If the button doesn't work, copy and paste this link into your browser:<br />
+          <a href="${link}" style="color: #736fe6; word-break: break-all;">${link}</a>
+        </p>
+      </div>
     `,
   });
 }
@@ -351,28 +411,46 @@ async function sendVerificationEmail(to, link, username) {
     service: "gmail",
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS, // Google App Password
+      pass: process.env.EMAIL_PASS,
     },
   });
 
   await transporter.sendMail({
-    from: `<${process.env.EMAIL_USER}>`,
+    from: `"Tree" <${process.env.EMAIL_USER}>`,
     to,
     subject: "Complete Your Registration",
     html: `
-      <p>Thanks for registering, ${username}!</p>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+        <div style="text-align: center; margin-bottom: 32px;">
+          <span style="font-size: 48px;">🌳</span>
+          <h1 style="font-size: 24px; color: #1a1a1a; margin: 8px 0 0;">Tree</h1>
+        </div>
 
-      <p>Please confirm your email by clicking the link below:</p>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Hey ${escapeHtml(username)}, thanks for signing up!
+        </p>
 
-      <p>
-        <a href="${link}">${link}</a>
-      </p>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Click the button below to verify your email and activate your account:
+        </p>
 
-      <p>This link expires in <strong>12 hours</strong>.</p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${link}" style="display: inline-block; background-color: #736fe6; color: white; text-decoration: none; padding: 14px 32px; border-radius: 980px; font-size: 16px; font-weight: 600;">
+            Verify My Email
+          </a>
+        </div>
 
-      <p>If you did not request this account, you can ignore this email.</p>
+        <p style="font-size: 13px; color: #888; line-height: 1.5;">
+          This link expires in 12 hours. If you didn't create this account, you can safely ignore this email.
+        </p>
 
-      <p>— Tree Helper</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0 16px;" />
+
+        <p style="font-size: 12px; color: #aaa; line-height: 1.5;">
+          If the button doesn't work, copy and paste this link into your browser:<br />
+          <a href="${link}" style="color: #736fe6; word-break: break-all;">${link}</a>
+        </p>
+      </div>
     `,
   });
 }
@@ -381,7 +459,11 @@ async function sendVerificationEmail(to, link, username) {
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
 
-  const user = await User.findOne({ email });
+   if (!email || !isValidEmail(email)) {
+    return res.json({ message: "Reset link sent if email exists" });
+  }
+
+  const user = await User.findOne({ email: email.trim().toLowerCase() });
   if (!user) {
     return res.json({
       message: "Reset link sent if email exists",
@@ -404,7 +486,11 @@ const forgotPassword = async (req, res) => {
 /* ---- RESET PASSWORD ---- */
 const resetPassword = async (req, res) => {
   const { token, password } = req.body;
-
+if (!password || typeof password !== "string" || password.length < 8) {
+    return res.status(400).json({
+      message: "Password must be at least 8 characters long",
+    });
+  }
   const user = await User.findOne({
     resetPasswordToken: token,
     resetPasswordExpiry: { $gt: Date.now() },
@@ -445,8 +531,11 @@ export const createApiKey = async (req, res) => {
       return res.status(400).json({ message: "Invalid key name" });
     }
 
-    const safeName = name?.trim().slice(0, 64) || "API Key";
+const safeName = name?.trim().slice(0, 64) || "API Key";
 
+if (containsHtml(safeName)) {
+  return res.status(400).json({ message: "Key name cannot contain HTML tags" });
+}
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });

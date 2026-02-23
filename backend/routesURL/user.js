@@ -102,6 +102,15 @@ function renderMedia(fileUrl, mimeType) {
   return ``;
 }
 
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 router.get("/user/:userId", urlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -127,6 +136,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     const profileType = user.profileType || "basic";
     const energy = user.availableEnergy;
     const extraEnergy = user.additionalEnergy;
+const safeUsername = escapeHtml(user.username);
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml) {
@@ -165,7 +175,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>@${user.username} — Profile</title>
+  <title>@${safeUsername} — Profile</title>
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -1046,7 +1056,7 @@ text-decoration: none;
     <div class="glass-card header">
       <div class="user-info">
        <a href="/api/v1/user/${userId}/energy${queryString}">
-        <h1>@${user.username}</h1> </a>
+        <h1>@${safeUsername}</h1> </a>
 
         <div class="user-meta">
    <a href="/api/v1/user/${userId}/energy${queryString}">
@@ -1154,7 +1164,7 @@ text-decoration: none;
               (r) => `
             <li>
               <a href="/api/v1/root/${r._id}${queryString}">
-                ${r.name || "Untitled"}
+                  ${escapeHtml(r.name || "Untitled")}
               </a>
             </li>
           `,
@@ -1519,7 +1529,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
       </div>
 
       <div class="note-content">
-        <div class="note-author">${user.username}</div>
+<div class="note-author">${escapeHtml(user.username)}</div>
         <a
           href="/api/v1/node/${n.nodeId}/${n.version}/notes/${noteId}${tokenQS}"
           class="note-link"
@@ -1528,7 +1538,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
             n.contentType === "file"
               ? `<span class="file-badge">FILE</span>`
               : ""
-          }${preview}
+          }${escapeHtml(preview)}
         </a>
       </div>
 
@@ -1536,7 +1546,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
         ${new Date(n.createdAt).toLocaleString()}
         <span class="meta-separator">•</span>
         <a href="/api/v1/node/${n.nodeId}/${n.version}${tokenQS}">
-          ${nodeName} v${n.version}
+${escapeHtml(nodeName)} v${n.version}
         </a>
         <span class="meta-separator">•</span>
         <a href="/api/v1/node/${n.nodeId}/${n.version}/notes${tokenQS}">
@@ -1556,7 +1566,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${user.username} — Notes</title>
+<title>${escapeHtml(user.username)} — Notes</title>
   <style>
 :root {
   --glass-water-rgb: 115, 111, 230;
@@ -1782,7 +1792,20 @@ body::after {
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
   transform: translateY(-2px);
 }
+.notes-list {
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
 
+.note-card {
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.note-card:nth-child(1) { animation-delay: 0.25s; }
+.note-card:nth-child(2) { animation-delay: 0.3s; }
+.note-card:nth-child(3) { animation-delay: 0.35s; }
+.note-card:nth-child(4) { animation-delay: 0.4s; }
+.note-card:nth-child(5) { animation-delay: 0.45s; }
+.note-card:nth-child(n+6) { animation-delay: 0.5s; }
 .search-form button {
   position: relative;
   overflow: hidden;
@@ -2110,7 +2133,7 @@ body::after {
     <div class="header">
       <h1>
         Notes by
-        <a href="/api/v1/user/${userId}${tokenQS}">${user.username}</a>
+<a href="/api/v1/user/${userId}${tokenQS}">${escapeHtml(user.username)}</a>
       </h1>
       <div class="header-subtitle">
         View and manage your last 200notes across every tree
@@ -2124,7 +2147,7 @@ body::after {
           type="text"
           name="q"
           placeholder="Search notes..."
-          value="${query.replace(/"/g, "&quot;")}"
+value="${escapeHtml(query)}"
         />
         <button type="submit">Search</button>
       </form>
@@ -2256,7 +2279,7 @@ router.get("/user/:userId/tags", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${user.username} — Mail</title>
+  <title>${escapeHtml(user.username)} — Mail</title>
   <style>
 :root {
   --glass-water-rgb: 115, 111, 230;
@@ -2319,23 +2342,13 @@ body::after {
 }
 
 @keyframes float {
-  0%, 100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-30px) rotate(5deg);
-  }
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
 }
 
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .container {
@@ -2351,7 +2364,7 @@ body::after {
   gap: 12px;
   margin-bottom: 20px;
   flex-wrap: wrap;
-  animation: fadeInUp 0.5s ease-out;
+  animation: fadeInUp 0.5s ease-out both;
 }
 
 .back-link {
@@ -2391,18 +2404,13 @@ body::after {
 
 .back-link:hover {
   background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
-  transform: translateY(-1px);
-  animation: waterDrift 2.2s ease-in-out infinite alternate;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
 }
 
 .back-link:hover::before {
   opacity: 1;
   transform: translateX(30%) translateY(10%);
-}
-
-@keyframes waterDrift {
-  0% { transform: translateY(-1px); }
-  100% { transform: translateY(1px); }
 }
 
 /* Glass Header Section */
@@ -2489,6 +2497,7 @@ body::after {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
 }
 
 .note-card {
@@ -2504,16 +2513,15 @@ body::after {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   color: white;
   overflow: hidden;
-  
-  /* Start hidden for lazy loading */
-  opacity: 0;
-  transform: translateY(30px);
+  animation: fadeInUp 0.5s ease-out both;
 }
 
-/* When item becomes visible */
-.note-card.visible {
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
+.note-card:nth-child(1) { animation-delay: 0.25s; }
+.note-card:nth-child(2) { animation-delay: 0.3s; }
+.note-card:nth-child(3) { animation-delay: 0.35s; }
+.note-card:nth-child(4) { animation-delay: 0.4s; }
+.note-card:nth-child(5) { animation-delay: 0.45s; }
+.note-card:nth-child(n+6) { animation-delay: 0.5s; }
 
 .note-card::before {
   content: "";
@@ -2633,6 +2641,7 @@ body::after {
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.28);
   color: white;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
 }
 
 .empty-state::before {
@@ -2733,7 +2742,7 @@ body::after {
     <div class="header">
       <h1>
         Mail for
-        <a href="/api/v1/user/${userId}${tokenQS}">@${user.username}</a>
+        <a href="/api/v1/user/${userId}${tokenQS}">@${escapeHtml(user.username)}</a>
         ${
           notes.length > 0
             ? `<span class="message-count">${notes.length}</span>`
@@ -2765,7 +2774,7 @@ body::after {
             <div class="note-content">
               <div class="note-author">
                 <a href="/api/v1/user/${n.userId._id}${tokenQS}">
-                  ${author}
+                  ${escapeHtml(author)}
                 </a>
               </div>
               <a href="/api/v1/node/${n.nodeId}/${n.version}/notes/${
@@ -2775,7 +2784,7 @@ body::after {
                   n.contentType === "file"
                     ? `<span class="file-badge">FILE</span>`
                     : ""
-                }${preview}
+                }${escapeHtml(preview)}
               </a>
             </div>
 
@@ -2783,7 +2792,7 @@ body::after {
               ${new Date(n.createdAt).toLocaleString()}
               <span class="meta-separator">•</span>
               <a href="/api/v1/node/${n.nodeId}/${n.version}${tokenQS}">
-                ${nodeName} v${n.version}
+                ${escapeHtml(nodeName)} v${n.version}
               </a>
               <span class="meta-separator">•</span>
               <a href="/api/v1/node/${n.nodeId}/${n.version}/notes${tokenQS}">
@@ -2807,31 +2816,6 @@ body::after {
     `
     }
   </div>
-
-  <script>
-    // Intersection Observer for lazy loading animations
-    const observerOptions = {
-      root: null,
-      rootMargin: '50px',
-      threshold: 0.1
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry, index) => {
-        if (entry.isIntersecting) {
-          setTimeout(() => {
-            entry.target.classList.add('visible');
-          }, index * 50);
-          observer.unobserve(entry.target);
-        }
-      });
-    }, observerOptions);
-
-    // Observe all note cards
-    document.querySelectorAll('.note-card').forEach(card => {
-      observer.observe(card);
-    });
-  </script>
 </body>
 </html>
 `);
@@ -2948,11 +2932,7 @@ const renderKeyValueMap = (data) => {
     </ul>
   `;
 };
-const escapeHtml = (str = "") =>
-  String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+
 
 /* ------------------------- GENERIC HELPERS ------------------------- */
 
@@ -3115,11 +3095,13 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
     /* HELPERS                                          */
     /* ─────────────────────────────────────────────── */
 
-    const esc = (str = "") =>
-      String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+   const esc = (str = "") =>
+  String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 
     const link = (id, label) =>
       id
@@ -3945,29 +3927,582 @@ router.get("/user/reset-password/:token", async (req, res) => {
 
     if (!user) {
       return res.send(`
-        <html>
-        <body style="font-family: sans-serif; padding: 20px;">
-          <h2>Reset Link Expired or Invalid</h2>
-          <p>Please request a new password reset.</p>
-        </body>
-        </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#736fe6">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Tree - Link Expired</title>
+  <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      background: #736fe6;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px; height: 600px;
+      background: white;
+      top: -300px; right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px; height: 400px;
+      background: white;
+      bottom: -200px; left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-30px) rotate(5deg); }
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .brand-header {
+      position: relative; z-index: 1;
+      margin-bottom: 32px; text-align: center;
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    .brand-logo {
+      font-size: 80px; margin-bottom: 16px; display: inline-block;
+      filter: drop-shadow(0 8px 32px rgba(0,0,0,0.2));
+      animation: fadeInDown 0.5s ease-out both, grow 4.5s ease-in-out infinite;
+    }
+
+    @keyframes grow {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    .brand-title {
+      font-size: 56px; font-weight: 600; color: white;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      letter-spacing: -1.5px; margin-bottom: 8px;
+    }
+
+    .container {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      padding: 48px;
+      border-radius: 16px;
+      width: 100%; max-width: 460px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+      border: 1px solid rgba(255,255,255,0.28);
+      text-align: center;
+      position: relative; z-index: 1;
+      animation: slideUp 0.6s ease-out 0.2s both;
+    }
+
+    h2 {
+      font-size: 32px; font-weight: 600; color: white;
+      margin-bottom: 12px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .subtitle {
+      font-size: 15px; color: rgba(255,255,255,0.85);
+      margin-bottom: 24px; line-height: 1.5;
+    }
+
+    .back-btn {
+      display: inline-block;
+      width: 100%;
+      padding: 14px;
+      margin-top: 16px;
+      border-radius: 980px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.25);
+      backdrop-filter: blur(10px);
+      color: white;
+      font-size: 16px; font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      text-align: center;
+      font-family: inherit;
+    }
+
+    .back-btn:hover {
+      background: rgba(255,255,255,0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    }
+
+    @media (max-width: 640px) {
+      .brand-logo { font-size: 64px; }
+      .brand-title { font-size: 42px; }
+      .container { padding: 32px 24px; }
+      h2 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="brand-header">
+    <a href="/" style="text-decoration: none;">
+      <div class="brand-logo">🌳</div>
+      <h1 class="brand-title">Tree</h1>
+    </a>
+  </div>
+
+  <div class="container">
+    <h2>Link Expired</h2>
+    <p class="subtitle">This reset link is invalid or has expired. Please request a new password reset.</p>
+    <a href="/login" class="back-btn">← Back to Login</a>
+  </div>
+</body>
+</html>
       `);
     }
 
-    // Render reset password form
     return res.send(`
-      <html>
-      <body style="font-family: sans-serif; padding: 20px;">
-        <h2>Reset Password</h2>
-        <form method="POST" action="/api/v1/user/reset-password/${token}">
-          <input type="password" name="password" placeholder="New Password" style="padding:8px; width:250px;" required />
-          <br/><br/>
-          <input type="password" name="confirm" placeholder="Confirm Password" style="padding:8px; width:250px;" required />
-          <br/><br/>
-          <button type="submit" style="padding:10px 20px;">Reset Password</button>
-        </form>
-      </body>
-      </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#736fe6">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Tree - Reset Password</title>
+  <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      background: #736fe6;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px; height: 600px;
+      background: white;
+      top: -300px; right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px; height: 400px;
+      background: white;
+      bottom: -200px; left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-30px) rotate(5deg); }
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .brand-header {
+      position: relative; z-index: 1;
+      margin-bottom: 32px; text-align: center;
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    .brand-logo {
+      font-size: 80px; margin-bottom: 16px; display: inline-block;
+      filter: drop-shadow(0 8px 32px rgba(0,0,0,0.2));
+      animation: fadeInDown 0.5s ease-out both, grow 4.5s ease-in-out infinite;
+    }
+
+    @keyframes grow {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    .brand-title {
+      font-size: 56px; font-weight: 600; color: white;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      letter-spacing: -1.5px; margin-bottom: 8px;
+    }
+
+    .container {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      padding: 48px;
+      border-radius: 16px;
+      width: 100%; max-width: 460px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+      border: 1px solid rgba(255,255,255,0.28);
+      text-align: center;
+      position: relative; z-index: 1;
+      animation: slideUp 0.6s ease-out 0.2s both;
+    }
+
+    h2 {
+      font-size: 32px; font-weight: 600; color: white;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .subtitle {
+      font-size: 15px; color: rgba(255,255,255,0.85);
+      margin-bottom: 32px; line-height: 1.5;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    label {
+      display: block;
+      font-size: 14px; font-weight: 600; color: white;
+      margin-bottom: 8px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    input {
+      width: 100%;
+      padding: 14px 18px;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      font-size: 16px;
+      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      font-family: inherit;
+      color: white;
+      font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.25);
+    }
+
+    input:focus {
+      outline: none;
+      border-color: rgba(255,255,255,0.6);
+      background: rgba(255,255,255,0.25);
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.15), 0 8px 30px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.4);
+      transform: translateY(-2px);
+    }
+
+    input::placeholder {
+      color: rgba(255,255,255,0.5);
+      font-weight: 400;
+    }
+
+    input.error {
+      border-color: rgba(239,68,68,0.6);
+      background: rgba(239,68,68,0.1);
+    }
+
+    .password-hint {
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 6px;
+      text-align: left;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      margin-top: 8px;
+      border-radius: 980px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.25);
+      backdrop-filter: blur(10px);
+      color: white;
+      font-size: 16px; font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      font-family: inherit;
+      position: relative;
+      overflow: hidden;
+    }
+
+    button:hover {
+      background: rgba(255,255,255,0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    }
+
+    button:active { transform: translateY(0); }
+
+    button.loading {
+      color: transparent;
+      pointer-events: none;
+    }
+
+    button.loading::after {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      top: 50%; left: 50%;
+      margin-left: -10px; margin-top: -10px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .message {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px; font-weight: 600;
+      text-align: left;
+      display: none;
+    }
+
+    .error-message {
+      color: white;
+      background: rgba(239,68,68,0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(239,68,68,0.4);
+    }
+
+    .success-message {
+      color: white;
+      background: rgba(16,185,129,0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(16,185,129,0.4);
+    }
+
+    .message.show { display: block; }
+
+    .back-btn {
+      display: inline-block;
+      width: 100%;
+      padding: 12px;
+      margin-top: 16px;
+      border-radius: 980px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.15);
+      color: white;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .back-btn:hover {
+      background: rgba(255,255,255,0.25);
+      transform: translateY(-2px);
+    }
+
+    @media (max-width: 640px) {
+      .brand-logo { font-size: 64px; }
+      .brand-title { font-size: 42px; }
+      .container { padding: 32px 24px; }
+      h2 { font-size: 28px; }
+      input { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="brand-header">
+    <a href="/" style="text-decoration: none;">
+      <div class="brand-logo">🌳</div>
+      <h1 class="brand-title">Tree</h1>
+    </a>
+  </div>
+
+  <div class="container">
+    <h2>Reset Password</h2>
+    <p class="subtitle">Enter your new password below</p>
+
+    <form id="resetForm">
+      <div class="input-group">
+        <label for="password">New Password</label>
+        <input
+          type="password"
+          id="password"
+          placeholder="Enter new password"
+          required
+          autocomplete="new-password"
+        />
+        <div class="password-hint">Must be at least 8 characters</div>
+      </div>
+
+      <div class="input-group">
+        <label for="confirm">Confirm Password</label>
+        <input
+          type="password"
+          id="confirm"
+          placeholder="Confirm new password"
+          required
+          autocomplete="new-password"
+        />
+      </div>
+
+      <button type="submit" id="resetBtn">Reset Password</button>
+    </form>
+
+    <div id="errorMessage" class="message error-message"></div>
+    <div id="successMessage" class="message success-message">
+      ✓ Password reset successful! Redirecting to login...
+    </div>
+
+    <a href="/login" class="back-btn">← Back to Login</a>
+  </div>
+
+  <script>
+    const form = document.getElementById("resetForm");
+    const passwordInput = document.getElementById("password");
+    const confirmInput = document.getElementById("confirm");
+    const errorEl = document.getElementById("errorMessage");
+    const successEl = document.getElementById("successMessage");
+    const btn = document.getElementById("resetBtn");
+
+    confirmInput.addEventListener("input", () => {
+      if (confirmInput.value && passwordInput.value !== confirmInput.value) {
+        confirmInput.classList.add("error");
+      } else {
+        confirmInput.classList.remove("error");
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const password = passwordInput.value;
+      const confirm = confirmInput.value;
+
+      errorEl.classList.remove("show");
+      successEl.classList.remove("show");
+      passwordInput.classList.remove("error");
+      confirmInput.classList.remove("error");
+
+      if (password.length < 8) {
+        errorEl.textContent = "Password must be at least 8 characters.";
+        errorEl.classList.add("show");
+        passwordInput.classList.add("error");
+        passwordInput.focus();
+        return;
+      }
+
+      if (password !== confirm) {
+        errorEl.textContent = "Passwords do not match.";
+        errorEl.classList.add("show");
+        confirmInput.classList.add("error");
+        confirmInput.focus();
+        return;
+      }
+
+      btn.classList.add("loading");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/v1/user/reset-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: "${token}", password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorEl.textContent = data.message || "Reset failed. Please try again.";
+          errorEl.classList.add("show");
+          btn.classList.remove("loading");
+          btn.disabled = false;
+          return;
+        }
+
+        successEl.classList.add("show");
+        form.style.display = "none";
+
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+
+      } catch (err) {
+        errorEl.textContent = "An error occurred. Please try again.";
+        errorEl.classList.add("show");
+        btn.classList.remove("loading");
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
     `);
   } catch (err) {
     console.error("Error loading reset password page:", err);
@@ -4181,7 +4716,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${user.username} — Raw Ideas</title>
+<title>${escapeHtml(user.username)} — Raw Ideas</title>
   <style>
 :root {
   --glass-water-rgb: 115, 111, 230;
@@ -4830,7 +5365,7 @@ body::after {
     <div class="header">
       <h1>
         Raw Ideas for
-        <a href="/api/v1/user/${userId}${tokenQS}">${user.username}</a>
+<a href="/api/v1/user/${userId}${tokenQS}">${escapeHtml(user.username)}</a>
       </h1>
       <div class="header-subtitle">
 Convert loose thoughts into structure (viewing last 200)      </div>
@@ -4865,11 +5400,11 @@ Convert loose thoughts into structure (viewing last 200)      </div>
               href="/api/v1/user/${userId}/raw-ideas/${r._id}${tokenQS}"
               class="idea-link"
             >
-              ${
-                r.contentType === "file"
-                  ? `<span class="file-badge">FILE</span>${r.content}`
-                  : r.content
-              }
+             ${
+  r.contentType === "file"
+    ? `<span class="file-badge">FILE</span>${escapeHtml(r.content)}`
+    : escapeHtml(r.content)
+}
             </a>
           </div>
 
@@ -5064,7 +5599,7 @@ router.post(
   },
 );
 
-router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
+router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
   try {
     const { userId, rawIdeaId } = req.params;
 
@@ -5087,12 +5622,15 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
 
-    const back = `/api/v1/user/${userId}/raw-ideas${tokenQS}`;
-
+const hasToken = !!token;
+const back = hasToken
+  ? `/api/v1/user/${userId}/raw-ideas${tokenQS}`
+  : "https://tree.tabors.site";
+const backText = hasToken ? "← Back to Raw Ideas" : "← Back to Home";
     const userLink =
       rawIdea.userId && rawIdea.userId !== "empty"
         ? `<a href="/api/v1/user/${rawIdea.userId._id}${tokenQS}">
-               ${rawIdea.userId.username ?? rawIdea.userId}
+               ${escapeHtml(rawIdea.userId.username ?? String(rawIdea.userId))}
              </a>`
         : "Unknown user";
 
@@ -5108,10 +5646,22 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Raw Idea by ${rawIdea.userId?.username || "User"}</title>
+  <title>Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")}</title>
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      background: #736fe6;
       margin: 0;
       padding: 0;
     }
@@ -5122,11 +5672,64 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       min-height: 100vh;
       padding: 20px;
       color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .container {
       max-width: 900px;
       margin: 0 auto;
+      position: relative;
+      z-index: 1;
     }
 
     /* Back Navigation */
@@ -5135,49 +5738,68 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       gap: 12px;
       margin-bottom: 20px;
       flex-wrap: wrap;
+      animation: fadeInUp 0.5s ease-out;
     }
 
     .back-link {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
+      padding: 10px 20px;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    /* Raw Idea Card */
-    .raw-idea-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
       position: relative;
       overflow: hidden;
     }
 
-    .raw-idea-card::before {
-      content: '';
+    .back-link::before {
+      content: "";
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .back-link:hover {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    }
+
+    .back-link:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Raw Idea Card */
+    .raw-idea-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
     }
 
     /* User Info */
@@ -5187,7 +5809,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       gap: 8px;
       margin-bottom: 20px;
       padding-bottom: 16px;
-      border-bottom: 1px solid #e9ecef;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .user-info::before {
@@ -5196,57 +5818,170 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
     }
 
     .user-info a {
-      color: #667eea;
+      color: white;
       text-decoration: none;
       font-weight: 600;
       font-size: 15px;
-      transition: color 0.2s;
+      transition: all 0.2s;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
     .user-info a:hover {
-      color: #764ba2;
-      text-decoration: underline;
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+      transform: translateX(2px);
     }
 
-    /* Copy Button */
+    /* Copy Button Bar */
     .copy-bar {
       display: flex;
       justify-content: flex-end;
+      gap: 8px;
       margin-bottom: 16px;
     }
 
-    #copyBtn {
-      background: rgba(102, 126, 234, 0.1);
-      border: 1px solid rgba(102, 126, 234, 0.2);
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
       cursor: pointer;
       font-size: 20px;
       padding: 8px 12px;
-      border-radius: 8px;
-      transition: all 0.2s;
+      border-radius: 980px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
     }
 
-    #copyBtn:hover {
-      background: rgba(102, 126, 234, 0.2);
+    .copy-btn::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
-    #copyBtn:active {
+    .copy-btn:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    .copy-btn:active {
       transform: translateY(0);
+    }
+
+    #copyUrlBtn {
+      background: rgba(255, 255, 255, 0.25);
     }
 
     /* Raw Idea Content */
     pre {
-      background: #f8f9fa;
+      background: rgba(255, 255, 255, 0.3);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
       padding: 20px;
       border-radius: 12px;
       font-size: 16px;
       line-height: 1.7;
       white-space: pre-wrap;
       word-wrap: break-word;
-      border: 1px solid #e9ecef;
+      border: 1px solid rgba(255, 255, 255, 0.3);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      color: #1a1a1a;
+      color: #3d2f8f;
+      font-weight: 600;
+      text-shadow:
+        0 0 10px rgba(102, 126, 234, 0.4),
+        0 1px 3px rgba(255, 255, 255, 1);
+      box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    pre::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        110deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.4),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-100%);
+      pointer-events: none;
+    }
+
+    pre:hover {
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow:
+        0 8px 32px rgba(102, 126, 234, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    pre.flash::before {
+      opacity: 1;
+      animation: glassShimmer 1.2s ease forwards;
+    }
+
+    pre:hover::before {
+      opacity: 1;
+      animation: glassShimmer 1.2s ease forwards;
+    }
+
+    pre.copied {
+      animation: textGlow 0.8s ease-out;
+    }
+
+    @keyframes textGlow {
+      0% {
+        box-shadow:
+          0 4px 20px rgba(0, 0, 0, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      }
+      50% {
+        box-shadow:
+          0 0 40px rgba(102, 126, 234, 0.6),
+          0 0 60px rgba(102, 126, 234, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        text-shadow:
+          0 0 20px rgba(102, 126, 234, 0.8),
+          0 0 30px rgba(102, 126, 234, 0.6),
+          0 1px 3px rgba(255, 255, 255, 1);
+      }
+      100% {
+        box-shadow:
+          0 4px 20px rgba(0, 0, 0, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      }
+    }
+
+    @keyframes glassShimmer {
+      0% {
+        opacity: 0;
+        transform: translateX(-120%) skewX(-15deg);
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: translateX(120%) skewX(-15deg);
+      }
     }
 
     /* Responsive */
@@ -5256,7 +5991,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       }
 
       .raw-idea-card {
-        padding: 20px;
+        padding: 24px 20px;
       }
 
       pre {
@@ -5284,7 +6019,8 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="${back}" class="back-link">← Back to Raw Ideas</a>
+<a href="${back}" class="back-link">${backText}</a>
+      <button id="copyUrlBtn" class="copy-btn" title="Copy URL to share">🔗</button>
     </div>
 
     <!-- Raw Idea Card -->
@@ -5294,21 +6030,44 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       </div>
 
       <div class="copy-bar">
-        <button id="copyBtn" title="Copy raw idea">📋</button>
+        <button id="copyBtn" class="copy-btn" title="Copy raw idea">📋</button>
       </div>
 
-      <pre id="content">${rawIdea.content}</pre>
+      <pre id="content">${escapeHtml(rawIdea.content)}</pre>
     </div>
   </div>
 
   <script>
-    const btn = document.getElementById("copyBtn");
+    const copyBtn = document.getElementById("copyBtn");
+    const copyUrlBtn = document.getElementById("copyUrlBtn");
     const content = document.getElementById("content");
 
-    btn.addEventListener("click", () => {
+    copyBtn.addEventListener("click", () => {
       navigator.clipboard.writeText(content.textContent).then(() => {
-        btn.textContent = "✔️";
-        setTimeout(() => (btn.textContent = "📋"), 900);
+        copyBtn.textContent = "✔️";
+        setTimeout(() => (copyBtn.textContent = "📋"), 900);
+
+        content.classList.add("copied");
+        setTimeout(() => content.classList.remove("copied"), 800);
+
+        setTimeout(() => {
+          content.classList.remove("flash");
+          void content.offsetWidth;
+          content.classList.add("flash");
+          setTimeout(() => content.classList.remove("flash"), 1300);
+        }, 600);
+      });
+    });
+
+    copyUrlBtn.addEventListener("click", () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      if (!url.searchParams.has('html')) {
+        url.searchParams.set('html', '');
+      }
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        copyUrlBtn.textContent = "✔️";
+        setTimeout(() => (copyUrlBtn.textContent = "🔗"), 900);
       });
     });
   </script>
@@ -5332,10 +6091,22 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${fileName}</title>
+  <title>${escapeHtml(fileName)}</title>
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      background: #736fe6;
       margin: 0;
       padding: 0;
     }
@@ -5346,11 +6117,64 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       min-height: 100vh;
       padding: 20px;
       color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .container {
       max-width: 900px;
       margin: 0 auto;
+      position: relative;
+      z-index: 1;
     }
 
     /* Back Navigation */
@@ -5359,49 +6183,68 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       gap: 12px;
       margin-bottom: 20px;
       flex-wrap: wrap;
+      animation: fadeInUp 0.5s ease-out;
     }
 
     .back-link {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
+      padding: 10px 20px;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    /* File Card */
-    .file-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
       position: relative;
       overflow: hidden;
     }
 
-    .file-card::before {
-      content: '';
+    .back-link::before {
+      content: "";
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .back-link:hover {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    }
+
+    .back-link:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* File Card */
+    .file-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
     }
 
     /* User Info */
@@ -5411,73 +6254,151 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       gap: 8px;
       margin-bottom: 20px;
       padding-bottom: 16px;
-      border-bottom: 1px solid #e9ecef;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     }
 
-     .user-info::before {
+    .user-info::before {
       content: '👤';
       font-size: 18px;
     }
 
     .user-info a {
-      color: #667eea;
+      color: white;
       text-decoration: none;
       font-weight: 600;
       font-size: 15px;
-      transition: color 0.2s;
+      transition: all 0.2s;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
     .user-info a:hover {
-      color: #764ba2;
-      text-decoration: underline;
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+      transform: translateX(2px);
     }
 
     /* File Header */
     h1 {
       font-size: 24px;
       font-weight: 700;
-      color: #1a1a1a;
+      color: white;
       margin-bottom: 20px;
       word-break: break-word;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
-    h1::before {
-      content: '📎 ';
-      font-size: 22px;
+    /* Action Buttons */
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
     }
 
-    /* Download Button */
     .download {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       padding: 12px 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
       color: white;
       text-decoration: none;
-      border-radius: 10px;
+      border-radius: 980px;
       font-weight: 600;
       font-size: 15px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-      margin-bottom: 24px;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
     }
 
-    .download:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    .download::after {
+      content: '⬇️';
+      font-size: 16px;
+      margin-left: 4px;
     }
 
     .download::before {
-      content: '⬇️';
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .download:hover {
+      background: rgba(255, 255, 255, 0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    }
+
+    .download:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    .copy-url-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 980px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.3s;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .copy-url-btn::after {
+      content: '🔗';
       font-size: 16px;
+      margin-left: 4px;
+    }
+
+    .copy-url-btn::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .copy-url-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .copy-url-btn:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     /* Media Container */
     .media {
       margin-top: 24px;
       padding-top: 24px;
-      border-top: 1px solid #e9ecef;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .media img,
@@ -5485,7 +6406,8 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
     .media audio {
       max-width: 100%;
       border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     /* Responsive */
@@ -5495,14 +6417,19 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
       }
 
       .file-card {
-        padding: 20px;
+        padding: 24px 20px;
       }
 
       h1 {
         font-size: 22px;
       }
 
-      .download {
+      .action-bar {
+        flex-direction: column;
+      }
+
+      .download,
+      .copy-url-btn {
         padding: 12px 18px;
         font-size: 16px;
         width: 100%;
@@ -5529,7 +6456,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="${back}" class="back-link">← Back to Raw Ideas</a>
+<a href="${back}" class="back-link">${backText}</a>
     </div>
 
     <!-- File Card -->
@@ -5538,17 +6465,39 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", urlAuth, async (req, res) => {
         ${userLink}
       </div>
 
-      <h1>${fileName}</h1>
+      <h1>${escapeHtml(fileName)}</h1>
 
-      <a class="download" href="${fileUrl}" download>
-        Download
-      </a>
+      <div class="action-bar">
+        <a class="download" href="${fileUrl}" download>
+          Download
+        </a>
+        <button id="copyUrlBtn" class="copy-url-btn">
+          Share
+        </button>
+      </div>
 
       <div class="media">
         ${mediaHtml}
       </div>
     </div>
   </div>
+
+  <script>
+    const copyUrlBtn = document.getElementById("copyUrlBtn");
+
+    copyUrlBtn.addEventListener("click", () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      if (!url.searchParams.has('html')) {
+        url.searchParams.set('html', '');
+      }
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        const originalText = copyUrlBtn.textContent;
+        copyUrlBtn.textContent = "✔️ Copied!";
+        setTimeout(() => (copyUrlBtn.textContent = originalText), 900);
+      });
+    });
+  </script>
 </body>
 </html>
 `);
@@ -10072,7 +11021,6 @@ router.post(
     }
   },
 );
-
 router.get("/user/:userId/chats", urlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -10137,8 +11085,28 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       return `${(ms / 60000).toFixed(1)}m`;
     };
 
+    const formatContent = (str) => {
+      if (!str) return "";
+      const s = String(str).trim();
+      if ((s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"))) {
+        try {
+          const parsed = JSON.parse(s);
+          const pretty = JSON.stringify(parsed, null, 2);
+          return `<span class="chain-json">${esc(pretty)}</span>`;
+        } catch (_) {}
+      }
+      return esc(s);
+    };
+
     const modeLabel = (path) => {
       if (!path) return "unknown";
+
+      if (path === "translator") return "🔄 Translator";
+      if (path.startsWith("tree:orchestrator:plan:")) {
+        const num = path.split(":")[3];
+        return `📋 Plan Step ${num}`;
+      }
+
       const parts = path.split(":");
       const labels = {
         home: "🏠 Home",
@@ -10146,24 +11114,27 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       };
       const subLabels = {
         default: "Default",
-        structure: "Structure",
-        edit: "Edit",
+        structure: "🏗️ Structure",
+        edit: "✏️ Edit",
         be: "Be",
         reflect: "Reflect",
-        navigate: "Navigate",
+        navigate: "🧭 Navigate",
         understand: "Understand",
+        getContext: "📖 Context",
+        respond: "💬 Respond",
+        notes: "📝 Notes",
       };
       const big = labels[parts[0]] || parts[0];
       const sub = subLabels[parts[1]] || parts[1] || "";
-      return sub ? `${big} → ${sub}` : big;
+      return sub ? `${big} ${sub}` : big;
     };
 
     const sourceLabel = (src) => {
       const map = {
         user: "👤 User",
-        orchestrator: "🤖 Orchestrator",
-        subtask: "📋 Subtask",
-        system: "⚙️ System",
+        orchestrator: "⚙️ Chain",
+        script: "📜 Script",
+        system: "🔧 System",
       };
       return map[src] || src;
     };
@@ -10196,52 +11167,181 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
 
     const actionColor = (action) => {
       switch (action) {
-        case "create":
-          return "#48bb78";
-        case "delete":
-        case "branchLifecycle":
-          return "#c85050";
-        case "editStatus":
-        case "editValue":
-        case "editGoal":
-        case "editSchedule":
-        case "editNameNode":
-        case "editScript":
-          return "#5082dc";
-        case "executeScript":
-          return "#38bdd2";
-        case "prestige":
-          return "#c8aa32";
-        case "note":
-        case "rawIdea":
-          return "#9b64dc";
-        case "invite":
-          return "#d264a0";
-        case "transaction":
-        case "trade":
-          return "#dc8c3c";
-        case "purchase":
-          return "#34be82";
-        case "updateParent":
-        case "updateChildNode":
-          return "#3caab4";
-        case "understanding":
-          return "#6464d2";
-        default:
-          return "#736fe6";
+        case "create": return "#48bb78";
+        case "delete": case "branchLifecycle": return "#c85050";
+        case "editStatus": case "editValue": case "editGoal":
+        case "editSchedule": case "editNameNode": case "editScript": return "#5082dc";
+        case "executeScript": return "#38bdd2";
+        case "prestige": return "#c8aa32";
+        case "note": case "rawIdea": return "#9b64dc";
+        case "invite": return "#d264a0";
+        case "transaction": case "trade": return "#dc8c3c";
+        case "purchase": return "#34be82";
+        case "updateParent": case "updateChildNode": return "#3caab4";
+        case "understanding": return "#6464d2";
+        default: return "#736fe6";
       }
     };
 
     const sessionGroups = sessions;
 
-    const renderChat = (chat) => {
-      const duration = formatDuration(
-        chat.startMessage?.time,
-        chat.endMessage?.time,
-      );
+    // ── Chain grouping ─────────────────────────────────────
+
+    const groupIntoChains = (chats) => {
+      const chains = [];
+      let current = null;
+      for (const chat of chats) {
+        if (chat.chainIndex === 0 || !current) {
+          current = { root: chat, steps: [] };
+          chains.push(current);
+        } else {
+          current.steps.push(chat);
+        }
+      }
+      return chains;
+    };
+
+    // ── Phase grouping ─────────────────────────────────────
+
+    const groupStepsIntoPhases = (steps) => {
+      const phases = [];
+      let currentPlan = null;
+      for (const step of steps) {
+        const mode = step.aiContext?.path || "";
+        if (mode === "translator") {
+          currentPlan = null;
+          phases.push({ type: "translate", step });
+        } else if (mode.startsWith("tree:orchestrator:plan:")) {
+          currentPlan = { type: "plan", marker: step, substeps: [] };
+          phases.push(currentPlan);
+        } else if (mode === "tree:respond") {
+          currentPlan = null;
+          phases.push({ type: "respond", step });
+        } else if (currentPlan) {
+          currentPlan.substeps.push(step);
+        } else {
+          phases.push({ type: "step", step });
+        }
+      }
+      return phases;
+    };
+
+    // ── Render substep ─────────────────────────────────────
+
+    const renderSubstep = (chat) => {
+      const duration = formatDuration(chat.startMessage?.time, chat.endMessage?.time);
+      const stopped = chat.endMessage?.stopped;
+
+      const dotClass = stopped ? "chain-dot-stopped"
+        : chat.endMessage?.time ? "chain-dot-done"
+        : "chain-dot-pending";
+
+      const inputFull = formatContent(chat.startMessage?.content);
+      const outputFull = formatContent(chat.endMessage?.content);
+
+      return `
+      <details class="chain-substep">
+        <summary class="chain-substep-summary">
+          <span class="chain-dot ${dotClass}"></span>
+          <span class="chain-step-mode">${modeLabel(chat.aiContext?.path)}</span>
+          ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
+        </summary>
+        <div class="chain-step-body">
+          <div class="chain-step-input"><span class="chain-io-label chain-io-in">IN</span>${inputFull}</div>
+          ${outputFull ? `<div class="chain-step-output"><span class="chain-io-label chain-io-out">OUT</span>${outputFull}</div>` : ""}
+        </div>
+      </details>`;
+    };
+
+    // ── Render phases ──────────────────────────────────────
+
+    const renderPhases = (steps) => {
+      const phases = groupStepsIntoPhases(steps);
+      if (phases.length === 0) return "";
+
+      const phaseHtml = phases.map((phase) => {
+        if (phase.type === "translate") {
+          const s = phase.step;
+          const duration = formatDuration(s.startMessage?.time, s.endMessage?.time);
+          const outputFull = formatContent(s.endMessage?.content);
+          return `
+          <details class="chain-phase chain-phase-translate">
+            <summary class="chain-phase-summary">
+              <span class="chain-phase-icon">🔄</span>
+              <span class="chain-phase-label">Translator</span>
+              ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
+            </summary>
+            ${outputFull ? `<div class="chain-step-body"><div class="chain-step-output"><span class="chain-io-label chain-io-out">PLAN</span>${outputFull}</div></div>` : ""}
+          </details>`;
+        }
+
+        if (phase.type === "plan") {
+          const m = phase.marker;
+          const inputFull = formatContent(m.startMessage?.content);
+          const hasSubsteps = phase.substeps.length > 0;
+          return `
+          <div class="chain-phase chain-phase-plan">
+            <div class="chain-phase-header">
+              <span class="chain-phase-icon">📋</span>
+              <span class="chain-phase-label">${modeLabel(m.aiContext?.path)}</span>
+            </div>
+            <div class="chain-plan-directive">${inputFull}</div>
+            ${hasSubsteps ? `<div class="chain-substeps">${phase.substeps.map(renderSubstep).join("")}</div>` : ""}
+          </div>`;
+        }
+
+        if (phase.type === "respond") {
+          const s = phase.step;
+          const duration = formatDuration(s.startMessage?.time, s.endMessage?.time);
+          const inputFull = formatContent(s.startMessage?.content);
+          const outputFull = formatContent(s.endMessage?.content);
+          return `
+          <details class="chain-phase chain-phase-respond">
+            <summary class="chain-phase-summary">
+              <span class="chain-phase-icon">💬</span>
+              <span class="chain-phase-label">${modeLabel(s.aiContext?.path)}</span>
+              ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
+            </summary>
+            <div class="chain-step-body">
+              ${inputFull ? `<div class="chain-step-input"><span class="chain-io-label chain-io-in">IN</span>${inputFull}</div>` : ""}
+              ${outputFull ? `<div class="chain-step-output"><span class="chain-io-label chain-io-out">OUT</span>${outputFull}</div>` : ""}
+            </div>
+          </details>`;
+        }
+
+        return renderSubstep(phase.step);
+      }).join("");
+
+      const summaryParts = phases.map(p => {
+        if (p.type === "translate") return "🔄";
+        if (p.type === "plan") {
+          const sub = p.substeps.map(s => modeLabel(s.aiContext?.path)).join(" → ");
+          return sub ? `📋 ${sub}` : "📋";
+        }
+        if (p.type === "respond") return "💬";
+        return modeLabel(p.step?.aiContext?.path);
+      }).join("  ");
+
+      return `
+      <details class="chain-dropdown">
+        <summary class="chain-summary">
+          ${phases.length} phase${phases.length !== 1 ? "s" : ""}
+          <span class="chain-modes">${summaryParts}</span>
+        </summary>
+        <div class="chain-phases">${phaseHtml}</div>
+      </details>`;
+    };
+
+    // ── Render chain ───────────────────────────────────────
+
+    const renderChain = (chain) => {
+      const chat = chain.root;
+      const steps = chain.steps;
+      const duration = formatDuration(chat.startMessage?.time, chat.endMessage?.time);
       const stopped = chat.endMessage?.stopped;
       const contribs = chat.contributions || [];
       const hasContribs = contribs.length > 0;
+      const hasSteps = steps.length > 0;
 
       const isCustomLlm = chat.llmProvider?.isCustom === true;
       const modelName = chat.llmProvider?.model || "default";
@@ -10256,31 +11356,25 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
         ? `<span class="badge badge-external">External</span>`
         : `<span class="badge badge-energy">⚡2</span>`;
 
-      const contribRows = contribs
-        .map((c) => {
-          const nId = c.nodeId?._id || c.nodeId;
-          const nName = c.nodeId?.name || nId || "—";
-          const nodeRef = nId
-            ? `<a href="/api/v1/node/${nId}${tokenQS}">${esc(nName)}</a>`
-            : `<span style="opacity:0.5">—</span>`;
-          const aiBadge = c.wasAi
-            ? `<span class="mini-badge mini-ai">AI</span>`
-            : "";
-          const cEnergyBadge =
-            c.energyUsed > 0
-              ? `<span class="mini-badge mini-energy">⚡${c.energyUsed}</span>`
-              : "";
-          const color = actionColor(c.action);
+      const contribRows = contribs.map((c) => {
+        const nId = c.nodeId?._id || c.nodeId;
+        const nName = c.nodeId?.name || nId || "—";
+        const nodeRef = nId
+          ? `<a href="/api/v1/node/${nId}${tokenQS}">${esc(nName)}</a>`
+          : `<span style="opacity:0.5">—</span>`;
+        const aiBadge = c.wasAi ? `<span class="mini-badge mini-ai">AI</span>` : "";
+        const cEnergyBadge = c.energyUsed > 0 ? `<span class="mini-badge mini-energy">⚡${c.energyUsed}</span>` : "";
+        const color = actionColor(c.action);
+        return `
+        <tr class="contrib-row">
+          <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}</td>
+          <td>${nodeRef}</td>
+          <td>${aiBadge}${cEnergyBadge}</td>
+          <td class="contrib-time">${formatTime(c.date)}</td>
+        </tr>`;
+      }).join("");
 
-          return `
-          <tr class="contrib-row">
-            <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}</td>
-            <td>${nodeRef}</td>
-            <td>${aiBadge}${cEnergyBadge}</td>
-            <td class="contrib-time">${formatTime(c.date)}</td>
-          </tr>`;
-        })
-        .join("");
+      const stepsHtml = hasSteps ? renderPhases(steps) : "";
 
       return `
       <li class="note-card">
@@ -10302,35 +11396,27 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
             <span class="msg-label">You</span>
             <div class="msg-text">${truncate(chat.startMessage?.content, 400)}</div>
           </div>
-          ${
-            chat.endMessage?.content
-              ? `
+          ${chat.endMessage?.content ? `
           <div class="chat-message chat-ai">
             <span class="msg-label">AI</span>
             <div class="msg-text">${truncate(chat.endMessage.content, 400)}</div>
-          </div>`
-              : ""
-          }
+          </div>` : ""}
         </div>
 
-        ${
-          hasContribs
-            ? `
+        ${stepsHtml}
+
+        ${hasContribs ? `
         <details class="contrib-dropdown">
           <summary class="contrib-summary">
             ${contribs.length} contribution${contribs.length !== 1 ? "s" : ""} during this chat
           </summary>
           <div class="contrib-table-wrap">
             <table class="contrib-table">
-              <thead>
-                <tr><th>Action</th><th>Node</th><th></th><th>Time</th></tr>
-              </thead>
+              <thead><tr><th>Action</th><th>Node</th><th></th><th>Time</th></tr></thead>
               <tbody>${contribRows}</tbody>
             </table>
           </div>
-        </details>`
-            : ""
-        }
+        </details>` : ""}
 
         <div class="note-meta">
           ${formatTime(chat.startMessage?.time)}
@@ -10340,15 +11426,14 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       </li>`;
     };
 
-    const renderedSections = sessionGroups
-      .map((group) => {
-        const chatCount = group.chatCount;
-        const sessionTime = formatTime(group.startTime);
-        const shortId = group.sessionId.slice(0, 8);
+    const renderedSections = sessionGroups.map((group) => {
+      const chatCount = group.chatCount;
+      const sessionTime = formatTime(group.startTime);
+      const shortId = group.sessionId.slice(0, 8);
+      const chains = groupIntoChains(group.chats);
+      const chatCards = chains.map(renderChain).join("");
 
-        const chatCards = group.chats.map(renderChat).join("");
-
-        return `
+      return `
       <div class="session-group">
         <div class="session-pane">
           <div class="session-pane-header">
@@ -10361,8 +11446,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
           <ul class="notes-list">${chatCards}</ul>
         </div>
       </div>`;
-      })
-      .join("");
+    }).join("");
 
     res.send(`
 <!DOCTYPE html>
@@ -10379,345 +11463,238 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
   --glass-alpha-hover: 0.38;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-
-html, body {
-  background: #736fe6;
-  margin: 0;
-  padding: 0;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { background: #736fe6; margin: 0; padding: 0; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: 20px;
-  color: #1a1a1a;
-  position: relative;
-  overflow-x: hidden;
-  touch-action: manipulation;
+  min-height: 100vh; min-height: 100dvh;
+  padding: 20px; color: #1a1a1a;
+  position: relative; overflow-x: hidden; touch-action: manipulation;
 }
 
-body::before,
-body::after {
-  content: '';
-  position: fixed;
-  border-radius: 50%;
-  opacity: 0.08;
-  animation: float 20s infinite ease-in-out;
-  pointer-events: none;
+body::before, body::after {
+  content: ''; position: fixed; border-radius: 50%; opacity: 0.08;
+  animation: float 20s infinite ease-in-out; pointer-events: none;
 }
-
-body::before {
-  width: 600px; height: 600px;
-  background: white;
-  top: -300px; right: -200px;
-  animation-delay: -5s;
-}
-
-body::after {
-  width: 400px; height: 400px;
-  background: white;
-  bottom: -200px; left: -100px;
-  animation-delay: -10s;
-}
+body::before { width: 600px; height: 600px; background: white; top: -300px; right: -200px; animation-delay: -5s; }
+body::after { width: 400px; height: 400px; background: white; bottom: -200px; left: -100px; animation-delay: -10s; }
 
 @keyframes float {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50% { transform: translateY(-30px) rotate(5deg); }
 }
-
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(30px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-}
+.container { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
 
 /* ── Glass Back Nav ─────────────────────────────── */
-
-.back-nav {
-  display: flex; gap: 12px;
-  margin-bottom: 20px; flex-wrap: wrap;
-  animation: fadeInUp 0.5s ease-out;
-}
-
+.back-nav { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; animation: fadeInUp 0.5s ease-out; }
 .back-link {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 10px 20px;
-  background: rgba(115, 111, 230, var(--glass-alpha));
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-  color: white; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
+  background: rgba(115,111,230,var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%); color: white; text-decoration: none;
   border-radius: 980px; font-weight: 600; font-size: 14px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
   box-shadow: 0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
-  border: 1px solid rgba(255,255,255,0.28);
-  position: relative; overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.28); position: relative; overflow: hidden;
 }
-
 .back-link::before {
   content: ""; position: absolute; inset: -40%;
   background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
-  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
-  pointer-events: none;
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
 }
-
-.back-link:hover {
-  background: rgba(115, 111, 230, var(--glass-alpha-hover));
-  transform: translateY(-1px);
-}
-
+.back-link:hover { background: rgba(115,111,230,var(--glass-alpha-hover)); transform: translateY(-1px); }
 .back-link:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
 
 /* ── Glass Header ───────────────────────────────── */
-
 .header {
   position: relative; overflow: hidden;
-  background: rgba(115, 111, 230, var(--glass-alpha));
-  backdrop-filter: blur(22px) saturate(140%);
+  background: rgba(115,111,230,var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
   border-radius: 16px; padding: 32px; margin-bottom: 24px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
-  border: 1px solid rgba(255,255,255,0.28);
-  color: white;
+  border: 1px solid rgba(255,255,255,0.28); color: white;
   animation: fadeInUp 0.6s ease-out 0.1s both;
 }
-
 .header::before {
   content: ""; position: absolute; inset: -40%;
   background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
-  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
-  pointer-events: none;
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
 }
-
 .header:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
-
 .header h1 {
-  font-size: 28px; font-weight: 600; color: white;
-  margin-bottom: 8px; line-height: 1.3; letter-spacing: -0.5px;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  font-size: 28px; font-weight: 600; color: white; margin-bottom: 8px;
+  line-height: 1.3; letter-spacing: -0.5px; text-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
-
-.header h1 a {
-  color: white; text-decoration: none;
-  border-bottom: 1px solid rgba(255,255,255,0.3);
-  transition: all 0.2s;
-}
-
-.header h1 a:hover {
-  border-bottom-color: white;
-  text-shadow: 0 0 12px rgba(255,255,255,0.8);
-}
-
+.header h1 a { color: white; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.3); transition: all 0.2s; }
+.header h1 a:hover { border-bottom-color: white; text-shadow: 0 0 12px rgba(255,255,255,0.8); }
 .message-count {
-  display: inline-block; padding: 6px 14px;
-  background: rgba(255,255,255,0.25); color: white;
-  border-radius: 980px; font-size: 14px; font-weight: 600;
-  margin-left: 12px; border: 1px solid rgba(255,255,255,0.3);
+  display: inline-block; padding: 6px 14px; background: rgba(255,255,255,0.25); color: white;
+  border-radius: 980px; font-size: 14px; font-weight: 600; margin-left: 12px; border: 1px solid rgba(255,255,255,0.3);
 }
+.header-subtitle { font-size: 14px; color: rgba(255,255,255,0.9); margin-bottom: 8px; font-weight: 400; line-height: 1.5; }
 
-.header-subtitle {
-  font-size: 14px; color: rgba(255,255,255,0.9);
-  margin-bottom: 8px; font-weight: 400; line-height: 1.5;
-}
-
-/* ── Session Pane with Header ───────────────────── */
-
-.session-group {
-  margin-bottom: 20px;
-  animation: fadeInUp 0.6s ease-out both;
-}
-
+/* ── Session Pane ───────────────────────────────── */
+.session-group { margin-bottom: 20px; animation: fadeInUp 0.6s ease-out both; }
 .session-pane {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 20px;
-  overflow: hidden;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px; overflow: hidden; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
-
 .session-pane-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  background: rgba(255,255,255,0.08);
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: space-between; padding: 14px 20px;
+  background: rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.1);
 }
-
-.session-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
+.session-header-left { display: flex; align-items: center; gap: 10px; }
 .session-id {
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 11px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.55);
-  background: rgba(255,255,255,0.1);
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.12);
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,0.55); background: rgba(255,255,255,0.1); padding: 3px 8px;
+  border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);
 }
-
-.session-info {
-  font-size: 13px;
-  color: rgba(255,255,255,0.7);
-  font-weight: 600;
-}
-
-.session-time {
-  font-size: 12px;
-  color: rgba(255,255,255,0.4);
-  font-weight: 500;
-}
+.session-info { font-size: 13px; color: rgba(255,255,255,0.7); font-weight: 600; }
+.session-time { font-size: 12px; color: rgba(255,255,255,0.4); font-weight: 500; }
 
 /* ── Glass Cards ────────────────────────────────── */
-
-.notes-list {
-  list-style: none;
-  display: flex; flex-direction: column; gap: 16px;
-  padding: 16px;
-}
-
+.notes-list { list-style: none; display: flex; flex-direction: column; gap: 16px; padding: 16px; }
 .note-card {
-  --card-rgb: 115, 111, 230;
-  position: relative;
-  background: rgba(var(--card-rgb), var(--glass-alpha));
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-  border-radius: 16px; padding: 24px;
+  --card-rgb: 115, 111, 230; position: relative;
+  background: rgba(var(--card-rgb), var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%); border-radius: 16px; padding: 24px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
-  border: 1px solid rgba(255,255,255,0.28);
-  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
-  color: white; overflow: hidden;
-  opacity: 0; transform: translateY(30px);
+  border: 1px solid rgba(255,255,255,0.28); transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  color: white; overflow: hidden; opacity: 0; transform: translateY(30px);
 }
-
-.note-card.visible {
-  animation: fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) forwards;
-}
-
+.note-card.visible { animation: fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) forwards; }
 .note-card::before {
   content: ""; position: absolute; inset: -40%;
   background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
-  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
-  pointer-events: none;
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
 }
-
-.note-card:hover {
-  background: rgba(var(--card-rgb), var(--glass-alpha-hover));
-  transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
-}
-
+.note-card:hover { background: rgba(var(--card-rgb), var(--glass-alpha-hover)); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
 .note-card:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
 
-/* ── Chat Header Row ────────────────────────────── */
-
-.chat-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chat-header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
+/* ── Chat Header ────────────────────────────────── */
+.chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+.chat-header-left { display: flex; align-items: center; gap: 8px; }
 .chat-mode {
-  font-size: 11px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.7);
-  background: rgba(255,255,255,0.1);
-  padding: 3px 10px;
-  border-radius: 980px;
-  border: 1px solid rgba(255,255,255,0.15);
+  font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.1);
+  padding: 3px 10px; border-radius: 980px; border: 1px solid rgba(255,255,255,0.15);
 }
-
 .chat-model {
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255,255,255,0.45);
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
+  font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.45);
+  font-family: 'SF Mono', 'Fira Code', monospace; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; max-width: 200px;
 }
-
-.chat-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+.chat-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* ── Messages ───────────────────────────────────── */
-
-.note-content {
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.chat-message {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-
+.note-content { margin-bottom: 16px; display: flex; flex-direction: column; gap: 14px; }
+.chat-message { display: flex; gap: 10px; align-items: flex-start; }
 .msg-label {
-  flex-shrink: 0;
-  font-weight: 700;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 3px 10px;
-  border-radius: 980px;
-  margin-top: 3px;
+  flex-shrink: 0; font-weight: 700; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 3px 10px; border-radius: 980px; margin-top: 3px;
 }
-
 .chat-user .msg-label { background: rgba(255,255,255,0.2); color: white; }
 .chat-ai .msg-label   { background: rgba(100,220,255,0.25); color: white; }
+.msg-text { color: rgba(255,255,255,0.95); word-wrap: break-word; min-width: 0; font-size: 15px; line-height: 1.65; font-weight: 400; }
+.chat-user .msg-text { font-weight: 500; }
 
-.msg-text {
-  color: rgba(255,255,255,0.95);
-  word-wrap: break-word;
-  min-width: 0;
-  font-size: 15px;
-  line-height: 1.65;
-  font-weight: 400;
+/* ── Chain: outer dropdown ──────────────────────── */
+.chain-dropdown { margin-bottom: 12px; }
+.chain-summary {
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,0.85); padding: 8px 14px;
+  background: rgba(255,255,255,0.1); border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  transition: all 0.2s; list-style: none;
+  display: flex; align-items: center; gap: 8px;
 }
+.chain-summary::-webkit-details-marker { display: none; }
+.chain-summary::before { content: "▶"; font-size: 10px; transition: transform 0.15s; display: inline-block; }
+details[open] > .chain-summary::before { transform: rotate(90deg); }
+.chain-summary:hover { background: rgba(255,255,255,0.18); }
+.chain-modes { font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chain-phases { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
 
-.chat-user .msg-text {
-  font-weight: 500;
+/* ── Chain: phase containers ────────────────────── */
+.chain-phase { border-radius: 10px; overflow: hidden; }
+.chain-phase-header {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600;
 }
+.chain-phase-icon { font-size: 14px; }
+.chain-phase-label { color: rgba(255,255,255,0.85); }
+.chain-phase-translate { background: rgba(100,100,220,0.12); border: 1px solid rgba(100,100,220,0.2); }
+.chain-phase-plan { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); }
+.chain-phase-respond { background: rgba(72,187,120,0.1); border: 1px solid rgba(72,187,120,0.2); }
+.chain-plan-directive { padding: 6px 12px 10px; font-size: 12px; color: rgba(255,255,255,0.6); line-height: 1.5; white-space: pre-wrap; }
+
+/* ── Chain: clickable summary for translate/substep details ── */
+.chain-phase-summary, .chain-substep-summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px; font-weight: 600;
+}
+.chain-phase-summary::-webkit-details-marker,
+.chain-substep-summary::-webkit-details-marker { display: none; }
+.chain-phase-summary::before,
+.chain-substep-summary::before {
+  content: "▶"; font-size: 8px; color: rgba(255,255,255,0.35);
+  transition: transform 0.15s; display: inline-block;
+}
+details[open] > .chain-phase-summary::before,
+details[open] > .chain-substep-summary::before { transform: rotate(90deg); }
+.chain-phase-summary:hover, .chain-substep-summary:hover { background: rgba(255,255,255,0.05); }
+
+/* ── Chain: substeps inside plan ────────────────── */
+.chain-substeps { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 8px; }
+.chain-substep { border-radius: 6px; background: rgba(255,255,255,0.04); }
+.chain-substep:hover { background: rgba(255,255,255,0.07); }
+
+/* ── Chain: status dot ──────────────────────────── */
+.chain-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.3);
+}
+.chain-dot-done    { background: rgba(72,187,120,0.8); border-color: rgba(72,187,120,0.4); }
+.chain-dot-stopped { background: rgba(200,80,80,0.8); border-color: rgba(200,80,80,0.4); }
+.chain-dot-pending { background: rgba(255,200,50,0.8); border-color: rgba(255,200,50,0.4); }
+
+.chain-step-mode {
+  font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.12); padding: 2px 8px; border-radius: 6px;
+}
+.chain-step-duration { font-size: 10px; color: rgba(255,255,255,0.45); }
+
+/* ── Chain: expanded body (no tricks, just content) ── */
+.chain-step-body { padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+
+.chain-io-label {
+  display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+  padding: 1px 6px; border-radius: 4px; margin-right: 8px; vertical-align: middle;
+}
+.chain-io-in  { background: rgba(100,220,255,0.2); color: rgba(100,220,255,0.9); }
+.chain-io-out { background: rgba(72,187,120,0.2); color: rgba(72,187,120,0.9); }
+
+.chain-step-input {
+  font-size: 12px; color: rgba(255,255,255,0.8); line-height: 1.6;
+  word-break: break-word; white-space: pre-wrap;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.chain-step-output {
+  font-size: 12px; color: rgba(255,255,255,0.65); line-height: 1.6;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);
+  word-break: break-word; white-space: pre-wrap;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.chain-json { color: rgba(255,255,255,0.8); }
 
 /* ── Contribution Dropdown ──────────────────────── */
-
 .contrib-dropdown { margin-bottom: 12px; }
-
 .contrib-summary {
   cursor: pointer; font-size: 13px; font-weight: 600;
   color: rgba(255,255,255,0.85); padding: 8px 14px;
@@ -10726,80 +11703,40 @@ body::after {
   transition: all 0.2s; list-style: none;
   display: flex; align-items: center; gap: 6px;
 }
-
 .contrib-summary::-webkit-details-marker { display: none; }
-
-.contrib-summary::before {
-  content: "▶"; font-size: 10px;
-  transition: transform 0.2s; display: inline-block;
-}
-
+.contrib-summary::before { content: "▶"; font-size: 10px; transition: transform 0.2s; display: inline-block; }
 details[open] .contrib-summary::before { transform: rotate(90deg); }
-
 .contrib-summary:hover { background: rgba(255,255,255,0.18); }
-
-.contrib-table-wrap {
-  margin-top: 10px; overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
+.contrib-table-wrap { margin-top: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .contrib-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-
 .contrib-table thead th {
-  text-align: left; font-size: 11px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.5px;
-  color: rgba(255,255,255,0.55); padding: 6px 10px;
+  text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: rgba(255,255,255,0.55); padding: 6px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.15);
 }
-
 .contrib-row td {
-  padding: 7px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  color: rgba(255,255,255,0.88); vertical-align: middle;
-  white-space: nowrap;
+  padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.88); vertical-align: middle; white-space: nowrap;
 }
-
 .contrib-row:last-child td { border-bottom: none; }
-
-.contrib-row a {
-  color: white; text-decoration: none;
-  border-bottom: 1px solid rgba(255,255,255,0.3);
-  transition: all 0.2s;
-}
-
-.contrib-row a:hover {
-  border-bottom-color: white;
-  text-shadow: 0 0 12px rgba(255,255,255,0.8);
-}
-
+.contrib-row a { color: white; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.3); transition: all 0.2s; }
+.contrib-row a:hover { border-bottom-color: white; text-shadow: 0 0 12px rgba(255,255,255,0.8); }
 .contrib-time { font-size: 11px; color: rgba(255,255,255,0.5); }
-
-.action-dot {
-  display: inline-block; width: 8px; height: 8px;
-  border-radius: 50%; margin-right: 6px; vertical-align: middle;
-}
+.action-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
 /* ── Mini Badges ────────────────────────────────── */
-
 .mini-badge {
-  display: inline-flex; align-items: center;
-  padding: 1px 7px; border-radius: 980px;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.2px;
-  margin-right: 3px;
+  display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 980px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.2px; margin-right: 3px;
 }
-
 .mini-ai    { background: rgba(255,200,50,0.35); color: #fff; }
 .mini-energy { background: rgba(100,220,255,0.3); color: #fff; }
 
 /* ── Badges ─────────────────────────────────────── */
-
 .badge {
-  display: inline-flex; align-items: center;
-  padding: 3px 10px; border-radius: 980px;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
-  border: 1px solid rgba(255,255,255,0.2);
+  display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 980px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.3px; border: 1px solid rgba(255,255,255,0.2);
 }
-
 .badge-done     { background: rgba(72,187,120,0.35); color: #fff; }
 .badge-stopped  { background: rgba(200,80,80,0.35); color: #fff; }
 .badge-pending  { background: rgba(255,200,50,0.3); color: #fff; }
@@ -10809,52 +11746,38 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 .badge-external { background: rgba(168,85,247,0.25); color: #fff; border-color: rgba(168,85,247,0.3); }
 
 /* ── Note Meta ──────────────────────────────────── */
-
 .note-meta {
-  padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,0.2);
-  font-size: 12px; color: rgba(255,255,255,0.85);
-  line-height: 1.8;
+  padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2);
+  font-size: 12px; color: rgba(255,255,255,0.85); line-height: 1.8;
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
 }
-
 .meta-separator { color: rgba(255,255,255,0.5); }
-
 .contribution-id {
-  background: rgba(255,255,255,0.12);
-  padding: 2px 6px; border-radius: 4px;
+  background: rgba(255,255,255,0.12); padding: 2px 6px; border-radius: 4px;
   font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace;
-  color: rgba(255,255,255,0.6);
-  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.1);
 }
 
 /* ── Empty State ────────────────────────────────── */
-
 .empty-state {
   position: relative; overflow: hidden;
-  background: rgba(115, 111, 230, var(--glass-alpha));
-  backdrop-filter: blur(22px) saturate(140%);
+  background: rgba(115,111,230,var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
   border-radius: 16px; padding: 60px 40px; text-align: center;
   box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
   border: 1px solid rgba(255,255,255,0.28); color: white;
 }
-
 .empty-state::before {
   content: ""; position: absolute; inset: -40%;
   background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
-  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
-  pointer-events: none;
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
 }
-
 .empty-state:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
-
 .empty-state-icon { font-size: 64px; margin-bottom: 16px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2)); }
 .empty-state-text { font-size: 20px; color: white; margin-bottom: 8px; font-weight: 600; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
 .empty-state-subtext { font-size: 14px; color: rgba(255,255,255,0.85); }
 
 /* ── Responsive ─────────────────────────────────── */
-
 @media (max-width: 640px) {
   body { padding: 16px; }
   .header { padding: 24px 20px; }
@@ -10870,8 +11793,8 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
   .notes-list { padding: 12px; gap: 12px; }
   .chat-model { max-width: 140px; }
   .msg-text { font-size: 14px; }
+  .chain-plan-directive { font-size: 11px; }
 }
-
 @media (min-width: 641px) and (max-width: 1024px) {
   .container { max-width: 700px; }
 }
@@ -10923,6 +11846,5 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
     res.status(500).json({ error: err.message });
   }
 });
-
 
 export default router;

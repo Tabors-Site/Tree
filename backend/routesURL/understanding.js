@@ -21,7 +21,14 @@ function buildQueryString(req) {
 
   return filtered ? `?${filtered}` : "";
 }
-
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 const rainbow = [
   "#ff3b30",
   "#ff9500",
@@ -192,11 +199,9 @@ router.get(
         const statusEmoji = isCompleted ? "✅" : "⏳";
         const typeLabel = isLeaf ? "Leaf" : `${node.childCount} children`;
 
-        const encodingPreview = encoding
-          ? encoding.length > 120
-            ? encoding.slice(0, 120) + "…"
-            : encoding
-          : "";
+       const encodingPreview = encoding
+  ? escapeHtml(encoding.length > 120 ? encoding.slice(0, 120) + "…" : encoding)
+  : "";
 
         let html = `
           <div class="tree-item" style="margin-left: ${depth * 20}px; animation-delay: ${0.05 * depth}s;">
@@ -205,7 +210,7 @@ router.get(
                 <div class="pane-left">
                   <span class="pane-status">${statusEmoji}</span>
                   <div class="pane-title-group">
-                    <span class="pane-name">${node.name}</span>
+<span class="pane-name">${escapeHtml(node.name)}</span>
                     <span class="pane-meta">${typeLabel} · Layer ${layer}/${node.mergeLayer}</span>
                   </div>
                 </div>
@@ -228,7 +233,7 @@ router.get(
                   ? `
               <div class="pane-encoding">
                 <div class="pane-encoding-label">Encoding</div>
-                <pre>${encoding}</pre>
+<pre>${escapeHtml(encoding)}</pre>
               </div>
               `
                   : `<div class="pane-encoding-label" style="margin-top:8px;">No encoding yet</div>`
@@ -253,7 +258,7 @@ router.get(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
-  <title>Understanding · ${run.perspective.slice(0, 40)}</title>
+<title>Understanding · ${escapeHtml(run.perspective.slice(0, 40))}</title>
   <style>
     /* =========================================================
        GLOBAL VARIABLES
@@ -830,7 +835,7 @@ router.get(
     <!-- Perspective -->
     <div class="glass-card" style="animation-delay: 0.15s; padding: 20px 28px;">
       <div class="meta-label" style="margin-bottom: 8px;">Perspective</div>
-      <div class="perspective-text">${run.perspective}</div>
+<div class="perspective-text">${escapeHtml(run.perspective)}</div>
     </div>
 
     ${
@@ -839,7 +844,7 @@ router.get(
     <!-- Final Understanding -->
     <div class="glass-card final-card" style="animation-delay: 0.2s;">
       <div class="meta-label" style="margin-bottom: 4px;">✅ Final Understanding</div>
-      <pre>${rootFinalEncoding}</pre>
+<pre>${escapeHtml(rootFinalEncoding)}</pre>
     </div>
     `
         : ""
@@ -996,8 +1001,7 @@ router.get(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
-  <title>Understanding · ${data.realNode.name}</title>
-  <style>
+<title>Understanding · ${escapeHtml(data.realNode.name)}</title>  <style>
     /* =========================================================
        GLOBAL VARIABLES
        ========================================================= */
@@ -1551,7 +1555,7 @@ router.get(
 
     <!-- Header -->
     <div class="glass-card" style="animation-delay: 0.1s;">
-      <h1><a href="${realNodeUrl}">🧠 ${data.realNode.name}</a></h1>
+<h1><a href="${realNodeUrl}">🧠 ${escapeHtml(data.realNode.name)}</a></h1>
       <div style="font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.55); letter-spacing: 0.3px; text-transform: uppercase; margin-bottom: 8px;">Understanding Node</div>
 
       <div class="id-row">
@@ -1619,7 +1623,7 @@ router.get(
                     ${e.isCurrentRun ? '<span class="current-badge">⭐ Current</span>' : ""}
                   </div>
                   <div class="enc-details">
-                    ${e.perspective} · Layer ${e.currentLayer}
+${escapeHtml(e.perspective)} · Layer ${e.currentLayer}
                   </div>
                 </div>
                 ${
@@ -1631,7 +1635,7 @@ router.get(
 
               ${
                 e.encoding
-                  ? `<div class="enc-content">${e.encoding}</div>`
+? `<div class="enc-content">${escapeHtml(e.encoding)}</div>`
                   : `<div class="enc-content in-progress">Compression in progress…</div>`
               }
 
@@ -1663,9 +1667,9 @@ router.get(
           <div class="note-card" style="animation: fadeInUp 0.4s ease-out both; animation-delay: ${0.3 + i * 0.06}s;">
             <div class="note-header">
               <div class="note-avatar">👤</div>
-              <span>@${n.username}</span>
+              <span>@${escapeHtml(n.username)}</span>
             </div>
-            <div class="note-content">${n.content}</div>
+            <div class="note-content">${escapeHtml(n.content)}</div>
           </div>
         `,
           )
@@ -2334,9 +2338,9 @@ router.get(
                 <div class="chat-msg ${c.role}" style="animation: fadeInUp 0.4s ease-out both; animation-delay: ${0.4 + i * 0.06}s;">
                   <div class="chat-head">
                     <div class="chat-avatar">${c.role === "assistant" ? "🤖" : "👤"}</div>
-                    <span>@${c.username}</span>
+<span>@${escapeHtml(c.username)}</span>
                   </div>
-                  <div class="chat-body">${c.content}</div>
+<div class="chat-body">${escapeHtml(c.content)}</div>
                 </div>
               `,
                 )
@@ -2359,7 +2363,7 @@ router.get(
                     <div class="child-pane-left">
                       <span class="child-status">${child.isComplete ? "✅" : "⏳"}</span>
                       <div class="child-pane-info">
-                        <span class="child-pane-name">${child.name}</span>
+<span class="child-pane-name">${escapeHtml(child.name)}</span>
                         <span class="child-pane-meta">Layer ${child.currentLayer ?? "-"}/${child.mergeLayer ?? "-"}</span>
                       </div>
                     </div>
@@ -2369,7 +2373,7 @@ router.get(
                     ${
                       child.encoding
                         ? `
-                      <pre class="child-encoding-text">${child.encoding}</pre>
+                        <pre class="child-encoding-text">${escapeHtml(child.encoding)}</pre>
                     `
                         : `
                       <div class="empty-state" style="padding: 16px;">No encoding yet</div>
@@ -2404,8 +2408,7 @@ router.get(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
-  <title>${data.realNode.name} – Compression</title>
-  <style>
+<title>${escapeHtml(data.realNode.name)} – Compression</title>  <style>
     /* =========================================================
        GLOBAL VARIABLES
        ========================================================= */
@@ -3048,7 +3051,7 @@ router.get(
 
     <!-- Header -->
     <div class="glass-card" style="animation-delay: 0.1s;">
-      <h1>${data.realNode.name}</h1>
+<h1>${escapeHtml(data.realNode.name)}</h1>
       <div class="header-meta">
         <span class="node-type-badge">${isLeaf ? "🍃 Leaf" : "🔗 Merge · " + childEncodings.length + " children"}</span>
         <span class="status-pill ${isCompleted ? "complete" : "processing"}">
@@ -3058,7 +3061,7 @@ router.get(
               : '<span class="spinner"></span> Processing'
           }
         </span>
-        <span class="perspective-chip">${data.perspective}</span>
+<span class="perspective-chip">${escapeHtml(data.perspective)}</span>
       </div>
     </div>
 

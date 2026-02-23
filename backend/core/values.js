@@ -2,7 +2,9 @@ import { findNodeById, logContribution } from "../db/utils.js";
 import { useEnergy } from "../core/energy.js";
 
 const SYSTEM_KEY_PREFIX = "_auto";
-
+function containsHtml(str) {
+  return /<[a-zA-Z\/][^>]*>/.test(str);
+}
 function assertUserWritableKey(rawKey) {
   if (typeof rawKey !== "string") {
     throw new Error("Invalid key");
@@ -27,6 +29,9 @@ function assertUserWritableKey(rawKey) {
   // optional but recommended
   if (key.length > 128) {
     throw new Error("Key is too long");
+  }
+    if (containsHtml(key)) {
+    throw new Error("Key cannot contain HTML tags");
   }
 
   return key;

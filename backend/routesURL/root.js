@@ -10,6 +10,15 @@ import { getGlobalValuesTreeAndFlat } from "../core/values.js";
 
 import Node from "../db/models/node.js";
 
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 const router = express.Router();
 
 // Only allow these params to remain in querystring
@@ -112,12 +121,12 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
                 node.isCurrent
                   ? `<a href="/api/v1/node/${node._id}${queryString}" class="node-link current">
                       <span class="node-icon">●</span>
-                      <span class="node-name">${node.name}</span>
+                      <span class="node-name">${escapeHtml(node.name)}</span>
                       <span class="node-badge">YOU ARE HERE</span>
                     </a>`
                   : `<a href="/api/v1/root/${node._id}${queryString}" class="node-link">
                       <span class="node-icon">○</span>
-                      <span class="node-name">${node.name}</span>
+                      <span class="node-name">${escapeHtml(node.name)}</span>
                       <span class="depth-badge">Level ${idx + 1}</span>
                     </a>`
               }
@@ -148,7 +157,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 
     
       <a href="/api/v1/node/${node._id}/${node.prestige}${queryString}">
-        ${node.name}
+        ${escapeHtml(node.name)}
       </a>
   `;
 
@@ -258,15 +267,10 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 `;
 
     // OWNER + CONTRIBUTORS
-    const ownerHtml = rootMeta?.rootOwner
-      ? `
-   
-      Root Owner: <a href="/api/v1/user/${rootMeta.rootOwner._id}${queryString}">
-        ${rootMeta.rootOwner.username}
-      </a>
-
-    
-  `
+   const ownerHtml = rootMeta?.rootOwner
+  ? `Root Owner: <a href="/api/v1/user/${rootMeta.rootOwner._id}${queryString}">
+      ${escapeHtml(rootMeta.rootOwner.username)}
+    </a>`
       : ``;
 
     const contributorsHtml = rootMeta?.contributors?.length
@@ -279,10 +283,9 @@ ${rootMeta.contributors
 
     return `
 <li>
-  <a href="/api/v1/user/${u._id}${queryString}">
-    ${u.username}
-  </a>
-
+<a href="/api/v1/user/${u._id}${queryString}">
+  ${escapeHtml(u.username)}
+</a>
   <div class="contributors-actions">
     ${
       isOwner
@@ -292,7 +295,7 @@ ${rootMeta.contributors
         action="/api/v1/root/${nodeId}/transfer-owner?token=${
           req.query.token ?? ""
         }&html"
-        onsubmit="return confirm('Transfer ownership to ${u.username}?')"
+onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
       >
         <input type="hidden" name="userReceiving" value="${u._id}" />
         <button type="submit">Transfer</button>
@@ -310,7 +313,7 @@ ${rootMeta.contributors
           req.query.token ?? ""
         }&html"
         onsubmit="return confirm('${
-          isSelf ? "Leave this root?" : `Remove ${u.username} from this root?`
+          isSelf ? "Leave this root?" : `Remove ${escapeHtml(u.username)} from this root?`
         }')"
       >
         <input type="hidden" name="userReceiving" value="${u._id}" />
@@ -394,7 +397,7 @@ ${rootMeta.contributors
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${allData.name} — Tree</title>
+<title>${escapeHtml(allData.name)} — Tree</title>
   <style>
    :root {
       --glass-water-rgb: 115, 111, 230;
@@ -1464,7 +1467,7 @@ transition:
         
         <h1>
           <a href="/api/v1/node/${allData._id}/${allData.prestige}${queryString}">
-            ${allData.name}
+${escapeHtml(allData.name)}
           </a>
         </h1>
 

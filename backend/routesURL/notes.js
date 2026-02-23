@@ -37,6 +37,16 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function renderMedia(fileUrl, mimeType) {
   // ---------- IMAGES ----------
   if (mimeType.startsWith("image/")) {
@@ -118,7 +128,7 @@ function renderBookNode(node, depth, req, version) {
 
   let html = `
     <section class="book-section depth-${depth}">
-      <${H}>${node.nodeName ?? node.nodeId}</${H}>
+      <${H}>${escapeHtml(node.nodeName ?? node.nodeId)}</${H}>
   `;
 
   for (const note of node.notes) {
@@ -127,7 +137,7 @@ function renderBookNode(node, depth, req, version) {
     if (note.type === "text") {
       html += `
         <div class="note-content">
-          <a href="${noteUrl}" class="note-link">${note.content}</a>
+          <a href="${noteUrl}" class="note-link">${escapeHtml(note.content)}</a>
         </div>
       `;
     }
@@ -140,7 +150,7 @@ function renderBookNode(node, depth, req, version) {
 
       html += `
         <div class="file-container">
-          <a href="${noteUrl}" class="note-link file-link">${note.content}</a>
+          <a href="${noteUrl}" class="note-link file-link">${escapeHtml(note.content)}</a>
           ${renderMedia(fileUrl, mimeType)}
         </div>
       `;
@@ -286,7 +296,7 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Book: ${title}</title>
+<title>Book: ${escapeHtml(title)}</title>
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -926,7 +936,7 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
         </button>
       </div>
 
-      <div class="page-title">Book: ${title}</div>
+<div class="page-title">Book: ${escapeHtml(title)}</div>
 
       <!-- Filters -->
       <div class="filters">
@@ -1957,7 +1967,7 @@ router.get("/node/:nodeId/:version/notes", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${nodeName} — Notes</title>
+<title>${escapeHtml(nodeName)} — Notes</title>
   <style>
     /* Replace the <style> content in your /node/:nodeId/:version/notes route with this */
 
@@ -2733,7 +2743,7 @@ input[type="file"].hidden-input {
       <div class="page-title">
         Notes for <a href="${base}?token=${
           req.query.token ?? ""
-        }&html">${nodeName} v${version}</a>
+        }&html">${escapeHtml(nodeName)} v${version}</a>
       </div>
     </div>
   </div>
@@ -2746,18 +2756,19 @@ input[type="file"].hidden-input {
         .map((n) => {
           const isSelf =
             currentUserId && n.userId && n.userId.toString() === currentUserId;
-          const preview =
-            n.contentType === "text"
-              ? n.content.length > 169
-                ? n.content.substring(0, 500) + "..."
-                : n.content
-              : n.content.split("/").pop();
+          const rawPreview =
+  n.contentType === "text"
+    ? n.content.length > 169
+      ? n.content.substring(0, 500) + "..."
+      : n.content
+    : n.content.split("/").pop();
+const preview = escapeHtml(rawPreview);
 
-          const userLabel = n.userId
-            ? `<a href="/api/v1/user/${n.userId}?token=${
-                req.query.token ?? ""
-              }&html">${n.username ?? n.userId}</a>`
-            : (n.username ?? "Unknown user");
+        const userLabel = n.userId
+  ? `<a href="/api/v1/user/${n.userId}?token=${
+      req.query.token ?? ""
+    }&html">${escapeHtml(n.username ?? n.userId)}</a>`
+  : escapeHtml(n.username ?? "Unknown user");
 
           return `
           <li
@@ -3211,11 +3222,11 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
   `;
 
 
-    const userLink = note.userId
-      ? `<a href="/api/v1/user/${note.userId._id}${qs}">
-       ${note.userId.username ?? "Unknown user"}
-     </a>`
-      : (note.username ?? "Unknown user");
+   const userLink = note.userId
+  ? `<a href="/api/v1/user/${note.userId._id}${qs}">
+     ${escapeHtml(note.userId.username ?? "Unknown user")}
+   </a>`
+  : escapeHtml(note.username ?? "Unknown user");
 
     if (req.query.html !== undefined) {
       if (note.contentType === "text") {
@@ -3227,7 +3238,7 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Note by ${note.userId?.username || "User"}</title>
+<title>Note by ${escapeHtml(note.userId?.username || "User")}</title>
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -3624,7 +3635,7 @@ pre.flash::before {
 </div>
 
 
-      <pre id="noteContent">${note.content}</pre>
+<pre id="noteContent">${escapeHtml(note.content)}</pre>
     </div>
   </div>
 
@@ -3687,7 +3698,7 @@ pre.flash::before {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${fileName}</title>
+<title>${escapeHtml(fileName)}</title>
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -4070,7 +4081,7 @@ pre.flash::before {
         ${userLink}
       </div>
 
-      <h1>${fileName}</h1>
+<h1>${escapeHtml(fileName)}</h1>
 
       <div class="action-bar">
         <a class="download" href="${fileUrl}" download>

@@ -5,7 +5,9 @@ import Contribution from "../db/models/contribution.js";
 import { useEnergy } from "../core/energy.js";
 
 import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";
-
+function containsHtml(str) {
+  return /<[a-zA-Z\/][^>]*>/.test(str);
+}
 export async function updateScript({
   nodeId,
   scriptId,
@@ -22,6 +24,19 @@ export async function updateScript({
   if (isCreating && !name) {
     throw new Error("Name is required when creating a new script");
   }
+
+  if (name !== undefined) {
+  if (typeof name !== "string" || !name.trim()) {
+    throw new Error("Script name cannot be empty");
+  }
+  name = name.trim();
+  if (name.length > 150) {
+    throw new Error("Script name must be 150 characters or fewer");
+  }
+  if (containsHtml(name)) {
+    throw new Error("Script name cannot contain HTML tags");
+  }
+}
 
   if (!isCreating && script === undefined && name === undefined) {
     throw new Error("Nothing to update");

@@ -53,7 +53,7 @@ useEffect(() => {
     }
 
     try {
-      const res = await fetch(`${apiUrl}/verify-token`, {
+      const res = await fetch(`https://tree.tabors.site/verify-token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

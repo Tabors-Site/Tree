@@ -1446,14 +1446,27 @@ export function renderForgotPasswordPage(req, res) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#667eea">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#736fe6">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Tree - Reset Password</title>
 
   <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      background: #736fe6;
       margin: 0;
       padding: 0;
     }
@@ -1462,6 +1475,7 @@ export function renderForgotPasswordPage(req, res) {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -1470,15 +1484,15 @@ export function renderForgotPasswordPage(req, res) {
       position: relative;
       overflow-x: hidden;
       overflow-y: auto;
+      touch-action: manipulation;
     }
 
-    /* Animated background elements */
     body::before,
     body::after {
       content: '';
       position: fixed;
       border-radius: 50%;
-      opacity: 0.1;
+      opacity: 0.08;
       animation: float 20s infinite ease-in-out;
       pointer-events: none;
     }
@@ -1500,22 +1514,31 @@ export function renderForgotPasswordPage(req, res) {
       left: -100px;
       animation-delay: -10s;
     }
-       html, body {
-        background: #736fe6;
-        margin: 0;
-        padding: 0;
-      }
 
     @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-30px) rotate(5deg); }
     }
 
-    /* Brand Header */
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes grow {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .brand-header {
       position: relative;
       z-index: 1;
@@ -1524,120 +1547,64 @@ export function renderForgotPasswordPage(req, res) {
       animation: fadeInDown 0.8s ease-out;
     }
 
-    @keyframes fadeInDown {
-      from {
-        opacity: 0;
-        transform: translateY(-30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
     .brand-logo {
       font-size: 80px;
       margin-bottom: 16px;
       display: inline-block;
-      animation: grow 2s infinite ease-in-out;
-    }
-
-    @keyframes grow {
-      0%, 100% {
-        transform: scale(1);
-      }
-      50% {
-        transform: scale(1.1);
-      }
+      filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.2));
+      animation: fadeInDown 0.5s ease-out both, grow 4.5s ease-in-out infinite;
     }
 
     .brand-title {
       font-size: 56px;
-      font-weight: 800;
+      font-weight: 600;
       color: white;
-      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-      letter-spacing: -1px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -1.5px;
       margin-bottom: 8px;
     }
 
     .brand-subtitle {
       font-size: 18px;
-      color: rgba(255, 255, 255, 0.9);
-      font-weight: 500;
+      color: rgba(255, 255, 255, 0.85);
+      font-weight: 400;
+      letter-spacing: 0.2px;
     }
 
-    /* Forgot Password Container */
     .forgot-container {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(20px);
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
       padding: 48px;
-      border-radius: 24px;
+      border-radius: 16px;
       width: 100%;
       max-width: 460px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
       text-align: center;
       position: relative;
       z-index: 1;
-      animation: slideUp 0.6s ease-out;
-    }
-
-    @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .forgot-container::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 6px;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-      border-radius: 24px 24px 0 0;
+      animation: slideUp 0.6s ease-out 0.2s both;
     }
 
     h2 {
       font-size: 32px;
-      font-weight: 700;
-      color: #1a1a1a;
-      margin-bottom: 12px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.5px;
     }
 
     .subtitle {
       font-size: 15px;
-      color: #666;
+      color: rgba(255, 255, 255, 0.85);
       margin-bottom: 32px;
-      line-height: 1.6;
+      line-height: 1.5;
+      font-weight: 400;
     }
 
-    /* Info Box */
-    .info-box {
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-      padding: 16px;
-      border-radius: 12px;
-      border-left: 4px solid #667eea;
-      margin-bottom: 32px;
-      text-align: left;
-    }
-
-    .info-box-content {
-      font-size: 14px;
-      color: #666;
-      line-height: 1.6;
-    }
-
-    .info-box-content::before {
-      margin-right: 6px;
-    }
-
-    /* Form */
     form {
       margin-bottom: 16px;
     }
@@ -1651,110 +1618,108 @@ export function renderForgotPasswordPage(req, res) {
       display: block;
       font-size: 14px;
       font-weight: 600;
-      color: #667eea;
+      color: white;
       margin-bottom: 8px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      letter-spacing: -0.2px;
     }
 
     input {
       width: 100%;
       padding: 14px 18px;
       border-radius: 12px;
-      border: 2px solid #e9ecef;
-      font-size: 15px;
-      transition: all 0.2s;
-      background: white;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      font-size: 16px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
       font-family: inherit;
+      color: white;
+      font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      touch-action: manipulation;
     }
 
     input:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+      border-color: rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(25px) saturate(160%);
+      -webkit-backdrop-filter: blur(25px) saturate(160%);
+      box-shadow:
+        0 0 0 4px rgba(255, 255, 255, 0.15),
+        0 8px 30px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px);
     }
 
     input::placeholder {
-      color: #aaa;
+      color: rgba(255, 255, 255, 0.5);
+      font-weight: 400;
+    }
+
+    input.error {
+      border-color: rgba(239, 68, 68, 0.6);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    input.error:focus {
+      box-shadow:
+        0 0 0 4px rgba(239, 68, 68, 0.2),
+        0 8px 30px rgba(239, 68, 68, 0.2);
     }
 
     button {
       width: 100%;
       padding: 16px;
       margin-top: 8px;
-      border-radius: 12px;
-      border: none;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
       color: white;
       font-size: 16px;
-      font-weight: 700;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
       font-family: inherit;
+      letter-spacing: -0.2px;
+      position: relative;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-30%) translateY(-10%);
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
     }
 
     button:hover {
+      background: rgba(255, 255, 255, 0.35);
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
     }
 
-    button:active {
-      transform: translateY(0);
-    }
+    button:active { transform: translateY(0); }
 
-    /* Success Message */
-    .success-message {
-      margin-top: 16px;
-      margin-bottom: 16px;
-      padding: 16px;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 600;
-      text-align: left;
-      color: #16a34a;
-      background: rgba(34, 197, 94, 0.1);
-      border-left: 3px solid #16a34a;
-      display: none;
-      line-height: 1.6;
-    }
-
-    .success-message::before {
-      content: '✓ ';
-      margin-right: 6px;
-      font-size: 16px;
-    }
-
-    .success-message.show {
-      display: block;
-    }
-
-    /* Secondary Actions */
-    .secondary-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 24px;
-      padding-top: 24px;
-      border-top: 2px solid #e9ecef;
-    }
-
-    .back-btn {
-      width: 100%;
-      background: transparent;
-      color: #667eea;
-      box-shadow: none;
-      font-weight: 600;
-      padding: 12px;
-      font-size: 15px;
-      margin-top: 0;
-    }
-
-    .back-btn:hover {
-      background: rgba(102, 126, 234, 0.1);
-      transform: none;
-      box-shadow: none;
-    }
-
-    /* Loading State */
     button.loading {
       position: relative;
       color: transparent;
@@ -1776,92 +1741,114 @@ export function renderForgotPasswordPage(req, res) {
       animation: spin 0.8s linear infinite;
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
+    .message {
+      margin-top: 16px;
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: left;
+      display: none;
     }
 
-    /* Responsive */
+    .error-message {
+      color: white;
+      background: rgba(239, 68, 68, 0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+
+    .success-message {
+      color: white;
+      background: rgba(16, 185, 129, 0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    .message.show { display: block; }
+
+    .secondary-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 24px;
+      padding-top: 24px;
+    }
+
+    .back-btn {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      font-weight: 600;
+      padding: 12px;
+      font-size: 15px;
+      margin-top: 0;
+    }
+
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
     @media (max-width: 640px) {
       body {
         padding: 20px 16px;
         justify-content: center;
       }
 
-      .brand-header {
-        margin-bottom: 24px;
-      }
-
-      .brand-logo {
-        font-size: 64px;
-      }
+      .brand-header { margin-bottom: 24px; }
+      .brand-logo { font-size: 64px; }
 
       .brand-title {
         font-size: 42px;
+        letter-spacing: -1px;
       }
 
-      .brand-subtitle {
-        font-size: 16px;
-      }
-
-      .forgot-container {
-        padding: 32px 24px;
-      }
-
-      h2 {
-        font-size: 28px;
-      }
+      .brand-subtitle { font-size: 16px; }
+      .forgot-container { padding: 32px 24px; }
+      h2 { font-size: 28px; }
+      input { font-size: 16px; }
     }
 
     @media (min-width: 641px) and (max-width: 1024px) {
-      .forgot-container {
-        max-width: 420px;
-      }
+      .forgot-container { max-width: 420px; }
     }
   </style>
 </head>
 
 <body>
-  <!-- Brand Header -->
   <div class="brand-header">
     <a href="/" style="text-decoration: none;">
-
-    <div class="brand-logo">🌳</div>
-    <h1 class="brand-title">Tree</h1></a>
+      <div class="brand-logo">🌳</div>
+      <h1 class="brand-title">Tree</h1>
+    </a>
     <div class="brand-subtitle">Organize your life, efficiently</div>
   </div>
 
-  <!-- Forgot Password Container -->
   <div class="forgot-container">
     <h2>Reset Password</h2>
-    <p class="subtitle">
-      Enter your email address and we'll send you a link to reset your password.
-    </p>
-
-    <div class="info-box">
-      <div class="info-box-content">
-        For security reasons, we'll send a reset link if an account exists for this email.
-      </div>
-    </div>
+    <p class="subtitle">Enter your email address and we'll send you a link to reset your password.</p>
 
     <form id="forgotForm">
       <div class="input-group">
         <label for="email">Email Address</label>
-        <input 
-          type="email" 
-          id="email" 
+        <input
+          type="email"
+          id="email"
           placeholder="Enter your email"
-          required 
+          required
           autocomplete="email"
+          autocapitalize="off"
         />
       </div>
 
       <button type="submit" id="submitBtn">Send Reset Link</button>
     </form>
 
-    <div id="successMessage" class="success-message">
-      If an account exists for that email, a password reset link has been sent. Please check your inbox.
+    <div id="errorMessage" class="message error-message"></div>
+    <div id="successMessage" class="message success-message">
+      ✓ If an account exists for that email, a password reset link has been sent. Check your inbox.
     </div>
 
     <div class="secondary-actions">
@@ -1873,15 +1860,45 @@ export function renderForgotPasswordPage(req, res) {
 
   <script>
     const apiUrl = "https://tree.tabors.site";
+    const EMAIL_REGEX = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
 
     document.getElementById("forgotForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
       const email = document.getElementById("email").value.trim();
+      const emailInput = document.getElementById("email");
       const btn = document.getElementById("submitBtn");
+      const errorEl = document.getElementById("errorMessage");
       const successEl = document.getElementById("successMessage");
 
+      errorEl.classList.remove("show");
       successEl.classList.remove("show");
+      emailInput.classList.remove("error");
+
+      if (!email) {
+        errorEl.textContent = "Please enter your email address.";
+        errorEl.classList.add("show");
+        emailInput.classList.add("error");
+        emailInput.focus();
+        return;
+      }
+
+      if (!EMAIL_REGEX.test(email)) {
+        errorEl.textContent = "Please enter a valid email address.";
+        errorEl.classList.add("show");
+        emailInput.classList.add("error");
+        emailInput.focus();
+        return;
+      }
+
+      if (email.length > 320) {
+        errorEl.textContent = "Email address is too long.";
+        errorEl.classList.add("show");
+        emailInput.classList.add("error");
+        emailInput.focus();
+        return;
+      }
+
       btn.classList.add("loading");
       btn.disabled = true;
 
@@ -1892,7 +1909,6 @@ export function renderForgotPasswordPage(req, res) {
           body: JSON.stringify({ email })
         });
 
-        // Always show success (by design - security)
         document.getElementById("forgotForm").reset();
         successEl.classList.add("show");
         btn.classList.remove("loading");
@@ -1900,7 +1916,6 @@ export function renderForgotPasswordPage(req, res) {
 
       } catch (err) {
         console.error(err);
-        // Still show success message for security
         document.getElementById("forgotForm").reset();
         successEl.classList.add("show");
         btn.classList.remove("loading");

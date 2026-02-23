@@ -4,7 +4,9 @@ import Node from "../db/models/node.js";
 import { getNotes } from "./notes.js";
 import { logContribution } from "../db/utils.js";
 import { useEnergy } from "../core/energy.js";
-
+function containsHtml(str) {
+  return /<[a-zA-Z\/][^>]*>/.test(str);
+}
 /**
  * Creates the shadow understanding tree and computes merge rules.
  * Runs ONCE per UnderstandingRun.
@@ -23,7 +25,9 @@ export async function createUnderstandingRun(
   const MAX_PERSPECTIVE_LENGTH = 400; // adjust as you want
 
   perspective = (perspective || "").trim();
-
+if (containsHtml(perspective)) {
+  throw new Error("Perspective cannot contain HTML tags");
+}
   if (!perspective) {
     perspective = "semantically compress while maintaining meaning";
   }

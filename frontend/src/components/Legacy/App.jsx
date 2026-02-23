@@ -41,7 +41,7 @@ const App = () => {
             return;
         }
 
-        fetch(`${apiUrl}/verify-token`, {
+        fetch(`https://tree.tabors.site/verify-token`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
