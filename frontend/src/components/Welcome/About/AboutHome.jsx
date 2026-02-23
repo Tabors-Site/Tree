@@ -21,7 +21,7 @@ const AboutHome = () => {
       emoji: "🔌",
       title: "API Reference",
       desc: "Read and write to your trees programmatically. Build bots, scripts, and integrations.",
-      to: "/about/api",
+      to: "/about/api/#overview",
       active: true,
     },
     {

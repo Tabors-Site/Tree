@@ -24,6 +24,7 @@ const ApiAccessSection = () => {
         <div className="toc">
           <div className="toc-title">Contents</div>
 
+
           <div className="toc-group">
             <div className="toc-group-label">Getting Started</div>
             <a href="#overview">🔑 Overview &amp; Authentication</a>
@@ -80,13 +81,7 @@ const ApiAccessSection = () => {
             <br />• Works with all endpoints (read and write)
           </div>
 
-          <div className="highlight-box">
-            <div className="section-text">
-              <strong>Browser sessions</strong> also use JWT-based authentication
-              via cookies, but JWTs expire quickly and are not recommended for
-              external integrations or scripts.
-            </div>
-          </div>
+        
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -103,8 +98,8 @@ const ApiAccessSection = () => {
 
           <div className="sub-title">?token=YOUR_TOKEN</div>
           <div className="section-text">
-            A URL access token that authenticates the request. Required for GET
-            routes when you don't have a cookie session or API key header.
+            A URL access token that authenticates the request. Only required for GET
+            routes when you don't have an API key header.
             Tokens are tied to your account and can be found or refreshed on
             your profile page.
             <br /><br />
@@ -642,7 +637,7 @@ ALL         — All contributors must approve`}</div>
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/root/:rootId/understandings</span>
             </div>
-            <div className="ep-desc">Create and start a new understanding run for the tree.</div>
+            <div className="ep-desc">Create a new understanding run for the tree.</div>
           </div>
 
           <div className="endpoint">

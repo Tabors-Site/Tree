@@ -1,7 +1,52 @@
+import bcrypt from "bcrypt";
+import User from "../db/models/user.js";
 import { resolveHtmlShareAccess } from "../core/authenticate.js";
 
 export default async function urlAuth(req, res, next) {
   try {
+    /* ===========================
+        1️⃣ API KEY AUTH (bypass share token)
+    ============================ */
+    const apiKey =
+      req.headers["x-api-key"] ||
+      (req.headers.authorization?.startsWith("ApiKey ")
+        ? req.headers.authorization.slice(7).trim()
+        : null);
+
+    if (apiKey) {
+      const users = await User.find({ "apiKeys.revoked": false });
+
+      for (const user of users) {
+        for (const key of user.apiKeys) {
+          if (key.revoked) continue;
+
+          const match = await bcrypt.compare(apiKey, key.keyHash);
+          if (!match) continue;
+
+          req.userId = user._id;
+          req.username = user.username;
+          req.authType = "apiKey";
+          req.apiKeyId = key._id;
+          req.isHtmlShare = false;
+
+          await User.updateOne(
+            { _id: user._id, "apiKeys._id": key._id },
+            {
+              $inc: { "apiKeys.$.usageCount": 1 },
+              $set: { "apiKeys.$.lastUsedAt": new Date() },
+            }
+          );
+
+          return next();
+        }
+      }
+
+      return res.status(401).json({ message: "Invalid API key" });
+    }
+
+    /* ===========================
+        2️⃣ SHARE TOKEN AUTH (existing flow)
+    ============================ */
     const shareToken =
       req.query.token ||
       req.params.token ||
@@ -20,7 +65,7 @@ export default async function urlAuth(req, res, next) {
       req.params?.nodeId ||
       req.body?.nodeId ||
       req.query?.nodeId ||
-      req.params?.rootId || // 👈 ADD THIS
+      req.params?.rootId ||
       null;
 
     if (!userId && !nodeId) {

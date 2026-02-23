@@ -3527,7 +3527,7 @@ body::after {
   gap: 12px;
   margin-bottom: 20px;
   flex-wrap: wrap;
-  animation: fadeInUp 0.5s ease-out;
+  animation: fadeInUp 0.5s ease-out both;
 }
 
 .back-link {
@@ -3667,12 +3667,19 @@ body::after {
   border: 1px solid rgba(255,255,255,0.28);
   transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
   color: white; overflow: hidden;
-  opacity: 0; transform: translateY(30px);
+
+}
+.notes-list {
+  animation: fadeInUp 0.6s ease-out 0.2s both;
 }
 
-.note-card.visible {
-  animation: fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) forwards;
-}
+.note-card:nth-child(1) { animation-delay: 0.25s; }
+.note-card:nth-child(2) { animation-delay: 0.3s; }
+.note-card:nth-child(3) { animation-delay: 0.35s; }
+.note-card:nth-child(4) { animation-delay: 0.4s; }
+.note-card:nth-child(5) { animation-delay: 0.45s; }
+.note-card:nth-child(n+6) { animation-delay: 0.5s; }
+
 
 .note-card::before {
   content: "";
@@ -3822,6 +3829,8 @@ body::after {
     inset 0 1px 0 rgba(255,255,255,0.25);
   border: 1px solid rgba(255,255,255,0.28);
   color: white;
+    animation: fadeInUp 0.6s ease-out 0.2s both;
+
 }
 
 .empty-state::before {
@@ -3896,17 +3905,7 @@ body::after {
     }
   </div>
 
-  <script>
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry, index) => {
-        if (entry.isIntersecting) {
-          setTimeout(() => entry.target.classList.add('visible'), index * 50);
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { root: null, rootMargin: '50px', threshold: 0.1 });
-    document.querySelectorAll('.note-card').forEach(card => observer.observe(card));
-  </script>
+ 
 </body>
 </html>
 `);
@@ -4787,16 +4786,7 @@ body::after {
   }
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+
 
 .container {
   max-width: 900px;
@@ -4811,7 +4801,7 @@ body::after {
   gap: 12px;
   margin-bottom: 20px;
   flex-wrap: wrap;
-  animation: fadeInUp 0.5s ease-out;
+  animation: fadeInUp 0.5s ease-out both;
 }
 
 .back-link {
@@ -5036,17 +5026,19 @@ body::after {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   color: white;
   overflow: hidden;
-  
-  /* Start hidden for lazy loading */
-  opacity: 0;
-  transform: translateY(30px);
+  animation: fadeInUp 0.5s ease-out both;
 }
 
-/* When item becomes visible */
-.idea-card.visible {
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+.ideas-list {
+  animation: fadeInUp 0.6s ease-out 0.2s both;
 }
 
+.idea-card:nth-child(1) { animation-delay: 0.25s; }
+.idea-card:nth-child(2) { animation-delay: 0.3s; }
+.idea-card:nth-child(3) { animation-delay: 0.35s; }
+.idea-card:nth-child(4) { animation-delay: 0.4s; }
+.idea-card:nth-child(5) { animation-delay: 0.45s; }
+.idea-card:nth-child(n+6) { animation-delay: 0.5s; }
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -5237,6 +5229,8 @@ body::after {
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.28);
   color: white;
+    animation: fadeInUp 0.6s ease-out 0.2s both;
+
 }
 
 .empty-state::before {
@@ -5368,7 +5362,7 @@ body::after {
 <a href="/api/v1/user/${userId}${tokenQS}">${escapeHtml(user.username)}</a>
       </h1>
       <div class="header-subtitle">
-Convert loose thoughts into structure (viewing last 200)      </div>
+These will be placed onto your tree's automatically while you dream</div>
 
       <!-- Search Form -->
       <form method="GET" action="/api/v1/user/${userId}/raw-ideas" class="search-form">
@@ -5449,36 +5443,8 @@ Convert loose thoughts into structure (viewing last 200)      </div>
     }
   </div>
 
-  <script>
-    // Intersection Observer for lazy loading animations
-    const observerOptions = {
-      root: null,
-      rootMargin: '50px',
-      threshold: 0.1
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry, index) => {
-        if (entry.isIntersecting) {
-          // Add a small stagger delay based on order
-          setTimeout(() => {
-            entry.target.classList.add('visible');
-          }, index * 50); // 50ms stagger between items
-          
-          // Stop observing once animated
-          observer.unobserve(entry.target);
-        }
-      });
-    }, observerOptions);
-
-    // Observe all idea cards
-    document.querySelectorAll('.idea-card').forEach(card => {
-      observer.observe(card);
-    });
-
-    // Delete button handler with event delegation
+ <script>
     document.addEventListener("click", async function(e) {
-      // Check if clicked element is delete button
       const deleteBtn = e.target.closest(".delete-button");
       if (!deleteBtn) return;
 
@@ -5504,7 +5470,6 @@ Convert loose thoughts into structure (viewing last 200)      </div>
         const data = await res.json();
         if (!data.success) throw new Error(data.error || "Delete failed");
 
-        // Fade out animation
         card.style.transition = "all 0.3s ease";
         card.style.opacity = "0";
         card.style.transform = "translateX(-20px)";
@@ -5512,7 +5477,7 @@ Convert loose thoughts into structure (viewing last 200)      </div>
       } catch (err) {
         alert("Failed to delete: " + (err.message || "Unknown error"));
       }
-    }, true); // Use capture phase to ensure we catch the event
+    }, true);
   </script>
 </body>
 </html>
@@ -11812,7 +11777,7 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
         <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
         ${chats.length > 0 ? `<span class="message-count">${chats.length}</span>` : ""}
       </h1>
-      <div class="header-subtitle">Your last 10 AI conversation sessions</div>
+      <div class="header-subtitle">Last 10 AI conversation sessions. Phases = thought process. Contributions = actions made on tree during conversation.</div>
     </div>
 
     ${
