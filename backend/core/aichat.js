@@ -68,7 +68,7 @@ async function getAIChats({
         select: "_id action nodeId nodeVersion wasAi energyUsed date",
         populate: { path: "nodeId", select: "name" },
       })
-      .sort({ "startMessage.time": -1 })
+.sort({ "startMessage.time": -1, chainIndex: -1 })
       .lean();
 
     // Step 3: Group into sessions (preserving newest-session-first order)

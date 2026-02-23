@@ -1426,7 +1426,24 @@ router.get("/app", authenticateLite, async (req, res) => {
     let recentRoots = [];
     let recentRootsOpen = false;
     let mobileRecentRootsExpanded = false;
-
+// Build iframe URL — always injects inApp, token, and rootId when available
+function buildIframeUrl(raw) {
+  try {
+    const base = raw.startsWith('http') ? raw : new URL(raw, window.location.origin).href;
+    const u = new URL(base);
+    if (!u.searchParams.has('inApp'))  u.searchParams.set('inApp', '1');
+    if (!u.searchParams.has('token'))  u.searchParams.set('token', CONFIG.htmlShareToken);
+    const rootId = getCurrentRootId();
+    if (rootId && !u.pathname.includes('/root/')) {
+      u.searchParams.set('rootId', rootId);
+    } else {
+      u.searchParams.delete('rootId');
+    }
+    return u.pathname + u.search;
+  } catch (e) {
+    return raw;
+  }
+}
     // Socket setup
     const socket = io({ transports: ["websocket", "polling"], withCredentials: true });
 
@@ -1486,10 +1503,7 @@ socket.on("navigate", ({ url, replace }) => {
     console.log("[socket] navigate:", url);
     loadingOverlay.classList.add("visible");
     currentIframeUrl = url;
-    let navUrl = url.includes('inApp=') ? url : url + (url.includes('?') ? '&' : '?') + 'inApp=1';
-    if (!navUrl.includes('token=')) {
-      navUrl += '&token=' + CONFIG.htmlShareToken;
-    }
+    let navUrl = buildIframeUrl(url);
     if (replace) {
       iframe.contentWindow?.location.replace(navUrl);
     } else {
@@ -1521,12 +1535,15 @@ socket.on("navigate", ({ url, replace }) => {
       recentRoots = roots || [];
       renderRecentRoots();
     });
+let activeRootId = null;
 
-    function getCurrentRootId() {
-      const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
-      const rootMatch = currentIframeUrl.match(new RegExp('(?:/api/v1)?/root/(' + ID + ')', 'i'));
-      return rootMatch ? rootMatch[1] : null;
-    }
+   function getCurrentRootId() {
+  if (activeRootId) return activeRootId;
+  // Fallback: try to extract from URL
+  const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
+  const rootMatch = currentIframeUrl.match(new RegExp('(?:/api/v1)?/root/(' + ID + ')', 'i'));
+  return rootMatch ? rootMatch[1] : null;
+}
 
     function truncateName(str, maxLen = 18) {
       if (!str) return '';
@@ -1582,12 +1599,14 @@ socket.on("navigate", ({ url, replace }) => {
       });
     }
 
-    function navigateToRoot(rootId) {
-      const url = '/api/v1/root/' + rootId + '?html&token=' + CONFIG.htmlShareToken + '&inApp=1';
-      loadingOverlay.classList.add("visible");
-      iframe.src = url;
-      currentIframeUrl = '/api/v1/root/' + rootId;
-    }
+  function navigateToRoot(rootId) {
+    activeRootId = rootId;
+
+  const url = '/api/v1/root/' + rootId + '?html&token=' + CONFIG.htmlShareToken + '&inApp=1';
+  loadingOverlay.classList.add("visible");
+  iframe.src = url;
+  currentIframeUrl = '/api/v1/root/' + rootId;
+}
 
     function closeRecentRoots() {
       recentRootsOpen = false;
@@ -1661,24 +1680,31 @@ socket.on("navigate", ({ url, replace }) => {
       }
     });
 
-    socket.on("availableModes", ({ bigMode, modes, currentMode, rootName }) => {
-      console.log("[mode] available:", bigMode, modes, "root:", rootName);
-      availableModes = modes || [];
-      if (currentMode) currentModeKey = currentMode;
-      const active = availableModes.find(m => m.key === currentModeKey);
-      if (active) {
-        $("modeCurrentEmoji").textContent = active.emoji;
-        $("modeCurrentLabel").textContent = active.label;
-      }
-      renderModeDropdown();
-      renderMobileModeBar();
+   socket.on("availableModes", ({ bigMode, modes, currentMode, rootName, rootId }) => {
+  console.log("[mode] available:", bigMode, modes, "root:", rootName, rootId);
+  availableModes = modes || [];
+  if (currentMode) currentModeKey = currentMode;
 
-      // Hide mode switching UI in tree mode (orchestrator handles it)
-      const isTree = bigMode === 'tree';
-      $("modeBar").style.display = isTree ? 'none' : '';
-      $("mobileModeBar").style.display = isTree ? 'none' : '';
-      updateRootName(rootName);
-    });
+  // Sync activeRootId from server — this is the source of truth
+  if (rootId) {
+    activeRootId = rootId;
+  } else if (bigMode === 'home') {
+    activeRootId = null;
+  }
+
+  const active = availableModes.find(m => m.key === currentModeKey);
+  if (active) {
+    $("modeCurrentEmoji").textContent = active.emoji;
+    $("modeCurrentLabel").textContent = active.label;
+  }
+  renderModeDropdown();
+  renderMobileModeBar();
+
+  const isTree = bigMode === 'tree';
+  $("modeBar").style.display = isTree ? 'none' : '';
+  $("mobileModeBar").style.display = isTree ? 'none' : '';
+  updateRootName(rootName);
+});
 
     socket.on("conversationCleared", () => {
       console.log("[socket] conversation manually cleared");
@@ -1893,7 +1919,10 @@ socket.on("navigate", ({ url, replace }) => {
         if (isRegistered) {
           socket.emit("urlChanged", { url: path, rootId, nodeId });
         }
-
+if (rootMatch) {
+  rootId = rootMatch[1];
+  activeRootId = rootId;  // <-- add this
+}
         // Re-render recent roots to update active state
         renderRecentRoots();
       }
@@ -2465,11 +2494,13 @@ socket.on("navigate", ({ url, replace }) => {
       }
     }
 
-    function goHome() {
-      loadingOverlay.classList.add("visible");
-      iframe.src = CONFIG.homeUrl;
-      currentIframeUrl = CONFIG.homeUrl;
-    }
+function goHome() {
+  activeRootId = null;
+
+  loadingOverlay.classList.add("visible");
+  currentIframeUrl = CONFIG.homeUrl;
+  iframe.src = CONFIG.homeUrl; // home doesn't need rootId
+}
 
     $("desktopHomeBtn").addEventListener("click", goHome);
     $("mobileHomeBtn").addEventListener("click", (e) => {
@@ -2500,16 +2531,120 @@ socket.on("navigate", ({ url, replace }) => {
     $("desktopOpenTabBtn").addEventListener("click", openInNewTab);
 
     // Iframe
-    iframe.addEventListener("load", () => {
-      loadingOverlay.classList.remove("visible");
+   iframe.addEventListener("load", () => {
+  loadingOverlay.classList.remove("visible");
+  try {
+    const loc = iframe.contentWindow?.location;
+    if (loc) {
+      currentIframeUrl = loc.pathname + loc.search;
+    }
+  } catch (e) {}
+  detectIframeUrlChange();
+  injectIframeParamForwarding();
+});
+
+function injectIframeParamForwarding() {
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    // Skip if already injected
+    if (doc._paramForwardingInjected) return;
+    doc._paramForwardingInjected = true;
+
+    // Intercept all clicks on links
+    doc.addEventListener('click', (e) => {
+      const anchor = e.target.closest('a');
+      if (!anchor || !anchor.href) return;
+
       try {
-        const loc = iframe.contentWindow?.location;
-        if (loc) {
-          currentIframeUrl = loc.pathname + loc.search;
+        const url = new URL(anchor.href);
+
+        // Only rewrite same-origin links
+        if (url.origin !== window.location.origin) return;
+
+        // Add inApp
+        if (!url.searchParams.has('inApp')) {
+          url.searchParams.set('inApp', '1');
         }
-      } catch (e) {}
-      detectIframeUrlChange();
-    });
+
+        // Add token
+        if (!url.searchParams.has('token')) {
+          url.searchParams.set('token', CONFIG.htmlShareToken);
+        }
+
+        // Add rootId if we have one and it's not already a /root/ URL
+        const rootId = getCurrentRootId();
+        if (rootId && !url.pathname.includes('/root/')) {
+          url.searchParams.set('rootId', rootId);
+        }
+
+        anchor.href = url.pathname + url.search;
+      } catch (err) {
+        // ignore malformed URLs
+      }
+    }, true); // capture phase to run before default
+
+    // Also intercept form submissions
+    doc.addEventListener('submit', (e) => {
+      const form = e.target;
+      if (!form || !form.action) return;
+      try {
+        const url = new URL(form.action, window.location.origin);
+        if (url.origin !== window.location.origin) return;
+
+        // Inject hidden fields
+        ['inApp', 'token', 'rootId'].forEach(key => {
+          if (form.querySelector('input[name="' + key + '"]')) return;
+          let val;
+          if (key === 'inApp') val = '1';
+          else if (key === 'token') val = CONFIG.htmlShareToken;
+          else if (key === 'rootId') val = getCurrentRootId();
+          if (!val) return;
+          const input = doc.createElement('input');
+          input.type = 'hidden';
+          input.name = key;
+          input.value = val;
+          form.appendChild(input);
+        });
+      } catch (err) {}
+    }, true);
+
+    // Intercept programmatic navigation (window.location assignments)
+    const iframeWindow = iframe.contentWindow;
+    if (iframeWindow) {
+      const origPushState = iframeWindow.history.pushState?.bind(iframeWindow.history);
+      const origReplaceState = iframeWindow.history.replaceState?.bind(iframeWindow.history);
+
+      function patchUrl(urlArg) {
+        if (!urlArg || typeof urlArg !== 'string') return urlArg;
+        try {
+          const u = new URL(urlArg, window.location.origin);
+          if (u.origin !== window.location.origin) return urlArg;
+          if (!u.searchParams.has('inApp')) u.searchParams.set('inApp', '1');
+          if (!u.searchParams.has('token')) u.searchParams.set('token', CONFIG.htmlShareToken);
+          const rootId = getCurrentRootId();
+          if (rootId && !u.pathname.includes('/root/')) u.searchParams.set('rootId', rootId);
+          return u.pathname + u.search;
+        } catch (e) { return urlArg; }
+      }
+
+      if (origPushState) {
+        iframeWindow.history.pushState = function(state, title, url) {
+          return origPushState(state, title, patchUrl(url));
+        };
+      }
+      if (origReplaceState) {
+        iframeWindow.history.replaceState = function(state, title, url) {
+          return origReplaceState(state, title, patchUrl(url));
+        };
+      }
+    }
+  } catch (e) {
+    // Cross-origin or sandbox restriction — can't inject
+    console.warn('[iframe] param forwarding injection failed:', e.message);
+  }
+}
 
     // Socket events
     socket.on("treeChanged", ({ nodeId, changeType, details }) => {
@@ -2535,9 +2670,9 @@ socket.on("orchestratorStep", ({ modeKey, result, timestamp }) => {
 function addOrchestratorStep(modeKey, result) {
   // Truncate long results for display
   let displayResult = result;
-  if (displayResult.length > 500) {
-    displayResult = displayResult.slice(0, 500) + "\\n… (truncated)";
-  }
+ // if (displayResult.length > 500) {
+   // displayResult = displayResult.slice(0, 500) + "\\n… (truncated)";
+  //}
 
   const MODE_EMOJIS = {
     "intent": "🎯",
@@ -2581,12 +2716,11 @@ function addOrchestratorStep(modeKey, result) {
     window.TreeApp = {
       sendMessage: sendChatMessage,
       addMessage,
-      navigate: (url) => { 
-        loadingOverlay.classList.add("visible"); 
-        const navUrl = url.includes('inApp=') ? url : url + (url.includes('?') ? '&' : '?') + 'inApp=1';
-        iframe.src = navUrl;
-        currentIframeUrl = url;
-      },
+  navigate: (url) => { 
+  loadingOverlay.classList.add("visible"); 
+  currentIframeUrl = url;
+  iframe.src = buildIframeUrl(url);
+},
       goHome: () => { loadingOverlay.classList.add("visible"); iframe.src = CONFIG.homeUrl; currentIframeUrl = CONFIG.homeUrl; },
       isConnected: () => isConnected,
       isRegistered: () => isRegistered,

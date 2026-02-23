@@ -473,24 +473,41 @@ export async function getContextForAi(nodeId, options = {}) {
   }
 
   // ---- Notes (current version only) ----
-  if (includeNotes) {
-    const notes = await Note.find({
-      nodeId: node._id,
-      version: currentPrestige,
-      contentType: "text",
-    })
-      .populate("userId", "username -_id")
-      .lean()
-      .exec();
+if (includeNotes) {
+      const noteCount = await Note.countDocuments({
+        nodeId: node._id,
+        version: currentPrestige,
+        contentType: "text",
+      });
 
-    if (notes.length > 0) {
-      context.notes = notes.map((n) => ({
-        id: n._id.toString(),
-        username: n.userId?.username || "Unknown",
-        content: n.content,
-      }));
+      context.noteCount = noteCount;
+
+      if (noteCount > 0) {
+        // Just the most recent 3 as preview
+        const recentNotes = await Note.find({
+          nodeId: node._id,
+          version: currentPrestige,
+          contentType: "text",
+        })
+          .sort({ _id: -1 })
+          .limit(3)
+          .populate("userId", "username -_id")
+          .lean()
+          .exec();
+
+        const MAX_PREVIEW = 200;
+        context.notes = recentNotes.map((n) => {
+          const content = n.content || "";
+          return {
+            id: n._id.toString(),
+            username: n.userId?.username || "Unknown",
+            preview: content.length > MAX_PREVIEW
+              ? content.slice(0, MAX_PREVIEW) + "…"
+              : content,
+          };
+        });
+      }
     }
-  }
 
   // ---- Parent ----
   if (node.parent) {

@@ -374,11 +374,23 @@ export async function processMessage(visitorId, message, ctx) {
       // tool execution happens below
     } else {
       // ✅ No tools left → now safe to return for internal mode
-      if (isInternal) {
+        if (isInternal) {
         const raw = assistantMessage.content;
         try {
           return JSON.parse(raw);
         } catch (err) {
+          // Try stripping markdown fences
+          try {
+            const stripped = raw.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+            return JSON.parse(stripped);
+          } catch (_) {}
+
+          // If it looks like truncated JSON, return it as raw context
+          // rather than failing — the orchestrator can still use it
+          if (raw && (raw.startsWith("{") || raw.startsWith("["))) {
+            return { _raw: true, content: raw };
+          }
+
           return {
             action: "error",
             reason: "Internal mode returned invalid JSON",

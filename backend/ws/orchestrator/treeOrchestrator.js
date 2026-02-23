@@ -8,7 +8,9 @@ import {
   getCurrentNodeId,
 } from "../conversation.js";
 import { translate } from "./translator.js";
+import { trackChainStep } from "../aiChatTracker.js";
 
+import { getContextForAi } from "../../core/treeFetch.js";
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
 // ─────────────────────────────────────────────────────────────────────────
@@ -51,8 +53,8 @@ export { clearMemory };
 function formatMemoryContext(visitorId) {
   const mem = getMemory(visitorId);
   if (mem.length === 0) return "";
-  const lines = mem.map((m) =>
-    m.role === "user" ? `User: ${m.content}` : `Assistant: ${m.content}`,
+  const lines = mem.map(m =>
+    m.role === "user" ? `User: ${m.content}` : `Assistant: ${m.content}`
   );
   return `\n\nRecent conversation:\n${lines.join("\n")}`;
 }
@@ -61,10 +63,8 @@ function formatMemoryContext(visitorId) {
 // CONFIRMATION CHECK
 // ─────────────────────────────────────────────────────────────────────────
 
-const CONFIRM_WORDS =
-  /^(yes|yeah|yep|y|confirm|proceed|do it|go ahead|ok|sure|approved?)\s*[.!]?$/i;
-const DENY_WORDS =
-  /^(no|nah|nope|n|cancel|stop|don'?t|abort|never\s*mind)\s*[.!]?$/i;
+const CONFIRM_WORDS = /^(yes|yeah|yep|y|confirm|proceed|do it|go ahead|ok|sure|approved?)\s*[.!]?$/i;
+const DENY_WORDS = /^(no|nah|nope|n|cancel|stop|don'?t|abort|never\s*mind)\s*[.!]?$/i;
 
 function isConfirmation(message) {
   return CONFIRM_WORDS.test(message.trim());
@@ -91,8 +91,7 @@ function emitStatus(socket, phase, text) {
 function emitModeResult(socket, modeKey, result) {
   socket.emit("orchestratorStep", {
     modeKey,
-    result:
-      typeof result === "string" ? result : JSON.stringify(result, null, 2),
+    result: typeof result === "string" ? result : JSON.stringify(result, null, 2),
     timestamp: Date.now(),
   });
 }
@@ -104,11 +103,14 @@ export async function orchestrateTreeRequest({
   username,
   userId,
   signal,
+  sessionId,
 }) {
   if (signal?.aborted) return null;
 
   const rootId = getRootId(visitorId);
   const meta = { username, userId, rootId };
+  const modesUsed = []; // Track full chain for AIChat
+  let chainIndex = 1; // 0 = user message (created in websocket.js)
 
   // ────────────────────────────────────────────────────────
   // CHECK FOR PENDING CONFIRMATION
@@ -149,6 +151,7 @@ export async function orchestrateTreeRequest({
   emitStatus(socket, "intent", "Understanding request…");
 
   let translation;
+  const translatorStart = new Date();
   try {
     translation = await translate({
       message,
@@ -161,259 +164,343 @@ export async function orchestrateTreeRequest({
     if (signal?.aborted) return null;
     console.error("❌ Translation failed:", err.message);
     translation = {
-      plan: [
-        {
-          intent: "query",
-          targetHint: null,
-          directive: message,
-          needsNavigation: false,
-          isDestructive: false,
-        },
-      ],
+      plan: [{
+        intent: "query",
+        targetHint: null,
+        directive: message,
+        needsNavigation: false,
+        isDestructive: false,
+      }],
       responseHint: "Respond naturally to the user's message.",
       summary: message,
     };
   }
+  const translatorEnd = new Date();
 
   if (signal?.aborted) return null;
 
-  // For now, execute plan[0] as primary operation. Multi-step plans come later.
-  const primaryOp = translation.plan[0];
   const responseHint = translation.responseHint || "";
+  const plan = translation.plan;
 
-  // Map translator output to the intent shape the rest of the orchestrator expects
-  const intent = {
-    intent: primaryOp.intent,
-    needsNavigation: primaryOp.needsNavigation,
-    needsContext: !["navigate"].includes(primaryOp.intent), // everything except pure nav needs context
-    isDestructive: primaryOp.isDestructive,
-    targetHint: primaryOp.targetHint,
-    directive: primaryOp.directive,
-    summary: translation.summary,
-  };
+  console.log(`🎯 Translated: ${plan.length} step(s) | "${translation.summary}"`);
+  emitModeResult(socket, "intent", { plan, responseHint, summary: translation.summary });
 
-  console.log(
-    `🎯 Translated: ${intent.intent} | nav=${intent.needsNavigation} | destructive=${intent.isDestructive} | "${intent.summary}"`,
-  );
-  emitModeResult(socket, "intent", {
-    ...intent,
-    responseHint,
-    fullPlan: translation.plan,
+  // Track translation step
+  modesUsed.push("translator");
+  trackChainStep({
+    userId, sessionId, chainIndex: chainIndex++,
+    modeKey: "translator",
+    input: message,
+    output: translation,
+    startTime: translatorStart,
+    endTime: translatorEnd,
   });
 
   // ────────────────────────────────────────────────────────
-  // STEP 2: NAVIGATE (if needed)
+  // STEP 2: EXECUTE PLAN (navigate → context → execute per step)
   // ────────────────────────────────────────────────────────
 
-  let targetNodeId = rootId;
-  let targetPath = null;
+  const stepResults = [];
+  let lastTargetNodeId = rootId;
+  let lastTargetPath = null;
+  let lastNodeContext = null;
 
-  if (intent.needsNavigation) {
-    emitStatus(socket, "navigate", "Finding node…");
-
-    switchMode(visitorId, "tree:navigate", {
-      ...meta,
-      currentNodeId: getCurrentNodeId(visitorId) || rootId,
-      clearHistory: true,
-    });
-
-    // Use the translator's directive for navigation (more precise than raw message)
-    const navDirective = intent.directive || message;
-    const memCtx = formatMemoryContext(visitorId);
-    const navMessage = memCtx
-      ? `${memCtx}\n\nCurrent request: ${navDirective}`
-      : navDirective;
-
-    const navResult = await processMessage(visitorId, navMessage, {
-      ...meta,
-      signal,
-      meta: { internal: true },
-    });
-
-    if (signal?.aborted) return null;
-    emitModeResult(socket, "tree:navigate", navResult);
-
-    if (navResult?.action === "found") {
-      targetNodeId = navResult.targetNodeId;
-      targetPath = navResult.targetPath;
-
-      // Navigate the iframe to the found node
-      socket.emit("navigate", {
-        url: `/api/v1/node/${targetNodeId}?html`,
-        replace: false,
-      });
-    } else if (navResult?.action === "ambiguous") {
-      // Let respond handle disambiguation
-      return await runRespond({
-        visitorId,
-        socket,
-        signal,
-        ...meta,
-        nodeContext: JSON.stringify(navResult, null, 2),
-        operationContext:
-          "Navigation found multiple matches. Need user to disambiguate.",
-        originalMessage: message,
-        responseHint:
-          "Ask the user to clarify which node they mean. List the options clearly.",
-      });
-    } else if (navResult?.action === "not_found") {
-      return await runRespond({
-        visitorId,
-        socket,
-        signal,
-        ...meta,
-        nodeContext: null,
-        operationContext: `Could not find a node matching the request. Target hint: "${intent.targetHint || message}"`,
-        originalMessage: message,
-        responseHint:
-          "Let the user know the node wasn't found. Suggest alternatives if possible.",
-      });
-    }
+  for (let i = 0; i < plan.length; i++) {
+  if (signal?.aborted) {
+  // Memory still gets the partial work
+  if (stepResults.length > 0) {
+    pushMemory(visitorId, message,
+      `[Stopped mid-plan. Completed ${stepResults.length}/${plan.length} steps: ${JSON.stringify(stepResults)}]`
+    );
   }
+  return null;
+}
 
-  // ── PURE NAVIGATION: skip context/execute/respond ──
-  if (intent.intent === "navigate" && targetNodeId) {
-    const navSummary = `Navigated to ${targetPath || targetNodeId}.`;
-    emitStatus(socket, "done", "");
-    pushMemory(visitorId, message, navSummary);
-    return {
-      success: true,
-      answer: navSummary,
-      modeKey: "tree:navigate",
-      rootId,
+    const op = plan[i];
+    const stepNum = i + 1;
+    const isOnlyStep = plan.length === 1;
+
+    // Emit plan step marker so frontend can group chain steps
+    trackChainStep({
+      userId, sessionId, chainIndex: chainIndex++,
+      modeKey: `tree:orchestrator:plan:${stepNum}`,
+      input: `Step ${stepNum}/${plan.length}: ${op.intent}${op.targetHint ? ` → ${op.targetHint}` : ""}\n${op.directive}`,
+    });
+
+    // Map plan op to intent shape used by helpers
+    const intent = {
+      intent: op.intent,
+      needsNavigation: op.needsNavigation,
+      needsContext: !["navigate"].includes(op.intent),
+      isDestructive: op.isDestructive,
+      targetHint: op.targetHint,
+      directive: op.directive,
+      summary: op.directive,
     };
-  }
 
-  // ────────────────────────────────────────────────────────
-  // STEP 3: GET CONTEXT (if needed)
-  // ────────────────────────────────────────────────────────
+    console.log(`  📋 Step ${stepNum}/${plan.length}: ${intent.intent} → ${intent.targetHint || "(current)"}`);
 
-  let nodeContext = null;
+    // ── NAVIGATE (if this step needs it) ──
+    let targetNodeId = lastTargetNodeId;
+    let targetPath = lastTargetPath;
 
-  if (intent.needsContext && targetNodeId) {
-    emitStatus(socket, "context", "Reading node…");
+    if (intent.needsNavigation) {
+      emitStatus(socket, "navigate", `Step ${stepNum}: Finding node…`);
 
-    switchMode(visitorId, "tree:getContext", {
-      ...meta,
-      targetNodeId,
-      clearHistory: true,
-    });
+      switchMode(visitorId, "tree:navigate", {
+        ...meta,
+        currentNodeId: getCurrentNodeId(visitorId) || rootId,
+        clearHistory: true,
+      });
 
-    // Build the context request based on intent
-    const contextRequest = buildContextRequest(intent, targetNodeId);
+      const navDirective = intent.directive || message;
+      const memCtx = i === 0 ? formatMemoryContext(visitorId) : null;
+      const navMessage = memCtx
+        ? `${memCtx}\n\nCurrent request: ${navDirective}`
+        : navDirective;
 
-    const ctxResult = await processMessage(visitorId, contextRequest, {
-      ...meta,
-      signal,
-      meta: { internal: true },
-    });
+      const navStart = new Date();
+      const navResult = await processMessage(visitorId, navMessage, {
+        ...meta,
+        signal,
+        meta: { internal: true },
+      });
+      const navEnd = new Date();
 
-    if (signal?.aborted) return null;
-    nodeContext = JSON.stringify(ctxResult, null, 2);
-    emitModeResult(socket, "tree:getContext", ctxResult);
-  }
+      if (signal?.aborted) return null;
+      emitModeResult(socket, "tree:navigate", navResult);
 
-  // ────────────────────────────────────────────────────────
-  // STEP 4: CONFIRM IF DESTRUCTIVE
-  // ────────────────────────────────────────────────────────
+      // Track navigate step
+      modesUsed.push("tree:navigate");
+      trackChainStep({
+        userId, sessionId, chainIndex: chainIndex++,
+        modeKey: "tree:navigate",
+        input: navDirective,
+        output: navResult,
+        startTime: navStart,
+        endTime: navEnd,
+      });
 
-  if (intent.isDestructive) {
-    pendingOperations.set(visitorId, {
-      action: intent.intent,
-      targetNodeId,
-      targetPath,
-      nodeContext,
-      originalMessage: message,
-    });
+      if (navResult?.action === "found") {
+        targetNodeId = navResult.targetNodeId;
+        targetPath = navResult.targetPath;
 
-    return await runRespond({
-      visitorId,
-      socket,
-      signal,
-      ...meta,
-      nodeContext,
-      operationContext: `Destructive operation requested: ${intent.summary}`,
-      confirmNeeded: true,
-      originalMessage: message,
-      responseHint:
-        "Clearly describe the destructive action and ask for explicit confirmation.",
-    });
-  }
+        socket.emit("navigate", {
+          url: `/api/v1/node/${targetNodeId}?html`,
+          replace: false,
+        });
+      } else if (navResult?.action === "ambiguous") {
+        return await runRespond({
+          visitorId, socket, signal, ...meta,
+          nodeContext: JSON.stringify(navResult, null, 2),
+          operationContext: stepResults.length > 0
+            ? `Completed ${stepResults.length} step(s) before hitting ambiguity:\n${JSON.stringify(stepResults, null, 2)}`
+            : "Navigation found multiple matches. Need user to disambiguate.",
+          originalMessage: message,
+          responseHint: "Ask the user to clarify which node they mean. List the options clearly.",
+        });
+      } else if (navResult?.action === "not_found") {
+        // If step 1 can't find the target, bail. If later step, skip it.
+        if (i === 0) {
+          return await runRespond({
+            visitorId, socket, signal, ...meta,
+            nodeContext: null,
+            operationContext: `Could not find a node matching: "${intent.targetHint || message}"`,
+            originalMessage: message,
+            responseHint: "Let the user know the node wasn't found. Suggest alternatives if possible.",
+          });
+        } else {
+          stepResults.push({ step: stepNum, intent: intent.intent, skipped: true, reason: "Node not found" });
+          continue;
+        }
+      }
+    }
 
-  // ────────────────────────────────────────────────────────
-  // STEP 5: EXECUTE MUTATION (if applicable)
-  // ────────────────────────────────────────────────────────
+    // ── PURE NAVIGATION: if navigate is the only step, return early ──
+    if (intent.intent === "navigate" && targetNodeId) {
+      if (isOnlyStep) {
+        const navSummary = `Navigated to ${targetPath || targetNodeId}.`;
+        emitStatus(socket, "done", "");
+        pushMemory(visitorId, message, navSummary);
+        return {
+          success: true,
+          answer: navSummary,
+          modeKey: "tree:navigate",
+          rootId,
+          modesUsed,
+        };
+      }
+      // Navigate step in a multi-step plan — just update position
+      lastTargetNodeId = targetNodeId;
+      lastTargetPath = targetPath;
+      stepResults.push({ step: stepNum, intent: "navigate", targetPath });
+      continue;
+    }
 
-  let operationContext = null;
+    // ── GET CONTEXT (if needed) ──
+    let nodeContext = lastNodeContext;
 
-  const mutationModes = {
-    structure: "tree:structure",
-    edit: "tree:edit",
-    notes: "tree:notes",
+// Replace the whole getContext block in the plan loop with:
+if (intent.needsContext && targetNodeId) {
+  emitStatus(socket, "context", isOnlyStep ? "Reading node…" : `Step ${stepNum}: Reading node…`);
+  const ctxStart = new Date();  // ← this was missing
+
+  const contextProfiles = {
+    structure: { includeChildren: true, includeParentChain: true, includeValues: false, includeNotes: false },
+    edit:      { includeChildren: true, includeParentChain: true, includeValues: true, includeNotes: false },
+    notes:     { includeChildren: false, includeParentChain: false, includeValues: false, includeNotes: true },
+    query:     { includeChildren: true, includeParentChain: true, includeValues: true, includeNotes: true },
   };
 
-  const executionMode = mutationModes[intent.intent];
+  const profile = contextProfiles[intent.intent] || contextProfiles.query;
+  const ctxResult = await getContextForAi(targetNodeId, profile);
 
-  if (executionMode) {
-    emitStatus(socket, "execute", "Making changes…");
+  nodeContext = JSON.stringify(ctxResult, null, 2);
+  emitModeResult(socket, "tree:getContext", ctxResult);
 
-    // Extract prestige from nodeContext for notes mode
-    let prestige = 0;
-    if (nodeContext) {
-      try {
-        const parsed = JSON.parse(nodeContext);
-        prestige = parsed.prestige ?? 0;
-      } catch {}
-    }
+  const ctxEnd = new Date();
+  trackChainStep({
+    userId, sessionId, chainIndex: chainIndex++,
+    modeKey: "tree:getContext",
+    input: `getContextForAi(${targetNodeId}, ${intent.intent})`,
+    output: ctxResult,
+    startTime: ctxStart,
+    endTime: ctxEnd,
+  });
+}
 
-    switchMode(visitorId, executionMode, {
-      ...meta,
-      targetNodeId,
-      prestige,
-      clearHistory: true,
-    });
+    // ── CONFIRM IF DESTRUCTIVE (aborts plan for confirmation) ──
+    if (intent.isDestructive) {
+      pendingOperations.set(visitorId, {
+        action: intent.intent,
+        targetNodeId,
+        targetPath,
+        nodeContext,
+        originalMessage: message,
+      });
 
-    // Build a directive execution message — use translator's directive for precision
-    const executionMessage = buildExecutionMessage(
-      intent,
-      intent.directive || message,
-      targetNodeId,
-      nodeContext,
-    );
-
-    const execResult = await processMessage(visitorId, executionMessage, {
-      ...meta,
-      signal,
-      meta: { internal: true },
-    });
-
-    if (signal?.aborted) return null;
-    operationContext = JSON.stringify(execResult, null, 2);
-    emitModeResult(socket, executionMode, execResult);
-
-    // Notify frontend of tree changes
-    if (intent.intent === "structure") {
-      socket.emit("treeChanged", {
-        nodeId: targetNodeId,
-        changeType: execResult?.action || "modified",
+      return await runRespond({
+        visitorId, socket, signal, ...meta,
+        nodeContext,
+        operationContext: stepResults.length > 0
+          ? `Completed ${stepResults.length} step(s), then hit destructive operation:\n${JSON.stringify(stepResults, null, 2)}\n\nPending: ${intent.directive}`
+          : `Destructive operation requested: ${intent.directive}`,
+        confirmNeeded: true,
+        originalMessage: message,
+        responseHint: "Clearly describe the destructive action and ask for explicit confirmation.",
       });
     }
+
+    // ── EXECUTE MUTATION ──
+    const mutationModes = {
+      structure: "tree:structure",
+      edit: "tree:edit",
+      notes: "tree:notes",
+    };
+
+    const executionMode = mutationModes[intent.intent];
+
+    if (executionMode) {
+      emitStatus(socket, "execute", isOnlyStep ? "Making changes…" : `Step ${stepNum}: Making changes…`);
+
+      let prestige = 0;
+      if (nodeContext) {
+        try {
+          const parsed = JSON.parse(nodeContext);
+          prestige = parsed.prestige ?? 0;
+        } catch {}
+      }
+
+      switchMode(visitorId, executionMode, {
+        ...meta,
+        targetNodeId,
+        prestige,
+        clearHistory: true,
+      });
+
+      const executionMessage = buildExecutionMessage(intent, intent.directive || message, targetNodeId, nodeContext);
+
+      const execStart = new Date();
+      const execResult = await processMessage(visitorId, executionMessage, {
+        ...meta,
+        signal,
+        meta: { internal: true },
+      });
+      const execEnd = new Date();
+
+      if (signal?.aborted) return null;
+      emitModeResult(socket, executionMode, execResult);
+
+      // Track execute step
+      modesUsed.push(executionMode);
+      trackChainStep({
+        userId, sessionId, chainIndex: chainIndex++,
+        modeKey: executionMode,
+        input: intent.directive,
+        output: execResult,
+        startTime: execStart,
+        endTime: execEnd,
+      });
+
+      stepResults.push({ step: stepNum, intent: intent.intent, result: execResult });
+
+      // Notify frontend of tree changes
+      if (intent.intent === "structure") {
+        socket.emit("treeChanged", {
+          nodeId: targetNodeId,
+          changeType: execResult?.action || "modified",
+        });
+        // If structure created new nodes, the next step might target them
+        // Update lastTargetNodeId so subsequent navigate can find children
+      }
+    } else {
+      // query, reflect — non-mutation, just collect context
+      stepResults.push({ step: stepNum, intent: intent.intent, context: nodeContext });
+    }
+
+    // Carry forward for next step
+    lastTargetNodeId = targetNodeId;
+    lastTargetPath = targetPath;
+    lastNodeContext = nodeContext;
   }
 
   // ────────────────────────────────────────────────────────
-  // STEP 6: RESPOND
+  // STEP 3: RESPOND (with all collected results)
   // ────────────────────────────────────────────────────────
 
-  return await runRespond({
+  const operationContext = stepResults.length > 0
+    ? JSON.stringify(stepResults, null, 2)
+    : null;
+
+  modesUsed.push("tree:respond");
+  const respondStart = new Date();
+
+  const response = await runRespond({
     visitorId,
     socket,
     signal,
     ...meta,
-    nodeContext,
+    nodeContext: lastNodeContext,
     operationContext,
     originalMessage: message,
     responseHint,
   });
+
+  const respondEnd = new Date();
+
+  trackChainStep({
+    userId, sessionId, chainIndex: chainIndex++,
+    modeKey: "tree:respond",
+    input: responseHint || "Respond to the user",
+    output: response?.answer || null,
+    startTime: respondStart,
+    endTime: respondEnd,
+  });
+
+  if (response) {
+    response.modesUsed = modesUsed;
+  }
+  return response;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -583,30 +670,7 @@ async function runRespond({
  * Build a context request message based on intent type.
  * Tells getContext mode what scope to use.
  */
-function buildContextRequest(intent, targetNodeId) {
-  const base = `Get context for node ${targetNodeId}`;
 
-  switch (intent.intent) {
-    case "query":
-    case "reflect":
-      return `${base} with full scope: notes, values, children, siblings, and parent chain.`;
-
-    case "structure":
-      return `${base} with children and parent chain. I need to understand the topology.`;
-
-    case "edit":
-      return `${base} with values, goals, and current status. I need to see what fields exist.`;
-
-    case "notes":
-      return `${base} with notes for the current version. Include note IDs.`;
-
-    case "navigate":
-      return `${base} with children and parent.`;
-
-    default:
-      return `${base} with notes and children.`;
-  }
-}
 
 /**
  * Build a directive execution message for mutation modes.
@@ -649,4 +713,4 @@ function buildExecutionMessage(intent, userMessage, targetNodeId, nodeContext) {
     default:
       return `${contextBlock}User request: ${userMessage}`;
   }
-}
+} 

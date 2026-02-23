@@ -18,12 +18,20 @@ const AIChatSchema = new mongoose.Schema({
   },
 
   // -----------------------------------
-  // Session grouping
+  // Session grouping (links the full chain)
   // -----------------------------------
   sessionId: {
     type: String,
     required: true,
     index: true,
+  },
+
+  // -----------------------------------
+  // Chain position (order within session)
+  // -----------------------------------
+  chainIndex: {
+    type: Number,
+    default: 0,
   },
 
   // -----------------------------------
@@ -35,9 +43,12 @@ const AIChatSchema = new mongoose.Schema({
       required: true,
     },
 
+    // "user" = human typed it
+    // "orchestrator" = orchestrator generated this call
+    // "script" = automated trigger from note/script
     source: {
       type: String,
-      enum: ["user", "orchestrator", "subtask", "system"],
+      enum: ["user", "orchestrator", "script", "system"],
       default: "user",
       required: true,
     },
@@ -71,7 +82,7 @@ const AIChatSchema = new mongoose.Schema({
   },
 
   // -----------------------------------
-  // AI Context (hierarchical mode)
+  // AI Context (which mode handled this)
   // -----------------------------------
   aiContext: {
     path: {
@@ -87,6 +98,10 @@ const AIChatSchema = new mongoose.Schema({
 
     _id: false,
   },
+
+  // -----------------------------------
+  // LLM provider info
+  // -----------------------------------
   llmProvider: {
     isCustom: {
       type: Boolean,
@@ -104,7 +119,7 @@ const AIChatSchema = new mongoose.Schema({
   },
 
   // -----------------------------------
-  // Contributions made during session
+  // Contributions made during this call
   // -----------------------------------
   contributions: [
     {
@@ -113,6 +128,9 @@ const AIChatSchema = new mongoose.Schema({
     },
   ],
 });
+
+// Query all steps in a chain
+AIChatSchema.index({ sessionId: 1, chainIndex: 1 });
 
 const AIChat = mongoose.model("AIChat", AIChatSchema);
 

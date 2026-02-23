@@ -2988,7 +2988,7 @@ function mapToolCallToApiUrl(toolName, args) {
 
     case "create-new-node-branch":
       if (!parentId) return null;
-      return withToken(`/api/v1/root/${parentId}?html`);
+      return withToken(`/api/v1/node/${parentId}?html`);
     case "get-active-leaf-execution-frontier":
       if (!nodeId || prestige == null) return null;
       return withToken(`/api/v1/node/${nodeId}/${prestige}?html`);
@@ -3044,7 +3044,7 @@ function mapToolCallToApiUrl(toolName, args) {
 
     /* ---------------- DEFAULT ---------------- */
     case "navigate-tree":
-      return withToken(`/api/v1/root/${nodeId}?html`);
+      return withToken(`/api/v1/node/${nodeId}?html`);
 
     default:
       return null;

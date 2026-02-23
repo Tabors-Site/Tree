@@ -1,6 +1,7 @@
 // ws/aiChatTracker.js
-// Tracks AI chat sessions — wraps each chat turn with start/end + contributions
-// Manages per-socket session IDs for grouping chats
+// Tracks AI chat sessions — each LLM call = one AIChat document
+// All calls in a chain share the same sessionId and are ordered by chainIndex
+// Query: AIChat.find({ sessionId }).sort({ chainIndex: 1 }) → full chain
 
 import { v4 as uuidv4 } from "uuid";
 import AIChat from "../db/models/aiChat.js";
@@ -97,13 +98,12 @@ export async function finalizeOpenChat(socket) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// TWO-PHASE RECORDING
+// TWO-PHASE RECORDING (for user-facing chats)
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
  * Phase 1: Create an AIChat record at the start of processing.
- * Captures accurate startTime for the contribution window.
- * Mode may be pre-orchestrator — will be patched on finalize for success.
+ * This is the user's original message — chainIndex 0.
  */
 export async function startAIChat({
   userId,
@@ -118,6 +118,7 @@ export async function startAIChat({
   const chat = await AIChat.create({
     userId,
     sessionId: sessionId || uuidv4(),
+    chainIndex: 0,
     startMessage: {
       content: message,
       source,
@@ -134,8 +135,7 @@ export async function startAIChat({
 }
 
 /**
- * Phase 2: Finalize an AIChat — set endMessage, collect contributions,
- * and optionally patch the mode to the actual execution mode.
+ * Phase 2: Finalize an AIChat — set endMessage, collect contributions.
  */
 export async function finalizeAIChat({
   chatId,
@@ -187,4 +187,69 @@ export async function finalizeAIChat({
   );
 
   return updated;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CHAIN STEP TRACKING (orchestrator internal calls)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Record an orchestrator chain step as its own AIChat document.
+ * All steps in a chain share the same sessionId.
+ *
+ * This is fire-and-forget — never blocks the orchestrator.
+ *
+ * @param {object} opts
+ * @param {string} opts.userId
+ * @param {string} opts.sessionId    - same sessionId as the user's chat
+ * @param {number} opts.chainIndex   - position in chain (1, 2, 3...)
+ * @param {string} opts.modeKey      - "translator", "tree:navigate", "tree:edit", etc.
+ * @param {string} opts.source       - "orchestrator" | "script"
+ * @param {string} opts.input        - what was sent to this step
+ * @param {string} [opts.output]     - what came back (null if tracking start only)
+ * @param {Date}   [opts.startTime]  - when the step started
+ * @param {Date}   [opts.endTime]    - when the step finished (null if no output)
+ * @param {object} [opts.llmProvider]
+ */
+export function trackChainStep({
+  userId,
+  sessionId,
+  chainIndex,
+  modeKey,
+  source = "orchestrator",
+  input,
+  output = null,
+  startTime = null,
+  endTime = null,
+  llmProvider = null,
+}) {
+  if (!sessionId || !userId) return;
+
+  const layers = modeKey ? modeKey.split(":") : ["orchestrator"];
+  const start = startTime || new Date();
+  const end = output ? (endTime || new Date()) : null;
+
+  // Fire and forget — don't await, don't block the chain
+  AIChat.create({
+    userId,
+    sessionId,
+    chainIndex,
+    startMessage: {
+      content: typeof input === "string" ? input : JSON.stringify(input).slice(0, 2000),
+      source,
+      time: start,
+    },
+    endMessage: {
+      content: output ? (typeof output === "string" ? output : JSON.stringify(output).slice(0, 2000)) : null,
+      time: end,
+      stopped: false,
+    },
+    aiContext: {
+      path: modeKey,
+      layers,
+    },
+    llmProvider: llmProvider || { isCustom: false, model: null, baseUrl: null },
+  }).catch((err) => {
+    console.error(`⚠️ Failed to track chain step [${modeKey}]:`, err.message);
+  });
 }
