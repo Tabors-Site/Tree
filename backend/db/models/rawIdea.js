@@ -30,6 +30,19 @@ const RawIdeaSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  status: {
+    type: String,
+    enum: ["pending", "processing", "succeeded", "stuck"],
+    default: "pending",
+  },
+  aiSessionId: {
+    type: String,
+    default: null,
+  },
+  placedAt: {
+    type: Date,
+    default: null,
+  },
 });
 
 const RawIdea = mongoose.model("RawIdea", RawIdeaSchema);

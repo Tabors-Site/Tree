@@ -216,7 +216,57 @@ export async function getActiveLeafExecutionFrontier(rootId) {
     leaves,
   };
 }
+export async function buildDeepTreeSummary(rootId) {
+  let nodeCount = 0;
 
+  async function walkNode(nodeId, depth) {
+    if (nodeCount >= TREE_SUMMARY_MAX_NODES) return null;
+    nodeCount++;
+
+    const ctx = await getContextForAi(nodeId, {
+      includeChildren: true,
+      includeParentChain: false,
+      includeValues: true,
+      includeNotes: false,
+    });
+
+    const indent = "  ".repeat(depth);
+    const values = ctx.version?.values;
+    const valueStr =
+      values && Object.keys(values).length > 0
+        ? ` (${Object.entries(values)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ")})`
+        : "";
+
+    let line = `${indent}- ${ctx.name}${valueStr}`;
+
+    if (depth < TREE_SUMMARY_MAX_DEPTH && ctx.children?.length > 0) {
+      const childLines = [];
+      for (const child of ctx.children) {
+        if (nodeCount >= TREE_SUMMARY_MAX_NODES) {
+          childLines.push(
+            `${"  ".repeat(depth + 1)}- ... (${ctx.children.length - childLines.length} more)`,
+          );
+          break;
+        }
+        const childResult = await walkNode(child.id, depth + 1);
+        if (childResult) childLines.push(childResult);
+      }
+      if (childLines.length > 0) {
+        line += "\n" + childLines.join("\n");
+      }
+    } else if (ctx.children?.length > 0) {
+      line += ` [${ctx.children.length} children]`;
+    }
+
+    return line;
+  }
+
+  const result = await walkNode(rootId, 0);
+  if (!result) return "(empty tree)";
+  return `Tree structure:\n${result}`;
+}
 export async function getNavigationContext(nodeId, { search } = {}) {
   if (!nodeId) {
     throw new Error("nodeId is required");

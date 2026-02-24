@@ -44,6 +44,8 @@ import {
   deleteRawIdeaAndFile as coreDeleteRawIdeaAndFile,
   convertRawIdeaToNote as coreConvertRawIdeaToNote,
 } from "../core/rawIdea.js";
+import { orchestrateRawIdeaPlacement } from "../ws/orchestrator/rawIdeaOrchestrator.js";
+import RawIdea from "../db/models/rawIdea.js";
 
 import {
   createApiKey,
@@ -5213,6 +5215,68 @@ body::after {
   gap: 6px;
 }
 
+/* Status badges */
+.status-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+  letter-spacing: 0.3px;
+}
+.status-badge--pending { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); }
+.status-badge--processing { background: rgba(255,200,0,0.25); color: #ffe066; }
+.status-badge--succeeded { background: rgba(50,220,120,0.25); color: #7effc0; }
+.status-badge--stuck { background: rgba(255,140,0,0.25); color: #ffcf7e; }
+
+/* Placed / stuck notices */
+.placed-notice {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(50,220,120,0.15);
+  border-radius: 10px;
+  font-size: 13px;
+  color: #7effc0;
+  border: 1px solid rgba(50,220,120,0.25);
+}
+.stuck-notice {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  background: rgba(255,140,0,0.15);
+  border-radius: 10px;
+  font-size: 13px;
+  color: #ffcf7e;
+  border: 1px solid rgba(255,140,0,0.25);
+}
+
+/* Auto-place button */
+.auto-place-btn {
+  margin-top: 14px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+.auto-place-btn:hover {
+  background: rgba(255,255,255,0.28);
+  transform: translateY(-1px);
+}
+.auto-place-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Empty State */
 .empty-state {
   position: relative;
@@ -5384,7 +5448,7 @@ These will be placed onto your tree's automatically while you dream</div>
       ${rawIdeas
         .map(
           (r) => `
-        <li class="idea-card" data-raw-idea-id="${r._id}">
+        <li class="idea-card idea-card--${r.status || "pending"}" data-raw-idea-id="${r._id}" data-status="${r.status || "pending"}">
           <button class="delete-button" title="Delete raw idea">✕</button>
 
           <div class="idea-content">
@@ -5398,7 +5462,24 @@ These will be placed onto your tree's automatically while you dream</div>
                  : escapeHtml(r.content)
              }
             </a>
+            <span class="status-badge status-badge--${r.status || "pending"}">
+              ${r.status === "processing" ? "⏳ processing" : r.status === "succeeded" ? "✓ placed by AI" : r.status === "stuck" ? "⚠ stuck" : "pending"}
+            </span>
           </div>
+
+          ${r.status === "succeeded" ? `
+          <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.</div>
+          ` : `
+          ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed — place manually below.</div>` : ""}
+
+          ${(!r.status || r.status === "pending") ? `
+          <button
+            class="auto-place-btn"
+            data-raw-idea-id="${r._id}"
+            data-token="${token}"
+            data-user-id="${userId}"
+          >✨ Auto-place</button>
+          ` : ""}
 
           <form
             method="POST"
@@ -5415,6 +5496,7 @@ These will be placed onto your tree's automatically while you dream</div>
             />
             <button type="submit">Transfer to Node</button>
           </form>
+          `}
 
           <div class="idea-meta">
             ${new Date(r.createdAt).toLocaleString()}
@@ -5442,38 +5524,80 @@ These will be placed onto your tree's automatically while you dream</div>
   </div>
 
  <script>
+    const urlToken = new URLSearchParams(window.location.search).get("token") || "";
+    const tokenQs = urlToken ? "?token=" + encodeURIComponent(urlToken) : "";
+
+    // Auto-refresh if any card is processing
+    if (document.querySelector(".idea-card[data-status='processing']")) {
+      setTimeout(() => window.location.reload(), 3000);
+    }
+
     document.addEventListener("click", async function(e) {
+      // ── Delete ──────────────────────────────────────────────────────────
       const deleteBtn = e.target.closest(".delete-button");
-      if (!deleteBtn) return;
+      if (deleteBtn) {
+        e.preventDefault();
+        e.stopPropagation();
 
-      e.preventDefault();
-      e.stopPropagation();
+        const card = deleteBtn.closest(".idea-card");
+        if (!card) return;
+        const rawIdeaId = card.dataset.rawIdeaId;
 
-      const card = deleteBtn.closest(".idea-card");
-      if (!card) return;
+        if (!confirm("Delete this raw idea? This cannot be undone.")) return;
 
-      const rawIdeaId = card.dataset.rawIdeaId;
+        try {
+          const res = await fetch(
+            "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + tokenQs,
+            { method: "DELETE" }
+          );
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error || "Delete failed");
 
-      if (!confirm("Delete this raw idea? This cannot be undone.")) return;
+          card.style.transition = "all 0.3s ease";
+          card.style.opacity = "0";
+          card.style.transform = "translateX(-20px)";
+          setTimeout(() => card.remove(), 300);
+        } catch (err) {
+          alert("Failed to delete: " + (err.message || "Unknown error"));
+        }
+        return;
+      }
 
-      const token = new URLSearchParams(window.location.search).get("token") || "";
-      const qs = token ? "?token=" + encodeURIComponent(token) : "";
+      // ── Auto-place ───────────────────────────────────────────────────────
+      const autoBtn = e.target.closest(".auto-place-btn");
+      if (autoBtn) {
+        e.preventDefault();
+        const rawIdeaId = autoBtn.dataset.rawIdeaId;
+        const card = autoBtn.closest(".idea-card");
 
-      try {
-        const res = await fetch(
-          "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + qs,
-          { method: "DELETE" }
-        );
+        autoBtn.disabled = true;
+        autoBtn.textContent = "⏳ Starting…";
 
-        const data = await res.json();
-        if (!data.success) throw new Error(data.error || "Delete failed");
-
-        card.style.transition = "all 0.3s ease";
-        card.style.opacity = "0";
-        card.style.transform = "translateX(-20px)";
-        setTimeout(() => card.remove(), 300);
-      } catch (err) {
-        alert("Failed to delete: " + (err.message || "Unknown error"));
+        try {
+          const res = await fetch(
+            "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + "/orchestrate" + tokenQs,
+            { method: "POST" }
+          );
+          if (res.status === 202) {
+            card.dataset.status = "processing";
+            // Update badge
+            const badge = card.querySelector(".status-badge");
+            if (badge) { badge.className = "status-badge status-badge--processing"; badge.textContent = "⏳ processing"; }
+            autoBtn.textContent = "⏳ Processing…";
+            // Reload after 4s to show result
+            setTimeout(() => window.location.reload(), 4000);
+          } else {
+            const data = await res.json().catch(() => ({}));
+            autoBtn.disabled = false;
+            autoBtn.textContent = "✨ Auto-place";
+            alert(data.error || "Could not start orchestration");
+          }
+        } catch (err) {
+          autoBtn.disabled = false;
+          autoBtn.textContent = "✨ Auto-place";
+          alert("Error: " + (err.message || "Unknown"));
+        }
+        return;
       }
     }, true);
   </script>
@@ -5558,6 +5682,61 @@ router.post(
         success: false,
         error: err.message,
       });
+    }
+  },
+);
+
+// ── Auto-orchestrate a single raw idea ──────────────────────────────────────
+router.post(
+  "/user/:userId/raw-ideas/:rawIdeaId/orchestrate",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { rawIdeaId } = req.params;
+
+      if (req.userId.toString() !== req.params.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const rawIdea = await RawIdea.findById(rawIdeaId);
+      if (!rawIdea || rawIdea.userId === "deleted") {
+        return res.status(404).json({ error: "Raw idea not found" });
+      }
+      if (rawIdea.userId.toString() !== req.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+      if (rawIdea.status && rawIdea.status !== "pending") {
+        return res
+          .status(409)
+          .json({ error: `Already ${rawIdea.status}` });
+      }
+
+      // Block concurrent placements — only one at a time per user
+      const alreadyProcessing = await RawIdea.findOne({
+        userId: req.userId.toString(),
+        status: "processing",
+      });
+      if (alreadyProcessing) {
+        return res.status(409).json({
+          error: "Another idea is already being placed — please wait for it to finish.",
+        });
+      }
+
+      const user = await User.findById(req.userId).select("username").lean();
+
+      // Fire and forget — orchestrator runs in background
+      orchestrateRawIdeaPlacement({
+        rawIdeaId,
+        userId: req.userId,
+        username: user?.username || "unknown",
+      }).catch((err) =>
+        console.error("Raw-idea orchestration failed:", err.message),
+      );
+
+      return res.status(202).json({ message: "Orchestration started" });
+    } catch (err) {
+      console.error("raw-idea orchestrate error:", err);
+      return res.status(500).json({ error: err.message });
     }
   },
 );

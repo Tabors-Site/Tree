@@ -210,10 +210,11 @@ export async function orchestrateTreeRequest({
   userId,
   signal,
   sessionId,
+  rootId: rootIdParam,
 }) {
   if (signal?.aborted) return null;
 
-  const rootId = getRootId(visitorId);
+  const rootId = rootIdParam ?? getRootId(visitorId);
   const meta = { username, userId, rootId };
   const modesUsed = []; // Track full chain for AIChat
   let chainIndex = 1; // 0 = user message (created in websocket.js)

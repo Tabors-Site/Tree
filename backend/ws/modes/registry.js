@@ -8,6 +8,9 @@ import homeDefault from "./home/default.js";
 import homeRawIdeaPlacement from "./home/raw-idea-placement.js";
 import homeReflect from "./home/reflect.js";
 
+// ── RAW IDEA sub-modes ───────────────────────────────────────────────────
+import rawIdeaChooseRoot from "./rawIdea/chooseRoot.js";
+
 // ── TREE sub-modes ──────────────────────────────────────────────────────
 import treeStructure from "./tree/structure.js";
 import treeEdit from "./tree/edit.js";
@@ -25,6 +28,7 @@ import treeRespond from "./tree/respond.js";
 export const BIG_MODES = {
   HOME: "home",
   TREE: "tree",
+  RAW_IDEA: "rawIdea",
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -36,6 +40,9 @@ const ALL_MODES = {
   "home:default": homeDefault,
   "home:raw-idea-placement": homeRawIdeaPlacement,
   "home:reflect": homeReflect,
+
+  // RAW IDEA
+  "rawIdea:chooseRoot": rawIdeaChooseRoot,
 
   // TREE
   "tree:navigate": treeNavigate, // 👈 ADD THIS
