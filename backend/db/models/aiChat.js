@@ -100,6 +100,54 @@ const AIChatSchema = new mongoose.Schema({
   },
 
   // -----------------------------------
+  // Tree orchestrator context (only in tree mode)
+  // Tracks where navigation landed and plan metadata
+  // -----------------------------------
+  treeContext: {
+    // The node navigator resolved to for this step
+    targetNodeId: {
+      type: String,
+      ref: "Node",
+      default: null,
+    },
+    targetNodeName: {
+      type: String,
+      default: null,
+    },
+    targetPath: {
+      type: String,
+      default: null,
+    },
+
+    // Plan step metadata
+    planStepIndex: {
+      type: Number,
+      default: null,
+    },
+    planTotalSteps: {
+      type: Number,
+      default: null,
+    },
+    directive: {
+      type: String,
+      default: null,
+    },
+
+    // Execution result
+    stepResult: {
+      type: String,
+      enum: ["success", "failed", "skipped", "pending", null],
+      default: null,
+    },
+    resultDetail: {
+      type: String,
+      default: null,
+    },
+
+    _id: false,
+  },
+
+  // -----------------------------------
   // LLM provider info
   // -----------------------------------
   llmProvider: {

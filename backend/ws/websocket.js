@@ -281,8 +281,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         modes: subModes,
         currentMode: activeMode,
         rootName,
-          rootId: activeRootId,  // <-- add this
-
+        rootId: activeRootId, // <-- add this
       });
     });
 
@@ -366,8 +365,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         modes: subModes,
         currentMode,
         rootName,
-          rootId: activeRootId,  // <-- add this
-
+        rootId: activeRootId, // <-- add this
       });
     });
 
@@ -414,7 +412,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         aiChat = await startAIChat({
           userId: socket.userId,
           sessionId,
-          message,
+          message: message.slice(0, 5000),
           source: "user",
           modeKey: preMode,
           llmProvider: {
@@ -441,7 +439,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             username,
             userId: socket.userId,
             signal: abort.signal,
-             sessionId,
+            sessionId,
           });
         } else {
           response = await processMessage(visitorId, message, {
@@ -634,23 +632,23 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
 
     // ── CLEAR / DISCONNECT ────────────────────────────────────────────
- socket.on("clearConversation", async () => {
-  const visitorId = socket.visitorId;
-  if (visitorId) {
-    // Finalize any in-flight chat
-    await finalizeOpenChat(socket);
+    socket.on("clearConversation", async () => {
+      const visitorId = socket.visitorId;
+      if (visitorId) {
+        // Finalize any in-flight chat
+        await finalizeOpenChat(socket);
 
-    resetConversation(visitorId, {
-      username: socket.username,
-      userId: socket.userId,
+        resetConversation(visitorId, {
+          username: socket.username,
+          userId: socket.userId,
+        });
+
+        rotateSession(socket); // ← add this
+
+        socket.emit("conversationCleared", { success: true });
+      }
+      clearMemory(socket.visitorId);
     });
-
-    rotateSession(socket);  // ← add this
-
-    socket.emit("conversationCleared", { success: true });
-  }
-  clearMemory(socket.visitorId);
-});
 
     socket.on("disconnect", async (reason) => {
       console.log(`🔌 Disconnected: ${socket.id} (${reason})`);

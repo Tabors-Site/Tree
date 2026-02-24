@@ -104,11 +104,11 @@ function renderMedia(fileUrl, mimeType) {
 
 function escapeHtml(str) {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 router.get("/user/:userId", urlAuth, async (req, res) => {
@@ -136,7 +136,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     const profileType = user.profileType || "basic";
     const energy = user.availableEnergy;
     const extraEnergy = user.additionalEnergy;
-const safeUsername = escapeHtml(user.username);
+    const safeUsername = escapeHtml(user.username);
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml) {
@@ -1460,7 +1460,7 @@ router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     const rawLimit = req.query.limit;
     let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
-       if (limit >= 200 || limit == undefined) {
+    if (limit >= 200 || limit == undefined) {
       limit = 200;
     }
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
@@ -2933,7 +2933,6 @@ const renderKeyValueMap = (data) => {
   `;
 };
 
-
 /* ------------------------- GENERIC HELPERS ------------------------- */
 
 const renderUser = (user) => {
@@ -3095,13 +3094,13 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
     /* HELPERS                                          */
     /* ─────────────────────────────────────────────── */
 
-   const esc = (str = "") =>
-  String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    const esc = (str = "") =>
+      String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
     const link = (id, label) =>
       id
@@ -3258,30 +3257,29 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
         }
 
         case "note": {
-  const na = c.noteAction || {};
+          const na = c.noteAction || {};
 
-  let verb;
-  switch (na.action) {
-    case "add":
-      verb = "Added a note to";
-      break;
-    case "edit":
-      verb = "Edited a note in";
-      break;
-    case "remove":
-      verb = "Removed a note from";
-      break;
-    default:
-      verb = "Updated a note in";
-  }
+          let verb;
+          switch (na.action) {
+            case "add":
+              verb = "Added a note to";
+              break;
+            case "edit":
+              verb = "Edited a note in";
+              break;
+            case "remove":
+              verb = "Removed a note from";
+              break;
+            default:
+              verb = "Updated a note in";
+          }
 
-  const noteRef = na.noteId
-    ? ` <a href="/api/v1/node/${nId}/${v}/notes/${na.noteId}${tokenQS}"><code>${esc(na.noteId)}</code></a>`
-    : "";
+          const noteRef = na.noteId
+            ? ` <a href="/api/v1/node/${nId}/${v}/notes/${na.noteId}${tokenQS}"><code>${esc(na.noteId)}</code></a>`
+            : "";
 
-  return `${verb} ${nLink}${noteRef}`;
-}
-
+          return `${verb} ${nLink}${noteRef}`;
+        }
 
         case "updateParent": {
           const up = c.updateParent || {};
@@ -5395,10 +5393,10 @@ These will be placed onto your tree's automatically while you dream</div>
               class="idea-link"
             >
              ${
-  r.contentType === "file"
-    ? `<span class="file-badge">FILE</span>${escapeHtml(r.content)}`
-    : escapeHtml(r.content)
-}
+               r.contentType === "file"
+                 ? `<span class="file-badge">FILE</span>${escapeHtml(r.content)}`
+                 : escapeHtml(r.content)
+             }
             </a>
           </div>
 
@@ -5587,11 +5585,11 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
 
-const hasToken = !!token;
-const back = hasToken
-  ? `/api/v1/user/${userId}/raw-ideas${tokenQS}`
-  : "https://tree.tabors.site";
-const backText = hasToken ? "← Back to Raw Ideas" : "← Back to Home";
+    const hasToken = !!token;
+    const back = hasToken
+      ? `/api/v1/user/${userId}/raw-ideas${tokenQS}`
+      : "https://tree.tabors.site";
+    const backText = hasToken ? "← Back to Raw Ideas" : "← Back to Home";
     const userLink =
       rawIdea.userId && rawIdea.userId !== "empty"
         ? `<a href="/api/v1/user/${rawIdea.userId._id}${tokenQS}">
@@ -11053,7 +11051,10 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
     const formatContent = (str) => {
       if (!str) return "";
       const s = String(str).trim();
-      if ((s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"))) {
+      if (
+        (s.startsWith("{") && s.endsWith("}")) ||
+        (s.startsWith("[") && s.endsWith("]"))
+      ) {
         try {
           const parsed = JSON.parse(s);
           const pretty = JSON.stringify(parsed, null, 2);
@@ -11132,20 +11133,98 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
 
     const actionColor = (action) => {
       switch (action) {
-        case "create": return "#48bb78";
-        case "delete": case "branchLifecycle": return "#c85050";
-        case "editStatus": case "editValue": case "editGoal":
-        case "editSchedule": case "editNameNode": case "editScript": return "#5082dc";
-        case "executeScript": return "#38bdd2";
-        case "prestige": return "#c8aa32";
-        case "note": case "rawIdea": return "#9b64dc";
-        case "invite": return "#d264a0";
-        case "transaction": case "trade": return "#dc8c3c";
-        case "purchase": return "#34be82";
-        case "updateParent": case "updateChildNode": return "#3caab4";
-        case "understanding": return "#6464d2";
-        default: return "#736fe6";
+        case "create":
+          return "#48bb78";
+        case "delete":
+        case "branchLifecycle":
+          return "#c85050";
+        case "editStatus":
+        case "editValue":
+        case "editGoal":
+        case "editSchedule":
+        case "editNameNode":
+        case "editScript":
+          return "#5082dc";
+        case "executeScript":
+          return "#38bdd2";
+        case "prestige":
+          return "#c8aa32";
+        case "note":
+        case "rawIdea":
+          return "#9b64dc";
+        case "invite":
+          return "#d264a0";
+        case "transaction":
+        case "trade":
+          return "#dc8c3c";
+        case "purchase":
+          return "#34be82";
+        case "updateParent":
+        case "updateChildNode":
+          return "#3caab4";
+        case "understanding":
+          return "#6464d2";
+        default:
+          return "#736fe6";
       }
+    };
+
+    // ── Tree context helpers ───────────────────────────────
+
+    const renderTreeContext = (tc) => {
+      if (!tc) return "";
+      const parts = [];
+
+      const nodeId = tc.targetNodeId?._id || tc.targetNodeId;
+      const nodeName = tc.targetNodeId?.name || tc.targetNodeName;
+      if (nodeId && nodeName && typeof nodeId === "string") {
+        parts.push(
+          `<a href="/api/v1/node/${nodeId}${tokenQS}" class="tree-target-link">🎯 ${esc(nodeName)}</a>`,
+        );
+      } else if (nodeName) {
+        parts.push(`<span class="tree-target-name">🎯 ${esc(nodeName)}</span>`);
+      } else if (tc.targetPath) {
+        const pathParts = tc.targetPath.split(" / ");
+        const last = pathParts[pathParts.length - 1];
+        parts.push(`<span class="tree-target-name">🎯 ${esc(last)}</span>`);
+      }
+
+      if (tc.planStepIndex != null && tc.planTotalSteps != null) {
+        parts.push(
+          `<span class="badge badge-step">${tc.planStepIndex}/${tc.planTotalSteps}</span>`,
+        );
+      }
+
+      if (tc.stepResult) {
+        const resultClasses = {
+          success: "badge-done",
+          failed: "badge-stopped",
+          skipped: "badge-skipped",
+          pending: "badge-pending",
+        };
+        const resultIcons = {
+          success: "✓",
+          failed: "✗",
+          skipped: "⊘",
+          pending: "⏳",
+        };
+        parts.push(
+          `<span class="badge ${resultClasses[tc.stepResult] || "badge-pending"}">${resultIcons[tc.stepResult] || ""} ${tc.stepResult}</span>`,
+        );
+      }
+
+      if (parts.length === 0) return "";
+      return `<div class="tree-context-bar">${parts.join("")}</div>`;
+    };
+
+    const renderDirective = (tc) => {
+      if (!tc?.directive) return "";
+      return `<div class="tree-directive">${esc(tc.directive)}</div>`;
+    };
+
+    const getTargetName = (tc) => {
+      if (!tc) return null;
+      return tc.targetNodeId?.name || tc.targetNodeName || null;
     };
 
     const sessionGroups = sessions;
@@ -11194,13 +11273,24 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
     // ── Render substep ─────────────────────────────────────
 
     const renderSubstep = (chat) => {
-      const duration = formatDuration(chat.startMessage?.time, chat.endMessage?.time);
+      const duration = formatDuration(
+        chat.startMessage?.time,
+        chat.endMessage?.time,
+      );
       const stopped = chat.endMessage?.stopped;
+      const tc = chat.treeContext;
 
-      const dotClass = stopped ? "chain-dot-stopped"
-        : chat.endMessage?.time ? "chain-dot-done"
-        : "chain-dot-pending";
+      const dotClass = stopped
+        ? "chain-dot-stopped"
+        : tc?.stepResult === "failed"
+          ? "chain-dot-stopped"
+          : tc?.stepResult === "skipped"
+            ? "chain-dot-skipped"
+            : chat.endMessage?.time
+              ? "chain-dot-done"
+              : "chain-dot-pending";
 
+      const targetName = getTargetName(tc);
       const inputFull = formatContent(chat.startMessage?.content);
       const outputFull = formatContent(chat.endMessage?.content);
 
@@ -11209,9 +11299,14 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
         <summary class="chain-substep-summary">
           <span class="chain-dot ${dotClass}"></span>
           <span class="chain-step-mode">${modeLabel(chat.aiContext?.path)}</span>
+          ${targetName ? `<span class="chain-step-target">${esc(targetName)}</span>` : ""}
+          ${tc?.stepResult === "failed" ? `<span class="chain-step-failed">FAILED</span>` : ""}
+          ${tc?.resultDetail && tc.stepResult === "failed" ? `<span class="chain-step-fail-reason">${truncate(tc.resultDetail, 60)}</span>` : ""}
           ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
         </summary>
         <div class="chain-step-body">
+          ${renderTreeContext(tc)}
+          ${renderDirective(tc)}
           <div class="chain-step-input"><span class="chain-io-label chain-io-in">IN</span>${inputFull}</div>
           ${outputFull ? `<div class="chain-step-output"><span class="chain-io-label chain-io-out">OUT</span>${outputFull}</div>` : ""}
         </div>
@@ -11224,43 +11319,89 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       const phases = groupStepsIntoPhases(steps);
       if (phases.length === 0) return "";
 
-      const phaseHtml = phases.map((phase) => {
-        if (phase.type === "translate") {
-          const s = phase.step;
-          const duration = formatDuration(s.startMessage?.time, s.endMessage?.time);
-          const outputFull = formatContent(s.endMessage?.content);
-          return `
+      const phaseHtml = phases
+        .map((phase) => {
+          if (phase.type === "translate") {
+            const s = phase.step;
+            const tc = s.treeContext;
+            const duration = formatDuration(
+              s.startMessage?.time,
+              s.endMessage?.time,
+            );
+            const outputFull = formatContent(s.endMessage?.content);
+            return `
           <details class="chain-phase chain-phase-translate">
             <summary class="chain-phase-summary">
               <span class="chain-phase-icon">🔄</span>
               <span class="chain-phase-label">Translator</span>
+              ${tc?.planTotalSteps ? `<span class="chain-step-counter">${tc.planTotalSteps}-step plan</span>` : ""}
+              ${tc?.directive ? `<span class="chain-plan-summary-text">${truncate(tc.directive, 80)}</span>` : ""}
               ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
             </summary>
             ${outputFull ? `<div class="chain-step-body"><div class="chain-step-output"><span class="chain-io-label chain-io-out">PLAN</span>${outputFull}</div></div>` : ""}
           </details>`;
-        }
+          }
 
-        if (phase.type === "plan") {
-          const m = phase.marker;
-          const inputFull = formatContent(m.startMessage?.content);
-          const hasSubsteps = phase.substeps.length > 0;
-          return `
+          if (phase.type === "plan") {
+            const m = phase.marker;
+            const tc = m.treeContext;
+            const targetName = getTargetName(tc);
+            const hasSubsteps = phase.substeps.length > 0;
+
+            // Count results from substeps that have execution modes
+            const counts = { success: 0, failed: 0, skipped: 0 };
+            for (const sub of phase.substeps) {
+              const r = sub.treeContext?.stepResult;
+              if (r && counts[r] !== undefined) counts[r]++;
+            }
+            const countBadges = [
+              counts.success > 0
+                ? `<span class="badge badge-done">${counts.success} ✓</span>`
+                : "",
+              counts.failed > 0
+                ? `<span class="badge badge-stopped">${counts.failed} ✗</span>`
+                : "",
+              counts.skipped > 0
+                ? `<span class="badge badge-skipped">${counts.skipped} ⊘</span>`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("");
+
+            // Use directive from treeContext if available, otherwise fall back to input
+            const directiveText = tc?.directive || "";
+            const inputFull = directiveText
+              ? esc(directiveText)
+              : formatContent(m.startMessage?.content);
+
+            return `
           <div class="chain-phase chain-phase-plan">
             <div class="chain-phase-header">
               <span class="chain-phase-icon">📋</span>
               <span class="chain-phase-label">${modeLabel(m.aiContext?.path)}</span>
+              ${targetName ? `<span class="chain-step-target">${esc(targetName)}</span>` : ""}
+              ${
+                tc?.planStepIndex != null && tc?.planTotalSteps != null
+                  ? `<span class="chain-step-counter">Step ${tc.planStepIndex} of ${tc.planTotalSteps}</span>`
+                  : ""
+              }
+              ${countBadges}
             </div>
             <div class="chain-plan-directive">${inputFull}</div>
             ${hasSubsteps ? `<div class="chain-substeps">${phase.substeps.map(renderSubstep).join("")}</div>` : ""}
           </div>`;
-        }
+          }
 
-        if (phase.type === "respond") {
-          const s = phase.step;
-          const duration = formatDuration(s.startMessage?.time, s.endMessage?.time);
-          const inputFull = formatContent(s.startMessage?.content);
-          const outputFull = formatContent(s.endMessage?.content);
-          return `
+          if (phase.type === "respond") {
+            const s = phase.step;
+            const tc = s.treeContext;
+            const duration = formatDuration(
+              s.startMessage?.time,
+              s.endMessage?.time,
+            );
+            const inputFull = formatContent(s.startMessage?.content);
+            const outputFull = formatContent(s.endMessage?.content);
+            return `
           <details class="chain-phase chain-phase-respond">
             <summary class="chain-phase-summary">
               <span class="chain-phase-icon">💬</span>
@@ -11268,24 +11409,47 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
               ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
             </summary>
             <div class="chain-step-body">
+              ${renderTreeContext(tc)}
               ${inputFull ? `<div class="chain-step-input"><span class="chain-io-label chain-io-in">IN</span>${inputFull}</div>` : ""}
               ${outputFull ? `<div class="chain-step-output"><span class="chain-io-label chain-io-out">OUT</span>${outputFull}</div>` : ""}
             </div>
           </details>`;
-        }
+          }
 
-        return renderSubstep(phase.step);
-      }).join("");
+          return renderSubstep(phase.step);
+        })
+        .join("");
 
-      const summaryParts = phases.map(p => {
-        if (p.type === "translate") return "🔄";
-        if (p.type === "plan") {
-          const sub = p.substeps.map(s => modeLabel(s.aiContext?.path)).join(" → ");
-          return sub ? `📋 ${sub}` : "📋";
-        }
-        if (p.type === "respond") return "💬";
-        return modeLabel(p.step?.aiContext?.path);
-      }).join("  ");
+      const summaryParts = phases
+        .map((p) => {
+          if (p.type === "translate") {
+            const tc = p.step.treeContext;
+            return tc?.planTotalSteps ? `🔄 ${tc.planTotalSteps}-step` : "🔄";
+          }
+          if (p.type === "plan") {
+            const tc = p.marker.treeContext;
+            const targetName = getTargetName(tc);
+            const sub = p.substeps
+              .map((s) => {
+                const stc = s.treeContext;
+                const icon =
+                  stc?.stepResult === "failed"
+                    ? "❌ "
+                    : stc?.stepResult === "skipped"
+                      ? "⊘ "
+                      : stc?.stepResult === "success"
+                        ? "✓ "
+                        : "";
+                return `${icon}${modeLabel(s.aiContext?.path)}`;
+              })
+              .join(" → ");
+            const label = targetName ? `📋 ${esc(targetName)}` : "📋";
+            return sub ? `${label}: ${sub}` : label;
+          }
+          if (p.type === "respond") return "💬";
+          return modeLabel(p.step?.aiContext?.path);
+        })
+        .join("  ");
 
       return `
       <details class="chain-dropdown">
@@ -11302,7 +11466,10 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
     const renderChain = (chain) => {
       const chat = chain.root;
       const steps = chain.steps;
-      const duration = formatDuration(chat.startMessage?.time, chat.endMessage?.time);
+      const duration = formatDuration(
+        chat.startMessage?.time,
+        chat.endMessage?.time,
+      );
       const stopped = chat.endMessage?.stopped;
       const contribs = chat.contributions || [];
       const hasContribs = contribs.length > 0;
@@ -11321,23 +11488,30 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
         ? `<span class="badge badge-external">External</span>`
         : `<span class="badge badge-energy">⚡2</span>`;
 
-      const contribRows = contribs.map((c) => {
-        const nId = c.nodeId?._id || c.nodeId;
-        const nName = c.nodeId?.name || nId || "—";
-        const nodeRef = nId
-          ? `<a href="/api/v1/node/${nId}${tokenQS}">${esc(nName)}</a>`
-          : `<span style="opacity:0.5">—</span>`;
-        const aiBadge = c.wasAi ? `<span class="mini-badge mini-ai">AI</span>` : "";
-        const cEnergyBadge = c.energyUsed > 0 ? `<span class="mini-badge mini-energy">⚡${c.energyUsed}</span>` : "";
-        const color = actionColor(c.action);
-        return `
+      const contribRows = contribs
+        .map((c) => {
+          const nId = c.nodeId?._id || c.nodeId;
+          const nName = c.nodeId?.name || nId || "—";
+          const nodeRef = nId
+            ? `<a href="/api/v1/node/${nId}${tokenQS}">${esc(nName)}</a>`
+            : `<span style="opacity:0.5">—</span>`;
+          const aiBadge = c.wasAi
+            ? `<span class="mini-badge mini-ai">AI</span>`
+            : "";
+          const cEnergyBadge =
+            c.energyUsed > 0
+              ? `<span class="mini-badge mini-energy">⚡${c.energyUsed}</span>`
+              : "";
+          const color = actionColor(c.action);
+          return `
         <tr class="contrib-row">
           <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}</td>
           <td>${nodeRef}</td>
           <td>${aiBadge}${cEnergyBadge}</td>
           <td class="contrib-time">${formatTime(c.date)}</td>
         </tr>`;
-      }).join("");
+        })
+        .join("");
 
       const stepsHtml = hasSteps ? renderPhases(steps) : "";
 
@@ -11361,16 +11535,22 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
             <span class="msg-label">You</span>
             <div class="msg-text">${truncate(chat.startMessage?.content, 400)}</div>
           </div>
-          ${chat.endMessage?.content ? `
+          ${
+            chat.endMessage?.content
+              ? `
           <div class="chat-message chat-ai">
             <span class="msg-label">AI</span>
             <div class="msg-text">${truncate(chat.endMessage.content, 400)}</div>
-          </div>` : ""}
+          </div>`
+              : ""
+          }
         </div>
 
         ${stepsHtml}
 
-        ${hasContribs ? `
+        ${
+          hasContribs
+            ? `
         <details class="contrib-dropdown">
           <summary class="contrib-summary">
             ${contribs.length} contribution${contribs.length !== 1 ? "s" : ""} during this chat
@@ -11381,7 +11561,9 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
               <tbody>${contribRows}</tbody>
             </table>
           </div>
-        </details>` : ""}
+        </details>`
+            : ""
+        }
 
         <div class="note-meta">
           ${formatTime(chat.startMessage?.time)}
@@ -11391,14 +11573,15 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       </li>`;
     };
 
-    const renderedSections = sessionGroups.map((group) => {
-      const chatCount = group.chatCount;
-      const sessionTime = formatTime(group.startTime);
-      const shortId = group.sessionId.slice(0, 8);
-      const chains = groupIntoChains(group.chats);
-      const chatCards = chains.map(renderChain).join("");
+    const renderedSections = sessionGroups
+      .map((group) => {
+        const chatCount = group.chatCount;
+        const sessionTime = formatTime(group.startTime);
+        const shortId = group.sessionId.slice(0, 8);
+        const chains = groupIntoChains(group.chats);
+        const chatCards = chains.map(renderChain).join("");
 
-      return `
+        return `
       <div class="session-group">
         <div class="session-pane">
           <div class="session-pane-header">
@@ -11411,7 +11594,8 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
           <ul class="notes-list">${chatCards}</ul>
         </div>
       </div>`;
-    }).join("");
+      })
+      .join("");
 
     res.send(`
 <!DOCTYPE html>
@@ -11589,6 +11773,7 @@ details[open] > .chain-summary::before { transform: rotate(90deg); }
 .chain-phase { border-radius: 10px; overflow: hidden; }
 .chain-phase-header {
   display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600;
+  flex-wrap: wrap;
 }
 .chain-phase-icon { font-size: 14px; }
 .chain-phase-label { color: rgba(255,255,255,0.85); }
@@ -11603,6 +11788,7 @@ details[open] > .chain-summary::before { transform: rotate(90deg); }
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px;
   font-size: 12px; font-weight: 600;
+  flex-wrap: wrap;
 }
 .chain-phase-summary::-webkit-details-marker,
 .chain-substep-summary::-webkit-details-marker { display: none; }
@@ -11628,6 +11814,7 @@ details[open] > .chain-substep-summary::before { transform: rotate(90deg); }
 .chain-dot-done    { background: rgba(72,187,120,0.8); border-color: rgba(72,187,120,0.4); }
 .chain-dot-stopped { background: rgba(200,80,80,0.8); border-color: rgba(200,80,80,0.4); }
 .chain-dot-pending { background: rgba(255,200,50,0.8); border-color: rgba(255,200,50,0.4); }
+.chain-dot-skipped { background: rgba(160,160,160,0.6); border-color: rgba(160,160,160,0.3); }
 
 .chain-step-mode {
   font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.8);
@@ -11635,7 +11822,7 @@ details[open] > .chain-substep-summary::before { transform: rotate(90deg); }
 }
 .chain-step-duration { font-size: 10px; color: rgba(255,255,255,0.45); }
 
-/* ── Chain: expanded body (no tricks, just content) ── */
+/* ── Chain: expanded body ───────────────────────── */
 .chain-step-body { padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.08); }
 
 .chain-io-label {
@@ -11657,6 +11844,63 @@ details[open] > .chain-substep-summary::before { transform: rotate(90deg); }
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 .chain-json { color: rgba(255,255,255,0.8); }
+
+/* ── Tree Context ───────────────────────────────── */
+.tree-context-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 12px; margin-bottom: 6px;
+  background: rgba(255,255,255,0.06); border-radius: 6px;
+  font-size: 12px;
+}
+.tree-target-link {
+  color: rgba(100,220,255,0.95); text-decoration: none;
+  border-bottom: 1px solid rgba(100,220,255,0.3);
+  font-weight: 600; font-size: 12px;
+  transition: all 0.2s;
+}
+.tree-target-link:hover {
+  border-bottom-color: rgba(100,220,255,0.8);
+  text-shadow: 0 0 8px rgba(100,220,255,0.5);
+}
+.tree-target-name {
+  color: rgba(255,255,255,0.8); font-weight: 600; font-size: 12px;
+}
+.tree-directive {
+  padding: 4px 12px 8px; font-size: 11px; color: rgba(255,255,255,0.55);
+  line-height: 1.5; font-style: italic;
+  border-left: 2px solid rgba(255,255,255,0.15);
+  margin: 0 12px 8px;
+}
+.chain-step-counter {
+  font-size: 10px; color: rgba(255,255,255,0.5); font-weight: 500;
+  background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 4px;
+}
+.chain-step-target {
+  font-size: 10px; color: rgba(100,220,255,0.7); font-weight: 500;
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chain-step-failed {
+  font-size: 9px; font-weight: 700; color: rgba(200,80,80,0.9);
+  background: rgba(200,80,80,0.15); padding: 1px 6px; border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.chain-step-fail-reason {
+  font-size: 10px; color: rgba(200,80,80,0.7); font-weight: 400;
+  font-style: italic; max-width: 200px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.badge-step {
+  background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7);
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px;
+}
+.badge-skipped {
+  background: rgba(160,160,160,0.25); color: rgba(255,255,255,0.7);
+}
+.chain-plan-summary-text {
+  font-size: 11px; color: rgba(255,255,255,0.45); font-weight: 400;
+  font-style: italic; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 300px;
+}
 
 /* ── Contribution Dropdown ──────────────────────── */
 .contrib-dropdown { margin-bottom: 12px; }
@@ -11759,6 +12003,9 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
   .chat-model { max-width: 140px; }
   .msg-text { font-size: 14px; }
   .chain-plan-directive { font-size: 11px; }
+  .chain-step-target { max-width: 100px; }
+  .chain-plan-summary-text { max-width: 160px; }
+  .chain-step-fail-reason { max-width: 120px; }
 }
 @media (min-width: 641px) and (max-width: 1024px) {
   .container { max-width: 700px; }

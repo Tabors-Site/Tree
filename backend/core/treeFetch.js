@@ -217,7 +217,6 @@ export async function getActiveLeafExecutionFrontier(rootId) {
   };
 }
 
-
 export async function getNavigationContext(nodeId, { search } = {}) {
   if (!nodeId) {
     throw new Error("nodeId is required");
@@ -235,10 +234,35 @@ export async function getNavigationContext(nodeId, { search } = {}) {
 
   const isRoot = !current.parent;
 
-  // ---- If search is provided, find matching nodes globally ----
+  // ---- Find the tree root (needed for scoped search) ----
+  let root;
+  if (isRoot) {
+    root = { id: current._id.toString(), name: current.name };
+  } else {
+    let cursor = current;
+    while (cursor.parent) {
+      const next = await Node.findById(cursor.parent)
+        .select("_id name parent")
+        .lean()
+        .exec();
+      if (!next) break;
+      cursor = next;
+    }
+    root = { id: cursor._id.toString(), name: cursor.name };
+  }
+
+  // ---- If search is provided, find matching nodes WITHIN THIS TREE ONLY ----
   if (search) {
     const regex = new RegExp(search, "i");
-    const matches = await Node.find({ name: { $regex: regex } })
+
+    // Collect all descendant IDs from root using BFS
+    const treeNodeIds = await collectDescendantIds(root.id);
+
+    // Search only within those IDs
+    const matches = await Node.find({
+      _id: { $in: treeNodeIds },
+      name: { $regex: regex },
+    })
       .select("_id name parent")
       .limit(10)
       .lean()
@@ -259,6 +283,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
         isRoot,
       },
       searchResults: results,
+      root,
     };
   }
 
@@ -304,31 +329,6 @@ export async function getNavigationContext(nodeId, { search } = {}) {
   const maxNodes = 50;
   const children = await getChildrenAdaptive(current.children, maxNodes);
 
-  // ---- Root ----
-  let root = null;
-  if (!isRoot) {
-    let cursor = current;
-    while (cursor.parent) {
-      const next = await Node.findById(cursor.parent)
-        .select("_id name parent")
-        .lean()
-        .exec();
-      if (!next) break;
-      cursor = next;
-      // cursor.parent === null means we reached root
-    }
-
-    root = {
-      id: cursor._id.toString(),
-      name: cursor.name,
-    };
-  } else {
-    root = {
-      id: current._id.toString(),
-      name: current.name,
-    };
-  }
-
   // ---- Final shape ----
   return {
     current: {
@@ -341,6 +341,37 @@ export async function getNavigationContext(nodeId, { search } = {}) {
     siblings,
     root,
   };
+}
+
+/**
+ * BFS to collect all descendant node IDs from a root.
+ * Caps at MAX_TREE_SIZE to prevent runaway on huge trees.
+ */
+async function collectDescendantIds(rootId, maxSize = 500) {
+  const ids = [];
+  const queue = [rootId];
+
+  while (queue.length > 0 && ids.length < maxSize) {
+    const batch = queue.splice(0, Math.min(queue.length, 50));
+    ids.push(...batch);
+
+    const nodes = await Node.find({ _id: { $in: batch } })
+      .select("children")
+      .lean()
+      .exec();
+
+    for (const node of nodes) {
+      if (node.children?.length > 0) {
+        for (const childId of node.children) {
+          if (ids.length + queue.length < maxSize) {
+            queue.push(childId);
+          }
+        }
+      }
+    }
+  }
+
+  return ids;
 }
 
 // ---- Adaptive child fetcher with node budget ----
@@ -412,7 +443,6 @@ async function getChildrenAdaptive(childIds, budget) {
   return results;
 }
 
-
 export async function getContextForAi(nodeId, options = {}) {
   if (!nodeId) throw new Error("nodeId is required");
 
@@ -454,13 +484,15 @@ export async function getContextForAi(nodeId, options = {}) {
     }
 
     if (includeValues) {
-      const values = currentVersion.values instanceof Map
-        ? Object.fromEntries(currentVersion.values)
-        : currentVersion.values || {};
+      const values =
+        currentVersion.values instanceof Map
+          ? Object.fromEntries(currentVersion.values)
+          : currentVersion.values || {};
 
-      const goals = currentVersion.goals instanceof Map
-        ? Object.fromEntries(currentVersion.goals)
-        : currentVersion.goals || {};
+      const goals =
+        currentVersion.goals instanceof Map
+          ? Object.fromEntries(currentVersion.goals)
+          : currentVersion.goals || {};
 
       // Only include if there's actual data
       if (Object.keys(values).length > 0) {
@@ -473,41 +505,42 @@ export async function getContextForAi(nodeId, options = {}) {
   }
 
   // ---- Notes (current version only) ----
-if (includeNotes) {
-      const noteCount = await Note.countDocuments({
+  if (includeNotes) {
+    const noteCount = await Note.countDocuments({
+      nodeId: node._id,
+      version: currentPrestige,
+      contentType: "text",
+    });
+
+    context.noteCount = noteCount;
+
+    if (noteCount > 0) {
+      // Just the most recent 3 as preview
+      const recentNotes = await Note.find({
         nodeId: node._id,
         version: currentPrestige,
         contentType: "text",
-      });
+      })
+        .sort({ _id: -1 })
+        .limit(3)
+        .populate("userId", "username -_id")
+        .lean()
+        .exec();
 
-      context.noteCount = noteCount;
-
-      if (noteCount > 0) {
-        // Just the most recent 3 as preview
-        const recentNotes = await Note.find({
-          nodeId: node._id,
-          version: currentPrestige,
-          contentType: "text",
-        })
-          .sort({ _id: -1 })
-          .limit(3)
-          .populate("userId", "username -_id")
-          .lean()
-          .exec();
-
-        const MAX_PREVIEW = 200;
-        context.notes = recentNotes.map((n) => {
-          const content = n.content || "";
-          return {
-            id: n._id.toString(),
-            username: n.userId?.username || "Unknown",
-            preview: content.length > MAX_PREVIEW
+      const MAX_PREVIEW = 200;
+      context.notes = recentNotes.map((n) => {
+        const content = n.content || "";
+        return {
+          id: n._id.toString(),
+          username: n.userId?.username || "Unknown",
+          preview:
+            content.length > MAX_PREVIEW
               ? content.slice(0, MAX_PREVIEW) + "…"
               : content,
-          };
-        });
-      }
+        };
+      });
     }
+  }
 
   // ---- Parent ----
   if (node.parent) {

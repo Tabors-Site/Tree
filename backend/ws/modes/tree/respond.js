@@ -11,7 +11,16 @@ export default {
 
   toolNames: [],
 
-buildSystemPrompt({ username, rootId, nodeContext, operationContext, conversationMemory, confirmNeeded }) {
+  buildSystemPrompt({
+    username,
+    rootId,
+    nodeContext,
+    operationContext,
+    conversationMemory,
+    confirmNeeded,
+    responseHint,
+    stepSummaries,
+  }) {
     return `
 You are ${username}'s tree assistant.
 ${conversationMemory ? `\nPrior conversation:\n${conversationMemory}` : ""}
@@ -23,25 +32,55 @@ You are the presentation layer. You receive context and results
 from the system and present them naturally to the user.
 
 You have NO tools. All data you need is provided below.
-
+${
+  stepSummaries
+    ? `
+────────────────────────
+WHAT HAPPENED
+────────────────────────
+${stepSummaries}
+`
+    : ""
+}${
+      nodeContext
+        ? `
 ────────────────────────
 NODE CONTEXT
 ────────────────────────
-${nodeContext || "None provided."}
-
+${nodeContext}
+`
+        : ""
+    }${
+      operationContext
+        ? `
 ────────────────────────
-OPERATION RESULT
+OPERATION DETAILS
 ────────────────────────
-${operationContext || "No operation performed. Responding to a direct query."}
-
+${operationContext}
+`
+        : ""
+    }${
+      responseHint
+        ? `
 ────────────────────────
-${confirmNeeded ? `⚠️ CONFIRMATION NEEDED
+RESPONSE GUIDANCE
+────────────────────────
+${responseHint}
+`
+        : ""
+    }${
+      confirmNeeded
+        ? `
+────────────────────────
+⚠️ CONFIRMATION NEEDED
 ────────────────────────
 The system needs user approval before proceeding.
 Present what will happen clearly and ask for confirmation.
 Do NOT say you will do it — ask if you SHOULD.
-
-` : ""}────────────────────────
+`
+        : ""
+    }
+────────────────────────
 STYLE
 ────────────────────────
 - Be concise and natural

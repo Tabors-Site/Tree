@@ -222,12 +222,13 @@ export function trackChainStep({
   startTime = null,
   endTime = null,
   llmProvider = null,
+  treeContext, // ← NEW
 }) {
   if (!sessionId || !userId) return;
 
   const layers = modeKey ? modeKey.split(":") : ["orchestrator"];
   const start = startTime || new Date();
-  const end = output ? (endTime || new Date()) : null;
+  const end = output ? endTime || new Date() : null;
 
   // Fire and forget — don't await, don't block the chain
   AIChat.create({
@@ -235,12 +236,19 @@ export function trackChainStep({
     sessionId,
     chainIndex,
     startMessage: {
-      content: typeof input === "string" ? input : JSON.stringify(input).slice(0, 2000),
+      content:
+        typeof input === "string"
+          ? input
+          : JSON.stringify(input).slice(0, 2000),
       source,
       time: start,
     },
     endMessage: {
-      content: output ? (typeof output === "string" ? output : JSON.stringify(output).slice(0, 2000)) : null,
+      content: output
+        ? typeof output === "string"
+          ? output
+          : JSON.stringify(output).slice(0, 2000)
+        : null,
       time: end,
       stopped: false,
     },
@@ -249,6 +257,7 @@ export function trackChainStep({
       layers,
     },
     llmProvider: llmProvider || { isCustom: false, model: null, baseUrl: null },
+    ...(treeContext ? { treeContext } : {}),
   }).catch((err) => {
     console.error(`⚠️ Failed to track chain step [${modeKey}]:`, err.message);
   });
