@@ -32,7 +32,7 @@ const RawIdeaSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["pending", "processing", "succeeded", "stuck"],
+    enum: ["pending", "processing", "succeeded", "stuck", "deleted"],
     default: "pending",
   },
   aiSessionId: {

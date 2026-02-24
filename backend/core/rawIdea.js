@@ -176,8 +176,8 @@ async function convertRawIdeaToNote({
   if (!rawIdea) {
     throw new Error("Raw idea not found");
   }
-  if (rawIdea.userId === "deleted") {
-    throw new Error("Raw idea already placed");
+  if (rawIdea.status === "deleted" || rawIdea.status === "succeeded") {
+    throw new Error("Raw idea already placed or deleted");
   }
 
   if (rawIdea.userId.toString() !== userId) {
@@ -229,8 +229,7 @@ async function convertRawIdeaToNote({
     },
   });
 
-  rawIdea.userId = "deleted";
-  rawIdea.content = rawIdea.content; // preserve text
+  rawIdea.status = "deleted";
   await rawIdea.save();
 
   return {
@@ -276,8 +275,8 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
     }
   }
 
-  // --- SOFT DELETE ---
-  rawIdea.userId = "deleted"; // sentinel
+  // --- SOFT DELETE via status ---
+  rawIdea.status = "deleted";
   rawIdea.content = fileDeleted
     ? "File was deleted"
     : rawIdea.contentType === "text"
@@ -317,7 +316,11 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
   };
 }
 
-async function getRawIdeas({ userId, limit, startDate, endDate }) {
+/**
+ * @param {string} [status="pending"] - "pending"|"processing"|"succeeded"|"stuck"|"deleted"|"all"
+ *   "pending" also includes legacy docs with no status field.
+ */
+async function getRawIdeas({ userId, limit, startDate, endDate, status = "pending" }) {
   if (!userId) {
     throw new Error("Missing required parameter: userId");
   }
@@ -326,9 +329,20 @@ async function getRawIdeas({ userId, limit, startDate, endDate }) {
     throw new Error("Invalid limit: must be a positive number");
   }
 
-  const queryObj = {
-    userId,
-  };
+  const queryObj = { userId };
+
+  if (!status || status === "all") {
+    // no status filter — return everything for this user
+  } else if (status === "pending") {
+    // include legacy docs that predate the status field
+    queryObj.$or = [
+      { status: "pending" },
+      { status: null },
+      { status: { $exists: false } },
+    ];
+  } else {
+    queryObj.status = status;
+  }
 
   if (startDate || endDate) {
     queryObj.createdAt = {};
@@ -369,6 +383,7 @@ async function searchRawIdeasByUser({
   limit,
   startDate,
   endDate,
+  status = "pending",
 }) {
   if (!userId) throw new Error("Missing required parameter: userId");
   if (!query || typeof query !== "string") {
@@ -412,6 +427,18 @@ async function searchRawIdeasByUser({
     contentType: "text", // files have no searchable text
     $and: conditions,
   };
+
+  if (!status || status === "all") {
+    // no status filter
+  } else if (status === "pending") {
+    mongoQueryObj.$or = [
+      { status: "pending" },
+      { status: null },
+      { status: { $exists: false } },
+    ];
+  } else {
+    mongoQueryObj.status = status;
+  }
 
   if (startDate || endDate) {
     mongoQueryObj.createdAt = {};

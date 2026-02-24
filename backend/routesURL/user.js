@@ -4669,6 +4669,9 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
 
     const query = req.query.q || "";
 
+    // status filter: "pending" (default) | "processing" | "succeeded" | "stuck" | "deleted" | "all"
+    const statusFilter = req.query.status || "pending";
+
     let result;
     if (query.trim() !== "") {
       result = await coreSearchRawIdeasByUser({
@@ -4677,6 +4680,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
         limit,
         startDate,
         endDate,
+        status: statusFilter,
       });
     } else {
       result = await coreGetRawIdeas({
@@ -4684,6 +4688,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
         limit,
         startDate,
         endDate,
+        status: statusFilter,
       });
     }
 
@@ -4706,6 +4711,23 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
 
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+    // Build tab URLs — preserve token + html, swap status
+    const tabUrl = (s) => {
+      const base = `/api/v1/user/${userId}/raw-ideas`;
+      const params = new URLSearchParams();
+      if (token) params.set("token", token);
+      params.set("html", "");
+      if (s !== "pending") params.set("status", s);
+      return `${base}?${params.toString()}`;
+    };
+    const tabs = [
+      { key: "pending", label: "Pending" },
+      { key: "processing", label: "Active" },
+      { key: "succeeded", label: "Finished" },
+      { key: "stuck", label: "Stuck" },
+      { key: "deleted", label: "Deleted" },
+    ];
 
     return res.send(`
 <!DOCTYPE html>
@@ -5251,6 +5273,37 @@ body::after {
   color: #ffcf7e;
   border: 1px solid rgba(255,140,0,0.25);
 }
+.processing-notice {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(255,200,0,0.12);
+  border-radius: 10px;
+  font-size: 13px;
+  color: #ffe066;
+  border: 1px solid rgba(255,200,0,0.2);
+}
+
+/* Status filter tabs */
+.filter-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.filter-tab {
+  padding: 5px 14px;
+  border-radius: 980px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+.filter-tab:hover { background: rgba(255,255,255,0.16); color: rgba(255,255,255,0.9); }
+.filter-tab--active { background: rgba(255,255,255,0.22); color: white; border-color: rgba(255,255,255,0.35); }
 
 /* Auto-place button */
 .auto-place-btn {
@@ -5430,6 +5483,7 @@ These will be placed onto your tree's automatically while you dream</div>
       <form method="GET" action="/api/v1/user/${userId}/raw-ideas" class="search-form">
         <input type="hidden" name="token" value="${token}">
         <input type="hidden" name="html" value="">
+        ${statusFilter !== "pending" ? `<input type="hidden" name="status" value="${statusFilter}">` : ""}
         <input
           type="text"
           name="q"
@@ -5438,6 +5492,11 @@ These will be placed onto your tree's automatically while you dream</div>
         />
         <button type="submit">Search</button>
       </form>
+
+      <!-- Status Filter Tabs -->
+      <div class="filter-tabs">
+        ${tabs.map((t) => `<a href="${tabUrl(t.key)}" class="filter-tab${statusFilter === t.key ? " filter-tab--active" : ""}">${t.label}</a>`).join("")}
+      </div>
     </div>
 
     <!-- Raw Ideas List -->
@@ -5449,7 +5508,7 @@ These will be placed onto your tree's automatically while you dream</div>
         .map(
           (r) => `
         <li class="idea-card idea-card--${r.status || "pending"}" data-raw-idea-id="${r._id}" data-status="${r.status || "pending"}">
-          <button class="delete-button" title="Delete raw idea">✕</button>
+          ${(!r.status || r.status === "pending" || r.status === "stuck") ? `<button class="delete-button" title="Delete raw idea">✕</button>` : ""}
 
           <div class="idea-content">
             <a
@@ -5463,16 +5522,18 @@ These will be placed onto your tree's automatically while you dream</div>
              }
             </a>
             <span class="status-badge status-badge--${r.status || "pending"}">
-              ${r.status === "processing" ? "⏳ processing" : r.status === "succeeded" ? "✓ placed by AI" : r.status === "stuck" ? "⚠ stuck" : "pending"}
+              ${r.status === "processing" ? "⏳ processing" : r.status === "succeeded" ? "✓ placed by AI" : r.status === "stuck" ? "⚠ stuck" : r.status === "deleted" ? "deleted" : "pending"}
             </span>
           </div>
 
           ${r.status === "succeeded" ? `
           <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.</div>
-          ` : `
+          ` : r.status === "processing" ? `
+          <div class="processing-notice">Being processed by AI — please wait.</div>
+          ` : r.status === "deleted" ? `` : `
           ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed — place manually below.</div>` : ""}
 
-          ${(!r.status || r.status === "pending") ? `
+          ${(!r.status || r.status === "pending") && r.contentType !== "file" ? `
           <button
             class="auto-place-btn"
             data-raw-idea-id="${r._id}"
@@ -5510,12 +5571,14 @@ These will be placed onto your tree's automatically while you dream</div>
         : `
     <div class="empty-state">
       <div class="empty-state-icon">💭</div>
-      <div class="empty-state-text">No raw ideas yet</div>
+      <div class="empty-state-text">No ${statusFilter === "pending" ? "" : statusFilter + " "}raw ideas</div>
       <div class="empty-state-subtext">
         ${
           query.trim() !== ""
             ? "Try a different search term"
-            : "Start capturing your ideas from the user page"
+            : statusFilter === "pending"
+              ? "Start capturing your ideas from the user page"
+              : "Nothing here yet"
         }
       </div>
     </div>
@@ -5623,6 +5686,14 @@ router.delete(
           .json({ success: false, error: "Not authorized" });
       }
 
+      const rawIdea = await RawIdea.findById(rawIdeaId);
+      if (!rawIdea) {
+        return res.status(404).json({ success: false, error: "Raw idea not found" });
+      }
+      if (rawIdea.status === "processing" || rawIdea.status === "succeeded") {
+        return res.status(409).json({ success: false, error: `Cannot delete a raw idea with status "${rawIdea.status}"` });
+      }
+
       const result = await coreDeleteRawIdeaAndFile({
         rawIdeaId,
         userId: req.userId,
@@ -5655,6 +5726,14 @@ router.post(
         return res.status(400).json({
           success: false,
           error: "raw-idea Id and nodeId are required",
+        });
+      }
+
+      const rawIdeaCheck = await RawIdea.findById(rawIdeaId).lean();
+      if (rawIdeaCheck?.status === "processing") {
+        return res.status(409).json({
+          success: false,
+          error: "Cannot transfer a raw idea while it is being processed",
         });
       }
 
@@ -5704,6 +5783,9 @@ router.post(
       }
       if (rawIdea.userId.toString() !== req.userId.toString()) {
         return res.status(403).json({ error: "Not authorized" });
+      }
+      if (rawIdea.contentType === "file") {
+        return res.status(422).json({ error: "File ideas cannot be auto-placed" });
       }
       if (rawIdea.status && rawIdea.status !== "pending") {
         return res

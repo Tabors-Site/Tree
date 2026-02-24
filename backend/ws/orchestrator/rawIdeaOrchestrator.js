@@ -229,7 +229,6 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
     // ── PHASE 3: Record successful placement ──────────────────────────────
     const targetNodeId = extractTargetNodeId(treeResult) || chosenRootId;
 
-    rawIdea.userId = "deleted"; // soft-delete, consistent with manual placement
     rawIdea.status = "succeeded";
     rawIdea.placedAt = new Date();
     await rawIdea.save();
