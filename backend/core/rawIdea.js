@@ -350,8 +350,10 @@ async function getRawIdeas({ userId, limit, startDate, endDate, status = "pendin
     if (endDate) queryObj.createdAt.$lte = new Date(endDate);
   }
 
+  const sortField = status === "succeeded" ? { placedAt: -1 } : { createdAt: -1 };
+
   let query = RawIdea.find(queryObj)
-    .sort({ createdAt: -1 })
+    .sort(sortField)
     .populate("tagged", "username")
     .lean();
 

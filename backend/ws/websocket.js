@@ -723,6 +723,10 @@ export function emitToUser(userId, event, data) {
   if (socketId) io.to(socketId).emit(event, data);
 }
 
+export function isUserOnline(userId) {
+  return authSessions.has(String(userId));
+}
+
 export function notifyTreeChange({ userId, nodeId, changeType, details }) {
   if (!io) return;
   const socketId = authSessions.get(userId);

@@ -1,0 +1,135 @@
+// jobs/rawIdeaAutoPlace.js
+// Periodically picks up the latest pending text raw idea for each premium/god user
+// and fires the raw-idea orchestrator as if they had clicked the Auto-place button.
+
+import User from "../db/models/user.js";
+import RawIdea from "../db/models/rawIdea.js";
+import { orchestrateRawIdeaPlacement } from "../ws/orchestrator/rawIdeaOrchestrator.js";
+import { isUserOnline } from "../ws/websocket.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────
+
+const ELIGIBLE_PLANS = ["premium", "god"];
+
+// ─────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────
+
+let jobTimer = null;
+
+// ─────────────────────────────────────────────────────────────────────────
+// SINGLE-USER HANDLER
+// ─────────────────────────────────────────────────────────────────────────
+
+async function processUser(user) {
+  const userId = user._id.toString();
+
+  // Skip if user is currently online — they can trigger it themselves
+  if (isUserOnline(userId)) return;
+
+  // Mirror the button: skip if another idea is already being orchestrated
+  const alreadyProcessing = await RawIdea.findOne({
+    userId,
+    status: "processing",
+  }).lean();
+  if (alreadyProcessing) return;
+
+  // Find the latest pending text raw idea (same legacy-compat $or as getRawIdeas)
+  const rawIdea = await RawIdea.findOne({
+    userId,
+    contentType: "text",
+    $or: [
+      { status: "pending" },
+      { status: null },
+      { status: { $exists: false } },
+    ],
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (!rawIdea) return;
+
+  console.log(
+    `⏰ Auto-placing raw idea ${rawIdea._id} for user ${user.username} (${user.profileType})`,
+  );
+
+  // Fire-and-forget — same pattern as the HTTP route
+  orchestrateRawIdeaPlacement({
+    rawIdeaId: rawIdea._id.toString(),
+    userId,
+    username: user.username,
+  }).catch((err) =>
+    console.error(
+      `❌ Auto-place orchestration failed for user ${userId}:`,
+      err.message,
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MAIN RUN
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function runRawIdeaAutoPlace() {
+  console.log("⏰ Raw idea auto-place job running…");
+  try {
+    const users = await User.find({ profileType: { $in: ELIGIBLE_PLANS } })
+      .select("_id username profileType")
+      .lean();
+
+    if (users.length === 0) {
+      console.log("⏰ No eligible users — skipping.");
+      return;
+    }
+
+    console.log(`⏰ ${users.length} eligible user(s) to check.`);
+
+    // Sequential so we don't fire 100 orchestrations simultaneously
+    for (const user of users) {
+      await processUser(user).catch((err) =>
+        console.error(
+          `⚠️ processUser error for ${user._id}:`,
+          err.message,
+        ),
+      );
+    }
+  } catch (err) {
+    console.error("❌ Raw idea auto-place job error:", err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LIFECYCLE
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Start the recurring job.
+ * @param {object} [opts]
+ * @param {number} [opts.intervalMs=900000]  15 min by default
+ */
+export function startRawIdeaAutoPlaceJob({ intervalMs = 15 * 60 * 1000 } = {}) {
+  if (jobTimer) {
+    clearInterval(jobTimer);
+  }
+
+  console.log(
+    `⏰ Raw idea auto-place job started (interval: ${intervalMs / 1000}s)`,
+  );
+
+  // Run once immediately, then on every interval
+  runRawIdeaAutoPlace();
+  jobTimer = setInterval(runRawIdeaAutoPlace, intervalMs);
+
+  // Return handle in case caller wants to store it
+  return jobTimer;
+}
+
+export function stopRawIdeaAutoPlaceJob() {
+  if (jobTimer) {
+    clearInterval(jobTimer);
+    jobTimer = null;
+    console.log("⏹ Raw idea auto-place job stopped");
+  }
+}

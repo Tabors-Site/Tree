@@ -6,6 +6,7 @@ import registerRoutes from "./routes/routesHandler.js";
 import registerURLRoutes from "./routesURL/routeURLHandler.js";
 
 import { initWebSocketServer } from "./ws/websocket.js";
+import { startRawIdeaAutoPlaceJob } from "./jobs/rawIdeaAutoPlace.js";
 
 import "./db/config.js"; // Initialize DB connection
 
@@ -70,4 +71,5 @@ const PORT = process.env.PORT || 80; //
 
 server.listen(PORT, "0.0.0.0", async () => {
   console.log(`Express server (Tree/MCP coupled) running on port ${PORT}`);
+  startRawIdeaAutoPlaceJob({ intervalMs: 15 * 60 * 1000 });
 });
