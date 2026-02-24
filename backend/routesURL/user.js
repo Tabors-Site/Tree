@@ -3023,23 +3023,26 @@ export const contributionRenderers = ({
     `executed script <code>${c.executeScript?.scriptName}</code>`,
   rawIdea: (c) => {
     const { action, rawIdeaId, targetNodeId } = c.rawIdeaAction || {};
+    const ideaLink = `<a href="/api/v1/user/${c.userId?._id}/raw-ideas/${rawIdeaId}${queryString}"><code>${rawIdeaId}</code></a>`;
 
     if (action === "add") {
-      return `added raw idea
-      <a href="/api/v1/user/${c.userId?._id}/raw-ideas/${rawIdeaId}${queryString}">
-        <code>${rawIdeaId}</code>
-      </a>`;
+      return `added raw idea ${ideaLink}`;
     }
 
     if (action === "delete") {
-      return `deleted raw idea
-      <code>${rawIdeaId}</code>`;
+      return `deleted raw idea <code>${rawIdeaId}</code>`;
     }
 
-    if (action === "place" && targetNodeId) {
-      return `placed raw idea
-      <code>${rawIdeaId}</code>
-      into ${renderLink(targetNodeId, queryString)}`;
+    if (action === "placed" && targetNodeId) {
+      return `placed raw idea ${ideaLink} into ${renderLink(targetNodeId, queryString)}`;
+    }
+
+    if (action === "aiStarted") {
+      return `AI started processing raw idea ${ideaLink}`;
+    }
+
+    if (action === "aiFailed") {
+      return `AI failed to place raw idea ${ideaLink}`;
     }
 
     return "updated raw idea";
@@ -3329,6 +3332,10 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
             const target = ri.targetNodeId ? link(ri.targetNodeId) : nLink;
             return `Placed raw idea ${ideaRef} into ${target}`;
           }
+          if (ri.action === "aiStarted")
+            return `AI began processing raw idea ${ideaRef}`;
+          if (ri.action === "aiFailed")
+            return `AI failed to place raw idea ${ideaRef}`;
           return `Updated raw idea ${ideaRef}`;
         }
 
@@ -5254,6 +5261,13 @@ body::after {
 .status-badge--stuck { background: rgba(255,140,0,0.25); color: #ffcf7e; }
 
 /* Placed / stuck notices */
+.placed-notice .chat-link {
+  color: #7effc0;
+  opacity: 0.8;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.placed-notice .chat-link:hover { opacity: 1; }
 .placed-notice {
   margin-top: 12px;
   padding: 10px 14px;
@@ -5527,7 +5541,7 @@ These will be placed onto your tree's automatically while you dream</div>
           </div>
 
           ${r.status === "succeeded" ? `
-          <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.</div>
+          <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>
           ` : r.status === "processing" ? `
           <div class="processing-notice">Being processed by AI — please wait.</div>
           ` : r.status === "deleted" ? `` : `
@@ -6055,6 +6069,41 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
       transform: translateX(2px);
     }
 
+    /* Status badge */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .status-badge--pending   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.2); }
+    .status-badge--processing{ background: rgba(255,200,0,0.25);   color: #ffe066;               border: 1px solid rgba(255,200,0,0.3); }
+    .status-badge--succeeded { background: rgba(50,220,120,0.25);  color: #7effc0;               border: 1px solid rgba(50,220,120,0.3); }
+    .status-badge--stuck     { background: rgba(255,140,0,0.25);   color: #ffcf7e;               border: 1px solid rgba(255,140,0,0.3); }
+    .status-badge--deleted   { background: rgba(255,80,80,0.2);    color: #ff9ea0;               border: 1px solid rgba(255,80,80,0.25); }
+    .ai-chat-link {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.9);
+      border: 1px solid rgba(255,255,255,0.25);
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .ai-chat-link:hover { background: rgba(255,255,255,0.25); }
+
     /* Copy Button Bar */
     .copy-bar {
       display: flex;
@@ -6252,6 +6301,13 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
       <div class="user-info">
         ${userLink}
       </div>
+
+      ${hasToken ? `<div class="status-row">
+        <span class="status-badge status-badge--${rawIdea.status || "pending"}">
+          ${rawIdea.status === "processing" ? "⏳ processing" : rawIdea.status === "succeeded" ? "✓ placed by AI" : rawIdea.status === "stuck" ? "⚠ stuck" : rawIdea.status === "deleted" ? "deleted" : "pending"}
+        </span>
+        ${rawIdea.aiSessionId && (rawIdea.status === "succeeded" || rawIdea.status === "stuck") ? `<a class="ai-chat-link" href="/api/v1/user/${userId}/chats?sessionId=${rawIdea.aiSessionId}&token=${token}&html">View AI chat →</a>` : ""}
+      </div>` : ""}
 
       <div class="copy-bar">
         <button id="copyBtn" class="copy-btn" title="Copy raw idea">📋</button>
@@ -6669,6 +6725,27 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
       }
     }
 
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .status-badge--pending   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.2); }
+    .status-badge--processing{ background: rgba(255,200,0,0.25);   color: #ffe066;               border: 1px solid rgba(255,200,0,0.3); }
+    .status-badge--succeeded { background: rgba(50,220,120,0.25);  color: #7effc0;               border: 1px solid rgba(50,220,120,0.3); }
+    .status-badge--stuck     { background: rgba(255,140,0,0.25);   color: #ffcf7e;               border: 1px solid rgba(255,140,0,0.3); }
+    .status-badge--deleted   { background: rgba(255,80,80,0.2);    color: #ff9ea0;               border: 1px solid rgba(255,80,80,0.25); }
+
     @media (min-width: 641px) and (max-width: 1024px) {
       .container {
         max-width: 700px;
@@ -6688,6 +6765,12 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
       <div class="user-info">
         ${userLink}
       </div>
+
+      ${hasToken ? `<div class="status-row">
+        <span class="status-badge status-badge--${rawIdea.status || "pending"}">
+          ${rawIdea.status === "processing" ? "⏳ processing" : rawIdea.status === "succeeded" ? "✓ placed by AI" : rawIdea.status === "stuck" ? "⚠ stuck" : rawIdea.status === "deleted" ? "deleted" : "pending"}
+        </span>
+      </div>` : ""}
 
       <h1>${escapeHtml(fileName)}</h1>
 

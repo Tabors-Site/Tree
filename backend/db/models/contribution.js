@@ -121,7 +121,7 @@ const ContributionSchema = new mongoose.Schema({
     type: {
       action: {
         type: String,
-        enum: ["add", "delete", "placed"],
+        enum: ["add", "delete", "placed", "aiStarted", "aiFailed"],
         required: true,
       },
       rawIdeaId: {

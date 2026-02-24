@@ -16,6 +16,7 @@ import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { getRootNodesForUser, buildDeepTreeSummary } from "../../core/treeFetch.js";
 import { logContribution } from "../../db/utils.js";
 import RawIdea from "../../db/models/rawIdea.js";
+import Node from "../../db/models/node.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // NULL SOCKET
@@ -101,6 +102,19 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
   rawIdea.aiSessionId = sessionId;
   await rawIdea.save();
 
+  // ── Log contribution: AI started processing ───────────────────────────
+  await logContribution({
+    userId,
+    nodeId: "deleted",
+    wasAi: true,
+    action: "rawIdea",
+    nodeVersion: "0",
+    rawIdeaAction: {
+      action: "aiStarted",
+      rawIdeaId: rawIdeaId.toString(),
+    },
+  });
+
   // ── Create the session root record (chainIndex 0) ────────────────────
   // This is what the AI chats page uses to show Done/Pending status.
   // finalizeAIChat() will set endMessage.time when we're done.
@@ -129,6 +143,17 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
       input: reason,
       output: { status: "stuck", reason },
     });
+    logContribution({
+      userId,
+      nodeId: "deleted",
+      wasAi: true,
+      action: "rawIdea",
+      nodeVersion: "0",
+      rawIdeaAction: {
+        action: "aiFailed",
+        rawIdeaId: rawIdeaId.toString(),
+      },
+    }).catch((e) => console.error(`⚠️ Failed to log aiFailed contribution:`, e.message));
   };
 
   // ── Pre-connect MCP client with a valid internal JWT ─────────────────
@@ -233,12 +258,15 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
     rawIdea.placedAt = new Date();
     await rawIdea.save();
 
+    const targetNode = await Node.findById(targetNodeId).select("prestige").lean();
+    const nodeVersion = targetNode?.prestige?.toString() ?? "0";
+
     await logContribution({
       userId,
       nodeId: targetNodeId,
       wasAi: true,
       action: "rawIdea",
-      nodeVersion: "0",
+      nodeVersion,
       rawIdeaAction: {
         action: "placed",
         rawIdeaId: rawIdeaId.toString(),
@@ -277,6 +305,17 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
         input: rawIdea.content,
         output: { status: "stuck", reason: err.message },
       });
+      logContribution({
+        userId,
+        nodeId: "deleted",
+        wasAi: true,
+        action: "rawIdea",
+        nodeVersion: "0",
+        rawIdeaAction: {
+          action: "aiFailed",
+          rawIdeaId: rawIdeaId.toString(),
+        },
+      }).catch((e) => console.error(`⚠️ Failed to log aiFailed contribution:`, e.message));
     } catch (saveErr) {
       console.error(`❌ Failed to mark raw idea as stuck:`, saveErr.message);
     }
