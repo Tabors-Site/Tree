@@ -106,6 +106,7 @@ const ContributionSchema = new mongoose.Schema({
     type: {
       action: { type: String, enum: ["add", "remove", "edit"], default: null },
       noteId: { type: String, ref: "Note", default: null },
+      content: { type: String, default: null },
       _id: false,
     },
   },

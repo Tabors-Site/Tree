@@ -12,6 +12,7 @@ import {
   deleteNoteAndFile as coreDeleteNoteAndFile,
   getBook as coreGetBook,
   generateBook as coreGenerateBook,
+  getNoteEditHistory,
 } from "../core/notes.js";
 
 import urlAuth from "../middleware/urlAuth.js";
@@ -239,6 +240,18 @@ router.get("/node/:nodeId/:version/notes/:noteId/editor",urlAuth, async (req, re
     );
   } catch (err) {
     console.error("Editor page error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── NOTE EDIT HISTORY ───────────────────────────
+router.get("/node/:nodeId/:version/notes/:noteId/history", urlAuth, async (req, res) => {
+  try {
+    const { noteId } = req.params;
+    const history = await getNoteEditHistory(noteId);
+    return res.json({ history });
+  } catch (err) {
+    console.error("Note history error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4615,6 +4628,97 @@ body.zen .editor-scroll { padding: 24px; }
   line-height: var(--editor-line-height);
   pointer-events: none;
 }
+
+/* ── HISTORY PANEL ──────────── */
+.history-overlay {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; justify-content: center; align-items: center;
+  padding: 20px;
+}
+.history-overlay.hidden { display: none; }
+
+.history-panel {
+  background: rgba(var(--glass-rgb), 0.65);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  width: 100%; max-width: 700px;
+  max-height: 80vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.history-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.history-title { font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.9); }
+
+.history-list {
+  max-height: 200px; overflow-y: auto; padding: 8px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.history-list::-webkit-scrollbar { width: 4px; }
+.history-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+.history-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 8px;
+  cursor: pointer; transition: all 0.2s;
+  border: 1px solid transparent; margin-bottom: 2px;
+}
+.history-item:hover { background: rgba(255,255,255,0.1); }
+.history-item.active { background: rgba(72,187,178,0.2); border-color: rgba(72,187,178,0.35); }
+
+.history-item-badge {
+  padding: 2px 8px; border-radius: 980px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; flex-shrink: 0;
+}
+.history-item-badge.add { background: rgba(72,187,120,0.25); color: rgba(72,187,120,0.9); }
+.history-item-badge.edit { background: rgba(100,220,255,0.2); color: rgba(100,220,255,0.9); }
+
+.history-item-info { flex: 1; min-width: 0; }
+.history-item-user { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85); }
+.history-item-date { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 1px; }
+
+.history-view { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.history-view.hidden { display: none; }
+
+.history-view-header {
+  padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.history-view-modes { display: flex; gap: 4px; }
+
+.history-view-content {
+  flex: 1; overflow-y: auto; padding: 12px 16px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: 12px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
+}
+.history-view-content::-webkit-scrollbar { width: 4px; }
+.history-view-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+.diff-line { padding: 1px 8px; border-radius: 3px; margin: 0; }
+.diff-same { color: rgba(255,255,255,0.7); }
+.diff-add { background: rgba(72,187,120,0.2); color: rgba(72,187,120,0.95); }
+.diff-del { background: rgba(239,68,68,0.2); color: rgba(239,68,68,0.95); }
+.history-empty { text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.3); font-size: 13px; }
+
+@media (max-width: 768px) {
+  .history-panel { max-width: 100%; max-height: 90vh; border-radius: 12px; }
+  .history-list { max-height: 150px; }
+}
 </style>  
 </head>
 <body>
@@ -4643,6 +4747,7 @@ body.zen .editor-scroll { padding: 24px; }
   </div>
 
   <div class="tb-spacer"></div>
+  ${isNew ? "" : '<button class="tb-btn" id="historyToggle" title="Edit history">🕒</button>'}
   <button class="tb-copy" id="copyBtn" title="Copy all text">📋 <span>Copy</span></button>
 </div>
 
@@ -4704,6 +4809,29 @@ body.zen .editor-scroll { padding: 24px; }
     <div class="modal-actions">
       <button class="modal-btn modal-btn-cancel" id="deleteCancelBtn">Cancel</button>
       <button class="modal-btn modal-btn-delete" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── HISTORY PANEL ───────────────────────────── -->
+<div class="history-overlay hidden" id="historyOverlay">
+  <div class="history-panel">
+    <div class="history-header">
+      <span class="history-title">Edit History</span>
+      <button class="sidebar-close" id="historyCloseBtn">✕</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">Loading...</div>
+    </div>
+    <div class="history-view hidden" id="historyView">
+      <div class="history-view-header">
+        <div class="history-view-modes">
+          <button class="tb-btn active" id="historyFullBtn">Full Content</button>
+          <button class="tb-btn" id="historyDiffBtn">Show Changes</button>
+        </div>
+        <button class="save-btn" id="historyRestoreBtn">Restore</button>
+      </div>
+      <div class="history-view-content" id="historyViewContent"></div>
     </div>
   </div>
 </div>
@@ -5287,6 +5415,201 @@ window.addEventListener("beforeunload", function(e) {
 window.addEventListener("resize", function() {
   autoGrowEditor();
 });
+
+/* ═══════════════════════════════════════════════════
+   EDIT HISTORY
+   ═══════════════════════════════════════════════════ */
+var historyData = [];
+var selectedHistoryIdx = -1;
+var historyMode = "full"; // "full" or "diff"
+
+var historyToggleBtn = document.getElementById("historyToggle");
+var historyOverlay = document.getElementById("historyOverlay");
+var historyCloseBtn = document.getElementById("historyCloseBtn");
+var historyListEl = document.getElementById("historyList");
+var historyView = document.getElementById("historyView");
+var historyViewContent = document.getElementById("historyViewContent");
+var historyFullBtn = document.getElementById("historyFullBtn");
+var historyDiffBtn = document.getElementById("historyDiffBtn");
+var historyRestoreBtn = document.getElementById("historyRestoreBtn");
+
+if (historyToggleBtn) {
+  historyToggleBtn.onclick = function() {
+    historyOverlay.classList.remove("hidden");
+    loadHistory();
+  };
+}
+
+if (historyCloseBtn) {
+  historyCloseBtn.onclick = function() {
+    historyOverlay.classList.add("hidden");
+  };
+}
+
+if (historyOverlay) {
+  historyOverlay.onclick = function(e) {
+    if (e.target === historyOverlay) historyOverlay.classList.add("hidden");
+  };
+}
+
+async function loadHistory() {
+  historyListEl.innerHTML = '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">Loading...</div>';
+  historyView.classList.add("hidden");
+  selectedHistoryIdx = -1;
+
+  try {
+    var token = new URLSearchParams(qs.replace("?","")).get("token");
+    var fetchUrl = "/api/v1/node/" + nodeId + "/" + version + "/notes/" + currentNoteId + "/history";
+    if (token) fetchUrl += "?token=" + encodeURIComponent(token);
+    var res = await fetch(fetchUrl, { credentials: "include" });
+    var data = await res.json();
+    historyData = data.history || [];
+
+    if (!historyData.length) {
+      historyListEl.innerHTML = '<div class="history-empty">No edit history available yet.<br>History is recorded on future saves.</div>';
+      return;
+    }
+
+    var html = "";
+    for (var i = historyData.length - 1; i >= 0; i--) {
+      var h = historyData[i];
+      var d = new Date(h.date);
+      var dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      var badgeClass = h.action === "add" ? "add" : "edit";
+      var badgeLabel = h.action === "add" ? "Created" : "Edit";
+
+      html +=
+        '<div class="history-item" data-idx="' + i + '">' +
+          '<span class="history-item-badge ' + badgeClass + '">' + badgeLabel + '</span>' +
+          '<div class="history-item-info">' +
+            '<div class="history-item-user">' + esc(h.username) + '</div>' +
+            '<div class="history-item-date">' + esc(dateStr) + '</div>' +
+          '</div>' +
+        '</div>';
+    }
+    historyListEl.innerHTML = html;
+
+    var items = historyListEl.querySelectorAll(".history-item");
+    for (var j = 0; j < items.length; j++) {
+      items[j].onclick = function() {
+        var idx = parseInt(this.getAttribute("data-idx"));
+        selectHistoryEntry(idx);
+        var all = historyListEl.querySelectorAll(".history-item");
+        for (var k = 0; k < all.length; k++) all[k].classList.remove("active");
+        this.classList.add("active");
+      };
+    }
+  } catch (e) {
+    historyListEl.innerHTML = '<div class="history-empty">Failed to load history.</div>';
+  }
+}
+
+function selectHistoryEntry(idx) {
+  selectedHistoryIdx = idx;
+  historyView.classList.remove("hidden");
+  renderHistoryView();
+}
+
+if (historyFullBtn) {
+  historyFullBtn.onclick = function() {
+    historyMode = "full";
+    historyFullBtn.classList.add("active");
+    historyDiffBtn.classList.remove("active");
+    renderHistoryView();
+  };
+}
+
+if (historyDiffBtn) {
+  historyDiffBtn.onclick = function() {
+    historyMode = "diff";
+    historyDiffBtn.classList.add("active");
+    historyFullBtn.classList.remove("active");
+    renderHistoryView();
+  };
+}
+
+if (historyRestoreBtn) {
+  historyRestoreBtn.onclick = function() {
+    if (selectedHistoryIdx < 0 || !historyData[selectedHistoryIdx]) return;
+    editor.value = historyData[selectedHistoryIdx].content;
+    historyOverlay.classList.add("hidden");
+    updateStats();
+    markDirty();
+    autoGrowEditor();
+  };
+}
+
+function renderHistoryView() {
+  if (selectedHistoryIdx < 0) return;
+  var entry = historyData[selectedHistoryIdx];
+
+  if (entry.content === null || entry.content === undefined) {
+    historyViewContent.innerHTML = '<div class="history-empty">Content was not recorded for this entry.</div>';
+    historyRestoreBtn.style.display = "none";
+    return;
+  }
+  historyRestoreBtn.style.display = "";
+
+  if (historyMode === "full") {
+    historyViewContent.innerHTML = '<pre style="margin:0;white-space:pre-wrap;word-break:break-word;color:rgba(255,255,255,0.85);">' + esc(entry.content) + '</pre>';
+  } else {
+    var prevContent = "";
+    for (var p = selectedHistoryIdx - 1; p >= 0; p--) {
+      if (historyData[p].content !== null && historyData[p].content !== undefined) {
+        prevContent = historyData[p].content;
+        break;
+      }
+    }
+    var diffHtml = computeDiff(prevContent, entry.content);
+    historyViewContent.innerHTML = diffHtml;
+  }
+}
+
+// ── LCS-based line diff ──
+function computeDiff(oldText, newText) {
+  var oldLines = oldText.split("\\n");
+  var newLines = newText.split("\\n");
+  var m = oldLines.length;
+  var n = newLines.length;
+
+  // Build LCS table
+  var dp = [];
+  for (var i = 0; i <= m; i++) {
+    dp[i] = [];
+    for (var j = 0; j <= n; j++) {
+      if (i === 0 || j === 0) dp[i][j] = 0;
+      else if (oldLines[i-1] === newLines[j-1]) dp[i][j] = dp[i-1][j-1] + 1;
+      else dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+    }
+  }
+
+  // Backtrack to get diff ops
+  var ops = [];
+  var ci = m, cj = n;
+  while (ci > 0 || cj > 0) {
+    if (ci > 0 && cj > 0 && oldLines[ci-1] === newLines[cj-1]) {
+      ops.push({ type: "same", text: oldLines[ci-1] });
+      ci--; cj--;
+    } else if (cj > 0 && (ci === 0 || dp[ci][cj-1] >= dp[ci-1][cj])) {
+      ops.push({ type: "add", text: newLines[cj-1] });
+      cj--;
+    } else {
+      ops.push({ type: "del", text: oldLines[ci-1] });
+      ci--;
+    }
+  }
+  ops.reverse();
+
+  var html = '<div>';
+  for (var k = 0; k < ops.length; k++) {
+    var op = ops[k];
+    var cls = op.type === "same" ? "diff-same" : (op.type === "add" ? "diff-add" : "diff-del");
+    var prefix = op.type === "same" ? "  " : (op.type === "add" ? "+ " : "- ");
+    html += '<div class="diff-line ' + cls + '">' + esc(prefix + op.text) + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
 
 /* ═══════════════════════════════════════════════════
    INIT

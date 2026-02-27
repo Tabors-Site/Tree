@@ -31,11 +31,23 @@ const AboutHome = () => {
       to: "/about/energy",
       active: true,
     },
+    {
+      emoji: "💡",
+      title: "Raw Ideas",
+      desc: "Capture thoughts and files. AI picks the right tree and places them automatically.",
+      to: "/about/raw-ideas",
+      active: true,
+    },
   ];
 
   return (
     <div className="about-home">
       <div className="about-home-card">
+
+        {/* ── BACK ── */}
+        <div className="al-page-back">
+          <Link className="al-back-link" to="/">←</Link>
+        </div>
 
         {/* ── HERO ── */}
         <div className="ah-hero">

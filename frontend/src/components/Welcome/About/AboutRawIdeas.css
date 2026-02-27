@@ -1,0 +1,363 @@
+/* ── ABOUT RAW IDEAS — scoped under .about-raw-ideas ── */
+
+.about-raw-ideas {
+  max-width: 820px;
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+  padding: 20px;
+}
+
+.ari-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(115, 111, 230, 0.28);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 24px;
+  padding: 48px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: ariIn 0.6s ease-out;
+}
+
+@keyframes ariIn {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── HEADER — matches .energy-docs-header ── */
+.ari-header {
+  margin-bottom: 28px;
+}
+
+.ari-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  margin-bottom: 8px;
+}
+
+.ari-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+/* ── SECTIONS — matches .nrg-section ── */
+.ari-section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 28px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 20px;
+}
+
+.ari-section--premium {
+  background: rgba(255, 200, 50, 0.08);
+  border-color: rgba(255, 200, 50, 0.2);
+}
+
+/* ── SECTION TITLE — matches .nrg-section-title ── */
+.ari-section-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 18px;
+  letter-spacing: -0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ari-section-icon { font-size: 24px; }
+
+/* ── SECTION TEXT — matches .nrg-section-text ── */
+.ari-section-text {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.7;
+  font-size: 15px;
+}
+
+/* ── STEP CARDS ── */
+.ari-steps-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ari-step-card {
+  display: flex;
+  gap: 18px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+}
+
+.ari-step-num {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+  padding-top: 3px;
+  width: 24px;
+}
+
+.ari-step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ari-step-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 6px;
+}
+
+.ari-step-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+
+.ari-step-desc strong { color: rgba(255, 255, 255, 0.85); }
+
+.ari-step-connector {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 0 0 29px;
+}
+
+/* ── CHIPS ── */
+.ari-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ari-chip {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  white-space: nowrap;
+}
+
+.ari-chip.text {
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 180, 50, 0.2);
+}
+
+.ari-chip.file {
+  color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* ── SCORE ROW ── */
+.ari-score-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ari-score-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.ari-score-item.selected {
+  border-color: rgba(130, 170, 255, 0.3);
+  background: rgba(130, 170, 255, 0.07);
+}
+
+.ari-score-item.dimmed { opacity: 0.4; }
+
+.ari-score-name {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.ari-score-item.selected .ari-score-name { color: rgba(130, 170, 255, 0.9); }
+
+.ari-score-pct {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.ari-score-pct.selected {
+  color: rgba(130, 170, 255, 0.8);
+  font-weight: 600;
+}
+
+/* ── MINI TREE ── */
+.ari-tree-mini {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.ari-mini-node {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.ari-mini-node.root {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.ari-mini-node.placed {
+  color: rgba(130, 170, 255, 0.9);
+  border: 1px solid rgba(130, 170, 255, 0.2);
+  border-radius: 6px;
+  padding: 3px 8px;
+  background: rgba(130, 170, 255, 0.06);
+}
+
+.ari-mini-indent {
+  padding-left: 16px;
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  margin-left: 6px;
+}
+
+.ari-mini-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ari-mini-dot.blue  { background: rgba(130, 170, 255, 0.6); }
+.ari-mini-dot.green { background: rgba(80, 200, 140, 0.6); }
+.ari-mini-dot.amber { background: rgba(255, 180, 50, 0.7); }
+
+.ari-mini-badge {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(130, 170, 255, 0.12);
+  color: rgba(130, 170, 255, 0.7);
+  margin-left: 4px;
+}
+
+/* ── OUTCOMES GRID ── */
+.ari-outcomes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.ari-outcome-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ari-outcome-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.ari-outcome-card.succeeded  .ari-outcome-dot { background: rgba(80, 200, 140, 0.7); }
+.ari-outcome-card.stuck      .ari-outcome-dot { background: rgba(255, 160, 60, 0.7); }
+.ari-outcome-card.processing .ari-outcome-dot { background: rgba(255, 200, 50, 0.7); }
+
+.ari-outcome-label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.ari-outcome-card.succeeded  .ari-outcome-label { color: rgba(80, 200, 140, 0.9); }
+.ari-outcome-card.stuck      .ari-outcome-label { color: rgba(255, 160, 60, 0.9); }
+.ari-outcome-card.processing .ari-outcome-label { color: rgba(255, 200, 50, 0.9); }
+
+.ari-outcome-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.55;
+}
+
+/* ── BACK LINK — matches .nrg-back-links / .nrg-back-link ── */
+.ari-back-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.ari-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 980px;
+  transition: all 0.3s;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.ari-back-link:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ── RESPONSIVE — matches energy breakpoints ── */
+@media (max-width: 768px) {
+  .about-raw-ideas { padding: 16px; }
+  .ari-card { padding: 28px 20px; border-radius: 20px; }
+  .ari-section { padding: 20px 14px; }
+  .ari-outcomes-grid { grid-template-columns: 1fr; }
+  .ari-score-row { flex-wrap: wrap; }
+}
+
+@media (max-width: 480px) {
+  .ari-card { padding: 24px 16px; }
+  .ari-step-card { gap: 12px; }
+}

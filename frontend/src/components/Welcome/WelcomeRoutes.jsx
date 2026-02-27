@@ -3,6 +3,7 @@ import WelcomePage from "./WelcomePage.jsx";
 
 
 import EnergySection from "./About/EnergySection.jsx";
+import AboutRawIdeas from "./About/AboutRawIdeas.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 import MustLogin from "./MustLogin.jsx";
@@ -35,6 +36,7 @@ const WelcomeRoutes = () => {
         <Route index element={<AboutHome />} />
         <Route path="api" element={<ApiAccessSection />} />
         <Route path="energy" element={<EnergySection />} />
+        <Route path="raw-ideas" element={<AboutRawIdeas />} />
 
       </Route>
 

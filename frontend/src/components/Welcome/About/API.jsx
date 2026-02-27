@@ -6,6 +6,11 @@ const ApiAccessSection = () => {
     <div className="api-docs">
       <div className="api-docs-card">
 
+        {/* ── BACK ── */}
+        <div className="al-page-back">
+          <Link className="al-back-link" to="/about">←</Link>
+        </div>
+
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* HEADER                                                        */}
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -295,7 +300,29 @@ const ApiAccessSection = () => {
               <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/user/:userId/raw-ideas</span>
             </div>
-            <div className="ep-desc">List or search all raw ideas.</div>
+            <div className="ep-desc">List or search raw ideas. Defaults to pending ideas.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="param-row">
+              <span className="param-key">?status=VALUE</span>
+              <span className="param-desc">Filter by status. One of: <code>pending</code> (default), <code>processing</code>, <code>succeeded</code>, <code>stuck</code>, <code>deleted</code>, <code>all</code></span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?q=SEARCH</span>
+              <span className="param-desc">Full-text search query (searches within content)</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?limit=NUMBER</span>
+              <span className="param-desc">Max results to return (max 200, default 200)</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?startDate=YYYY-MM-DD</span>
+              <span className="param-desc">Filter from date</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?endDate=YYYY-MM-DD</span>
+              <span className="param-desc">Filter to date</span>
+            </div>
+            <div className="ep-note">Succeeded ideas are sorted by placement date (<code>placedAt</code>) descending. All others sort by creation date.</div>
           </div>
 
           <div className="endpoint">
@@ -303,7 +330,18 @@ const ApiAccessSection = () => {
               <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId</span>
             </div>
-            <div className="ep-desc">View a single raw idea.</div>
+            <div className="ep-desc">View a single raw idea including its status and AI session link.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/orchestrate</span>
+            </div>
+            <div className="ep-desc">Trigger AI auto-placement for a raw idea. Picks the best-fit tree and places the idea as a note or as structure automatically. Returns immediately (202) while the process runs in the background.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "message": "Orchestration started" }  // 202 Accepted'}</div>
+            <div className="ep-note">Only works for <code>pending</code> text ideas. Returns 409 if already processing or completed. Poll the idea's status to track progress.</div>
           </div>
 
           <div className="endpoint">
@@ -311,9 +349,10 @@ const ApiAccessSection = () => {
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/transfer</span>
             </div>
-            <div className="ep-desc">Convert a raw idea into a note on a target node.</div>
+            <div className="ep-desc">Manually convert a raw idea into a note on a target node.</div>
             <div className="ep-label">Request Body</div>
             <div className="ep-code">{'{ "nodeId": "targetNodeId" }'}</div>
+            <div className="ep-note">Returns 409 if the idea is currently being processed by AI.</div>
           </div>
 
           <div className="endpoint">
@@ -322,6 +361,7 @@ const ApiAccessSection = () => {
               <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId</span>
             </div>
             <div className="ep-desc">Permanently delete a raw idea.</div>
+            <div className="ep-note">Returns 409 if the idea has status <code>processing</code> or <code>succeeded</code>.</div>
           </div>
 
           <div className="section-spacer"></div>

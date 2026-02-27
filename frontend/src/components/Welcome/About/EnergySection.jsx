@@ -6,6 +6,11 @@ const EnergySection = () => {
     <div className="energy-docs">
       <div className="energy-docs-card">
 
+        {/* ── BACK ── */}
+        <div className="al-page-back">
+          <Link className="al-back-link" to="/about">←</Link>
+        </div>
+
         {/* ── HEADER ── */}
         <div className="energy-docs-header">
           <h2 className="energy-docs-title">⚡ Energy System</h2>

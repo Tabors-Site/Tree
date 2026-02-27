@@ -119,7 +119,6 @@ export function startRawIdeaAutoPlaceJob({ intervalMs = 15 * 60 * 1000 } = {}) {
   );
 
   // Run once immediately, then on every interval
-  runRawIdeaAutoPlace();
   jobTimer = setInterval(runRawIdeaAutoPlace, intervalMs);
 
   // Return handle in case caller wants to store it

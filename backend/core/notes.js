@@ -14,6 +14,7 @@ function hashBookSettings(settings) {
     .digest("hex");
 }
 
+import Contribution from "../db/models/contribution.js";
 import { logContribution } from "../db/utils.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
@@ -170,7 +171,7 @@ async function createNote({
     wasAi,
     action: "note",
     nodeVersion: version,
-    noteAction: { action: "add", noteId: newNote._id.toString() },
+    noteAction: { action: "add", noteId: newNote._id.toString(), content: contentType === "text" ? (finalContent || "") : null },
     energyUsed,
   });
 
@@ -306,7 +307,7 @@ async function editNote({
     wasAi,
     action: "note",
     nodeVersion: note.version,
-    noteAction: { action: "edit", noteId: note._id.toString() },
+    noteAction: { action: "edit", noteId: note._id.toString(), content: finalContent || "" },
     energyUsed,
   });
 
@@ -831,6 +832,27 @@ async function generateBook({ nodeId, settings, userId }) {
   };
 }
 
+async function getNoteEditHistory(noteId) {
+  if (!noteId) throw new Error("Missing required parameter: noteId");
+
+  const contributions = await Contribution.find({
+    action: "note",
+    "noteAction.noteId": noteId,
+    "noteAction.action": { $in: ["add", "edit"] },
+  })
+    .populate("userId", "username")
+    .sort({ date: 1 })
+    .lean();
+
+  return contributions.map((c) => ({
+    _id: c._id,
+    username: c.userId?.username ?? "Unknown",
+    date: c.date,
+    content: c.noteAction.content,
+    action: c.noteAction.action,
+  }));
+}
+
 export {
   createNote,
   editNote,
@@ -841,4 +863,5 @@ export {
   searchNotesByUser,
   getBook,
   generateBook,
+  getNoteEditHistory,
 };

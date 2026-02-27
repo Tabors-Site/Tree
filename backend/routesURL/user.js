@@ -2960,7 +2960,7 @@ const renderUser = (user) => {
 
 const renderLink = (id, queryString) =>
   id
-    ? `<a href="/api/v1/node/${id}${queryString}"><code>${id}</code></a>`
+    ? `<a href="/api/v1/node/${id}${queryString}"><code>${escapeHtml(id)}</code></a>`
     : `<code>unknown</code>`;
 
 const renderVersionLink = (
@@ -2970,7 +2970,7 @@ const renderVersionLink = (
   label = `Version ${version}`,
 ) =>
   `<a href="/api/v1/node/${nodeId}/${version}${queryString}">
-    <code>${label}</code>
+    <code>${escapeHtml(label)}</code>
   </a>`;
 
 export const contributionRenderers = ({
@@ -2980,7 +2980,8 @@ export const contributionRenderers = ({
   queryString,
 }) => ({
   create: () => `created node`,
-  editStatus: (c) => `changed status to <code>${c.statusEdited}</code>`,
+  editStatus: (c) =>
+    `changed status to <code>${escapeHtml(c.statusEdited)}</code>`,
   editValue: () => `updated values`,
   prestige: () =>
     nodeId
@@ -3000,7 +3001,7 @@ export const contributionRenderers = ({
   editSchedule: () => `updated schedule`,
   editGoal: () => `updated goal`,
   editNameNode: (c) =>
-    `renamed node from <code>${c.editNameNode?.oldName}</code> to <code>${c.editNameNode?.newName}</code>`,
+    `renamed node from <code>${escapeHtml(c.editNameNode?.oldName)}</code> to <code>${escapeHtml(c.editNameNode?.newName)}</code>`,
   updateParent: (c) =>
     `changed parent from ${renderLink(
       c.updateParent?.oldParentId,
@@ -3016,21 +3017,22 @@ export const contributionRenderers = ({
    <a href="/api/v1/node/${c.nodeId}/${c.nodeVersion}/notes/${
      c.noteAction?.noteId
    }${queryString}">
-     <code>${c.noteAction?.noteId}</code>
+     <code>${escapeHtml(c.noteAction?.noteId)}</code>
    </a>`,
-  editScript: (c) => `updated script <code>${c.editScript?.scriptName}</code>`,
+  editScript: (c) =>
+    `updated script <code>${escapeHtml(c.editScript?.scriptName)}</code>`,
   executeScript: (c) =>
-    `executed script <code>${c.executeScript?.scriptName}</code>`,
+    `executed script <code>${escapeHtml(c.executeScript?.scriptName)}</code>`,
   rawIdea: (c) => {
     const { action, rawIdeaId, targetNodeId } = c.rawIdeaAction || {};
-    const ideaLink = `<a href="/api/v1/user/${c.userId?._id}/raw-ideas/${rawIdeaId}${queryString}"><code>${rawIdeaId}</code></a>`;
+    const ideaLink = `<a href="/api/v1/user/${c.userId?._id}/raw-ideas/${rawIdeaId}${queryString}"><code>${escapeHtml(rawIdeaId)}</code></a>`;
 
     if (action === "add") {
       return `added raw idea ${ideaLink}`;
     }
 
     if (action === "delete") {
-      return `deleted raw idea <code>${rawIdeaId}</code>`;
+      return `deleted raw idea <code>${escapeHtml(rawIdeaId)}</code>`;
     }
 
     if (action === "placed" && targetNodeId) {
@@ -3083,7 +3085,7 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
 
     const { contributions = [] } = await getContributionsByUser(
       userId,
-      500, // hard limit to prevent abuse
+      100, // hard limit to prevent abuse
       req.query.startDate,
       req.query.endDate,
     );
@@ -3220,8 +3222,8 @@ router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
           const target = userTag(ia.receivingId);
           const labels = {
             invite: `Invited ${target} to collaborate on`,
-            acceptInvite: `Accepted an invitation from ${target} on`,
-            denyInvite: `Declined an invitation from ${target} on`,
+            acceptInvite: `Accepted an invitation on`,
+            denyInvite: `Declined an invitation on`,
             removeContributor: `Removed ${target} from`,
             switchOwner: `Transferred ownership of`,
           };
@@ -5491,7 +5493,7 @@ body::after {
 <a href="/api/v1/user/${userId}${tokenQS}">${escapeHtml(user.username)}</a>
       </h1>
       <div class="header-subtitle">
-These will be placed onto your tree's automatically while you dream</div>
+These will be placed onto your tree's automatically while you dream (Premium Plan only)</div>
 
       <!-- Search Form -->
       <form method="GET" action="/api/v1/user/${userId}/raw-ideas" class="search-form">
@@ -5522,7 +5524,7 @@ These will be placed onto your tree's automatically while you dream</div>
         .map(
           (r) => `
         <li class="idea-card idea-card--${r.status || "pending"}" data-raw-idea-id="${r._id}" data-status="${r.status || "pending"}">
-          ${(!r.status || r.status === "pending" || r.status === "stuck") ? `<button class="delete-button" title="Delete raw idea">✕</button>` : ""}
+          ${!r.status || r.status === "pending" || r.status === "stuck" ? `<button class="delete-button" title="Delete raw idea">✕</button>` : ""}
 
           <div class="idea-content">
             <a
@@ -5540,21 +5542,32 @@ These will be placed onto your tree's automatically while you dream</div>
             </span>
           </div>
 
-          ${r.status === "succeeded" ? `
+          ${
+            r.status === "succeeded"
+              ? `
           <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>
-          ` : r.status === "processing" ? `
+          `
+              : r.status === "processing"
+                ? `
           <div class="processing-notice">Being processed by AI — please wait.</div>
-          ` : r.status === "deleted" ? `` : `
+          `
+                : r.status === "deleted"
+                  ? ``
+                  : `
           ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed — place manually below.</div>` : ""}
 
-          ${(!r.status || r.status === "pending") && r.contentType !== "file" ? `
+          ${
+            (!r.status || r.status === "pending") && r.contentType !== "file"
+              ? `
           <button
             class="auto-place-btn"
             data-raw-idea-id="${r._id}"
             data-token="${token}"
             data-user-id="${userId}"
           >✨ Auto-place</button>
-          ` : ""}
+          `
+              : ""
+          }
 
           <form
             method="POST"
@@ -5571,7 +5584,8 @@ These will be placed onto your tree's automatically while you dream</div>
             />
             <button type="submit">Transfer to Node</button>
           </form>
-          `}
+          `
+          }
 
           <div class="idea-meta">
             ${new Date(r.createdAt).toLocaleString()}
@@ -5702,10 +5716,15 @@ router.delete(
 
       const rawIdea = await RawIdea.findById(rawIdeaId);
       if (!rawIdea) {
-        return res.status(404).json({ success: false, error: "Raw idea not found" });
+        return res
+          .status(404)
+          .json({ success: false, error: "Raw idea not found" });
       }
       if (rawIdea.status === "processing" || rawIdea.status === "succeeded") {
-        return res.status(409).json({ success: false, error: `Cannot delete a raw idea with status "${rawIdea.status}"` });
+        return res.status(409).json({
+          success: false,
+          error: `Cannot delete a raw idea with status "${rawIdea.status}"`,
+        });
       }
 
       const result = await coreDeleteRawIdeaAndFile({
@@ -5799,12 +5818,12 @@ router.post(
         return res.status(403).json({ error: "Not authorized" });
       }
       if (rawIdea.contentType === "file") {
-        return res.status(422).json({ error: "File ideas cannot be auto-placed" });
+        return res
+          .status(422)
+          .json({ error: "File ideas cannot be auto-placed" });
       }
       if (rawIdea.status && rawIdea.status !== "pending") {
-        return res
-          .status(409)
-          .json({ error: `Already ${rawIdea.status}` });
+        return res.status(409).json({ error: `Already ${rawIdea.status}` });
       }
 
       // Block concurrent placements — only one at a time per user
@@ -5814,7 +5833,8 @@ router.post(
       });
       if (alreadyProcessing) {
         return res.status(409).json({
-          error: "Another idea is already being placed — please wait for it to finish.",
+          error:
+            "Another idea is already being placed — please wait for it to finish.",
         });
       }
 
@@ -6302,12 +6322,16 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
         ${userLink}
       </div>
 
-      ${hasToken ? `<div class="status-row">
+      ${
+        hasToken
+          ? `<div class="status-row">
         <span class="status-badge status-badge--${rawIdea.status || "pending"}">
           ${rawIdea.status === "processing" ? "⏳ processing" : rawIdea.status === "succeeded" ? "✓ placed by AI" : rawIdea.status === "stuck" ? "⚠ stuck" : rawIdea.status === "deleted" ? "deleted" : "pending"}
         </span>
         ${rawIdea.aiSessionId && (rawIdea.status === "succeeded" || rawIdea.status === "stuck") ? `<a class="ai-chat-link" href="/api/v1/user/${userId}/chats?sessionId=${rawIdea.aiSessionId}&token=${token}&html">View AI chat →</a>` : ""}
-      </div>` : ""}
+      </div>`
+          : ""
+      }
 
       <div class="copy-bar">
         <button id="copyBtn" class="copy-btn" title="Copy raw idea">📋</button>
@@ -6766,11 +6790,15 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
         ${userLink}
       </div>
 
-      ${hasToken ? `<div class="status-row">
+      ${
+        hasToken
+          ? `<div class="status-row">
         <span class="status-badge status-badge--${rawIdea.status || "pending"}">
           ${rawIdea.status === "processing" ? "⏳ processing" : rawIdea.status === "succeeded" ? "✓ placed by AI" : rawIdea.status === "stuck" ? "⚠ stuck" : rawIdea.status === "deleted" ? "deleted" : "pending"}
         </span>
-      </div>` : ""}
+      </div>`
+          : ""
+      }
 
       <h1>${escapeHtml(fileName)}</h1>
 

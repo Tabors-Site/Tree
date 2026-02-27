@@ -24,11 +24,11 @@ dotenv.config();
 // ─────────────────────────────────────────────────────────────────────────
 
 const defaultClient = new OpenAI({
-  baseURL: process.env.OPENAI_BASE_URL || "http://localhost:11434/v1",
+  baseURL: process.env.OPENAI_BASE_URL || "http://10.0.0.23:11434/v1",
   apiKey: process.env.OPENAI_API_KEY || "ollama",
 });
-
-const DEFAULT_MODEL = process.env.AI_MODEL || "gpt-oss:20b";
+//"gpt-oss:20b";
+const DEFAULT_MODEL = process.env.AI_MODEL || "qwen3.5:27b";
 
 const MAX_MESSAGES = 30;
 const MAX_TOOL_ITERATIONS = 15;
