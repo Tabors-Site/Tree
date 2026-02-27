@@ -20,6 +20,7 @@ import treeUnderstand from "./tree/understand.js";
 import treeGetContext from "./tree/getContext.js";
 import treeEditNotes from "./tree/notes.js";
 import treeRespond from "./tree/respond.js";
+import treeLibrarian from "./tree/librarian.js";
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ const ALL_MODES = {
   "tree:getContext": treeGetContext,
   "tree:notes": treeEditNotes,
   "tree:respond": treeRespond,
+  "tree:librarian": treeLibrarian,
 };
 
 // ─────────────────────────────────────────────────────────────────────────

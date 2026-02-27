@@ -5549,12 +5549,12 @@ These will be placed onto your tree's automatically while you dream (Premium Pla
           `
               : r.status === "processing"
                 ? `
-          <div class="processing-notice">Being processed by AI — please wait.</div>
+          <div class="processing-notice">Being processed by AI — please wait.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>
           `
                 : r.status === "deleted"
                   ? ``
                   : `
-          ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed — place manually below.</div>` : ""}
+          ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed — place manually below.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>` : ""}
 
           ${
             (!r.status || r.status === "pending") && r.contentType !== "file"
@@ -5666,8 +5666,8 @@ These will be placed onto your tree's automatically while you dream (Premium Pla
 
         try {
           const res = await fetch(
-            "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + "/orchestrate" + tokenQs,
-            { method: "POST" }
+            "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + "/place" + tokenQs,
+            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: "user" }) }
           );
           if (res.status === 202) {
             card.dataset.status = "processing";
@@ -5798,9 +5798,9 @@ router.post(
   },
 );
 
-// ── Auto-orchestrate a single raw idea ──────────────────────────────────────
+// ── Auto-place a single raw idea (fire-and-forget) ──────────────────────────
 router.post(
-  "/user/:userId/raw-ideas/:rawIdeaId/orchestrate",
+  "/user/:userId/raw-ideas/:rawIdeaId/place",
   authenticate,
   async (req, res) => {
     try {
@@ -5841,10 +5841,12 @@ router.post(
       const user = await User.findById(req.userId).select("username").lean();
 
       // Fire and forget — orchestrator runs in background
+      const source = req.body?.source === "user" ? "user" : "api";
       orchestrateRawIdeaPlacement({
         rawIdeaId,
         userId: req.userId,
         username: user?.username || "unknown",
+        source,
       }).catch((err) =>
         console.error("Raw-idea orchestration failed:", err.message),
       );
@@ -5852,6 +5854,96 @@ router.post(
       return res.status(202).json({ message: "Orchestration started" });
     } catch (err) {
       console.error("raw-idea orchestrate error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// ── Auto-chat a single raw idea (synchronous, returns response) ─────────────
+router.post(
+  "/user/:userId/raw-ideas/:rawIdeaId/chat",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { rawIdeaId } = req.params;
+
+      if (req.userId.toString() !== req.params.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const rawIdea = await RawIdea.findById(rawIdeaId);
+      if (!rawIdea || rawIdea.userId === "deleted") {
+        return res.status(404).json({ error: "Raw idea not found" });
+      }
+      if (rawIdea.userId.toString() !== req.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+      if (rawIdea.contentType === "file") {
+        return res
+          .status(422)
+          .json({ error: "File ideas cannot be auto-placed" });
+      }
+      if (rawIdea.status && rawIdea.status !== "pending") {
+        return res.status(409).json({ error: `Already ${rawIdea.status}` });
+      }
+
+      // Block concurrent placements — only one at a time per user
+      const alreadyProcessing = await RawIdea.findOne({
+        userId: req.userId.toString(),
+        status: "processing",
+      });
+      if (alreadyProcessing) {
+        return res.status(409).json({
+          error:
+            "Another idea is already being placed — please wait for it to finish.",
+        });
+      }
+
+      const user = await User.findById(req.userId).select("username").lean();
+
+      // 19-minute timeout — return gracefully before nginx kills the connection
+      const TIMEOUT_MS = 19 * 60 * 1000;
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        if (!res.headersSent) {
+          res
+            .status(504)
+            .json({
+              success: false,
+              error: "Request timed out. The idea took too long to process.",
+            });
+        }
+      }, TIMEOUT_MS);
+
+      const source = req.body?.source === "user" ? "user" : "api";
+      const result = await orchestrateRawIdeaPlacement({
+        rawIdeaId,
+        userId: req.userId,
+        username: user?.username || "unknown",
+        withResponse: true,
+        source,
+      });
+
+      clearTimeout(timer);
+      if (timedOut) return;
+
+      if (!result || !result.success) {
+        return res.json({
+          success: false,
+          error: result?.reason || "Could not process the idea.",
+        });
+      }
+
+      return res.json({
+        success: true,
+        answer: result.answer,
+        rootId: result.rootId,
+        rootName: result.rootName,
+        targetNodeId: result.targetNodeId,
+      });
+    } catch (err) {
+      console.error("raw-idea chat error:", err);
       return res.status(500).json({ error: err.message });
     }
   },
@@ -6328,7 +6420,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
         <span class="status-badge status-badge--${rawIdea.status || "pending"}">
           ${rawIdea.status === "processing" ? "⏳ processing" : rawIdea.status === "succeeded" ? "✓ placed by AI" : rawIdea.status === "stuck" ? "⚠ stuck" : rawIdea.status === "deleted" ? "deleted" : "pending"}
         </span>
-        ${rawIdea.aiSessionId && (rawIdea.status === "succeeded" || rawIdea.status === "stuck") ? `<a class="ai-chat-link" href="/api/v1/user/${userId}/chats?sessionId=${rawIdea.aiSessionId}&token=${token}&html">View AI chat →</a>` : ""}
+        ${rawIdea.aiSessionId && (rawIdea.status === "succeeded" || rawIdea.status === "stuck" || rawIdea.status === "processing") ? `<a class="ai-chat-link" href="/api/v1/user/${userId}/chats?sessionId=${rawIdea.aiSessionId}&token=${token}&html">View AI chat →</a>` : ""}
       </div>`
           : ""
       }
@@ -11410,6 +11502,13 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       return clean.length > len ? clean.slice(0, len) + "…" : clean;
     };
 
+    // Turn "Placed on node <uuid>" into a clickable link
+    const linkifyNodeIds = (html) =>
+      html.replace(
+        /Placed on node ([0-9a-f-]{36})/g,
+        (_, id) => `Placed on node <a class="node-link" href="/api/v1/root/${id}${token ? `?token=${token}&html` : "?html"}">${id}</a>`,
+      );
+
     const formatTime = (d) => (d ? new Date(d).toLocaleString() : "—");
 
     const formatDuration = (start, end) => {
@@ -11449,9 +11548,11 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       const labels = {
         home: "🏠 Home",
         tree: "🌳 Tree",
+        rawIdea: "📥 Raw Idea",
       };
       const subLabels = {
         default: "Default",
+        chat: "💬 Chat",
         structure: "🏗️ Structure",
         edit: "✏️ Edit",
         be: "Be",
@@ -11461,6 +11562,10 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
         getContext: "📖 Context",
         respond: "💬 Respond",
         notes: "📝 Notes",
+        start: "Start",
+        chooseRoot: "Choose Root",
+        complete: "Placed",
+        stuck: "Stuck",
       };
       const big = labels[parts[0]] || parts[0];
       const sub = subLabels[parts[1]] || parts[1] || "";
@@ -11470,7 +11575,9 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
     const sourceLabel = (src) => {
       const map = {
         user: "👤 User",
+        api: "🔌 API",
         orchestrator: "⚙️ Chain",
+        background: "🕐 Background",
         script: "📜 Script",
         system: "🔧 System",
       };
@@ -11850,6 +11957,16 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       const isCustomLlm = chat.llmProvider?.isCustom === true;
       const modelName = chat.llmProvider?.model || "default";
 
+      const tc = chat.treeContext;
+      const treeNodeId = tc?.targetNodeId?._id || tc?.targetNodeId;
+      const treeNodeName = tc?.targetNodeId?.name || tc?.targetNodeName;
+      const treeLink =
+        treeNodeId && treeNodeName
+          ? `<a href="/api/v1/node/${treeNodeId}${tokenQS}" class="tree-target-link">🌳 ${esc(treeNodeName)}</a>`
+          : treeNodeName
+            ? `<span class="tree-target-name">🌳 ${esc(treeNodeName)}</span>`
+            : "";
+
       const statusBadge = stopped
         ? `<span class="badge badge-stopped">Stopped</span>`
         : chat.endMessage?.time
@@ -11892,6 +12009,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
         <div class="chat-header">
           <div class="chat-header-left">
             <span class="chat-mode">${modeLabel(chat.aiContext?.path)}</span>
+            ${treeLink}
             <span class="chat-model">${esc(modelName)}</span>
           </div>
           <div class="chat-badges">
@@ -11912,7 +12030,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
               ? `
           <div class="chat-message chat-ai">
             <span class="msg-label">AI</span>
-            <div class="msg-text">${truncate(chat.endMessage.content, 400)}</div>
+            <div class="msg-text">${linkifyNodeIds(truncate(chat.endMessage.content, 400))}</div>
           </div>`
               : ""
           }
@@ -12122,6 +12240,8 @@ body::after { width: 400px; height: 400px; background: white; bottom: -200px; le
 .chat-user .msg-label { background: rgba(255,255,255,0.2); color: white; }
 .chat-ai .msg-label   { background: rgba(100,220,255,0.25); color: white; }
 .msg-text { color: rgba(255,255,255,0.95); word-wrap: break-word; min-width: 0; font-size: 15px; line-height: 1.65; font-weight: 400; }
+.node-link { color: #7effc0; text-decoration: none; background: rgba(50,220,120,0.15); padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+.node-link:hover { background: rgba(50,220,120,0.3); }
 .chat-user .msg-text { font-weight: 500; }
 
 /* ── Chain: outer dropdown ──────────────────────── */

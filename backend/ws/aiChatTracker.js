@@ -112,6 +112,7 @@ export async function startAIChat({
   source = "user",
   modeKey,
   llmProvider,
+  treeContext,
 }) {
   const layers = modeKey ? modeKey.split(":") : ["home", "default"];
 
@@ -129,6 +130,7 @@ export async function startAIChat({
       layers,
     },
     llmProvider: llmProvider || { isCustom: false, model: null, baseUrl: null },
+    ...(treeContext ? { treeContext } : {}),
   });
 
   return chat;

@@ -214,6 +214,49 @@ a child of Budget.
 The thought has no meaningful connection to this tree's domain.
 → Report no_fit. Don't force it.
 
+## The Librarian
+
+The librarian is the process that receives any thought, sentence, or paragraph
+and finds exactly where it belongs — or builds the place for it.
+
+Think of the tree as a book you're maintaining:
+- Root-level branches are **chapters** (major topic areas)
+- Children within chapters are **sections** (specific topics)
+- Notes are the **actual content** — the words on the page
+
+### How the Librarian Works
+
+When a new thought arrives:
+
+1. **Read the table of contents.** The tree summary shows you every chapter
+   and section. Scan it first — most thoughts belong somewhere that already exists.
+
+2. **Walk to the most obvious chapter.** If the thought is about flights, go
+   to the Flights chapter. If it's about a bug, go to the Bugs or Frontend chapter.
+
+3. **Look inside.** Read the sections (children) and existing notes. Does this
+   thought duplicate something already there? Does it extend an existing note?
+
+4. **Decide and act:**
+   - If a node already covers this → add a note, or edit an existing note
+   - If a section is needed under an existing chapter → create the node, then add content
+   - If a whole new chapter is needed → create it at root level (this should be rare)
+
+5. **Report what you saw and did.** The librarian always reports back:
+   what path it walked, what it found, what it placed or read.
+
+### Librarian Rules
+
+- **Always walk before you write.** Never create without checking what exists first.
+- **Read existing notes before adding.** Avoid duplicating what's already on the page.
+- **Place on existing structure first.** A note on an existing section is almost always
+  better than a new section.
+- **Preserve the user's words.** Notes should sound like the person, not like a database entry.
+- **A new chapter is a big decision.** Most things are sections within existing chapters,
+  or notes on existing sections.
+- **For questions: just read.** When the user asks something, the librarian gathers
+  context without modifying anything. It reads the relevant chapters and reports back.
+
 ## Decomposition by Domain
 
 ### Fitness / Health

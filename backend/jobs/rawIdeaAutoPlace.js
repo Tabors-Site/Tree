@@ -4,6 +4,7 @@
 
 import User from "../db/models/user.js";
 import RawIdea from "../db/models/rawIdea.js";
+import AIChat from "../db/models/aiChat.js";
 import { orchestrateRawIdeaPlacement } from "../ws/orchestrator/rawIdeaOrchestrator.js";
 import { isUserOnline } from "../ws/websocket.js";
 
@@ -60,6 +61,7 @@ async function processUser(user) {
     rawIdeaId: rawIdea._id.toString(),
     userId,
     username: user.username,
+    source: "background",
   }).catch((err) =>
     console.error(
       `❌ Auto-place orchestration failed for user ${userId}:`,
@@ -109,9 +111,41 @@ export async function runRawIdeaAutoPlace() {
  * @param {object} [opts]
  * @param {number} [opts.intervalMs=900000]  15 min by default
  */
-export function startRawIdeaAutoPlaceJob({ intervalMs = 15 * 60 * 1000 } = {}) {
+export async function startRawIdeaAutoPlaceJob({ intervalMs = 15 * 60 * 1000 } = {}) {
   if (jobTimer) {
     clearInterval(jobTimer);
+  }
+
+  // Reset any ideas left in "processing" from a previous server run
+  try {
+    const { modifiedCount } = await RawIdea.updateMany(
+      { status: "processing" },
+      { $set: { status: "pending" } },
+    );
+    if (modifiedCount > 0) {
+      console.log(`⏰ Reset ${modifiedCount} stale processing raw idea(s) → pending`);
+    }
+  } catch (err) {
+    console.error("⚠️ Failed to reset stale processing raw ideas:", err.message);
+  }
+
+  // Finalize any AI chats left without an endMessage from a previous server run
+  try {
+    const { modifiedCount } = await AIChat.updateMany(
+      { "endMessage.time": null },
+      {
+        $set: {
+          "endMessage.time": new Date(),
+          "endMessage.stopped": true,
+          "endMessage.content": "Server restarted before completion",
+        },
+      },
+    );
+    if (modifiedCount > 0) {
+      console.log(`⏰ Finalized ${modifiedCount} stale pending AI chat(s)`);
+    }
+  } catch (err) {
+    console.error("⚠️ Failed to finalize stale AI chats:", err.message);
   }
 
   console.log(

@@ -9,7 +9,7 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-import { switchMode, processMessage, setRootId } from "../conversation.js";
+import { switchMode, processMessage, setRootId, getClientForUser } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat } from "../aiChatTracker.js";
 import { orchestrateTreeRequest } from "./treeOrchestrator.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
@@ -67,13 +67,13 @@ function extractTargetNodeId(treeResult) {
 
 /**
  * Automatically places a raw idea into the best-fit tree.
- * Runs as a fire-and-forget async process — caller should not await.
  *
- * @param {string} rawIdeaId
- * @param {string} userId
- * @param {string} username
+ * @param {string}  rawIdeaId
+ * @param {string}  userId
+ * @param {string}  username
+ * @param {boolean} [withResponse=false] — when true, waits for tree:respond and returns result
  */
-export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username }) {
+export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username, withResponse = false, source = "orchestrator" }) {
   const visitorId = `rawIdea:${rawIdeaId}`;
   const sessionId = uuidv4();
   let chainIndex = 1;
@@ -86,15 +86,15 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
   const rawIdea = await RawIdea.findById(rawIdeaId);
   if (!rawIdea || rawIdea.userId === "deleted") {
     console.warn(`⚠️ Raw idea ${rawIdeaId} not found or already placed`);
-    return;
+    return withResponse ? { success: false, reason: "Raw idea not found" } : undefined;
   }
   if (rawIdea.userId !== userId) {
     console.warn(`⚠️ Raw idea ${rawIdeaId} ownership mismatch`);
-    return;
+    return withResponse ? { success: false, reason: "Not authorized" } : undefined;
   }
   if (rawIdea.status && rawIdea.status !== "pending") {
     console.warn(`⚠️ Raw idea ${rawIdeaId} already ${rawIdea.status}`);
-    return;
+    return withResponse ? { success: false, reason: `Already ${rawIdea.status}` } : undefined;
   }
 
   // ── Mark as processing ────────────────────────────────────────────────
@@ -118,12 +118,24 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
   // ── Create the session root record (chainIndex 0) ────────────────────
   // This is what the AI chats page uses to show Done/Pending status.
   // finalizeAIChat() will set endMessage.time when we're done.
+  let llmProvider;
+  try {
+    const clientInfo = await getClientForUser(userId);
+    llmProvider = {
+      isCustom: clientInfo.isCustom,
+      model: clientInfo.model,
+      baseUrl: clientInfo.isCustom ? clientInfo.client.baseURL : null,
+    };
+  } catch {
+    llmProvider = undefined;
+  }
   const mainChat = await startAIChat({
     userId,
     sessionId,
     message: rawIdea.content,
-    source: "orchestrator",
+    source,
     modeKey: "rawIdea:start",
+    llmProvider,
   });
   mainChatId = mainChat._id;
 
@@ -171,7 +183,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
     const roots = await getRootNodesForUser(userId);
     if (!roots || roots.length === 0) {
       await markStuck("No trees available for this user");
-      return;
+      return withResponse ? { success: false, reason: "No trees available for this user" } : undefined;
     }
 
     // Build a summary for each root tree
@@ -219,10 +231,9 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
     const confidence = typeof parsed?.confidence === "number" ? parsed.confidence : 0;
 
     if (!chosenRootId || confidence < 0.35) {
-      await markStuck(
-        parsed?.reasoning || `No tree fit (confidence: ${confidence.toFixed(2)})`,
-      );
-      return;
+      const stuckReason = parsed?.reasoning || `No tree fit (confidence: ${confidence.toFixed(2)})`;
+      await markStuck(stuckReason);
+      return withResponse ? { success: false, reason: stuckReason } : undefined;
     }
 
     console.log(
@@ -241,14 +252,14 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
       signal: null,
       sessionId,
       rootId: chosenRootId,
+      skipRespond: !withResponse,
     });
 
     if (!treeResult || treeResult.noFit || !treeResult.success) {
-      await markStuck(
-        treeResult?.reason ||
-          (treeResult?.noFit ? "Tree rejected the idea (no_fit)" : "Tree orchestration failed"),
-      );
-      return;
+      const stuckReason = treeResult?.reason ||
+        (treeResult?.noFit ? "Tree rejected the idea (no_fit)" : "Tree orchestration failed");
+      await markStuck(stuckReason);
+      return withResponse ? { success: false, reason: stuckReason } : undefined;
     }
 
     // ── PHASE 3: Record successful placement ──────────────────────────────
@@ -285,12 +296,24 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
     });
 
     finalizeArgs = {
-      content: `Placed on node ${targetNodeId}`,
+      content: withResponse
+        ? (treeResult.answer || `Placed on node ${targetNodeId}`)
+        : `Placed on node ${targetNodeId}`,
       stopped: false,
       modeKey: "rawIdea:complete",
     };
 
     console.log(`✅ Raw idea ${rawIdeaId} placed on node ${targetNodeId}`);
+
+    if (withResponse) {
+      return {
+        success: true,
+        answer: treeResult.answer || null,
+        rootId: chosenRootId,
+        rootName: parsed.rootName || null,
+        targetNodeId,
+      };
+    }
   } catch (err) {
     console.error(`❌ Raw-idea orchestration error for ${rawIdeaId}:`, err.message);
     try {
@@ -320,6 +343,9 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username 
       console.error(`❌ Failed to mark raw idea as stuck:`, saveErr.message);
     }
     finalizeArgs = { content: err.message, stopped: false, modeKey: "rawIdea:complete" };
+    if (withResponse) {
+      return { success: false, reason: err.message };
+    }
   } finally {
     if (mainChatId) {
       finalizeAIChat({ chatId: mainChatId, ...finalizeArgs }).catch((e) =>

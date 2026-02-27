@@ -44,11 +44,12 @@ const AIChatSchema = new mongoose.Schema({
     },
 
     // "user" = human typed it
+    // "api"  = external API call
     // "orchestrator" = orchestrator generated this call
     // "script" = automated trigger from note/script
     source: {
       type: String,
-      enum: ["user", "orchestrator", "script", "system"],
+      enum: ["user", "api", "orchestrator", "background", "script", "system"],
       default: "user",
       required: true,
     },
@@ -108,41 +109,21 @@ const AIChatSchema = new mongoose.Schema({
     targetNodeId: {
       type: String,
       ref: "Node",
-      default: null,
     },
-    targetNodeName: {
-      type: String,
-      default: null,
-    },
-    targetPath: {
-      type: String,
-      default: null,
-    },
+    targetNodeName: String,
+    targetPath: String,
 
     // Plan step metadata
-    planStepIndex: {
-      type: Number,
-      default: null,
-    },
-    planTotalSteps: {
-      type: Number,
-      default: null,
-    },
-    directive: {
-      type: String,
-      default: null,
-    },
+    planStepIndex: Number,
+    planTotalSteps: Number,
+    directive: String,
 
     // Execution result
     stepResult: {
       type: String,
-      enum: ["success", "failed", "skipped", "pending", null],
-      default: null,
+      enum: ["success", "failed", "skipped", "pending"],
     },
-    resultDetail: {
-      type: String,
-      default: null,
-    },
+    resultDetail: String,
 
     _id: false,
   },

@@ -298,15 +298,167 @@ RULES
 `.trim();
 
 // ─────────────────────────────────────────────────────────────────────────
-// TRANSLATE
+// CLASSIFIER — lightweight intent classification for the librarian flow
 // ─────────────────────────────────────────────────────────────────────────
 
+const CLASSIFIER_SYSTEM_PROMPT = `
+${CONSTITUTION}
+
+────────────────────────────────────────────────────────
+YOUR TASK
+────────────────────────────────────────────────────────
+
+You receive a thought, idea, or request along with the current tree state.
+Your ONLY job is to classify what kind of action this requires.
+
+Return ONLY this JSON. No markdown. No explanation.
+
+{
+  "intent": "place" | "query" | "destructive" | "no_fit",
+  "confidence": number,
+  "responseHint": string,
+  "summary": string
+}
+
+INTENT DEFINITIONS:
+
+"place" — The user has a thought, idea, fact, or piece of information that
+  should be stored on the tree. This includes:
+  - Notes, observations, preferences ("flights are cheaper in March")
+  - New things to track ("add a workout routine")
+  - Information to file ("fix bug where user can't respond")
+  - Building new structure ("add a section for travel tips")
+  The librarian will handle finding the right place and storing it.
+
+"query" — The user is asking a question or wants to understand something.
+  No tree modifications needed. Examples:
+  - "what should I do next?"
+  - "hey, what's going on with this?"
+  - "how's the budget looking?"
+  - Greetings, thanks, conversational messages
+  The librarian will read the tree and gather context to answer.
+
+"destructive" — The user wants to DELETE, MOVE, MERGE, REORGANIZE, or
+  make STATUS CHANGES. These are dangerous operations that need the
+  full planning pipeline with confirmation. Examples:
+  - "delete the old workout branch"
+  - "merge these two nodes"
+  - "remove what doesn't belong"
+  - "move Backend under Projects"
+  - "mark everything as complete"
+
+"no_fit" — The idea has NO meaningful connection to this tree's domain.
+  A dentist appointment doesn't belong in a Japan Trip tree.
+  Only use for genuinely unrelated content.
+
+CONFIDENCE:
+  1.0 = obviously belongs (e.g., "add pushups" on Fitness tree)
+  0.7 = reasonable fit
+  0.3 = stretch, vaguely related
+  0.0 = no_fit
+
+RESPONSE HINT:
+  Guidance for how the response should feel. Match the user's energy.
+  Brief input → brief hint. Big request → richer hint.
+
+SUMMARY:
+  One-line description for logs.
+
+RULES:
+1. ALWAYS return valid JSON. Nothing else.
+2. When in doubt between "place" and "query", lean toward "place"
+   if the message contains any information worth storing.
+3. "destructive" is for deletions, moves, merges, status cascades,
+   and bulk changes. Edits to values/goals/names are "place".
+4. no_fit means ZERO connection to this tree. A stretch is still "place"
+   with low confidence, not no_fit.
+5. Conversational messages ("hi", "thanks", "what's up") are "query".
+`.trim();
+
 /**
- * Translate a user message into tree operations.
+ * Classify a user message into a high-level intent.
+ * Lightweight alternative to full translation — used by the librarian flow.
  *
  * @param {object} opts
  * @param {string} opts.message - The raw user message
- * @param {string} opts.visitorId - For memory context
+ * @param {string} opts.userId - For LLM client resolution
+ * @param {string} opts.conversationMemory - Formatted recent exchanges
+ * @param {string|null} opts.treeSummary - Brief summary of current tree state
+ * @param {AbortSignal} [opts.signal] - Cancellation signal
+ *
+ * @returns {object} { intent, confidence, responseHint, summary }
+ */
+export async function classify({
+  message,
+  userId,
+  conversationMemory,
+  treeSummary,
+  signal,
+}) {
+  const { client: openai, model } = await getClientForUser(userId);
+
+  let contextBlock = "";
+  if (conversationMemory) {
+    contextBlock += `\nRecent conversation:\n${conversationMemory}\n`;
+  }
+  if (treeSummary) {
+    contextBlock += `\nCurrent tree state:\n${treeSummary}\n`;
+  }
+
+  const userContent = contextBlock
+    ? `${contextBlock}\nUser message: ${message}`
+    : message;
+
+  const response = await openai.chat.completions.create(
+    {
+      model,
+      messages: [
+        { role: "system", content: CLASSIFIER_SYSTEM_PROMPT },
+        { role: "user", content: userContent },
+      ],
+    },
+    signal ? { signal } : {},
+  );
+
+  const raw = response.choices?.[0]?.message?.content;
+  if (!raw) throw new Error("Empty classifier response");
+
+  try {
+    const result = JSON.parse(raw);
+
+    // Validate and default fields
+    if (!result.intent) result.intent = "query";
+    if (!["place", "query", "destructive", "no_fit"].includes(result.intent)) {
+      result.intent = "query";
+    }
+    if (result.confidence === undefined) result.confidence = 0.5;
+    result.confidence = Math.max(0, Math.min(1, result.confidence));
+    if (!result.responseHint) result.responseHint = "";
+    if (!result.summary) result.summary = message;
+
+    return result;
+  } catch (err) {
+    console.error("❌ Classifier parse failed:", err.message, "raw:", raw);
+    return {
+      intent: "query",
+      confidence: 0.5,
+      responseHint: "Respond naturally to the user's message.",
+      summary: message,
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TRANSLATE DESTRUCTIVE — full translation for destructive operations only
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Translate a user message into detailed tree operations.
+ * Used for destructive operations (delete, move, merge, status changes)
+ * that need the full planning pipeline with confirmation.
+ *
+ * @param {object} opts
+ * @param {string} opts.message - The raw user message
  * @param {string} opts.userId - For LLM client resolution
  * @param {string} opts.conversationMemory - Formatted recent exchanges
  * @param {string|null} opts.treeSummary - Brief summary of current tree state
@@ -314,7 +466,7 @@ RULES
  *
  * @returns {object} { plan, responseHint, summary, confidence }
  */
-export async function translate({
+export async function translateDestructive({
   message,
   userId,
   conversationMemory,
@@ -398,3 +550,6 @@ export async function translate({
     };
   }
 }
+
+// Backward compat — old name still works
+export { translateDestructive as translate };

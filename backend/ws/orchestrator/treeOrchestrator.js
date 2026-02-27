@@ -1,6 +1,7 @@
 // ws/orchestrator/treeOrchestrator.js
-// Orchestrates tree requests: translator → navigate → getContext → execute → respond
-// Each plan step: navigate (establish position) → context → execute → summarize → reset
+// Orchestrates tree requests: classify → librarian (place/query) or destructive flow
+// Librarian: navigates, reads, places — behind the scenes
+// Destructive: translate → navigate → confirm → execute (existing flow)
 
 import {
   switchMode,
@@ -9,7 +10,7 @@ import {
   getCurrentNodeId,
   resetConversation,
 } from "../conversation.js";
-import { translate } from "./translator.js";
+import { classify, translateDestructive } from "./translator.js";
 import { trackChainStep } from "../aiChatTracker.js";
 
 import { getContextForAi, getNavigationContext } from "../../core/treeFetch.js";
@@ -202,168 +203,45 @@ function emitModeResult(socket, modeKey, result) {
   });
 }
 
-export async function orchestrateTreeRequest({
+// ─────────────────────────────────────────────────────────────────────────
+// SHARED PLAN EXECUTION LOOP
+// Used by both destructive path and librarian flow.
+// Each step: navigate → context/scout → destructive check → execute → summarize
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Execute a plan (array of steps) produced by either the translator or librarian.
+ *
+ * Returns:
+ *   { type: "completed", stepSummaries, lastTargetNodeId, lastTargetPath, chainIndex }
+ *   { type: "confirm", response, chainIndex }  — destructive step paused for confirmation
+ *   { type: "respond", response, chainIndex }   — early exit (ambiguity, not found)
+ *   null — signal aborted
+ */
+async function executePlanSteps({
+  plan,
   visitorId,
   message,
   socket,
+  signal,
   username,
   userId,
-  signal,
+  rootId,
   sessionId,
-  rootId: rootIdParam,
+  modesUsed,
+  chainIndex,
+  initialTargetNodeId,
+  initialTargetPath,
+  stepSummaries,
+  responseHint,
+  includeMemoryOnFirstStep,
 }) {
-  if (signal?.aborted) return null;
-
-  const rootId = rootIdParam ?? getRootId(visitorId);
   const meta = { username, userId, rootId };
-  const modesUsed = []; // Track full chain for AIChat
-  let chainIndex = 1; // 0 = user message (created in websocket.js)
-
-  // ────────────────────────────────────────────────────────
-  // CHECK FOR PENDING CONFIRMATION
-  // ────────────────────────────────────────────────────────
-
-  const pending = pendingOperations.get(visitorId);
-  if (pending) {
-    pendingOperations.delete(visitorId);
-
-    if (isConfirmation(message)) {
-      return await executePendingOperation({
-        visitorId,
-        pending,
-        socket,
-        signal,
-        ...meta,
-      });
-    } else if (isDenial(message)) {
-      const remaining = pending.remainingPlan?.length || 0;
-      const cancelContext =
-        remaining > 0
-          ? `User cancelled the destructive operation. ${remaining} remaining plan step(s) were also abandoned.`
-          : "User cancelled the operation.";
-
-      return await runRespond({
-        visitorId,
-        socket,
-        signal,
-        ...meta,
-        operationContext: cancelContext,
-        nodeContext: pending.nodeContext,
-        originalMessage: message,
-        stepSummaries: pending.stepSummaries || [],
-      });
-    }
-    // If neither confirm nor deny, treat as a new request (fall through)
-  }
-
-  // ────────────────────────────────────────────────────────
-  // STEP 1: TRANSLATE (natural language → tree operations)
-  // ────────────────────────────────────────────────────────
-
-  emitStatus(socket, "intent", "Understanding request…");
-
-  // Pre-fetch full tree shape so translator can see what exists at every level
-  let treeSummary = null;
-  if (rootId) {
-    try {
-      treeSummary = await buildDeepTreeSummary(rootId);
-    } catch (err) {
-      console.error("⚠️ Pre-fetch tree summary failed:", err.message);
-    }
-  }
-
-  let translation;
-  const translatorStart = new Date();
-  try {
-    translation = await translate({
-      message,
-      userId,
-      conversationMemory: formatMemoryContext(visitorId),
-      treeSummary,
-      signal,
-    });
-  } catch (err) {
-    if (signal?.aborted) return null;
-    console.error("❌ Translation failed:", err.message);
-    translation = {
-      plan: [
-        {
-          intent: "query",
-          targetHint: null,
-          directive: message,
-          needsNavigation: false,
-          isDestructive: false,
-        },
-      ],
-      responseHint: "Respond naturally to the user's message.",
-      summary: message,
-    };
-  }
-  const translatorEnd = new Date();
-
-  if (signal?.aborted) return null;
-
-  const responseHint = translation.responseHint || "";
-  const plan = translation.plan;
-  const confidence = translation.confidence ?? 0.5;
-
-  console.log(
-    `🎯 Translated: ${plan.length} step(s) | confidence: ${confidence} | "${translation.summary}"`,
-  );
-  emitModeResult(socket, "intent", {
-    plan,
-    responseHint,
-    summary: translation.summary,
-    confidence,
-  });
-
-  // Track translation step
-  modesUsed.push("translator");
-  trackChainStep({
-    userId,
-    sessionId,
-    chainIndex: chainIndex++,
-    modeKey: "translator",
-    input: message,
-    output: translation,
-    startTime: translatorStart,
-    endTime: translatorEnd,
-  });
-
-  // ────────────────────────────────────────────────────────
-  // NO_FIT CHECK — tree rejects this idea
-  // ────────────────────────────────────────────────────────
-
-  if (plan.length === 1 && plan[0].intent === "no_fit") {
-    const reason = plan[0].directive || "Idea does not fit this tree.";
-    console.log(`🚫 No fit: ${reason}`);
-
-    emitStatus(socket, "done", "");
-
-    return {
-      success: false,
-      noFit: true,
-      confidence,
-      reason,
-      summary: translation.summary,
-      modeKey: "translator",
-      rootId,
-      modesUsed,
-    };
-  }
-
-  // ────────────────────────────────────────────────────────
-  // STEP 2: EXECUTE PLAN
-  // Each step: navigate → context → execute → summarize → reset
-  // ────────────────────────────────────────────────────────
-
-  const stepSummaries = []; // Accumulated summaries — the state thread between steps
-  let lastTargetNodeId = rootId;
-  let lastTargetPath = null;
+  let lastTargetNodeId = initialTargetNodeId || rootId;
+  let lastTargetPath = initialTargetPath || null;
 
   for (let i = 0; i < plan.length; i++) {
     if (signal?.aborted) {
-      // Store partial progress in memory
       if (stepSummaries.length > 0) {
         pushMemory(
           visitorId,
@@ -375,8 +253,9 @@ export async function orchestrateTreeRequest({
     }
 
     const op = plan[i];
-    const stepNum = i + 1;
-    const isOnlyStep = plan.length === 1;
+    const stepNum = stepSummaries.length + 1;
+    const totalSteps = stepSummaries.length + plan.length - i;
+    const isOnlyStep = plan.length === 1 && stepSummaries.length === 0;
 
     // Emit plan step marker
     trackChainStep({
@@ -384,9 +263,9 @@ export async function orchestrateTreeRequest({
       sessionId,
       chainIndex: chainIndex++,
       modeKey: `tree:orchestrator:plan:${stepNum}`,
-      input: `Step ${stepNum}/${plan.length}: ${op.intent}${op.targetHint ? ` → ${op.targetHint}` : ""}\n${op.directive}`,
+      input: `Step ${stepNum}: ${op.intent}${op.targetHint ? ` → ${op.targetHint}` : ""}\n${op.directive}`,
       treeContext: {
-        targetNodeId: lastTargetNodeId,
+        targetNodeId: op.targetNodeId || lastTargetNodeId,
         targetPath: lastTargetPath,
         planStepIndex: stepNum,
         planTotalSteps: plan.length,
@@ -407,17 +286,21 @@ export async function orchestrateTreeRequest({
     };
 
     console.log(
-      `  📋 Step ${stepNum}/${plan.length}: ${intent.intent} → ${intent.targetHint || "(current)"}`,
+      `  📋 Step ${stepNum}: ${intent.intent} → ${intent.targetHint || "(current)"}`,
     );
 
     // ══════════════════════════════════════════════════════
-    // A) NAVIGATE — always first, establishes position
+    // A) NAVIGATE — establish position
     // ══════════════════════════════════════════════════════
 
-    let targetNodeId = lastTargetNodeId;
+    let targetNodeId = op.targetNodeId || lastTargetNodeId;
     let targetPath = lastTargetPath;
 
-    if (intent.targetHint) {
+    // If librarian already provided a targetNodeId, skip navigation
+    if (op.targetNodeId && !op.needsNavigation) {
+      console.log(`  📍 Librarian provided ID: ${op.targetNodeId}`);
+      targetNodeId = op.targetNodeId;
+    } else if (intent.targetHint) {
       // ── LLM NAVIGATION — search for a specific node ──
       emitStatus(
         socket,
@@ -432,7 +315,10 @@ export async function orchestrateTreeRequest({
       });
 
       const priorStepsCtx = formatStepSummaries(stepSummaries);
-      const memCtx = i === 0 ? formatMemoryContext(visitorId) : "";
+      const memCtx =
+        i === 0 && includeMemoryOnFirstStep
+          ? formatMemoryContext(visitorId)
+          : "";
       const navDirective = intent.directive || message;
 
       let navMessage = navDirective;
@@ -462,12 +348,23 @@ export async function orchestrateTreeRequest({
         startTime: navStart,
         endTime: navEnd,
         treeContext: {
-          targetNodeId: navResult?.action === "found" ? navResult.targetNodeId : lastTargetNodeId,
-          targetPath: navResult?.action === "found" ? navResult.targetPath : lastTargetPath,
+          targetNodeId:
+            navResult?.action === "found"
+              ? navResult.targetNodeId
+              : lastTargetNodeId,
+          targetPath:
+            navResult?.action === "found"
+              ? navResult.targetPath
+              : lastTargetPath,
           planStepIndex: stepNum,
           planTotalSteps: plan.length,
           directive: navDirective,
-          stepResult: navResult?.action === "found" ? "success" : navResult?.action === "ambiguous" ? "pending" : "failed",
+          stepResult:
+            navResult?.action === "found"
+              ? "success"
+              : navResult?.action === "ambiguous"
+                ? "pending"
+                : "failed",
           resultDetail: navResult?.reason || navResult?.summary || null,
         },
       });
@@ -482,7 +379,6 @@ export async function orchestrateTreeRequest({
         });
       } else if (navResult?.action === "ambiguous") {
         // For merge/dedup/duplicate operations, ambiguity is EXPECTED.
-        // Collect all candidates and continue with the parent as target.
         const isBatchOp =
           /\b(merge|dedup|duplicat|redundan|consolidat|delet|remov|clean\s*up|all|both|every|each)\b/i.test(
             intent.directive || message,
@@ -493,7 +389,6 @@ export async function orchestrateTreeRequest({
             `  🔀 Merge operation — collecting ${navResult.candidates.length} ambiguous candidates`,
           );
 
-          // Fetch context for all candidates
           const candidateContexts = [];
           for (const candidate of navResult.candidates) {
             try {
@@ -512,8 +407,6 @@ export async function orchestrateTreeRequest({
             }
           }
 
-          // Use the parent of the first candidate as the merge target
-          // (they're duplicates, so they should share the same parent)
           const firstCandidate = candidateContexts[0];
           if (firstCandidate?.parent?.id) {
             targetNodeId = firstCandidate.parent.id;
@@ -525,7 +418,6 @@ export async function orchestrateTreeRequest({
             targetPath = null;
           }
 
-          // Inject candidate contexts as supplementary data for the execution step
           intent._mergeContext = {
             mergeTarget: targetNodeId,
             candidates: candidateContexts,
@@ -536,7 +428,7 @@ export async function orchestrateTreeRequest({
           );
         } else {
           // Normal ambiguity — ask user
-          return await runRespond({
+          const response = await runRespond({
             visitorId,
             socket,
             signal,
@@ -551,10 +443,11 @@ export async function orchestrateTreeRequest({
               "Ask the user to clarify which node they mean. List the options clearly.",
             stepSummaries,
           });
+          return { type: "respond", response, chainIndex };
         }
       } else if (navResult?.action === "not_found") {
-        if (i === 0) {
-          return await runRespond({
+        if (i === 0 && stepSummaries.length === 0) {
+          const response = await runRespond({
             visitorId,
             socket,
             signal,
@@ -566,6 +459,7 @@ export async function orchestrateTreeRequest({
               "Let the user know the node wasn't found. Suggest alternatives if possible.",
             stepSummaries,
           });
+          return { type: "respond", response, chainIndex };
         } else {
           stepSummaries.push(
             buildStepSummary({
@@ -585,7 +479,9 @@ export async function orchestrateTreeRequest({
       // ── NO TARGET — operate on current position (root or last step's target) ──
       targetNodeId = lastTargetNodeId || getCurrentNodeId(visitorId) || rootId;
       targetPath = lastTargetPath || null;
-      console.log(`  📍 Using current position: ${targetPath || targetNodeId}`);
+      console.log(
+        `  📍 Using current position: ${targetPath || targetNodeId}`,
+      );
     }
 
     // ══════════════════════════════════════════════════════
@@ -598,14 +494,20 @@ export async function orchestrateTreeRequest({
         emitStatus(socket, "done", "");
         pushMemory(visitorId, message, navSummary);
         return {
-          success: true,
-          answer: navSummary,
-          modeKey: "tree:navigate",
-          rootId,
-          modesUsed,
+          type: "completed",
+          stepSummaries,
+          lastTargetNodeId: targetNodeId,
+          lastTargetPath: targetPath,
+          chainIndex,
+          navigateOnly: {
+            success: true,
+            answer: navSummary,
+            modeKey: "tree:navigate",
+            rootId,
+            modesUsed,
+          },
         };
       }
-      // Navigate step in a multi-step plan — record summary and continue
       stepSummaries.push(
         buildStepSummary({
           stepNum,
@@ -620,13 +522,12 @@ export async function orchestrateTreeRequest({
       );
       lastTargetNodeId = targetNodeId;
       lastTargetPath = targetPath;
-      // Reset conversation before next step
       resetConversation(visitorId, { username, userId });
       continue;
     }
 
     // ══════════════════════════════════════════════════════
-    // C) GET CONTEXT + SCOUT — explore deeper if targets exist
+    // C) GET CONTEXT + SCOUT
     // ══════════════════════════════════════════════════════
 
     let nodeContext = null;
@@ -671,11 +572,6 @@ export async function orchestrateTreeRequest({
       ctxResult = await getContextForAi(targetNodeId, profile);
 
       // ── SCOUT LOOP ──
-      // Scout is ONLY useful for one case: preventing duplicate node creation
-      // when you say "create X" and X already exists.
-      //
-      // SKIP scouting for anything else — moves, deletes, merges, reorganization.
-      // Scout was wrongly converting these to "edit", breaking the operation.
       const shouldScout =
         !intent.isDestructive &&
         !/\b(delet|merg|dedup|duplicat|remov|consolidat|redundan|clean\s*up|reorgani[sz]|move|reparent|relocat|transfer)\b/i.test(
@@ -699,7 +595,6 @@ export async function orchestrateTreeRequest({
         });
 
         if (scoutResult.adapted) {
-          // Scout found existing structure — update position and intent
           targetNodeId = scoutResult.targetNodeId;
           targetPath = scoutResult.targetPath || targetPath;
           ctxResult = scoutResult.ctxResult;
@@ -721,8 +616,6 @@ export async function orchestrateTreeRequest({
       nodeContext = JSON.stringify(ctxResult, null, 2);
 
       // ── DEEP CONTEXT for destructive restructure operations ──
-      // Merge/dedup/cleanup needs to see children WITH their own children
-      // so the structure mode has all the IDs to move and delete.
       const isRestructure =
         intent.isDestructive ||
         /\b(delet|merg|dedup|remov|consolidat|redundan|clean\s*up|reorgani[sz])\b/i.test(
@@ -768,8 +661,6 @@ export async function orchestrateTreeRequest({
       }
 
       // ── SECONDARY CONTEXT for move/reparent operations ──
-      // Move needs IDs from BOTH source and destination.
-      // Navigation found one — fetch all other referenced nodes.
       if (
         intent.intent === "structure" &&
         /\b(move|reparent|relocate|transfer)\b/i.test(intent.directive)
@@ -842,9 +733,11 @@ export async function orchestrateTreeRequest({
       });
     }
 
+    // ══════════════════════════════════════════════════════
+    // D) DESTRUCTIVE CHECK — pause for confirmation
+    // ══════════════════════════════════════════════════════
+
     if (intent.isDestructive) {
-      // Save everything needed to resume the plan after confirmation
-      // Use op.intent (original from translator), NOT intent.intent which scout may have modified
       const remainingPlan = plan.slice(i + 1);
 
       pendingOperations.set(visitorId, {
@@ -854,7 +747,6 @@ export async function orchestrateTreeRequest({
         targetPath,
         nodeContext,
         originalMessage: message,
-        // State needed to resume the plan
         remainingPlan,
         stepSummaries: [...stepSummaries],
         stepNum,
@@ -864,7 +756,7 @@ export async function orchestrateTreeRequest({
         chainIndex,
       });
 
-      return await runRespond({
+      const response = await runRespond({
         visitorId,
         socket,
         signal,
@@ -880,6 +772,7 @@ export async function orchestrateTreeRequest({
           "Clearly describe the destructive action and ask for explicit confirmation.",
         stepSummaries,
       });
+      return { type: "confirm", response, chainIndex };
     }
 
     // ══════════════════════════════════════════════════════
@@ -935,7 +828,6 @@ export async function orchestrateTreeRequest({
       if (signal?.aborted) return null;
       emitModeResult(socket, executionMode, execResult);
 
-      // Track execute step
       modesUsed.push(executionMode);
       trackChainStep({
         userId,
@@ -957,7 +849,7 @@ export async function orchestrateTreeRequest({
         },
       });
 
-      // Notify frontend of tree changes — only if operations actually happened
+      // Notify frontend of tree changes
       if (intent.intent === "structure" && execResult?.operations?.length > 0) {
         socket.emit("treeChanged", {
           nodeId: targetNodeId,
@@ -967,7 +859,7 @@ export async function orchestrateTreeRequest({
     }
 
     // ══════════════════════════════════════════════════════
-    // F) SUMMARIZE & RESET — compact this step, drop conversation
+    // F) SUMMARIZE & RESET
     // ══════════════════════════════════════════════════════
 
     const stepSummary = buildStepSummary({
@@ -991,28 +883,315 @@ export async function orchestrateTreeRequest({
       );
     }
 
-    // Reset conversation — next step starts fresh with only accumulated summaries
+    // Reset conversation — next step starts fresh
     resetConversation(visitorId, { username, userId });
 
-    // Carry forward position for next step
+    // Carry forward position
     lastTargetNodeId = targetNodeId;
     lastTargetPath = targetPath;
   }
 
+  return {
+    type: "completed",
+    stepSummaries,
+    lastTargetNodeId,
+    lastTargetPath,
+    chainIndex,
+  };
+}
+
+export async function orchestrateTreeRequest({
+  visitorId,
+  message,
+  socket,
+  username,
+  userId,
+  signal,
+  sessionId,
+  rootId: rootIdParam,
+  skipRespond = false,
+}) {
+  if (signal?.aborted) return null;
+
+  const rootId = rootIdParam ?? getRootId(visitorId);
+  const meta = { username, userId, rootId };
+  const modesUsed = []; // Track full chain for AIChat
+  let chainIndex = 1; // 0 = user message (created in websocket.js)
+
   // ────────────────────────────────────────────────────────
-  // STEP 3: RESPOND (with accumulated step summaries)
+  // CHECK FOR PENDING CONFIRMATION
   // ────────────────────────────────────────────────────────
+
+  const pending = pendingOperations.get(visitorId);
+  if (pending) {
+    pendingOperations.delete(visitorId);
+
+    if (isConfirmation(message)) {
+      return await executePendingOperation({
+        visitorId,
+        pending,
+        socket,
+        signal,
+        ...meta,
+        skipRespond,
+      });
+    } else if (isDenial(message)) {
+      const remaining = pending.remainingPlan?.length || 0;
+      const cancelContext =
+        remaining > 0
+          ? `User cancelled the destructive operation. ${remaining} remaining plan step(s) were also abandoned.`
+          : "User cancelled the operation.";
+
+      if (skipRespond) {
+        return { success: true, answer: null, modeKey: "tree:orchestrator", stepSummaries: pending.stepSummaries || [] };
+      }
+      return await runRespond({
+        visitorId,
+        socket,
+        signal,
+        ...meta,
+        operationContext: cancelContext,
+        nodeContext: pending.nodeContext,
+        originalMessage: message,
+        stepSummaries: pending.stepSummaries || [],
+      });
+    }
+    // If neither confirm nor deny, treat as a new request (fall through)
+  }
+
+  // ────────────────────────────────────────────────────────
+  // STEP 1: CLASSIFY (lightweight intent detection)
+  // ────────────────────────────────────────────────────────
+
+  emitStatus(socket, "intent", "Understanding request…");
+
+  // Pre-fetch full tree shape so classifier and librarian can see what exists
+  let treeSummary = null;
+  if (rootId) {
+    try {
+      treeSummary = await buildDeepTreeSummary(rootId);
+    } catch (err) {
+      console.error("⚠️ Pre-fetch tree summary failed:", err.message);
+    }
+  }
+
+  let classification;
+  const classifyStart = new Date();
+  try {
+    classification = await classify({
+      message,
+      userId,
+      conversationMemory: formatMemoryContext(visitorId),
+      treeSummary,
+      signal,
+    });
+  } catch (err) {
+    if (signal?.aborted) return null;
+    console.error("❌ Classification failed:", err.message);
+    classification = {
+      intent: "query",
+      confidence: 0.5,
+      responseHint: "Respond naturally to the user's message.",
+      summary: message,
+    };
+  }
+  const classifyEnd = new Date();
+
+  if (signal?.aborted) return null;
+
+  const confidence = classification.confidence ?? 0.5;
+
+  console.log(
+    `🎯 Classified: ${classification.intent} | confidence: ${confidence} | "${classification.summary}"`,
+  );
+  emitModeResult(socket, "intent", {
+    intent: classification.intent,
+    responseHint: classification.responseHint,
+    summary: classification.summary,
+    confidence,
+  });
+
+  // Track classification step
+  modesUsed.push("classifier");
+  trackChainStep({
+    userId,
+    sessionId,
+    chainIndex: chainIndex++,
+    modeKey: "classifier",
+    input: message,
+    output: classification,
+    startTime: classifyStart,
+    endTime: classifyEnd,
+  });
+
+  // ────────────────────────────────────────────────────────
+  // NO_FIT CHECK — tree rejects this idea
+  // ────────────────────────────────────────────────────────
+
+  if (classification.intent === "no_fit") {
+    const reason = classification.summary || "Idea does not fit this tree.";
+    console.log(`🚫 No fit: ${reason}`);
+
+    emitStatus(socket, "done", "");
+
+    return {
+      success: false,
+      noFit: true,
+      confidence,
+      reason,
+      summary: classification.summary,
+      modeKey: "classifier",
+      rootId,
+      modesUsed,
+    };
+  }
+
+  // ────────────────────────────────────────────────────────
+  // ROUTE: LIBRARIAN (place/query) or DESTRUCTIVE (delete/move/merge)
+  // ────────────────────────────────────────────────────────
+
+  if (classification.intent === "place" || classification.intent === "query") {
+    return await runLibrarianFlow({
+      visitorId,
+      message,
+      socket,
+      signal,
+      username,
+      userId,
+      rootId,
+      sessionId,
+      treeSummary,
+      classification,
+      modesUsed,
+      chainIndex,
+      skipRespond,
+    });
+  }
+
+  // ────────────────────────────────────────────────────────
+  // DESTRUCTIVE PATH — full translate → plan → execute flow
+  // ────────────────────────────────────────────────────────
+
+  emitStatus(socket, "intent", "Planning operation…");
+
+  let translation;
+  const translatorStart = new Date();
+  try {
+    translation = await translateDestructive({
+      message,
+      userId,
+      conversationMemory: formatMemoryContext(visitorId),
+      treeSummary,
+      signal,
+    });
+  } catch (err) {
+    if (signal?.aborted) return null;
+    console.error("❌ Destructive translation failed:", err.message);
+    translation = {
+      plan: [
+        {
+          intent: "query",
+          targetHint: null,
+          directive: message,
+          needsNavigation: false,
+          isDestructive: false,
+        },
+      ],
+      responseHint: "Respond naturally to the user's message.",
+      summary: message,
+    };
+  }
+  const translatorEnd = new Date();
+
+  if (signal?.aborted) return null;
+
+  const responseHint = translation.responseHint || "";
+  const plan = translation.plan;
+
+  console.log(
+    `🎯 Destructive plan: ${plan.length} step(s) | "${translation.summary}"`,
+  );
+  emitModeResult(socket, "intent", {
+    plan,
+    responseHint,
+    summary: translation.summary,
+    confidence,
+  });
+
+  modesUsed.push("translator");
+  trackChainStep({
+    userId,
+    sessionId,
+    chainIndex: chainIndex++,
+    modeKey: "translator",
+    input: message,
+    output: translation,
+    startTime: translatorStart,
+    endTime: translatorEnd,
+  });
+
+  // ────────────────────────────────────────────────────────
+  // STEP 2+3: EXECUTE PLAN → RESPOND
+  // ────────────────────────────────────────────────────────
+
+  const planResult = await executePlanSteps({
+    plan,
+    visitorId,
+    message,
+    socket,
+    signal,
+    username,
+    userId,
+    rootId,
+    sessionId,
+    modesUsed,
+    chainIndex,
+    initialTargetNodeId: rootId,
+    initialTargetPath: null,
+    stepSummaries: [],
+    responseHint,
+    includeMemoryOnFirstStep: true,
+  });
+
+  if (!planResult) return null;
+
+  // Early exits: confirm or respond (ambiguity/not found)
+  if (planResult.type === "confirm" || planResult.type === "respond") {
+    const r = planResult.response;
+    if (r) {
+      r.modesUsed = modesUsed;
+      r.confidence = confidence;
+    }
+    return r;
+  }
+
+  // Navigate-only shortcut
+  if (planResult.navigateOnly) return planResult.navigateOnly;
+
+  // Normal completion — respond with accumulated results
+  const { stepSummaries, lastTargetNodeId, lastTargetPath } = planResult;
+  chainIndex = planResult.chainIndex;
 
   const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
 
+  if (skipRespond) {
+    return {
+      success: !anyFailed,
+      answer: null,
+      modeKey: "tree:orchestrator",
+      modesUsed,
+      confidence,
+      stepSummaries,
+      lastTargetNodeId,
+      lastTargetPath,
+    };
+  }
+
   const operationContext =
     stepSummaries.length > 0 ? formatStepSummaries(stepSummaries) : null;
-
-  // Also pass the raw summaries for structured access
   const structuredResults =
     stepSummaries.length > 0 ? JSON.stringify(stepSummaries, null, 2) : null;
 
-  // Adjust responseHint if any steps failed
   const finalResponseHint = anyFailed
     ? `${responseHint ? responseHint + " " : ""}IMPORTANT: Some operations failed. Report what succeeded and what failed honestly. Do NOT claim success for failed operations.`
     : responseHint;
@@ -1025,7 +1204,7 @@ export async function orchestrateTreeRequest({
     socket,
     signal,
     ...meta,
-    nodeContext: null, // responder gets what it needs from summaries
+    nodeContext: null,
     operationContext: structuredResults || operationContext,
     originalMessage: message,
     responseHint: finalResponseHint,
@@ -1062,7 +1241,283 @@ export async function orchestrateTreeRequest({
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// LIBRARIAN FLOW (place or query — the main path)
+// Librarian navigates tree with navigate-tree tool, returns a plan,
+// then executePlanSteps runs the plan through existing modes.
+// ─────────────────────────────────────────────────────────────────────────
+
+async function runLibrarianFlow({
+  visitorId,
+  message,
+  socket,
+  signal,
+  username,
+  userId,
+  rootId,
+  sessionId,
+  treeSummary,
+  classification,
+  modesUsed,
+  chainIndex,
+  skipRespond = false,
+}) {
+  const meta = { username, userId, rootId };
+  const isQuery = classification.intent === "query";
+
+  // ── LIBRARIAN: navigate + decide ──
+  emitStatus(
+    socket,
+    "navigate",
+    isQuery ? "Reading tree…" : "Walking the tree…",
+  );
+
+  switchMode(visitorId, "tree:librarian", {
+    ...meta,
+    treeSummary: treeSummary || "",
+    intent: classification.intent,
+    clearHistory: true,
+  });
+
+  const libStart = new Date();
+  const libPlan = await processMessage(visitorId, message, {
+    ...meta,
+    signal,
+    meta: { internal: true },
+  });
+  const libEnd = new Date();
+
+  if (signal?.aborted) return null;
+  emitModeResult(socket, "tree:librarian", libPlan);
+
+  // libPlan = { plan: [...], responseHint, summary, confidence }
+  // Same format as translator output → feeds directly into plan execution
+
+  // Handle librarian failure — fall back to simple response
+  if (!libPlan || libPlan.action === "error" || (!libPlan.plan && !libPlan.responseHint)) {
+    console.error("❌ Librarian failed:", libPlan?.reason || libPlan?.raw || "no response");
+
+    modesUsed.push("tree:librarian");
+    trackChainStep({
+      userId,
+      sessionId,
+      chainIndex: chainIndex++,
+      modeKey: "tree:librarian",
+      input: message,
+      output: libPlan,
+      startTime: libStart,
+      endTime: libEnd,
+      treeContext: {
+        targetNodeId: rootId,
+        directive: classification.summary,
+        stepResult: "failed",
+      },
+    });
+
+    // Fall back to responding with what we have
+    if (skipRespond) {
+      return { success: false, answer: null, modeKey: "tree:orchestrator", modesUsed, stepSummaries: [] };
+    }
+    modesUsed.push("tree:respond");
+    const response = await runRespond({
+      visitorId,
+      socket,
+      signal,
+      ...meta,
+      nodeContext: null,
+      operationContext: null,
+      originalMessage: message,
+      responseHint: classification.responseHint || "Respond naturally to the user's message.",
+      stepSummaries: [],
+    });
+
+    if (response) {
+      response.modesUsed = modesUsed;
+      response.confidence = classification.confidence;
+    }
+    return response;
+  }
+
+  modesUsed.push("tree:librarian");
+  trackChainStep({
+    userId,
+    sessionId,
+    chainIndex: chainIndex++,
+    modeKey: "tree:librarian",
+    input: message,
+    output: libPlan,
+    startTime: libStart,
+    endTime: libEnd,
+    treeContext: {
+      targetNodeId: rootId,
+      directive: classification.summary,
+      stepResult: libPlan?.plan ? "success" : "failed",
+    },
+  });
+
+  const plan = libPlan?.plan || [];
+  const responseHint = libPlan?.responseHint || classification.responseHint || "";
+
+  console.log(
+    `📚 Librarian: ${plan.length} step(s) | "${libPlan?.summary || "no summary"}"`,
+  );
+
+  // ── QUERY: empty plan → skip execution, go to respond ──
+  if (plan.length === 0) {
+    if (skipRespond) {
+      return {
+        success: true, answer: null, modeKey: "tree:orchestrator",
+        modesUsed, confidence: libPlan?.confidence || classification.confidence,
+        stepSummaries: [],
+      };
+    }
+    modesUsed.push("tree:respond");
+    const respondStart = new Date();
+
+    const response = await runRespond({
+      visitorId,
+      socket,
+      signal,
+      ...meta,
+      nodeContext: null,
+      operationContext: null,
+      originalMessage: message,
+      responseHint,
+      librarianContext: libPlan,
+      stepSummaries: [],
+    });
+
+    const respondEnd = new Date();
+    trackChainStep({
+      userId,
+      sessionId,
+      chainIndex: chainIndex++,
+      modeKey: "tree:respond",
+      input: responseHint || "Respond to the user",
+      output: response?.answer || null,
+      startTime: respondStart,
+      endTime: respondEnd,
+      treeContext: {
+        targetNodeId: rootId,
+        directive: responseHint || "Respond to the user",
+        stepResult: "success",
+      },
+    });
+
+    if (response) {
+      response.modesUsed = modesUsed;
+      response.confidence = libPlan?.confidence || classification.confidence;
+    }
+    return response;
+  }
+
+  // ── EXECUTE PLAN (reuse shared step loop) ──
+  const planResult = await executePlanSteps({
+    plan,
+    visitorId,
+    message,
+    socket,
+    signal,
+    username,
+    userId,
+    rootId,
+    sessionId,
+    modesUsed,
+    chainIndex,
+    initialTargetNodeId: rootId,
+    initialTargetPath: null,
+    stepSummaries: [],
+    responseHint,
+    includeMemoryOnFirstStep: false, // librarian already had context
+  });
+
+  if (!planResult) return null;
+
+  // Early exits (shouldn't happen for librarian since isDestructive=false, but handle gracefully)
+  if (planResult.type === "confirm" || planResult.type === "respond") {
+    const r = planResult.response;
+    if (r) {
+      r.modesUsed = modesUsed;
+      r.confidence = libPlan?.confidence || classification.confidence;
+    }
+    return r;
+  }
+
+  if (planResult.navigateOnly) return planResult.navigateOnly;
+
+  // ── RESPOND ──
+  const { stepSummaries, lastTargetNodeId, lastTargetPath } = planResult;
+  chainIndex = planResult.chainIndex;
+
+  const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
+
+  if (skipRespond) {
+    return {
+      success: !anyFailed,
+      answer: null,
+      modeKey: "tree:orchestrator",
+      modesUsed,
+      confidence: libPlan?.confidence || classification.confidence,
+      stepSummaries,
+      lastTargetNodeId,
+      lastTargetPath,
+    };
+  }
+
+  const operationContext =
+    stepSummaries.length > 0 ? formatStepSummaries(stepSummaries) : null;
+  const structuredResults =
+    stepSummaries.length > 0 ? JSON.stringify(stepSummaries, null, 2) : null;
+
+  const finalResponseHint = anyFailed
+    ? `${responseHint ? responseHint + " " : ""}IMPORTANT: Some operations failed. Report what succeeded and what failed honestly.`
+    : responseHint;
+
+  modesUsed.push("tree:respond");
+  const respondStart = new Date();
+
+  const response = await runRespond({
+    visitorId,
+    socket,
+    signal,
+    ...meta,
+    nodeContext: null,
+    operationContext: structuredResults || operationContext,
+    originalMessage: message,
+    responseHint: finalResponseHint,
+    librarianContext: libPlan,
+    stepSummaries,
+  });
+
+  const respondEnd = new Date();
+  trackChainStep({
+    userId,
+    sessionId,
+    chainIndex: chainIndex++,
+    modeKey: "tree:respond",
+    input: responseHint || "Respond to the user",
+    output: response?.answer || null,
+    startTime: respondStart,
+    endTime: respondEnd,
+    treeContext: {
+      targetNodeId: lastTargetNodeId,
+      targetPath: lastTargetPath,
+      directive: responseHint || "Respond to the user",
+      stepResult: anyFailed ? "failed" : "success",
+    },
+  });
+
+  if (response) {
+    response.modesUsed = modesUsed;
+    response.confidence = libPlan?.confidence || classification.confidence;
+    response.stepSummaries = stepSummaries;
+  }
+  return response;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // EXECUTE PENDING (after confirmation)
+// Executes the confirmed destructive step, then resumes remaining plan
+// steps using the shared executePlanSteps loop.
 // ─────────────────────────────────────────────────────────────────────────
 
 async function executePendingOperation({
@@ -1073,6 +1528,7 @@ async function executePendingOperation({
   username,
   userId,
   rootId,
+  skipRespond = false,
 }) {
   const meta = { username, userId, rootId };
   const modesUsed = pending.modesUsed || [];
@@ -1117,7 +1573,6 @@ async function executePendingOperation({
     clearHistory: true,
   });
 
-  // Use the specific directive, not the original message
   const executionMessage = buildExecutionMessage(
     pending.directive || pending.originalMessage,
     pending.targetNodeId,
@@ -1176,321 +1631,54 @@ async function executePendingOperation({
     }),
   );
 
-  // Reset conversation before continuing
   resetConversation(visitorId, { username, userId });
 
-  // ── RESUME REMAINING PLAN STEPS ──
+  // ── RESUME REMAINING PLAN STEPS (using shared loop) ──
   const remainingPlan = pending.remainingPlan || [];
-  const message = pending.originalMessage;
-  let lastTargetNodeId = pending.targetNodeId;
-  let lastTargetPath = pending.targetPath;
+  const pendingMessage = pending.originalMessage;
+  const responseHint = pending.responseHint || "";
 
-  for (let i = 0; i < remainingPlan.length; i++) {
-    if (signal?.aborted) return null;
+  if (remainingPlan.length > 0) {
+    const planResult = await executePlanSteps({
+      plan: remainingPlan,
+      visitorId,
+      message: pendingMessage,
+      socket,
+      signal,
+      username,
+      userId,
+      rootId,
+      sessionId,
+      modesUsed,
+      chainIndex,
+      initialTargetNodeId: pending.targetNodeId,
+      initialTargetPath: pending.targetPath,
+      stepSummaries,
+      responseHint,
+      includeMemoryOnFirstStep: false,
+    });
 
-    const op = remainingPlan[i];
-    const stepNum = stepSummaries.length + 1;
-    const isOnlyStep = false; // we're mid-plan
+    if (!planResult) return null;
 
-    const intent = {
-      intent: op.intent,
-      needsNavigation: op.needsNavigation,
-      needsContext: !["navigate"].includes(op.intent),
-      isDestructive: op.isDestructive,
-      targetHint: op.targetHint,
-      directive: op.directive,
-      summary: op.directive,
-    };
-
-    console.log(
-      `  📋 Resuming step ${stepNum}: ${intent.intent} → ${intent.targetHint || "(current)"}`,
-    );
-
-    // ── NAVIGATE ──
-    let targetNodeId = lastTargetNodeId;
-    let targetPath = lastTargetPath;
-
-    if (intent.targetHint) {
-      emitStatus(socket, "navigate", `Step ${stepNum}: Finding node…`);
-
-      switchMode(visitorId, "tree:navigate", {
-        ...meta,
-        currentNodeId: getCurrentNodeId(visitorId) || rootId,
-        clearHistory: true,
-      });
-
-      const priorStepsCtx = formatStepSummaries(stepSummaries);
-      const navStart = new Date();
-      const navResult = await processMessage(
-        visitorId,
-        `${priorStepsCtx}\n\nCurrent request: ${intent.directive || message}`,
-        {
-          ...meta,
-          signal,
-          meta: { internal: true },
-        },
-      );
-      const navEnd = new Date();
-
-      if (signal?.aborted) return null;
-      emitModeResult(socket, "tree:navigate", navResult);
-      modesUsed.push("tree:navigate");
-      trackChainStep({
-        userId,
-        sessionId,
-        chainIndex: chainIndex++,
-        modeKey: "tree:navigate",
-        input: intent.directive,
-        output: navResult,
-        startTime: navStart,
-        endTime: navEnd,
-        treeContext: {
-          targetNodeId: navResult?.action === "found" ? navResult.targetNodeId : lastTargetNodeId,
-          targetPath: navResult?.action === "found" ? navResult.targetPath : lastTargetPath,
-          planStepIndex: stepNum,
-          planTotalSteps: null,
-          directive: intent.directive,
-          stepResult: navResult?.action === "found" ? "success" : navResult?.action === "ambiguous" ? "pending" : "failed",
-          resultDetail: navResult?.reason || navResult?.summary || null,
-        },
-      });
-
-      if (navResult?.action === "found") {
-        targetNodeId = navResult.targetNodeId;
-        targetPath = navResult.targetPath;
-        socket.emit("navigate", {
-          url: `/api/v1/node/${targetNodeId}?html`,
-          replace: false,
-        });
-      } else {
-        stepSummaries.push(
-          buildStepSummary({
-            stepNum,
-            intent: intent.intent,
-            targetNodeId,
-            targetPath,
-            skipped: true,
-            skipReason:
-              navResult?.action === "ambiguous"
-                ? "Ambiguous target"
-                : "Node not found",
-          }),
-        );
-        resetConversation(visitorId, { username, userId });
-        continue;
+    // Early exits (nested destructive confirmation)
+    if (planResult.type === "confirm" || planResult.type === "respond") {
+      const r = planResult.response;
+      if (r) {
+        r.modesUsed = modesUsed;
+        r.stepSummaries = stepSummaries;
       }
-    } else {
-      targetNodeId = lastTargetNodeId || getCurrentNodeId(visitorId) || rootId;
-      targetPath = lastTargetPath || null;
+      return r;
     }
 
-    // ── GET CONTEXT ──
-    let nodeContext = null;
-    if (intent.needsContext && targetNodeId) {
-      emitStatus(socket, "context", `Step ${stepNum}: Reading node…`);
-
-      const contextProfiles = {
-        structure: {
-          includeChildren: true,
-          includeParentChain: true,
-          includeValues: false,
-          includeNotes: false,
-        },
-        edit: {
-          includeChildren: true,
-          includeParentChain: true,
-          includeValues: true,
-          includeNotes: false,
-        },
-        notes: {
-          includeChildren: false,
-          includeParentChain: false,
-          includeValues: false,
-          includeNotes: true,
-        },
-        query: {
-          includeChildren: true,
-          includeParentChain: true,
-          includeValues: true,
-          includeNotes: true,
-        },
-      };
-      const profile = contextProfiles[intent.intent] || contextProfiles.query;
-      const ctxResult = await getContextForAi(targetNodeId, profile);
-      nodeContext = JSON.stringify(ctxResult, null, 2);
-
-      // Deep context for destructive restructure
-      const isRestructure =
-        intent.isDestructive ||
-        /\b(delet|merg|dedup|remov|consolidat|redundan|clean\s*up|reorgani[sz])\b/i.test(
-          intent.directive,
-        );
-      if (
-        intent.intent === "structure" &&
-        isRestructure &&
-        ctxResult.children?.length > 0
-      ) {
-        const childContexts = [];
-        for (const child of ctxResult.children) {
-          try {
-            const childCtx = await getContextForAi(child.id, {
-              includeChildren: true,
-              includeParentChain: false,
-              includeValues: false,
-              includeNotes: false,
-            });
-            childContexts.push(childCtx);
-          } catch {}
-        }
-        if (childContexts.length > 0) {
-          nodeContext = JSON.stringify(
-            { currentNode: ctxResult, childrenDetail: childContexts },
-            null,
-            2,
-          );
-        }
-      }
-
-      if (
-        intent.intent === "structure" &&
-        /\b(move|reparent|relocate|transfer)\b/i.test(intent.directive)
-      ) {
-        const counterparts = await fetchMoveCounterparts(
-          intent.directive,
-          targetNodeId,
-          rootId,
-        );
-        if (counterparts.length > 0) {
-          const combined = {
-            navigatedNode: ctxResult,
-            referencedNodes: counterparts,
-          };
-          nodeContext = JSON.stringify(combined, null, 2);
-        }
-      }
-
-      emitModeResult(socket, "tree:getContext", ctxResult);
-    }
-
-    // ── DESTRUCTIVE CHECK (nested confirmation — rare but possible) ──
-    if (intent.isDestructive) {
-      pendingOperations.set(visitorId, {
-        action: op.intent,
-        directive: op.directive,
-        targetNodeId,
-        targetPath,
-        nodeContext,
-        originalMessage: message,
-        remainingPlan: remainingPlan.slice(i + 1),
-        stepSummaries: [...stepSummaries],
-        stepNum,
-        responseHint: pending.responseHint,
-        sessionId,
-        modesUsed: [...modesUsed],
-        chainIndex,
-      });
-
-      return await runRespond({
-        visitorId,
-        socket,
-        signal,
-        ...meta,
-        nodeContext,
-        operationContext: `${formatStepSummaries(stepSummaries)}\n\nPending destructive operation: ${intent.directive}`,
-        confirmNeeded: true,
-        originalMessage: message,
-        responseHint:
-          "Clearly describe the destructive action and ask for explicit confirmation.",
-        stepSummaries,
-      });
-    }
-
-    // ── EXECUTE ──
-    const execMode = mutationModes[intent.intent];
-    let stepExecResult = null;
-
-    if (execMode) {
-      emitStatus(socket, "execute", `Step ${stepNum}: Making changes…`);
-
-      let stepPrestige = 0;
-      if (nodeContext) {
-        try {
-          stepPrestige = JSON.parse(nodeContext).prestige ?? 0;
-        } catch {}
-      }
-
-      switchMode(visitorId, execMode, {
-        ...meta,
-        targetNodeId,
-        prestige: stepPrestige,
-        clearHistory: true,
-      });
-
-      const execMsg = buildExecutionMessage(
-        intent.directive || message,
-        targetNodeId,
-        nodeContext,
-        stepSummaries,
-      );
-      const sStart = new Date();
-      stepExecResult = await processMessage(visitorId, execMsg, {
-        ...meta,
-        signal,
-        meta: { internal: true },
-      });
-      const sEnd = new Date();
-
-      if (signal?.aborted) return null;
-      emitModeResult(socket, execMode, stepExecResult);
-      modesUsed.push(execMode);
-      trackChainStep({
-        userId,
-        sessionId,
-        chainIndex: chainIndex++,
-        modeKey: execMode,
-        input: intent.directive,
-        output: stepExecResult,
-        startTime: sStart,
-        endTime: sEnd,
-        treeContext: {
-          targetNodeId,
-          targetPath,
-          planStepIndex: stepNum,
-          planTotalSteps: null,
-          directive: intent.directive,
-          stepResult: execResultToStepResult(stepExecResult),
-          resultDetail: stepExecResult?.summary || stepExecResult?.reason || null,
-        },
-      });
-
-      if (
-        intent.intent === "structure" &&
-        stepExecResult?.operations?.length > 0
-      ) {
-        socket.emit("treeChanged", {
-          nodeId: targetNodeId,
-          changeType: stepExecResult?.action || "modified",
-        });
-      }
-    }
-
-    stepSummaries.push(
-      buildStepSummary({
-        stepNum,
-        intent: intent.intent,
-        targetPath,
-        targetNodeId,
-        execResult: stepExecResult,
-        nodeContext,
-      }),
-    );
-    resetConversation(visitorId, { username, userId });
-    lastTargetNodeId = targetNodeId;
-    lastTargetPath = targetPath;
+    chainIndex = planResult.chainIndex;
   }
 
   // ── RESPOND ──
-  const responseHint = pending.responseHint || "";
+  if (skipRespond) {
+    const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
+    return { success: !anyFailed, answer: null, modeKey: "tree:orchestrator", modesUsed, stepSummaries };
+  }
+
   modesUsed.push("tree:respond");
 
   const response = await runRespond({
@@ -1500,7 +1688,7 @@ async function executePendingOperation({
     ...meta,
     nodeContext: null,
     operationContext: JSON.stringify(stepSummaries, null, 2),
-    originalMessage: message,
+    originalMessage: pendingMessage,
     responseHint,
     stepSummaries,
   });
@@ -1529,6 +1717,7 @@ async function runRespond({
   originalMessage = null,
   responseHint = "",
   stepSummaries = [],
+  librarianContext = null,
 }) {
   emitStatus(socket, "respond", "");
 
@@ -1548,6 +1737,7 @@ async function runRespond({
     stepSummaries: summaryCtx || null,
     responseHint: responseHint || null,
     confirmNeeded,
+    librarianContext: librarianContext || null,
     clearHistory: true,
   });
 
@@ -1555,6 +1745,10 @@ async function runRespond({
   let trigger;
   if (confirmNeeded) {
     trigger = "Present the pending operation and ask for confirmation.";
+  } else if (librarianContext) {
+    trigger = responseHint
+      ? `Respond naturally based on what you know. Guidance: ${responseHint}`
+      : "Respond naturally based on the context provided.";
   } else if (operationContext) {
     trigger = responseHint
       ? `Summarize what was done. Tone guidance: ${responseHint}`

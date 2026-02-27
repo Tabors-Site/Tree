@@ -31,6 +31,14 @@ const ApiAccessSection = () => {
 
 
           <div className="toc-group">
+            <div className="toc-group-label">AI</div>
+            <a href="#tree-chat">🧠 Tree Chat</a>
+            <a href="#tree-place">📌 Tree Place</a>
+            <a href="#auto-place">📥 Auto-Place</a>
+            <a href="#auto-chat">🤖 Auto-Chat</a>
+          </div>
+
+          <div className="toc-group">
             <div className="toc-group-label">Getting Started</div>
             <a href="#overview">🔑 Overview &amp; Authentication</a>
             <a href="#url-modes">🌐 URL Modes — ?html &amp; ?token</a>
@@ -86,7 +94,7 @@ const ApiAccessSection = () => {
             <br />• Works with all endpoints (read and write)
           </div>
 
-        
+
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -125,6 +133,163 @@ const ApiAccessSection = () => {
               <strong>For API integrations</strong>, use the <code>x-api-key</code>{" "}
               header and omit both <code>?html</code> and <code>?token</code>.
               The token/html pattern is designed for shareable browser links.
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  TREE CHAT                                                    */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="tree-chat">
+          <div className="section-title">
+            <span className="section-icon">🧠</span> Tree Chat
+          </div>
+          <div className="section-text">
+            The highest-level endpoint for interacting with a tree. Send a
+            message to any tree and get a natural language response back. It
+            distills every other function (navigation, placement, notes,
+            structure, queries) into a single call — send context in, build
+            and read the tree, get a response out.
+            <br /><br />
+            The AI walks the tree, finds where your idea belongs (or gathers
+            context for a question), executes the operations, and returns a
+            conversational answer. It works with whatever root you give it.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/chat</span>
+            </div>
+            <div className="ep-desc">
+              Send a message to a tree. The AI reads the tree, places ideas or
+              answers questions, and returns a response.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{'{ "message": "flights seem cheaper in late March" }'}</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "success": true, "answer": "Noted — added that to your flight planning." }'}</div>
+            <div className="ep-note">
+              Works for both placing information and asking questions.
+              The response is always natural language — no tree internals are exposed.
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  TREE PLACE                                                   */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="tree-place">
+          <div className="section-title">
+            <span className="section-icon">📌</span> Tree Place
+          </div>
+          <div className="section-text">
+            Place content onto a tree without generating a conversational
+            response. The AI navigates the tree, finds where the idea belongs,
+            and executes the operations — but skips the final response step,
+            making it faster and cheaper than Tree Chat.
+            <br /><br />
+            Returns structured results (what was placed and where) instead of
+            natural language. Use Tree Chat above if you need a conversational reply.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/place</span>
+            </div>
+            <div className="ep-desc">
+              Place content onto a specific tree. The AI navigates, creates
+              structure, and edits nodes — but does not generate a response.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{'{ "message": "flights seem cheaper in late March" }'}</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "success": true, "stepSummaries": [...], "targetNodeId": "abc123", "targetPath": "Trip / Flights" }'}</div>
+            <div className="ep-note">
+              Same orchestration as Tree Chat, minus the final response generation.
+              Useful for bulk ingestion or automated pipelines where you don&#39;t need
+              a conversational reply.
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  AUTO-PLACE                                                   */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="auto-place">
+          <div className="section-title">
+            <span className="section-icon">📥</span> Auto-Place
+          </div>
+          <div className="section-text">
+            Takes a raw idea created from a user&#39;s profile and places it onto
+            a tree. The AI picks the best tree, finds the right place in it,
+            and stores the idea — all automatically. No root ID needed.
+            <br /><br />
+            This is fire-and-forget: it returns immediately while placement
+            runs in the background. Does not generate a response — just places
+            the idea. Use Tree Chat above if you need a conversational reply.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/place</span>
+            </div>
+            <div className="ep-desc">
+              Trigger AI auto-placement for a raw idea. The AI evaluates all your
+              trees, picks the best fit, navigates to the right location, and
+              places the idea as a note or new structure.
+            </div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "message": "Orchestration started" }  // 202 Accepted'}</div>
+            <div className="ep-note">
+              Create a raw idea first via <code>POST /api/v1/user/:userId/raw-ideas</code>,
+              then trigger orchestration. Poll the idea&#39;s status to track progress.
+              Only works for <code>pending</code> text ideas.
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  AUTO-CHAT                                                     */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="auto-chat">
+          <div className="section-title">
+            <span className="section-icon">🤖</span> Auto-Chat
+          </div>
+          <div className="section-text">
+            Same as Auto-Place, but synchronous — waits for the AI to finish
+            and returns a conversational response along with which tree the idea
+            was placed on. Useful when you want both placement <em>and</em> an
+            answer in a single call.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/chat</span>
+            </div>
+            <div className="ep-desc">
+              Auto-place a raw idea and return the AI&#39;s response. The AI picks
+              the best tree, places the idea, generates a response, and returns
+              everything in one call.
+            </div>
+            <div className="ep-label">Success Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "answer": "Your idea about X was placed under ...",
+  "rootId": "abc123",
+  "rootName": "My Tree",
+  "targetNodeId": "def456"
+}`}</div>
+            <div className="ep-label">Failure Response</div>
+            <div className="ep-code">{`{ "success": false, "error": "No trees available for this user" }`}</div>
+            <div className="ep-note">
+              Create a raw idea first via <code>POST /api/v1/user/:userId/raw-ideas</code>,
+              then call this endpoint. Only works for <code>pending</code> text ideas.
+              This is a long-running request (up to 19 minutes) — the AI is doing
+              real work behind the scenes.
             </div>
           </div>
         </div>
@@ -331,17 +496,6 @@ const ApiAccessSection = () => {
               <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId</span>
             </div>
             <div className="ep-desc">View a single raw idea including its status and AI session link.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/orchestrate</span>
-            </div>
-            <div className="ep-desc">Trigger AI auto-placement for a raw idea. Picks the best-fit tree and places the idea as a note or as structure automatically. Returns immediately (202) while the process runs in the background.</div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{'{ "message": "Orchestration started" }  // 202 Accepted'}</div>
-            <div className="ep-note">Only works for <code>pending</code> text ideas. Returns 409 if already processing or completed. Poll the idea's status to track progress.</div>
           </div>
 
           <div className="endpoint">

@@ -7,6 +7,7 @@ import transactions from "./transactions.js";
 import values from "./values.js";
 import appe from "./app.js";
 import understanding from "./understanding.js";
+import tree from "./tree.js";
 
 import rateLimit from "express-rate-limit";
 
@@ -38,4 +39,5 @@ export default function registerURLRoutes(app) {
   app.use("/", transactions);
   app.use("/", values);
   app.use("/", node);
+  app.use("/", tree);
 }

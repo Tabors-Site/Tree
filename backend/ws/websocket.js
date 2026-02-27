@@ -409,6 +409,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       let aiChat = null;
       try {
+        const activeRootId = getRootId(visitorId);
         aiChat = await startAIChat({
           userId: socket.userId,
           sessionId,
@@ -420,6 +421,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             model: clientInfo.model,
             baseUrl: clientInfo.isCustom ? clientInfo.client.baseURL : null,
           },
+          ...(activeRootId
+            ? { treeContext: { targetNodeId: activeRootId } }
+            : {}),
         });
         setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
       } catch (err) {
