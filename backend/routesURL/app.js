@@ -1228,6 +1228,7 @@ router.get("/app", authenticateLite, async (req, res) => {
             <button class="clear-chat-btn" id="desktopOpenTabBtn" title="Open in new tab">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             </button>
+            <button class="clear-chat-btn" id="desktopCustomAiBtn" title="Custom AI">🤖</button>
           </div>
           <div class="chat-header-right">
             <div class="status-badge">
@@ -1338,6 +1339,7 @@ router.get("/app", authenticateLite, async (req, res) => {
           <button class="clear-chat-btn" id="mobileClearChatBtn" title="Clear conversation">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
           </button>
+          <button class="clear-chat-btn" id="mobileCustomAiBtn" title="Custom AI">🤖</button>
           <button class="mobile-close-btn" id="mobileCloseBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
@@ -2529,6 +2531,32 @@ function goHome() {
     }
 
     $("desktopOpenTabBtn").addEventListener("click", openInNewTab);
+
+    // Custom AI button — navigate iframe to /user/:id/energy and scroll to bottom
+    function goCustomAi() {
+      const url = buildIframeUrl('/api/v1/user/' + CONFIG.userId + '/energy?html');
+      loadingOverlay.classList.add("visible");
+      currentIframeUrl = url;
+      iframe.src = url;
+      // Scroll iframe to bottom once loaded
+      const onLoad = () => {
+        iframe.removeEventListener('load', onLoad);
+        try { iframe.contentWindow.scrollTo(0, iframe.contentDocument.body.scrollHeight); } catch(e) {}
+      };
+      iframe.addEventListener('load', onLoad);
+    }
+
+    $("desktopCustomAiBtn").addEventListener("click", goCustomAi);
+    $("mobileCustomAiBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (mobileSheetState === 'open') {
+        // In full chat mode on mobile — slide it down to peeked
+        setTimeout(() => setMobileSheetState('peeked', true), 10);
+      }
+      // If already peeked/closed, keep it down (don't open)
+      goCustomAi();
+    });
 
     // Iframe
    iframe.addEventListener("load", () => {

@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import User from "../db/models/user.js";
+import CustomLlmConnection from "../db/models/customLlmConnection.js";
 import {
   getMode,
   getDefaultMode,
@@ -63,60 +64,66 @@ const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
  * Uses their custom LLM if configured, otherwise falls back to default.
  */
 
-export async function getClientForUser(userId) {
+export async function getClientForUser(userId, slot) {
   if (!userId) return { client: defaultClient, model: DEFAULT_MODEL, isCustom: false };
 
-  var cached = userClientCache.get(userId);
+  slot = slot || "main";
+  var cacheKey = userId + ":" + slot;
+
+  var cached = userClientCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < CLIENT_CACHE_TTL) {
     return cached;
   }
 
   try {
-    var user = await User.findById(userId)
-      .select("customLlmConnection")
-      .lean();
+    var user = await User.findById(userId).select("llmAssignments").lean();
+    var assignments = user && user.llmAssignments;
+    // Try the requested slot first, fall back to main
+    var connectionId = (assignments && assignments[slot]) || (slot !== "main" && assignments && assignments.main) || null;
 
-    var conn = user && user.customLlmConnection;
+    if (connectionId) {
+      var conn = await CustomLlmConnection.findById(connectionId).lean();
 
-    if (conn && conn.baseUrl && conn.encryptedApiKey && !conn.revoked) {
-      // Re-validate DNS at request time to prevent DNS rebinding
-      try {
-        var hostname = new URL(conn.baseUrl).hostname;
-        await resolveAndValidateHost(hostname);
-      } catch (err) {
-        console.error("Blocked custom LLM for " + userId + ": " + err.message);
-        var fallback = {
-          client: defaultClient,
-          model: DEFAULT_MODEL,
-          isCustom: false,
+      if (conn && conn.baseUrl && conn.encryptedApiKey) {
+        // Re-validate DNS at request time to prevent DNS rebinding
+        try {
+          var hostname = new URL(conn.baseUrl).hostname;
+          await resolveAndValidateHost(hostname);
+        } catch (err) {
+          console.error("Blocked custom LLM for " + userId + ": " + err.message);
+          var fallback = {
+            client: defaultClient,
+            model: DEFAULT_MODEL,
+            isCustom: false,
+            fetchedAt: Date.now(),
+          };
+          userClientCache.set(cacheKey, fallback);
+          return fallback;
+        }
+
+        var apiKey = decrypt(conn.encryptedApiKey);
+
+        var baseURL = conn.baseUrl.replace(/\/+$/, "");
+        if (baseURL.endsWith("/chat/completions")) {
+          baseURL = baseURL.replace(/\/chat\/completions$/, "");
+        }
+
+        var entry = {
+          client: new OpenAI({ baseURL: baseURL, apiKey: apiKey }),
+          model: conn.model || DEFAULT_MODEL,
+          isCustom: true,
           fetchedAt: Date.now(),
         };
-        userClientCache.set(userId, fallback);
-        return fallback;
+
+        userClientCache.set(cacheKey, entry);
+
+        CustomLlmConnection.updateOne(
+          { _id: conn._id },
+          { $set: { lastUsedAt: new Date() } }
+        ).catch(function () {});
+
+        return entry;
       }
-
-      var apiKey = decrypt(conn.encryptedApiKey);
-
-      var baseURL = conn.baseUrl.replace(/\/+$/, "");
-      if (baseURL.endsWith("/chat/completions")) {
-        baseURL = baseURL.replace(/\/chat\/completions$/, "");
-      }
-
-      var entry = {
-        client: new OpenAI({ baseURL: baseURL, apiKey: apiKey }),
-        model: conn.model || DEFAULT_MODEL,
-        isCustom: true,
-        fetchedAt: Date.now(),
-      };
-
-      userClientCache.set(userId, entry);
-
-      User.updateOne(
-        { _id: userId },
-        { $set: { "customLlmConnection.lastUsedAt": new Date() } }
-      ).catch(function () {});
-
-      return entry;
     }
   } catch (err) {
     console.error("Failed to load custom LLM for user " + userId + ": " + err.message);
@@ -128,7 +135,7 @@ export async function getClientForUser(userId) {
     isCustom: false,
     fetchedAt: Date.now(),
   };
-  userClientCache.set(userId, defaultEntry);
+  userClientCache.set(cacheKey, defaultEntry);
   return defaultEntry;
 }
 
@@ -136,7 +143,12 @@ export async function getClientForUser(userId) {
  * Clear cached client for a user (call when they update/revoke their LLM config).
  */
 export function clearUserClientCache(userId) {
-  userClientCache.delete(userId);
+  // Clear all slot entries for this user
+  for (var key of userClientCache.keys()) {
+    if (key === userId || key.startsWith(userId + ":")) {
+      userClientCache.delete(key);
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -265,7 +277,7 @@ export async function processMessage(visitorId, message, ctx) {
   const mode = getMode(session.modeKey);
 
   // Resolve LLM client for this user (custom or default)
-  const { client: openai, model: MODEL, isCustom } = await getClientForUser(ctx.userId);
+  const { client: openai, model: MODEL, isCustom } = await getClientForUser(ctx.userId, ctx.slot);
 
  
 

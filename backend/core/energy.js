@@ -1,7 +1,7 @@
 // core/energy/useEnergy.js
 import fs from "fs";
 import User from "../db/models/user.js";
-import { clearCustomLlmConnection } from "./customLLM.js";
+import { assignConnection } from "./customLLM.js";
 
 /* ================================
  * CONSTANTS (HALF-COST VERSION)
@@ -160,7 +160,7 @@ export function maybeResetEnergy(user) {
     user.availableEnergy.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
 
     user.availableEnergy.lastResetAt = new Date();
-    clearCustomLlmConnection(user._id); // Revoke custom LLM on downgrade
+    assignConnection(user._id, "main", null); // Clear LLM assignment on downgrade
   }
 
   const lastReset = user.availableEnergy.lastResetAt?.getTime() || 0;

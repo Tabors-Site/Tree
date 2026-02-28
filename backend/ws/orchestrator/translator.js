@@ -394,8 +394,9 @@ export async function classify({
   conversationMemory,
   treeSummary,
   signal,
+  slot,
 }) {
-  const { client: openai, model } = await getClientForUser(userId);
+  const { client: openai, model } = await getClientForUser(userId, slot);
 
   let contextBlock = "";
   if (conversationMemory) {
@@ -472,8 +473,9 @@ export async function translateDestructive({
   conversationMemory,
   treeSummary,
   signal,
+  slot,
 }) {
-  const { client: openai, model } = await getClientForUser(userId);
+  const { client: openai, model } = await getClientForUser(userId, slot);
 
   // Build context block
   let contextBlock = "";

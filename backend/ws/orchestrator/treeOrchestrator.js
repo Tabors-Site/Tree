@@ -910,11 +910,12 @@ export async function orchestrateTreeRequest({
   sessionId,
   rootId: rootIdParam,
   skipRespond = false,
+  slot,
 }) {
   if (signal?.aborted) return null;
 
   const rootId = rootIdParam ?? getRootId(visitorId);
-  const meta = { username, userId, rootId };
+  const meta = { username, userId, rootId, slot };
   const modesUsed = []; // Track full chain for AIChat
   let chainIndex = 1; // 0 = user message (created in websocket.js)
 
@@ -984,6 +985,7 @@ export async function orchestrateTreeRequest({
       conversationMemory: formatMemoryContext(visitorId),
       treeSummary,
       signal,
+      slot,
     });
   } catch (err) {
     if (signal?.aborted) return null;
@@ -1083,6 +1085,7 @@ export async function orchestrateTreeRequest({
       conversationMemory: formatMemoryContext(visitorId),
       treeSummary,
       signal,
+      slot,
     });
   } catch (err) {
     if (signal?.aborted) return null;
@@ -1718,6 +1721,7 @@ async function runRespond({
   responseHint = "",
   stepSummaries = [],
   librarianContext = null,
+  slot,
 }) {
   emitStatus(socket, "respond", "");
 
@@ -1763,6 +1767,7 @@ async function runRespond({
     username,
     userId,
     rootId,
+    slot,
     signal,
     onToolResults(results) {
       if (signal?.aborted) return;

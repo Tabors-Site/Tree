@@ -1,4 +1,5 @@
 import User from "../db/models/user.js";
+import CustomLlmConnection from "../db/models/customLlmConnection.js";
 import { clearUserClientCache } from "../ws/conversation.js";
 import crypto from "crypto";
 import dns from "dns/promises";
@@ -159,14 +160,15 @@ function validateInputs(baseUrl, apiKey, model, requireApiKey) {
   return safeModel;
 }
 
+const VALID_SLOTS = ["main", "rawIdea"];
+
 // ─────────────────────────────────────────────────────────────────────────
 // PUBLIC API
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function setCustomLlmConnection(userId, { baseUrl, apiKey, model }) {
-  // 1. Check user exists and has paid plan FIRST
+export async function addCustomLlmConnection(userId, { name, baseUrl, apiKey, model }) {
   var user = await User.findById(userId)
-    .select("profileType planExpiresAt customLlmConnection")
+    .select("profileType planExpiresAt")
     .lean();
 
   if (!user) throw new Error("User not found");
@@ -174,76 +176,139 @@ export async function setCustomLlmConnection(userId, { baseUrl, apiKey, model })
     throw new Error("Custom LLM connections require an active paid plan");
   }
 
-  // 2. Determine if this is an update (apiKey may be optional)
-  var isUpdate = !!(user.customLlmConnection && user.customLlmConnection.baseUrl);
-  var requireApiKey = !isUpdate;
+  var count = await CustomLlmConnection.countDocuments({ userId });
+  if (count >= 15) throw new Error("Maximum of 15 connections reached");
 
-  // 3. Validate and sanitize inputs
-  var safeModel = validateInputs(baseUrl, apiKey, model, requireApiKey);
+  if (!name || typeof name !== "string" || name.length > 100) {
+    throw new Error("Invalid connection name");
+  }
 
-  // 4. Validate URL format
+  var safeModel = validateInputs(baseUrl, apiKey, model, true);
   var safeBaseUrl = validateCustomBaseUrl(baseUrl);
 
-  // 5. DNS resolution check — blocks SSRF via DNS
   var hostname = new URL(safeBaseUrl).hostname;
   await resolveAndValidateHost(hostname);
 
-  // 6. Build update payload
-  var updatePayload = {
-    "customLlmConnection.baseUrl": safeBaseUrl,
-    "customLlmConnection.model": safeModel,
-    "customLlmConnection.lastUsedAt": null,
-    "customLlmConnection.revoked": false,
-  };
-
-  // Only update the API key if one was provided
-  if (apiKey) {
-    updatePayload["customLlmConnection.encryptedApiKey"] = encrypt(apiKey);
-  }
-
-  // 7. Write to DB
-  await User.findByIdAndUpdate(userId, { $set: updatePayload });
-
-  // 8. Bust cache
-  clearUserClientCache(userId);
-
-  return { baseUrl: safeBaseUrl, model: safeModel, revoked: false };
-}
-
-export async function clearCustomLlmConnection(userId) {
-  var user = await User.findByIdAndUpdate(
+  var conn = await CustomLlmConnection.create({
     userId,
-    { $unset: { customLlmConnection: 1 } },
-    { new: true }
-  );
-
-  if (!user) throw new Error("User not found");
-
-  clearUserClientCache(userId);
-}
-
-export async function setCustomLlmRevoked(userId, revoked) {
-  if (typeof revoked !== "boolean") {
-    throw new Error("Revoked must be a boolean");
-  }
-
-  var user = await User.findByIdAndUpdate(
-    userId,
-    {
-      $set: {
-        "customLlmConnection.revoked": revoked,
-      },
-    },
-    { new: true }
-  );
-
-  if (!user) throw new Error("User not found");
-
-  clearUserClientCache(userId);
+    name: name.trim(),
+    baseUrl: safeBaseUrl,
+    encryptedApiKey: encrypt(apiKey),
+    model: safeModel,
+  });
 
   return {
-    revoked: user.customLlmConnection ? user.customLlmConnection.revoked : true,
+    _id: conn._id,
+    name: conn.name,
+    baseUrl: conn.baseUrl,
+    model: conn.model,
   };
+}
+
+export async function updateCustomLlmConnection(userId, connectionId, { name, baseUrl, apiKey, model }) {
+  var user = await User.findById(userId)
+    .select("profileType planExpiresAt llmAssignments")
+    .lean();
+
+  if (!user) throw new Error("User not found");
+  if (!hasPaidPlan(user)) {
+    throw new Error("Custom LLM connections require an active paid plan");
+  }
+
+  var existing = await CustomLlmConnection.findOne({ _id: connectionId, userId });
+  if (!existing) throw new Error("Connection not found");
+
+  var safeModel = validateInputs(baseUrl, apiKey, model, false);
+  var safeBaseUrl = validateCustomBaseUrl(baseUrl);
+
+  var hostname = new URL(safeBaseUrl).hostname;
+  await resolveAndValidateHost(hostname);
+
+  var update = {
+    baseUrl: safeBaseUrl,
+    model: safeModel,
+  };
+  if (name !== undefined && name !== null) {
+    if (typeof name !== "string" || name.length > 100) throw new Error("Invalid connection name");
+    update.name = name.trim();
+  }
+  if (apiKey) {
+    update.encryptedApiKey = encrypt(apiKey);
+  }
+
+  var updated = await CustomLlmConnection.findByIdAndUpdate(
+    connectionId,
+    { $set: update },
+    { new: true }
+  );
+
+  // If this connection is currently assigned to any slot, bust cache
+  if (user.llmAssignments) {
+    for (var s of VALID_SLOTS) {
+      if (user.llmAssignments[s] === connectionId) {
+        clearUserClientCache(userId);
+        break;
+      }
+    }
+  }
+
+  return {
+    _id: updated._id,
+    name: updated.name,
+    baseUrl: updated.baseUrl,
+    model: updated.model,
+  };
+}
+
+export async function deleteCustomLlmConnection(userId, connectionId) {
+  var conn = await CustomLlmConnection.findOneAndDelete({ _id: connectionId, userId });
+  if (!conn) throw new Error("Connection not found");
+
+  // If deleted connection was assigned to any slot, clear those assignments
+  var user = await User.findById(userId).select("llmAssignments").lean();
+  if (user && user.llmAssignments) {
+    var unset = {};
+    for (var s of VALID_SLOTS) {
+      if (user.llmAssignments[s] === connectionId) {
+        unset["llmAssignments." + s] = null;
+      }
+    }
+    if (Object.keys(unset).length > 0) {
+      await User.findByIdAndUpdate(userId, { $set: unset });
+      clearUserClientCache(userId);
+    }
+  }
+
+  return { removed: true };
+}
+
+export async function getConnectionsForUser(userId) {
+  return CustomLlmConnection.find({ userId })
+    .select("_id name baseUrl model lastUsedAt createdAt")
+    .sort({ createdAt: -1 })
+    .lean();
+}
+
+export async function assignConnection(userId, slot, connectionId) {
+  if (!VALID_SLOTS.includes(slot)) {
+    throw new Error("Invalid assignment slot: " + slot);
+  }
+
+  // If assigning (not clearing), verify the connection exists and belongs to this user
+  if (connectionId) {
+    var conn = await CustomLlmConnection.findOne({ _id: connectionId, userId }).lean();
+    if (!conn) throw new Error("Connection not found");
+  }
+
+  var updateKey = "llmAssignments." + slot;
+  await User.findByIdAndUpdate(userId, {
+    $set: { [updateKey]: connectionId || null },
+  });
+
+  // Bust cache so the new assignment takes effect
+  clearUserClientCache(userId);
+
+  return { slot, connectionId: connectionId || null };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

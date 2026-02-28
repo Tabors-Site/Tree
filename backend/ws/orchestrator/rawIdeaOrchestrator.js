@@ -120,7 +120,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
   // finalizeAIChat() will set endMessage.time when we're done.
   let llmProvider;
   try {
-    const clientInfo = await getClientForUser(userId);
+    const clientInfo = await getClientForUser(userId, "rawIdea");
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
@@ -207,6 +207,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     const chooseResult = await processMessage(visitorId, rawIdea.content, {
       username,
       userId,
+      slot: "rawIdea",
       meta: { internal: true },
     });
     const chooseEnd = new Date();
@@ -253,6 +254,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       sessionId,
       rootId: chosenRootId,
       skipRespond: !withResponse,
+      slot: "rawIdea",
     });
 
     if (!treeResult || treeResult.noFit || !treeResult.success) {

@@ -12,9 +12,11 @@ import { getAIChats } from "../core/aichat.js";
 
 import { createPurchaseSession } from "../routes/billing/purchase.js";
 import {
-  setCustomLlmConnection,
-  clearCustomLlmConnection,
-  setCustomLlmRevoked,
+  addCustomLlmConnection,
+  updateCustomLlmConnection,
+  deleteCustomLlmConnection,
+  getConnectionsForUser,
+  assignConnection,
 } from "../core/customLLM.js";
 
 import {
@@ -9731,10 +9733,12 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     const profileType = (user.profileType || "basic").toLowerCase();
     const planExpiresAt = user.planExpiresAt || null;
 
-    const llmConn = user.customLlmConnection || null;
-    const hasLlm = !!(llmConn && llmConn.baseUrl && !llmConn.revoked);
-    const llmRevoked = llmConn?.revoked === true;
-    const hasLlmConfig = !!(llmConn && llmConn.baseUrl);
+    const llmConnections = await getConnectionsForUser(userId);
+    const mainAssignment = user.llmAssignments?.main || null;
+    const rawIdeaAssignment = user.llmAssignments?.rawIdea || null;
+    const activeConn = mainAssignment ? llmConnections.find(c => c._id === mainAssignment) : null;
+    const hasLlm = !!activeConn;
+    const connectionCount = llmConnections.length;
     const isBasic = profileType === "basic";
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -10879,42 +10883,108 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
 
   <!-- Custom LLM -->
   <div class="glass-card" style="animation-delay: 0.3s;">
-    <h2>🤖 Custom LLM Endpoint</h2>
+    <h2>🤖 Custom LLM Endpoints <span style="opacity:0.5;font-size:0.7em">(${connectionCount}/15)</span></h2>
     <div class="llm-section-wrapper ${isBasic ? "locked" : ""}">
       <div class="llm-upgrade-overlay">
         <div class="llm-upgrade-text">🔒 Upgrade Required</div>
         <div class="llm-upgrade-sub">Custom LLM connections require a Standard or Premium plan</div>
       </div>
       <div class="llm-section-content">
-        <div class="llm-sub">Connect your own OpenAI API-compatible LLM to use AI chat and bypass energy usage for conversations.</div>
+        <div class="llm-sub">Connect your own OpenAI API-compatible LLMs to bypass energy usage. Assign them to different areas below.</div>
 
-        ${hasLlmConfig ? '<div class="llm-connected-badge" id="llmBadge" style="' + (llmRevoked ? "display:none;" : "") + '"><div class="llm-connected-dot"></div><span class="llm-connected-text">Connected</span><span class="llm-connected-detail">' + llmConn.model + " · " + llmConn.baseUrl + "</span></div>" : ""}
+        ${connectionCount > 0 ? '<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">'
+          + '<div style="flex:1;min-width:180px;">'
+            + '<label class="llm-field-label" style="margin-bottom:4px;display:block;">Profile (Chat)</label>'
+            + '<select class="llm-input" id="llmAssignMain" onchange="assignSlot(&#39;main&#39;, this.value)" style="padding:8px 10px;">'
+              + '<option value=""' + (!mainAssignment ? ' selected' : '') + '>Default LLM</option>'
+              + llmConnections.map(function(c) {
+                  return '<option value="' + c._id + '"' + (mainAssignment === c._id ? ' selected' : '') + '>' + c.name + ' (' + c.model + ')</option>';
+                }).join('')
+            + '</select>'
+          + '</div>'
+          + '<div style="flex:1;min-width:180px;">'
+            + '<label class="llm-field-label" style="margin-bottom:4px;display:block;">Raw Ideas</label>'
+            + '<select class="llm-input" id="llmAssignRawIdea" onchange="assignSlot(&#39;rawIdea&#39;, this.value)" style="padding:8px 10px;">'
+              + '<option value=""' + (!rawIdeaAssignment ? ' selected' : '') + '>Default LLM</option>'
+              + llmConnections.map(function(c) {
+                  return '<option value="' + c._id + '"' + (rawIdeaAssignment === c._id ? ' selected' : '') + '>' + c.name + ' (' + c.model + ')</option>';
+                }).join('')
+            + '</select>'
+          + '</div>'
+        + '</div>' : ''}
 
-        ${hasLlmConfig ? '<div class="llm-toggle-row"><span class="llm-toggle-label">Custom LLM Active</span><div id="llmToggle" class="glass-toggle ' + (llmRevoked ? "" : "active") + '"><div class="glass-toggle-knob"></div></div></div>' : ""}
+        <div id="llmConnectionsList">
+          ${connectionCount === 0
+            ? '<div class="llm-empty-state" style="text-align:center;padding:18px 0;opacity:0.5;">None — using default LLM</div>'
+            : llmConnections.map(function(c) {
+                return '<div class="llm-conn-card" data-id="' + c._id + '" style="border:1px solid var(--glass-border-light);border-radius:10px;padding:12px 14px;margin-bottom:8px;background:rgba(255,255,255,0.03);">'
+                  + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+                    + '<div style="flex:1;min-width:0;">'
+                      + '<div style="font-weight:600;font-size:0.95em;">' + c.name + '</div>'
+                      + '<div style="font-size:0.8em;opacity:0.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + c.model + ' · ' + c.baseUrl + '</div>'
+                    + '</div>'
+                    + '<div style="display:flex;gap:6px;flex-shrink:0;">'
+                      + '<button class="llm-save-btn" style="font-size:0.75em;padding:4px 10px;" onclick="editConnection(\'' + c._id + '\')">Edit</button>'
+                      + '<button class="llm-disconnect-btn" style="font-size:0.75em;padding:4px 10px;" onclick="deleteConnection(\'' + c._id + '\')">Delete</button>'
+                    + '</div>'
+                  + '</div>'
+                + '</div>';
+              }).join("")
+          }
+        </div>
 
-        <div class="llm-fields ${hasLlmConfig && llmRevoked ? "disabled" : ""}" id="llmFields">
-          <div class="llm-field-row">
-            <label class="llm-field-label">Endpoint URL</label>
-            <input type="text" class="llm-input" id="llmBaseUrl"
-              placeholder="https://api.groq.com/openai/v1/chat/completions"
-              value="${hasLlmConfig ? llmConn.baseUrl : ""}" />
-          </div>
-          <div class="llm-field-row">
-            <label class="llm-field-label">API Key</label>
-            <input type="password" class="llm-input" id="llmApiKey"
-              placeholder="${hasLlmConfig ? "••••••••  (saved — enter new to change)" : "gsk_abc123..."}" />
-          </div>
-          <div class="llm-field-row">
-            <label class="llm-field-label">Model</label>
-            <input type="text" class="llm-input" id="llmModel"
-              placeholder="openai/gpt-oss-120b"
-              value="${hasLlmConfig ? llmConn.model : ""}" />
-          </div>
-          <div class="llm-btn-row">
-            <button class="llm-save-btn" onclick="saveLLM()">${hasLlmConfig ? "Update Connection" : "Save Connection"}</button>
-            ${hasLlmConfig ? '<button class="llm-disconnect-btn" onclick="disconnectLLM()">Disconnect</button>' : ""}
+        <div id="llmAddSection" style="margin-top:12px;">
+          <button class="llm-save-btn" id="llmAddToggle" onclick="toggleAddForm()" style="width:100%;">+ Add Connection</button>
+          <div class="llm-fields" id="llmAddForm" style="display:none;margin-top:10px;">
+            <div class="llm-field-row">
+              <label class="llm-field-label">Name</label>
+              <input type="text" class="llm-input" id="llmName" placeholder="e.g. Groq, OpenRouter" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">Endpoint URL</label>
+              <input type="text" class="llm-input" id="llmBaseUrl" placeholder="https://api.groq.com/openai/v1/chat/completions" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">API Key</label>
+              <input type="password" class="llm-input" id="llmApiKey" placeholder="gsk_abc123..." />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">Model</label>
+              <input type="text" class="llm-input" id="llmModel" placeholder="openai/gpt-oss-120b" />
+            </div>
+            <div class="llm-btn-row">
+              <button class="llm-save-btn" onclick="addConnection()">Save Connection</button>
+            </div>
           </div>
         </div>
+
+        <div id="llmEditSection" style="display:none;margin-top:12px;">
+          <div style="font-weight:600;margin-bottom:8px;">Edit Connection</div>
+          <input type="hidden" id="llmEditId" />
+          <div class="llm-fields">
+            <div class="llm-field-row">
+              <label class="llm-field-label">Name</label>
+              <input type="text" class="llm-input" id="llmEditName" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">Endpoint URL</label>
+              <input type="text" class="llm-input" id="llmEditBaseUrl" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">API Key</label>
+              <input type="password" class="llm-input" id="llmEditApiKey" placeholder="••••••••  (leave blank to keep)" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">Model</label>
+              <input type="text" class="llm-input" id="llmEditModel" />
+            </div>
+            <div class="llm-btn-row">
+              <button class="llm-save-btn" onclick="updateConnection()">Update</button>
+              <button class="llm-disconnect-btn" onclick="cancelEdit()">Cancel</button>
+            </div>
+          </div>
+        </div>
+
         <div class="llm-status" id="llmStatus"></div>
       </div>
     </div>
@@ -11145,9 +11215,9 @@ function renderCheckout() {
     '<button class="checkout-btn" onclick="handleCheckout()">Pay with Stripe</button>' +
     '<div class="checkout-legal">' +
       'By purchasing, you agree to our ' +
-      '<span class="checkout-legal-link" onclick="openModal(\\'terms\\')">Terms of Service</span>' +
+      '<span class="checkout-legal-link" onclick="openModal(&#39;terms&#39;)">Terms of Service</span>' +
       ' and ' +
-      '<span class="checkout-legal-link" onclick="openModal(\\'privacy\\')">Privacy Policy</span>.' +
+      '<span class="checkout-legal-link" onclick="openModal(&#39;privacy&#39;)">Privacy Policy</span>.' +
     '</div>' +
     '<div class="checkout-note">No recurring charges · No refunds · Renew manually</div>';
 }
@@ -11197,6 +11267,8 @@ async function handleCheckout() {
 // =====================
 // CUSTOM LLM
 // =====================
+var llmConnections = ${JSON.stringify(llmConnections)};
+
 function showLlmStatus(msg, ok) {
   var el = document.getElementById("llmStatus");
   el.style.display = "block";
@@ -11205,35 +11277,32 @@ function showLlmStatus(msg, ok) {
   if (ok) setTimeout(function() { el.style.display = "none"; }, 3000);
 }
 
-async function saveLLM() {
+function toggleAddForm() {
+  var form = document.getElementById("llmAddForm");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+  document.getElementById("llmEditSection").style.display = "none";
+}
+
+async function addConnection() {
+  var name = document.getElementById("llmName").value.trim();
   var baseUrl = document.getElementById("llmBaseUrl").value.trim();
   var apiKey = document.getElementById("llmApiKey").value.trim();
   var model = document.getElementById("llmModel").value.trim();
 
-  if (!baseUrl || !model) {
-    showLlmStatus("Endpoint URL and Model are required", false);
+  if (!name || !baseUrl || !apiKey || !model) {
+    showLlmStatus("All fields are required", false);
     return;
   }
-
-  var isUpdate = ${hasLlmConfig ? "true" : "false"};
-  if (!isUpdate && !apiKey) {
-    showLlmStatus("API Key is required for new connections", false);
-    return;
-  }
-
-  var payload = { baseUrl: baseUrl, model: model };
-  if (apiKey) payload.apiKey = apiKey;
 
   try {
     var res = await fetch("/api/v1/user/" + userId + "/custom-llm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ name: name, baseUrl: baseUrl, apiKey: apiKey, model: model }),
     });
-
     if (res.ok) {
-      showLlmStatus("✓ Connection saved", true);
-      setTimeout(function() { location.reload(); }, 1200);
+      showLlmStatus("✓ Connection added", true);
+      setTimeout(function() { location.reload(); }, 1000);
     } else {
       var data = await res.json().catch(function() { return {}; });
       showLlmStatus("✕ " + (data.error || "Failed to save"), false);
@@ -11243,55 +11312,88 @@ async function saveLLM() {
   }
 }
 
-async function disconnectLLM() {
-  if (!confirm("Disconnect your custom LLM? This will remove the saved connection.")) return;
+function editConnection(connId) {
+  var conn = llmConnections.find(function(c) { return c._id === connId; });
+  if (!conn) return;
+  document.getElementById("llmEditId").value = connId;
+  document.getElementById("llmEditName").value = conn.name;
+  document.getElementById("llmEditBaseUrl").value = conn.baseUrl;
+  document.getElementById("llmEditApiKey").value = "";
+  document.getElementById("llmEditModel").value = conn.model;
+  document.getElementById("llmEditSection").style.display = "block";
+  document.getElementById("llmAddForm").style.display = "none";
+}
+
+function cancelEdit() {
+  document.getElementById("llmEditSection").style.display = "none";
+}
+
+async function updateConnection() {
+  var connId = document.getElementById("llmEditId").value;
+  var name = document.getElementById("llmEditName").value.trim();
+  var baseUrl = document.getElementById("llmEditBaseUrl").value.trim();
+  var apiKey = document.getElementById("llmEditApiKey").value.trim();
+  var model = document.getElementById("llmEditModel").value.trim();
+
+  if (!baseUrl || !model) {
+    showLlmStatus("Endpoint URL and Model are required", false);
+    return;
+  }
+
+  var payload = { baseUrl: baseUrl, model: model };
+  if (name) payload.name = name;
+  if (apiKey) payload.apiKey = apiKey;
 
   try {
-    var res = await fetch("/api/v1/user/" + userId + "/custom-llm", {
-      method: "DELETE",
+    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/" + connId, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
-
     if (res.ok) {
-      showLlmStatus("✓ Disconnected", true);
+      showLlmStatus("✓ Connection updated", true);
       setTimeout(function() { location.reload(); }, 1000);
     } else {
-      showLlmStatus("✕ Failed to disconnect", false);
+      var data = await res.json().catch(function() { return {}; });
+      showLlmStatus("✕ " + (data.error || "Failed to update"), false);
     }
   } catch (err) {
     showLlmStatus("✕ Network error", false);
   }
 }
 
-async function toggleLLM(active) {
-  var fields = document.getElementById("llmFields");
-  var badge = document.getElementById("llmBadge");
-
-  if (fields) fields.classList.toggle("disabled", !active);
-  if (badge) badge.style.display = active ? "flex" : "none";
-
+async function deleteConnection(connId) {
+  if (!confirm("Delete this connection? This cannot be undone.")) return;
   try {
-    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/revoke", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ revoked: !active })
+    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/" + connId, {
+      method: "DELETE",
     });
-
     if (res.ok) {
-      showLlmStatus(active ? "✓ Custom LLM enabled" : "✓ Custom LLM paused", true);
+      showLlmStatus("✓ Deleted", true);
+      setTimeout(function() { location.reload(); }, 1000);
     } else {
-      showLlmStatus("✕ Failed to update", false);
-      // Revert
-      var toggle = document.getElementById("llmToggle");
-      if (toggle) toggle.classList.toggle("active");
-      if (fields) fields.classList.toggle("disabled");
-      if (badge) badge.style.display = active ? "none" : "flex";
+      showLlmStatus("✕ Failed to delete", false);
     }
   } catch (err) {
     showLlmStatus("✕ Network error", false);
-    var toggle2 = document.getElementById("llmToggle");
-    if (toggle2) toggle2.classList.toggle("active");
-    if (fields) fields.classList.toggle("disabled");
-    if (badge) badge.style.display = active ? "none" : "flex";
+  }
+}
+
+async function assignSlot(slot, connId) {
+  try {
+    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot: slot, connectionId: connId || null }),
+    });
+    if (res.ok) {
+      var label = slot === "main" ? "Chat" : "Raw Ideas";
+      showLlmStatus(connId ? "✓ Assigned to " + label : "✓ " + label + " → default LLM", true);
+    } else {
+      showLlmStatus("✕ Failed to assign", false);
+    }
+  } catch (err) {
+    showLlmStatus("✕ Network error", false);
   }
 }
 
@@ -11333,15 +11435,6 @@ document.getElementById("customEnergyBtn").onclick = function() {
   renderCheckout();
 };
 
-// Glass toggle handler
-var llmToggle = document.getElementById("llmToggle");
-if (llmToggle) {
-  llmToggle.onclick = function() {
-    var isActive = llmToggle.classList.toggle("active");
-    toggleLLM(isActive);
-  };
-}
-
 // =====================
 // INIT
 // =====================
@@ -11375,79 +11468,72 @@ router.post("/user/:userId/purchase", authenticate, async (req, res) => {
 // ROUTES
 // ─────────────────────────────────────────────────────────────────────────
 
+// List all custom LLM connections
+router.get("/user/:userId/custom-llm", authenticate, async (req, res) => {
+  try {
+    const connections = await getConnectionsForUser(req.params.userId);
+    return res.json({ success: true, connections });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Assign a connection to a slot (must be before /:connectionId routes)
+router.post("/user/:userId/custom-llm/assign", authenticate, async (req, res) => {
+  try {
+    const { slot, connectionId } = req.body;
+    if (!slot) return res.status(400).json({ error: "slot is required" });
+    const result = await assignConnection(req.params.userId, slot, connectionId || null);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("❌ Failed to assign custom LLM:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Add a new connection
 router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
   try {
-    req.body.userId = req.params.userId;
-
-    const { userId, baseUrl, apiKey, model } = req.body;
-
-    if (!baseUrl || !apiKey || !model) {
+    const { name, baseUrl, apiKey, model } = req.body;
+    if (!name || !baseUrl || !apiKey || !model) {
       return res.status(400).json({
-        error: "Missing required fields: baseUrl, apiKey, model",
+        error: "Missing required fields: name, baseUrl, apiKey, model",
       });
     }
-
-    const result = await setCustomLlmConnection(userId, {
-      baseUrl,
-      apiKey,
-      model,
-    });
-
-    return res.status(200).json({
-      success: true,
-      customLlmConnection: result,
-    });
+    const result = await addCustomLlmConnection(req.params.userId, { name, baseUrl, apiKey, model });
+    return res.status(201).json({ success: true, connection: result });
   } catch (err) {
     console.error("❌ Failed to save custom LLM:", err.message);
-    return res.status(500).json({
-      error: "Failed to save custom LLM connection",
-    });
+    const status = err.message.includes("Maximum") ? 400 : 500;
+    return res.status(status).json({ error: err.message });
   }
 });
 
-router.delete("/user/:userId/custom-llm", authenticate, async (req, res) => {
+// Update a connection
+router.put("/user/:userId/custom-llm/:connectionId", authenticate, async (req, res) => {
   try {
-    const userId = req.params.userId;
-
-    await clearCustomLlmConnection(userId);
-
-    return res.status(200).json({
-      success: true,
-      removed: true,
-    });
+    const { name, baseUrl, apiKey, model } = req.body;
+    if (!baseUrl || !model) {
+      return res.status(400).json({ error: "Missing required fields: baseUrl, model" });
+    }
+    const result = await updateCustomLlmConnection(req.params.userId, req.params.connectionId, { name, baseUrl, apiKey, model });
+    return res.json({ success: true, connection: result });
   } catch (err) {
-    console.error("❌ Failed to clear custom LLM:", err.message);
-    return res.status(500).json({
-      error: "Failed to remove custom LLM connection",
-    });
+    console.error("❌ Failed to update custom LLM:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
-router.post(
-  "/user/:userId/custom-llm/revoke",
-  authenticate,
-  async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { revoked } = req.body;
-
-      // basic validation
-      if (typeof revoked !== "boolean") {
-        return res.status(400).json({ error: "revoked must be boolean" });
-      }
-
-      const result = await setCustomLlmRevoked(userId, revoked);
-
-      return res.json({
-        success: true,
-        revoked: result.revoked,
-      });
-    } catch (err) {
-      console.error("❌ Failed to toggle custom LLM:", err);
-      res.status(500).json({ error: err.message });
-    }
-  },
-);
+// Delete a connection
+router.delete("/user/:userId/custom-llm/:connectionId", authenticate, async (req, res) => {
+  try {
+    await deleteCustomLlmConnection(req.params.userId, req.params.connectionId);
+    return res.json({ success: true, removed: true });
+  } catch (err) {
+    console.error("❌ Failed to delete custom LLM:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
 router.get("/user/:userId/chats", urlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
