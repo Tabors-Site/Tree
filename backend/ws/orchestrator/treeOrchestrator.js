@@ -1097,6 +1097,7 @@ export async function orchestrateTreeRequest({
       modesUsed,
       chainIndex,
       skipRespond,
+      llmProvider,
     });
   }
 
@@ -1297,6 +1298,7 @@ async function runLibrarianFlow({
   modesUsed,
   chainIndex,
   skipRespond = false,
+  llmProvider,
 }) {
   const meta = { username, userId, rootId };
   const isQuery = classification.intent === "query";
