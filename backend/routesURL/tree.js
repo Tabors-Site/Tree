@@ -15,6 +15,7 @@ import { orchestrateTreeRequest } from "../ws/orchestrator/treeOrchestrator.js";
 import { setRootId, getClientForUser } from "../ws/conversation.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
 import { startAIChat, finalizeAIChat } from "../ws/aiChatTracker.js";
+import { enqueue } from "../ws/requestQueue.js";
 
 const router = express.Router();
 
@@ -102,7 +103,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
       llmProvider: {
         isCustom: clientInfo.isCustom,
         model: clientInfo.model,
-        baseUrl: clientInfo.isCustom ? clientInfo.client.baseURL : null,
+        connectionId: clientInfo.connectionId || null,
       },
       treeContext: { targetNodeId: rootId },
     });
@@ -110,75 +111,79 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
     console.error("⚠️ Failed to create AIChat:", err.message);
   }
 
-  try {
-    console.log(`🔑 Tree chat: connecting MCP for ${visitorId}`);
-    const internalJwt = jwt.sign(
-      { userId: req.userId.toString(), username: req.username },
-      JWT_SECRET,
-      { expiresIn: "1h" },
-    );
-    await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
-    console.log(`✅ Tree chat: MCP connected, starting orchestration`);
+  // Serialize requests per user+tree so concurrent messages don't race
+  await enqueue(sessionId, async () => {
+    try {
+      console.log(`🔑 Tree chat: connecting MCP for ${visitorId}`);
+      const internalJwt = jwt.sign(
+        { userId: req.userId.toString(), username: req.username },
+        JWT_SECRET,
+        { expiresIn: "1h" },
+      );
+      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+      console.log(`✅ Tree chat: MCP connected, starting orchestration`);
 
-    setRootId(visitorId, rootId);
+      setRootId(visitorId, rootId);
 
-    const result = await orchestrateTreeRequest({
-      visitorId,
-      message: message.trim(),
-      socket: nullSocket,
-      username: req.username,
-      userId: req.userId,
-      signal: null,
-      sessionId,
-      rootId,
-    });
-
-    clearTimeout(timer);
-    if (timedOut) return;
-
-    console.log(`✅ Tree chat: orchestration complete, success=${result?.success}`);
-
-    // ── Finalize AIChat (success or no-fit) ──
-    if (aiChat) {
-      const answer = result?.answer || result?.reason || null;
-      finalizeAIChat({
-        chatId: aiChat._id,
-        content: answer,
-        stopped: false,
-        modeKey: result?.modeKey || "tree:orchestrator",
-      }).catch((err) => console.error("⚠️ AIChat finalize failed:", err.message));
-    }
-
-    if (!result || !result.success) {
-      return res.json({
-        success: false,
-        answer: result?.answer || "Could not process your message.",
+      const result = await orchestrateTreeRequest({
+        visitorId,
+        message: message.trim(),
+        socket: nullSocket,
+        username: req.username,
+        userId: req.userId,
+        signal: null,
+        sessionId,
+        rootId,
+        rootChatId: aiChat?._id || null,
       });
+
+      clearTimeout(timer);
+      if (timedOut) return;
+
+      console.log(`✅ Tree chat: orchestration complete, success=${result?.success}`);
+
+      // ── Finalize AIChat (success or no-fit) ──
+      if (aiChat) {
+        const answer = result?.answer || result?.reason || null;
+        finalizeAIChat({
+          chatId: aiChat._id,
+          content: answer,
+          stopped: false,
+          modeKey: result?.modeKey || "tree:orchestrator",
+        }).catch((err) => console.error("⚠️ AIChat finalize failed:", err.message));
+      }
+
+      if (!result || !result.success) {
+        return res.json({
+          success: false,
+          answer: result?.answer || "Could not process your message.",
+        });
+      }
+
+      return res.json({
+        success: true,
+        answer: result.answer,
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      if (timedOut) return;
+      console.error("❌ Tree chat error:", err.message);
+
+      // ── Finalize AIChat (error) ──
+      if (aiChat) {
+        finalizeAIChat({
+          chatId: aiChat._id,
+          content: `Error: ${err.message}`,
+          stopped: false,
+        }).catch((e) => console.error("⚠️ AIChat error finalize failed:", e.message));
+      }
+
+      return res.status(500).json({ success: false, answer: "Something went wrong." });
+    } finally {
+      clearTimeout(timer);
+      if (!timedOut) closeMCPClient(visitorId);
     }
-
-    return res.json({
-      success: true,
-      answer: result.answer,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    if (timedOut) return;
-    console.error("❌ Tree chat error:", err.message);
-
-    // ── Finalize AIChat (error) ──
-    if (aiChat) {
-      finalizeAIChat({
-        chatId: aiChat._id,
-        content: `Error: ${err.message}`,
-        stopped: false,
-      }).catch((e) => console.error("⚠️ AIChat error finalize failed:", e.message));
-    }
-
-    return res.status(500).json({ success: false, answer: "Something went wrong." });
-  } finally {
-    clearTimeout(timer);
-    if (!timedOut) closeMCPClient(visitorId);
-  }
+  });
 });
 
 /**
@@ -231,7 +236,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
       llmProvider: {
         isCustom: clientInfo.isCustom,
         model: clientInfo.model,
-        baseUrl: clientInfo.isCustom ? clientInfo.client.baseURL : null,
+        connectionId: clientInfo.connectionId || null,
       },
       treeContext: { targetNodeId: rootId },
     });
@@ -239,74 +244,78 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
     console.error("⚠️ Failed to create AIChat:", err.message);
   }
 
-  try {
-    const internalJwt = jwt.sign(
-      { userId: req.userId.toString(), username: req.username },
-      JWT_SECRET,
-      { expiresIn: "1h" },
-    );
-    await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
-    setRootId(visitorId, rootId);
+  // Serialize requests per user+tree so concurrent messages don't race
+  await enqueue(sessionId, async () => {
+    try {
+      const internalJwt = jwt.sign(
+        { userId: req.userId.toString(), username: req.username },
+        JWT_SECRET,
+        { expiresIn: "1h" },
+      );
+      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+      setRootId(visitorId, rootId);
 
-    const result = await orchestrateTreeRequest({
-      visitorId,
-      message: message.trim(),
-      socket: nullSocket,
-      username: req.username,
-      userId: req.userId,
-      signal: null,
-      sessionId,
-      rootId,
-      skipRespond: true,
-    });
-
-    clearTimeout(timer);
-    if (timedOut) return;
-
-    if (aiChat) {
-      const summary = result?.stepSummaries?.length
-        ? `Placed: ${result.stepSummaries.length} step(s)`
-        : null;
-      finalizeAIChat({
-        chatId: aiChat._id,
-        content: summary || result?.reason || null,
-        stopped: false,
-        modeKey: result?.modeKey || "tree:orchestrator",
-      }).catch((err) => console.error("⚠️ AIChat finalize failed:", err.message));
-    }
-
-    if (!result || !result.success) {
-      return res.json({
-        success: false,
-        error: result?.reason || "Could not place content.",
-        stepSummaries: result?.stepSummaries || [],
+      const result = await orchestrateTreeRequest({
+        visitorId,
+        message: message.trim(),
+        socket: nullSocket,
+        username: req.username,
+        userId: req.userId,
+        signal: null,
+        sessionId,
+        rootId,
+        skipRespond: true,
+        rootChatId: aiChat?._id || null,
       });
+
+      clearTimeout(timer);
+      if (timedOut) return;
+
+      if (aiChat) {
+        const summary = result?.stepSummaries?.length
+          ? `Placed: ${result.stepSummaries.length} step(s)`
+          : null;
+        finalizeAIChat({
+          chatId: aiChat._id,
+          content: summary || result?.reason || null,
+          stopped: false,
+          modeKey: result?.modeKey || "tree:orchestrator",
+        }).catch((err) => console.error("⚠️ AIChat finalize failed:", err.message));
+      }
+
+      if (!result || !result.success) {
+        return res.json({
+          success: false,
+          error: result?.reason || "Could not place content.",
+          stepSummaries: result?.stepSummaries || [],
+        });
+      }
+
+      return res.json({
+        success: true,
+        stepSummaries: result.stepSummaries || [],
+        targetNodeId: result.lastTargetNodeId || null,
+        targetPath: result.lastTargetPath || null,
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      if (timedOut) return;
+      console.error("❌ Tree place error:", err.message);
+
+      if (aiChat) {
+        finalizeAIChat({
+          chatId: aiChat._id,
+          content: `Error: ${err.message}`,
+          stopped: false,
+        }).catch((e) => console.error("⚠️ AIChat error finalize failed:", e.message));
+      }
+
+      return res.status(500).json({ success: false, error: "Something went wrong." });
+    } finally {
+      clearTimeout(timer);
+      if (!timedOut) closeMCPClient(visitorId);
     }
-
-    return res.json({
-      success: true,
-      stepSummaries: result.stepSummaries || [],
-      targetNodeId: result.lastTargetNodeId || null,
-      targetPath: result.lastTargetPath || null,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    if (timedOut) return;
-    console.error("❌ Tree place error:", err.message);
-
-    if (aiChat) {
-      finalizeAIChat({
-        chatId: aiChat._id,
-        content: `Error: ${err.message}`,
-        stopped: false,
-      }).catch((e) => console.error("⚠️ AIChat error finalize failed:", e.message));
-    }
-
-    return res.status(500).json({ success: false, error: "Something went wrong." });
-  } finally {
-    clearTimeout(timer);
-    if (!timedOut) closeMCPClient(visitorId);
-  }
+  });
 });
 
 export default router;

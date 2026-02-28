@@ -373,10 +373,14 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
         const ownerConnections = await getConnectionsForUser(ownerProfile._id.toString());
         const currentPlacement = rootMeta.llmAssignments?.placement || null;
 
-        const optionsHtml = ownerConnections.map(function(c) {
-          return '<option value="' + c._id + '"' + (currentPlacement === c._id ? ' selected' : '') + '>'
-            + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</option>';
+        const customOptHtml = ownerConnections.map(function(c) {
+          return '<div class="custom-select-option' + (currentPlacement === c._id ? ' selected' : '') + '" data-value="' + c._id + '">'
+            + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</div>';
         }).join('');
+
+        const selectedLabel = currentPlacement
+          ? (function() { var m = ownerConnections.find(function(c){return c._id === currentPlacement;}); return m ? escapeHtml(m.name) + ' (' + escapeHtml(m.model) + ')' : 'Default (inherit from profile)'; })()
+          : 'Default (inherit from profile)';
 
         treeLlmHtml = `
 <h2 style="margin-top:16px;">Tree AI Model</h2>
@@ -385,22 +389,13 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
 </p>
 ${ownerConnections.length === 0
   ? '<p style="font-size:0.85em;opacity:0.5;">No custom connections — <a href="/api/v1/user/${ownerProfile._id}${queryString ? queryString + "&" : "?"}html" style="color:inherit;">add one on your profile</a></p>'
-  : `<select
-    id="treeLlmSelect"
-    onchange="assignRootLlm(this.value)"
-    style="
-      width:100%;
-      max-width:360px;
-      padding:8px 10px;
-      border-radius:6px;
-      border:1px solid #ccc;
-      font-size:14px;
-      margin-bottom:4px;
-    "
-  >
-    <option value=""${!currentPlacement ? ' selected' : ''}>Default (inherit from profile)</option>
-    ${optionsHtml}
-  </select>
+  : `<div class="custom-select" id="treeLlmSelect" style="margin-bottom:4px;">
+    <div class="custom-select-trigger">${selectedLabel}</div>
+    <div class="custom-select-options">
+      <div class="custom-select-option${!currentPlacement ? ' selected' : ''}" data-value="">Default (inherit from profile)</div>
+      ${customOptHtml}
+    </div>
+  </div>
   <div id="treeLlmStatus" style="font-size:0.8em;margin-top:4px;display:none;"></div>`
 }`;
       } else {
@@ -1462,6 +1457,32 @@ transition:
 
 
 
+  /* Custom dropdown (replaces native <select> to avoid iframe glitch on mobile) */
+  .custom-select { position: relative; width: 100%; max-width: 360px; }
+  .custom-select-trigger {
+    padding: 8px 10px; font-size: 14px; border-radius: 6px;
+    border: 1px solid #ccc; background: white; color: #1a1a1a;
+    cursor: pointer; display: flex; align-items: center;
+    justify-content: space-between; gap: 8px;
+    -webkit-user-select: none; user-select: none;
+  }
+  .custom-select-trigger::after { content: "▾"; font-size: 11px; opacity: 0.5; flex-shrink: 0; }
+  .custom-select.open .custom-select-trigger { border-color: #764ba2; }
+  .custom-select.open .custom-select-trigger::after { content: "▴"; }
+  .custom-select-options {
+    display: none; position: absolute; left: 0; right: 0;
+    bottom: calc(100% + 4px);
+    background: white; border: 1px solid #ccc; border-radius: 6px;
+    overflow: hidden; z-index: 100; max-height: 220px; overflow-y: auto;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.12);
+  }
+  .custom-select.open .custom-select-options { display: block; }
+  .custom-select-option {
+    padding: 9px 12px; font-size: 14px; color: #333;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .custom-select-option:hover { background: #f0f0f0; }
+  .custom-select-option.selected { background: rgba(118,75,162,0.12); color: #764ba2; font-weight: 600; }
 
   </style>
 </head>
@@ -1649,6 +1670,33 @@ async function assignRootLlm(connId) {
     }
   }
 }
+
+// CUSTOM DROPDOWN HANDLER
+(function() {
+  document.querySelectorAll(".custom-select").forEach(function(sel) {
+    var trigger = sel.querySelector(".custom-select-trigger");
+    if (!trigger) return;
+    trigger.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var wasOpen = sel.classList.contains("open");
+      document.querySelectorAll(".custom-select.open").forEach(function(s) { s.classList.remove("open"); });
+      if (!wasOpen) sel.classList.add("open");
+    });
+    sel.querySelectorAll(".custom-select-option").forEach(function(opt) {
+      opt.addEventListener("click", function(e) {
+        e.stopPropagation();
+        sel.querySelectorAll(".custom-select-option").forEach(function(o) { o.classList.remove("selected"); });
+        opt.classList.add("selected");
+        trigger.textContent = opt.textContent;
+        sel.classList.remove("open");
+        assignRootLlm(opt.getAttribute("data-value"));
+      });
+    });
+  });
+  document.addEventListener("click", function() {
+    document.querySelectorAll(".custom-select.open").forEach(function(s) { s.classList.remove("open"); });
+  });
+})();
 
 // AUTO-SCROLL BREADCRUMB TO RIGHT ON LOAD
 window.addEventListener('load', () => {

@@ -16,6 +16,7 @@ import { useEnergy } from "../core/energy.js";
 import { getNodeName } from "../controllers/treeDataFetching.js";
 import Node from "../db/models/node.js";
 import { orchestrateTreeRequest } from "./orchestrator/treeOrchestrator.js";
+import { enqueue } from "./requestQueue.js";
 import {
   switchMode,
   switchBigMode,
@@ -401,145 +402,149 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         return;
       }
 
-      // Abort any previous in-flight request
-      if (socket._chatAbort) {
-        socket._chatAbort.abort();
-      }
-      const abort = new AbortController();
-      socket._chatAbort = abort;
+      // Serialize messages per visitorId — wait for previous message to finish
+      await enqueue(visitorId, async () => {
+        // Abort any previous in-flight request
+        if (socket._chatAbort) {
+          socket._chatAbort.abort();
+        }
+        const abort = new AbortController();
+        socket._chatAbort = abort;
 
-      // ── Session + AIChat tracking ──────────────────────────────────
-      // Finalize any leftover chat from a previous turn
-      await finalizeOpenChat(socket);
+        // ── Session + AIChat tracking ──────────────────────────────────
+        // Finalize any leftover chat from a previous turn
+        await finalizeOpenChat(socket);
 
-      const sessionId = ensureSession(socket);
-      const preMode = getCurrentMode(visitorId) || "home:default";
+        const sessionId = ensureSession(socket);
+        const preMode = getCurrentMode(visitorId) || "home:default";
 
-      // Resolve client info for tracking (include root override if present)
-      const trackingRootId = getRootId(visitorId);
-      let rootLlmOverride = null;
-      if (trackingRootId) {
-        const rn = await Node.findById(trackingRootId).select("llmAssignments").lean();
-        rootLlmOverride = rn?.llmAssignments?.placement || null;
-      }
-      const clientInfo = await getClientForUser(socket.userId, undefined, rootLlmOverride);
+        // Resolve client info for tracking (include root override if present)
+        const trackingRootId = getRootId(visitorId);
+        let rootLlmOverride = null;
+        if (trackingRootId) {
+          const rn = await Node.findById(trackingRootId).select("llmAssignments").lean();
+          rootLlmOverride = rn?.llmAssignments?.placement || null;
+        }
+        const clientInfo = await getClientForUser(socket.userId, undefined, rootLlmOverride);
 
-      let aiChat = null;
-      try {
-        const activeRootId = trackingRootId;
-        aiChat = await startAIChat({
-          userId: socket.userId,
-          sessionId,
-          message: message.slice(0, 5000),
-          source: "user",
-          modeKey: preMode,
-          llmProvider: {
-            isCustom: clientInfo.isCustom,
-            model: clientInfo.model,
-            baseUrl: clientInfo.isCustom ? clientInfo.client.baseURL : null,
-          },
-          ...(activeRootId
-            ? { treeContext: { targetNodeId: activeRootId } }
-            : {}),
-        });
-        setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
-      } catch (err) {
-        console.error("⚠️ Failed to create AIChat:", err.message);
-      }
-
-      try {
-        const currentMode = getCurrentMode(visitorId);
-        const bigMode = currentMode?.split(":")[0] || null;
-        let response;
-
-        if (bigMode === "tree") {
-          response = await orchestrateTreeRequest({
-            visitorId,
-            message,
-            socket,
-            username,
+        let aiChat = null;
+        try {
+          const activeRootId = trackingRootId;
+          aiChat = await startAIChat({
             userId: socket.userId,
-            signal: abort.signal,
             sessionId,
-          });
-        } else {
-          response = await processMessage(visitorId, message, {
-            username,
-            userId: socket.userId,
-            rootId: getRootId(visitorId),
-            signal: abort.signal,
-            onToolResults(results) {
-              if (abort.signal.aborted) return;
-              for (const r of results) {
-                socket.emit("toolResult", r);
-              }
+            message: message.slice(0, 5000),
+            source: "user",
+            modeKey: preMode,
+            llmProvider: {
+              isCustom: clientInfo.isCustom,
+              model: clientInfo.model,
+              connectionId: clientInfo.connectionId || null,
             },
+            ...(activeRootId
+              ? { treeContext: { targetNodeId: activeRootId } }
+              : {}),
           });
+          setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
+        } catch (err) {
+          console.error("⚠️ Failed to create AIChat:", err.message);
         }
 
-        if (response && !abort.signal.aborted) {
-          socket.emit("chatResponse", { ...response, generation });
+        try {
+          const currentMode = getCurrentMode(visitorId);
+          const bigMode = currentMode?.split(":")[0] || null;
+          let response;
 
-          // ── Finalize AIChat (success) ────────────────────────────
+          if (bigMode === "tree") {
+            response = await orchestrateTreeRequest({
+              visitorId,
+              message,
+              socket,
+              username,
+              userId: socket.userId,
+              signal: abort.signal,
+              sessionId,
+              rootChatId: aiChat?._id || null,
+            });
+          } else {
+            response = await processMessage(visitorId, message, {
+              username,
+              userId: socket.userId,
+              rootId: getRootId(visitorId),
+              signal: abort.signal,
+              onToolResults(results) {
+                if (abort.signal.aborted) return;
+                for (const r of results) {
+                  socket.emit("toolResult", r);
+                }
+              },
+            });
+          }
+
+          if (response && !abort.signal.aborted) {
+            socket.emit("chatResponse", { ...response, generation });
+
+            // ── Finalize AIChat (success) ────────────────────────────
+            if (aiChat) {
+              const finalMode = response.modeKey || getCurrentMode(visitorId);
+              finalizeAIChat({
+                chatId: aiChat._id,
+                content: response.answer || null,
+                stopped: false,
+                modeKey: finalMode,
+              }).catch((err) =>
+                console.error("⚠️ AIChat finalize failed:", err.message),
+              );
+            }
+            clearActiveChat(socket);
+          } else if (abort.signal.aborted) {
+            // ── Finalize AIChat (cancelled mid-flight) ───────────────
+            if (aiChat) {
+              finalizeAIChat({
+                chatId: aiChat._id,
+                content: null,
+                stopped: true,
+              }).catch((err) =>
+                console.error("⚠️ AIChat cancel finalize failed:", err.message),
+              );
+            }
+            clearActiveChat(socket);
+          }
+        } catch (err) {
+          if (abort.signal.aborted) {
+            if (aiChat) {
+              finalizeAIChat({
+                chatId: aiChat._id,
+                content: null,
+                stopped: true,
+              }).catch((e) =>
+                console.error("⚠️ AIChat abort finalize failed:", e.message),
+              );
+            }
+            clearActiveChat(socket);
+            return;
+          }
+
+          console.error("❌ Chat error:", err);
+          socket.emit("chatError", { error: err.message, generation });
+
+          // ── Finalize AIChat (error) ────────────────────────────────
           if (aiChat) {
-            const finalMode = response.modeKey || getCurrentMode(visitorId);
             finalizeAIChat({
               chatId: aiChat._id,
-              content: response.answer || null,
+              content: `Error: ${err.message}`,
               stopped: false,
-              modeKey: finalMode,
-            }).catch((err) =>
-              console.error("⚠️ AIChat finalize failed:", err.message),
-            );
-          }
-          clearActiveChat(socket);
-        } else if (abort.signal.aborted) {
-          // ── Finalize AIChat (cancelled mid-flight) ───────────────
-          if (aiChat) {
-            finalizeAIChat({
-              chatId: aiChat._id,
-              content: null,
-              stopped: true,
-            }).catch((err) =>
-              console.error("⚠️ AIChat cancel finalize failed:", err.message),
-            );
-          }
-          clearActiveChat(socket);
-        }
-      } catch (err) {
-        if (abort.signal.aborted) {
-          if (aiChat) {
-            finalizeAIChat({
-              chatId: aiChat._id,
-              content: null,
-              stopped: true,
             }).catch((e) =>
-              console.error("⚠️ AIChat abort finalize failed:", e.message),
+              console.error("⚠️ AIChat error finalize failed:", e.message),
             );
           }
           clearActiveChat(socket);
-          return;
+        } finally {
+          if (socket._chatAbort === abort) {
+            socket._chatAbort = null;
+          }
         }
-
-        console.error("❌ Chat error:", err);
-        socket.emit("chatError", { error: err.message, generation });
-
-        // ── Finalize AIChat (error) ────────────────────────────────
-        if (aiChat) {
-          finalizeAIChat({
-            chatId: aiChat._id,
-            content: `Error: ${err.message}`,
-            stopped: false,
-          }).catch((e) =>
-            console.error("⚠️ AIChat error finalize failed:", e.message),
-          );
-        }
-        clearActiveChat(socket);
-      } finally {
-        if (socket._chatAbort === abort) {
-          socket._chatAbort = null;
-        }
-      }
+      });
     });
 
     // ── CANCEL REQUEST ────────────────────────────────────────────────

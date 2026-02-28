@@ -397,8 +397,8 @@ export async function classify({
   slot,
   rootLlmConnectionId,
 }) {
-  const { client: openai, model, isCustom } = await getClientForUser(userId, slot, rootLlmConnectionId);
-  const _llmProvider = { isCustom, model, baseUrl: isCustom ? openai.baseURL : null };
+  const { client: openai, model, isCustom, connectionId } = await getClientForUser(userId, slot, rootLlmConnectionId);
+  const _llmProvider = { isCustom, model, connectionId: connectionId || null };
 
   let contextBlock = "";
   if (conversationMemory) {
@@ -480,8 +480,8 @@ export async function translateDestructive({
   slot,
   rootLlmConnectionId,
 }) {
-  const { client: openai, model, isCustom } = await getClientForUser(userId, slot, rootLlmConnectionId);
-  const _llmProvider = { isCustom, model, baseUrl: isCustom ? openai.baseURL : null };
+  const { client: openai, model, isCustom, connectionId } = await getClientForUser(userId, slot, rootLlmConnectionId);
+  const _llmProvider = { isCustom, model, connectionId: connectionId || null };
 
   // Build context block
   let contextBlock = "";

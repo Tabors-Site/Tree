@@ -116,10 +116,13 @@ export async function startAIChat({
 }) {
   const layers = modeKey ? modeKey.split(":") : ["home", "default"];
 
+  const chatId = uuidv4();
   const chat = await AIChat.create({
+    _id: chatId,
     userId,
     sessionId: sessionId || uuidv4(),
     chainIndex: 0,
+    rootChatId: chatId,
     startMessage: {
       content: message,
       source,
@@ -129,7 +132,7 @@ export async function startAIChat({
       path: modeKey || "home:default",
       layers,
     },
-    llmProvider: llmProvider || { isCustom: false, model: null, baseUrl: null },
+    llmProvider: llmProvider || { isCustom: false, model: null, connectionId: null },
     ...(treeContext ? { treeContext } : {}),
   });
 
@@ -217,6 +220,7 @@ export function trackChainStep({
   userId,
   sessionId,
   chainIndex,
+  rootChatId = null,
   modeKey,
   source = "orchestrator",
   input,
@@ -237,6 +241,7 @@ export function trackChainStep({
     userId,
     sessionId,
     chainIndex,
+    rootChatId,
     startMessage: {
       content:
         typeof input === "string"
@@ -258,7 +263,7 @@ export function trackChainStep({
       path: modeKey,
       layers,
     },
-    llmProvider: llmProvider || { isCustom: false, model: null, baseUrl: null },
+    llmProvider: llmProvider || { isCustom: false, model: null, connectionId: null },
     ...(treeContext ? { treeContext } : {}),
   }).catch((err) => {
     console.error(`⚠️ Failed to track chain step [${modeKey}]:`, err.message);

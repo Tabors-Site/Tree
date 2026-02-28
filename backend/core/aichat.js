@@ -73,7 +73,12 @@ async function getAIChats({
         select: "name",
         model: "Node",
       })
-      .sort({ "startMessage.time": -1, chainIndex: -1 })
+      .populate({
+        path: "llmProvider.connectionId",
+        select: "name model",
+        model: "CustomLlmConnection",
+      })
+      .sort({ "startMessage.time": -1 })
       .lean();
 
     // Step 3: Group into sessions (preserving newest-session-first order)
@@ -88,11 +93,16 @@ async function getAIChats({
         sessionMap.get(sid).push(chat);
       }
     }
-    // Reverse each session's chats → chronological (oldest first)
+    // Sort each session's chats: time ascending (groups chains together), then chainIndex ascending (orders steps within chain)
     const sessions = sessionIds
       .filter((sid) => sessionMap.get(sid).length > 0)
       .map((sid) => {
-        const sessionChats = sessionMap.get(sid).reverse();
+        const sessionChats = sessionMap.get(sid).sort((a, b) => {
+          const ta = new Date(a.startMessage?.time || 0).getTime();
+          const tb = new Date(b.startMessage?.time || 0).getTime();
+          if (ta !== tb) return ta - tb;
+          return a.chainIndex - b.chainIndex;
+        });
         return {
           sessionId: sid,
           chats: sessionChats,

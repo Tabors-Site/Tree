@@ -176,7 +176,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-visual">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>@${safeUsername} — Profile</title>
@@ -197,6 +197,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
+      min-height: 100dvh;
       padding: 20px;
       color: #1a1a1a;
       position: relative;
@@ -231,8 +232,13 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       left: -100px;
       animation-delay: -10s;
     }
-       html, body {
+       html {
         background: #736fe6;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+      }
+      body {
         margin: 0;
         padding: 0;
       }
@@ -10638,6 +10644,72 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     transform: translateY(-2px);
   }
 
+  /* Custom dropdown (replaces native <select> to avoid iframe glitch on mobile) */
+  .custom-select {
+    position: relative;
+    width: 100%;
+  }
+  .custom-select-trigger {
+    padding: 8px 10px;
+    font-size: 15px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    transition: border-color 0.2s, background 0.2s;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .custom-select-trigger::after {
+    content: "▾";
+    font-size: 12px;
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+  .custom-select.open .custom-select-trigger {
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.25);
+  }
+  .custom-select.open .custom-select-trigger::after { content: "▴"; }
+  .custom-select-options {
+    display: none;
+    position: absolute;
+    left: 0; right: 0;
+    bottom: calc(100% + 4px);
+    background: rgba(30, 20, 50, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 100;
+    max-height: 220px;
+    overflow-y: auto;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+  }
+  .custom-select.open .custom-select-options { display: block; }
+  .custom-select-option {
+    padding: 10px 12px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .custom-select-option:hover,
+  .custom-select-option:focus { background: rgba(255, 255, 255, 0.12); }
+  .custom-select-option.selected {
+    background: rgba(72, 187, 178, 0.2);
+    color: white;
+    font-weight: 600;
+  }
+
   .llm-btn-row {
     display: flex;
     gap: 12px;
@@ -10895,21 +10967,27 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
         ${connectionCount > 0 ? '<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">'
           + '<div style="flex:1;min-width:180px;">'
             + '<label class="llm-field-label" style="margin-bottom:4px;display:block;">Profile (Chat)</label>'
-            + '<select class="llm-input" id="llmAssignMain" onchange="assignSlot(&#39;main&#39;, this.value)" style="padding:8px 10px;">'
-              + '<option value=""' + (!mainAssignment ? ' selected' : '') + '>Default LLM</option>'
-              + llmConnections.map(function(c) {
-                  return '<option value="' + c._id + '"' + (mainAssignment === c._id ? ' selected' : '') + '>' + c.name + ' (' + c.model + ')</option>';
-                }).join('')
-            + '</select>'
+            + '<div class="custom-select" id="llmAssignMain" data-slot="main">'
+              + '<div class="custom-select-trigger">' + (mainAssignment ? llmConnections.filter(function(c){return c._id===mainAssignment}).map(function(c){return c.name+' ('+c.model+')'})[0] || 'Default LLM' : 'Default LLM') + '</div>'
+              + '<div class="custom-select-options">'
+                + '<div class="custom-select-option' + (!mainAssignment ? ' selected' : '') + '" data-value="">Default LLM</div>'
+                + llmConnections.map(function(c) {
+                    return '<div class="custom-select-option' + (mainAssignment === c._id ? ' selected' : '') + '" data-value="' + c._id + '">' + c.name + ' (' + c.model + ')</div>';
+                  }).join('')
+              + '</div>'
+            + '</div>'
           + '</div>'
           + '<div style="flex:1;min-width:180px;">'
             + '<label class="llm-field-label" style="margin-bottom:4px;display:block;">Raw Ideas</label>'
-            + '<select class="llm-input" id="llmAssignRawIdea" onchange="assignSlot(&#39;rawIdea&#39;, this.value)" style="padding:8px 10px;">'
-              + '<option value=""' + (!rawIdeaAssignment ? ' selected' : '') + '>Default LLM</option>'
-              + llmConnections.map(function(c) {
-                  return '<option value="' + c._id + '"' + (rawIdeaAssignment === c._id ? ' selected' : '') + '>' + c.name + ' (' + c.model + ')</option>';
-                }).join('')
-            + '</select>'
+            + '<div class="custom-select" id="llmAssignRawIdea" data-slot="rawIdea">'
+              + '<div class="custom-select-trigger">' + (rawIdeaAssignment ? llmConnections.filter(function(c){return c._id===rawIdeaAssignment}).map(function(c){return c.name+' ('+c.model+')'})[0] || 'Default LLM' : 'Default LLM') + '</div>'
+              + '<div class="custom-select-options">'
+                + '<div class="custom-select-option' + (!rawIdeaAssignment ? ' selected' : '') + '" data-value="">Default LLM</div>'
+                + llmConnections.map(function(c) {
+                    return '<div class="custom-select-option' + (rawIdeaAssignment === c._id ? ' selected' : '') + '" data-value="' + c._id + '">' + c.name + ' (' + c.model + ')</div>';
+                  }).join('')
+              + '</div>'
+            + '</div>'
           + '</div>'
         + '</div>' : ''}
 
@@ -11398,6 +11476,37 @@ async function assignSlot(slot, connId) {
 }
 
 // =====================
+// CUSTOM DROPDOWNS
+// =====================
+(function() {
+  document.querySelectorAll(".custom-select").forEach(function(sel) {
+    var trigger = sel.querySelector(".custom-select-trigger");
+    trigger.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var wasOpen = sel.classList.contains("open");
+      // close all others
+      document.querySelectorAll(".custom-select.open").forEach(function(s) { s.classList.remove("open"); });
+      if (!wasOpen) sel.classList.add("open");
+    });
+    sel.querySelectorAll(".custom-select-option").forEach(function(opt) {
+      opt.addEventListener("click", function(e) {
+        e.stopPropagation();
+        sel.querySelectorAll(".custom-select-option").forEach(function(o) { o.classList.remove("selected"); });
+        opt.classList.add("selected");
+        trigger.textContent = opt.textContent;
+        sel.classList.remove("open");
+        var val = opt.getAttribute("data-value");
+        var slot = sel.getAttribute("data-slot");
+        if (slot) assignSlot(slot, val);
+      });
+    });
+  });
+  document.addEventListener("click", function() {
+    document.querySelectorAll(".custom-select.open").forEach(function(s) { s.classList.remove("open"); });
+  });
+})();
+
+// =====================
 // EVENTS
 // =====================
 document.querySelectorAll(".plan-box").forEach(function(box) {
@@ -11797,17 +11906,32 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
     // ── Chain grouping ─────────────────────────────────────
 
     const groupIntoChains = (chats) => {
-      const chains = [];
-      let current = null;
+      // Group by rootChatId for proper chain separation
+      const chainMap = new Map();
+      const chainOrder = [];
+
       for (const chat of chats) {
-        if (chat.chainIndex === 0 || !current) {
-          current = { root: chat, steps: [] };
-          chains.push(current);
+        const key = chat.rootChatId || chat._id;
+        if (!chainMap.has(key)) {
+          chainMap.set(key, { root: null, steps: [] });
+          chainOrder.push(key);
+        }
+        const chain = chainMap.get(key);
+        if (chat.chainIndex === 0 || chat._id === key) {
+          chain.root = chat;
         } else {
-          current.steps.push(chat);
+          chain.steps.push(chat);
         }
       }
-      return chains;
+
+      // Sort steps within each chain by chainIndex
+      return chainOrder
+        .map((key) => {
+          const chain = chainMap.get(key);
+          chain.steps.sort((a, b) => a.chainIndex - b.chainIndex);
+          return chain;
+        })
+        .filter((c) => c.root);
     };
 
     // ── Phase grouping ─────────────────────────────────────
@@ -11838,7 +11962,8 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
     // ── Model badge helper ─────────────────────────────────
 
     const renderModelBadge = (chat) => {
-      const model = chat.llmProvider?.model;
+      const connName = chat.llmProvider?.connectionId?.name;
+      const model = connName || chat.llmProvider?.model;
       if (!model) return "";
       const isCustom = chat.llmProvider?.isCustom;
       const cls = isCustom ? "chain-model chain-model-custom" : "chain-model";
@@ -12055,7 +12180,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       const hasSteps = steps.length > 0;
 
       const isCustomLlm = chat.llmProvider?.isCustom === true;
-      const modelName = chat.llmProvider?.model || "default";
+      const modelName = chat.llmProvider?.connectionId?.name || chat.llmProvider?.model || "default";
 
       const tc = chat.treeContext;
       const treeNodeId = tc?.targetNodeId?._id || tc?.targetNodeId;

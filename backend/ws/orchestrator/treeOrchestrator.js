@@ -238,6 +238,7 @@ async function executePlanSteps({
   responseHint,
   includeMemoryOnFirstStep,
   llmProvider,
+  rootChatId,
 }) {
   const meta = { username, userId, rootId };
   let lastTargetNodeId = initialTargetNodeId || rootId;
@@ -264,6 +265,7 @@ async function executePlanSteps({
     trackChainStep({
       userId,
       sessionId,
+      rootChatId,
       chainIndex: chainIndex++,
       modeKey: `tree:orchestrator:plan:${stepNum}`,
       input: `Step ${stepNum}: ${op.intent}${op.targetHint ? ` → ${op.targetHint}` : ""}\n${op.directive}`,
@@ -345,6 +347,7 @@ async function executePlanSteps({
       trackChainStep({
         userId,
         sessionId,
+        rootChatId,
         chainIndex: chainIndex++,
         modeKey: "tree:navigate",
         input: navDirective,
@@ -721,6 +724,7 @@ async function executePlanSteps({
       trackChainStep({
         userId,
         sessionId,
+        rootChatId,
         chainIndex: chainIndex++,
         modeKey: "tree:getContext",
         input: `getContextForAi(${targetNodeId}, ${intent.intent})`,
@@ -838,6 +842,7 @@ async function executePlanSteps({
       trackChainStep({
         userId,
         sessionId,
+        rootChatId,
         chainIndex: chainIndex++,
         modeKey: executionMode,
         input: intent.directive,
@@ -918,6 +923,7 @@ export async function orchestrateTreeRequest({
   rootId: rootIdParam,
   skipRespond = false,
   slot,
+  rootChatId = null,
 }) {
   if (signal?.aborted) return null;
 
@@ -933,13 +939,13 @@ export async function orchestrateTreeRequest({
   }
 
   // Resolve llmProvider once for tracking across all chain steps
-  let llmProvider = { isCustom: false, model: null, baseUrl: null };
+  let llmProvider = { isCustom: false, model: null, connectionId: null };
   try {
     const clientInfo = await getClientForUser(userId, slot, rootLlmConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
-      baseUrl: clientInfo.isCustom ? clientInfo.client.baseURL : null,
+      connectionId: clientInfo.connectionId || null,
     };
   } catch (e) { /* use default */ }
 
@@ -962,6 +968,7 @@ export async function orchestrateTreeRequest({
         socket,
         signal,
         ...meta,
+        rootChatId,
         skipRespond,
       });
     } else if (isDenial(message)) {
@@ -1047,6 +1054,7 @@ export async function orchestrateTreeRequest({
   trackChainStep({
     userId,
     sessionId,
+    rootChatId,
     chainIndex: chainIndex++,
     modeKey: "classifier",
     input: message,
@@ -1098,6 +1106,7 @@ export async function orchestrateTreeRequest({
       chainIndex,
       skipRespond,
       llmProvider,
+      rootChatId,
     });
   }
 
@@ -1157,6 +1166,7 @@ export async function orchestrateTreeRequest({
   trackChainStep({
     userId,
     sessionId,
+    rootChatId,
     chainIndex: chainIndex++,
     modeKey: "translator",
     input: message,
@@ -1188,6 +1198,7 @@ export async function orchestrateTreeRequest({
     responseHint,
     includeMemoryOnFirstStep: true,
     llmProvider,
+    rootChatId,
   });
 
   if (!planResult) return null;
@@ -1253,6 +1264,7 @@ export async function orchestrateTreeRequest({
   trackChainStep({
     userId,
     sessionId,
+    rootChatId,
     chainIndex: chainIndex++,
     modeKey: "tree:respond",
     input: responseHint || "Respond to the user",
@@ -1299,6 +1311,7 @@ async function runLibrarianFlow({
   chainIndex,
   skipRespond = false,
   llmProvider,
+  rootChatId,
 }) {
   const meta = { username, userId, rootId };
   const isQuery = classification.intent === "query";
@@ -1339,6 +1352,7 @@ async function runLibrarianFlow({
     trackChainStep({
       userId,
       sessionId,
+      rootChatId,
       chainIndex: chainIndex++,
       modeKey: "tree:librarian",
       input: message,
@@ -1381,6 +1395,7 @@ async function runLibrarianFlow({
   trackChainStep({
     userId,
     sessionId,
+    rootChatId,
     chainIndex: chainIndex++,
     modeKey: "tree:librarian",
     input: message,
@@ -1431,6 +1446,7 @@ async function runLibrarianFlow({
     trackChainStep({
       userId,
       sessionId,
+      rootChatId,
       chainIndex: chainIndex++,
       modeKey: "tree:respond",
       input: responseHint || "Respond to the user",
@@ -1471,6 +1487,7 @@ async function runLibrarianFlow({
     responseHint,
     includeMemoryOnFirstStep: false, // librarian already had context
     llmProvider,
+    rootChatId,
   });
 
   if (!planResult) return null;
@@ -1535,6 +1552,7 @@ async function runLibrarianFlow({
   trackChainStep({
     userId,
     sessionId,
+    rootChatId,
     chainIndex: chainIndex++,
     modeKey: "tree:respond",
     input: responseHint || "Respond to the user",
@@ -1573,6 +1591,7 @@ async function executePendingOperation({
   userId,
   rootId,
   llmProvider,
+  rootChatId,
   skipRespond = false,
 }) {
   const meta = { username, userId, rootId };
@@ -1640,6 +1659,7 @@ async function executePendingOperation({
   trackChainStep({
     userId,
     sessionId,
+    rootChatId,
     chainIndex: chainIndex++,
     modeKey: executionMode,
     input: pending.directive || pending.originalMessage,
@@ -1702,6 +1722,7 @@ async function executePendingOperation({
       stepSummaries,
       responseHint,
       includeMemoryOnFirstStep: false,
+      rootChatId,
     });
 
     if (!planResult) return null;

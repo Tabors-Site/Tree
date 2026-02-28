@@ -124,7 +124,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
-      baseUrl: clientInfo.isCustom ? clientInfo.client.baseURL : null,
+      connectionId: clientInfo.connectionId || null,
     };
   } catch {
     llmProvider = undefined;
@@ -149,6 +149,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     trackChainStep({
       userId,
       sessionId,
+      rootChatId: mainChatId,
       chainIndex: chainIndex++,
       modeKey: "rawIdea:complete",
       source: "orchestrator",
@@ -220,6 +221,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     trackChainStep({
       userId,
       sessionId,
+      rootChatId: mainChatId,
       chainIndex: chainIndex++,
       modeKey: "rawIdea:chooseRoot",
       source: "orchestrator",
@@ -257,6 +259,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       rootId: chosenRootId,
       skipRespond: !withResponse,
       slot: "rawIdea",
+      rootChatId: mainChatId,
     });
 
     if (!treeResult || treeResult.noFit || !treeResult.success) {
@@ -292,6 +295,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     trackChainStep({
       userId,
       sessionId,
+      rootChatId: mainChatId,
       chainIndex: chainIndex++,
       modeKey: "rawIdea:complete",
       source: "orchestrator",
@@ -327,6 +331,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       trackChainStep({
         userId,
         sessionId,
+        rootChatId: mainChatId,
         chainIndex: chainIndex++,
         modeKey: "rawIdea:complete",
         source: "orchestrator",

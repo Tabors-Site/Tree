@@ -1,5 +1,6 @@
 import User from "../../db/models/user.js";
 import { upgradeUserPlan } from "./upgradePlan.js";
+import { clearUserClientCache } from "../../ws/conversation.js";
 
 /* ===============================
    CONFIG
@@ -70,6 +71,9 @@ export async function processPurchase({
   }
 
   await user.save();
+
+  // Bust LLM client cache so custom connections take effect immediately
+  clearUserClientCache(userId);
 
   return user;
 }

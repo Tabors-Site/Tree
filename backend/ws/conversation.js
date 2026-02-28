@@ -17,7 +17,6 @@ import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
 
 import { resolveAndValidateHost } from "../core/customLLM.js";
 
-
 dotenv.config();
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -29,6 +28,8 @@ const defaultClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "ollama",
 });
 //"gpt-oss:20b";
+//qwen3.5-35b-a3b-GGUF:Q4_K_XL
+//qwen3.5:27b
 const DEFAULT_MODEL = process.env.AI_MODEL || "qwen3.5:27b";
 
 const MAX_MESSAGES = 30;
@@ -36,7 +37,7 @@ const MAX_TOOL_ITERATIONS = 15;
 
 // ─────────────────────────────────────────────────────────────────────────
 // ENCRYPTION HELPERS (must match whatever you use when saving)
-// ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────p────────────────
 
 const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";
@@ -72,11 +73,18 @@ async function resolveConnection(connectionId, cacheKey) {
   var conn = await CustomLlmConnection.findById(connectionId).lean();
   if (!conn || !conn.baseUrl || !conn.encryptedApiKey) return null;
 
+  // Verify the connection owner has an active paid plan
+  var owner = await User.findById(conn.userId).select("profileType planExpiresAt").lean();
+  if (!owner || owner.profileType === "basic") return null;
+  if (owner.profileType !== "god" && (!owner.planExpiresAt || new Date(owner.planExpiresAt) <= new Date())) return null;
+
   try {
     var hostname = new URL(conn.baseUrl).hostname;
     await resolveAndValidateHost(hostname);
   } catch (err) {
-    console.error("Blocked custom LLM connection " + connectionId + ": " + err.message);
+    console.error(
+      "Blocked custom LLM connection " + connectionId + ": " + err.message,
+    );
     return null;
   }
 
@@ -90,6 +98,7 @@ async function resolveConnection(connectionId, cacheKey) {
     client: new OpenAI({ baseURL: baseURL, apiKey: apiKey }),
     model: conn.model || DEFAULT_MODEL,
     isCustom: true,
+    connectionId: conn._id,
     fetchedAt: Date.now(),
   };
 
@@ -97,14 +106,15 @@ async function resolveConnection(connectionId, cacheKey) {
 
   CustomLlmConnection.updateOne(
     { _id: conn._id },
-    { $set: { lastUsedAt: new Date() } }
+    { $set: { lastUsedAt: new Date() } },
   ).catch(function () {});
 
   return entry;
 }
 
 export async function getClientForUser(userId, slot, overrideConnectionId) {
-  if (!userId) return { client: defaultClient, model: DEFAULT_MODEL, isCustom: false };
+  if (!userId)
+    return { client: defaultClient, model: DEFAULT_MODEL, isCustom: false };
 
   slot = slot || "main";
 
@@ -113,14 +123,25 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
   if (overrideConnectionId) {
     var overrideCacheKey = "conn:" + overrideConnectionId;
     var overrideCached = userClientCache.get(overrideCacheKey);
-    if (overrideCached && Date.now() - overrideCached.fetchedAt < CLIENT_CACHE_TTL) {
+    if (
+      overrideCached &&
+      Date.now() - overrideCached.fetchedAt < CLIENT_CACHE_TTL
+    ) {
       return overrideCached;
     }
     try {
-      var overrideEntry = await resolveConnection(overrideConnectionId, overrideCacheKey);
+      var overrideEntry = await resolveConnection(
+        overrideConnectionId,
+        overrideCacheKey,
+      );
       if (overrideEntry) return overrideEntry;
     } catch (err) {
-      console.error("Failed to resolve override connection " + overrideConnectionId + ": " + err.message);
+      console.error(
+        "Failed to resolve override connection " +
+          overrideConnectionId +
+          ": " +
+          err.message,
+      );
     }
     // Fall through to normal slot-based resolution
   }
@@ -142,7 +163,9 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
       if (entry) return entry;
     }
   } catch (err) {
-    console.error("Failed to load custom LLM for user " + userId + ": " + err.message);
+    console.error(
+      "Failed to load custom LLM for user " + userId + ": " + err.message,
+    );
   }
 
   var defaultEntry = {
@@ -237,9 +260,9 @@ export function switchMode(visitorId, newModeKey, ctx) {
 
   // Build new system prompt
   const systemPrompt = buildPromptForMode(newModeKey, {
-  ...ctx,
-  rootId: session.rootId || ctx.rootId,
-});
+    ...ctx,
+    rootId: session.rootId || ctx.rootId,
+  });
 
   // Reset conversation with new system prompt + carried context
   session.messages = [
@@ -293,9 +316,11 @@ export async function processMessage(visitorId, message, ctx) {
   const mode = getMode(session.modeKey);
 
   // Resolve LLM client for this user (custom or default, with root override)
-  const { client: openai, model: MODEL, isCustom } = await getClientForUser(ctx.userId, ctx.slot, ctx.rootLlmConnectionId);
-
- 
+  const {
+    client: openai,
+    model: MODEL,
+    isCustom,
+  } = await getClientForUser(ctx.userId, ctx.slot, ctx.rootLlmConnectionId);
 
   // Ensure MCP client
   let client = mcpClients.get(visitorId);
@@ -353,8 +378,7 @@ export async function processMessage(visitorId, message, ctx) {
 
   // Add user message
 
-    session.messages.push({ role: "user", content: message });
-  
+  session.messages.push({ role: "user", content: message });
 
   // Get tools for current mode
   const tools = getToolsForMode(session.modeKey);
@@ -402,14 +426,16 @@ export async function processMessage(visitorId, message, ctx) {
       // tool execution happens below
     } else {
       // ✅ No tools left → now safe to return for internal mode
-        if (isInternal) {
+      if (isInternal) {
         const raw = assistantMessage.content;
         try {
           return JSON.parse(raw);
         } catch (err) {
           // Try stripping markdown fences
           try {
-            const stripped = raw.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+            const stripped = raw
+              .replace(/^```(?:json)?\s*\n?/i, "")
+              .replace(/\n?```\s*$/, "");
             return JSON.parse(stripped);
           } catch (_) {}
 

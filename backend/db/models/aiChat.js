@@ -35,6 +35,16 @@ const AIChatSchema = new mongoose.Schema({
   },
 
   // -----------------------------------
+  // Links steps back to their root chat (chainIndex 0)
+  // Root records set this to their own _id
+  // -----------------------------------
+  rootChatId: {
+    type: String,
+    default: null,
+    index: true,
+  },
+
+  // -----------------------------------
   // Start message
   // -----------------------------------
   startMessage: {
@@ -140,8 +150,9 @@ const AIChatSchema = new mongoose.Schema({
       type: String,
       default: null,
     },
-    baseUrl: {
+    connectionId: {
       type: String,
+      ref: "CustomLlmConnection",
       default: null,
     },
     _id: false,
