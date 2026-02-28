@@ -1,5 +1,6 @@
 import User from "../db/models/user.js";
 import CustomLlmConnection from "../db/models/customLlmConnection.js";
+import Node from "../db/models/node.js";
 import { clearUserClientCache } from "../ws/conversation.js";
 import crypto from "crypto";
 import dns from "dns/promises";
@@ -264,7 +265,7 @@ export async function deleteCustomLlmConnection(userId, connectionId) {
   var conn = await CustomLlmConnection.findOneAndDelete({ _id: connectionId, userId });
   if (!conn) throw new Error("Connection not found");
 
-  // If deleted connection was assigned to any slot, clear those assignments
+  // If deleted connection was assigned to any user slot, clear those assignments
   var user = await User.findById(userId).select("llmAssignments").lean();
   if (user && user.llmAssignments) {
     var unset = {};
@@ -278,6 +279,12 @@ export async function deleteCustomLlmConnection(userId, connectionId) {
       clearUserClientCache(userId);
     }
   }
+
+  // If deleted connection was assigned to any root node, clear those too
+  await Node.updateMany(
+    { "llmAssignments.placement": connectionId },
+    { $set: { "llmAssignments.placement": null } }
+  );
 
   return { removed: true };
 }

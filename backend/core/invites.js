@@ -133,6 +133,8 @@ export async function createInvite({
     }
 
     node.rootOwner = receivingUser._id;
+    // Clear LLM assignments — the new owner doesn't own the old connections
+    node.llmAssignments = { placement: null };
     node.contributors = node.contributors.filter(
       (u) => u._id.toString() !== receivingUser._id.toString(),
     );

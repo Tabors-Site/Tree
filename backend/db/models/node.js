@@ -49,6 +49,13 @@ const NodeSchema = new mongoose.Schema({
     enum: ["OWNER_ONLY", "ANYONE", "MAJORITY", "ALL"],
     default: "OWNER_ONLY",
   },
+  llmAssignments: {
+    placement: { type: String, ref: "CustomLlmConnection", default: null },
+    // Future slots:
+    // cleanup: { type: String, ref: "CustomLlmConnection", default: null },
+    // coder: { type: String, ref: "CustomLlmConnection", default: null },
+    // organization: { type: String, ref: "CustomLlmConnection", default: null },
+  },
   children: [{ type: String, ref: "Node" }],
   parent: { type: String, ref: "Node", default: null },
 

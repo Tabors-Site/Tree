@@ -2,6 +2,7 @@
 import fs from "fs";
 import User from "../db/models/user.js";
 import { assignConnection } from "./customLLM.js";
+import Node from "../db/models/node.js";
 
 /* ================================
  * CONSTANTS (HALF-COST VERSION)
@@ -160,7 +161,13 @@ export function maybeResetEnergy(user) {
     user.availableEnergy.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
 
     user.availableEnergy.lastResetAt = new Date();
-    assignConnection(user._id, "main", null); // Clear LLM assignment on downgrade
+    // Clear all LLM assignments on downgrade (user slots + root nodes)
+    assignConnection(user._id, "main", null);
+    assignConnection(user._id, "rawIdea", null);
+    Node.updateMany(
+      { rootOwner: user._id, "llmAssignments.placement": { $ne: null } },
+      { $set: { "llmAssignments.placement": null } }
+    ).catch(function(e) { console.error("Failed to clear root LLM on downgrade:", e.message); });
   }
 
   const lastReset = user.availableEnergy.lastResetAt?.getTime() || 0;

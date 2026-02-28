@@ -11835,6 +11835,16 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       return phases;
     };
 
+    // ── Model badge helper ─────────────────────────────────
+
+    const renderModelBadge = (chat) => {
+      const model = chat.llmProvider?.model;
+      if (!model) return "";
+      const isCustom = chat.llmProvider?.isCustom;
+      const cls = isCustom ? "chain-model chain-model-custom" : "chain-model";
+      return `<span class="${cls}">${esc(model)}</span>`;
+    };
+
     // ── Render substep ─────────────────────────────────────
 
     const renderSubstep = (chat) => {
@@ -11867,6 +11877,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
           ${targetName ? `<span class="chain-step-target">${esc(targetName)}</span>` : ""}
           ${tc?.stepResult === "failed" ? `<span class="chain-step-failed">FAILED</span>` : ""}
           ${tc?.resultDetail && tc.stepResult === "failed" ? `<span class="chain-step-fail-reason">${truncate(tc.resultDetail, 60)}</span>` : ""}
+          ${renderModelBadge(chat)}
           ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
         </summary>
         <div class="chain-step-body">
@@ -11901,6 +11912,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
               <span class="chain-phase-label">Translator</span>
               ${tc?.planTotalSteps ? `<span class="chain-step-counter">${tc.planTotalSteps}-step plan</span>` : ""}
               ${tc?.directive ? `<span class="chain-plan-summary-text">${truncate(tc.directive, 80)}</span>` : ""}
+              ${renderModelBadge(s)}
               ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
             </summary>
             ${outputFull ? `<div class="chain-step-body"><div class="chain-step-output"><span class="chain-io-label chain-io-out">PLAN</span>${outputFull}</div></div>` : ""}
@@ -11951,6 +11963,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
                   : ""
               }
               ${countBadges}
+              ${renderModelBadge(m)}
             </div>
             <div class="chain-plan-directive">${inputFull}</div>
             ${hasSubsteps ? `<div class="chain-substeps">${phase.substeps.map(renderSubstep).join("")}</div>` : ""}
@@ -11971,6 +11984,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
             <summary class="chain-phase-summary">
               <span class="chain-phase-icon">💬</span>
               <span class="chain-phase-label">${modeLabel(s.aiContext?.path)}</span>
+              ${renderModelBadge(s)}
               ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
             </summary>
             <div class="chain-step-body">
@@ -12399,6 +12413,12 @@ details[open] > .chain-substep-summary::before { transform: rotate(90deg); }
   background: rgba(255,255,255,0.12); padding: 2px 8px; border-radius: 6px;
 }
 .chain-step-duration { font-size: 10px; color: rgba(255,255,255,0.45); }
+.chain-model {
+  font-size: 10px; font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255,255,255,0.4); margin-left: auto; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 150px;
+}
+.chain-model-custom { color: #48bb78; }
 
 /* ── Chain: expanded body ───────────────────────── */
 .chain-step-body { padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.08); }

@@ -585,10 +585,23 @@ const ApiAccessSection = () => {
           </div>
 
           {/* ── Custom LLM ──────── */}
-          <div className="sub-title">Custom LLM</div>
+          <div className="sub-title">Custom LLM Connections</div>
           <div className="desc-muted">
-            Connect your own LLM provider for AI features. Requires a base URL,
-            API key, and model name.
+            Connect your own LLM providers for AI features. Each user can have
+            up to 15 connections and assign them to different slots. Requires a
+            paid plan.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/user/:userId/custom-llm</span>
+            </div>
+            <div className="ep-desc">List all custom LLM connections for the user.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{ "success": true, "connections": [
+  { "_id": "...", "name": "GPT-4o", "baseUrl": "https://api.openai.com/v1", "model": "gpt-4o", ... }
+] }`}</div>
           </div>
 
           <div className="endpoint">
@@ -596,32 +609,53 @@ const ApiAccessSection = () => {
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/user/:userId/custom-llm</span>
             </div>
-            <div className="ep-desc">Set or update the custom LLM connection.</div>
+            <div className="ep-desc">Create a new custom LLM connection.</div>
             <div className="ep-label">Request Body</div>
             <div className="ep-code">{`{
+  "name": "My GPT-4o",
   "baseUrl": "https://api.openai.com/v1",
   "apiKey": "sk-...",
   "model": "gpt-4o"
 }`}</div>
+            <div className="ep-note">Max 15 connections per user. API key is encrypted at rest.</div>
           </div>
 
           <div className="endpoint">
             <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/user/:userId/custom-llm/revoke</span>
+              <span className="ep-method put">PUT</span>
+              <span className="ep-url">/api/v1/user/:userId/custom-llm/:connectionId</span>
             </div>
-            <div className="ep-desc">Enable or disable the custom LLM without deleting it.</div>
+            <div className="ep-desc">Update an existing connection's name, URL, key, or model.</div>
             <div className="ep-label">Request Body</div>
-            <div className="ep-code">{'{ "revoked": true }'}</div>
-            <div className="ep-note">Set <code>revoked: false</code> to re-enable.</div>
+            <div className="ep-code">{`{
+  "name": "Updated Name",
+  "baseUrl": "https://api.openai.com/v1",
+  "apiKey": "sk-new-key",
+  "model": "gpt-4o-mini"
+}`}</div>
+            <div className="ep-note">Only <code>apiKey</code> and <code>name</code> are optional — omit <code>apiKey</code> to keep the existing key.</div>
           </div>
 
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method delete">DELETE</span>
-              <span className="ep-url">/api/v1/user/:userId/custom-llm</span>
+              <span className="ep-url">/api/v1/user/:userId/custom-llm/:connectionId</span>
             </div>
-            <div className="ep-desc">Permanently remove the custom LLM connection.</div>
+            <div className="ep-desc">Permanently delete a connection. Auto-removes it from all user slots and root tree assignments.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/custom-llm/assign</span>
+            </div>
+            <div className="ep-desc">Assign a connection to a user-level LLM slot, or unassign by passing null.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "slot": "main", "connectionId": "connection-id-here" }`}</div>
+            <div className="ep-label">Allowed Slots</div>
+            <div className="ep-code">{`main     — Default slot used for tree chat/profile
+rawIdea  — Used for raw idea auto-placement`}</div>
+            <div className="ep-note">Pass <code>connectionId: null</code> to unassign and revert to the server default.</div>
           </div>
 
           {/* ── Chat History ─────── */}
@@ -744,6 +778,22 @@ const ApiAccessSection = () => {
 ANYONE      — Any contributor can approve
 MAJORITY    — Majority of contributors must approve
 ALL         — All contributors must approve`}</div>
+          </div>
+
+          <div className="section-spacer"></div>
+
+          {/* ── Tree AI Model ────── */}
+          <div className="sub-title">Tree AI Model</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/llm-assign</span>
+            </div>
+            <div className="ep-desc">Assign a custom LLM connection to a root tree. All AI operations on that tree will use this connection. Owner-only, requires paid plan.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "slot": "placement", "connectionId": "connection-id-here" }`}</div>
+            <div className="ep-note">Pass <code>connectionId: null</code> to unassign and revert to the user's default. The connection must belong to the root owner.</div>
           </div>
 
           <div className="section-spacer"></div>

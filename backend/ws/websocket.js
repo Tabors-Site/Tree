@@ -14,6 +14,7 @@ import {
 } from "./mcp.js";
 import { useEnergy } from "../core/energy.js";
 import { getNodeName } from "../controllers/treeDataFetching.js";
+import Node from "../db/models/node.js";
 import { orchestrateTreeRequest } from "./orchestrator/treeOrchestrator.js";
 import {
   switchMode,
@@ -381,10 +382,18 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       const visitorId = socket.visitorId || `user:${socket.userId}`;
 
-      // Charge energy upfront
+      // Charge energy upfront (skip if user or root has custom LLM)
       try {
         const { isCustom } = await getClientForUser(socket.userId);
-        if (!isCustom) {
+        let skipEnergy = isCustom;
+        if (!skipEnergy) {
+          const activeRootId = getRootId(visitorId);
+          if (activeRootId) {
+            const rootNode = await Node.findById(activeRootId).select("llmAssignments").lean();
+            if (rootNode?.llmAssignments?.placement) skipEnergy = true;
+          }
+        }
+        if (!skipEnergy) {
           await useEnergy({ userId: socket.userId, action: "chat" });
         }
       } catch (err) {
@@ -402,14 +411,22 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       // ── Session + AIChat tracking ──────────────────────────────────
       // Finalize any leftover chat from a previous turn
       await finalizeOpenChat(socket);
-      const clientInfo = await getClientForUser(socket.userId);
 
       const sessionId = ensureSession(socket);
       const preMode = getCurrentMode(visitorId) || "home:default";
 
+      // Resolve client info for tracking (include root override if present)
+      const trackingRootId = getRootId(visitorId);
+      let rootLlmOverride = null;
+      if (trackingRootId) {
+        const rn = await Node.findById(trackingRootId).select("llmAssignments").lean();
+        rootLlmOverride = rn?.llmAssignments?.placement || null;
+      }
+      const clientInfo = await getClientForUser(socket.userId, undefined, rootLlmOverride);
+
       let aiChat = null;
       try {
-        const activeRootId = getRootId(visitorId);
+        const activeRootId = trackingRootId;
         aiChat = await startAIChat({
           userId: socket.userId,
           sessionId,

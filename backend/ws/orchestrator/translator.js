@@ -395,8 +395,10 @@ export async function classify({
   treeSummary,
   signal,
   slot,
+  rootLlmConnectionId,
 }) {
-  const { client: openai, model } = await getClientForUser(userId, slot);
+  const { client: openai, model, isCustom } = await getClientForUser(userId, slot, rootLlmConnectionId);
+  const _llmProvider = { isCustom, model, baseUrl: isCustom ? openai.baseURL : null };
 
   let contextBlock = "";
   if (conversationMemory) {
@@ -437,6 +439,7 @@ export async function classify({
     if (!result.responseHint) result.responseHint = "";
     if (!result.summary) result.summary = message;
 
+    result.llmProvider = _llmProvider;
     return result;
   } catch (err) {
     console.error("❌ Classifier parse failed:", err.message, "raw:", raw);
@@ -445,6 +448,7 @@ export async function classify({
       confidence: 0.5,
       responseHint: "Respond naturally to the user's message.",
       summary: message,
+      llmProvider: _llmProvider,
     };
   }
 }
@@ -474,8 +478,10 @@ export async function translateDestructive({
   treeSummary,
   signal,
   slot,
+  rootLlmConnectionId,
 }) {
-  const { client: openai, model } = await getClientForUser(userId, slot);
+  const { client: openai, model, isCustom } = await getClientForUser(userId, slot, rootLlmConnectionId);
+  const _llmProvider = { isCustom, model, baseUrl: isCustom ? openai.baseURL : null };
 
   // Build context block
   let contextBlock = "";
@@ -532,6 +538,7 @@ export async function translateDestructive({
     // Clamp confidence
     result.confidence = Math.max(0, Math.min(1, result.confidence));
 
+    result.llmProvider = _llmProvider;
     return result;
   } catch (err) {
     // If JSON parse fails, return a safe fallback
@@ -549,6 +556,7 @@ export async function translateDestructive({
       responseHint: "Respond naturally to the user's message.",
       summary: message,
       confidence: 0.5,
+      llmProvider: _llmProvider,
     };
   }
 }

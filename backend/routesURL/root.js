@@ -9,6 +9,7 @@ import { setTransactionPolicy } from "../core/transactions.js";
 import { getGlobalValuesTreeAndFlat } from "../core/values.js";
 
 import Node from "../db/models/node.js";
+import { getConnectionsForUser } from "../core/customLLM.js";
 
 
 function escapeHtml(str) {
@@ -70,11 +71,11 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     await getAllData(fakeReq, fakeRes);
     if (!allData) return res.status(500).send("getAllData failed");
 
-    // Load owner + contributors
+    // Load owner + contributors + llm assignments
     const rootMeta = await Node.findById(nodeId)
-      .populate("rootOwner", "username _id")
+      .populate("rootOwner", "username _id profileType planExpiresAt")
       .populate("contributors", "username _id")
-      .select("rootOwner contributors transactionPolicy")
+      .select("rootOwner contributors transactionPolicy llmAssignments")
       .lean()
       .exec();
     const rootNode = await Node.findById(nodeId).select("parent").lean();
@@ -359,6 +360,55 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
 </form>
 `
       : "";
+
+    // ── Owner-only: Tree AI Model section ───────────────────────────
+    let treeLlmHtml = "";
+    if (isOwner && rootMeta?.rootOwner) {
+      const ownerProfile = rootMeta.rootOwner;
+      const hasPaid = ownerProfile.profileType !== "basic"
+        && ownerProfile.planExpiresAt
+        && ownerProfile.planExpiresAt > new Date();
+
+      if (hasPaid) {
+        const ownerConnections = await getConnectionsForUser(ownerProfile._id.toString());
+        const currentPlacement = rootMeta.llmAssignments?.placement || null;
+
+        const optionsHtml = ownerConnections.map(function(c) {
+          return '<option value="' + c._id + '"' + (currentPlacement === c._id ? ' selected' : '') + '>'
+            + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</option>';
+        }).join('');
+
+        treeLlmHtml = `
+<h2 style="margin-top:16px;">Tree AI Model</h2>
+<p style="font-size:0.85em;opacity:0.6;margin-bottom:8px;">
+  Assign a custom LLM to this tree. All AI operations (placement, queries) will use it.
+</p>
+${ownerConnections.length === 0
+  ? '<p style="font-size:0.85em;opacity:0.5;">No custom connections — <a href="/api/v1/user/${ownerProfile._id}${queryString ? queryString + "&" : "?"}html" style="color:inherit;">add one on your profile</a></p>'
+  : `<select
+    id="treeLlmSelect"
+    onchange="assignRootLlm(this.value)"
+    style="
+      width:100%;
+      max-width:360px;
+      padding:8px 10px;
+      border-radius:6px;
+      border:1px solid #ccc;
+      font-size:14px;
+      margin-bottom:4px;
+    "
+  >
+    <option value=""${!currentPlacement ? ' selected' : ''}>Default (inherit from profile)</option>
+    ${optionsHtml}
+  </select>
+  <div id="treeLlmStatus" style="font-size:0.8em;margin-top:4px;display:none;"></div>`
+}`;
+      } else {
+        treeLlmHtml = `
+<h2 style="margin-top:16px;">Tree AI Model</h2>
+<p style="font-size:0.85em;opacity:0.5;">Requires a Standard or Premium plan to assign custom LLMs to trees.</p>`;
+      }
+    }
 
     const parentHtml = ancestors.length
       ? renderParents([
@@ -1510,6 +1560,7 @@ ${
   ${inviteFormHtml}
   ${contributorsHtml}
   ${policyHtml}
+  ${treeLlmHtml}
   
   ${
     !isOwner && req.userId
@@ -1566,6 +1617,39 @@ ${
 
 
 <script>
+// ROOT LLM ASSIGNMENT
+async function assignRootLlm(connId) {
+  var statusEl = document.getElementById("treeLlmStatus");
+  try {
+    var res = await fetch("/api/v1/root/${nodeId}/llm-assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot: "placement", connectionId: connId || null }),
+    });
+    if (res.ok) {
+      if (statusEl) {
+        statusEl.style.display = "block";
+        statusEl.style.color = "rgba(72, 187, 120, 0.9)";
+        statusEl.textContent = connId ? "✓ Assigned" : "✓ Using default";
+        setTimeout(function() { statusEl.style.display = "none"; }, 3000);
+      }
+    } else {
+      var data = await res.json().catch(function() { return {}; });
+      if (statusEl) {
+        statusEl.style.display = "block";
+        statusEl.style.color = "rgba(255, 107, 107, 0.9)";
+        statusEl.textContent = "✕ " + (data.error || "Failed");
+      }
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.style.display = "block";
+      statusEl.style.color = "rgba(255, 107, 107, 0.9)";
+      statusEl.textContent = "✕ Network error";
+    }
+  }
+}
+
 // AUTO-SCROLL BREADCRUMB TO RIGHT ON LOAD
 window.addEventListener('load', () => {
   const breadcrumb = document.querySelector('.breadcrumb-constellation');
@@ -1829,6 +1913,61 @@ router.post("/root/:rootId/retire", authenticate, async (req, res) => {
       success: false,
       error: err.message,
     });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// ROOT LLM ASSIGNMENT
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const { slot, connectionId } = req.body;
+
+    if (slot !== "placement") {
+      return res.status(400).json({ error: "Invalid slot — only 'placement' is supported" });
+    }
+
+    // Validate root and ownership
+    const root = await Node.findById(rootId).select("rootOwner").lean();
+    if (!root) return res.status(404).json({ error: "Root not found" });
+    if (!root.rootOwner) return res.status(400).json({ error: "Node is not a root" });
+    if (root.rootOwner.toString() !== req.userId.toString()) {
+      return res.status(403).json({ error: "Only the root owner can assign LLM connections" });
+    }
+
+    // Validate paid plan
+    const { default: User } = await import("../db/models/user.js");
+    const owner = await User.findById(req.userId).select("profileType planExpiresAt").lean();
+    if (!owner || owner.profileType === "basic" || !owner.planExpiresAt || owner.planExpiresAt <= new Date()) {
+      return res.status(403).json({ error: "Custom LLM connections require an active paid plan" });
+    }
+
+    // If assigning, verify connection belongs to root owner
+    if (connectionId) {
+      const { default: CustomLlmConnection } = await import("../db/models/customLlmConnection.js");
+      const conn = await CustomLlmConnection.findOne({ _id: connectionId, userId: req.userId }).lean();
+      if (!conn) return res.status(404).json({ error: "Connection not found" });
+    }
+
+    await Node.findByIdAndUpdate(rootId, {
+      $set: { "llmAssignments.placement": connectionId || null },
+    });
+
+    // Bust client cache for owner so changes take effect immediately
+    const { clearUserClientCache } = await import("../ws/conversation.js");
+    clearUserClientCache(req.userId);
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`,
+      );
+    }
+
+    return res.json({ success: true, slot: "placement", connectionId: connectionId || null });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 

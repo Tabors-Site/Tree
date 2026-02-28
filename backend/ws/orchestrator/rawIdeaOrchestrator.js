@@ -154,6 +154,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       source: "orchestrator",
       input: reason,
       output: { status: "stuck", reason },
+      llmProvider,
     });
     logContribution({
       userId,
@@ -226,6 +227,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       output: parsed,
       startTime: chooseStart,
       endTime: chooseEnd,
+      llmProvider: chooseResult?.llmProvider || llmProvider,
     });
 
     const chosenRootId = parsed?.rootId;
@@ -295,6 +297,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       source: "orchestrator",
       input: rawIdea.content,
       output: { status: "succeeded", targetNodeId },
+      llmProvider,
     });
 
     finalizeArgs = {
@@ -329,6 +332,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
         source: "orchestrator",
         input: rawIdea.content,
         output: { status: "stuck", reason: err.message },
+        llmProvider,
       });
       logContribution({
         userId,
