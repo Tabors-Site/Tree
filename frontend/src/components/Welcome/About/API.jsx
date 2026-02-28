@@ -34,8 +34,9 @@ const ApiAccessSection = () => {
             <div className="toc-group-label">AI</div>
             <a href="#tree-chat">🧠 Tree Chat</a>
             <a href="#tree-place">📌 Tree Place</a>
-            <a href="#auto-place">📥 Auto-Place</a>
-            <a href="#auto-chat">🤖 Auto-Chat</a>
+            <a href="#raw-idea-chat">🤖 Raw Idea Chat</a>
+            <a href="#raw-idea-place">📥 Raw Idea Place</a>
+            <a href="#understand-tree">🔬 Understand Tree</a>
           </div>
 
           <div className="toc-group">
@@ -215,51 +216,14 @@ const ApiAccessSection = () => {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  AUTO-PLACE                                                   */}
+        {/*  RAW IDEA CHAT                                                 */}
         {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="auto-place">
+        <div className="section" id="raw-idea-chat">
           <div className="section-title">
-            <span className="section-icon">📥</span> Auto-Place
+            <span className="section-icon">🤖</span> Raw Idea Chat
           </div>
           <div className="section-text">
-            Takes a raw idea created from a user&#39;s profile and places it onto
-            a tree. The AI picks the best tree, finds the right place in it,
-            and stores the idea — all automatically. No root ID needed.
-            <br /><br />
-            This is fire-and-forget: it returns immediately while placement
-            runs in the background. Does not generate a response — just places
-            the idea. Use Tree Chat above if you need a conversational reply.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/place</span>
-            </div>
-            <div className="ep-desc">
-              Trigger AI auto-placement for a raw idea. The AI evaluates all your
-              trees, picks the best fit, navigates to the right location, and
-              places the idea as a note or new structure.
-            </div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{'{ "message": "Orchestration started" }  // 202 Accepted'}</div>
-            <div className="ep-note">
-              Create a raw idea first via <code>POST /api/v1/user/:userId/raw-ideas</code>,
-              then trigger orchestration. Poll the idea&#39;s status to track progress.
-              Only works for <code>pending</code> text ideas.
-            </div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  AUTO-CHAT                                                     */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="auto-chat">
-          <div className="section-title">
-            <span className="section-icon">🤖</span> Auto-Chat
-          </div>
-          <div className="section-text">
-            Same as Auto-Place, but synchronous — waits for the AI to finish
+            Same as Raw Idea Place, but synchronous — waits for the AI to finish
             and returns a conversational response along with which tree the idea
             was placed on. Useful when you want both placement <em>and</em> an
             answer in a single call.
@@ -271,7 +235,7 @@ const ApiAccessSection = () => {
               <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/chat</span>
             </div>
             <div className="ep-desc">
-              Auto-place a raw idea and return the AI&#39;s response. The AI picks
+              Place a raw idea and return the AI&#39;s response. The AI picks
               the best tree, places the idea, generates a response, and returns
               everything in one call.
             </div>
@@ -290,6 +254,110 @@ const ApiAccessSection = () => {
               then call this endpoint. Only works for <code>pending</code> text ideas.
               This is a long-running request (up to 19 minutes) — the AI is doing
               real work behind the scenes.
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  RAW IDEA PLACE                                                */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="raw-idea-place">
+          <div className="section-title">
+            <span className="section-icon">📥</span> Raw Idea Place
+          </div>
+          <div className="section-text">
+            Takes a raw idea created from a user&#39;s profile and places it onto
+            a tree. The AI picks the best tree, finds the right place in it,
+            and stores the idea — all automatically. No root ID needed.
+            <br /><br />
+            This is fire-and-forget: it returns immediately while placement
+            runs in the background. Does not generate a response — just places
+            the idea. Use Raw Idea Chat above if you need a conversational reply.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/place</span>
+            </div>
+            <div className="ep-desc">
+              Trigger AI placement for a raw idea. The AI evaluates all your
+              trees, picks the best fit, navigates to the right location, and
+              places the idea as a note or new structure.
+            </div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "message": "Orchestration started" }  // 202 Accepted'}</div>
+            <div className="ep-note">
+              Create a raw idea first via <code>POST /api/v1/user/:userId/raw-ideas</code>,
+              then trigger orchestration. Poll the idea&#39;s status to track progress.
+              Only works for <code>pending</code> text ideas.
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  UNDERSTAND TREE                                               */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="understand-tree">
+          <div className="section-title">
+            <span className="section-icon">🔬</span> Understand Tree
+          </div>
+          <div className="section-text">
+            Runs AI-powered compression across an entire tree. The AI reads every
+            node, summarizes leaf content, then merges summaries layer by layer
+            until a single root encoding remains — a holistic understanding of the
+            whole tree from a given perspective.
+            <br /><br />
+            Example perspectives:
+          </div>
+          <ul className="ep-examples">
+            <li><code>translate to Chinese</code></li>
+            <li><code>summarize this into 30 words</code></li>
+            <li><code>find all the places where marketing strategy is mentioned</code></li>
+            <li><code>extract every action item and deadline</code></li>
+            <li><code>identify contradictions or conflicting ideas</code></li>
+          </ul>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings</span>
+            </div>
+            <div className="ep-desc">
+              Create a new understanding run. Pass a <code>perspective</code> in the
+              request body to tell the AI what lens to use.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "perspective": "summarize this into 30 words" }`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/orchestrate</span>
+            </div>
+            <div className="ep-desc">
+              Run the AI understanding orchestrator on an existing run.
+              The AI compresses all nodes layer by layer until a single root
+              encoding remains. Only one orchestration can run at a time per run.
+            </div>
+            <div className="ep-label">Success Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "understandingRunId": "abc123",
+  "perspective": "summarize this into 30 words",
+  "nodeCount": 12,
+  "nodesProcessed": 11,
+  "rootEncoding": "Compressed summary of the tree…"
+}`}</div>
+            <div className="ep-label">Already Complete</div>
+            <div className="ep-code">{`{ "success": true, "alreadyComplete": true, "rootEncoding": "…" }`}</div>
+            <div className="ep-note">
+              Create a run first via <code>POST /api/v1/root/:rootId/understandings</code>,
+              then trigger orchestration. This is a long-running request — the AI
+              processes every node in the tree. Idempotent — if the run was
+              interrupted, calling again picks up where it left off. If already
+              complete, returns the final result immediately.
             </div>
           </div>
         </div>
@@ -874,6 +942,8 @@ ALL         — All contributors must approve`}</div>
             Understandings are AI-powered analysis runs across a tree. Each run
             produces encodings for individual nodes, capturing the AI's
             interpretation of the node's state and content.
+            <br /><br />
+            To run the full AI orchestrator, see <a href="#understand-tree">Understand Tree</a> above.
           </div>
 
           <div className="endpoint">

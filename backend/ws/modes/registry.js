@@ -17,6 +17,7 @@ import treeEdit from "./tree/edit.js";
 import treeBe from "./tree/be.js";
 import treeNavigate from "./tree/navigate.js";
 import treeUnderstand from "./tree/understand.js";
+import treeUnderstandSummarize from "./tree/understandSummarize.js";
 import treeGetContext from "./tree/getContext.js";
 import treeEditNotes from "./tree/notes.js";
 import treeRespond from "./tree/respond.js";
@@ -52,6 +53,7 @@ const ALL_MODES = {
   "tree:edit": treeEdit,
   "tree:be": treeBe,
   "tree:understand": treeUnderstand,
+  "tree:understand-summarize": treeUnderstandSummarize,
   "tree:getContext": treeGetContext,
   "tree:notes": treeEditNotes,
   "tree:respond": treeRespond,

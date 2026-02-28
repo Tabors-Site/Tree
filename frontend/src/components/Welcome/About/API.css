@@ -134,10 +134,23 @@
   font-style: italic; margin-top: 6px;
 }
 
+.api-docs .ep-examples {
+  margin: 6px 0 12px 0; padding-left: 20px;
+  list-style: none;
+}
+.api-docs .ep-examples li {
+  font-size: 13px; color: rgba(255,255,255,0.65);
+  margin-bottom: 4px;
+}
+.api-docs .ep-examples li::before {
+  content: "→ "; color: rgba(255,255,255,0.3);
+}
+
 /* ── INLINE CODE ──────────── */
 .api-docs .section-text code,
 .api-docs .ep-desc code,
 .api-docs .ep-note code,
+.api-docs .ep-examples code,
 .api-docs .desc-muted code {
   background: rgba(0,0,0,0.2);
   padding: 2px 7px; border-radius: 5px;

@@ -12216,10 +12216,13 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
             c.energyUsed > 0
               ? `<span class="mini-badge mini-energy">⚡${c.energyUsed}</span>`
               : "";
+          const understandingLink = c.action === "understanding" && c.understandingMeta?.understandingRunId && c.understandingMeta?.rootNodeId
+            ? ` <a class="understanding-link" href="/api/v1/root/${c.understandingMeta.rootNodeId}/understandings/run/${c.understandingMeta.understandingRunId}${tokenQS}">🧠 View run →</a>`
+            : "";
           const color = actionColor(c.action);
           return `
         <tr class="contrib-row">
-          <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}</td>
+          <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}${understandingLink}</td>
           <td>${nodeRef}</td>
           <td>${aiBadge}${cEnergyBadge}</td>
           <td class="contrib-time">${formatTime(c.date)}</td>
@@ -12248,14 +12251,16 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
         <div class="note-content">
           <div class="chat-message chat-user">
             <span class="msg-label">You</span>
-            <div class="msg-text">${truncate(chat.startMessage?.content, 400)}</div>
+            <div class="msg-text msg-clamp">${esc(chat.startMessage?.content || "")}</div>
+            ${(chat.startMessage?.content || "").length > 300 ? `<button class="expand-btn" onclick="toggleExpand(this)">Show more</button>` : ""}
           </div>
           ${
             chat.endMessage?.content
               ? `
           <div class="chat-message chat-ai">
             <span class="msg-label">AI</span>
-            <div class="msg-text">${linkifyNodeIds(truncate(chat.endMessage.content, 400))}</div>
+            <div class="msg-text msg-clamp">${linkifyNodeIds(esc(chat.endMessage.content))}</div>
+            ${chat.endMessage.content.length > 300 ? `<button class="expand-btn" onclick="toggleExpand(this)">Show more</button>` : ""}
           </div>`
               : ""
           }
@@ -12465,8 +12470,25 @@ body::after { width: 400px; height: 400px; background: white; bottom: -200px; le
 .chat-user .msg-label { background: rgba(255,255,255,0.2); color: white; }
 .chat-ai .msg-label   { background: rgba(100,220,255,0.25); color: white; }
 .msg-text { color: rgba(255,255,255,0.95); word-wrap: break-word; min-width: 0; font-size: 15px; line-height: 1.65; font-weight: 400; }
+.msg-clamp {
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+  overflow: hidden; max-height: calc(1.65em * 4);
+  transition: max-height 0.3s ease;
+}
+.msg-clamp.expanded { -webkit-line-clamp: unset; max-height: none; overflow: visible; }
+.expand-btn {
+  background: none; border: none; color: rgba(100,220,255,0.9); cursor: pointer;
+  font-size: 12px; font-weight: 600; padding: 2px 0; margin-top: 2px;
+  transition: color 0.2s;
+}
+.expand-btn:hover { color: rgba(100,220,255,1); text-decoration: underline; }
 .node-link { color: #7effc0; text-decoration: none; background: rgba(50,220,120,0.15); padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; }
 .node-link:hover { background: rgba(50,220,120,0.3); }
+.understanding-link {
+  color: rgba(100,100,210,0.9); text-decoration: none; font-size: 11px; font-weight: 500;
+  margin-left: 4px; transition: color 0.2s;
+}
+.understanding-link:hover { color: rgba(130,130,255,1); text-decoration: underline; }
 .chat-user .msg-text { font-weight: 500; }
 
 /* ── Chain: outer dropdown ──────────────────────── */
@@ -12772,6 +12794,13 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
       });
     }, { root: null, rootMargin: '50px', threshold: 0.1 });
     document.querySelectorAll('.note-card').forEach(function(card) { observer.observe(card); });
+
+    function toggleExpand(btn) {
+      var text = btn.previousElementSibling;
+      if (!text) return;
+      var expanded = text.classList.toggle('expanded');
+      btn.textContent = expanded ? 'Show less' : 'Show more';
+    }
   </script>
 </body>
 </html>

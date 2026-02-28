@@ -8,6 +8,7 @@ import { getNotes } from "../core/notes.js";
 const router = express.Router();
 
 import { createUnderstandingRun } from "../core/understanding.js";
+import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
 import Node from "../db/models/node.js";
 function buildQueryString(req) {
   const allowedParams = ["token", "html"];
@@ -23,11 +24,11 @@ function buildQueryString(req) {
 }
 function escapeHtml(str) {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 const rainbow = [
   "#ff3b30",
@@ -74,6 +75,37 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
     });
   }
 });
+
+router.post(
+  "/root/:nodeId/understandings/run/:runId/orchestrate",
+  authenticate,
+  async (req, res) => {
+    const { nodeId, runId } = req.params;
+    const userId = req.userId;
+    const username = req.username;
+
+    try {
+      const result = await orchestrateUnderstanding({
+        rootId: nodeId,
+        userId,
+        username,
+        runId,
+        source: "api",
+      });
+
+      if ("html" in req.query && result.success) {
+        return res.redirect(
+          `/api/v1/root/${nodeId}/understandings/run/${runId}?token=${req.query.token ?? ""}&html`,
+        );
+      }
+
+      return res.json(result);
+    } catch (err) {
+      console.error("Understanding orchestration error:", err.message);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  },
+);
 
 router.get(
   "/root/:nodeId/understandings/run/:runId",
@@ -199,9 +231,11 @@ router.get(
         const statusEmoji = isCompleted ? "✅" : "⏳";
         const typeLabel = isLeaf ? "Leaf" : `${node.childCount} children`;
 
-       const encodingPreview = encoding
-  ? escapeHtml(encoding.length > 120 ? encoding.slice(0, 120) + "…" : encoding)
-  : "";
+        const encodingPreview = encoding
+          ? escapeHtml(
+              encoding.length > 120 ? encoding.slice(0, 120) + "…" : encoding,
+            )
+          : "";
 
         let html = `
           <div class="tree-item" style="margin-left: ${depth * 20}px; animation-delay: ${0.05 * depth}s;">
@@ -794,6 +828,35 @@ router.get(
       .pane-id-link { width: 100%; justify-content: center; }
       .pane-name { font-size: 14px; }
     }
+
+    .process-btn {
+      margin-top: 14px;
+      padding: 10px 24px;
+      border-radius: 980px;
+      border: 1px solid rgba(72, 187, 178, 0.4);
+      background: rgba(72, 187, 178, 0.25);
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.3s;
+      width: 100%;
+    }
+    .process-btn:hover:not(:disabled) {
+      background: rgba(72, 187, 178, 0.4);
+      transform: translateY(-1px);
+    }
+    .process-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .process-status {
+      margin-top: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -860,6 +923,16 @@ router.get(
         <div class="progress-fill" style="width: ${progressPercent}%;"></div>
       </div>
       <div class="progress-sub">${completedCount} of ${totalNodes} nodes compressed</div>
+      ${
+        !rootIsCompleted
+          ? `
+      <button id="processBtn" class="process-btn" onclick="startProcess()">
+        <span id="processBtnLabel">🧠 Process</span>
+      </button>
+      <div id="processStatus" class="process-status"></div>
+      `
+          : ""
+      }
     </div>
 
     <!-- Tree -->
@@ -887,6 +960,44 @@ router.get(
           setTimeout(() => icon.textContent = '📋', 900);
         }
       });
+    }
+
+    async function startProcess() {
+      var btn = document.getElementById('processBtn');
+      var label = document.getElementById('processBtnLabel');
+      var status = document.getElementById('processStatus');
+      if (!btn) return;
+
+      btn.disabled = true;
+      label.textContent = '⏳ Processing…';
+      status.style.display = 'block';
+      status.style.color = 'rgba(255,255,255,0.6)';
+      status.textContent = 'Running understanding orchestrator — this may take a while…';
+
+      try {
+        var res = await fetch('/api/v1/root/${run.rootNodeId}/understandings/run/${run._id}/orchestrate', {
+          method: 'POST',
+        });
+        var data = await res.json();
+        if (data.success) {
+          status.style.color = 'rgba(72, 187, 120, 0.9)';
+          status.textContent = data.alreadyComplete
+            ? '✓ Already complete'
+            : '✓ Done — ' + (data.nodesProcessed || 0) + ' nodes processed';
+          label.textContent = '✅ Complete';
+          setTimeout(function() { location.reload(); }, 1500);
+        } else {
+          status.style.color = 'rgba(255, 107, 107, 0.9)';
+          status.textContent = '✕ ' + (data.error || 'Failed');
+          label.textContent = '🧠 Retry';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        status.style.color = 'rgba(255, 107, 107, 0.9)';
+        status.textContent = '✕ Network error';
+        label.textContent = '🧠 Retry';
+        btn.disabled = false;
+      }
     }
   </script>
 </body>
@@ -1635,7 +1746,7 @@ ${escapeHtml(e.perspective)} · Layer ${e.currentLayer}
 
               ${
                 e.encoding
-? `<div class="enc-content">${escapeHtml(e.encoding)}</div>`
+                  ? `<div class="enc-content">${escapeHtml(e.encoding)}</div>`
                   : `<div class="enc-content in-progress">Compression in progress…</div>`
               }
 
