@@ -13,6 +13,7 @@ import {
 } from "../conversation.js";
 import { classify, translateDestructive } from "./translator.js";
 import { trackChainStep, setAiContributionContext } from "../aiChatTracker.js";
+import { isActiveNavigator } from "../sessionRegistry.js";
 
 import { getContextForAi, getNavigationContext } from "../../core/treeFetch.js";
 import Node from "../../db/models/node.js";
@@ -381,10 +382,13 @@ async function executePlanSteps({
         targetNodeId = navResult.targetNodeId;
         targetPath = navResult.targetPath;
 
-        socket.emit("navigate", {
-          url: `/api/v1/node/${targetNodeId}?html`,
-          replace: false,
-        });
+        // Only navigate if this session controls the iframe
+        if (isActiveNavigator(userId, sessionId)) {
+          socket.emit("navigate", {
+            url: `/api/v1/node/${targetNodeId}?html`,
+            replace: false,
+          });
+        }
       } else if (navResult?.action === "ambiguous") {
         // For merge/dedup/duplicate operations, ambiguity is EXPECTED.
         const isBatchOp =

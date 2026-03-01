@@ -83,6 +83,8 @@ router.post(
     const { nodeId, runId } = req.params;
     const userId = req.userId;
     const username = req.username;
+    const fromSite = req.body?.source === "user";
+    const source = fromSite ? "user" : "api";
 
     try {
       const result = await orchestrateUnderstanding({
@@ -90,7 +92,8 @@ router.post(
         userId,
         username,
         runId,
-        source: "api",
+        source,
+        fromSite,
       });
 
       if ("html" in req.query && result.success) {
@@ -977,6 +980,8 @@ router.get(
       try {
         var res = await fetch('/api/v1/root/${run.rootNodeId}/understandings/run/${run._id}/orchestrate', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'user' }),
         });
         var data = await res.json();
         if (data.success) {

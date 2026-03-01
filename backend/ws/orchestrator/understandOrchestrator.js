@@ -23,6 +23,8 @@ import {
   clearAiContributionContext,
 } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
+import { emitNavigate, emitToUser } from "../websocket.js";
+import { registerSession, endSession, setActiveNavigator, getSession, SESSION_TYPES } from "../sessionRegistry.js";
 import {
   getNextCompressionPayloadForLLM,
   commitCompressionResult,
@@ -114,6 +116,7 @@ export async function orchestrateUnderstanding({
   username,
   runId,
   source = "orchestrator",
+  fromSite = false,
   sessionId: externalSessionId,
   rootChatId: externalRootChatId,
   startingChainIndex,
@@ -160,8 +163,28 @@ export async function orchestrateUnderstanding({
   }
 
   const isChainStep = !!externalSessionId;
+  const isSite = fromSite && !isChainStep;
   const visitorId = `understand:${rootId}:${Date.now()}`;
   const sessionId = externalSessionId || uuidv4();
+  if (!isChainStep) {
+    registerSession({
+      sessionId,
+      userId,
+      type: SESSION_TYPES.UNDERSTANDING_ORCHESTRATE,
+      description: `Understanding: ${runPerspective}`,
+      meta: { rootId, runId: understandingRunId, visitorId },
+    });
+  }
+  // When triggered from site, claim navigator so progress shows in iframe
+  if (isSite) {
+    setActiveNavigator(userId, sessionId);
+    const sess = getSession(sessionId);
+    emitToUser(userId, "navigatorSession", {
+      sessionId,
+      type: sess?.type || SESSION_TYPES.UNDERSTANDING_ORCHESTRATE,
+      description: sess?.description || `Understanding: ${runPerspective}`,
+    });
+  }
   let chainIndex = startingChainIndex || 1;
   let nodesProcessed = 0;
 
@@ -275,6 +298,15 @@ export async function orchestrateUnderstanding({
 
       nodesProcessed++;
 
+      // Navigate iframe to the node just processed
+      if (isSite) {
+        emitNavigate({
+          userId,
+          url: `/api/v1/root/${rootId}/understandings/run/${understandingRunId}/${payload.target.understandingNodeId}?html`,
+          sessionId,
+        });
+      }
+
       trackChainStep({
         userId,
         sessionId,
@@ -307,6 +339,15 @@ export async function orchestrateUnderstanding({
       stopped: false,
       modeKey: "tree:understand",
     };
+
+    // Navigate to run overview when done
+    if (isSite) {
+      emitNavigate({
+        userId,
+        url: `/api/v1/root/${rootId}/understandings/run/${understandingRunId}?html`,
+        sessionId,
+      });
+    }
 
     console.log(
       `✅ Understanding complete for root ${rootId} (${nodesProcessed} nodes processed)`,
@@ -355,6 +396,7 @@ export async function orchestrateUnderstanding({
       );
     }
     clearAiContributionContext(userId);
+    if (!isChainStep) endSession(sessionId);
     closeMCPClient(visitorId);
   }
 }

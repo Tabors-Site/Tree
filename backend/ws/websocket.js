@@ -50,6 +50,17 @@ import {
   clearAiContributionContext,
 } from "./aiChatTracker.js";
 import { clearMemory } from "./orchestrator/treeOrchestrator.js";
+import {
+  registerSession,
+  endSession,
+  canNavigate,
+  touchSession,
+  getActiveNavigator,
+  clearActiveNavigator,
+  getSession,
+  SESSION_TYPES,
+  registeredSessionCount,
+} from "./sessionRegistry.js";
 
 dotenv.config();
 
@@ -60,6 +71,38 @@ let io;
 // Socket tracking
 const userSockets = new Map(); // visitorId → socket.id
 const authSessions = new Map(); // userId → socket.id
+
+// ── Session registry sync helper ────────────────────────────────────────
+function syncRegistrySession(socket) {
+  const sessionId = socket._aiSession?.id;
+  if (!sessionId || !socket.userId) return;
+  if (socket._registrySessionId === sessionId) return; // no change
+  if (socket._registrySessionId) endSession(socket._registrySessionId);
+  registerSession({
+    sessionId,
+    userId: socket.userId,
+    type: SESSION_TYPES.WEBSOCKET_CHAT,
+    description: `Chat session for ${socket.username || "unknown"}`,
+    meta: { visitorId: socket.visitorId },
+  });
+  socket._registrySessionId = sessionId;
+  emitNavigatorStatus(socket);
+}
+
+function emitNavigatorStatus(socket) {
+  if (!socket.userId) return;
+  const navId = getActiveNavigator(socket.userId);
+  if (navId) {
+    const session = getSession(navId);
+    socket.emit("navigatorSession", {
+      sessionId: navId,
+      type: session?.type || null,
+      description: session?.description || null,
+    });
+  } else {
+    socket.emit("navigatorSession", null);
+  }
+}
 
 // ============================================================================
 // WEBSOCKET SERVER
@@ -143,6 +186,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       // Initialize AI session for this connection
       ensureSession(socket);
+      syncRegistrySession(socket);
 
       try {
         await connectToMCP(MCP_SERVER_URL, visitorId, socket.jwt);
@@ -253,6 +297,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         // Rotate session when returning to home
         if (newBigMode === BIG_MODES.HOME) {
           rotateSession(socket);
+          syncRegistrySession(socket);
         }
 
         try {
@@ -337,6 +382,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         // Rotate session when landing on home
         if (urlBigMode === BIG_MODES.HOME || !urlBigMode) {
           rotateSession(socket);
+          syncRegistrySession(socket);
         }
 
         try {
@@ -418,6 +464,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         await finalizeOpenChat(socket);
 
         const sessionId = ensureSession(socket);
+        syncRegistrySession(socket);
         const preMode = getCurrentMode(visitorId) || "home:default";
 
         // Resolve client info for tracking (include root override if present)
@@ -662,6 +709,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
     });
 
+    // ── NAVIGATOR CONTROL ──────────────────────────────────────────────
+    socket.on("detachNavigator", () => {
+      if (socket.userId) {
+        clearActiveNavigator(socket.userId);
+        emitNavigatorStatus(socket);
+      }
+    });
+
     // ── CLEAR / DISCONNECT ────────────────────────────────────────────
     socket.on("clearConversation", async () => {
       const visitorId = socket.visitorId;
@@ -674,7 +729,8 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           userId: socket.userId,
         });
 
-        rotateSession(socket); // ← add this
+        rotateSession(socket);
+        syncRegistrySession(socket);
 
         socket.emit("conversationCleared", { success: true });
       }
@@ -686,6 +742,11 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       // Finalize any in-flight chat
       await finalizeOpenChat(socket);
+
+      // Clean up session registry
+      if (socket._registrySessionId) {
+        endSession(socket._registrySessionId);
+      }
 
       // Abort any in-flight LLM request
       if (socket._chatAbort) {
@@ -729,12 +790,19 @@ export function emitToVisitor(visitorId, event, data) {
   if (socketId) io.to(socketId).emit(event, data);
 }
 
-export function emitNavigate({ userId, url, replace = false }) {
+export function emitNavigate({ userId, url, replace = false, sessionId = null }) {
   if (!io) return;
+
+  // If sessionId provided, only allow if this session is the active navigator
+  if (sessionId && !canNavigate(sessionId)) {
+    console.log(`🚫 Nav blocked: session ${sessionId.slice(0, 8)} is not active navigator for user ${userId}`);
+    return;
+  }
+
   const socketId = authSessions.get(userId);
   if (socketId) {
     io.to(socketId).emit("navigate", { url, replace });
-    console.log(`📍 Navigated user ${userId} to ${url}`);
+    console.log(`📍 Navigated user ${userId} to ${url} (session: ${sessionId ? sessionId.slice(0, 8) : "ungated"})`);
   }
 }
 
@@ -767,6 +835,6 @@ export function notifyTreeChange({ userId, nodeId, changeType, details }) {
 
 function logStats() {
   console.log(
-    `📊 Auth: ${authSessions.size} | Visitors: ${userSockets.size} | MCP: ${mcpClients.size} | Sessions: ${sessionCount()}`,
+    `📊 Auth: ${authSessions.size} | Visitors: ${userSockets.size} | MCP: ${mcpClients.size} | Sessions: ${sessionCount()} | Registry: ${registeredSessionCount()}`,
   );
 }

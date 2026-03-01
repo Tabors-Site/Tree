@@ -617,6 +617,74 @@ router.get("/app", authenticateLite, async (req, res) => {
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-text { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-top: 16px; }
 
+    .navigator-indicator {
+      display: none;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      padding: 2px 8px 4px;
+    }
+    .navigator-indicator.active { display: flex; }
+    .navigator-indicator.desktop-only { }
+    .navigator-indicator.mobile-only {
+      position: fixed;
+      top: 8px;
+      right: 8px;
+      z-index: 200;
+      padding: 0;
+    }
+    @media (max-width: 768px) {
+      .navigator-indicator.desktop-only { display: none !important; }
+    }
+    @media (min-width: 769px) {
+      .navigator-indicator.mobile-only { display: none !important; }
+    }
+    .navigator-badge {
+      display: flex;
+      flex-direction: row-reverse;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 6px;
+      background: rgba(var(--glass-rgb), 0.4);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      cursor: default;
+      transition: background 0.2s;
+    }
+    .navigator-badge:hover { background: rgba(var(--glass-rgb), 0.7); }
+    .navigator-badge .nav-icon {
+      width: 14px;
+      height: 14px;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .navigator-badge .nav-label {
+      font-size: 10px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      max-width: 0;
+      overflow: hidden;
+      transition: max-width 0.3s ease, opacity 0.2s;
+      opacity: 0;
+    }
+    .navigator-badge:hover .nav-label { max-width: 160px; opacity: 1; }
+    .navigator-close {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      padding: 0;
+    }
+    .navigator-close:hover { background: rgba(239, 68, 68, 0.25); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+    .navigator-close svg { width: 12px; height: 12px; }
+
     .panel-divider { width: 16px; height: 100%; display: flex; align-items: center; justify-content: center; cursor: col-resize; position: relative; z-index: 20; flex-shrink: 0; }
     .divider-handle { width: 6px; height: 80px; background: rgba(var(--glass-rgb), 0.5); backdrop-filter: blur(var(--glass-blur)); border: 1px solid var(--glass-border); border-radius: 4px; transition: all var(--transition-fast); }
     .panel-divider:hover .divider-handle { background: rgba(var(--glass-rgb), 0.7); width: 8px; }
@@ -1205,6 +1273,17 @@ router.get("/app", authenticateLite, async (req, res) => {
     <span id="modeAlertText"></span>
   </div>
 
+  <!-- Navigator indicator (mobile: fixed top-right) -->
+  <div class="navigator-indicator mobile-only" id="navigatorIndicatorMobile">
+    <div class="navigator-badge">
+      <span class="nav-label" id="navigatorLabelMobile">session</span>
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    </div>
+    <button class="navigator-close" id="navigatorCloseMobile" title="Detach navigator">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
   <div class="app-container">
     <!-- Chat Panel -->
     <div class="chat-panel glass-panel" id="chatPanel">
@@ -1240,6 +1319,17 @@ router.get("/app", authenticateLite, async (req, res) => {
             </button>
           </div>
         </div>
+      </div>
+
+      <!-- Navigator indicator (desktop: row below header) -->
+      <div class="navigator-indicator desktop-only" id="navigatorIndicatorDesktop">
+        <div class="navigator-badge">
+          <span class="nav-label" id="navigatorLabelDesktop">session</span>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <button class="navigator-close" id="navigatorCloseDesktop" title="Detach navigator">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
 
       <!-- Recent Roots Dropdown (absolute positioned, top-left overlay) -->
@@ -1513,6 +1603,43 @@ socket.on("navigate", ({ url, replace }) => {
     }
   });
 
+    // ── Navigator session indicator ──────────────────────────────────
+    const navIndicators = [
+      document.getElementById("navigatorIndicatorDesktop"),
+      document.getElementById("navigatorIndicatorMobile"),
+    ];
+    const navLabels = [
+      document.getElementById("navigatorLabelDesktop"),
+      document.getElementById("navigatorLabelMobile"),
+    ];
+
+    const sessionTypeLabels = {
+      "websocket-chat": "chat",
+      "api-tree-chat": "api chat",
+      "api-tree-place": "api place",
+      "raw-idea-orchestrate": "raw idea",
+      "raw-idea-chat": "raw idea chat",
+      "understanding-orchestrate": "understand",
+      "scheduled-raw-idea": "scheduled",
+    };
+
+    socket.on("navigatorSession", (data) => {
+      if (data && data.sessionId) {
+        const label = sessionTypeLabels[data.type] || data.type || "session";
+        navLabels.forEach(el => { if (el) el.textContent = label; });
+        navIndicators.forEach(el => { if (el) el.classList.add("active"); });
+      } else {
+        navIndicators.forEach(el => { if (el) el.classList.remove("active"); });
+      }
+    });
+
+    document.getElementById("navigatorCloseDesktop").addEventListener("click", () => {
+      socket.emit("detachNavigator");
+    });
+    document.getElementById("navigatorCloseMobile").addEventListener("click", () => {
+      socket.emit("detachNavigator");
+    });
+
     socket.on("reload", () => {
       loadingOverlay.classList.add("visible");
       iframe.contentWindow?.location.reload();
@@ -1522,7 +1649,8 @@ socket.on("navigate", ({ url, replace }) => {
       isConnected = false;
       isRegistered = false;
       updateStatus("disconnected");
-      
+      navIndicators.forEach(el => { if (el) el.classList.remove("active"); });
+
       [chatMessages, mobileChatMessages].forEach(container => {
         container.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from Tree. Please refresh the whole website to reconnect.</p></div>';
       });

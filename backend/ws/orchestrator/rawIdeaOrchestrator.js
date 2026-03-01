@@ -15,6 +15,7 @@ import { orchestrateTreeRequest } from "./treeOrchestrator.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { getRootNodesForUser, buildDeepTreeSummary } from "../../core/treeFetch.js";
 import { logContribution } from "../../db/utils.js";
+import { registerSession, endSession, SESSION_TYPES } from "../sessionRegistry.js";
 import RawIdea from "../../db/models/rawIdea.js";
 import Node from "../../db/models/node.js";
 
@@ -76,6 +77,17 @@ function extractTargetNodeId(treeResult) {
 export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username, withResponse = false, source = "orchestrator" }) {
   const visitorId = `rawIdea:${rawIdeaId}`;
   const sessionId = uuidv4();
+  registerSession({
+    sessionId,
+    userId,
+    type: source === "background"
+      ? SESSION_TYPES.SCHEDULED_RAW_IDEA
+      : withResponse
+        ? SESSION_TYPES.RAW_IDEA_CHAT
+        : SESSION_TYPES.RAW_IDEA_ORCHESTRATE,
+    description: `Raw idea placement: ${rawIdeaId}`,
+    meta: { rawIdeaId, visitorId },
+  });
   let chainIndex = 1;
 
   // Used to pass final status into the finally block for session finalization
@@ -373,6 +385,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       );
     }
     clearAiContributionContext(userId);
+    endSession(sessionId);
     closeMCPClient(visitorId);
   }
 }

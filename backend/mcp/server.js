@@ -2810,6 +2810,7 @@ async function handleMcpRequest(req, res) {
         emitNavigate({
           userId: req.userId,
           url: `https://tree.tabors.site${apiPath}`,
+          sessionId: aiCtx.sessionId,
         });
       }
 
@@ -2984,6 +2985,7 @@ async function handleMcpRequest(req, res) {
         emitNavigate({
           userId: req.userId,
           url: `https://tree.tabors.site${apiPath}`,
+          sessionId: aiCtx2.sessionId,
         });
       }
 

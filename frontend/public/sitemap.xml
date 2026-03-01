@@ -30,6 +30,13 @@
   </url>
 
   <url>
+    <loc>https://tree.tabors.site/about/raw-ideas</loc>
+    <lastmod>2026-02-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <url>
     <loc>https://tree.tabors.site/terms</loc>
     <lastmod>2026-02-13</lastmod>
     <changefreq>yearly</changefreq>

@@ -16,6 +16,7 @@ import { setRootId, getClientForUser } from "../ws/conversation.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
 import { startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../ws/aiChatTracker.js";
 import { enqueue } from "../ws/requestQueue.js";
+import { registerSession, endSession, SESSION_TYPES } from "../ws/sessionRegistry.js";
 
 const router = express.Router();
 
@@ -70,6 +71,13 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
 
   const visitorId = `tree-chat:${req.userId}:${Date.now()}`;
   const sessionId = getOrCreateSession(req.userId, rootId);
+  registerSession({
+    sessionId,
+    userId: req.userId,
+    type: SESSION_TYPES.API_TREE_CHAT,
+    description: `API tree chat on root ${rootId}`,
+    meta: { rootId, visitorId },
+  });
 
   // 19-minute timeout — return gracefully before nginx kills the connection
   const TIMEOUT_MS = 19 * 60 * 1000;
@@ -184,6 +192,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
     } finally {
       clearTimeout(timer);
       clearAiContributionContext(req.userId);
+      endSession(sessionId);
       if (!timedOut) closeMCPClient(visitorId);
     }
   });
@@ -208,6 +217,13 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
 
   const visitorId = `tree-place:${req.userId}:${Date.now()}`;
   const sessionId = getOrCreateSession(req.userId, rootId);
+  registerSession({
+    sessionId,
+    userId: req.userId,
+    type: SESSION_TYPES.API_TREE_PLACE,
+    description: `API tree place on root ${rootId}`,
+    meta: { rootId, visitorId },
+  });
 
   const TIMEOUT_MS = 19 * 60 * 1000;
   let timedOut = false;
@@ -319,6 +335,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
     } finally {
       clearTimeout(timer);
       clearAiContributionContext(req.userId);
+      endSession(sessionId);
       if (!timedOut) closeMCPClient(visitorId);
     }
   });
