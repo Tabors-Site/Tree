@@ -8,6 +8,26 @@ import AIChat from "../db/models/aiChat.js";
 import Contribution from "../db/models/contribution.js";
 
 // ─────────────────────────────────────────────────────────────────────────
+// AI CONTRIBUTION CONTEXT (in-memory userId → { sessionId, aiChatId })
+// Used by handleMcpRequest to inject into tool args so contributions
+// are tagged with the correct AI chat, not linked by time window.
+// ─────────────────────────────────────────────────────────────────────────
+
+const activeAiContext = new Map();
+
+export function setAiContributionContext(userId, sessionId, aiChatId) {
+  activeAiContext.set(String(userId), { sessionId, aiChatId: aiChatId ? String(aiChatId) : null });
+}
+
+export function getAiContributionContext(userId) {
+  return activeAiContext.get(String(userId)) || { sessionId: null, aiChatId: null };
+}
+
+export function clearAiContributionContext(userId) {
+  activeAiContext.delete(String(userId));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // SESSION MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -156,17 +176,27 @@ export async function finalizeAIChat({
   // Already finalized — don't double-write
   if (chat.endMessage?.time) return chat;
 
-  // Collect AI contributions in the time window
-  const contributions = await Contribution.find({
-    userId: chat.userId,
-    wasAi: true,
-    date: {
-      $gte: chat.startMessage.time,
-      $lte: endTime,
-    },
+  // Collect AI contributions linked to this chat
+  let contributions = await Contribution.find({
+    aiChatId: chatId,
   })
     .select("_id")
     .lean();
+
+  // Fallback: old contributions without aiChatId — use time-based window
+  if (!contributions.length) {
+    contributions = await Contribution.find({
+      userId: chat.userId,
+      wasAi: true,
+      aiChatId: null,
+      date: {
+        $gte: chat.startMessage.time,
+        $lte: endTime,
+      },
+    })
+      .select("_id")
+      .lean();
+  }
 
   const contributionIds = contributions.map((c) => c._id);
 

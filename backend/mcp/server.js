@@ -73,6 +73,7 @@ import {
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { getTreeForAi, getNodeForAi } from "../controllers/treeDataFetching.js"; // import from your real backend
 import { resolveTreeAccess } from "../core/authenticate.js";
+import { getAiContributionContext } from "../ws/aiChatTracker.js";
 
 
 async function resolvePrestige({ nodeId, prestige }) {
@@ -462,6 +463,8 @@ RULES
     {
       nodeId: z.string().describe("Node ID where scripts are stored."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
 
     {
@@ -511,6 +514,8 @@ RULES
         .string()
         .describe("The ID of the root or starting node of the tree."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: true,
@@ -554,6 +559,8 @@ RULES
     {
       nodeId: z.string().describe("Root node ID for the guided branch."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: true,
@@ -827,6 +834,8 @@ RULES
         ),
 
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
       name: z.string().describe("The name of the script."),
       script: z
         .string()
@@ -839,7 +848,7 @@ RULES
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, scriptId, name, script, userId }) => {
+    async ({ nodeId, scriptId, name, script, userId, aiChatId, sessionId }) => {
       const result = await updateScript({
         nodeId,
         scriptId: z
@@ -851,6 +860,8 @@ RULES
         script,
         userId,
         wasAi: true,
+        aiChatId,
+        sessionId,
       });
 
       return {
@@ -868,6 +879,8 @@ RULES
         .string()
         .describe("The Id of the script to execute. Found inside of get-node"),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -875,12 +888,14 @@ RULES
       idempotentHint: false,
       openWorldHint: true,
     },
-    async ({ nodeId, scriptId, userId }) => {
+    async ({ nodeId, scriptId, userId, aiChatId, sessionId }) => {
       const result = await executeScript({
         nodeId,
         scriptId,
         userId,
         wasAi: true,
+        aiChatId,
+        sessionId,
       });
 
       return {
@@ -906,6 +921,8 @@ RULES
         .describe(
           "The ID of the user performing the edit. Used for contribution logging.",
         ),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -913,7 +930,7 @@ RULES
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, key, value, prestige, userId }) => {
+    async ({ nodeId, key, value, prestige, userId, aiChatId, sessionId }) => {
       const version = await resolvePrestige({
         nodeId,
         prestige,
@@ -925,6 +942,8 @@ RULES
         version,
         userId,
         wasAi: true,
+        aiChatId,
+        sessionId,
       });
 
       return {
@@ -954,6 +973,8 @@ RULES
       userId: z
         .string()
         .describe("The ID of the user performing the goal edit (for logging)."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -961,7 +982,7 @@ RULES
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, key, goal, prestige, userId }) => {
+    async ({ nodeId, key, goal, prestige, userId, aiChatId, sessionId }) => {
       const version = await resolvePrestige({
         nodeId,
         prestige,
@@ -974,6 +995,8 @@ RULES
           version,
           userId,
           wasAi: true,
+          aiChatId,
+          sessionId,
         });
 
         return {
@@ -1012,6 +1035,8 @@ RULES
         .describe(
           "ID of the user making the status edit (for contribution logging).",
         ),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1019,7 +1044,7 @@ RULES
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, status, prestige, isInherited, userId }) => {
+    async ({ nodeId, status, prestige, isInherited, userId, aiChatId, sessionId }) => {
       const version = await resolvePrestige({ nodeId, prestige });
 
       try {
@@ -1030,6 +1055,8 @@ RULES
           isInherited,
           userId,
           wasAi: true,
+          aiChatId,
+          sessionId,
         });
 
         return {
@@ -1054,6 +1081,8 @@ RULES
     {
       content: z.string().describe("The text content of the note."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("The ID of the node the note belongs to."),
       prestige: z.number().describe("The prestige version of the node"),
     },
@@ -1063,7 +1092,7 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ content, userId, nodeId, prestige }) => {
+    async ({ content, userId, nodeId, prestige, aiChatId, sessionId }) => {
       const version = await resolvePrestige({
         nodeId,
         prestige,
@@ -1077,6 +1106,8 @@ RULES
           version,
           isReflection: true, // 🔥 Always included, always true, backend safe
           wasAi: true,
+          aiChatId,
+          sessionId,
         });
 
         return {
@@ -1124,6 +1155,8 @@ RULES
         .describe(
           "ID of the user making the status edit (for contribution logging).",
         ),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1131,7 +1164,7 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ noteId, content, lineStart, lineEnd, userId }) => {
+    async ({ noteId, content, lineStart, lineEnd, userId, aiChatId, sessionId }) => {
       try {
         const result = await editNote({
           noteId,
@@ -1140,6 +1173,8 @@ RULES
           lineStart: lineStart ?? null,
           lineEnd: lineEnd ?? null,
           wasAi: true,
+          aiChatId,
+          sessionId,
         });
 
         return {
@@ -1210,6 +1245,8 @@ RULES
     "Fetches all notes written by a specific user (optionally limited to the most recent N). Recommend to use limit 10 or less. Use get-searched-notes-by-user... if looking for specifics.",
     {
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
       limit: z
         .number()
         .optional()
@@ -1259,6 +1296,8 @@ RULES
     "Fetches all notes where a specific user was tagged (optionally limited to the most recent N). May be referenced as mail",
     {
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
       limit: z
         .number()
         .optional()
@@ -1306,6 +1345,8 @@ RULES
     {
       noteId: z.string().describe("The ID of the note to delete."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("The ID of the node the note belongs to."),
        prestige: z.number().describe("The prestige version of the node"),
     },
@@ -1315,9 +1356,9 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ noteId, userId }) => {
+    async ({ noteId, userId, aiChatId, sessionId }) => {
       try {
-        const result = await deleteNoteAndFile({ noteId, userId, wasAi: true });
+        const result = await deleteNoteAndFile({ noteId, userId, wasAi: true, aiChatId, sessionId });
 
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -1340,6 +1381,8 @@ RULES
         .string()
         .describe("The unique ID of the node to add prestige to."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1347,9 +1390,9 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ nodeId, userId }) => {
+    async ({ nodeId, userId, aiChatId, sessionId }) => {
       try {
-        const result = await addPrestige({ nodeId, userId, wasAi: true });
+        const result = await addPrestige({ nodeId, userId, wasAi: true, aiChatId, sessionId });
 
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -1387,6 +1430,8 @@ RULES
           "The reeffect time in hours (must be below 1,000,000). Added to schedule when prestiging for new version.",
         ),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1394,7 +1439,7 @@ RULES
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, prestige, newSchedule, reeffectTime, userId }) => {
+    async ({ nodeId, prestige, newSchedule, reeffectTime, userId, aiChatId, sessionId }) => {
       const version = await resolvePrestige({
         nodeId,
         prestige,
@@ -1407,6 +1452,8 @@ RULES
           reeffectTime,
           userId,
           wasAi: true,
+          aiChatId,
+          sessionId,
         });
 
         return {
@@ -1438,6 +1485,8 @@ RULES
         .describe("Optional note for the root node."),
 
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1445,7 +1494,7 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ name, note, userId }) => {
+    async ({ name, note, userId, aiChatId, sessionId }) => {
       try {
         const rootNode = await createNewNode(
           name,
@@ -1459,6 +1508,8 @@ RULES
           note ?? null,
           null,
           true,
+          aiChatId,
+          sessionId,
         );
 
         return {
@@ -1532,6 +1583,8 @@ RULES
         .optional()
         .describe("Parent node ID for the root of this subtree."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1539,13 +1592,15 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ nodeData, parentId, userId }) => {
+    async ({ nodeData, parentId, userId, aiChatId, sessionId }) => {
       try {
         const { rootId, rootName, totalCreated } = await createNodesRecursive(
           nodeData,
           parentId,
           userId,
           true,
+          aiChatId,
+          sessionId,
         );
         return {
           content: [
@@ -1577,6 +1632,8 @@ RULES
     {
       nodeId: z.string().describe("ID of the node branch to delete."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1584,9 +1641,9 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ nodeId, userId }) => {
+    async ({ nodeId, userId, aiChatId, sessionId }) => {
       try {
-        const deletedNode = await deleteNodeBranch(nodeId, userId, true);
+        const deletedNode = await deleteNodeBranch(nodeId, userId, true, aiChatId, sessionId);
 
         return {
           content: [
@@ -1620,6 +1677,8 @@ RULES
       nodeId: z.string().describe("The ID of the node being renamed."),
       newName: z.string().describe("The new name to assign to the node."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1627,13 +1686,15 @@ RULES
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, newName, userId }) => {
+    async ({ nodeId, newName, userId, aiChatId, sessionId }) => {
       try {
         const { oldName, newName: updatedName } = await editNodeName({
           nodeId,
           newName,
           userId,
           wasAi: true,
+          aiChatId,
+          sessionId,
         });
 
         return {
@@ -1666,6 +1727,8 @@ RULES
       userId: z
         .string()
         .describe("The user performing the operation (optional)."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1673,13 +1736,15 @@ RULES
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeChildId, nodeNewParentId, userId }) => {
+    async ({ nodeChildId, nodeNewParentId, userId, aiChatId, sessionId }) => {
       try {
         const { nodeChild, nodeNewParent } = await updateParentRelationship(
           nodeChildId,
           nodeNewParentId,
           userId,
           true,
+          aiChatId,
+          sessionId,
         );
 
         return {
@@ -1816,6 +1881,8 @@ RULES
     "Search text notes by a user based on text matching.",
     {
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
       query: z.string().describe("Search query string."),
       limit: z
         .number()
@@ -1859,6 +1926,8 @@ RULES
     "Fetches raw ideas (inbox) for a user. Read-only.",
     {
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
       limit: z
         .number()
         .optional()
@@ -1911,6 +1980,8 @@ RULES
     {
       rawIdeaId: z.string().describe("ID of the raw idea to place."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("Target node ID."),
     },
     {
@@ -1919,13 +1990,15 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ rawIdeaId, userId, nodeId }) => {
+    async ({ rawIdeaId, userId, nodeId, aiChatId, sessionId }) => {
       try {
         const result = await convertRawIdeaToNote({
           rawIdeaId,
           userId,
           nodeId,
           wasAi: true,
+          aiChatId,
+          sessionId,
         });
 
         return {
@@ -1997,6 +2070,8 @@ RULES
         .default("general")
         .describe("Perspective for this understanding run."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -2004,12 +2079,14 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ rootNodeId, perspective, userId }) => {
+    async ({ rootNodeId, perspective, userId, aiChatId, sessionId }) => {
       const result = await createUnderstandingRun(
         rootNodeId,
         userId,
         perspective,
         true,
+        aiChatId,
+        sessionId,
       );
 
       return {
@@ -2038,6 +2115,8 @@ RULES
         .string()
         .describe("Root node ID to list understandings for."),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: true,
@@ -2210,6 +2289,9 @@ Then IMMEDIATELY call understanding-capture with:
       currentLayer,
       encoding,
       rootNodeId,
+      userId,
+      aiChatId,
+      sessionId,
     }) => {
       await commitCompressionResult({
         mode,
@@ -2217,6 +2299,10 @@ Then IMMEDIATELY call understanding-capture with:
         understandingNodeId,
         currentLayer,
         encoding,
+        userId,
+        wasAi: true,
+        aiChatId,
+        sessionId,
       });
 
       return {
@@ -2264,6 +2350,8 @@ Then IMMEDIATELY call understanding-capture with:
           "Omit on first call. Include your summary from previous task on subsequent calls.",
         ),
       userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -2271,7 +2359,7 @@ Then IMMEDIATELY call understanding-capture with:
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ understandingRunId, rootNodeId, previousResult, userId }) => {
+    async ({ understandingRunId, rootNodeId, previousResult, userId, aiChatId, sessionId }) => {
       // 1️⃣ Commit previous result if provided
       if (previousResult) {
         try {
@@ -2283,6 +2371,8 @@ Then IMMEDIATELY call understanding-capture with:
             currentLayer: previousResult.currentLayer,
             userId,
             wasAi: true,
+            aiChatId,
+            sessionId,
           });
         } catch (err) {
           return {
@@ -2679,6 +2769,12 @@ async function handleMcpRequest(req, res) {
         return;
       }
       requestArgs.userId = req.userId;
+
+      // Inject AI chat context so contributions are tracked per-chat
+      const aiCtx = getAiContributionContext(req.userId);
+      requestArgs.aiChatId = aiCtx.aiChatId;
+      requestArgs.sessionId = aiCtx.sessionId;
+
       const user = await User.findById(req.userId).select("htmlShareToken");
       const htmlShareToken = user?.htmlShareToken ?? null;
 
@@ -2840,6 +2936,12 @@ async function handleMcpRequest(req, res) {
         return;
       }
       requestArgs.userId = req.userId;
+
+      // Inject AI chat context so contributions are tracked per-chat
+      const aiCtx2 = getAiContributionContext(req.userId);
+      requestArgs.aiChatId = aiCtx2.aiChatId;
+      requestArgs.sessionId = aiCtx2.sessionId;
+
       const user = await User.findById(req.userId).select("htmlShareToken");
       const htmlShareToken = user?.htmlShareToken ?? null;
 

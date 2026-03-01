@@ -19,6 +19,8 @@ import {
   trackChainStep,
   startAIChat,
   finalizeAIChat,
+  setAiContributionContext,
+  clearAiContributionContext,
 } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import {
@@ -201,6 +203,9 @@ export async function orchestrateUnderstanding({
     });
     mainChatId = mainChat._id;
   }
+  if (mainChatId) {
+    setAiContributionContext(userId, sessionId, mainChatId);
+  }
 
   console.log(
     `🧠 Understand orchestrator started for run ${understandingRunId} (${runPerspective}, ${nodeCount} nodes)`,
@@ -264,6 +269,8 @@ export async function orchestrateUnderstanding({
         currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
         userId,
         wasAi: true,
+        aiChatId: mainChatId,
+        sessionId,
       });
 
       nodesProcessed++;
@@ -347,6 +354,7 @@ export async function orchestrateUnderstanding({
         ),
       );
     }
+    clearAiContributionContext(userId);
     closeMCPClient(visitorId);
   }
 }

@@ -9,6 +9,8 @@ async function updateSchedule({
   reeffectTime,
   userId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 }) {
   if (!nodeId || versionIndex === undefined || reeffectTime === undefined) {
     const error = new Error(
@@ -65,6 +67,8 @@ async function updateSchedule({
     userId,
     nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "editSchedule",
     nodeVersion: versionIndex,
     scheduleEdited,

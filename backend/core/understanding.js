@@ -16,6 +16,8 @@ export async function createUnderstandingRun(
   userId,
   perspective = "general",
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 ) {
   const nodes = await Node.find({}).lean();
   const nodeById = new Map(nodes.map((n) => [String(n._id), n]));
@@ -73,6 +75,8 @@ if (containsHtml(perspective)) {
     userId: userId,
     nodeId: rootNodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     energyUsed,
 
     action: "understanding",
@@ -548,6 +552,8 @@ export async function commitCompressionResult({
   currentLayer,
   userId,
   wasAi = true,
+  aiChatId = null,
+  sessionId = null,
 }) {
   const run = await UnderstandingRun.findById(understandingRunId).lean();
   if (!run) throw new Error("UnderstandingRun not found");
@@ -583,6 +589,8 @@ export async function commitCompressionResult({
       userId,
       nodeId: node.realNodeId,
       wasAi,
+      aiChatId,
+      sessionId,
       energyUsed,
       action: "understanding",
       nodeVersion: "0",
@@ -652,6 +660,8 @@ export async function commitCompressionResult({
         userId,
         nodeId: node.realNodeId,
         wasAi,
+        aiChatId,
+        sessionId,
         energyUsed,
         action: "understanding",
         nodeVersion: "0",

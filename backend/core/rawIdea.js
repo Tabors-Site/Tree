@@ -166,6 +166,8 @@ async function convertRawIdeaToNote({
   userId,
   nodeId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 }) {
   if (!rawIdeaId || !userId || !nodeId) {
     throw new Error("Missing or invalid required fields");
@@ -208,6 +210,8 @@ async function convertRawIdeaToNote({
     userId,
     nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "rawIdea",
     nodeVersion: node.prestige,
     rawIdeaAction: {
@@ -221,6 +225,8 @@ async function convertRawIdeaToNote({
     userId,
     nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "note",
     nodeVersion: node.prestige,
     noteAction: {

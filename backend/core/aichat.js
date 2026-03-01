@@ -1,4 +1,5 @@
 import AIChat from "../db/models/aiChat.js";
+import Contribution from "../db/models/contribution.js";
 
 async function getAIChats({
   userId,
@@ -65,7 +66,7 @@ async function getAIChats({
     })
       .populate({
         path: "contributions",
-        select: "_id action nodeId nodeVersion wasAi energyUsed date",
+        select: "_id action nodeId nodeVersion wasAi energyUsed date understandingMeta",
         populate: { path: "nodeId", select: "name" },
       })
       .populate({
@@ -80,6 +81,28 @@ async function getAIChats({
       })
       .sort({ "startMessage.time": -1 })
       .lean();
+
+    // Step 2b: Direct aiChatId lookup — always accurate, works for in-progress chats
+    const chatIds = chats.map((c) => c._id);
+    const directContribs = await Contribution.find({
+      aiChatId: { $in: chatIds },
+    })
+      .select("_id action nodeId nodeVersion wasAi energyUsed date understandingMeta aiChatId")
+      .populate({ path: "nodeId", select: "name" })
+      .lean();
+
+    if (directContribs.length > 0) {
+      const contribsByChat = new Map();
+      for (const c of directContribs) {
+        const key = String(c.aiChatId);
+        if (!contribsByChat.has(key)) contribsByChat.set(key, []);
+        contribsByChat.get(key).push(c);
+      }
+      for (const chat of chats) {
+        const direct = contribsByChat.get(String(chat._id));
+        if (direct) chat.contributions = direct;
+      }
+    }
 
     // Step 3: Group into sessions (preserving newest-session-first order)
     const sessionMap = new Map();

@@ -12,7 +12,7 @@ import {
   getClientForUser,
 } from "../conversation.js";
 import { classify, translateDestructive } from "./translator.js";
-import { trackChainStep } from "../aiChatTracker.js";
+import { trackChainStep, setAiContributionContext } from "../aiChatTracker.js";
 
 import { getContextForAi, getNavigationContext } from "../../core/treeFetch.js";
 import Node from "../../db/models/node.js";
@@ -948,6 +948,11 @@ export async function orchestrateTreeRequest({
       connectionId: clientInfo.connectionId || null,
     };
   } catch (e) { /* use default */ }
+
+  // Ensure AI contribution context is set so MCP tool calls get aiChatId/sessionId
+  if (rootChatId) {
+    setAiContributionContext(userId, sessionId, rootChatId);
+  }
 
   const meta = { username, userId, rootId, slot, rootLlmConnectionId, llmProvider };
   const modesUsed = []; // Track full chain for AIChat

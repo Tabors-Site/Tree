@@ -94,6 +94,8 @@ async function createNote({
   isReflection,
   file,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 }) {
   if (!contentType || !["file", "text"].includes(contentType)) {
     throw new Error("Invalid content type");
@@ -169,6 +171,8 @@ async function createNote({
     userId,
     nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "note",
     nodeVersion: version,
     noteAction: { action: "add", noteId: newNote._id.toString(), content: contentType === "text" ? (finalContent || "") : null },
@@ -189,7 +193,8 @@ async function editNote({
   lineEnd = null,
   wasAi = false,
   isReflection = false,
-
+  aiChatId = null,
+  sessionId = null,
 }) {
   if (!noteId || !userId) {
     throw new Error("Missing required fields");
@@ -305,6 +310,8 @@ async function editNote({
     userId,
     nodeId: note.nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "note",
     nodeVersion: note.version,
     noteAction: { action: "edit", noteId: note._id.toString(), content: finalContent || "" },
@@ -445,7 +452,7 @@ async function getAllTagsForUser(userId, limit, startDate, endDate) {
   return { notes: notesWithTaggedBy };
 }
 
-async function deleteNoteAndFile({ noteId, userId, wasAi = false }) {
+async function deleteNoteAndFile({ noteId, userId, wasAi = false, aiChatId = null, sessionId = null }) {
   const note = await Note.findById(noteId);
   if (!note) throw new Error("Note not found");
 
@@ -534,6 +541,8 @@ async function deleteNoteAndFile({ noteId, userId, wasAi = false }) {
     userId,
     nodeId, // original nodeId
     wasAi,
+    aiChatId,
+    sessionId,
     action: "note",
     nodeVersion: version,
     noteAction: {

@@ -1,5 +1,6 @@
 import Contribution from "./models/contribution.js";
 import Node from "./models/node.js";
+import { getAiContributionContext } from "../ws/aiChatTracker.js";
 
 async function handleSchedule(nodeVersion) {
   if (nodeVersion.schedule === null) {
@@ -29,6 +30,8 @@ const logContribution = async ({
   userId,
   nodeId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
   action,
   statusEdited,
   valueEdited,
@@ -128,12 +131,23 @@ const logContribution = async ({
     }
   }
 
+  // If this is an AI contribution but aiChatId wasn't explicitly provided
+  // (e.g. MCP tool args get stripped by Zod schema validation), look it up
+  // from the in-memory context map keyed by userId.
+  if (wasAi && !aiChatId) {
+    const ctx = getAiContributionContext(userId);
+    aiChatId = ctx.aiChatId;
+    sessionId = ctx.sessionId;
+  }
+
   try {
     const newContribution = new Contribution({
       userId,
       nodeId,
       action,
       wasAi,
+      aiChatId,
+      sessionId,
       energyUsed,
 
       statusEdited,

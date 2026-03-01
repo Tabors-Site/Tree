@@ -46,6 +46,8 @@ import {
   setActiveChat,
   clearActiveChat,
   finalizeOpenChat,
+  setAiContributionContext,
+  clearAiContributionContext,
 } from "./aiChatTracker.js";
 import { clearMemory } from "./orchestrator/treeOrchestrator.js";
 
@@ -446,6 +448,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
               : {}),
           });
           setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
+          setAiContributionContext(socket.userId, sessionId, aiChat._id);
         } catch (err) {
           console.error("⚠️ Failed to create AIChat:", err.message);
         }
@@ -496,6 +499,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                 console.error("⚠️ AIChat finalize failed:", err.message),
               );
             }
+            clearAiContributionContext(socket.userId);
             clearActiveChat(socket);
           } else if (abort.signal.aborted) {
             // ── Finalize AIChat (cancelled mid-flight) ───────────────
@@ -508,6 +512,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                 console.error("⚠️ AIChat cancel finalize failed:", err.message),
               );
             }
+            clearAiContributionContext(socket.userId);
             clearActiveChat(socket);
           }
         } catch (err) {

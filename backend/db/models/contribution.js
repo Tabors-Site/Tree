@@ -19,6 +19,16 @@ const ContributionSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  aiChatId: {
+    type: String,
+    ref: "AIChat",
+    default: null,
+  },
+  sessionId: {
+    type: String,
+    default: null,
+    index: true,
+  },
 
   action: {
     type: String,

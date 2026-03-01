@@ -10,7 +10,7 @@ dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
 import { switchMode, processMessage, setRootId, getClientForUser } from "../conversation.js";
-import { trackChainStep, startAIChat, finalizeAIChat } from "../aiChatTracker.js";
+import { trackChainStep, startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../aiChatTracker.js";
 import { orchestrateTreeRequest } from "./treeOrchestrator.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { getRootNodesForUser, buildDeepTreeSummary } from "../../core/treeFetch.js";
@@ -103,10 +103,12 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
   await rawIdea.save();
 
   // ── Log contribution: AI started processing ───────────────────────────
+  // Note: aiChatId not yet available (mainChat created below), but sessionId is
   await logContribution({
     userId,
     nodeId: "deleted",
     wasAi: true,
+    sessionId,
     action: "rawIdea",
     nodeVersion: "0",
     rawIdeaAction: {
@@ -138,6 +140,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     llmProvider,
   });
   mainChatId = mainChat._id;
+  setAiContributionContext(userId, sessionId, mainChatId);
 
   console.log(`🤖 Raw-idea orchestrator started for ${rawIdeaId} (session: ${sessionId})`);
 
@@ -161,6 +164,8 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       userId,
       nodeId: "deleted",
       wasAi: true,
+      aiChatId: mainChatId,
+      sessionId,
       action: "rawIdea",
       nodeVersion: "0",
       rawIdeaAction: {
@@ -283,6 +288,8 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       userId,
       nodeId: targetNodeId,
       wasAi: true,
+      aiChatId: mainChatId,
+      sessionId,
       action: "rawIdea",
       nodeVersion,
       rawIdeaAction: {
@@ -343,6 +350,8 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
         userId,
         nodeId: "deleted",
         wasAi: true,
+        aiChatId: mainChatId,
+        sessionId,
         action: "rawIdea",
         nodeVersion: "0",
         rawIdeaAction: {
@@ -363,6 +372,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
         console.error(`❌ Failed to finalize raw-idea session chat:`, e.message),
       );
     }
+    clearAiContributionContext(userId);
     closeMCPClient(visitorId);
   }
 }

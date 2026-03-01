@@ -15,6 +15,8 @@ export async function updateScript({
   script,
   userId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 }) {
   const isCreating = !scriptId;
 
@@ -122,6 +124,8 @@ export async function updateScript({
     userId,
     nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "editScript",
     nodeVersion: node.prestige.toString(),
     editScript: {
@@ -146,6 +150,8 @@ export async function executeScript({
   scriptId,
   userId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 }) {
   if (!nodeId || !scriptId || !userId) {
     throw new Error("Missing required fields: nodeId, scriptId, or userId");
@@ -206,6 +212,8 @@ export async function executeScript({
       userId,
       nodeId,
       wasAi,
+      aiChatId,
+      sessionId,
       action: "executeScript",
       nodeVersion: node.prestige.toString(),
       executeScript: {
@@ -221,6 +229,8 @@ export async function executeScript({
       userId,
       nodeId,
       wasAi,
+      aiChatId,
+      sessionId,
       action: "executeScript",
       nodeVersion: node.prestige.toString(),
       executeScript: {

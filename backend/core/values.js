@@ -58,6 +58,8 @@ async function setValueForNode({
   version,
   userId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 }) {
   key = assertUserWritableKey(key);
   if (key.length > 60) throw new Error("Title must be 60 characters or less");
@@ -107,6 +109,8 @@ numericValue = truncate6(numericValue);
     userId,
     nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "editValue",
     valueEdited: { [finalKey]: numericValue },
     nodeVersion: versionIndex,
@@ -123,6 +127,8 @@ async function setGoalForNode({
   version,
   userId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 }) {
   const versionIndex = Number(version);
   let  numericGoal = Number(goal);
@@ -175,6 +181,8 @@ if (!valueKey) {
     userId,
     nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "editGoal",
     goalEdited: { [finalKey]: numericGoal },
     nodeVersion: versionIndex,

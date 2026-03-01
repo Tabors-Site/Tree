@@ -8,6 +8,8 @@ async function editStatus({
   isInherited,
   userId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 }) {
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
@@ -35,6 +37,8 @@ async function editStatus({
     userId,
     nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "editStatus",
     statusEdited: status,
     nodeVersion: version,
@@ -43,7 +47,7 @@ async function editStatus({
 
   // Cascade if inherited
   if (isInherited) {
-    await updateNodeStatusRecursively(node, status, version, userId, wasAi);
+    await updateNodeStatusRecursively(node, status, version, userId, wasAi, aiChatId, sessionId);
   }
 
   return {
@@ -59,6 +63,8 @@ async function updateNodeStatusRecursively(
   version,
   userId,
   wasAi,
+  aiChatId = null,
+  sessionId = null,
 ) {
   if (status === "divider") {
     const targetVersionIndex = node.versions.findIndex(
@@ -86,12 +92,14 @@ async function updateNodeStatusRecursively(
           userId,
           nodeId: childNode._id,
           wasAi,
+          aiChatId,
+          sessionId,
           action: "editStatus",
           statusEdited: status,
           nodeVersion: targetChildVersionIndex,
         });
 
-        await updateNodeStatusRecursively(childNode, status, version, userId);
+        await updateNodeStatusRecursively(childNode, status, version, userId, wasAi, aiChatId, sessionId);
       } else {
         console.warn(`Version not found for child node ${childNode._id}`);
       }
@@ -99,7 +107,7 @@ async function updateNodeStatusRecursively(
   }
 }
 
-async function addPrestige({ nodeId, userId, wasAi }) {
+async function addPrestige({ nodeId, userId, wasAi, aiChatId = null, sessionId = null }) {
   console.log(nodeId);
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
@@ -115,6 +123,8 @@ async function addPrestige({ nodeId, userId, wasAi }) {
     userId,
     nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "prestige",
     nodeVersion: targetNodeIndex,
     energyUsed,

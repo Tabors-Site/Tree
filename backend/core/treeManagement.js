@@ -35,6 +35,8 @@ export async function createNewNode(
   note = null,
   validatedUser = null,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 ) {
 
   if (!name || typeof name !== "string" || !name.trim()) {
@@ -93,6 +95,8 @@ export async function createNewNode(
       userId: user._id,
       nodeId: parentNodeID,
       wasAi,
+      aiChatId,
+      sessionId,
       action: "updateChildNode",
       nodeVersion: parentNode.prestige.toString(),
       updateChildNode: {
@@ -106,6 +110,8 @@ export async function createNewNode(
     userId: user._id,
     nodeId: newNode._id,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "create",
     nodeVersion: "0",
     energyUsed,
@@ -120,6 +126,8 @@ export async function createNewNode(
       version: 0,
       isReflection: false,
       wasAi,
+      aiChatId,
+      sessionId,
     });
   }
 
@@ -131,13 +139,15 @@ export async function createNodesRecursive(
   parentId,
   userId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 ) {
   const user = await getUserOrThrow(userId);
 
-  return createNodesRecursiveInternal(nodeData, parentId, user, wasAi);
+  return createNodesRecursiveInternal(nodeData, parentId, user, wasAi, aiChatId, sessionId);
 }
 
-async function createNodesRecursiveInternal(nodeData, parentId, user, wasAi) {
+async function createNodesRecursiveInternal(nodeData, parentId, user, wasAi, aiChatId = null, sessionId = null) {
   const { name, schedule, values, goals, reeffectTime, effectTime, note } =
     nodeData;
 
@@ -157,6 +167,8 @@ async function createNodesRecursiveInternal(nodeData, parentId, user, wasAi) {
     note || null,
     user, // 👈 avoids re-query
     wasAi,
+    aiChatId,
+    sessionId,
   );
 
   let totalCreated = 1;
@@ -167,6 +179,8 @@ async function createNodesRecursiveInternal(nodeData, parentId, user, wasAi) {
       newNode._id,
       user,
       wasAi,
+      aiChatId,
+      sessionId,
     );
     totalCreated += childResult.totalCreated;
   }
@@ -178,7 +192,7 @@ async function createNodesRecursiveInternal(nodeData, parentId, user, wasAi) {
   };
 }
 
-export async function deleteNodeBranch(nodeId, userId, wasAi = false) {
+export async function deleteNodeBranch(nodeId, userId, wasAi = false, aiChatId = null, sessionId = null) {
   const nodeToDelete = await Node.findById(nodeId);
   if (!nodeToDelete) throw new Error("Node not found");
   const access = await resolveTreeAccess(nodeId, userId);
@@ -214,6 +228,8 @@ export async function deleteNodeBranch(nodeId, userId, wasAi = false) {
         userId,
         nodeId: node._id.toString(),
         wasAi,
+        aiChatId,
+        sessionId,
         action: "updateChildNode",
         nodeVersion: node.prestige.toString(),
         updateChildNode: {
@@ -227,6 +243,8 @@ export async function deleteNodeBranch(nodeId, userId, wasAi = false) {
     userId,
     nodeId: nodeId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "branchLifecycle",
     nodeVersion: nodeToDelete.prestige.toString(),
     branchLifecycle: {
@@ -243,6 +261,8 @@ export async function updateParentRelationship(
   nodeNewParentId,
   userId,
   wasAi = false,
+  aiChatId = null,
+  sessionId = null,
 ) {
   const nodeChild = await Node.findById(nodeChildId);
   if (!nodeChild) throw new Error("Child node not found");
@@ -295,6 +315,8 @@ export async function updateParentRelationship(
       userId,
       nodeId: oldParent._id.toString(),
       wasAi,
+      aiChatId,
+      sessionId,
       action: "updateChildNode",
       nodeVersion: oldParent.prestige.toString(),
       updateChildNode: {
@@ -313,6 +335,8 @@ export async function updateParentRelationship(
     userId,
     nodeId: nodeChildId,
     wasAi,
+    aiChatId,
+    sessionId,
     action: "updateParent",
     nodeVersion: nodeChild.prestige.toString(),
     updateParent: {
@@ -330,6 +354,8 @@ export async function updateParentRelationship(
     userId,
     nodeId: nodeNewParentId.toString(),
     wasAi,
+    aiChatId,
+    sessionId,
     action: "updateChildNode",
     nodeVersion: nodeNewParent.prestige.toString(),
     updateChildNode: {
@@ -340,7 +366,7 @@ export async function updateParentRelationship(
 
   return { nodeChild, nodeNewParent };
 }
-export async function editNodeName({ nodeId, newName, userId, wasAi = false }) {
+export async function editNodeName({ nodeId, newName, userId, wasAi = false, aiChatId = null, sessionId = null }) {
   if (!newName || typeof newName !== "string" || !newName.trim()) {
     throw new Error("Node name cannot be empty");
   }
@@ -369,6 +395,8 @@ export async function editNodeName({ nodeId, newName, userId, wasAi = false }) {
     nodeId,
     action: "editNameNode",
     wasAi,
+    aiChatId,
+    sessionId,
     nodeVersion: node.prestige.toString(),
     editNameNode: {
       oldName,
