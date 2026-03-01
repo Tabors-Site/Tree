@@ -29,6 +29,9 @@ const userSessionIndex = new Map();
 // userId → sessionId  (which session controls the iframe)
 const activeNavigator = new Map();
 
+// Change listeners — dashboard subscribes to get notified of session changes
+const changeListeners = new Set();
+
 // ─────────────────────────────────────────────────────────────────────────
 // REGISTRATION
 // ─────────────────────────────────────────────────────────────────────────
@@ -78,6 +81,7 @@ export function registerSession({ sessionId, userId, type, description = "", met
     `📋 Session registered: ${type} [${sessionId.slice(0, 8)}] for user ${uid} (navigator: ${isNav})`,
   );
 
+  for (const cb of changeListeners) cb(uid);
   return { sessionId, isActiveNavigator: isNav };
 }
 
@@ -105,6 +109,8 @@ export function endSession(sessionId) {
   if (activeNavigator.get(uid) === sessionId) {
     promoteNavigator(uid);
   }
+
+  for (const cb of changeListeners) cb(uid);
 }
 
 /**
@@ -120,6 +126,8 @@ export function clearUserSessions(userId) {
   }
   userSessionIndex.delete(uid);
   activeNavigator.delete(uid);
+
+  for (const cb of changeListeners) cb(uid);
 }
 
 /**
@@ -128,6 +136,27 @@ export function clearUserSessions(userId) {
 export function touchSession(sessionId) {
   const session = sessions.get(sessionId);
   if (session) session.lastActivity = Date.now();
+}
+
+/**
+ * Merge updates into a session's meta object and notify listeners.
+ */
+export function updateSessionMeta(sessionId, metaUpdates) {
+  const session = sessions.get(sessionId);
+  if (!session) return false;
+  session.meta = { ...session.meta, ...metaUpdates };
+  session.lastActivity = Date.now();
+  for (const cb of changeListeners) cb(session.userId);
+  return true;
+}
+
+/**
+ * Subscribe to session changes. Callback receives (userId).
+ * Returns an unsubscribe function.
+ */
+export function onSessionChange(callback) {
+  changeListeners.add(callback);
+  return () => changeListeners.delete(callback);
 }
 
 // ─────────────────────────────────────────────────────────────────────────

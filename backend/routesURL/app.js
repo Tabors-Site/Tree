@@ -2,6 +2,7 @@
 import express from "express";
 import User from "../db/models/user.js";
 import authenticateLite from "../middleware/authenticateLite.js";
+import { dashboardCSS, dashboardHTML, dashboardJS } from "./dashboardPartial.js";
 
 const router = express.Router();
 
@@ -1262,6 +1263,7 @@ router.get("/app", authenticateLite, async (req, res) => {
         transform: translateX(-50%) translateY(0);
       }
     }
+    ${dashboardCSS()}
   </style>
 </head>
 <body>
@@ -1391,7 +1393,8 @@ router.get("/app", authenticateLite, async (req, res) => {
 
     <!-- Viewport Panel -->
     <div class="viewport-panel glass-panel" id="viewportPanel">
-      <div class="iframe-container">
+      ${dashboardHTML()}
+      <div class="iframe-container" id="iframeContainer">
         <div class="loading-overlay" id="loadingOverlay">
           <div class="loading-spinner">
             <div class="spinner-ring"></div>
@@ -2893,6 +2896,8 @@ function addOrchestratorStep(modeKey, result) {
       getRecentRoots: () => recentRoots,
       navigateToRoot: navigateToRoot
     };
+
+    ${dashboardJS()}
   </script>
 </body>
 </html>`);

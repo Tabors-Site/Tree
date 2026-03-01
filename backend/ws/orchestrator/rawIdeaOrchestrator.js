@@ -15,7 +15,7 @@ import { orchestrateTreeRequest } from "./treeOrchestrator.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { getRootNodesForUser, buildDeepTreeSummary } from "../../core/treeFetch.js";
 import { logContribution } from "../../db/utils.js";
-import { registerSession, endSession, SESSION_TYPES } from "../sessionRegistry.js";
+import { registerSession, endSession, updateSessionMeta, SESSION_TYPES } from "../sessionRegistry.js";
 import RawIdea from "../../db/models/rawIdea.js";
 import Node from "../../db/models/node.js";
 
@@ -264,6 +264,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
 
     // ── PHASE 2: Delegate to tree orchestrator ────────────────────────────
     setRootId(visitorId, chosenRootId);
+    updateSessionMeta(sessionId, { rootId: chosenRootId });
 
     const treeResult = await orchestrateTreeRequest({
       visitorId,

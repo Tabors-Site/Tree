@@ -24,7 +24,7 @@ import {
 } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { emitNavigate, emitToUser } from "../websocket.js";
-import { registerSession, endSession, setActiveNavigator, getSession, SESSION_TYPES } from "../sessionRegistry.js";
+import { registerSession, endSession, setActiveNavigator, getSession, updateSessionMeta, SESSION_TYPES } from "../sessionRegistry.js";
 import {
   getNextCompressionPayloadForLLM,
   commitCompressionResult,
@@ -297,6 +297,7 @@ export async function orchestrateUnderstanding({
       });
 
       nodesProcessed++;
+      updateSessionMeta(sessionId, { nodeId: payload.target.realNodeId || rootId });
 
       // Navigate iframe to the node just processed
       if (isSite) {

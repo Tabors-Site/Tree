@@ -50,6 +50,7 @@ import {
   clearAiContributionContext,
 } from "./aiChatTracker.js";
 import { clearMemory } from "./orchestrator/treeOrchestrator.js";
+import { getAIChats } from "../core/aichat.js";
 import {
   registerSession,
   endSession,
@@ -58,6 +59,9 @@ import {
   getActiveNavigator,
   clearActiveNavigator,
   getSession,
+  getSessionsForUser,
+  updateSessionMeta,
+  onSessionChange,
   SESSION_TYPES,
   registeredSessionCount,
 } from "./sessionRegistry.js";
@@ -102,6 +106,31 @@ function emitNavigatorStatus(socket) {
   } else {
     socket.emit("navigatorSession", null);
   }
+}
+
+// ── Dashboard tree helper ────────────────────────────────────────────────
+async function loadTreeForDashboard(rootId) {
+  const root = await Node.findById(rootId).populate("children").exec();
+  if (!root) throw new Error("Tree not found");
+  const populateChildren = async (node) => {
+    if (node.children?.length > 0) {
+      node.children = await Node.populate(node.children, { path: "children" });
+      for (const c of node.children) await populateChildren(c);
+    }
+  };
+  await populateChildren(root);
+  const simplify = (n) => {
+    const obj = typeof n.toObject === "function" ? n.toObject() : n;
+    return {
+      id: String(obj._id),
+      name: obj.name,
+      status: obj.versions?.find((v) => v.prestige === obj.prestige)?.status || "active",
+      children: (obj.children || []).map((c) =>
+        simplify(typeof c === "object" && c !== null ? c : { _id: c, name: "?", children: [], versions: [], prestige: 0 }),
+      ),
+    };
+  };
+  return simplify(root);
 }
 
 // ============================================================================
@@ -274,6 +303,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         if (!getRootId(visitorId)) {
           setRootId(visitorId, nodeId);
         }
+      }
+
+      // Update session registry meta for dashboard tracking
+      if (socket._registrySessionId) {
+        updateSessionMeta(socket._registrySessionId, {
+          rootId: rootId || getRootId(visitorId) || null,
+          nodeId: nodeId || rootId || getCurrentNodeId(visitorId) || null,
+        });
       }
 
       // Clear both when going home
@@ -717,6 +754,35 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
     });
 
+    // ── DASHBOARD EVENTS ──────────────────────────────────────────────
+    socket.on("getDashboardSessions", () => {
+      if (!socket.userId) return;
+      const sessions = getSessionsForUser(socket.userId);
+      const activeNav = getActiveNavigator(socket.userId);
+      socket.emit("dashboardSessions", { sessions, activeNavigatorId: activeNav });
+    });
+
+    socket.on("getDashboardTree", async ({ rootId }) => {
+      if (!socket.userId || !rootId) return;
+      try {
+        const tree = await loadTreeForDashboard(rootId);
+        socket.emit("dashboardTreeData", { rootId, tree });
+      } catch (err) {
+        socket.emit("dashboardTreeData", { rootId, error: err.message });
+      }
+    });
+
+    socket.on("getDashboardChats", async ({ sessionId }) => {
+      if (!socket.userId || !sessionId) return;
+      try {
+        const { sessions } = await getAIChats({ userId: socket.userId, sessionId, sessionLimit: 1 });
+        const chats = sessions.flatMap((s) => s.chats);
+        socket.emit("dashboardChats", { sessionId, chats });
+      } catch (err) {
+        socket.emit("dashboardChats", { sessionId, error: err.message });
+      }
+    });
+
     // ── CLEAR / DISCONNECT ────────────────────────────────────────────
     socket.on("clearConversation", async () => {
       const visitorId = socket.visitorId;
@@ -774,6 +840,13 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       logStats();
     });
+  });
+
+  // Subscribe to session registry changes → push to dashboard
+  onSessionChange((userId) => {
+    const sessions = getSessionsForUser(userId);
+    const activeNav = getActiveNavigator(userId);
+    emitToUser(userId, "dashboardSessions", { sessions, activeNavigatorId: activeNav });
   });
 
   console.log("🚀 WebSocket server initialized");
