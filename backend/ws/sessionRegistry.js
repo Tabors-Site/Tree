@@ -197,6 +197,7 @@ export function setActiveNavigator(userId, sessionId) {
   const session = sessions.get(sessionId);
   if (!session || session.userId !== String(userId)) return false;
   activeNavigator.set(String(userId), sessionId);
+  for (const cb of changeListeners) cb(String(userId));
   return true;
 }
 
@@ -212,6 +213,7 @@ export function getActiveNavigator(userId) {
  */
 export function clearActiveNavigator(userId) {
   activeNavigator.delete(String(userId));
+  for (const cb of changeListeners) cb(String(userId));
 }
 
 // ─────────────────────────────────────────────────────────────────────────

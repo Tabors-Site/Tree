@@ -57,6 +57,7 @@ import {
   canNavigate,
   touchSession,
   getActiveNavigator,
+  setActiveNavigator,
   clearActiveNavigator,
   getSession,
   getSessionsForUser,
@@ -124,6 +125,7 @@ async function loadTreeForDashboard(rootId) {
     return {
       id: String(obj._id),
       name: obj.name,
+      prestige: obj.prestige || 0,
       status: obj.versions?.find((v) => v.prestige === obj.prestige)?.status || "active",
       children: (obj.children || []).map((c) =>
         simplify(typeof c === "object" && c !== null ? c : { _id: c, name: "?", children: [], versions: [], prestige: 0 }),
@@ -754,12 +756,22 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
     });
 
+    socket.on("attachNavigator", ({ sessionId }) => {
+      if (!socket.userId || !sessionId) return;
+      setActiveNavigator(socket.userId, sessionId);
+      emitNavigatorStatus(socket);
+    });
+
     // ── DASHBOARD EVENTS ──────────────────────────────────────────────
     socket.on("getDashboardSessions", () => {
       if (!socket.userId) return;
       const sessions = getSessionsForUser(socket.userId);
       const activeNav = getActiveNavigator(socket.userId);
-      socket.emit("dashboardSessions", { sessions, activeNavigatorId: activeNav });
+      socket.emit("dashboardSessions", {
+        sessions,
+        activeNavigatorId: activeNav,
+        selfSessionId: socket._registrySessionId || null,
+      });
     });
 
     socket.on("getDashboardTree", async ({ rootId }) => {
@@ -769,6 +781,21 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         socket.emit("dashboardTreeData", { rootId, tree });
       } catch (err) {
         socket.emit("dashboardTreeData", { rootId, error: err.message });
+      }
+    });
+
+    socket.on("getDashboardRoots", async () => {
+      if (!socket.userId) return;
+      try {
+        const roots = await Node.find({ rootOwner: socket.userId, parent: { $ne: "deleted" } }).select("_id name children");
+        const simplified = roots.map((r) => ({
+          id: String(r._id),
+          name: r.name,
+          childCount: r.children ? r.children.length : 0,
+        }));
+        socket.emit("dashboardRoots", { roots: simplified });
+      } catch (err) {
+        socket.emit("dashboardRoots", { roots: [], error: err.message });
       }
     });
 
@@ -846,7 +873,13 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
   onSessionChange((userId) => {
     const sessions = getSessionsForUser(userId);
     const activeNav = getActiveNavigator(userId);
-    emitToUser(userId, "dashboardSessions", { sessions, activeNavigatorId: activeNav });
+    const socketId = authSessions.get(userId);
+    const userSocket = socketId ? io.sockets.sockets.get(socketId) : null;
+    emitToUser(userId, "dashboardSessions", {
+      sessions,
+      activeNavigatorId: activeNav,
+      selfSessionId: userSocket?._registrySessionId || null,
+    });
   });
 
   console.log("🚀 WebSocket server initialized");

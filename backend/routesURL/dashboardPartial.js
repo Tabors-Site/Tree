@@ -13,6 +13,21 @@ export function dashboardCSS() {
       overflow: hidden;
     }
     .dashboard-view.active { display: flex; }
+    .dashboard-view.disconnected { position: relative; pointer-events: none; }
+    .dashboard-view.disconnected::after {
+      content: "Disconnected";
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.5);
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      z-index: 100;
+    }
     .iframe-container.hidden { display: none; }
 
     .dashboard-layout {
@@ -21,17 +36,35 @@ export function dashboardCSS() {
       overflow: hidden;
     }
 
-    /* ── Tree view (main area) ──────────────────────────────────────── */
+    /* ── Main area ───────────────────────────────────────────────────── */
     .dash-tree-view {
       flex: 1;
-      overflow: auto;
+      display: flex;
+      flex-direction: column;
       padding: 16px;
       position: relative;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #dashForestView {
+      flex: 1;
+      overflow: auto;
+      min-height: 0;
+    }
+    #dashTreeContent {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #dashTreeCanvas {
+      flex: 1;
+      min-height: 0;
     }
     .dash-tree-header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 10px;
       margin-bottom: 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -41,70 +74,178 @@ export function dashboardCSS() {
       font-weight: 600;
       color: var(--text-secondary);
     }
-    .tree-empty {
+    .dash-back-btn {
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      color: var(--text-secondary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .dash-back-btn:hover { background: rgba(255,255,255,0.15); color: var(--text-primary); }
+
+    /* ── Raw idea processing strip ──────────────────────────────────── */
+    .raw-idea-space {
+      margin-bottom: 14px;
+      flex-shrink: 0;
+    }
+    .raw-idea-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+    .raw-idea-list {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .raw-idea-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(251,191,36,0.1);
+      border: 1px solid rgba(251,191,36,0.2);
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: all 0.15s;
+      max-width: 200px;
+    }
+    .raw-idea-card:hover { background: rgba(251,191,36,0.18); }
+    .raw-idea-pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(251,191,36,0.8);
+      flex-shrink: 0;
+      animation: rawPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes rawPulse {
+      0%, 100% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+    .raw-idea-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── Forest view (grid of root trees) ──────────────────────────── */
+    .dash-forest {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px;
+      padding: 4px 0;
+    }
+    .dash-root-card {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: var(--text-muted);
-      gap: 12px;
-    }
-    .tree-empty-icon { font-size: 48px; opacity: 0.5; }
-    .tree-empty p { font-size: 13px; }
-
-    .tree-node-row {
-      display: flex;
-      align-items: center;
-      padding: 4px 8px;
-      border-radius: 6px;
-      cursor: default;
-      transition: background 0.1s;
       gap: 6px;
+      padding: 16px 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+      text-align: center;
     }
-    .tree-node-row:hover { background: rgba(255,255,255,0.06); }
-    .tree-node-row.highlighted {
-      background: rgba(16, 185, 129, 0.12);
-      border-left: 2px solid var(--accent);
+    .dash-root-card:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15); }
+    .dash-root-card.has-sessions { border-color: rgba(16,185,129,0.3); }
+    .dash-root-icon {
+      font-size: 28px;
+      line-height: 1;
     }
-    .tree-node-name {
-      font-size: 13px;
+    .dash-root-name {
+      font-size: 12px;
+      font-weight: 500;
       color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
     }
-    .tree-node-row.highlighted .tree-node-name { color: var(--text-primary); font-weight: 500; }
-    .tree-node-status {
+    .dash-root-info {
       font-size: 9px;
-      padding: 1px 5px;
-      border-radius: 3px;
-      background: rgba(255,255,255,0.08);
       color: var(--text-muted);
     }
-    .tree-node-badges {
-      display: flex;
-      gap: 2px;
-      margin-left: auto;
-    }
-    .tree-session-badge {
-      font-size: 10px;
-      padding: 1px 4px;
-      border-radius: 3px;
-      background: rgba(16,185,129,0.2);
-    }
-    .tree-children {
-      padding-left: 20px;
-      border-left: 1px solid rgba(255,255,255,0.06);
-      margin-left: 11px;
-    }
-    .tree-toggle {
-      width: 16px;
-      height: 16px;
+    .dash-root-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: var(--accent);
+      color: #000;
+      font-size: 9px;
+      font-weight: 700;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
+    }
+    .dash-forest-empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 40px 16px;
       color: var(--text-muted);
-      font-size: 10px;
-      flex-shrink: 0;
+      font-size: 13px;
+    }
+    .dash-forest-empty-icon { font-size: 40px; opacity: 0.4; margin-bottom: 8px; }
+
+    /* ── Visual tree (SVG) ───────────────────────────────────────────── */
+    .vtree-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+    }
+    .vtree-svg {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+    }
+    .vtree-node { cursor: pointer; }
+    .vtree-node:hover circle.vtree-main { filter: brightness(1.4); }
+    .vtree-highlight-ring.active {
+      stroke: var(--accent) !important;
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 8px rgba(16,185,129,0.6));
+    }
+    .vtree-tooltip {
+      position: absolute;
+      background: rgba(0,0,0,0.88);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      pointer-events: none;
+      z-index: 40;
+      max-width: 220px;
+      white-space: nowrap;
+      display: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .vtree-tooltip.visible { display: block; }
+    .vtree-tooltip-name { font-weight: 600; }
+    .vtree-tooltip-status { opacity: 0.65; margin-left: 6px; font-size: 10px; }
+    .vtree-badge-dot {
+      stroke: none;
+      filter: drop-shadow(0 0 3px rgba(16,185,129,0.5));
     }
 
     /* ── Session sidebar ────────────────────────────────────────────── */
@@ -149,6 +290,7 @@ export function dashboardCSS() {
       border: 1px solid rgba(255,255,255,0.08);
       margin-bottom: 6px;
       transition: all 0.15s;
+      cursor: pointer;
     }
     .session-card:hover { background: rgba(255,255,255,0.1); }
     .session-card.tracked {
@@ -215,8 +357,8 @@ export function dashboardCSS() {
       padding: 12px 16px;
       border-bottom: 1px solid var(--glass-border-light);
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-direction: column;
+      align-items: flex-start;
       flex-shrink: 0;
     }
     .dash-chat-close {
@@ -250,60 +392,153 @@ export function dashboardCSS() {
       text-transform: uppercase;
     }
 
-    /* ── Dashboard toggle button ────────────────────────────────────── */
-    .dashboard-toggle-btn {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      z-index: 15;
-      width: 32px;
-      height: 32px;
+    /* (dashboard toggle buttons are now in app.js chat panel) */
+
+    /* ── Mobile sessions overlay ────────────────────────────────────── */
+    .mobile-sessions-pill {
+      display: none;
+      z-index: 25;
+      align-items: center;
+      align-self: flex-start;
+      flex-shrink: 0;
+      gap: 5px;
+      padding: 4px 10px;
+      margin-bottom: 8px;
+      border-radius: 20px;
+      background: rgba(var(--glass-rgb), 0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .mobile-sessions-pill:hover { background: rgba(var(--glass-rgb), 0.95); }
+    .mobile-sessions-pill.has-activity { border-color: rgba(16,185,129,0.4); }
+    .mobile-sessions-pill .pill-count {
+      background: var(--accent);
+      color: #000;
+      font-size: 9px;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(var(--glass-rgb), 0.6);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--glass-border);
-      border-radius: 8px;
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: all 0.15s;
+      padding: 0 3px;
     }
-    .dashboard-toggle-btn:hover { background: rgba(var(--glass-rgb), 0.85); color: var(--text-primary); }
-    .dashboard-toggle-btn.active { background: rgba(16,185,129,0.2); border-color: var(--accent); color: var(--accent); }
+    .mobile-sessions-pill .pill-label {
+      font-size: 11px;
+    }
+    .mobile-sessions-overlay {
+      display: none;
+      position: absolute;
+      top: 52px;
+      right: 8px;
+      left: 8px;
+      max-height: 70%;
+      background: rgba(var(--glass-rgb), 0.95);
+      backdrop-filter: blur(var(--glass-blur));
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      z-index: 35;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .mobile-sessions-overlay.open { display: flex; }
+    .mobile-overlay-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--glass-border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .mobile-overlay-header h3 { font-size: 13px; font-weight: 600; margin: 0; }
+    .mobile-overlay-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .mobile-overlay-close:hover { color: var(--text-primary); }
+    .mobile-overlay-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 10px 12px;
+    }
+    .mobile-sessions-scrim {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 34;
+      background: rgba(0,0,0,0.3);
+    }
+    .mobile-sessions-scrim.open { display: block; }
 
     /* ── Mobile adjustments ─────────────────────────────────────────── */
     @media (max-width: 768px) {
+      .dashboard-layout { flex-direction: column; }
       .session-sidebar { display: none; }
       .dashboard-chat-panel { width: 100%; }
-      .dashboard-toggle-btn { display: none; }
+      .mobile-sessions-pill { display: flex; }
+      .dash-forest { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
     }
   `;
 }
 
 export function dashboardHTML() {
   return `
-    <button class="dashboard-toggle-btn" id="dashboardToggleBtn" title="Session Dashboard">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-        <rect x="3" y="3" width="7" height="9" rx="1"/>
-        <rect x="14" y="3" width="7" height="5" rx="1"/>
-        <rect x="14" y="12" width="7" height="9" rx="1"/>
-        <rect x="3" y="16" width="7" height="5" rx="1"/>
-      </svg>
-    </button>
     <div class="dashboard-view" id="dashboardView">
       <div class="dashboard-layout">
         <div class="dash-tree-view" id="dashTreeView">
-          <div class="tree-empty" id="dashTreeEmpty">
-            <div class="tree-empty-icon">🌳</div>
-            <p>No tree loaded</p>
-            <p style="font-size:12px;opacity:0.7">Track a session or wait for one to start working on a tree</p>
+
+          <!-- Mobile sessions (inline row, not floating) -->
+          <button class="mobile-sessions-pill" id="mobileSessionsPill">
+            <span class="pill-label">Sessions</span>
+            <span class="pill-count" id="mobileSessionsPillCount">0</span>
+          </button>
+          <div class="mobile-sessions-scrim" id="mobileSessionsScrim"></div>
+          <div class="mobile-sessions-overlay" id="mobileSessionsOverlay">
+            <div class="mobile-overlay-header">
+              <h3>Sessions <span class="session-count-badge" id="dashSessionCountMobile">0</span></h3>
+              <button class="mobile-overlay-close" id="mobileSessionsClose">&times;</button>
+            </div>
+            <div class="mobile-overlay-body" id="mobileSessionsList"></div>
           </div>
+
+          <!-- Raw ideas being processed (visible when any exist) -->
+          <div class="raw-idea-space" id="rawIdeaSpace" style="display:none">
+            <div class="raw-idea-label">Processing</div>
+            <div class="raw-idea-list" id="rawIdeaList"></div>
+          </div>
+
+          <!-- Forest view — all root trees (default) -->
+          <div id="dashForestView">
+            <div class="dash-tree-header">
+              <span class="dash-tree-title">Your Trees</span>
+            </div>
+            <div class="dash-forest" id="dashForestGrid"></div>
+          </div>
+
+          <!-- Single tree view (shown when a root is selected) -->
           <div id="dashTreeContent" style="display:none">
             <div class="dash-tree-header">
+              <button class="dash-back-btn" id="dashBackBtn">&larr; All Trees</button>
               <span class="dash-tree-title" id="dashTreeTitle">Tree</span>
             </div>
             <div id="dashTreeCanvas"></div>
+          </div>
+
+          <div class="vtree-tooltip" id="vtreeTooltip">
+            <span class="vtree-tooltip-name" id="vtreeTooltipName"></span>
+            <span class="vtree-tooltip-status" id="vtreeTooltipStatus"></span>
           </div>
         </div>
         <div class="session-sidebar" id="sessionSidebar">
@@ -316,8 +551,11 @@ export function dashboardHTML() {
       </div>
       <div class="dashboard-chat-panel" id="dashChatPanel">
         <div class="dash-chat-header">
-          <span id="dashChatTitle" style="font-size:13px;font-weight:600">AI Chat</span>
-          <button class="dash-chat-close" id="dashChatClose">&times;</button>
+          <span id="dashChatTitle" style="font-size:13px;font-weight:600">Messages</span>
+          <div class="dash-chat-controls" style="display:flex;gap:6px;align-items:center;margin-top:8px">
+            <button class="dash-chat-close" id="dashChatRefresh" title="Refresh">&#x21BB;</button>
+            <button class="dash-chat-close" id="dashChatClose">&times;</button>
+          </div>
         </div>
         <div class="dash-chat-body" id="dashChatBody"></div>
       </div>
@@ -332,155 +570,381 @@ export function dashboardJS() {
     // ══════════════════════════════════════════════════════════════════
 
     (function() {
-      let dashboardActive = false;
-      let dashSessions = [];
-      let dashTrackedSessionId = null;
-      let dashCurrentRootId = null;
-      let dashTreeData = null;
+      var dashboardActive = false;
+      var dashMode = "forest";       // "forest" or "tree"
+      var dashSessions = [];
+      var dashRoots = [];
+      var dashTrackedSessionId = null;
+      var dashTrackedNavRootId = null;  // last rootId we auto-navigated to for tracked session
+      var dashCurrentRootId = null;
+      var dashTreeData = null;
+      var dashSelfSessionId = null;
+      var dashActiveNavigatorId = null;
 
-      const dashboardToggleBtn = document.getElementById("dashboardToggleBtn");
-      const iframeContainer = document.getElementById("iframeContainer");
-      const dashboardView = document.getElementById("dashboardView");
-      const dashTreeEmpty = document.getElementById("dashTreeEmpty");
-      const dashTreeContent = document.getElementById("dashTreeContent");
-      const dashTreeCanvas = document.getElementById("dashTreeCanvas");
-      const dashTreeTitle = document.getElementById("dashTreeTitle");
-      const dashSessionList = document.getElementById("dashSessionList");
-      const dashSessionCount = document.getElementById("dashSessionCount");
-      const dashChatPanel = document.getElementById("dashChatPanel");
-      const dashChatBody = document.getElementById("dashChatBody");
-      const dashChatTitle = document.getElementById("dashChatTitle");
+      var desktopDashboardBtn = document.getElementById("desktopDashboardBtn");
+      var iframeContainer = document.getElementById("iframeContainer");
+      var dashboardView = document.getElementById("dashboardView");
+      var dashForestView = document.getElementById("dashForestView");
+      var dashForestGrid = document.getElementById("dashForestGrid");
+      var dashTreeContent = document.getElementById("dashTreeContent");
+      var dashTreeCanvas = document.getElementById("dashTreeCanvas");
+      var dashTreeTitle = document.getElementById("dashTreeTitle");
+      var dashBackBtn = document.getElementById("dashBackBtn");
+      var rawIdeaSpace = document.getElementById("rawIdeaSpace");
+      var rawIdeaList = document.getElementById("rawIdeaList");
+      var dashSessionList = document.getElementById("dashSessionList");
+      var dashSessionCount = document.getElementById("dashSessionCount");
+      var dashChatPanel = document.getElementById("dashChatPanel");
+      var dashChatBody = document.getElementById("dashChatBody");
+      var dashChatTitle = document.getElementById("dashChatTitle");
+      var vtreeTooltip = document.getElementById("vtreeTooltip");
+      var vtreeTooltipName = document.getElementById("vtreeTooltipName");
+      var vtreeTooltipStatus = document.getElementById("vtreeTooltipStatus");
+      var dashTreeView = document.getElementById("dashTreeView");
+      var mobileSessionsPill = document.getElementById("mobileSessionsPill");
+      var mobileSessionsPillCount = document.getElementById("mobileSessionsPillCount");
+      var mobileSessionsOverlay = document.getElementById("mobileSessionsOverlay");
+      var mobileSessionsScrim = document.getElementById("mobileSessionsScrim");
+      var mobileSessionsClose = document.getElementById("mobileSessionsClose");
+      var mobileSessionsList = document.getElementById("mobileSessionsList");
+      var dashSessionCountMobile = document.getElementById("dashSessionCountMobile");
+      var mobileDashboardBtn = document.getElementById("mobileDashboardBtn");
 
-      const DASH_SESSION_ICONS = {
+      // ── Disconnected state ──────────────────────────────────────
+      socket.on("disconnect", function() {
+        if (dashboardView) dashboardView.classList.add("disconnected");
+      });
+      socket.on("connect", function() {
+        if (dashboardView) dashboardView.classList.remove("disconnected");
+      });
+
+      var DASH_SESSION_ICONS = {
         "websocket-chat": "\\u{1F4AC}",
         "api-tree-chat": "\\u{1F333}",
         "api-tree-place": "\\u{1F4CC}",
         "raw-idea-orchestrate": "\\u{1F4A1}",
         "raw-idea-chat": "\\u{1F4A1}",
         "understanding-orchestrate": "\\u{1F9E0}",
-        "scheduled-raw-idea": "\\u{23F0}",
+        "scheduled-raw-idea": "\\u{23F0}"
       };
 
       function dashEscape(str) {
         return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
       }
-
       function dashTimeAgo(ts) {
         if (!ts) return "";
-        const diff = Date.now() - ts;
+        var diff = Date.now() - ts;
         if (diff < 60000) return "just now";
         if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
         return Math.floor(diff / 3600000) + "h ago";
       }
-
       function dashTruncate(str, len) {
         if (!str) return "";
         return str.length > len ? str.slice(0, len) + "..." : str;
       }
 
       // ── Toggle ────────────────────────────────────────────────────
-      dashboardToggleBtn.addEventListener("click", function() {
+      function toggleDashboard() {
         dashboardActive = !dashboardActive;
-        dashboardToggleBtn.classList.toggle("active", dashboardActive);
+        if (desktopDashboardBtn) desktopDashboardBtn.classList.toggle("active", dashboardActive);
+        if (mobileDashboardBtn) mobileDashboardBtn.classList.toggle("active", dashboardActive);
         iframeContainer.classList.toggle("hidden", dashboardActive);
         dashboardView.classList.toggle("active", dashboardActive);
         if (dashboardActive) {
           socket.emit("getDashboardSessions");
+          socket.emit("getDashboardRoots");
         }
+      }
+
+      if (desktopDashboardBtn) desktopDashboardBtn.addEventListener("click", toggleDashboard);
+      if (mobileDashboardBtn) mobileDashboardBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        toggleDashboard();
       });
 
-      // ── Session list ──────────────────────────────────────────────
-      socket.on("dashboardSessions", function(data) {
-        if (!data) return;
-        dashSessions = data.sessions || [];
+      // Expose closeDashboard so app.js goHome() can dismiss it
+      if (window.TreeApp) {
+        window.TreeApp.closeDashboard = function() {
+          if (dashboardActive) toggleDashboard();
+        };
+      }
+
+      // ── Mode switching ──────────────────────────────────────────
+      function enterTreeMode(rootId) {
+        dashMode = "tree";
+        dashCurrentRootId = rootId;
+        dashTreeData = null;
+        dashForestView.style.display = "none";
+        dashTreeContent.style.display = "";
+        dashTreeCanvas.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted)">Loading tree...</div>';
+        dashTreeTitle.textContent = "Loading...";
+        socket.emit("getDashboardTree", { rootId: rootId });
         renderDashSessions();
+      }
 
-        if (dashTrackedSessionId) {
-          var tracked = dashSessions.find(function(s) { return s.sessionId === dashTrackedSessionId; });
-          if (!tracked) {
-            dashTrackedSessionId = null;
-            renderDashSessions();
-          } else if (tracked.meta && tracked.meta.rootId && tracked.meta.rootId !== dashCurrentRootId) {
-            loadDashTree(tracked.meta.rootId);
-          }
-        } else {
-          // Auto-show tree if any session has one and no tree loaded
-          var withTree = dashSessions.filter(function(s) { return s.meta && s.meta.rootId; });
-          if (withTree.length > 0 && !dashCurrentRootId) {
-            withTree.sort(function(a, b) { return b.lastActivity - a.lastActivity; });
-            loadDashTree(withTree[0].meta.rootId);
-          }
-        }
+      function exitTreeMode() {
+        dashMode = "forest";
+        dashCurrentRootId = null;
+        dashTreeData = null;
+        dashForestView.style.display = "";
+        dashTreeContent.style.display = "none";
+        renderForest();
+        renderDashSessions();
+      }
 
-        updateDashHighlights();
+      dashBackBtn.addEventListener("click", exitTreeMode);
+
+      // ── Roots (forest) ──────────────────────────────────────────
+      socket.on("dashboardRoots", function(data) {
+        if (!data) return;
+        dashRoots = data.roots || [];
+        if (dashMode === "forest") renderForest();
       });
 
-      function renderDashSessions() {
-        dashSessionCount.textContent = dashSessions.length;
-
-        if (dashSessions.length === 0) {
-          dashSessionList.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">No active sessions</div>';
+      function renderForest() {
+        if (dashRoots.length === 0) {
+          dashForestGrid.innerHTML = '<div class="dash-forest-empty">'
+            + '<div class="dash-forest-empty-icon">\\u{1F331}</div>'
+            + '<p>No trees yet</p></div>';
           return;
         }
 
         var html = "";
+        for (var i = 0; i < dashRoots.length; i++) {
+          var r = dashRoots[i];
+          // Count sessions on this root
+          var count = 0;
+          for (var j = 0; j < dashSessions.length; j++) {
+            if (dashSessions[j].meta && dashSessions[j].meta.rootId === r.id) count++;
+          }
+          var sizeLabel = r.childCount === 0 ? "seedling" : r.childCount <= 3 ? "sapling" : r.childCount <= 10 ? "growing" : "mature";
+          var treeIcon = r.childCount === 0 ? "\\u{1F331}" : r.childCount <= 3 ? "\\u{1F33F}" : r.childCount <= 10 ? "\\u{1F333}" : "\\u{1F332}";
+
+          html += '<div class="dash-root-card' + (count > 0 ? " has-sessions" : "") + '" data-root-id="' + r.id + '">'
+            + (count > 0 ? '<span class="dash-root-badge">' + count + '</span>' : '')
+            + '<div class="dash-root-icon">' + treeIcon + '</div>'
+            + '<div class="dash-root-name">' + dashEscape(r.name) + '</div>'
+            + '<div class="dash-root-info">' + sizeLabel + '</div>'
+            + '</div>';
+        }
+        dashForestGrid.innerHTML = html;
+      }
+
+      // Click root card → enter tree mode
+      dashForestGrid.addEventListener("click", function(e) {
+        var card = e.target.closest("[data-root-id]");
+        if (!card) return;
+        enterTreeMode(card.getAttribute("data-root-id"));
+      });
+
+      // ── Raw ideas ───────────────────────────────────────────────
+      function renderRawIdeas() {
+        var rawSessions = [];
         for (var i = 0; i < dashSessions.length; i++) {
           var s = dashSessions[i];
+          var isRaw = s.type === "raw-idea-orchestrate" || s.type === "raw-idea-chat" || s.type === "scheduled-raw-idea";
+          var noTree = !s.meta || !s.meta.rootId;
+          if (isRaw && noTree) rawSessions.push(s);
+        }
+
+        if (rawSessions.length === 0) {
+          rawIdeaSpace.style.display = "none";
+          return;
+        }
+        rawIdeaSpace.style.display = "";
+
+        var html = "";
+        for (var i = 0; i < rawSessions.length; i++) {
+          var s = rawSessions[i];
+          var desc = dashEscape(s.description || "Raw idea");
+          html += '<div class="raw-idea-card" data-raw-sid="' + s.sessionId + '">'
+            + '<span class="raw-idea-pulse"></span>'
+            + '<span class="raw-idea-desc">' + desc + '</span>'
+            + '</div>';
+        }
+        rawIdeaList.innerHTML = html;
+      }
+
+      // Click raw idea → track it (auto-follow when it gets placed)
+      rawIdeaList.addEventListener("click", function(e) {
+        var card = e.target.closest("[data-raw-sid]");
+        if (!card) return;
+        var sid = card.getAttribute("data-raw-sid");
+        dashTrackedSessionId = sid;
+        renderDashSessions();
+      });
+
+      // ── Sessions ────────────────────────────────────────────────
+      socket.on("dashboardSessions", function(data) {
+        if (!data) return;
+        dashSessions = data.sessions || [];
+        if (data.selfSessionId) dashSelfSessionId = data.selfSessionId;
+        dashActiveNavigatorId = data.activeNavigatorId || null;
+
+        // Sync tracked session with server navigator state
+        if (dashTrackedSessionId !== dashActiveNavigatorId) {
+          dashTrackedSessionId = dashActiveNavigatorId;
+          if (!dashTrackedSessionId) dashTrackedNavRootId = null;
+        }
+
+        renderRawIdeas();
+        renderDashSessions();
+
+        // Auto-follow tracked session — only navigate when rootId first appears or changes
+        if (dashTrackedSessionId) {
+          var tracked = null;
+          for (var i = 0; i < dashSessions.length; i++) {
+            if (dashSessions[i].sessionId === dashTrackedSessionId) { tracked = dashSessions[i]; break; }
+          }
+          if (!tracked) {
+            dashTrackedSessionId = null;
+            dashTrackedNavRootId = null;
+            renderDashSessions();
+          } else if (tracked.meta && tracked.meta.rootId && tracked.meta.rootId !== dashTrackedNavRootId) {
+            // Session got a NEW rootId — close dashboard and navigate iframe once
+            dashTrackedNavRootId = tracked.meta.rootId;
+            if (dashboardActive) toggleDashboard();
+            if (window.TreeApp && window.TreeApp.navigate) {
+              window.TreeApp.navigate("/api/v1/root/" + tracked.meta.rootId + "?html");
+            }
+          }
+        }
+
+        // Update forest badges if in forest mode
+        if (dashMode === "forest") renderForest();
+        // Update tree highlights if in tree mode
+        if (dashMode === "tree") updateDashHighlights();
+      });
+
+      function renderDashSessions() {
+        // Filter sessions based on mode
+        var filtered;
+        if (dashMode === "tree" && dashCurrentRootId) {
+          filtered = [];
+          for (var i = 0; i < dashSessions.length; i++) {
+            if (dashSessions[i].meta && dashSessions[i].meta.rootId === dashCurrentRootId) {
+              filtered.push(dashSessions[i]);
+            }
+          }
+        } else {
+          filtered = dashSessions;
+        }
+
+        dashSessionCount.textContent = filtered.length;
+
+        if (filtered.length === 0) {
+          var emptyMsg = dashMode === "tree"
+            ? "No sessions on this tree"
+            : "No active sessions";
+          dashSessionList.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">' + emptyMsg + '</div>';
+          syncMobileSessions("", 0);
+          return;
+        }
+
+        var html = "";
+        for (var i = 0; i < filtered.length; i++) {
+          var s = filtered[i];
           var isTracked = s.sessionId === dashTrackedSessionId;
           var icon = DASH_SESSION_ICONS[s.type] || "\\u{1F527}";
           var desc = dashEscape(s.description || s.type);
-          var rootLabel = (s.meta && s.meta.rootId) ? s.meta.rootId.slice(0, 8) + "..." : "\\u2014";
+          var hasRoot = s.meta && s.meta.rootId;
           var ago = dashTimeAgo(s.lastActivity);
 
-          html += '<div class="session-card ' + (isTracked ? "tracked" : "") + '" data-sid="' + s.sessionId + '">'
+          // Resolve location label: tree name or "Home"
+          var locationLabel;
+          if (hasRoot) {
+            var rootName = null;
+            for (var k = 0; k < dashRoots.length; k++) {
+              if (dashRoots[k].id === s.meta.rootId) { rootName = dashRoots[k].name; break; }
+            }
+            locationLabel = "Tree: " + dashEscape(rootName || s.meta.rootId.slice(0, 8));
+          } else {
+            locationLabel = "Home";
+          }
+
+          // Follow button logic: follow sets navigator, detach clears it
+          var trackBtn = "";
+          if (isTracked) {
+            trackBtn = '<button class="session-btn active" data-action="track" data-sid="' + s.sessionId + '">\\u{1F4CD} Detach</button>';
+          } else {
+            trackBtn = '<button class="session-btn" data-action="track" data-sid="' + s.sessionId + '">\\u{1F3AF} Follow</button>';
+          }
+
+          html += '<div class="session-card ' + (isTracked ? "tracked" : "") + '" data-sid="' + s.sessionId + '"'
+            + (hasRoot ? ' data-root="' + s.meta.rootId + '"' : '') + '>'
             + '<div class="session-card-header">'
             + '<span class="session-type-icon">' + icon + '</span>'
             + '<span class="session-desc">' + desc + '</span>'
             + '</div>'
-            + '<div class="session-meta-info">Tree: ' + rootLabel + ' \\u00B7 ' + ago + '</div>'
+            + '<div class="session-meta-info">' + locationLabel + ' \\u00B7 ' + ago + '</div>'
             + '<div class="session-actions">'
-            + '<button class="session-btn ' + (isTracked ? "active" : "") + '" data-action="track" data-sid="' + s.sessionId + '">'
-            + (isTracked ? "\\u{1F4CD} Tracking" : "\\u{1F3AF} Track")
-            + '</button>'
-            + '<button class="session-btn" data-action="chat" data-sid="' + s.sessionId + '">\\u{1F4AC} Chat</button>'
+            + trackBtn
+            + '<button class="session-btn" data-action="chat" data-sid="' + s.sessionId + '">\\u{1F4AC} Messages</button>'
             + '</div>'
             + '</div>';
         }
         dashSessionList.innerHTML = html;
+        syncMobileSessions(html, filtered.length);
       }
 
-      // Event delegation for session buttons
-      dashSessionList.addEventListener("click", function(e) {
-        var btn = e.target.closest("[data-action]");
-        if (!btn) return;
-        var action = btn.getAttribute("data-action");
-        var sid = btn.getAttribute("data-sid");
-        if (action === "track") dashTrackSession(sid);
-        else if (action === "chat") dashViewChat(sid);
-      });
+      function syncMobileSessions(html, count) {
+        var n = count !== undefined ? count : dashSessions.length;
+        if (mobileSessionsList) mobileSessionsList.innerHTML = html || dashSessionList.innerHTML;
+        if (mobileSessionsPillCount) mobileSessionsPillCount.textContent = n;
+        if (dashSessionCountMobile) dashSessionCountMobile.textContent = n;
+        if (mobileSessionsPill) mobileSessionsPill.classList.toggle("has-activity", n > 1);
+      }
 
-      function dashTrackSession(sessionId) {
+      // Event delegation for session cards + buttons
+      function handleSessionClick(e) {
+        // Button actions first
+        var btn = e.target.closest("[data-action]");
+        if (btn) {
+          e.stopPropagation();
+          var action = btn.getAttribute("data-action");
+          var sid = btn.getAttribute("data-sid");
+          if (action === "track") toggleTrack(sid);
+          else if (action === "chat") dashViewChat(sid);
+          return;
+        }
+        // Click on card body → navigate to session's tree
+        var card = e.target.closest("[data-sid]");
+        if (!card) return;
+        var rootId = card.getAttribute("data-root");
+        if (rootId) {
+          enterTreeMode(rootId);
+        }
+      }
+
+      dashSessionList.addEventListener("click", handleSessionClick);
+
+      function toggleTrack(sessionId) {
         if (dashTrackedSessionId === sessionId) {
           dashTrackedSessionId = null;
+          dashTrackedNavRootId = null;
+          socket.emit("detachNavigator");
         } else {
           dashTrackedSessionId = sessionId;
-          var s = dashSessions.find(function(s) { return s.sessionId === sessionId; });
-          if (s && s.meta && s.meta.rootId) loadDashTree(s.meta.rootId);
+          dashTrackedNavRootId = null;
+          socket.emit("attachNavigator", { sessionId: sessionId });
+          var s = null;
+          for (var i = 0; i < dashSessions.length; i++) {
+            if (dashSessions[i].sessionId === sessionId) { s = dashSessions[i]; break; }
+          }
+          if (s && s.meta && s.meta.rootId) {
+            // Close dashboard and navigate iframe to the followed tree
+            dashTrackedNavRootId = s.meta.rootId;
+            if (dashboardActive) toggleDashboard();
+            if (window.TreeApp && window.TreeApp.navigate) {
+              window.TreeApp.navigate("/api/v1/root/" + s.meta.rootId + "?html");
+            }
+          }
+          // If no rootId (Home), stay on dashboard
         }
         renderDashSessions();
       }
 
       // ── Tree loading ──────────────────────────────────────────────
-      function loadDashTree(rootId) {
-        if (rootId === dashCurrentRootId && dashTreeData) return;
-        dashCurrentRootId = rootId;
-        dashTreeCanvas.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted)">Loading tree...</div>';
-        dashTreeEmpty.style.display = "none";
-        dashTreeContent.style.display = "";
-        dashTreeTitle.textContent = "Tree: " + rootId.slice(0, 8) + "...";
-        socket.emit("getDashboardTree", { rootId: rootId });
-      }
-
       socket.on("dashboardTreeData", function(data) {
         if (!data || data.rootId !== dashCurrentRootId) return;
         if (data.error) {
@@ -492,69 +956,178 @@ export function dashboardJS() {
         updateDashHighlights();
       });
 
-      function renderDashTree() {
-        if (!dashTreeData) {
-          dashTreeEmpty.style.display = "";
-          dashTreeContent.style.display = "none";
-          return;
+      // ── Visual tree helpers ───────────────────────────────────────
+      function vtreeCount(node) {
+        var c = 1;
+        if (node.children) for (var i = 0; i < node.children.length; i++) c += vtreeCount(node.children[i]);
+        return c;
+      }
+      function vtreeMaxDepth(node, d) {
+        d = d || 0;
+        if (!node.children || !node.children.length) return d;
+        var mx = d;
+        for (var i = 0; i < node.children.length; i++) {
+          var cd = vtreeMaxDepth(node.children[i], d + 1);
+          if (cd > mx) mx = cd;
         }
-        dashTreeEmpty.style.display = "none";
-        dashTreeContent.style.display = "";
-        dashTreeTitle.textContent = dashEscape(dashTreeData.name);
-        dashTreeCanvas.innerHTML = renderNodeHTML(dashTreeData);
+        return mx;
+      }
+      function vtreeWidth(node) {
+        if (!node.children || !node.children.length) return 1;
+        var w = 0;
+        for (var i = 0; i < node.children.length; i++) w += vtreeWidth(node.children[i]);
+        return w;
       }
 
-      function renderNodeHTML(node) {
-        var hasChildren = node.children && node.children.length > 0;
-        var childrenHTML = "";
-        if (hasChildren) {
-          childrenHTML = '<div class="tree-children">';
-          for (var i = 0; i < node.children.length; i++) {
-            childrenHTML += renderNodeHTML(node.children[i]);
+      function buildVisualTree(treeData) {
+        var total = vtreeCount(treeData);
+        var maxD = vtreeMaxDepth(treeData);
+
+        var nodeR, fontSize, branchBase;
+        if (total <= 5) { nodeR = 22; fontSize = 11; branchBase = 6; }
+        else if (total <= 15) { nodeR = 15; fontSize = 10; branchBase = 4.5; }
+        else if (total <= 40) { nodeR = 11; fontSize = 9; branchBase = 3; }
+        else { nodeR = 7; fontSize = 0; branchBase = 2; }
+
+        var hSpace = total <= 5 ? 100 : total <= 15 ? 65 : total <= 40 ? 45 : 30;
+        var vSpace = total <= 5 ? 110 : total <= 15 ? 80 : total <= 40 ? 58 : 44;
+
+        var nodes = [];
+        function place(node, depth, xL, xR, pid) {
+          var x = (xL + xR) / 2;
+          var isLeaf = !node.children || !node.children.length;
+          nodes.push({ id: node.id, name: node.name, status: node.status || "active", prestige: node.prestige || 0, x: x, depth: depth, pid: pid, isLeaf: isLeaf });
+          if (!isLeaf) {
+            var tw = vtreeWidth(node);
+            var cur = xL;
+            for (var i = 0; i < node.children.length; i++) {
+              var cw = vtreeWidth(node.children[i]);
+              var cR = cur + (xR - xL) * (cw / tw);
+              place(node.children[i], depth + 1, cur, cR, node.id);
+              cur = cR;
+            }
           }
-          childrenHTML += '</div>';
         }
-        return '<div class="tree-node" data-node-id="' + node.id + '">'
-          + '<div class="tree-node-row">'
-          + '<span class="tree-toggle">' + (hasChildren ? '\\u25B8' : '\\u00B7') + '</span>'
-          + '<span class="tree-node-name">' + dashEscape(node.name) + '</span>'
-          + '<span class="tree-node-status">' + (node.status || "active") + '</span>'
-          + '<div class="tree-node-badges"></div>'
-          + '</div>'
-          + childrenHTML
-          + '</div>';
+        var treeW = vtreeWidth(treeData);
+        place(treeData, 0, 0, treeW, null);
+
+        var pad = nodeR * 3 + 15;
+        var trunkH = total <= 5 ? 40 : 25;
+        var svgW = treeW * hSpace + pad * 2;
+        var svgH = (maxD + 1) * vSpace + pad * 2 + trunkH;
+
+        for (var i = 0; i < nodes.length; i++) {
+          nodes[i].sx = nodes[i].x * hSpace + pad;
+          nodes[i].sy = pad + (maxD - nodes[i].depth) * vSpace;
+        }
+
+        var rootN = nodes[0];
+        var groundY = rootN.sy + trunkH + 8;
+
+        var s = '<svg class="vtree-svg" viewBox="0 0 ' + svgW + ' ' + svgH + '" preserveAspectRatio="xMidYMid meet">';
+        s += '<ellipse cx="' + (svgW / 2) + '" cy="' + groundY + '" rx="' + Math.min(svgW * 0.35, 120) + '" ry="6" fill="rgba(139,90,43,0.12)"/>';
+        s += '<line x1="' + rootN.sx + '" y1="' + rootN.sy + '" x2="' + rootN.sx + '" y2="' + (rootN.sy + trunkH) + '"'
+          + ' stroke="rgba(139,90,43,0.55)" stroke-width="' + (branchBase * 1.8) + '" stroke-linecap="round"/>';
+
+        for (var i = 0; i < nodes.length; i++) {
+          var n = nodes[i];
+          if (n.pid === null) continue;
+          var par = null;
+          for (var j = 0; j < nodes.length; j++) { if (nodes[j].id === n.pid) { par = nodes[j]; break; } }
+          if (!par) continue;
+          var bw = Math.max(1, branchBase - n.depth * 0.6);
+          var cpY = (par.sy + n.sy) / 2;
+          s += '<path class="vtree-branch" d="M' + par.sx + ',' + par.sy + ' C' + par.sx + ',' + cpY + ' ' + n.sx + ',' + cpY + ' ' + n.sx + ',' + n.sy + '"'
+            + ' fill="none" stroke="rgba(139,90,43,0.3)" stroke-width="' + bw + '" stroke-linecap="round"/>';
+        }
+
+        for (var i = 0; i < nodes.length; i++) {
+          var n = nodes[i];
+          var fill;
+          if (n.status === "trimmed") fill = "rgba(120,120,120,0.45)";
+          else if (n.status === "completed") fill = "rgba(234,179,8,0.65)";
+          else if (n.isLeaf) fill = "rgba(34,197,94,0.75)";
+          else fill = "rgba(16,185,129,0.55)";
+          var r = (n.pid === null) ? nodeR * 1.2 : nodeR;
+
+          s += '<g class="vtree-node" data-node-id="' + n.id + '" data-name="' + dashEscape(n.name) + '" data-status="' + n.status + '" data-prestige="' + n.prestige + '">';
+          s += '<circle class="vtree-highlight-ring" cx="' + n.sx + '" cy="' + n.sy + '" r="' + (r + 5) + '" fill="none" stroke="transparent" stroke-width="2"/>';
+          s += '<circle class="vtree-main" cx="' + n.sx + '" cy="' + n.sy + '" r="' + r + '" fill="' + fill + '" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>';
+          if (fontSize > 0) {
+            var lbl = n.name.length > 14 ? n.name.slice(0, 12) + ".." : n.name;
+            s += '<text x="' + n.sx + '" y="' + (n.sy - r - 6) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="' + fontSize + '" style="pointer-events:none">' + dashEscape(lbl) + '</text>';
+          }
+          s += '</g>';
+        }
+
+        s += '</svg>';
+        return s;
       }
 
-      // Toggle tree children on click
+      function renderDashTree() {
+        if (!dashTreeData) return;
+        dashTreeTitle.textContent = dashEscape(dashTreeData.name);
+        dashTreeCanvas.innerHTML = '<div class="vtree-container">' + buildVisualTree(dashTreeData) + '</div>';
+      }
+
+      // ── Tooltip ─────────────────────────────────────────────────────
+      dashTreeCanvas.addEventListener("mouseover", function(e) {
+        var g = e.target.closest(".vtree-node");
+        if (!g) return;
+        vtreeTooltipName.textContent = g.getAttribute("data-name");
+        vtreeTooltipStatus.textContent = g.getAttribute("data-status");
+        vtreeTooltip.classList.add("visible");
+      });
+      dashTreeCanvas.addEventListener("mousemove", function(e) {
+        if (!vtreeTooltip.classList.contains("visible")) return;
+        var rect = dashTreeView.getBoundingClientRect();
+        vtreeTooltip.style.left = (e.clientX - rect.left + 14) + "px";
+        vtreeTooltip.style.top = (e.clientY - rect.top - 32) + "px";
+      });
+      dashTreeCanvas.addEventListener("mouseout", function(e) {
+        if (e.target.closest(".vtree-node")) vtreeTooltip.classList.remove("visible");
+      });
+
+      // ── Click tree node → navigate iframe ──────────────────────────
       dashTreeCanvas.addEventListener("click", function(e) {
-        var toggle = e.target.closest(".tree-toggle");
-        if (!toggle) return;
-        var nodeEl = toggle.closest(".tree-node");
-        var children = nodeEl.querySelector(":scope > .tree-children");
-        if (children) {
-          var collapsed = children.style.display === "none";
-          children.style.display = collapsed ? "" : "none";
-          toggle.textContent = collapsed ? "\\u25BE" : "\\u25B8";
+        var g = e.target.closest(".vtree-node");
+        if (!g) return;
+        var nodeId = g.getAttribute("data-node-id");
+        var prestige = g.getAttribute("data-prestige") || "0";
+        if (!nodeId) return;
+        // Switch back to iframe and navigate to this node
+        if (dashboardActive) toggleDashboard();
+        if (window.TreeApp && window.TreeApp.navigate) {
+          window.TreeApp.navigate("/api/v1/node/" + nodeId + "/" + prestige + "?html");
         }
       });
 
-      // ── Node highlighting ─────────────────────────────────────────
+      // ── Node highlighting (SVG) ────────────────────────────────────
       function updateDashHighlights() {
-        var rows = document.querySelectorAll(".tree-node-row.highlighted");
-        for (var i = 0; i < rows.length; i++) {
-          rows[i].classList.remove("highlighted");
-          var badges = rows[i].querySelector(".tree-node-badges");
-          if (badges) badges.innerHTML = "";
-        }
+        var rings = document.querySelectorAll(".vtree-highlight-ring.active");
+        for (var i = 0; i < rings.length; i++) rings[i].classList.remove("active");
+        var dots = document.querySelectorAll(".vtree-badge-dot");
+        for (var i = 0; i < dots.length; i++) dots[i].remove();
+
         for (var j = 0; j < dashSessions.length; j++) {
           var s = dashSessions[j];
           if (!s.meta || !s.meta.nodeId) continue;
-          var nodeEl = document.querySelector('[data-node-id="' + s.meta.nodeId + '"] > .tree-node-row');
-          if (!nodeEl) continue;
-          nodeEl.classList.add("highlighted");
-          var badges = nodeEl.querySelector(".tree-node-badges");
-          if (badges) {
-            badges.innerHTML += '<span class="tree-session-badge">' + (DASH_SESSION_ICONS[s.type] || "\\u{1F527}") + '</span>';
+          var g = document.querySelector('.vtree-node[data-node-id="' + s.meta.nodeId + '"]');
+          if (!g) continue;
+          var ring = g.querySelector(".vtree-highlight-ring");
+          if (ring) ring.classList.add("active");
+          var main = g.querySelector(".vtree-main");
+          if (main) {
+            var cx = parseFloat(main.getAttribute("cx"));
+            var cy = parseFloat(main.getAttribute("cy"));
+            var r = parseFloat(main.getAttribute("r"));
+            var badge = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            badge.setAttribute("class", "vtree-badge-dot");
+            badge.setAttribute("cx", String(cx + r + 4));
+            badge.setAttribute("cy", String(cy - r + 2));
+            badge.setAttribute("r", "4");
+            badge.setAttribute("fill", "rgba(16,185,129,0.9)");
+            g.appendChild(badge);
           }
         }
       }
@@ -566,15 +1139,25 @@ export function dashboardJS() {
         }
       });
 
-      // ── Chat panel ────────────────────────────────────────────────
+      // ── Messages panel ─────────────────────────────────────────────
+      var dashChatCurrentSid = null;
+
       document.getElementById("dashChatClose").addEventListener("click", function() {
         dashChatPanel.classList.remove("open");
+        dashChatCurrentSid = null;
+      });
+
+      document.getElementById("dashChatRefresh").addEventListener("click", function() {
+        if (!dashChatCurrentSid) return;
+        dashChatBody.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted)">Loading...</div>';
+        socket.emit("getDashboardChats", { sessionId: dashChatCurrentSid });
       });
 
       function dashViewChat(sessionId) {
+        dashChatCurrentSid = sessionId;
         dashChatPanel.classList.add("open");
         dashChatBody.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted)">Loading...</div>';
-        dashChatTitle.textContent = "AI Chat \\u2014 " + sessionId.slice(0, 8);
+        dashChatTitle.textContent = "Messages \\u2014 " + sessionId.slice(0, 8);
         socket.emit("getDashboardChats", { sessionId: sessionId });
       }
 
@@ -606,6 +1189,49 @@ export function dashboardJS() {
         }
         dashChatBody.innerHTML = html;
       });
+
+      // ── Mobile sessions ──────────────────────────────────────────
+      function closeMobileOverlay() {
+        if (mobileSessionsOverlay) mobileSessionsOverlay.classList.remove("open");
+        if (mobileSessionsScrim) mobileSessionsScrim.classList.remove("open");
+      }
+      function openMobileOverlay() {
+        if (mobileSessionsOverlay) mobileSessionsOverlay.classList.add("open");
+        if (mobileSessionsScrim) mobileSessionsScrim.classList.add("open");
+      }
+
+      if (mobileSessionsPill) {
+        mobileSessionsPill.addEventListener("click", function() {
+          var isOpen = mobileSessionsOverlay && mobileSessionsOverlay.classList.contains("open");
+          if (isOpen) closeMobileOverlay();
+          else openMobileOverlay();
+        });
+      }
+      if (mobileSessionsClose) {
+        mobileSessionsClose.addEventListener("click", closeMobileOverlay);
+      }
+      if (mobileSessionsScrim) {
+        mobileSessionsScrim.addEventListener("click", closeMobileOverlay);
+      }
+      if (mobileSessionsList) {
+        mobileSessionsList.addEventListener("click", function(e) {
+          var btn = e.target.closest("[data-action]");
+          if (btn) {
+            var action = btn.getAttribute("data-action");
+            var sid = btn.getAttribute("data-sid");
+            if (action === "track") toggleTrack(sid);
+            else if (action === "chat") dashViewChat(sid);
+            closeMobileOverlay();
+            return;
+          }
+          var card = e.target.closest("[data-sid]");
+          if (card) {
+            var rootId = card.getAttribute("data-root");
+            if (rootId) enterTreeMode(rootId);
+            closeMobileOverlay();
+          }
+        });
+      }
 
     })();
   `;

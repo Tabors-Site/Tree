@@ -640,6 +640,41 @@ router.get("/app", authenticateLite, async (req, res) => {
     @media (min-width: 769px) {
       .navigator-indicator.mobile-only { display: none !important; }
     }
+    /* ── Dashboard toggle (chat panel) ─────────────────────────────── */
+    .chat-dashboard-btn {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      padding: 2px 8px 4px;
+    }
+    .chat-dashboard-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 10px;
+      color: rgba(147, 197, 253, 0.9);
+      white-space: nowrap;
+    }
+    .chat-dashboard-badge:hover { background: rgba(59, 130, 246, 0.22); color: #93c5fd; }
+    .chat-dashboard-badge.active { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.35); color: var(--accent); }
+    .chat-dashboard-badge svg { width: 12px; height: 12px; flex-shrink: 0; }
+    .chat-dashboard-badge .dash-btn-label {
+      max-width: 0;
+      overflow: hidden;
+      transition: max-width 0.25s ease, opacity 0.2s;
+      opacity: 0;
+    }
+    .chat-dashboard-badge:hover .dash-btn-label { max-width: 80px; opacity: 1; }
+    @media (max-width: 768px) {
+      .chat-dashboard-btn { display: none; }
+    }
     .navigator-badge {
       display: flex;
       flex-direction: row-reverse;
@@ -668,23 +703,31 @@ router.get("/app", authenticateLite, async (req, res) => {
       transition: max-width 0.3s ease, opacity 0.2s;
       opacity: 0;
     }
-    .navigator-badge:hover .nav-label { max-width: 160px; opacity: 1; }
-    .navigator-close {
-      width: 18px;
-      height: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 6px;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 0.15s;
-      padding: 0;
+    .navigator-badge .nav-close-icon {
+      width: 12px;
+      height: 12px;
+      max-width: 0;
+      overflow: hidden;
+      opacity: 0;
+      flex-shrink: 0;
+      transition: max-width 0.3s ease, opacity 0.2s;
     }
-    .navigator-close:hover { background: rgba(239, 68, 68, 0.25); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
-    .navigator-close svg { width: 12px; height: 12px; }
+    .navigator-badge:hover .nav-label,
+    .navigator-badge.flash .nav-label { max-width: 160px; opacity: 1; }
+    .navigator-badge:hover .nav-close-icon,
+    .navigator-badge.flash .nav-close-icon { max-width: 16px; opacity: 1; }
+    .navigator-badge:hover,
+    .navigator-badge.flash {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.3);
+      cursor: pointer;
+    }
+    .navigator-badge:hover .nav-icon,
+    .navigator-badge.flash .nav-icon { color: #ef4444; }
+    .navigator-badge:hover .nav-label,
+    .navigator-badge.flash .nav-label { color: #ef4444; }
+    .navigator-badge:hover .nav-close-icon,
+    .navigator-badge.flash .nav-close-icon { color: #ef4444; }
 
     .panel-divider { width: 16px; height: 100%; display: flex; align-items: center; justify-content: center; cursor: col-resize; position: relative; z-index: 20; flex-shrink: 0; }
     .divider-handle { width: 6px; height: 80px; background: rgba(var(--glass-rgb), 0.5); backdrop-filter: blur(var(--glass-blur)); border: 1px solid var(--glass-border); border-radius: 4px; transition: all var(--transition-fast); }
@@ -789,6 +832,19 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
     .mobile-header-actions .clear-chat-btn:active {
       background: rgba(255, 255, 255, 0.15);
+    }
+    .mobile-header-actions .mobile-dash-btn {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: rgba(147, 197, 253, 0.9);
+    }
+    .mobile-header-actions .mobile-dash-btn:active {
+      background: rgba(59, 130, 246, 0.28);
+    }
+    .mobile-header-actions .mobile-dash-btn.active {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: rgba(16, 185, 129, 0.35);
+      color: var(--accent);
     }
 
     .mobile-chat-sheet {
@@ -1277,13 +1333,11 @@ router.get("/app", authenticateLite, async (req, res) => {
 
   <!-- Navigator indicator (mobile: fixed top-right) -->
   <div class="navigator-indicator mobile-only" id="navigatorIndicatorMobile">
-    <div class="navigator-badge">
+    <div class="navigator-badge" id="navigatorBadgeMobile" title="Detach session navigator">
+      <svg class="nav-close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       <span class="nav-label" id="navigatorLabelMobile">session</span>
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
     </div>
-    <button class="navigator-close" id="navigatorCloseMobile" title="Detach navigator">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
   </div>
 
   <div class="app-container">
@@ -1325,13 +1379,19 @@ router.get("/app", authenticateLite, async (req, res) => {
 
       <!-- Navigator indicator (desktop: row below header) -->
       <div class="navigator-indicator desktop-only" id="navigatorIndicatorDesktop">
-        <div class="navigator-badge">
+        <div class="navigator-badge" id="navigatorBadgeDesktop" title="Detach session navigator">
+          <svg class="nav-close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           <span class="nav-label" id="navigatorLabelDesktop">session</span>
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         </div>
-        <button class="navigator-close" id="navigatorCloseDesktop" title="Detach navigator">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+      </div>
+
+      <!-- Dashboard toggle (desktop: row below navigator) -->
+      <div class="chat-dashboard-btn" id="desktopDashboardRow">
+        <div class="chat-dashboard-badge" id="desktopDashboardBtn" title="Session Dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span class="dash-btn-label">Dashboard</span>
+        </div>
       </div>
 
       <!-- Recent Roots Dropdown (absolute positioned, top-left overlay) -->
@@ -1423,6 +1483,9 @@ router.get("/app", authenticateLite, async (req, res) => {
           <span class="root-name-inline mobile-root-path" id="mobileRootNameLabel" title=""></span>
         </div>
         <div class="mobile-header-actions">
+          <button class="clear-chat-btn mobile-dash-btn" id="mobileDashboardBtn" title="Session Dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          </button>
           <button class="clear-chat-btn" id="mobileHomeBtn" title="Home">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           </button>
@@ -1611,6 +1674,10 @@ socket.on("navigate", ({ url, replace }) => {
       document.getElementById("navigatorIndicatorDesktop"),
       document.getElementById("navigatorIndicatorMobile"),
     ];
+    const navBadges = [
+      document.getElementById("navigatorBadgeDesktop"),
+      document.getElementById("navigatorBadgeMobile"),
+    ];
     const navLabels = [
       document.getElementById("navigatorLabelDesktop"),
       document.getElementById("navigatorLabelMobile"),
@@ -1626,21 +1693,50 @@ socket.on("navigate", ({ url, replace }) => {
       "scheduled-raw-idea": "scheduled",
     };
 
+    let navFlashTimer = null;
     socket.on("navigatorSession", (data) => {
       if (data && data.sessionId) {
         const label = sessionTypeLabels[data.type] || data.type || "session";
         navLabels.forEach(el => { if (el) el.textContent = label; });
         navIndicators.forEach(el => { if (el) el.classList.add("active"); });
+        // Flash badge expanded for 3 seconds so user sees which session
+        navBadges.forEach(el => { if (el) el.classList.add("flash"); });
+        if (navFlashTimer) clearTimeout(navFlashTimer);
+        navFlashTimer = setTimeout(() => {
+          navBadges.forEach(el => { if (el) el.classList.remove("flash"); });
+        }, 3000);
       } else {
         navIndicators.forEach(el => { if (el) el.classList.remove("active"); });
+        navBadges.forEach(el => { if (el) el.classList.remove("flash"); });
+        if (navFlashTimer) clearTimeout(navFlashTimer);
       }
     });
 
-    document.getElementById("navigatorCloseDesktop").addEventListener("click", () => {
+    document.getElementById("navigatorBadgeDesktop").addEventListener("click", () => {
       socket.emit("detachNavigator");
     });
-    document.getElementById("navigatorCloseMobile").addEventListener("click", () => {
-      socket.emit("detachNavigator");
+
+    // Mobile: first tap expands, second tap (when expanded) detaches
+    let mobileNavExpanded = false;
+    let mobileNavCollapseTimer = null;
+    document.getElementById("navigatorBadgeMobile").addEventListener("click", () => {
+      const badge = document.getElementById("navigatorBadgeMobile");
+      if (mobileNavExpanded) {
+        // Already expanded — detach
+        mobileNavExpanded = false;
+        if (mobileNavCollapseTimer) clearTimeout(mobileNavCollapseTimer);
+        badge.classList.remove("flash");
+        socket.emit("detachNavigator");
+      } else {
+        // First tap — expand to show session name
+        mobileNavExpanded = true;
+        badge.classList.add("flash");
+        if (mobileNavCollapseTimer) clearTimeout(mobileNavCollapseTimer);
+        mobileNavCollapseTimer = setTimeout(() => {
+          mobileNavExpanded = false;
+          badge.classList.remove("flash");
+        }, 4000);
+      }
     });
 
     socket.on("reload", () => {
@@ -2378,9 +2474,9 @@ if (rootMatch) {
       openMobileSheetFull();
     });
 
-    // Header tap in peeked state opens full
+    // Header tap in peeked state opens full (ignore button clicks)
     mobileSheetHeader.addEventListener("click", (e) => {
-      if (mobileSheetState === 'peeked' && !isDraggingSheet) {
+      if (mobileSheetState === 'peeked' && !isDraggingSheet && !e.target.closest("button")) {
         e.preventDefault();
         e.stopPropagation();
         openMobileSheetFull();
@@ -2629,6 +2725,9 @@ if (rootMatch) {
 
 function goHome() {
   activeRootId = null;
+
+  // Close dashboard if open
+  if (window.TreeApp && window.TreeApp.closeDashboard) window.TreeApp.closeDashboard();
 
   loadingOverlay.classList.add("visible");
   currentIframeUrl = CONFIG.homeUrl;
