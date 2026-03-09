@@ -32,6 +32,9 @@ const activeNavigator = new Map();
 // Change listeners — dashboard subscribes to get notified of session changes
 const changeListeners = new Set();
 
+// sessionId → AbortController  (allows killing in-flight work)
+const sessionAbortControllers = new Map();
+
 // ─────────────────────────────────────────────────────────────────────────
 // REGISTRATION
 // ─────────────────────────────────────────────────────────────────────────
@@ -95,6 +98,13 @@ export function registerSession({ sessionId, userId, type, description = "", met
 export function endSession(sessionId) {
   const session = sessions.get(sessionId);
   if (!session) return;
+
+  // Abort any in-flight work tied to this session
+  const ac = sessionAbortControllers.get(sessionId);
+  if (ac) {
+    ac.abort();
+    sessionAbortControllers.delete(sessionId);
+  }
 
   const uid = session.userId;
   sessions.delete(sessionId);
@@ -248,6 +258,35 @@ export function getSession(sessionId) {
  */
 export function registeredSessionCount() {
   return sessions.size;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ABORT CONTROL — lets callers register an AbortController per session
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Register an AbortController for a session so it can be killed externally.
+ */
+export function setSessionAbort(sessionId, abortController) {
+  sessionAbortControllers.set(sessionId, abortController);
+}
+
+/**
+ * Abort and remove the controller for a session.
+ */
+export function abortSession(sessionId) {
+  const ac = sessionAbortControllers.get(sessionId);
+  if (ac) {
+    ac.abort();
+    sessionAbortControllers.delete(sessionId);
+  }
+}
+
+/**
+ * Clean up abort controller (called when session ends normally).
+ */
+export function clearSessionAbort(sessionId) {
+  sessionAbortControllers.delete(sessionId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────

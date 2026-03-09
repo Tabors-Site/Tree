@@ -762,6 +762,25 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       emitNavigatorStatus(socket);
     });
 
+    // ── STOP SESSION ──────────────────────────────────────────────────
+    socket.on("stopSession", ({ sessionId }) => {
+      if (!socket.userId || !sessionId) return;
+      const session = getSession(sessionId);
+      if (!session || session.userId !== String(socket.userId)) return;
+      console.log(`🛑 Session stopped by user: ${session.type} [${sessionId.slice(0, 8)}]`);
+      endSession(sessionId);
+      // If it was the user's own chat abort, cancel in-flight request
+      if (sessionId === socket._registrySessionId) {
+        if (socket._chatAbort) {
+          socket._chatAbort.abort();
+          socket._chatAbort = null;
+        }
+        socket._registrySessionId = null;
+        // Tell the client UI to reset sending state
+        socket.emit("chatCancelled");
+      }
+    });
+
     // ── DASHBOARD EVENTS ──────────────────────────────────────────────
     socket.on("getDashboardSessions", () => {
       if (!socket.userId) return;
@@ -869,7 +888,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
   });
 
-  // Subscribe to session registry changes → push to dashboard
+  // Subscribe to session registry changes → push to dashboard + navigator badge
   onSessionChange((userId) => {
     const sessions = getSessionsForUser(userId);
     const activeNav = getActiveNavigator(userId);
@@ -880,6 +899,8 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       activeNavigatorId: activeNav,
       selfSessionId: userSocket?._registrySessionId || null,
     });
+    // Also sync navigator badge in app.js (e.g. when AI session ends and chat is promoted)
+    if (userSocket) emitNavigatorStatus(userSocket);
   });
 
   console.log("🚀 WebSocket server initialized");

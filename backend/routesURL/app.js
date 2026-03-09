@@ -2,7 +2,7 @@
 import express from "express";
 import User from "../db/models/user.js";
 import authenticateLite from "../middleware/authenticateLite.js";
-import { dashboardCSS, dashboardHTML, dashboardJS } from "./dashboardPartial.js";
+import { dashboardCSS, dashboardHTML, dashboardJS } from "./sessionManagerPartial.js";
 
 const router = express.Router();
 
@@ -712,22 +712,19 @@ router.get("/app", authenticateLite, async (req, res) => {
       flex-shrink: 0;
       transition: max-width 0.3s ease, opacity 0.2s;
     }
-    .navigator-badge:hover .nav-label,
-    .navigator-badge.flash .nav-label { max-width: 160px; opacity: 1; }
-    .navigator-badge:hover .nav-close-icon,
-    .navigator-badge.flash .nav-close-icon { max-width: 16px; opacity: 1; }
-    .navigator-badge:hover,
-    .navigator-badge.flash {
+    /* Reveal: just expand to show label (no red, no X) */
+    .navigator-badge.reveal .nav-label { max-width: 160px; opacity: 1; }
+    /* Hover: expand all, turn red, show X */
+    .navigator-badge:hover .nav-label { max-width: 160px; opacity: 1; }
+    .navigator-badge:hover .nav-close-icon { max-width: 16px; opacity: 1; }
+    .navigator-badge:hover {
       background: rgba(239, 68, 68, 0.15);
       border-color: rgba(239, 68, 68, 0.3);
       cursor: pointer;
     }
-    .navigator-badge:hover .nav-icon,
-    .navigator-badge.flash .nav-icon { color: #ef4444; }
-    .navigator-badge:hover .nav-label,
-    .navigator-badge.flash .nav-label { color: #ef4444; }
-    .navigator-badge:hover .nav-close-icon,
-    .navigator-badge.flash .nav-close-icon { color: #ef4444; }
+    .navigator-badge:hover .nav-icon { color: #ef4444; }
+    .navigator-badge:hover .nav-label { color: #ef4444; }
+    .navigator-badge:hover .nav-close-icon { color: #ef4444; }
 
     .panel-divider { width: 16px; height: 100%; display: flex; align-items: center; justify-content: center; cursor: col-resize; position: relative; z-index: 20; flex-shrink: 0; }
     .divider-handle { width: 6px; height: 80px; background: rgba(var(--glass-rgb), 0.5); backdrop-filter: blur(var(--glass-blur)); border: 1px solid var(--glass-border); border-radius: 4px; transition: all var(--transition-fast); }
@@ -1377,20 +1374,20 @@ router.get("/app", authenticateLite, async (req, res) => {
         </div>
       </div>
 
-      <!-- Navigator indicator (desktop: row below header) -->
+      <!-- Session manager toggle (desktop: row above navigator) -->
+      <div class="chat-dashboard-btn" id="desktopDashboardRow">
+        <div class="chat-dashboard-badge" id="desktopDashboardBtn" title="Session Manager">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span class="dash-btn-label">Sessions</span>
+        </div>
+      </div>
+
+      <!-- Navigator indicator (desktop: row below session manager) -->
       <div class="navigator-indicator desktop-only" id="navigatorIndicatorDesktop">
         <div class="navigator-badge" id="navigatorBadgeDesktop" title="Detach session navigator">
           <svg class="nav-close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           <span class="nav-label" id="navigatorLabelDesktop">session</span>
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        </div>
-      </div>
-
-      <!-- Dashboard toggle (desktop: row below navigator) -->
-      <div class="chat-dashboard-btn" id="desktopDashboardRow">
-        <div class="chat-dashboard-badge" id="desktopDashboardBtn" title="Session Dashboard">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-          <span class="dash-btn-label">Dashboard</span>
         </div>
       </div>
 
@@ -1483,7 +1480,7 @@ router.get("/app", authenticateLite, async (req, res) => {
           <span class="root-name-inline mobile-root-path" id="mobileRootNameLabel" title=""></span>
         </div>
         <div class="mobile-header-actions">
-          <button class="clear-chat-btn mobile-dash-btn" id="mobileDashboardBtn" title="Session Dashboard">
+          <button class="clear-chat-btn mobile-dash-btn" id="mobileDashboardBtn" title="Session Manager">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
           </button>
           <button class="clear-chat-btn" id="mobileHomeBtn" title="Home">
@@ -1657,6 +1654,16 @@ function buildIframeUrl(raw) {
       lockModeBar(false);
     });
 
+    // Session killed from session manager while chat was in-flight
+    socket.on("chatCancelled", () => {
+      if (isSending) {
+        removeTypingIndicator();
+        isSending = false;
+        lockModeBar(false);
+        updateSendButtons();
+      }
+    });
+
 socket.on("navigate", ({ url, replace }) => {
     console.log("[socket] navigate:", url);
     loadingOverlay.classList.add("visible");
@@ -1694,20 +1701,25 @@ socket.on("navigate", ({ url, replace }) => {
     };
 
     let navFlashTimer = null;
+    let currentNavSessionId = null;
     socket.on("navigatorSession", (data) => {
       if (data && data.sessionId) {
         const label = sessionTypeLabels[data.type] || data.type || "session";
         navLabels.forEach(el => { if (el) el.textContent = label; });
         navIndicators.forEach(el => { if (el) el.classList.add("active"); });
-        // Flash badge expanded for 3 seconds so user sees which session
-        navBadges.forEach(el => { if (el) el.classList.add("flash"); });
-        if (navFlashTimer) clearTimeout(navFlashTimer);
-        navFlashTimer = setTimeout(() => {
-          navBadges.forEach(el => { if (el) el.classList.remove("flash"); });
-        }, 3000);
+        // Only reveal when navigator actually changes (new session or added from nothing)
+        if (data.sessionId !== currentNavSessionId) {
+          currentNavSessionId = data.sessionId;
+          navBadges.forEach(el => { if (el) el.classList.add("reveal"); });
+          if (navFlashTimer) clearTimeout(navFlashTimer);
+          navFlashTimer = setTimeout(() => {
+            navBadges.forEach(el => { if (el) el.classList.remove("reveal"); });
+          }, 3000);
+        }
       } else {
+        currentNavSessionId = null;
         navIndicators.forEach(el => { if (el) el.classList.remove("active"); });
-        navBadges.forEach(el => { if (el) el.classList.remove("flash"); });
+        navBadges.forEach(el => { if (el) el.classList.remove("reveal"); });
         if (navFlashTimer) clearTimeout(navFlashTimer);
       }
     });
@@ -1725,16 +1737,16 @@ socket.on("navigate", ({ url, replace }) => {
         // Already expanded — detach
         mobileNavExpanded = false;
         if (mobileNavCollapseTimer) clearTimeout(mobileNavCollapseTimer);
-        badge.classList.remove("flash");
+        badge.classList.remove("reveal");
         socket.emit("detachNavigator");
       } else {
         // First tap — expand to show session name
         mobileNavExpanded = true;
-        badge.classList.add("flash");
+        badge.classList.add("reveal");
         if (mobileNavCollapseTimer) clearTimeout(mobileNavCollapseTimer);
         mobileNavCollapseTimer = setTimeout(() => {
           mobileNavExpanded = false;
-          badge.classList.remove("flash");
+          badge.classList.remove("reveal");
         }, 4000);
       }
     });

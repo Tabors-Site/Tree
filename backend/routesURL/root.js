@@ -82,12 +82,10 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     const isDeleted = rootNode.parent === "deleted";
 
     const isRoot = rootNode.parent === null;
-    let rootNameColor = "#000"; // default
+    let rootNameColor = "rgba(255, 255, 255, 0.4)"; // subtle white edge
 
     if (isDeleted) {
       rootNameColor = "#b00020"; // red
-    } else if (isRoot) {
-      rootNameColor = "#2e7d32"; // green
     }
 
     // JSON MODE
@@ -179,37 +177,19 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 
     const inviteFormHtml = isOwner
       ? `
-<h2>Invite Contributor</h2>
-
 <form
   method="POST"
   action="/api/v1/root/${nodeId}/invite?token=${req.query.token ?? ""}&html"
-  style="display:flex; gap:8px; max-width:420px; margin-top:8px;"
+  style="display:flex; gap:8px; max-width:420px; margin-top:12px;"
 >
   <input
     type="text"
     name="userReceiving"
     placeholder="Username or User ID"
     required
-    style="
-      flex:1;
-      padding:8px 10px;
-      font-size:14px;
-      border-radius:6px;
-      border:1px solid #ccc;
-    "
   />
 
-  <button
-    type="submit"
-    style="
-      padding:8px 14px;
-      border-radius:6px;
-      border:1px solid #999;
-      background:#eee;
-      cursor:pointer;
-    "
-  >
+  <button type="submit">
     Invite
   </button>
 </form>
@@ -226,10 +206,6 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
   }&html"
   style="max-width: 420px;"
 >
-  <label style="font-weight:600; display:block; margin-bottom:8px;">
-    Transaction Approval Mode
-  </label>
-
   <select
     name="policy"
     style="
@@ -263,20 +239,22 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
   </button>
 </form>
 `
-      : `
-
-`;
+      : ``;
 
     // OWNER + CONTRIBUTORS
    const ownerHtml = rootMeta?.rootOwner
-  ? `Root Owner: <a href="/api/v1/user/${rootMeta.rootOwner._id}${queryString}">
+  ? `<ul class="contributors-list">
+  <li>
+    <a href="/api/v1/user/${rootMeta.rootOwner._id}${queryString}">
       ${escapeHtml(rootMeta.rootOwner.username)}
-    </a>`
+    </a>
+    <span style="font-size:12px;opacity:0.7;color:white;">Owner</span>
+  </li>
+</ul>`
       : ``;
 
     const contributorsHtml = rootMeta?.contributors?.length
       ? `
-<h2>Contributors</h2>
 <ul class="contributors-list">
 ${rootMeta.contributors
   .map((u) => {
@@ -348,14 +326,14 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
     style="
       padding:8px 14px;
       border-radius:8px;
-      border:1px solid #900;
-      background:#fff0f0;
-      color:#900;
+      border:1px solid rgba(239, 68, 68, 0.5);
+      background:rgba(239, 68, 68, 0.25);
+      color:white;
       font-weight:600;
       cursor:pointer;
     "
   >
-    Retire Root
+    Retire
   </button>
 </form>
 `
@@ -372,35 +350,52 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
       if (hasPaid) {
         const ownerConnections = await getConnectionsForUser(ownerProfile._id.toString());
         const currentPlacement = rootMeta.llmAssignments?.placement || null;
+        const currentUnderstanding = rootMeta.llmAssignments?.understanding || null;
 
-        const customOptHtml = ownerConnections.map(function(c) {
+        const placementOptHtml = ownerConnections.map(function(c) {
           return '<div class="custom-select-option' + (currentPlacement === c._id ? ' selected' : '') + '" data-value="' + c._id + '">'
             + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</div>';
         }).join('');
 
-        const selectedLabel = currentPlacement
+        const understandingOptHtml = ownerConnections.map(function(c) {
+          return '<div class="custom-select-option' + (currentUnderstanding === c._id ? ' selected' : '') + '" data-value="' + c._id + '">'
+            + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</div>';
+        }).join('');
+
+        const placementLabel = currentPlacement
           ? (function() { var m = ownerConnections.find(function(c){return c._id === currentPlacement;}); return m ? escapeHtml(m.name) + ' (' + escapeHtml(m.model) + ')' : 'Default (inherit from profile)'; })()
           : 'Default (inherit from profile)';
 
+        const understandingLabel = currentUnderstanding
+          ? (function() { var m = ownerConnections.find(function(c){return c._id === currentUnderstanding;}); return m ? escapeHtml(m.name) + ' (' + escapeHtml(m.model) + ')' : 'Default (inherit from profile)'; })()
+          : 'Default (inherit from profile)';
+
         treeLlmHtml = `
-<h2 style="margin-top:16px;">Tree AI Model</h2>
-<p style="font-size:0.85em;opacity:0.6;margin-bottom:8px;">
-  Assign a custom LLM to this tree. All AI operations (placement, queries) will use it.
-</p>
+<h3>AI Models</h3>
 ${ownerConnections.length === 0
   ? '<p style="font-size:0.85em;opacity:0.5;">No custom connections — <a href="/api/v1/user/${ownerProfile._id}${queryString ? queryString + "&" : "?"}html" style="color:inherit;">add one on your profile</a></p>'
-  : `<div class="custom-select" id="treeLlmSelect" style="margin-bottom:4px;">
-    <div class="custom-select-trigger">${selectedLabel}</div>
+  : `<p style="font-size:0.85em;opacity:0.6;margin-bottom:4px;">Placement</p>
+  <div class="custom-select" id="treeLlmSelect" data-slot="placement" style="margin-bottom:4px;">
+    <div class="custom-select-trigger">${placementLabel}</div>
     <div class="custom-select-options">
       <div class="custom-select-option${!currentPlacement ? ' selected' : ''}" data-value="">Default (inherit from profile)</div>
-      ${customOptHtml}
+      ${placementOptHtml}
     </div>
   </div>
-  <div id="treeLlmStatus" style="font-size:0.8em;margin-top:4px;display:none;"></div>`
+  <div id="treeLlmStatus" class="llm-assign-status" style="font-size:0.8em;margin-top:4px;display:none;"></div>
+  <p style="font-size:0.85em;opacity:0.6;margin-bottom:4px;margin-top:10px;">Understanding</p>
+  <div class="custom-select" id="treeLlmUnderstandingSelect" data-slot="understanding" style="margin-bottom:4px;">
+    <div class="custom-select-trigger">${understandingLabel}</div>
+    <div class="custom-select-options">
+      <div class="custom-select-option${!currentUnderstanding ? ' selected' : ''}" data-value="">Default (inherit from profile)</div>
+      ${understandingOptHtml}
+    </div>
+  </div>
+  <div id="treeLlmUnderstandingStatus" class="llm-assign-status" style="font-size:0.8em;margin-top:4px;display:none;"></div>`
 }`;
       } else {
         treeLlmHtml = `
-<h2 style="margin-top:16px;">Tree AI Model</h2>
+<h3>AI Models</h3>
 <p style="font-size:0.85em;opacity:0.5;">Requires a Standard or Premium plan to assign custom LLMs to trees.</p>`;
       }
     }
@@ -416,12 +411,22 @@ ${ownerConnections.length === 0
         ])
       : ``;
 
-    // CHILDREN
-    const childrenHtml = allData.children?.length
-      ? `<ul class="tree-root">${allData.children
-          .map((c) => renderTree(c))
-          .join("")}</ul>`
-      : `<p><em>No children</em></p>`;
+    // FULL TREE (root at top + children underneath)
+    const childrenInner = allData.children?.length
+      ? `<ul>${allData.children.map((c) => renderTree(c)).join("")}</ul>`
+      : ``;
+
+    const treeHtml = `
+      <ul class="tree-root" style="padding-left:0;">
+        <li class="tree-node root-entry"
+            data-node-id="${allData._id}"
+            style="border-left: 4px solid ${rootNameColor}; padding-left: 6px; margin: 6px 0;">
+          <a href="/api/v1/node/${allData._id}/${allData.prestige}${queryString}">
+            ${escapeHtml(allData.name)}
+          </a>
+          ${childrenInner}
+        </li>
+      </ul>`;
 
     // SAFE JSON
     const jsonDump = JSON.stringify(allData, null, 2)
@@ -649,6 +654,16 @@ transition:
       color: white;
       text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
       letter-spacing: -0.3px;
+    }
+
+    .section-header h2 a {
+      color: white;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .section-header h2 a:hover {
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
     }
 
     /* ==========================================
@@ -971,17 +986,6 @@ transition:
       display: inline-block;
     }
 
-    .node-id-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 12px;
-      padding: 10px 14px;
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
     code {
       background: transparent;
       padding: 0;
@@ -990,24 +994,6 @@ transition:
       font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
       color: white;
       word-break: break-all;
-      flex: 1;
-    }
-
-    #copyNodeIdBtn {
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      cursor: pointer;
-      padding: 6px 10px;
-      border-radius: 6px;
-      opacity: 1;
-      font-size: 16px;
-      transition: all 0.2s;
-      flex-shrink: 0;
-    }
-
-    #copyNodeIdBtn:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: scale(1.1);
     }
 
     /* Section Headers */
@@ -1166,6 +1152,7 @@ transition:
       border-radius: 980px;
       border: 1px solid rgba(255, 255, 255, 0.3);
       background: rgba(255, 255, 255, 0.25);
+      color: white;
       cursor: pointer;
       font-weight: 600;
       font-size: 14px;
@@ -1298,45 +1285,6 @@ transition:
       transform: translateY(-2px);
     }
 
-    /* Glass Jump Buttons */
-    #jumpTop,
-    #jumpBottom {
-      position: fixed;
-      right: 20px;
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(var(--glass-water-rgb), 0.35);
-      color: white;
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.3);
-      opacity: 1;
-transition:
-  transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-  background-color 0.3s ease,
-  opacity 0.3s ease;   
-        z-index: 999;
-    }
-
-    #jumpTop:hover,
-    #jumpBottom:hover {
-      transform: translateY(-3px) scale(1.05);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.4);
-      background: rgba(var(--glass-water-rgb), 0.45);
-    }
-
-    #jumpTop {
-      top: 20px;
-    }
-
-    #jumpBottom {
-      bottom: 20px;
-    }
 .glass-shadow {
   position: absolute;
   inset: 0;
@@ -1416,21 +1364,6 @@ transition:
         padding-left: 8px;
       }
 
-      #jumpTop,
-      #jumpBottom {
-        width: 44px;
-        height: 44px;
-        right: 16px;
-        font-size: 10px;
-      }
-
-      #jumpTop {
-        top: 16px;
-      }
-
-      #jumpBottom {
-        bottom: 16px;
-      }
     }
 
     @media (min-width: 641px) and (max-width: 1024px) {
@@ -1460,29 +1393,71 @@ transition:
   /* Custom dropdown (replaces native <select> to avoid iframe glitch on mobile) */
   .custom-select { position: relative; width: 100%; max-width: 360px; }
   .custom-select-trigger {
-    padding: 8px 10px; font-size: 14px; border-radius: 6px;
-    border: 1px solid #ccc; background: white; color: #1a1a1a;
+    padding: 12px 14px; font-size: 15px; border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.15); color: white;
     cursor: pointer; display: flex; align-items: center;
     justify-content: space-between; gap: 8px;
+    font-weight: 500;
     -webkit-user-select: none; user-select: none;
+    transition: all 0.3s ease;
   }
-  .custom-select-trigger::after { content: "▾"; font-size: 11px; opacity: 0.5; flex-shrink: 0; }
-  .custom-select.open .custom-select-trigger { border-color: #764ba2; }
+  .custom-select-trigger::after { content: "▾"; font-size: 11px; opacity: 0.6; flex-shrink: 0; }
+  .custom-select.open .custom-select-trigger {
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+  }
   .custom-select.open .custom-select-trigger::after { content: "▴"; }
   .custom-select-options {
     display: none; position: absolute; left: 0; right: 0;
     bottom: calc(100% + 4px);
-    background: white; border: 1px solid #ccc; border-radius: 6px;
+    background: rgba(102, 126, 234, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 10px;
     overflow: hidden; z-index: 100; max-height: 220px; overflow-y: auto;
-    box-shadow: 0 -4px 16px rgba(0,0,0,0.12);
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.2);
   }
   .custom-select.open .custom-select-options { display: block; }
   .custom-select-option {
-    padding: 9px 12px; font-size: 14px; color: #333;
+    padding: 10px 14px; font-size: 14px; color: rgba(255, 255, 255, 0.85);
     cursor: pointer; transition: background 0.15s;
   }
-  .custom-select-option:hover { background: #f0f0f0; }
-  .custom-select-option.selected { background: rgba(118,75,162,0.12); color: #764ba2; font-weight: 600; }
+  .custom-select-option:hover { background: rgba(255, 255, 255, 0.15); }
+  .custom-select-option.selected { background: rgba(255, 255, 255, 0.2); color: white; font-weight: 600; }
+
+  /* Root entry in tree */
+  .root-entry {
+    background: rgba(255, 255, 255, 0.18) !important;
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    border-left: 4px solid !important;
+  }
+  .root-entry > a {
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  /* Settings groups inside ownership card */
+  .settings-group {
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .settings-group:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .settings-group:first-child {
+    padding-top: 0;
+  }
+  .settings-group h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 15px;
+    opacity: 0.85;
+  }
+  .settings-group h2 {
+    margin-top: 0;
+  }
 
   </style>
 </head>
@@ -1515,10 +1490,7 @@ transition:
     `
         : ""
     } 
-    <!-- Header Section -->
- 
-
-    <!-- Navigation Path (Constellation) -->
+    <!-- Navigation Path (only if not root) -->
     ${
       ancestors.length
         ? `
@@ -1531,42 +1503,17 @@ transition:
     `
         : ""
     }
-       <div class="content-card">
 
-      <div class="header-section">
-        <div class="owner-info">${ownerHtml}</div>
-        
-        <h1>
-          <a href="/api/v1/node/${allData._id}/${allData.prestige}${queryString}">
-${escapeHtml(allData.name)}
-          </a>
-        </h1>
-
-        <div class="node-id-container">
-          <code id="nodeIdCode">${allData._id}</code>
-          <button id="copyNodeIdBtn" title="Copy ID">📋</button>
-        </div>
-        
-      </div>
-    </div>
-
-    <!-- Children Section -->
+    <!-- Tree Card (root + children unified) -->
     <div class="content-card">
-
       <div class="section-header">
-      <div id="filterButtons"></div>
-        <h2>Children</h2>
+        <h2>Tree: <a href="/api/v1/node/${allData._id}/${allData.prestige}${queryString}">${escapeHtml(allData.name)}</a></h2>
       </div>
-      ${childrenHtml}
-      
-
+      <div id="filterButtons"></div>
+      ${treeHtml}
     </div>
 
- 
-
-  
-
-   <!-- Tree Ownership Options Section -->
+    <!-- Tree Settings Section -->
 ${
   isOwner ||
   rootMeta?.contributors?.some(
@@ -1575,40 +1522,65 @@ ${
     ? `
 <div class="content-card">
   <div class="section-header">
-    <h2>${isOwner ? "Tree Ownership Options" : "Contributor Options"}</h2>
+    <h2>${isOwner ? "Tree Settings" : "Contributor Options"}</h2>
   </div>
-  
-  ${inviteFormHtml}
-  ${contributorsHtml}
-  ${policyHtml}
-  ${treeLlmHtml}
-  
+
+  <div class="settings-group">
+    <h3>Team</h3>
+    ${ownerHtml}
+    ${contributorsHtml}
+    ${inviteFormHtml}
+  </div>
+
+  ${policyHtml ? `
+  <div class="settings-group">
+    <h3>Transaction Policy</h3>
+    ${policyHtml}
+  </div>` : ""}
+
+  ${treeLlmHtml ? `
+  <div class="settings-group">
+    ${treeLlmHtml}
+  </div>` : ""}
+
   ${
     !isOwner && req.userId
       ? `
-  <h2>Leave Tree</h2>
-  <form
-    method="POST"
-    action="/api/v1/root/${nodeId}/remove-user?token=${req.query.token ?? ""}&html"
-    onsubmit="return confirm('Are you sure you want to leave this tree?')"
-    style="margin-top:12px;"
-  >
-    <input type="hidden" name="userReceiving" value="${req.userId}" />
-    <button
-      type="submit"
-      style="
-        padding:8px 14px;
-        border-radius:8px;
-        border:1px solid #900;
-        background:#fff0f0;
-        color:#900;
-        font-weight:600;
-        cursor:pointer;
-      "
+  <div class="settings-group">
+    <h3>Leave Tree</h3>
+    <form
+      method="POST"
+      action="/api/v1/root/${nodeId}/remove-user?token=${req.query.token ?? ""}&html"
+      onsubmit="return confirm('Are you sure you want to leave this tree?')"
     >
-      Leave Tree
-    </button>
-  </form>
+      <input type="hidden" name="userReceiving" value="${req.userId}" />
+      <button
+        type="submit"
+        style="
+          padding:8px 14px;
+          border-radius:8px;
+          border:1px solid #900;
+          background:rgba(239, 68, 68, 0.15);
+          color:#ff6b6b;
+          font-weight:600;
+          cursor:pointer;
+        "
+      >
+        Leave Tree
+      </button>
+    </form>
+  </div>
+  `
+      : ""
+  }
+
+  ${
+    retireHtml
+      ? `
+  <div class="settings-group">
+    <h3>Retire Tree</h3>
+    ${retireHtml}
+  </div>
   `
       : ""
   }
@@ -1617,35 +1589,19 @@ ${
     : ""
 }
 
-    <!-- Retire Tree Section -->
-    ${
-      retireHtml
-        ? `
-    <div class="content-card">
-      <div class="section-header">
-        <h2>Retire Tree</h2>
-      </div>
-      ${retireHtml}
-    </div>
-    `
-        : ""
-    }
-
-    <!-- Jump Buttons -->
-    <button id="jumpTop" title="Jump to top">TOP</button>
-    <button id="jumpBottom" title="Jump to bottom">BOT</button>
   </div>
 
 
 <script>
 // ROOT LLM ASSIGNMENT
-async function assignRootLlm(connId) {
-  var statusEl = document.getElementById("treeLlmStatus");
+async function assignRootLlm(slot, connId) {
+  var statusId = slot === "understanding" ? "treeLlmUnderstandingStatus" : "treeLlmStatus";
+  var statusEl = document.getElementById(statusId);
   try {
     var res = await fetch("/api/v1/root/${nodeId}/llm-assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slot: "placement", connectionId: connId || null }),
+      body: JSON.stringify({ slot: slot, connectionId: connId || null }),
     });
     if (res.ok) {
       if (statusEl) {
@@ -1689,7 +1645,7 @@ async function assignRootLlm(connId) {
         opt.classList.add("selected");
         trigger.textContent = opt.textContent;
         sel.classList.remove("open");
-        assignRootLlm(opt.getAttribute("data-value"));
+        assignRootLlm(sel.getAttribute("data-slot") || "placement", opt.getAttribute("data-value"));
       });
     });
   });
@@ -1762,26 +1718,6 @@ document.addEventListener('click', (e) => {
 </script>
 
   <script>
-    // Jump buttons
-    document.getElementById("jumpTop").addEventListener("click", () => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-
-    document.getElementById("jumpBottom").addEventListener("click", () => {
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-    });
-
-    // Copy ID
-    const btn = document.getElementById("copyNodeIdBtn");
-    const code = document.getElementById("nodeIdCode");
-
-    btn.addEventListener("click", () => {
-      navigator.clipboard.writeText(code.textContent).then(() => {
-        btn.textContent = "✔️";
-        setTimeout(() => (btn.textContent = "📋"), 900);
-      });
-    });
-
     // Filter toggles
     const params = new URLSearchParams(window.location.search);
 
@@ -1814,7 +1750,17 @@ document.addEventListener('click', (e) => {
     document.getElementById("filterButtons").innerHTML =
       makeToggle("active") +
       makeToggle("completed") +
-      makeToggle("trimmed");
+      makeToggle("trimmed") +
+      '<a href="#" id="copyNodeIdBtn" title="Copy Node ID" style="background:rgba(var(--glass-water-rgb),0.35);">📋</a>';
+
+    document.getElementById("copyNodeIdBtn").addEventListener("click", function(e) {
+      e.preventDefault();
+      navigator.clipboard.writeText("${allData._id}").then(function() {
+        var b = document.getElementById("copyNodeIdBtn");
+        b.textContent = "✔️";
+        setTimeout(function() { b.textContent = "📋"; }, 900);
+      });
+    });
   </script>
 
 </body>
@@ -1973,8 +1919,8 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     const { rootId } = req.params;
     const { slot, connectionId } = req.body;
 
-    if (slot !== "placement") {
-      return res.status(400).json({ error: "Invalid slot — only 'placement' is supported" });
+    if (slot !== "placement" && slot !== "understanding") {
+      return res.status(400).json({ error: "Invalid slot — must be 'placement' or 'understanding'" });
     }
 
     // Validate root and ownership
@@ -2000,7 +1946,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     }
 
     await Node.findByIdAndUpdate(rootId, {
-      $set: { "llmAssignments.placement": connectionId || null },
+      $set: { [`llmAssignments.${slot}`]: connectionId || null },
     });
 
     // Bust client cache for owner so changes take effect immediately
@@ -2013,7 +1959,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
       );
     }
 
-    return res.json({ success: true, slot: "placement", connectionId: connectionId || null });
+    return res.json({ success: true, slot, connectionId: connectionId || null });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

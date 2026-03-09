@@ -1,5 +1,5 @@
-// routesURL/dashboardPartial.js
-// Exports CSS, HTML, and JS strings for the session dashboard view
+// routesURL/sessionManagerPartial.js
+// Exports CSS, HTML, and JS strings for the session manager view
 // embedded inside app.js viewport panel.
 
 export function dashboardCSS() {
@@ -313,6 +313,25 @@ export function dashboardCSS() {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .session-stop-btn {
+      background: none;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      padding: 3px 8px;
+      border-radius: 4px;
+      transition: all 0.15s;
+      flex-shrink: 0;
+      opacity: 0;
+    }
+    .session-card:hover .session-stop-btn { opacity: 1; }
+    .session-stop-btn:hover {
+      color: #fff;
+      background: rgba(239, 68, 68, 0.4);
+    }
     .session-meta-info {
       font-size: 10px;
       color: var(--text-muted);
@@ -370,6 +389,12 @@ export function dashboardCSS() {
       font-size: 18px;
     }
     .dash-chat-close:hover { color: var(--text-primary); }
+    .dash-chat-kill {
+      color: #ef4444;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .dash-chat-kill:hover { color: #f87171 !important; }
     .dash-chat-body {
       flex: 1;
       overflow-y: auto;
@@ -553,8 +578,9 @@ export function dashboardHTML() {
         <div class="dash-chat-header">
           <span id="dashChatTitle" style="font-size:13px;font-weight:600">Messages</span>
           <div class="dash-chat-controls" style="display:flex;gap:6px;align-items:center;margin-top:8px">
+            <button class="dash-chat-close" id="dashChatClose" title="Back">&larr;</button>
             <button class="dash-chat-close" id="dashChatRefresh" title="Refresh">&#x21BB;</button>
-            <button class="dash-chat-close" id="dashChatClose">&times;</button>
+            <button class="dash-chat-close dash-chat-kill" id="dashChatKill" title="Kill session">Kill</button>
           </div>
         </div>
         <div class="dash-chat-body" id="dashChatBody"></div>
@@ -801,12 +827,9 @@ export function dashboardJS() {
             dashTrackedNavRootId = null;
             renderDashSessions();
           } else if (tracked.meta && tracked.meta.rootId && tracked.meta.rootId !== dashTrackedNavRootId) {
-            // Session got a NEW rootId — close dashboard and navigate iframe once
+            // Session got a NEW rootId — close dashboard; server handles navigation via emitNavigate
             dashTrackedNavRootId = tracked.meta.rootId;
             if (dashboardActive) toggleDashboard();
-            if (window.TreeApp && window.TreeApp.navigate) {
-              window.TreeApp.navigate("/api/v1/root/" + tracked.meta.rootId + "?html");
-            }
           }
         }
 
@@ -875,6 +898,7 @@ export function dashboardJS() {
             + '<div class="session-card-header">'
             + '<span class="session-type-icon">' + icon + '</span>'
             + '<span class="session-desc">' + desc + '</span>'
+            + '<button class="session-stop-btn" data-action="stop" data-sid="' + s.sessionId + '" title="Kill session">Kill</button>'
             + '</div>'
             + '<div class="session-meta-info">' + locationLabel + ' \\u00B7 ' + ago + '</div>'
             + '<div class="session-actions">'
@@ -905,6 +929,7 @@ export function dashboardJS() {
           var sid = btn.getAttribute("data-sid");
           if (action === "track") toggleTrack(sid);
           else if (action === "chat") dashViewChat(sid);
+          else if (action === "stop") stopSession(sid);
           return;
         }
         // Click on card body → navigate to session's tree
@@ -932,16 +957,24 @@ export function dashboardJS() {
             if (dashSessions[i].sessionId === sessionId) { s = dashSessions[i]; break; }
           }
           if (s && s.meta && s.meta.rootId) {
-            // Close dashboard and navigate iframe to the followed tree
+            // Close dashboard; server handles navigation via emitNavigate
             dashTrackedNavRootId = s.meta.rootId;
             if (dashboardActive) toggleDashboard();
-            if (window.TreeApp && window.TreeApp.navigate) {
-              window.TreeApp.navigate("/api/v1/root/" + s.meta.rootId + "?html");
-            }
           }
           // If no rootId (Home), stay on dashboard
         }
         renderDashSessions();
+      }
+
+      function stopSession(sessionId) {
+        if (!confirm("Stop this session?")) return;
+        // If stopping the tracked session, detach first
+        if (dashTrackedSessionId === sessionId) {
+          dashTrackedSessionId = null;
+          dashTrackedNavRootId = null;
+          socket.emit("detachNavigator");
+        }
+        socket.emit("stopSession", { sessionId: sessionId });
       }
 
       // ── Tree loading ──────────────────────────────────────────────
@@ -1153,6 +1186,13 @@ export function dashboardJS() {
         socket.emit("getDashboardChats", { sessionId: dashChatCurrentSid });
       });
 
+      document.getElementById("dashChatKill").addEventListener("click", function() {
+        if (!dashChatCurrentSid) return;
+        stopSession(dashChatCurrentSid);
+        dashChatPanel.classList.remove("open");
+        dashChatCurrentSid = null;
+      });
+
       function dashViewChat(sessionId) {
         dashChatCurrentSid = sessionId;
         dashChatPanel.classList.add("open");
@@ -1221,6 +1261,7 @@ export function dashboardJS() {
             var sid = btn.getAttribute("data-sid");
             if (action === "track") toggleTrack(sid);
             else if (action === "chat") dashViewChat(sid);
+            else if (action === "stop") { stopSession(sid); }
             closeMobileOverlay();
             return;
           }

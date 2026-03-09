@@ -715,7 +715,7 @@ const ApiAccessSection = () => {
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/user/:userId/custom-llm/assign</span>
+              <span className="ep-url">/api/v1/user/:userId/llm-assign</span>
             </div>
             <div className="ep-desc">Assign a connection to a user-level LLM slot, or unassign by passing null.</div>
             <div className="ep-label">Request Body</div>
@@ -851,16 +851,19 @@ ALL         — All contributors must approve`}</div>
           <div className="section-spacer"></div>
 
           {/* ── Tree AI Model ────── */}
-          <div className="sub-title">Tree AI Model</div>
+          <div className="sub-title">Tree AI Models</div>
 
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/root/:rootId/llm-assign</span>
             </div>
-            <div className="ep-desc">Assign a custom LLM connection to a root tree. All AI operations on that tree will use this connection. Owner-only, requires paid plan.</div>
+            <div className="ep-desc">Assign a custom LLM connection to a tree slot. Owner-only, requires paid plan.</div>
             <div className="ep-label">Request Body</div>
             <div className="ep-code">{`{ "slot": "placement", "connectionId": "connection-id-here" }`}</div>
+            <div className="ep-label">Allowed Slots</div>
+            <div className="ep-code">{`placement     — Used for tree chat, node placement, and all tree AI operations
+understanding — Used for understanding runs (falls back to placement if unset)`}</div>
             <div className="ep-note">Pass <code>connectionId: null</code> to unassign and revert to the user's default. The connection must belong to the root owner.</div>
           </div>
 

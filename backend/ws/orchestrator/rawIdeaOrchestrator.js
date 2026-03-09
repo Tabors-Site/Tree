@@ -15,7 +15,7 @@ import { orchestrateTreeRequest } from "./treeOrchestrator.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { getRootNodesForUser, buildDeepTreeSummary } from "../../core/treeFetch.js";
 import { logContribution } from "../../db/utils.js";
-import { registerSession, endSession, updateSessionMeta, SESSION_TYPES } from "../sessionRegistry.js";
+import { registerSession, endSession, updateSessionMeta, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
 import RawIdea from "../../db/models/rawIdea.js";
 import Node from "../../db/models/node.js";
 
@@ -77,6 +77,7 @@ function extractTargetNodeId(treeResult) {
 export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username, withResponse = false, source = "orchestrator" }) {
   const visitorId = `rawIdea:${rawIdeaId}`;
   const sessionId = uuidv4();
+  const abort = new AbortController();
   registerSession({
     sessionId,
     userId,
@@ -88,6 +89,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     description: `Raw idea placement: ${rawIdeaId}`,
     meta: { rawIdeaId, visitorId },
   });
+  setSessionAbort(sessionId, abort);
   let chainIndex = 1;
 
   // Used to pass final status into the finally block for session finalization
@@ -227,6 +229,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       username,
       userId,
       slot: "rawIdea",
+      signal: abort.signal,
       meta: { internal: true },
     });
     const chooseEnd = new Date();
@@ -272,7 +275,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       socket: nullSocket,
       username,
       userId,
-      signal: null,
+      signal: abort.signal,
       sessionId,
       rootId: chosenRootId,
       skipRespond: !withResponse,
@@ -375,7 +378,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     } catch (saveErr) {
       console.error(`❌ Failed to mark raw idea as stuck:`, saveErr.message);
     }
-    finalizeArgs = { content: err.message, stopped: false, modeKey: "rawIdea:complete" };
+    finalizeArgs = { content: err.message, stopped: abort.signal.aborted, modeKey: "rawIdea:complete" };
     if (withResponse) {
       return { success: false, reason: err.message };
     }
@@ -386,6 +389,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       );
     }
     clearAiContributionContext(userId);
+    clearSessionAbort(sessionId);
     endSession(sessionId);
     closeMCPClient(visitorId);
   }

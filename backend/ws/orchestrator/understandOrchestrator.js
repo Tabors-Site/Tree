@@ -24,13 +24,14 @@ import {
 } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { emitNavigate, emitToUser } from "../websocket.js";
-import { registerSession, endSession, setActiveNavigator, getSession, updateSessionMeta, SESSION_TYPES } from "../sessionRegistry.js";
+import { registerSession, endSession, setActiveNavigator, getSession, updateSessionMeta, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
 import {
   getNextCompressionPayloadForLLM,
   commitCompressionResult,
 } from "../../core/understanding.js";
 import UnderstandingRun from "../../db/models/understandingRun.js";
 import UnderstandingNode from "../../db/models/understandingNode.js";
+import Node from "../../db/models/node.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // ACTIVE RUN LOCK — prevents concurrent orchestrations of the same run
@@ -166,6 +167,7 @@ export async function orchestrateUnderstanding({
   const isSite = fromSite && !isChainStep;
   const visitorId = `understand:${rootId}:${Date.now()}`;
   const sessionId = externalSessionId || uuidv4();
+  const abort = new AbortController();
   if (!isChainStep) {
     registerSession({
       sessionId,
@@ -174,6 +176,7 @@ export async function orchestrateUnderstanding({
       description: `Understanding: ${runPerspective}`,
       meta: { rootId, runId: understandingRunId, visitorId },
     });
+    setSessionAbort(sessionId, abort);
   }
   // When triggered from site, claim navigator so progress shows in iframe
   if (isSite) {
@@ -195,10 +198,15 @@ export async function orchestrateUnderstanding({
   };
   let mainChatId = externalRootChatId || null;
 
-  // ── Resolve LLM ─────────────────────────────────────────────────────────
+  // ── Resolve LLM (use root's understanding LLM if set, fall back to placement) ──
+  let rootLlmConnectionId = null;
+  if (rootId) {
+    const rootNode = await Node.findById(rootId).select("llmAssignments").lean();
+    rootLlmConnectionId = rootNode?.llmAssignments?.understanding || rootNode?.llmAssignments?.placement || null;
+  }
   let llmProvider;
   try {
-    const clientInfo = await getClientForUser(userId, "understand");
+    const clientInfo = await getClientForUser(userId, "understand", rootLlmConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
@@ -249,6 +257,8 @@ export async function orchestrateUnderstanding({
 
     // ── PHASE 2: Compression loop ───────────────────────────────────────────
     while (true) {
+      if (abort.signal.aborted) throw new Error("Session stopped");
+
       const payload = await getNextCompressionPayloadForLLM(
         understandingRunId,
         userId,
@@ -270,6 +280,8 @@ export async function orchestrateUnderstanding({
         username,
         userId,
         slot: "understand",
+        signal: abort.signal,
+        rootLlmConnectionId,
       });
 
       const summary =
@@ -369,7 +381,7 @@ export async function orchestrateUnderstanding({
     );
     finalizeArgs = {
       content: err.message,
-      stopped: false,
+      stopped: abort.signal.aborted,
       modeKey: "tree:understand",
     };
 
@@ -397,7 +409,10 @@ export async function orchestrateUnderstanding({
       );
     }
     clearAiContributionContext(userId);
-    if (!isChainStep) endSession(sessionId);
+    if (!isChainStep) {
+      clearSessionAbort(sessionId);
+      endSession(sessionId);
+    }
     closeMCPClient(visitorId);
   }
 }

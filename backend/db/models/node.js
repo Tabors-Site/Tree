@@ -51,10 +51,7 @@ const NodeSchema = new mongoose.Schema({
   },
   llmAssignments: {
     placement: { type: String, ref: "CustomLlmConnection", default: null },
-    // Future slots:
-    // cleanup: { type: String, ref: "CustomLlmConnection", default: null },
-    // coder: { type: String, ref: "CustomLlmConnection", default: null },
-    // organization: { type: String, ref: "CustomLlmConnection", default: null },
+    understanding: { type: String, ref: "CustomLlmConnection", default: null },
   },
   children: [{ type: String, ref: "Node" }],
   parent: { type: String, ref: "Node", default: null },

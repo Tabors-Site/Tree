@@ -11459,7 +11459,7 @@ async function deleteConnection(connId) {
 
 async function assignSlot(slot, connId) {
   try {
-    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/assign", {
+    var res = await fetch("/api/v1/user/" + userId + "/llm-assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ slot: slot, connectionId: connId || null }),
@@ -11587,8 +11587,8 @@ router.get("/user/:userId/custom-llm", authenticate, async (req, res) => {
   }
 });
 
-// Assign a connection to a slot (must be before /:connectionId routes)
-router.post("/user/:userId/custom-llm/assign", authenticate, async (req, res) => {
+// Assign a connection to a user-level slot
+router.post("/user/:userId/llm-assign", authenticate, async (req, res) => {
   try {
     const { slot, connectionId } = req.body;
     if (!slot) return res.status(400).json({ error: "slot is required" });
