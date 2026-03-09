@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import User from "../db/models/user.js";
+import Node from "../db/models/node.js";
 import CustomLlmConnection from "../db/models/customLlmConnection.js";
 import {
   getMode,
@@ -172,10 +173,62 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
     client: defaultClient,
     model: DEFAULT_MODEL,
     isCustom: false,
+    connectionId: null,
     fetchedAt: Date.now(),
   };
   userClientCache.set(cacheKey, defaultEntry);
   return defaultEntry;
+}
+
+// ── Mode → llmAssignments key mapping ────────────────────────────────────
+// Groups related modes under a single assignment key.
+// Resolution: mode-specific → placement fallback → user default
+const MODE_TO_ASSIGNMENT = {
+  // placement covers the core tree orchestration modes
+  "tree:librarian": "placement",
+  "tree:navigate": "placement",
+  "tree:structure": "placement",
+  "tree:edit": "placement",
+  "tree:be": "placement",
+  "tree:getContext": "placement",
+  // respond gets its own key
+  "tree:respond": "respond",
+  // notes gets its own key
+  "tree:notes": "notes",
+  // understanding modes
+  "tree:understand": "understanding",
+  "tree:understand-summarize": "understanding",
+  // cleanup modes
+  "tree:cleanup-analyze": "cleanup",
+  "tree:cleanup-expand-scan": "cleanup",
+  // drain modes
+  "tree:drain-cluster": "drain",
+  "tree:drain-scout": "drain",
+  "tree:drain-plan": "drain",
+};
+
+/**
+ * Resolve the LLM connectionId for a given mode on a tree.
+ * Priority: llmAssignments[modeGroup] → llmAssignments.placement → null
+ * Returns the connectionId string or null.
+ */
+export async function resolveRootLlmForMode(rootId, modeKey) {
+  if (!rootId) return null;
+  try {
+    const rootNode = await Node.findById(rootId).select("llmAssignments").lean();
+    if (!rootNode?.llmAssignments) return null;
+
+    const assignmentKey = MODE_TO_ASSIGNMENT[modeKey];
+    if (assignmentKey) {
+      const modeOverride = rootNode.llmAssignments[assignmentKey];
+      if (modeOverride) return modeOverride;
+    }
+
+    // Fallback to placement (tree-wide default)
+    return rootNode.llmAssignments.placement || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -316,11 +369,18 @@ export async function processMessage(visitorId, message, ctx) {
   const mode = getMode(session.modeKey);
 
   // Resolve LLM client for this user (custom or default, with root override)
+  // Auto-resolve per-mode LLM override from the tree's llmAssignments
+  const rootId = session.rootId || ctx.rootId;
+  const modeConnectionId =
+    ctx.rootLlmConnectionId ||
+    (rootId ? await resolveRootLlmForMode(rootId, session.modeKey) : null);
+
   const {
     client: openai,
     model: MODEL,
     isCustom,
-  } = await getClientForUser(ctx.userId, ctx.slot, ctx.rootLlmConnectionId);
+    connectionId: resolvedConnectionId,
+  } = await getClientForUser(ctx.userId, ctx.slot, modeConnectionId);
 
   // Ensure MCP client
   let client = mcpClients.get(visitorId);
@@ -428,27 +488,33 @@ export async function processMessage(visitorId, message, ctx) {
       // ✅ No tools left → now safe to return for internal mode
       if (isInternal) {
         const raw = assistantMessage.content;
+        const _llmProvider = { isCustom, model: MODEL, connectionId: resolvedConnectionId || null };
         try {
-          return JSON.parse(raw);
+          const parsed = JSON.parse(raw);
+          parsed._llmProvider = _llmProvider;
+          return parsed;
         } catch (err) {
           // Try stripping markdown fences
           try {
             const stripped = raw
               .replace(/^```(?:json)?\s*\n?/i, "")
               .replace(/\n?```\s*$/, "");
-            return JSON.parse(stripped);
+            const parsed = JSON.parse(stripped);
+            parsed._llmProvider = _llmProvider;
+            return parsed;
           } catch (_) {}
 
           // If it looks like truncated JSON, return it as raw context
           // rather than failing — the orchestrator can still use it
           if (raw && (raw.startsWith("{") || raw.startsWith("["))) {
-            return { _raw: true, content: raw };
+            return { _raw: true, content: raw, _llmProvider };
           }
 
           return {
             action: "error",
             reason: "Internal mode returned invalid JSON",
             raw,
+            _llmProvider,
           };
         }
       }
@@ -557,7 +623,7 @@ export async function processMessage(visitorId, message, ctx) {
     llmProvider: {
       isCustom,
       model: MODEL,
-      baseUrl: isCustom ? openai.baseURL : null,
+      connectionId: resolvedConnectionId || null,
     },
   };
 }

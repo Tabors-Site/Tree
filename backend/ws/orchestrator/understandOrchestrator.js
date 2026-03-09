@@ -216,15 +216,10 @@ export async function orchestrateUnderstanding({
   };
   let mainChatId = externalRootChatId || null;
 
-  // ── Resolve LLM (use root's understanding LLM if set, fall back to placement) ──
-  let rootLlmConnectionId = null;
-  if (rootId) {
-    const rootNode = await Node.findById(rootId).select("llmAssignments").lean();
-    rootLlmConnectionId = rootNode?.llmAssignments?.understanding || rootNode?.llmAssignments?.placement || null;
-  }
+  // ── Resolve base LLM for tracking (processMessage auto-resolves per-mode) ──
   let llmProvider;
   try {
-    const clientInfo = await getClientForUser(userId, "understand", rootLlmConnectionId);
+    const clientInfo = await getClientForUser(userId, "understand");
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
@@ -297,9 +292,9 @@ export async function orchestrateUnderstanding({
       const result = await processMessage(visitorId, prompt, {
         username,
         userId,
+        rootId,
         slot: "understand",
         signal: abort.signal,
-        rootLlmConnectionId,
       });
 
       const summary =

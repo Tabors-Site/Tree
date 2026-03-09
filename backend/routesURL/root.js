@@ -350,49 +350,39 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
 
       if (hasPaid) {
         const ownerConnections = await getConnectionsForUser(ownerProfile._id.toString());
-        const currentPlacement = rootMeta.llmAssignments?.placement || null;
-        const currentUnderstanding = rootMeta.llmAssignments?.understanding || null;
+        const llmSlots = [
+          { key: "placement", label: "Placement" },
+          { key: "understanding", label: "Understanding" },
+          { key: "respond", label: "Respond" },
+          { key: "notes", label: "Notes" },
+          { key: "cleanup", label: "Cleanup" },
+          { key: "drain", label: "Drain" },
+        ];
 
-        const placementOptHtml = ownerConnections.map(function(c) {
-          return '<div class="custom-select-option' + (currentPlacement === c._id ? ' selected' : '') + '" data-value="' + c._id + '">'
-            + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</div>';
-        }).join('');
-
-        const understandingOptHtml = ownerConnections.map(function(c) {
-          return '<div class="custom-select-option' + (currentUnderstanding === c._id ? ' selected' : '') + '" data-value="' + c._id + '">'
-            + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</div>';
-        }).join('');
-
-        const placementLabel = currentPlacement
-          ? (function() { var m = ownerConnections.find(function(c){return c._id === currentPlacement;}); return m ? escapeHtml(m.name) + ' (' + escapeHtml(m.model) + ')' : 'Default (inherit from profile)'; })()
-          : 'Default (inherit from profile)';
-
-        const understandingLabel = currentUnderstanding
-          ? (function() { var m = ownerConnections.find(function(c){return c._id === currentUnderstanding;}); return m ? escapeHtml(m.name) + ' (' + escapeHtml(m.model) + ')' : 'Default (inherit from profile)'; })()
-          : 'Default (inherit from profile)';
+        function buildSlotHtml(slot) {
+          const current = rootMeta.llmAssignments?.[slot.key] || null;
+          const optHtml = ownerConnections.map(function(c) {
+            return '<div class="custom-select-option' + (current === c._id ? ' selected' : '') + '" data-value="' + c._id + '">'
+              + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</div>';
+          }).join('');
+          const label = current
+            ? (function() { var m = ownerConnections.find(function(c){return c._id === current;}); return m ? escapeHtml(m.name) + ' (' + escapeHtml(m.model) + ')' : 'Default (inherit from profile)'; })()
+            : 'Default (inherit from profile)';
+          return `<p style="font-size:0.85em;opacity:0.6;margin-bottom:4px;margin-top:10px;">${slot.label}</p>
+  <div class="custom-select" data-slot="${slot.key}" style="margin-bottom:4px;">
+    <div class="custom-select-trigger">${label}</div>
+    <div class="custom-select-options">
+      <div class="custom-select-option${!current ? ' selected' : ''}" data-value="">Default (inherit from profile)</div>
+      ${optHtml}
+    </div>
+  </div>`;
+        }
 
         treeLlmHtml = `
 <h3>AI Models</h3>
 ${ownerConnections.length === 0
   ? '<p style="font-size:0.85em;opacity:0.5;">No custom connections — <a href="/api/v1/user/${ownerProfile._id}${queryString ? queryString + "&" : "?"}html" style="color:inherit;">add one on your profile</a></p>'
-  : `<p style="font-size:0.85em;opacity:0.6;margin-bottom:4px;">Placement</p>
-  <div class="custom-select" id="treeLlmSelect" data-slot="placement" style="margin-bottom:4px;">
-    <div class="custom-select-trigger">${placementLabel}</div>
-    <div class="custom-select-options">
-      <div class="custom-select-option${!currentPlacement ? ' selected' : ''}" data-value="">Default (inherit from profile)</div>
-      ${placementOptHtml}
-    </div>
-  </div>
-  <div id="treeLlmStatus" class="llm-assign-status" style="font-size:0.8em;margin-top:4px;display:none;"></div>
-  <p style="font-size:0.85em;opacity:0.6;margin-bottom:4px;margin-top:10px;">Understanding</p>
-  <div class="custom-select" id="treeLlmUnderstandingSelect" data-slot="understanding" style="margin-bottom:4px;">
-    <div class="custom-select-trigger">${understandingLabel}</div>
-    <div class="custom-select-options">
-      <div class="custom-select-option${!currentUnderstanding ? ' selected' : ''}" data-value="">Default (inherit from profile)</div>
-      ${understandingOptHtml}
-    </div>
-  </div>
-  <div id="treeLlmUnderstandingStatus" class="llm-assign-status" style="font-size:0.8em;margin-top:4px;display:none;"></div>`
+  : llmSlots.map(buildSlotHtml).join('\n') + '\n  <div class="llm-assign-status" style="font-size:0.8em;margin-top:4px;display:none;"></div>'
 }`;
       } else {
         treeLlmHtml = `
@@ -1702,8 +1692,7 @@ async function clearDreamTime() {
 
 // ROOT LLM ASSIGNMENT
 async function assignRootLlm(slot, connId) {
-  var statusId = slot === "understanding" ? "treeLlmUnderstandingStatus" : "treeLlmStatus";
-  var statusEl = document.getElementById(statusId);
+  var statusEl = document.querySelector(".llm-assign-status");
   try {
     var res = await fetch("/api/v1/root/${nodeId}/llm-assign", {
       method: "POST",
@@ -2026,8 +2015,9 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     const { rootId } = req.params;
     const { slot, connectionId } = req.body;
 
-    if (slot !== "placement" && slot !== "understanding") {
-      return res.status(400).json({ error: "Invalid slot — must be 'placement' or 'understanding'" });
+    const validSlots = ["placement", "understanding", "respond", "notes", "cleanup", "drain"];
+    if (!validSlots.includes(slot)) {
+      return res.status(400).json({ error: `Invalid slot — must be one of: ${validSlots.join(", ")}` });
     }
 
     // Validate root and ownership

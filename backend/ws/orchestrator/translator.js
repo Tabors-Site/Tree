@@ -5,7 +5,7 @@
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { getClientForUser } from "../conversation.js";
+import { getClientForUser, resolveRootLlmForMode } from "../conversation.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -436,9 +436,10 @@ export async function classify({
   treeSummary,
   signal,
   slot,
-  rootLlmConnectionId,
+  rootId,
 }) {
-  const { client: openai, model, isCustom, connectionId } = await getClientForUser(userId, slot, rootLlmConnectionId);
+  const overrideId = rootId ? await resolveRootLlmForMode(rootId, "tree:librarian") : null;
+  const { client: openai, model, isCustom, connectionId } = await getClientForUser(userId, slot, overrideId);
   const _llmProvider = { isCustom, model, connectionId: connectionId || null };
 
   let contextBlock = "";
@@ -533,9 +534,10 @@ export async function translateDestructive({
   treeSummary,
   signal,
   slot,
-  rootLlmConnectionId,
+  rootId,
 }) {
-  const { client: openai, model, isCustom, connectionId } = await getClientForUser(userId, slot, rootLlmConnectionId);
+  const overrideId = rootId ? await resolveRootLlmForMode(rootId, "tree:structure") : null;
+  const { client: openai, model, isCustom, connectionId } = await getClientForUser(userId, slot, overrideId);
   const _llmProvider = { isCustom, model, connectionId: connectionId || null };
 
   // Build context block

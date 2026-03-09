@@ -356,7 +356,7 @@ async function executePlanSteps({
         output: navResult,
         startTime: navStart,
         endTime: navEnd,
-        llmProvider,
+        llmProvider: navResult?._llmProvider || llmProvider,
         treeContext: {
           targetNodeId:
             navResult?.action === "found"
@@ -854,7 +854,7 @@ async function executePlanSteps({
         output: execResult,
         startTime: execStart,
         endTime: execEnd,
-        llmProvider,
+        llmProvider: execResult?._llmProvider || llmProvider,
         treeContext: {
           targetNodeId,
           targetPath,
@@ -936,19 +936,10 @@ export async function orchestrateTreeRequest({
 
   const rootId = rootIdParam ?? getRootId(visitorId);
 
-  // Check if root has a custom LLM assigned for placement
-  let rootLlmConnectionId = null;
-  if (rootId) {
-    try {
-      const rootNode = await Node.findById(rootId).select("llmAssignments").lean();
-      rootLlmConnectionId = rootNode?.llmAssignments?.placement || null;
-    } catch (e) { /* ignore — fall back to user/default */ }
-  }
-
-  // Resolve llmProvider once for tracking across all chain steps
+  // Resolve base llmProvider for tracking (processMessage auto-resolves per-mode)
   let llmProvider = { isCustom: false, model: null, connectionId: null };
   try {
-    const clientInfo = await getClientForUser(userId, slot, rootLlmConnectionId);
+    const clientInfo = await getClientForUser(userId, slot);
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
@@ -961,7 +952,7 @@ export async function orchestrateTreeRequest({
     setAiContributionContext(visitorId, sessionId, rootChatId);
   }
 
-  const meta = { username, userId, rootId, slot, rootLlmConnectionId, llmProvider };
+  const meta = { username, userId, rootId, slot, llmProvider };
   const modesUsed = []; // Track full chain for AIChat
   let chainIndex = 1; // 0 = user message (created in websocket.js)
 
@@ -1034,7 +1025,7 @@ export async function orchestrateTreeRequest({
       treeSummary,
       signal,
       slot,
-      rootLlmConnectionId,
+      rootId,
     });
   } catch (err) {
     if (signal?.aborted) return null;
@@ -1149,7 +1140,6 @@ export async function orchestrateTreeRequest({
         responseHint: classification.responseHint || "Acknowledge the idea naturally. Do not mention deferral, memory, or holding.",
         stepSummaries: [],
         slot,
-        rootLlmConnectionId,
       });
 
       return {
@@ -1212,7 +1202,7 @@ export async function orchestrateTreeRequest({
       treeSummary,
       signal,
       slot,
-      rootLlmConnectionId,
+      rootId,
     });
   } catch (err) {
     if (signal?.aborted) return null;
@@ -1446,7 +1436,7 @@ async function runLibrarianFlow({
       output: libPlan,
       startTime: libStart,
       endTime: libEnd,
-      llmProvider,
+      llmProvider: libPlan?._llmProvider || llmProvider,
       treeContext: {
         targetNodeId: rootId,
         directive: classification.summary,
@@ -1489,7 +1479,7 @@ async function runLibrarianFlow({
     output: libPlan,
     startTime: libStart,
     endTime: libEnd,
-    llmProvider,
+    llmProvider: libPlan?._llmProvider || llmProvider,
     treeContext: {
       targetNodeId: rootId,
       directive: classification.summary,
@@ -1753,7 +1743,7 @@ async function executePendingOperation({
     output: execResult,
     startTime: execStart,
     endTime: execEnd,
-    llmProvider,
+    llmProvider: execResult?._llmProvider || llmProvider,
     treeContext: {
       targetNodeId: pending.targetNodeId,
       targetPath: pending.targetPath,
@@ -1873,7 +1863,6 @@ async function runRespond({
   stepSummaries = [],
   librarianContext = null,
   slot,
-  rootLlmConnectionId,
 }) {
   emitStatus(socket, "respond", "");
 
@@ -1930,7 +1919,6 @@ async function runRespond({
     userId,
     rootId,
     slot,
-    rootLlmConnectionId,
     signal,
     onToolResults(results) {
       if (signal?.aborted) return;
