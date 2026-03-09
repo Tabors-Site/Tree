@@ -862,9 +862,29 @@ ALL         — All contributors must approve`}</div>
             <div className="ep-label">Request Body</div>
             <div className="ep-code">{`{ "slot": "placement", "connectionId": "connection-id-here" }`}</div>
             <div className="ep-label">Allowed Slots</div>
-            <div className="ep-code">{`placement     — Used for tree chat, node placement, and all tree AI operations
-understanding — Used for understanding runs (falls back to placement if unset)`}</div>
-            <div className="ep-note">Pass <code>connectionId: null</code> to unassign and revert to the user's default. The connection must belong to the root owner.</div>
+            <div className="ep-code">{`placement     — Tree chat, navigation, node placement, classification
+understanding — Understanding runs (falls back to placement)
+respond       — Final user-facing responses (falls back to placement)
+notes         — Note creation and editing (falls back to placement)
+cleanup       — Cleanup analysis and expansion (falls back to placement)
+drain         — Short-term memory drain placement (falls back to placement)`}</div>
+            <div className="ep-note">Pass <code>connectionId: null</code> to unassign and revert to the user's default. The connection must belong to the root owner. Unset slots fall back to <code>placement</code>, then to the user's default LLM.</div>
+          </div>
+
+          <div className="section-spacer"></div>
+
+          {/* ── Dream Time ─────────── */}
+          <div className="sub-title">Dream Time</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/dream-time</span>
+            </div>
+            <div className="ep-desc">Set or clear the nightly dream schedule for a tree. When set, the tree will automatically run cleanup and understanding processes at the specified time. Owner-only.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "dreamTime": "03:00" }`}</div>
+            <div className="ep-note">Use 24-hour <code>HH:MM</code> format. Pass <code>null</code> or omit to disable dreaming.</div>
           </div>
 
           <div className="section-spacer"></div>
