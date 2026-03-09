@@ -10,45 +10,43 @@ const WelcomePage = () => {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
-const bannerMessages = [
-    "Welcome to Tree. Click the Open App button to get started.",
+  const bannerMessages = [
+    "Welcome to Tree. Click Start Chat to get started.",
+    "New: Trees can now dream. Set a sleep schedule and let your Tree organize itself overnight.",
+    "New: Understanding runs detect changes incrementally — only dirty branches get reprocessed.",
+    "New: Session dashboards track every AI process running across your Trees in real time.",
+    "New: Start Chat offers a streamlined interface. Use the Dashboard for full control.",
+    "Understanding runs summarize your entire Tree from any perspective you define.",
+    "Collaborative workspaces are live. Invite others to build together.",
+    "Custom LLM support is available. Bring your own key in OpenAI-compatible format.",
+    "This project is in active development. Expect occasional downtime as new features ship.",
+  ];
 
-  "02/12/2026: This project is in active development. Expect occasional downtime as things are built.",
-    "01/28/2025: AI Modes are live with custom LLM support (OpenAI API format supported)",
-        "01/20/2025: Try making an understanding run. The AI will summarize your whole tree from a perspective.",
-                "The energy system is now live for public use. Stripe has been intregrated, but payments will not be accepted until the App is more complete.",
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const [bannerPhase, setBannerPhase] = useState("enter"); // enter, hold, exit
 
+  useEffect(() => {
+    let timeout;
+    if (bannerPhase === "enter") {
+      timeout = setTimeout(() => setBannerPhase("hold"), 1000);
+    } else if (bannerPhase === "hold") {
+      timeout = setTimeout(() => setBannerPhase("exit"), 6000);
+    } else if (bannerPhase === "exit") {
+      timeout = setTimeout(() => {
+        setBannerIndex((i) => (i + 1) % bannerMessages.length);
+        setBannerPhase("enter");
+      }, 600);
+    }
+    return () => clearTimeout(timeout);
+  }, [bannerPhase]);
 
-  "02/17/2026: LLM Mode Orchestration coming soon! Design complex workflows with multiple LLMs.",
-
-  "Tree now supports collaborative workspaces. Invite others to build together.",
-    "New perspectives are revealing.",
-
-];
-
-const [bannerIndex, setBannerIndex] = useState(0);
-const [bannerPhase, setBannerPhase] = useState("enter"); // enter, hold, exit
-
-useEffect(() => {
-  let timeout;
-  if (bannerPhase === "enter") {
-    timeout = setTimeout(() => setBannerPhase("hold"), 1000);
-  } else if (bannerPhase === "hold") {
-    timeout = setTimeout(() => setBannerPhase("exit"), 6000);
-  } else if (bannerPhase === "exit") {
-    timeout = setTimeout(() => {
-      setBannerIndex((i) => (i + 1) % bannerMessages.length);
-      setBannerPhase("enter");
-    }, 600);
-  }
-  return () => clearTimeout(timeout);
-}, [bannerPhase]);
-
-  const handleOpenBrowser = async () => {
+  const handleOpen = async (destination) => {
     const token = Cookies.get("token");
+    const path = new window.URL(destination).pathname;
+    const loginUrl = `/login?redirect=${encodeURIComponent(path)}`;
 
     if (!token) {
-      window.location.href = "/login";
+      window.location.href = loginUrl;
       return;
     }
 
@@ -63,7 +61,7 @@ useEffect(() => {
       });
 
       if (!res.ok) {
-        window.location.href = "/login";
+        window.location.href = loginUrl;
         return;
       }
 
@@ -78,22 +76,25 @@ useEffect(() => {
         return;
       }
 
-      window.location.href = `${URL}/app`;
+      window.location.href = destination;
     } catch (err) {
       console.error("Open App error:", err);
-      window.location.href = "/login";
+      window.location.href = loginUrl;
     }
   };
 
+  const handleOpenApp = () => handleOpen(`${URL}/app`);
+  const handleOpenChat = () => handleOpen(`${URL}/chat`);
+
   return (
     <div className="welcome-page">
-<div className="dev-banner">
-  <span className={`dev-banner-text ${bannerPhase}`} key={bannerIndex}>
-    {bannerMessages[bannerIndex]}
-  </span>
-</div>
+      <div className="dev-banner">
+        <span className={`dev-banner-text ${bannerPhase}`} key={bannerIndex}>
+          {bannerMessages[bannerIndex]}
+        </span>
+      </div>
       <section className="hero">
-      
+
         <div className="hero-top">
           <a
             href="https://tabors.site"
@@ -102,17 +103,25 @@ useEffect(() => {
             Back to tabors.site
           </a>
 
-          <button
-            className="back-to-site-btn open-app-btn"
-            onClick={handleOpenBrowser}
-          >
-            Open App
-          </button>
+          <div className="hero-top-right">
+            <button
+              className="back-to-site-btn open-app-btn start-chat-btn"
+              onClick={handleOpenChat}
+            >
+              Start Chat
+            </button>
+            <button
+              className="back-to-site-btn open-app-btn dashboard-btn"
+              onClick={handleOpenApp}
+            >
+              Dashboard
+            </button>
+          </div>
         </div>
 
-     
+
         <div className="hero-center">
-     
+
           <div className="hero-logo" aria-hidden>
             🌳
           </div>

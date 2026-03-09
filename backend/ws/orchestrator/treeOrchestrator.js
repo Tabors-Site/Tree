@@ -958,7 +958,7 @@ export async function orchestrateTreeRequest({
 
   // Ensure AI contribution context is set so MCP tool calls get aiChatId/sessionId
   if (rootChatId) {
-    setAiContributionContext(userId, sessionId, rootChatId);
+    setAiContributionContext(visitorId, sessionId, rootChatId);
   }
 
   const meta = { username, userId, rootId, slot, rootLlmConnectionId, llmProvider };

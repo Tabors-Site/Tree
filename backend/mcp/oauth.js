@@ -117,9 +117,7 @@ export async function oauthAuthorize(req, res) {
 }
 
 export function renderLoginPage(req, res) {
-  const redirect = req.query.redirect
-    ? encodeURIComponent(req.query.redirect)
-    : "";
+  const redirect = req.query.redirect || "";
 
   res.setHeader("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>
@@ -579,7 +577,7 @@ export function renderLoginPage(req, res) {
     <h2>Welcome Back</h2>
 
     <p id="oauthHint" class="oauth-hint" style="display:none;">
-      Please log in to continue. If you need to register, please restart the process afterward.
+      Please log in to continue.
     </p>
 
     <form id="loginForm">
@@ -632,7 +630,7 @@ export function renderLoginPage(req, res) {
 
   <script>
     const apiUrl = "https://tree.tabors.site";
-    const redirectAfterLogin = "${redirect}" ? decodeURIComponent("${redirect}") : null;
+    const redirectAfterLogin = "${redirect}" || null;
 
     if (redirectAfterLogin) {
       document.getElementById("oauthHint").style.display = "block";
@@ -677,7 +675,7 @@ export function renderLoginPage(req, res) {
           return;
         }
 
-    window.location.href = redirectAfterLogin || "/app";
+    window.location.href = redirectAfterLogin || "/chat";
 
       } catch (err) {
         console.error(err);

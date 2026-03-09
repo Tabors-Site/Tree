@@ -142,10 +142,10 @@ export async function drainTree(rootId) {
     llmProvider,
   });
   mainChatId = mainChat._id;
-  setAiContributionContext(userId, sessionId, mainChatId);
+  setAiContributionContext(visitorId, sessionId, mainChatId);
 
   // ── MCP connection ───────────────────────────────────────────────────
-  const internalJwt = jwt.sign({ userId, username }, JWT_SECRET, { expiresIn: "1h" });
+  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, { expiresIn: "1h" });
   await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
 
   console.log(`🧠 Drain started: ${items.length} items for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
@@ -493,7 +493,7 @@ export async function drainTree(rootId) {
         console.error(`❌ Failed to finalize drain session chat:`, e.message),
       );
     }
-    clearAiContributionContext(userId);
+    clearAiContributionContext(visitorId);
     clearSessionAbort(sessionId);
     endSession(sessionId);
     closeMCPClient(visitorId);

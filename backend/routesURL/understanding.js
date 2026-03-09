@@ -1,9 +1,10 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
-import { createUnderstandingRun } from "../core/understanding.js";
+import { createUnderstandingRun, findOrCreateUnderstandingRun } from "../core/understanding.js";
 import UnderstandingRun from "../db/models/understandingRun.js";
 import UnderstandingNode from "../db/models/understandingNode.js";
+import Contribution from "../db/models/contribution.js";
 import { getNotes } from "../core/notes.js";
 const router = express.Router();
 
@@ -41,7 +42,7 @@ const rainbow = [
 router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const { perspective = "general" } = req.body;
+    const { perspective = "general", incremental = false } = req.body;
     const userId = req.userId;
 
     const rootNode = await Node.findById(nodeId).lean();
@@ -51,7 +52,9 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
       });
     }
 
-    const result = await createUnderstandingRun(nodeId, userId, perspective);
+    const result = incremental
+      ? await findOrCreateUnderstandingRun(nodeId, userId, perspective)
+      : await createUnderstandingRun(nodeId, userId, perspective);
     if ("html" in req.query) {
       return res.redirect(
         `/api/v1/root/${nodeId}/understandings/run/${
@@ -128,6 +131,24 @@ router.get(
           !!state && !!topo && state.currentLayer >= topo.mergeLayer;
       }
 
+      // Dirty node detection — compare contribution snapshots to current counts
+      const contribCounts = await Contribution.aggregate([
+        { $match: { nodeId: { $in: realNodeIds }, action: { $ne: "understanding" } } },
+        { $group: { _id: "$nodeId", count: { $sum: 1 } } },
+      ]);
+      const countMap = new Map(contribCounts.map((c) => [c._id, c.count]));
+
+      const dirtyNodes = {};
+      let dirtyCount = 0;
+      for (const node of nodes) {
+        const state = getPS(node, ridStr);
+        const currentCount = countMap.get(node.realNodeId) || 0;
+        const storedCount = state?.contributionSnapshot;
+        const isDirty = !state || storedCount === null || storedCount === undefined || storedCount !== currentCount;
+        dirtyNodes[node._id] = isDirty;
+        if (isDirty) dirtyCount++;
+      }
+
       // JSON mode
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       if (!wantHtml) {
@@ -136,9 +157,14 @@ router.get(
           rootNodeId: run.rootNodeId,
           perspective: run.perspective,
           maxDepth: run.maxDepth,
+          status: run.status || "completed",
           createdAt: run.createdAt,
+          lastCompletedAt: run.lastCompletedAt || null,
+          encodingHistory: run.encodingHistory || [],
           nodeMap: run.nodeMap ?? {},
           completed,
+          dirtyNodes,
+          dirtyCount,
           nodes,
           topology: run.topology,
         });
@@ -190,12 +216,14 @@ router.get(
         if (!node) return "";
 
         const isCompleted = completed[node._id];
+        const isDirty = dirtyNodes[node._id];
         const state = getPS(node, ridStr);
         const encoding = state?.encoding || "";
         const layer = state?.currentLayer ?? "-";
         const isLeaf = node.childCount === 0;
-        const statusEmoji = isCompleted ? "✅" : "⏳";
+        const statusEmoji = isDirty ? "🔄" : isCompleted ? "✅" : "⏳";
         const typeLabel = isLeaf ? "Leaf" : `${node.childCount} children`;
+        const dirtyLabel = isDirty ? " · <span style=\"color:#ffcc00;\">changed</span>" : "";
 
         const encodingPreview = encoding
           ? escapeHtml(
@@ -211,7 +239,7 @@ router.get(
                   <span class="pane-status">${statusEmoji}</span>
                   <div class="pane-title-group">
 <span class="pane-name">${escapeHtml(node.name)}</span>
-                    <span class="pane-meta">${typeLabel} · Layer ${layer}/${node.mergeLayer}</span>
+                    <span class="pane-meta">${typeLabel} · Layer ${layer}/${node.mergeLayer}${dirtyLabel}</span>
                   </div>
                 </div>
                 <span class="pane-chevron" id="chev-${node._id}">▸</span>
@@ -858,6 +886,22 @@ router.get(
           <div class="meta-label">Created</div>
           <div class="meta-value">${createdDate}</div>
         </div>
+        <div class="meta-item">
+          <div class="meta-label">Status</div>
+          <div class="meta-value">${run.status === "running" ? "🔄 Running" : "✅ Completed"}</div>
+        </div>
+        ${run.lastCompletedAt ? `
+        <div class="meta-item">
+          <div class="meta-label">Last Completed</div>
+          <div class="meta-value">${new Date(run.lastCompletedAt).toLocaleString()}</div>
+        </div>
+        ` : ""}
+        ${(run.encodingHistory?.length || 0) > 0 ? `
+        <div class="meta-item">
+          <div class="meta-label">Runs</div>
+          <div class="meta-value">${run.encodingHistory.length}</div>
+        </div>
+        ` : ""}
       </div>
     </div>
 
@@ -888,12 +932,12 @@ router.get(
       <div class="progress-track">
         <div class="progress-fill" style="width: ${progressPercent}%;"></div>
       </div>
-      <div class="progress-sub">${completedCount} of ${totalNodes} nodes compressed</div>
+      <div class="progress-sub">${completedCount} of ${totalNodes} nodes compressed${dirtyCount > 0 ? ` · <span style="color:#ffcc00;">${dirtyCount} changed</span>` : ""}</div>
       ${
-        !rootIsCompleted
+        !rootIsCompleted || dirtyCount > 0
           ? `
       <button id="processBtn" class="process-btn" onclick="startProcess()">
-        <span id="processBtnLabel">🧠 Process</span>
+        <span id="processBtnLabel">${dirtyCount > 0 && rootIsCompleted ? `🔄 Reprocess (${dirtyCount} changed)` : "🧠 Process"}</span>
       </button>
       <div id="processStatus" class="process-status"></div>
       `

@@ -27,6 +27,7 @@ import { createSession, endSession, setActiveNavigator, getSession, updateSessio
 import {
   getNextCompressionPayloadForLLM,
   commitCompressionResult,
+  prepareIncrementalRun,
 } from "../../core/understanding.js";
 import UnderstandingRun from "../../db/models/understandingRun.js";
 import UnderstandingNode from "../../db/models/understandingNode.js";
@@ -148,12 +149,25 @@ export async function orchestrateUnderstanding({
       : Object.keys(existingRun.nodeMap).length
     : 0;
 
+  // Prepare incremental run (rebuild topology, detect dirty nodes)
+  const { dirtyCount, totalNodes } = await prepareIncrementalRun(understandingRunId, userId);
+  console.log(`🧠 Incremental prep: ${dirtyCount}/${totalNodes} nodes dirty`);
+
+  // Set status to running
+  await UnderstandingRun.findByIdAndUpdate(understandingRunId, { status: "running" });
+
   // Check if already complete before spinning up resources
   const firstPayload = await getNextCompressionPayloadForLLM(
     understandingRunId,
     userId,
   );
   if (!firstPayload) {
+    // Nothing to process — mark completed and return
+    activeRuns.delete(understandingRunId);
+    await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
+      status: "completed",
+      lastCompletedAt: new Date(),
+    });
     const rootEncoding = await getRootEncoding(existingRun);
     return {
       success: true,
@@ -221,7 +235,7 @@ export async function orchestrateUnderstanding({
   }
 
   // ── Pre-connect MCP client ──────────────────────────────────────────────
-  const internalJwt = jwt.sign({ userId, username }, JWT_SECRET, {
+  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, {
     expiresIn: "1h",
   });
   await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
@@ -239,7 +253,7 @@ export async function orchestrateUnderstanding({
     mainChatId = mainChat._id;
   }
   if (mainChatId) {
-    setAiContributionContext(userId, sessionId, mainChatId);
+    setAiContributionContext(visitorId, sessionId, mainChatId);
   }
 
   console.log(
@@ -351,6 +365,13 @@ export async function orchestrateUnderstanding({
     const finalRun = await UnderstandingRun.findById(understandingRunId).lean();
     const rootEncoding = await getRootEncoding(finalRun);
 
+    // Mark run as completed and push encoding to history
+    const completedAt = new Date();
+    await UnderstandingRun.findByIdAndUpdate(understandingRunId, rootEncoding
+      ? { status: "completed", lastCompletedAt: completedAt, $push: { encodingHistory: { encoding: rootEncoding, completedAt } } }
+      : { status: "completed", lastCompletedAt: completedAt },
+    );
+
     finalizeArgs = {
       content: rootEncoding || `Processed ${nodesProcessed} nodes`,
       stopped: false,
@@ -412,7 +433,7 @@ export async function orchestrateUnderstanding({
         ),
       );
     }
-    clearAiContributionContext(userId);
+    clearAiContributionContext(visitorId);
     if (!isChainStep) {
       clearSessionAbort(sessionId);
       endSession(sessionId);

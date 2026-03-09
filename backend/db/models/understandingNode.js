@@ -16,7 +16,7 @@ const PerspectiveStateSchema = new mongoose.Schema(
 
     encoding: {
       type: String,
-      required: true,
+      default: "",
     },
 
     currentLayer: {
@@ -27,6 +27,11 @@ const PerspectiveStateSchema = new mongoose.Schema(
     updatedAt: {
       type: Date,
       default: Date.now,
+    },
+
+    contributionSnapshot: {
+      type: Number,
+      default: null,
     },
   },
   { _id: false }

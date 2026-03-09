@@ -4,8 +4,7 @@
 
 import Node from "../db/models/node.js";
 import User from "../db/models/user.js";
-import UnderstandingRun from "../db/models/understandingRun.js";
-import { createUnderstandingRun } from "../core/understanding.js";
+import { findOrCreateUnderstandingRun } from "../core/understanding.js";
 import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -40,21 +39,6 @@ async function processTree(rootNode) {
     return;
   }
 
-  // Check if we already ran today
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const existingRun = await UnderstandingRun.findOne({
-    rootNodeId: rootId,
-    perspective: NAV_PERSPECTIVE,
-    createdAt: { $gte: startOfDay },
-  }).lean();
-
-  if (existingRun) {
-    console.log(`🧠 Skipping "${rootNode.name}" — already ran today`);
-    return;
-  }
-
   // Resolve username
   const user = await User.findById(userId).select("username").lean();
   if (!user) {
@@ -65,8 +49,8 @@ async function processTree(rootNode) {
   console.log(`🧠 Understanding auto-run: starting for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
 
   try {
-    // Create a new understanding run
-    const run = await createUnderstandingRun(
+    // Find existing run or create a new one
+    const run = await findOrCreateUnderstandingRun(
       rootId,
       userId,
       NAV_PERSPECTIVE,

@@ -81,6 +81,23 @@ const UnderstandingRunSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
+  status: {
+    type: String,
+    enum: ["running", "completed"],
+    default: "running",
+  },
+
+  lastCompletedAt: {
+    type: Date,
+    default: null,
+  },
+
+  encodingHistory: [{
+    encoding: { type: String },
+    completedAt: { type: Date },
+    _id: false,
+  }],
+
   createdAt: {
     type: Date,
     default: Date.now,

@@ -20,6 +20,7 @@ export default function authenticateMCP(req, res, next) {
       decoded.userId || decoded.id || decoded._id;
 
     req.username = decoded.username;
+    req.visitorId = decoded.visitorId || null;
 
     next();
   } catch (err) {

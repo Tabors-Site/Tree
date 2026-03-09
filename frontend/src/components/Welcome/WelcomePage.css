@@ -170,6 +170,12 @@ background:
   max-width: 100%;
 }
 
+.hero-top-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .hero-center {
   flex: 1;
   padding: 200px 0 0;
@@ -500,8 +506,13 @@ background:
   font-weight: 600;
 }
 
-/* Extra glass sparkle for primary */
-.open-app-btn::after {
+/* Start Chat — deeper glass + shimmer */
+.start-chat-btn {
+  --glass-alpha: 0.42;
+  --glass-alpha-hover: 0.54;
+}
+
+.start-chat-btn::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -523,9 +534,14 @@ background:
   pointer-events: none;
 }
 
-.open-app-btn:hover::after {
+.start-chat-btn:hover::after {
   opacity: 1;
   transform: translateX(100%);
+}
+
+/* Dashboard — no shimmer */
+.dashboard-btn::after {
+  display: none;
 }
 
 /* =========================
@@ -664,7 +680,9 @@ background:
     text-align: center;
   }
 
-  .open-app-btn {
+  .hero-top-right {
+    width: 100%;
+    flex-direction: column;
     order: -1;
   }
 

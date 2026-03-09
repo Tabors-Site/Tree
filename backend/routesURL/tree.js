@@ -64,7 +64,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
     timedOut = true;
     console.error(`⏱️ Tree chat timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
     closeMCPClient(visitorId);
-    clearAiContributionContext(req.userId);
+    clearAiContributionContext(visitorId);
     if (aiChat) {
       finalizeAIChat({
         chatId: aiChat._id,
@@ -94,7 +94,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
       },
       treeContext: { targetNodeId: rootId },
     });
-    if (aiChat) setAiContributionContext(req.userId, sessionId, aiChat._id);
+    if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
   } catch (err) {
     console.error("⚠️ Failed to create AIChat:", err.message);
   }
@@ -104,7 +104,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
     try {
       console.log(`🔑 Tree chat: connecting MCP for ${visitorId}`);
       const internalJwt = jwt.sign(
-        { userId: req.userId.toString(), username: req.username },
+        { userId: req.userId.toString(), username: req.username, visitorId },
         JWT_SECRET,
         { expiresIn: "1h" },
       );
@@ -172,7 +172,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
       }
     } finally {
       clearTimeout(timer);
-      clearAiContributionContext(req.userId);
+      clearAiContributionContext(visitorId);
       clearSessionAbort(sessionId);
       endSession(sessionId);
       if (!timedOut) closeMCPClient(visitorId);
@@ -214,7 +214,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
     timedOut = true;
     console.error(`⏱️ Tree place timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
     closeMCPClient(visitorId);
-    clearAiContributionContext(req.userId);
+    clearAiContributionContext(visitorId);
     if (aiChat) {
       finalizeAIChat({
         chatId: aiChat._id,
@@ -243,7 +243,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
       },
       treeContext: { targetNodeId: rootId },
     });
-    if (aiChat) setAiContributionContext(req.userId, sessionId, aiChat._id);
+    if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
   } catch (err) {
     console.error("⚠️ Failed to create AIChat:", err.message);
   }
@@ -252,7 +252,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
   await enqueue(sessionId, async () => {
     try {
       const internalJwt = jwt.sign(
-        { userId: req.userId.toString(), username: req.username },
+        { userId: req.userId.toString(), username: req.username, visitorId },
         JWT_SECRET,
         { expiresIn: "1h" },
       );
@@ -320,7 +320,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
       }
     } finally {
       clearTimeout(timer);
-      clearAiContributionContext(req.userId);
+      clearAiContributionContext(visitorId);
       clearSessionAbort(sessionId);
       endSession(sessionId);
       if (!timedOut) closeMCPClient(visitorId);

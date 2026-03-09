@@ -220,7 +220,13 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       syncRegistrySession(socket);
 
       try {
-        await connectToMCP(MCP_SERVER_URL, visitorId, socket.jwt);
+        // Create internal JWT with visitorId so MCP can route contribution context
+        const mcpJwt = jwt.sign(
+          { userId: String(userId), username, visitorId },
+          JWT_SECRET,
+          { expiresIn: "24h" },
+        );
+        await connectToMCP(MCP_SERVER_URL, visitorId, mcpJwt);
         socket.emit("registered", { success: true, visitorId });
       } catch (err) {
         console.error(
@@ -539,7 +545,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
               : {}),
           });
           setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
-          setAiContributionContext(socket.userId, sessionId, aiChat._id);
+          setAiContributionContext(socket.visitorId, sessionId, aiChat._id);
         } catch (err) {
           console.error("⚠️ Failed to create AIChat:", err.message);
         }
@@ -591,7 +597,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                 console.error("⚠️ AIChat finalize failed:", err.message),
               );
             }
-            clearAiContributionContext(socket.userId);
+            clearAiContributionContext(socket.visitorId);
             clearActiveChat(socket);
           } else if (abort.signal.aborted) {
             // ── Finalize AIChat (cancelled mid-flight) ───────────────
@@ -604,7 +610,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                 console.error("⚠️ AIChat cancel finalize failed:", err.message),
               );
             }
-            clearAiContributionContext(socket.userId);
+            clearAiContributionContext(socket.visitorId);
             clearActiveChat(socket);
           }
         } catch (err) {

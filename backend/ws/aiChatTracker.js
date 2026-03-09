@@ -16,16 +16,16 @@ import { createSession, SESSION_TYPES } from "./sessionRegistry.js";
 
 const activeAiContext = new Map();
 
-export function setAiContributionContext(userId, sessionId, aiChatId) {
-  activeAiContext.set(String(userId), { sessionId, aiChatId: aiChatId ? String(aiChatId) : null });
+export function setAiContributionContext(visitorId, sessionId, aiChatId) {
+  activeAiContext.set(String(visitorId), { sessionId, aiChatId: aiChatId ? String(aiChatId) : null });
 }
 
-export function getAiContributionContext(userId) {
-  return activeAiContext.get(String(userId)) || { sessionId: null, aiChatId: null };
+export function getAiContributionContext(visitorId) {
+  return activeAiContext.get(String(visitorId)) || { sessionId: null, aiChatId: null };
 }
 
-export function clearAiContributionContext(userId) {
-  activeAiContext.delete(String(userId));
+export function clearAiContributionContext(visitorId) {
+  activeAiContext.delete(String(visitorId));
 }
 
 // ─────────────────────────────────────────────────────────────────────────

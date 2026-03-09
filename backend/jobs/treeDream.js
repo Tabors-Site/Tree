@@ -7,11 +7,10 @@
 import Node from "../db/models/node.js";
 import User from "../db/models/user.js";
 import ShortMemory from "../db/models/shortMemory.js";
-import UnderstandingRun from "../db/models/understandingRun.js";
 import { orchestrateReorganize } from "../ws/orchestrator/cleanupReorganizeOrchestrator.js";
 import { orchestrateExpand } from "../ws/orchestrator/cleanupExpandOrchestrator.js";
 import { drainTree } from "../ws/orchestrator/shortTermDrainOrchestrator.js";
-import { createUnderstandingRun } from "../core/understanding.js";
+import { findOrCreateUnderstandingRun } from "../core/understanding.js";
 import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -127,33 +126,19 @@ async function runTreeDream(rootNode) {
     // ════════════════════════════════════════════════════════════════
 
     try {
-      // Check if understanding already ran today
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
+      console.log(`💤 Starting understanding run for "${rootNode.name}"`);
 
-      const existingRun = await UnderstandingRun.findOne({
-        rootNodeId: rootId,
-        perspective: NAV_PERSPECTIVE,
-        createdAt: { $gte: startOfDay },
-      }).lean();
+      const run = await findOrCreateUnderstandingRun(rootId, userId, NAV_PERSPECTIVE, true);
 
-      if (existingRun) {
-        console.log(`💤 Understanding already ran today — skipping`);
-      } else {
-        console.log(`💤 Starting understanding run for "${rootNode.name}"`);
+      await orchestrateUnderstanding({
+        rootId,
+        userId,
+        username,
+        runId: run.understandingRunId,
+        source: "background",
+      });
 
-        const run = await createUnderstandingRun(rootId, userId, NAV_PERSPECTIVE, true);
-
-        await orchestrateUnderstanding({
-          rootId,
-          userId,
-          username,
-          runId: run.understandingRunId,
-          source: "background",
-        });
-
-        console.log(`💤 Understanding run complete`);
-      }
+      console.log(`💤 Understanding run complete`);
     } catch (err) {
       console.error(`❌ Dream understanding failed:`, err.message);
     }

@@ -464,8 +464,8 @@ RULES
     {
       nodeId: z.string().describe("Node ID where scripts are stored."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
 
     {
@@ -515,8 +515,8 @@ RULES
         .string()
         .describe("The ID of the root or starting node of the tree."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: true,
@@ -560,8 +560,8 @@ RULES
     {
       nodeId: z.string().describe("Root node ID for the guided branch."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: true,
@@ -835,8 +835,8 @@ RULES
         ),
 
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       name: z.string().describe("The name of the script."),
       script: z
         .string()
@@ -880,8 +880,8 @@ RULES
         .string()
         .describe("The Id of the script to execute. Found inside of get-node"),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -922,8 +922,8 @@ RULES
         .describe(
           "The ID of the user performing the edit. Used for contribution logging.",
         ),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -974,8 +974,8 @@ RULES
       userId: z
         .string()
         .describe("The ID of the user performing the goal edit (for logging)."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1036,8 +1036,8 @@ RULES
         .describe(
           "ID of the user making the status edit (for contribution logging).",
         ),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1082,8 +1082,8 @@ RULES
     {
       content: z.string().describe("The text content of the note."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("The ID of the node the note belongs to."),
       prestige: z.number().describe("The prestige version of the node"),
     },
@@ -1156,8 +1156,8 @@ RULES
         .describe(
           "ID of the user making the status edit (for contribution logging).",
         ),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1246,8 +1246,8 @@ RULES
     "Fetches all notes written by a specific user (optionally limited to the most recent N). Recommend to use limit 10 or less. Use get-searched-notes-by-user... if looking for specifics.",
     {
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       limit: z
         .number()
         .optional()
@@ -1297,8 +1297,8 @@ RULES
     "Fetches all notes where a specific user was tagged (optionally limited to the most recent N). May be referenced as mail",
     {
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       limit: z
         .number()
         .optional()
@@ -1346,8 +1346,8 @@ RULES
     {
       noteId: z.string().describe("The ID of the note to delete."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("The ID of the node the note belongs to."),
        prestige: z.number().describe("The prestige version of the node"),
     },
@@ -1382,8 +1382,8 @@ RULES
       targetNodeId: z.string().describe("The destination node ID."),
       prestige: z.number().optional().describe("Target version (defaults to latest)."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1424,8 +1424,8 @@ RULES
         .string()
         .describe("The unique ID of the node to add prestige to."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1473,8 +1473,8 @@ RULES
           "The reeffect time in hours (must be below 1,000,000). Added to schedule when prestiging for new version.",
         ),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1528,8 +1528,8 @@ RULES
         .describe("Optional note for the root node."),
 
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1626,8 +1626,8 @@ RULES
         .optional()
         .describe("Parent node ID for the root of this subtree."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1675,8 +1675,8 @@ RULES
     {
       nodeId: z.string().describe("ID of the node branch to delete."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1720,8 +1720,8 @@ RULES
       nodeId: z.string().describe("The ID of the node being renamed."),
       newName: z.string().describe("The new name to assign to the node."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1770,8 +1770,8 @@ RULES
       userId: z
         .string()
         .describe("The user performing the operation (optional)."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -1924,8 +1924,8 @@ RULES
     "Search text notes by a user based on text matching.",
     {
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       query: z.string().describe("Search query string."),
       limit: z
         .number()
@@ -1969,8 +1969,8 @@ RULES
     "Fetches raw ideas (inbox) for a user. Read-only.",
     {
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       limit: z
         .number()
         .optional()
@@ -2023,8 +2023,8 @@ RULES
     {
       rawIdeaId: z.string().describe("ID of the raw idea to place."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("Target node ID."),
     },
     {
@@ -2113,8 +2113,8 @@ RULES
         .default("general")
         .describe("Perspective for this understanding run."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -2158,8 +2158,8 @@ RULES
         .string()
         .describe("Root node ID to list understandings for."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: true,
@@ -2393,8 +2393,8 @@ Then IMMEDIATELY call understanding-capture with:
           "Omit on first call. Include your summary from previous task on subsequent calls.",
         ),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
-      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
       readOnlyHint: false,
@@ -2814,7 +2814,10 @@ async function handleMcpRequest(req, res) {
       requestArgs.userId = req.userId;
 
       // Inject AI chat context so contributions are tracked per-chat
-      const aiCtx = getAiContributionContext(req.userId);
+      // Key by visitorId (unique per MCP connection) to avoid collisions
+      // between concurrent sessions for the same user
+      const contextKey = req.visitorId || req.userId;
+      const aiCtx = getAiContributionContext(contextKey);
       requestArgs.aiChatId = aiCtx.aiChatId;
       requestArgs.sessionId = aiCtx.sessionId;
 
@@ -2982,7 +2985,8 @@ async function handleMcpRequest(req, res) {
       requestArgs.userId = req.userId;
 
       // Inject AI chat context so contributions are tracked per-chat
-      const aiCtx2 = getAiContributionContext(req.userId);
+      const contextKey2 = req.visitorId || req.userId;
+      const aiCtx2 = getAiContributionContext(contextKey2);
       requestArgs.aiChatId = aiCtx2.aiChatId;
       requestArgs.sessionId = aiCtx2.sessionId;
 

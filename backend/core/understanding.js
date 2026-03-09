@@ -1,6 +1,7 @@
 import UnderstandingRun from "../db/models/understandingRun.js";
 import UnderstandingNode from "../db/models/understandingNode.js";
 import Node from "../db/models/node.js";
+import Contribution from "../db/models/contribution.js";
 import { getNotes } from "./notes.js";
 import { logContribution } from "../db/utils.js";
 import { useEnergy } from "../core/energy.js";
@@ -96,6 +97,44 @@ if (containsHtml(perspective)) {
     maxDepth,
     realRootNode: rootNodeId,
   };
+}
+
+/**
+ * Find an existing completed run with the same perspective, or create a new one.
+ * Used by auto-jobs and dream pipeline for incremental re-runs.
+ */
+export async function findOrCreateUnderstandingRun(
+  rootNodeId,
+  userId,
+  perspective = "general",
+  wasAi = false,
+  aiChatId = null,
+  sessionId = null,
+) {
+  const existing = await UnderstandingRun.findOne({
+    rootNodeId: String(rootNodeId),
+    perspective,
+    status: "completed",
+  })
+    .sort({ lastCompletedAt: -1 })
+    .lean();
+
+  if (existing) {
+    return {
+      understandingRunId: existing._id,
+      perspective: existing.perspective,
+      nodeCount: existing.nodeMap
+        ? existing.nodeMap instanceof Map
+          ? existing.nodeMap.size
+          : Object.keys(existing.nodeMap).length
+        : 0,
+      maxDepth: existing.maxDepth,
+      realRootNode: rootNodeId,
+      reused: true,
+    };
+  }
+
+  return createUnderstandingRun(rootNodeId, userId, perspective, wasAi, aiChatId, sessionId);
 }
 
 async function buildRunTree({
@@ -515,12 +554,18 @@ async function autoCommitLeaf(
   const existing = node.perspectiveStates?.get(understandingRunId);
   if (existing) return;
 
+  const contribCount = await Contribution.countDocuments({
+    nodeId: node.realNodeId,
+    action: { $ne: "understanding" },
+  });
+
   node.perspectiveStates.set(understandingRunId, {
     understandingRunId,
     perspective,
     encoding,
     currentLayer: 0,
     updatedAt: new Date(),
+    contributionSnapshot: contribCount,
   });
   /*
   await logContribution({
@@ -572,12 +617,18 @@ export async function commitCompressionResult({
     const existing = node.perspectiveStates?.get(understandingRunId);
     if (existing) return; // idempotent
 
+    const contribCount = await Contribution.countDocuments({
+      nodeId: node.realNodeId,
+      action: { $ne: "understanding" },
+    });
+
     node.perspectiveStates.set(understandingRunId, {
       understandingRunId,
       perspective,
       encoding,
       currentLayer: 0,
       updatedAt: new Date(),
+      contributionSnapshot: contribCount,
     });
     const { energyUsed } = await useEnergy({
       userId,
@@ -643,12 +694,18 @@ export async function commitCompressionResult({
     if (existing && existing.currentLayer >= currentLayer) {
       // idempotent
     } else {
+      const contribCount = await Contribution.countDocuments({
+        nodeId: node.realNodeId,
+        action: { $ne: "understanding" },
+      });
+
       node.perspectiveStates.set(understandingRunId, {
         understandingRunId,
         perspective,
         encoding,
         currentLayer,
         updatedAt: new Date(),
+        contributionSnapshot: contribCount,
       });
       const { energyUsed } = await useEnergy({
         userId,
@@ -685,6 +742,177 @@ export async function commitCompressionResult({
   }
 
   throw new Error(`Unknown commit mode: ${mode}`);
+}
+
+/* ================================================================
+ * INCREMENTAL RUN SUPPORT
+ * ================================================================ */
+
+/**
+ * Rebuild the run's topology from the current real tree.
+ * Detects added/removed/moved nodes. Returns the set of structurally dirty uNodeIds.
+ */
+async function refreshRunTopology(run) {
+  const runId = String(run._id);
+  const nodes = await Node.find({}).lean();
+  const nodeById = new Map(nodes.map((n) => [String(n._id), n]));
+
+  const rootNode = nodeById.get(String(run.rootNodeId));
+  if (!rootNode) throw new Error("Root node not found during topology refresh");
+
+  const newNodeMap = new Map();
+  const newTopology = new Map();
+  const createdUNodes = new Set();
+
+  await buildRunTree({
+    realNode: rootNode,
+    nodeById,
+    nodeMap: newNodeMap,
+    topology: newTopology,
+    parentUNodeId: null,
+    depth: 0,
+    createdUNodes,
+  });
+
+  const rootUNodeId = newNodeMap.get(String(rootNode._id));
+  computeDerivedTopology(rootUNodeId, newTopology);
+
+  // Build old topology map for comparison
+  const oldTopology = new Map(
+    Object.entries(run.topology instanceof Map ? Object.fromEntries(run.topology) : (run.topology || {}))
+      .map(([k, v]) => [String(k), v]),
+  );
+  const oldNodeMap = new Map(
+    Object.entries(run.nodeMap instanceof Map ? Object.fromEntries(run.nodeMap) : (run.nodeMap || {}))
+      .map(([k, v]) => [String(k), String(v)]),
+  );
+
+  const structurallyDirty = new Set();
+
+  // Detect removed nodes — clear their perspectiveState for this run
+  for (const [, oldUNodeId] of oldNodeMap) {
+    if (!newTopology.has(oldUNodeId)) {
+      const uNode = await UnderstandingNode.findById(oldUNodeId);
+      if (uNode && uNode.perspectiveStates?.has(runId)) {
+        uNode.perspectiveStates.delete(runId);
+        await uNode.save();
+      }
+    }
+  }
+
+  // Detect moved nodes (parent changed)
+  for (const [uNodeId, newTopo] of newTopology) {
+    const oldTopo = oldTopology.get(uNodeId);
+    if (oldTopo && String(oldTopo.parent || "") !== String(newTopo.parent || "")) {
+      structurallyDirty.add(uNodeId);
+    }
+  }
+
+  // Save updated topology
+  await UnderstandingRun.findByIdAndUpdate(runId, {
+    nodeMap: Object.fromEntries(newNodeMap),
+    topology: Object.fromEntries(newTopology),
+    maxDepth: computeDerivedTopology(rootUNodeId, newTopology),
+  });
+
+  return { newTopology, structurallyDirty };
+}
+
+/**
+ * Detect dirty nodes by comparing contribution counts, then propagate
+ * dirtiness upward and clear stale perspectiveStates.
+ */
+async function markDirtyNodes(run, topology, structurallyDirty = new Set()) {
+  const runId = String(run._id);
+
+  // Get all realNodeIds in this run
+  const nodeMapEntries = Object.entries(
+    run.nodeMap instanceof Map ? Object.fromEntries(run.nodeMap) : (run.nodeMap || {}),
+  );
+  const realNodeIds = nodeMapEntries.map(([realId]) => realId);
+  const realToUNode = new Map(nodeMapEntries.map(([realId, uId]) => [realId, String(uId)]));
+
+  // Batch query current contribution counts (excluding understanding contributions)
+  const contribCounts = await Contribution.aggregate([
+    { $match: { nodeId: { $in: realNodeIds }, action: { $ne: "understanding" } } },
+    { $group: { _id: "$nodeId", count: { $sum: 1 } } },
+  ]);
+  const countMap = new Map(contribCounts.map((c) => [c._id, c.count]));
+
+  // Load all understanding nodes for this run
+  const uNodeIds = [...new Set(nodeMapEntries.map(([, uId]) => String(uId)))];
+  const uNodes = await UnderstandingNode.find({ _id: { $in: uNodeIds } });
+  const uNodeById = new Map(uNodes.map((n) => [String(n._id), n]));
+
+  const dirtySet = new Set(structurallyDirty);
+
+  // Check each node for content changes
+  for (const [realId, uId] of realToUNode) {
+    const uNode = uNodeById.get(uId);
+    if (!uNode) continue;
+
+    const state = uNode.perspectiveStates?.get(runId);
+    if (!state) {
+      // No perspectiveState = new node or never processed — already dirty
+      dirtySet.add(uId);
+      continue;
+    }
+
+    const currentCount = countMap.get(realId) || 0;
+    const storedCount = state.contributionSnapshot;
+
+    if (storedCount === null || storedCount === undefined || storedCount !== currentCount) {
+      dirtySet.add(uId);
+    }
+  }
+
+  // Propagate dirtiness upward to root
+  const propagated = new Set(dirtySet);
+  for (const uId of dirtySet) {
+    let current = uId;
+    while (current) {
+      const topo = topology.get(current);
+      if (!topo || !topo.parent) break;
+      const parentId = String(topo.parent);
+      if (propagated.has(parentId)) break; // already propagated
+      propagated.add(parentId);
+      current = parentId;
+    }
+  }
+
+  // Clear perspectiveStates for all dirty nodes (so compression loop picks them up)
+  const bulkOps = [];
+  for (const uId of propagated) {
+    const uNode = uNodeById.get(uId);
+    if (!uNode) continue;
+
+    if (uNode.perspectiveStates?.has(runId)) {
+      uNode.perspectiveStates.delete(runId);
+      bulkOps.push(uNode.save());
+    }
+  }
+  if (bulkOps.length > 0) await Promise.all(bulkOps);
+
+  // Clear pendingMerge if it's in the dirty set
+  if (run.pendingMerge?.targetNodeId && propagated.has(String(run.pendingMerge.targetNodeId))) {
+    await UnderstandingRun.findByIdAndUpdate(runId, { $unset: { pendingMerge: "" } });
+  }
+
+  return { dirtyCount: propagated.size, totalNodes: uNodeIds.length };
+}
+
+/**
+ * Prepare an existing run for incremental re-processing.
+ * Rebuilds topology from current tree and marks dirty nodes.
+ */
+export async function prepareIncrementalRun(understandingRunId, userId) {
+  const run = await UnderstandingRun.findById(understandingRunId).lean();
+  if (!run) throw new Error("UnderstandingRun not found");
+
+  const { newTopology, structurallyDirty } = await refreshRunTopology(run);
+  const { dirtyCount, totalNodes } = await markDirtyNodes(run, newTopology, structurallyDirty);
+
+  return { dirtyCount, totalNodes };
 }
 
 /**

@@ -150,10 +150,10 @@ export async function orchestrateExpand({ rootId, userId, username, source = "or
     llmProvider,
   });
   mainChatId = mainChat._id;
-  setAiContributionContext(userId, sessionId, mainChatId);
+  setAiContributionContext(visitorId, sessionId, mainChatId);
 
   // ── MCP connection ───────────────────────────────────────────────────
-  const internalJwt = jwt.sign({ userId, username }, JWT_SECRET, { expiresIn: "1h" });
+  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, { expiresIn: "1h" });
   await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
 
   console.log(`🧹 Cleanup expand started for tree ${rootId}`);
@@ -387,7 +387,7 @@ export async function orchestrateExpand({ rootId, userId, username, source = "or
         console.error(`❌ Failed to finalize cleanup-expand chat:`, e.message),
       );
     }
-    clearAiContributionContext(userId);
+    clearAiContributionContext(visitorId);
     clearSessionAbort(sessionId);
     endSession(sessionId);
     closeMCPClient(visitorId);

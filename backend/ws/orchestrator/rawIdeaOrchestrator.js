@@ -151,7 +151,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     llmProvider,
   });
   mainChatId = mainChat._id;
-  setAiContributionContext(userId, sessionId, mainChatId);
+  setAiContributionContext(visitorId, sessionId, mainChatId);
 
   console.log(`🤖 Raw-idea orchestrator started for ${rawIdeaId} (session: ${sessionId})`);
 
@@ -190,7 +190,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
   // processMessage() needs an MCP client keyed to visitorId. WebSocket sessions
   // pre-connect in websocket.js; for offline orchestration we do it here.
   const internalJwt = jwt.sign(
-    { userId, username },
+    { userId, username, visitorId },
     JWT_SECRET,
     { expiresIn: "1h" },
   );
@@ -427,7 +427,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
         console.error(`❌ Failed to finalize raw-idea session chat:`, e.message),
       );
     }
-    clearAiContributionContext(userId);
+    clearAiContributionContext(visitorId);
     clearSessionAbort(sessionId);
     endSession(sessionId);
     closeMCPClient(visitorId);

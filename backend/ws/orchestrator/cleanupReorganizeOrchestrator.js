@@ -90,10 +90,10 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
     llmProvider,
   });
   mainChatId = mainChat._id;
-  setAiContributionContext(userId, sessionId, mainChatId);
+  setAiContributionContext(visitorId, sessionId, mainChatId);
 
   // ── MCP connection ───────────────────────────────────────────────────
-  const internalJwt = jwt.sign({ userId, username }, JWT_SECRET, { expiresIn: "1h" });
+  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, { expiresIn: "1h" });
   await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
 
   console.log(`🧹 Cleanup reorganize started for tree ${rootId}`);
@@ -277,7 +277,7 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
         console.error(`❌ Failed to finalize cleanup-reorg chat:`, e.message),
       );
     }
-    clearAiContributionContext(userId);
+    clearAiContributionContext(visitorId);
     clearSessionAbort(sessionId);
     endSession(sessionId);
     closeMCPClient(visitorId);
