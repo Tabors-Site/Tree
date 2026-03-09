@@ -325,10 +325,18 @@ const ApiAccessSection = () => {
             </div>
             <div className="ep-desc">
               Create a new understanding run. Pass a <code>perspective</code> in the
-              request body to tell the AI what lens to use.
+              request body to tell the AI what lens to use. Set <code>incremental</code> to
+              <code>true</code> to reuse an existing completed run and only reprocess
+              nodes that changed since the last run.
             </div>
             <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{ "perspective": "summarize this into 30 words" }`}</div>
+            <div className="ep-code">{`{ "perspective": "summarize this into 30 words", "incremental": true }`}</div>
+            <div className="ep-note">
+              When <code>incremental</code> is <code>true</code>, the system finds the most recent
+              completed run for the same root and perspective, detects which nodes have new
+              contributions, and only reprocesses dirty nodes and their ancestors. If no prior
+              run exists, a fresh run is created. Defaults to <code>false</code>.
+            </div>
           </div>
 
           <div className="endpoint">
@@ -974,7 +982,12 @@ drain         — Short-term memory drain placement (falls back to placement)`}<
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/root/:rootId/understandings</span>
             </div>
-            <div className="ep-desc">Create a new understanding run for the tree.</div>
+            <div className="ep-desc">
+              Create a new understanding run for the tree. Pass <code>incremental: true</code> to
+              reuse an existing completed run and only reprocess changed nodes.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "perspective": "general", "incremental": true }`}</div>
           </div>
 
           <div className="endpoint">
