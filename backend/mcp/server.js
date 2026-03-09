@@ -45,6 +45,7 @@ import {
   getAllNotesByUser,
   getAllTagsForUser,
   deleteNoteAndFile,
+  transferNote,
   searchNotesByUser,
 } from "../core/notes.js";
 import { getRawIdeas, convertRawIdeaToNote } from "../core/rawIdea.js";
@@ -1367,6 +1368,48 @@ RULES
         return {
           content: [
             { type: "text", text: `❌ Failed to delete note: ${err.message}` },
+          ],
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "transfer-node-note",
+    "Transfers a note from its current node to a different node in the same tree. Logs contributions on both source and target nodes.",
+    {
+      noteId: z.string().describe("The ID of the note to transfer."),
+      targetNodeId: z.string().describe("The destination node ID."),
+      prestige: z.number().optional().describe("Target version (defaults to latest)."),
+      userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z.string().optional().describe("Injected by server. Ignore."),
+      sessionId: z.string().optional().describe("Injected by server. Ignore."),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    async ({ noteId, targetNodeId, prestige, userId, aiChatId, sessionId }) => {
+      try {
+        const result = await transferNote({
+          noteId,
+          targetNodeId,
+          userId,
+          prestige: prestige ?? null,
+          wasAi: true,
+          aiChatId,
+          sessionId,
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text", text: `❌ Failed to transfer note: ${err.message}` },
           ],
         };
       }
@@ -3023,8 +3066,9 @@ function mapToolCallToApiUrl(toolName, args) {
   const resolvedUnderstandingNodeId =
     understandingNodeId ?? args?.previousResult?.understandingNodeId;
 
-  // helper: always append token safely
+  // helper: always append token safely; returns null if URL has undefined/null segments
   const withToken = (path) => {
+    if (/undefined|null/.test(path)) return null;
     if (!htmlShareToken) return path;
     const sep = path.includes("?") ? "&" : "?";
     return `${path}${sep}token=${htmlShareToken}`;
@@ -3103,6 +3147,7 @@ function mapToolCallToApiUrl(toolName, args) {
     case "create-node-version-note":
     case "create-node-version-image-note":
     case "delete-node-note":
+    case "transfer-node-note":
       return withToken(`/api/v1/node/${nodeId}/${prestige}/notes?html`);
        case "get-node-notes":
     case "edit-node-note":

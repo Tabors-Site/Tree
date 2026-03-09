@@ -841,6 +841,100 @@ async function generateBook({ nodeId, settings, userId }) {
   };
 }
 
+async function transferNote({
+  noteId,
+  targetNodeId,
+  userId,
+  prestige = null,
+  wasAi = false,
+  aiChatId = null,
+  sessionId = null,
+}) {
+  if (!noteId || !targetNodeId || !userId) {
+    throw new Error("Missing required fields: noteId, targetNodeId, userId");
+  }
+
+  const note = await Note.findById(noteId);
+  if (!note) throw new Error("Note not found");
+
+  if (note.nodeId === "deleted") {
+    throw new Error("Cannot transfer a deleted note");
+  }
+
+  // Authorization: must be note author or tree owner
+  const rootNode = await resolveRootNode(note.nodeId);
+  const isAuthor = note.userId?.toString() === userId.toString();
+  const isRootOwner = rootNode.rootOwner?.toString() === userId.toString();
+
+  if (!isAuthor && !isRootOwner) {
+    throw new Error("Only the note author or the tree owner can transfer this note");
+  }
+
+  // Verify target node exists and is in the same tree
+  const targetNode = await Node.findById(targetNodeId).select("_id prestige").lean();
+  if (!targetNode) throw new Error("Target node not found");
+
+  const targetRoot = await resolveRootNode(targetNodeId);
+  if (targetRoot._id.toString() !== rootNode._id.toString()) {
+    throw new Error("Cannot transfer notes between different trees");
+  }
+
+  // Resolve target version
+  let targetVersion;
+  if (typeof prestige === "number" && prestige >= 0) {
+    targetVersion = prestige;
+  } else {
+    targetVersion = targetNode.prestige ?? 0;
+  }
+
+  // Save original location for contribution logging
+  const sourceNodeId = note.nodeId;
+  const sourceVersion = note.version;
+
+  // Move the note
+  note.nodeId = targetNodeId;
+  note.version = String(targetVersion);
+  await note.save();
+
+  // Log "remove" contribution on source node
+  await logContribution({
+    userId,
+    nodeId: sourceNodeId,
+    wasAi,
+    aiChatId,
+    sessionId,
+    action: "note",
+    nodeVersion: Number(sourceVersion),
+    noteAction: {
+      action: "remove",
+      noteId: noteId.toString(),
+    },
+  });
+
+  // Log "add" contribution on target node
+  await logContribution({
+    userId,
+    nodeId: targetNodeId,
+    wasAi,
+    aiChatId,
+    sessionId,
+    action: "note",
+    nodeVersion: targetVersion,
+    noteAction: {
+      action: "add",
+      noteId: noteId.toString(),
+      content: note.contentType === "text" ? (note.content || "") : null,
+    },
+  });
+
+  return {
+    message: "Note transferred successfully",
+    noteId: noteId.toString(),
+    from: { nodeId: sourceNodeId, version: Number(sourceVersion) },
+    to: { nodeId: targetNodeId, version: targetVersion },
+  };
+}
+
 async function getNoteEditHistory(noteId) {
   if (!noteId) throw new Error("Missing required parameter: noteId");
 
@@ -867,6 +961,7 @@ export {
   editNote,
   getNotes,
   deleteNoteAndFile,
+  transferNote,
   getAllNotesByUser,
   getAllTagsForUser,
   searchNotesByUser,

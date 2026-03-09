@@ -15,8 +15,9 @@ import { classify, translateDestructive } from "./translator.js";
 import { trackChainStep, setAiContributionContext } from "../aiChatTracker.js";
 import { isActiveNavigator } from "../sessionRegistry.js";
 
-import { getContextForAi, getNavigationContext } from "../../core/treeFetch.js";
+import { getContextForAi, getNavigationContext, buildDeepTreeSummary } from "../../core/treeFetch.js";
 import Node from "../../db/models/node.js";
+import ShortMemory from "../../db/models/shortMemory.js";
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
 // ─────────────────────────────────────────────────────────────────────────
@@ -928,6 +929,8 @@ export async function orchestrateTreeRequest({
   skipRespond = false,
   slot,
   rootChatId = null,
+  sourceType = null,
+  sourceId = null,
 }) {
   if (signal?.aborted) return null;
 
@@ -1014,7 +1017,8 @@ export async function orchestrateTreeRequest({
   let treeSummary = null;
   if (rootId) {
     try {
-      treeSummary = await buildDeepTreeSummary(rootId);
+      treeSummary = await buildDeepTreeSummary(rootId, { includeEncodings: true });
+      console.log("📋 treeSummary for librarian:\n", treeSummary);
     } catch (err) {
       console.error("⚠️ Pre-fetch tree summary failed:", err.message);
     }
@@ -1092,6 +1096,79 @@ export async function orchestrateTreeRequest({
       modeKey: "classifier",
       rootId,
       modesUsed,
+    };
+  }
+
+  // ────────────────────────────────────────────────────────
+  // SHORT-MEMORY CHECK — explicit defer or vague placements
+  // ────────────────────────────────────────────────────────
+
+  // Explicit user defer → force defer
+  if (classification.intent === "defer") {
+    classification.intent = "place"; // treat as place for the defer path
+    classification.placementAxes = null;
+  }
+
+  const deferDecision = classification.intent === "place" && !classification.placementAxes
+    ? { defer: true, reason: "User explicitly requested deferral" }
+    : shouldDeferToMemory(classification);
+  if (deferDecision.defer) {
+    console.log(`📝 Deferred to short memory: ${deferDecision.reason}`);
+
+    const memoryItem = await ShortMemory.create({
+      rootId,
+      userId,
+      content: message,
+      deferReason: deferDecision.reason,
+      classificationAxes: classification.placementAxes,
+      sourceType: sourceType || "tree-chat",
+      sourceId: sourceId || null,
+      sessionId,
+    });
+
+    trackChainStep({
+      userId,
+      sessionId,
+      rootChatId,
+      chainIndex: chainIndex++,
+      modeKey: "short-memory:defer",
+      input: message,
+      output: { deferReason: deferDecision.reason, memoryItemId: memoryItem._id },
+      llmProvider,
+    });
+
+    if (!skipRespond) {
+      const response = await runRespond({
+        visitorId,
+        socket,
+        signal,
+        username,
+        userId,
+        rootId,
+        originalMessage: message,
+        responseHint: classification.responseHint || "Acknowledge the idea naturally. Do not mention deferral, memory, or holding.",
+        stepSummaries: [],
+        slot,
+        rootLlmConnectionId,
+      });
+
+      return {
+        ...response,
+        success: true,
+        deferred: true,
+        memoryItemId: memoryItem._id,
+        modeKey: "short-memory:defer",
+        modesUsed: [...modesUsed, "short-memory"],
+      };
+    }
+
+    return {
+      success: true,
+      deferred: true,
+      memoryItemId: memoryItem._id,
+      modeKey: "short-memory:defer",
+      modesUsed,
+      rootId,
     };
   }
 
@@ -1337,6 +1414,7 @@ async function runLibrarianFlow({
     treeSummary: treeSummary || "",
     intent: classification.intent,
     clearHistory: true,
+    conversationMemory: formatMemoryContext(visitorId),
   });
 
   const libStart = new Date();
@@ -1805,6 +1883,16 @@ async function runRespond({
   // Build a combined context: memory + step summaries + operation details
   const summaryCtx = formatStepSummaries(stepSummaries);
 
+  // Strip librarianContext to only the fields respond needs (skip plan array, nodeIds, etc.)
+  let strippedLibCtx = null;
+  if (librarianContext) {
+    strippedLibCtx = {
+      summary: librarianContext.summary || null,
+      responseHint: librarianContext.responseHint || null,
+      confidence: librarianContext.confidence ?? null,
+    };
+  }
+
   switchMode(visitorId, "tree:respond", {
     username,
     userId,
@@ -1812,10 +1900,10 @@ async function runRespond({
     nodeContext: nodeContext || null,
     operationContext: operationContext || null,
     conversationMemory: memCtx || null,
-    stepSummaries: summaryCtx || null,
+    stepSummaries: !operationContext ? summaryCtx || null : null,
     responseHint: responseHint || null,
     confirmNeeded,
-    librarianContext: librarianContext || null,
+    librarianContext: strippedLibCtx,
     clearHistory: true,
   });
 
@@ -1863,6 +1951,43 @@ async function runRespond({
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// SHORT-MEMORY DECISION
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Decide whether a "place" classification should be deferred to short-term
+ * memory instead of placed immediately. Based on the classifier's placement
+ * axes: pathConfidence, domainNovelty, relationalComplexity.
+ *
+ * @returns {{ defer: boolean, reason?: string }}
+ */
+function shouldDeferToMemory(classification) {
+  if (classification.intent !== "place") return { defer: false };
+  const axes = classification.placementAxes;
+  if (!axes) return { defer: false };
+
+  // Explicit structural intent — never defer
+  if (axes.pathConfidence >= 0.9) return { defer: false };
+
+  // Relational complexity — touches multiple subtrees
+  if (axes.relationalComplexity > 0.5) {
+    return { defer: true, reason: "Touches multiple subtrees — needs more context" };
+  }
+
+  // New domain area — no existing structure to attach to
+  if (axes.domainNovelty > 0.5) {
+    return { defer: true, reason: "New area — holding until more context emerges" };
+  }
+
+  // No clear existing spot
+  if (axes.pathConfidence < 0.6) {
+    return { defer: true, reason: "No clear home — holding for better placement" };
+  }
+
+  return { defer: false };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -1901,66 +2026,6 @@ function buildExecutionMessage(
   parts.push(`Target: ${targetNodeId}`);
   parts.push(userMessage);
   return parts.join("\n\n");
-}
-
-/**
- * Recursively fetch tree structure and format as an indented summary.
- * Caps at MAX_DEPTH levels and MAX_NODES total to keep it bounded.
- * This gives the translator full visibility into the tree's shape.
- */
-const TREE_SUMMARY_MAX_DEPTH = 4;
-const TREE_SUMMARY_MAX_NODES = 60;
-
-async function buildDeepTreeSummary(rootId) {
-  let nodeCount = 0;
-
-  async function walkNode(nodeId, depth) {
-    if (nodeCount >= TREE_SUMMARY_MAX_NODES) return null;
-    nodeCount++;
-
-    const ctx = await getContextForAi(nodeId, {
-      includeChildren: true,
-      includeParentChain: false,
-      includeValues: true,
-      includeNotes: false,
-    });
-
-    const indent = "  ".repeat(depth);
-    const values = ctx.version?.values;
-    const valueStr =
-      values && Object.keys(values).length > 0
-        ? ` (${Object.entries(values)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join(", ")})`
-        : "";
-
-    let line = `${indent}- ${ctx.name}${valueStr}`;
-
-    if (depth < TREE_SUMMARY_MAX_DEPTH && ctx.children?.length > 0) {
-      const childLines = [];
-      for (const child of ctx.children) {
-        if (nodeCount >= TREE_SUMMARY_MAX_NODES) {
-          childLines.push(
-            `${"  ".repeat(depth + 1)}- ... (${ctx.children.length - childLines.length} more)`,
-          );
-          break;
-        }
-        const childResult = await walkNode(child.id, depth + 1);
-        if (childResult) childLines.push(childResult);
-      }
-      if (childLines.length > 0) {
-        line += "\n" + childLines.join("\n");
-      }
-    } else if (ctx.children?.length > 0) {
-      line += ` [${ctx.children.length} children]`;
-    }
-
-    return line;
-  }
-
-  const result = await walkNode(rootId, 0);
-  if (!result) return "(empty tree)";
-  return `Tree structure:\n${result}`;
 }
 
 /**

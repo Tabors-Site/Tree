@@ -10,6 +10,7 @@ import {
   getNotes as coreGetNotes,
   editNote,
   deleteNoteAndFile as coreDeleteNoteAndFile,
+  transferNote as coreTransferNote,
   getBook as coreGetBook,
   generateBook as coreGenerateBook,
   getNoteEditHistory,
@@ -4160,6 +4161,33 @@ router.delete(
       const result = await coreDeleteNoteAndFile({
         noteId,
         userId: req.userId,
+      });
+
+      res.json({ success: true, ...result });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  },
+);
+
+// ── TRANSFER NOTE TO ANOTHER NODE ─────────────────────────────────────
+router.post(
+  "/node/:nodeId/:version/notes/:noteId/transfer",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { noteId } = req.params;
+      const { targetNodeId, prestige } = req.body;
+
+      if (!targetNodeId) {
+        return res.status(400).json({ success: false, error: "targetNodeId is required" });
+      }
+
+      const result = await coreTransferNote({
+        noteId,
+        targetNodeId,
+        userId: req.userId,
+        prestige: typeof prestige === "number" ? prestige : null,
       });
 
       res.json({ success: true, ...result });

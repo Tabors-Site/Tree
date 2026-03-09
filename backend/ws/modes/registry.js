@@ -22,6 +22,11 @@ import treeGetContext from "./tree/getContext.js";
 import treeEditNotes from "./tree/notes.js";
 import treeRespond from "./tree/respond.js";
 import treeLibrarian from "./tree/librarian.js";
+import treeDrainCluster from "./tree/drainCluster.js";
+import treeDrainScout from "./tree/drainScout.js";
+import treeDrainPlan from "./tree/drainPlan.js";
+import treeCleanupAnalyze from "./tree/cleanupAnalyze.js";
+import treeCleanupExpandScan from "./tree/cleanupExpandScan.js";
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -58,6 +63,11 @@ const ALL_MODES = {
   "tree:notes": treeEditNotes,
   "tree:respond": treeRespond,
   "tree:librarian": treeLibrarian,
+  "tree:drain-cluster": treeDrainCluster,
+  "tree:drain-scout": treeDrainScout,
+  "tree:drain-plan": treeDrainPlan,
+  "tree:cleanup-analyze": treeCleanupAnalyze,
+  "tree:cleanup-expand-scan": treeCleanupExpandScan,
 };
 
 // ─────────────────────────────────────────────────────────────────────────

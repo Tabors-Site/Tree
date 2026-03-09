@@ -1,0 +1,139 @@
+// jobs/understandingAutoRun.js
+// Daily job: creates and runs a navigation-focused understanding pass per tree.
+// Produces per-node encodings that enhance tree summaries for librarian/scout navigation.
+
+import Node from "../db/models/node.js";
+import User from "../db/models/user.js";
+import UnderstandingRun from "../db/models/understandingRun.js";
+import { createUnderstandingRun } from "../core/understanding.js";
+import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────
+
+const NAV_PERSPECTIVE =
+  "Summarize this section as if it is a node inside a larger knowledge tree. " +
+  "Write from a perspective that understands this content will sit between a parent above and possible branches below. " +
+  "Compress the meaning upward (what this contributes to the bigger picture) while preserving clarity downward " +
+  "(what direction this section points toward). Emphasize the core idea, remove detail noise.";
+
+const MIN_TREE_CHILDREN = 2; // skip trees with fewer than this many children
+
+// ─────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────
+
+let jobTimer = null;
+
+// ─────────────────────────────────────────────────────────────────────────
+// SINGLE TREE HANDLER
+// ─────────────────────────────────────────────────────────────────────────
+
+async function processTree(rootNode) {
+  const rootId = rootNode._id.toString();
+  const userId = rootNode.rootOwner.toString();
+
+  // Skip tiny trees
+  if (!rootNode.children || rootNode.children.length < MIN_TREE_CHILDREN) {
+    console.log(`🧠 Skipping "${rootNode.name}" — too few children (${rootNode.children?.length || 0})`);
+    return;
+  }
+
+  // Check if we already ran today
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const existingRun = await UnderstandingRun.findOne({
+    rootNodeId: rootId,
+    perspective: NAV_PERSPECTIVE,
+    createdAt: { $gte: startOfDay },
+  }).lean();
+
+  if (existingRun) {
+    console.log(`🧠 Skipping "${rootNode.name}" — already ran today`);
+    return;
+  }
+
+  // Resolve username
+  const user = await User.findById(userId).select("username").lean();
+  if (!user) {
+    console.warn(`⚠️ Understanding auto-run: no user for tree ${rootId}`);
+    return;
+  }
+
+  console.log(`🧠 Understanding auto-run: starting for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
+
+  try {
+    // Create a new understanding run
+    const run = await createUnderstandingRun(
+      rootId,
+      userId,
+      NAV_PERSPECTIVE,
+      true, // wasAi
+    );
+
+    // Run the orchestrator
+    await orchestrateUnderstanding({
+      rootId,
+      userId,
+      username: user.username,
+      runId: run.understandingRunId,
+      source: "background",
+    });
+
+    console.log(`✅ Understanding auto-run complete for tree "${rootNode.name}"`);
+  } catch (err) {
+    console.error(`❌ Understanding auto-run failed for tree "${rootNode.name}":`, err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// JOB RUN
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function runUnderstandingAutoJob() {
+  console.log("🧠 Understanding auto-run job starting...");
+
+  try {
+    // Find all root nodes (trees)
+    const rootNodes = await Node.find({ rootOwner: { $ne: null } })
+      .select("_id name rootOwner children")
+      .lean();
+
+    if (rootNodes.length === 0) {
+      console.log("🧠 No trees found — skipping.");
+      return;
+    }
+
+    // Pick the biggest tree (most children) for now
+    const biggest = rootNodes.reduce((best, node) =>
+      (node.children?.length || 0) > (best.children?.length || 0) ? node : best,
+    );
+
+    console.log(`🧠 Targeting biggest tree: "${biggest.name}" (${biggest.children?.length || 0} children)`);
+    await processTree(biggest);
+  } catch (err) {
+    console.error("❌ Understanding auto-run job error:", err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// START / STOP
+// ─────────────────────────────────────────────────────────────────────────
+
+export function startUnderstandingAutoJob({ intervalMs = 24 * 60 * 60 * 1000 } = {}) {
+  if (jobTimer) clearInterval(jobTimer);
+
+  console.log(`🧠 Understanding auto-run job started (interval: ${intervalMs / 1000}s)`);
+  jobTimer = setInterval(runUnderstandingAutoJob, intervalMs);
+  return jobTimer;
+}
+
+export function stopUnderstandingAutoJob() {
+  if (jobTimer) {
+    clearInterval(jobTimer);
+    jobTimer = null;
+    console.log("⏹ Understanding auto-run job stopped");
+  }
+}

@@ -9,6 +9,7 @@ import { setTransactionPolicy } from "../core/transactions.js";
 import { getGlobalValuesTreeAndFlat } from "../core/values.js";
 
 import Node from "../db/models/node.js";
+import ShortMemory from "../db/models/shortMemory.js";
 import { getConnectionsForUser } from "../core/customLLM.js";
 
 
@@ -75,7 +76,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     const rootMeta = await Node.findById(nodeId)
       .populate("rootOwner", "username _id profileType planExpiresAt")
       .populate("contributors", "username _id")
-      .select("rootOwner contributors transactionPolicy llmAssignments")
+      .select("rootOwner contributors transactionPolicy llmAssignments dreamTime lastDreamAt")
       .lean()
       .exec();
     const rootNode = await Node.findById(nodeId).select("parent").lean();
@@ -427,6 +428,43 @@ ${ownerConnections.length === 0
           ${childrenInner}
         </li>
       </ul>`;
+
+    // DEFERRED ITEMS (Short-Term Holdings)
+    const deferredItems = await ShortMemory.find({
+      rootId: nodeId,
+      status: { $in: ["pending", "escalated"] },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const deferredHtml = deferredItems.length > 0
+      ? deferredItems.map((item) => {
+          const age = Math.round((Date.now() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60));
+          const ageStr = age < 1 ? "< 1h ago" : age < 24 ? `${age}h ago` : `${Math.round(age / 24)}d ago`;
+          const statusBadge = item.status === "escalated"
+            ? `<span style="color:#ff9500;font-size:0.75em;">escalated</span>`
+            : `<span style="color:#8e8e93;font-size:0.75em;">pending</span>`;
+          const candidateStr = item.candidates?.length
+            ? `<div style="color:#8e8e93;font-size:0.8em;margin-top:2px;">candidates: ${item.candidates.map(c => escapeHtml(c.nodePath || c.nodeId)).join(", ")}</div>`
+            : "";
+          const reasonStr = item.deferReason
+            ? `<div style="color:#8e8e93;font-size:0.8em;margin-top:2px;">${escapeHtml(item.deferReason)}</div>`
+            : "";
+          return `<div style="padding:8px 10px;border-left:3px solid #ff9500;margin:6px 0;background:rgba(255,149,0,0.08);border-radius:4px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:0.85em;">${escapeHtml(item.content.length > 120 ? item.content.slice(0, 117) + "..." : item.content)}</span>
+              <span style="font-size:0.7em;color:#8e8e93;white-space:nowrap;margin-left:8px;">${ageStr}</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+              ${statusBadge}
+              <span style="color:#8e8e93;font-size:0.75em;">via ${escapeHtml(item.sourceType)}</span>
+              ${item.drainAttempts > 0 ? `<span style="color:#ff3b30;font-size:0.75em;">${item.drainAttempts} attempts</span>` : ""}
+            </div>
+            ${candidateStr}
+            ${reasonStr}
+          </div>`;
+        }).join("")
+      : `<div style="color:#8e8e93;font-size:0.85em;padding:8px;">No deferred items</div>`;
 
     // SAFE JSON
     const jsonDump = JSON.stringify(allData, null, 2)
@@ -1513,6 +1551,14 @@ transition:
       ${treeHtml}
     </div>
 
+    <!-- Deferred Items (Short-Term Holdings) -->
+    <div class="content-card">
+      <div class="section-header">
+        <h2>Short-Term Holdings ${deferredItems.length > 0 ? `<span style="font-size:0.7em;color:#ff9500;">(${deferredItems.length})</span>` : ""}</h2>
+      </div>
+      ${deferredHtml}
+    </div>
+
     <!-- Tree Settings Section -->
 ${
   isOwner ||
@@ -1542,6 +1588,29 @@ ${
   <div class="settings-group">
     ${treeLlmHtml}
   </div>` : ""}
+
+  ${isOwner ? `
+  <div class="settings-group">
+    <h3>Tree Dream</h3>
+    <p style="color:rgba(255,255,255,0.5);font-size:0.85rem;margin:0 0 12px">
+      Schedule a daily maintenance cycle — cleanup, process deferred items,
+      and update tree understanding.
+    </p>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <input type="time" id="dreamTimeInput" value="${rootMeta.dreamTime || ""}"
+        style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
+               background:rgba(255,255,255,0.06);color:#fff;font-size:0.95rem" />
+      <button onclick="saveDreamTime()" style="padding:8px 14px;border-radius:8px;
+        border:1px solid rgba(72,187,120,0.4);background:rgba(72,187,120,0.15);
+        color:rgba(72,187,120,0.9);font-weight:600;cursor:pointer">Save</button>
+      <button onclick="clearDreamTime()" style="padding:8px 14px;border-radius:8px;
+        border:1px solid rgba(255,107,107,0.4);background:rgba(255,107,107,0.1);
+        color:rgba(255,107,107,0.8);cursor:pointer">Disable</button>
+      <span id="dreamTimeStatus" style="display:none;font-size:0.85rem"></span>
+    </div>
+    ${rootMeta.lastDreamAt ? `<p style="color:rgba(255,255,255,0.4);font-size:0.8rem;margin:8px 0 0">Last dream: ${new Date(rootMeta.lastDreamAt).toLocaleString()}</p>` : ""}
+  </div>
+  ` : ""}
 
   ${
     !isOwner && req.userId
@@ -1593,6 +1662,44 @@ ${
 
 
 <script>
+// DREAM TIME
+async function saveDreamTime() {
+  var input = document.getElementById("dreamTimeInput");
+  var status = document.getElementById("dreamTimeStatus");
+  try {
+    var res = await fetch("/api/v1/root/${nodeId}/dream-time", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dreamTime: input.value || null }),
+    });
+    if (res.ok) {
+      if (status) {
+        status.style.display = "inline";
+        status.style.color = "rgba(72, 187, 120, 0.9)";
+        status.textContent = input.value ? "Saved" : "Disabled";
+        setTimeout(function() { status.style.display = "none"; }, 3000);
+      }
+    } else {
+      var data = await res.json().catch(function() { return {}; });
+      if (status) {
+        status.style.display = "inline";
+        status.style.color = "rgba(255, 107, 107, 0.9)";
+        status.textContent = data.error || "Failed";
+      }
+    }
+  } catch (err) {
+    if (status) {
+      status.style.display = "inline";
+      status.style.color = "rgba(255, 107, 107, 0.9)";
+      status.textContent = "Network error";
+    }
+  }
+}
+async function clearDreamTime() {
+  document.getElementById("dreamTimeInput").value = "";
+  saveDreamTime();
+}
+
 // ROOT LLM ASSIGNMENT
 async function assignRootLlm(slot, connId) {
   var statusId = slot === "understanding" ? "treeLlmUnderstandingStatus" : "treeLlmStatus";
@@ -1960,6 +2067,41 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     }
 
     return res.json({ success: true, slot, connectionId: connectionId || null });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// DREAM TIME
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post("/root/:rootId/dream-time", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const { dreamTime } = req.body;
+
+    // Validate root and ownership
+    const root = await Node.findById(rootId).select("rootOwner").lean();
+    if (!root) return res.status(404).json({ error: "Root not found" });
+    if (!root.rootOwner) return res.status(400).json({ error: "Node is not a root" });
+    if (root.rootOwner.toString() !== req.userId.toString()) {
+      return res.status(403).json({ error: "Only the root owner can set dream time" });
+    }
+
+    // Validate format (HH:MM or null/empty to disable)
+    if (dreamTime) {
+      const match = /^([01]\d|2[0-3]):([0-5]\d)$/.test(dreamTime);
+      if (!match) {
+        return res.status(400).json({ error: "Invalid time format — use HH:MM (24h)" });
+      }
+    }
+
+    await Node.findByIdAndUpdate(rootId, {
+      dreamTime: dreamTime || null,
+    });
+
+    return res.json({ success: true, dreamTime: dreamTime || null });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

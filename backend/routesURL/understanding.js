@@ -1,14 +1,12 @@
 import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import authenticate from "../middleware/authenticate.js";
-
+import { createUnderstandingRun } from "../core/understanding.js";
 import UnderstandingRun from "../db/models/understandingRun.js";
 import UnderstandingNode from "../db/models/understandingNode.js";
 import { getNotes } from "../core/notes.js";
 const router = express.Router();
 
-import { createUnderstandingRun } from "../core/understanding.js";
-import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
 import Node from "../db/models/node.js";
 function buildQueryString(req) {
   const allowedParams = ["token", "html"];
@@ -39,13 +37,13 @@ const rainbow = [
   "#5856d6",
   "#af52de",
 ];
+
 router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { perspective = "general" } = req.body;
     const userId = req.userId;
 
-    // 🔒 Validate root node
     const rootNode = await Node.findById(nodeId).lean();
     if (!rootNode) {
       return res.status(404).json({
@@ -53,7 +51,6 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
       });
     }
 
-    // 🧠 Create understanding run
     const result = await createUnderstandingRun(nodeId, userId, perspective);
     if ("html" in req.query) {
       return res.redirect(
@@ -75,40 +72,6 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
     });
   }
 });
-
-router.post(
-  "/root/:nodeId/understandings/run/:runId/orchestrate",
-  authenticate,
-  async (req, res) => {
-    const { nodeId, runId } = req.params;
-    const userId = req.userId;
-    const username = req.username;
-    const fromSite = req.body?.source === "user";
-    const source = fromSite ? "user" : "api";
-
-    try {
-      const result = await orchestrateUnderstanding({
-        rootId: nodeId,
-        userId,
-        username,
-        runId,
-        source,
-        fromSite,
-      });
-
-      if ("html" in req.query && result.success) {
-        return res.redirect(
-          `/api/v1/root/${nodeId}/understandings/run/${runId}?token=${req.query.token ?? ""}&html`,
-        );
-      }
-
-      return res.json(result);
-    } catch (err) {
-      console.error("Understanding orchestration error:", err.message);
-      return res.status(500).json({ success: false, error: err.message });
-    }
-  },
-);
 
 router.get(
   "/root/:nodeId/understandings/run/:runId",

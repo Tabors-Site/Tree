@@ -1,7 +1,6 @@
 // ws/orchestrator/rawIdeaOrchestrator.js
 // Automates raw idea placement: chooseRoot → delegate to treeOrchestrator → record result.
 
-import { v4 as uuidv4 } from "uuid";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
@@ -15,7 +14,7 @@ import { orchestrateTreeRequest } from "./treeOrchestrator.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { getRootNodesForUser, buildDeepTreeSummary } from "../../core/treeFetch.js";
 import { logContribution } from "../../db/utils.js";
-import { registerSession, endSession, updateSessionMeta, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
+import { createSession, endSession, updateSessionMeta, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
 import RawIdea from "../../db/models/rawIdea.js";
 import Node from "../../db/models/node.js";
 
@@ -76,10 +75,7 @@ function extractTargetNodeId(treeResult) {
  */
 export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username, withResponse = false, source = "orchestrator" }) {
   const visitorId = `rawIdea:${rawIdeaId}`;
-  const sessionId = uuidv4();
-  const abort = new AbortController();
-  registerSession({
-    sessionId,
+  const { sessionId } = createSession({
     userId,
     type: source === "background"
       ? SESSION_TYPES.SCHEDULED_RAW_IDEA
@@ -89,6 +85,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     description: `Raw idea placement: ${rawIdeaId}`,
     meta: { rawIdeaId, visitorId },
   });
+  const abort = new AbortController();
   setSessionAbort(sessionId, abort);
   let chainIndex = 1;
 
@@ -281,7 +278,49 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
       skipRespond: !withResponse,
       slot: "rawIdea",
       rootChatId: mainChatId,
+      sourceType: withResponse ? "raw-idea-chat" : "raw-idea-place",
+      sourceId: rawIdeaId.toString(),
     });
+
+    // ── Deferred to short-term memory ──
+    if (treeResult?.deferred) {
+      rawIdea.status = "deferred";
+      rawIdea.aiSessionId = sessionId;
+      await rawIdea.save();
+
+      trackChainStep({
+        userId,
+        sessionId,
+        rootChatId: mainChatId,
+        chainIndex: chainIndex++,
+        modeKey: "rawIdea:deferred",
+        source: "orchestrator",
+        input: rawIdea.content,
+        output: { status: "deferred", memoryItemId: treeResult.memoryItemId },
+        llmProvider,
+      });
+
+      finalizeArgs = {
+        content: withResponse
+          ? (treeResult.answer || "Noted — collecting more context before placing.")
+          : "Deferred to short-term memory",
+        stopped: false,
+        modeKey: "rawIdea:deferred",
+      };
+
+      console.log(`📝 Raw idea ${rawIdeaId} deferred to short memory`);
+
+      if (withResponse) {
+        return {
+          success: true,
+          deferred: true,
+          answer: treeResult.answer || "Noted — collecting more context before placing.",
+          rootId: chosenRootId,
+          rootName: parsed.rootName,
+        };
+      }
+      return undefined;
+    }
 
     if (!treeResult || treeResult.noFit || !treeResult.success) {
       const stuckReason = treeResult?.reason ||

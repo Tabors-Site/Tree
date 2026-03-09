@@ -1,6 +1,9 @@
 // ws/sessionRegistry.js
 // Tracks all active sessions per user and gates iframe navigation so only
 // the designated "active navigator" session can redirect the user's view.
+// All session creation should go through createSession().
+
+import { v4 as uuidv4 } from "uuid";
 
 // ─────────────────────────────────────────────────────────────────────────
 // SESSION TYPES
@@ -14,6 +17,9 @@ export const SESSION_TYPES = {
   RAW_IDEA_CHAT: "raw-idea-chat",
   UNDERSTANDING_ORCHESTRATE: "understanding-orchestrate",
   SCHEDULED_RAW_IDEA: "scheduled-raw-idea",
+  SHORT_TERM_DRAIN: "short-term-drain",
+  CLEANUP_REORGANIZE: "cleanup-reorganize",
+  CLEANUP_EXPAND: "cleanup-expand",
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -35,20 +41,79 @@ const changeListeners = new Set();
 // sessionId → AbortController  (allows killing in-flight work)
 const sessionAbortControllers = new Map();
 
+// scopeKey → { sessionId, lastActivity }  (for idle-TTL reuse of scoped sessions)
+const scopedSessions = new Map();
+const DEFAULT_SCOPE_TTL = 15 * 60 * 1000; // 15 minutes
+
+// ─────────────────────────────────────────────────────────────────────────
+// SESSION CREATION — single entry point for all session creation
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Create or retrieve a session. This is the preferred way to get a sessionId.
+ *
+ * @param {object}  opts
+ * @param {string}  opts.userId      - required
+ * @param {string}  opts.type        - SESSION_TYPES value
+ * @param {string}  [opts.scopeKey]  - for idle-TTL reuse (e.g. "userId:rootId")
+ * @param {string}  [opts.description]
+ * @param {object}  [opts.meta]
+ * @param {number}  [opts.idleTTL]   - ms before a scoped session expires (default 15 min)
+ * @returns {{ sessionId: string, reused: boolean, isActiveNavigator: boolean }}
+ */
+export function createSession({ userId, type, scopeKey, description = "", meta = {}, idleTTL = DEFAULT_SCOPE_TTL }) {
+  const now = Date.now();
+
+  // If scopeKey provided, try to reuse an existing scoped session
+  if (scopeKey) {
+    const existing = scopedSessions.get(scopeKey);
+    if (existing && now - existing.lastActivity < idleTTL) {
+      existing.lastActivity = now;
+      // Re-register to update meta/description and touch lastActivity
+      const { isActiveNavigator } = registerSession({ sessionId: existing.sessionId, userId, type, description, meta });
+      return { sessionId: existing.sessionId, reused: true, isActiveNavigator };
+    }
+  }
+
+  // Create a new session
+  const sessionId = uuidv4();
+  const { isActiveNavigator } = registerSession({ sessionId, userId, type, description, meta });
+
+  // Store in scoped map if scopeKey provided
+  if (scopeKey) {
+    scopedSessions.set(scopeKey, { sessionId, lastActivity: now });
+  }
+
+  return { sessionId, reused: false, isActiveNavigator };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // REGISTRATION
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Register a new session. websocket-chat type auto-claims navigator.
+ * Register a session (or touch it if it already exists).
+ * websocket-chat type auto-claims navigator.
  * @returns {{ sessionId: string, isActiveNavigator: boolean }}
  */
 export function registerSession({ sessionId, userId, type, description = "", meta = {} }) {
   const now = Date.now();
+  const uid = String(userId);
+
+  const existing = sessions.get(sessionId);
+  if (existing) {
+    // Idempotent re-registration — just touch and update meta
+    existing.lastActivity = now;
+    existing.description = description || existing.description;
+    existing.meta = { ...existing.meta, ...meta };
+    const isNav = activeNavigator.get(uid) === sessionId;
+    for (const cb of changeListeners) cb(uid);
+    return { sessionId, isActiveNavigator: isNav };
+  }
 
   sessions.set(sessionId, {
     sessionId,
-    userId: String(userId),
+    userId: uid,
     type,
     createdAt: now,
     lastActivity: now,
@@ -57,7 +122,6 @@ export function registerSession({ sessionId, userId, type, description = "", met
     meta,
   });
 
-  const uid = String(userId);
   if (!userSessionIndex.has(uid)) {
     userSessionIndex.set(uid, new Set());
   }
@@ -336,5 +400,9 @@ setInterval(() => {
       console.log(`🧹 Stale session removed: ${session.type} [${sessionId.slice(0, 8)}]`);
       endSession(sessionId);
     }
+  }
+  // Clean up expired scoped session entries
+  for (const [key, val] of scopedSessions) {
+    if (now - val.lastActivity > DEFAULT_SCOPE_TTL) scopedSessions.delete(key);
   }
 }, 5 * 60 * 1000);

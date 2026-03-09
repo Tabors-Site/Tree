@@ -323,7 +323,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
 
       // Switch if big mode changed or no mode set yet
-      if (currentBig !== newBigMode || !currentMode) {
+      // Only switch to HOME if the URL explicitly matches /user/ routes —
+      // don't let bad/invalid tool URLs (which fall through to HOME default)
+      // kill an active tree session.
+      const isExplicitHome = /^(\/api\/v1)?\/user\//.test((url || "").split("?")[0]);
+      const shouldSwitch = currentBig !== newBigMode || !currentMode;
+      if (shouldSwitch && (newBigMode !== BIG_MODES.HOME || isExplicitHome || !currentMode)) {
         // Finalize any in-flight chat
         await finalizeOpenChat(socket);
 
@@ -554,6 +559,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
               signal: abort.signal,
               sessionId,
               rootChatId: aiChat?._id || null,
+              sourceType: "tree-chat",
             });
           } else {
             response = await processMessage(visitorId, message, {

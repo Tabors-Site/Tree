@@ -7,8 +7,8 @@ import registerURLRoutes from "./routesURL/routeURLHandler.js";
 
 import { initWebSocketServer } from "./ws/websocket.js";
 import { startRawIdeaAutoPlaceJob } from "./jobs/rawIdeaAutoPlace.js";
-
-import "./db/config.js"; // Initialize DB connection
+import { startTreeDreamJob, runTreeDreamJob } from "./jobs/treeDream.js";
+import mongoose from "./db/config.js"; // Initialize DB connection
 
 import dotenv from "dotenv";
 //import { initWebSocketServer } from "./ws/websocket.js";
@@ -35,7 +35,7 @@ import { stripeWebhook } from "./routes/billing/webhook.js";
 app.post(
   "/billing/webhook",
   express.raw({ type: "application/json" }),
-  stripeWebhook
+  stripeWebhook,
 );
 
 app.options("*", cors());
@@ -44,19 +44,28 @@ app.use(express.json({ limit: "1000mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.set("trust proxy", 1);
 
-app.disable('x-powered-by');
+app.disable("x-powered-by");
 app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader("X-Content-Type-Options", "nosniff");
 
   // Allow framing from your own domains only
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://tree.tabors.site https://*.tabors.site");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader(
+    "Content-Security-Policy",
+    "frame-ancestors 'self' https://tree.tabors.site https://*.tabors.site",
+  );
 
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
+  res.setHeader(
+    "Strict-Transport-Security",
+    "max-age=31536000; includeSubDomains",
+  );
 
   next();
 });
@@ -72,4 +81,12 @@ const PORT = process.env.PORT || 80; //
 server.listen(PORT, "0.0.0.0", async () => {
   console.log(`Express server (Tree/MCP coupled) running on port ${PORT}`);
   startRawIdeaAutoPlaceJob({ intervalMs: 15 * 60 * 1000 });
+  startTreeDreamJob({ intervalMs: 30 * 60 * 1000 });
+  // Wait for MongoDB before running immediately
+  mongoose.connection.on("connected", () => {
+    runTreeDreamJob();
+  });
+  if (mongoose.connection.readyState === 1) {
+    runTreeDreamJob();
+  }
 });

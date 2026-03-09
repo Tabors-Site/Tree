@@ -2,7 +2,6 @@
 // Autonomous understanding: creates/resumes a run, loops through all nodes,
 // uses LLM for summarization only (no tool calling), commits results.
 
-import { v4 as uuidv4 } from "uuid";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
@@ -24,7 +23,7 @@ import {
 } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { emitNavigate, emitToUser } from "../websocket.js";
-import { registerSession, endSession, setActiveNavigator, getSession, updateSessionMeta, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
+import { createSession, endSession, setActiveNavigator, getSession, updateSessionMeta, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
 import {
   getNextCompressionPayloadForLLM,
   commitCompressionResult,
@@ -53,7 +52,11 @@ function buildSummarizationPrompt(payload) {
   }
 
   if (payload.mode === "merge") {
-    const childText = input.childSummaries
+    const nonEmpty = input.childSummaries.filter((cs) => cs.summary && cs.summary.trim());
+    if (nonEmpty.length === 0) {
+      return `Node "${input.nodeName}" has ${input.childSummaries.length} empty children. Write a one-sentence summary of what this section likely covers based on its name alone.`;
+    }
+    const childText = nonEmpty
       .map((cs, i) => `[Child ${i + 1}] ${cs.summary}`)
       .join("\n\n");
     return `Merge these child summaries into one cohesive summary for "${input.nodeName}":\n\n${childText}`;
@@ -166,16 +169,17 @@ export async function orchestrateUnderstanding({
   const isChainStep = !!externalSessionId;
   const isSite = fromSite && !isChainStep;
   const visitorId = `understand:${rootId}:${Date.now()}`;
-  const sessionId = externalSessionId || uuidv4();
+  let sessionId;
   const abort = new AbortController();
-  if (!isChainStep) {
-    registerSession({
-      sessionId,
+  if (isChainStep) {
+    sessionId = externalSessionId;
+  } else {
+    ({ sessionId } = createSession({
       userId,
       type: SESSION_TYPES.UNDERSTANDING_ORCHESTRATE,
       description: `Understanding: ${runPerspective}`,
       meta: { rootId, runId: understandingRunId, visitorId },
-    });
+    }));
     setSessionAbort(sessionId, abort);
   }
   // When triggered from site, claim navigator so progress shows in iframe

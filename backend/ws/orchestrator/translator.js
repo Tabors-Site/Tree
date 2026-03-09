@@ -314,10 +314,15 @@ Your ONLY job is to classify what kind of action this requires.
 Return ONLY this JSON. No markdown. No explanation.
 
 {
-  "intent": "place" | "query" | "destructive" | "no_fit",
+  "intent": "place" | "query" | "destructive" | "defer" | "no_fit",
   "confidence": number,
   "responseHint": string,
-  "summary": string
+  "summary": string,
+  "placementAxes": {
+    "pathConfidence": number,
+    "domainNovelty": number,
+    "relationalComplexity": number
+  } | null
 }
 
 INTENT DEFINITIONS:
@@ -347,6 +352,12 @@ INTENT DEFINITIONS:
   - "move Backend under Projects"
   - "mark everything as complete"
 
+"defer" — The user explicitly wants to hold this idea for later rather than
+  place it now. They're saying "save this", "defer this", "hold this",
+  "remember this for later", "park this", etc. The content still belongs
+  on the tree, but the user wants it held in short-term memory.
+  Set placementAxes to null for defer.
+
 "no_fit" — The idea has NO meaningful connection to this tree's domain.
   A dentist appointment doesn't belong in a Japan Trip tree.
   Only use for genuinely unrelated content.
@@ -364,6 +375,29 @@ RESPONSE HINT:
 SUMMARY:
   One-line description for logs.
 
+PLACEMENT AXES (required when intent is "place", null otherwise):
+
+When intent is "place", you MUST also return placementAxes to help the system
+decide whether to place immediately or hold the idea for more context.
+
+  pathConfidence (0.0–1.0): Can this resolve to a SPECIFIC EXISTING node?
+    0.9 = exact match exists ("add pushups" when a Pushups node is already there).
+    0.5 = a related branch exists but the exact spot is unclear.
+    0.2 = no obvious home — would need new structure to place this well.
+    1.0 = user explicitly says "create/build/plan X" — explicit structural
+    intent with a clear directive, always place immediately.
+    IMPORTANT: Do NOT give high pathConfidence just because you could
+    create a new branch. High pathConfidence means the spot ALREADY EXISTS.
+
+  domainNovelty (0.0–1.0): Is this a genuinely new top-level area for this tree?
+    0.9 = brand new domain not represented anywhere. 0.1 = fits existing branches.
+
+  relationalComplexity (0.0–1.0): Does this touch or imply a link between two+
+    existing subtrees? 0.8 = "my diet affects my workout output" bridges
+    diet + workout branches. 0.1 = clearly about a single branch.
+
+When intent is NOT "place" (including "defer"), set placementAxes to null.
+
 RULES:
 1. ALWAYS return valid JSON. Nothing else.
 2. When in doubt between "place" and "query", lean toward "place"
@@ -373,6 +407,13 @@ RULES:
 4. no_fit means ZERO connection to this tree. A stretch is still "place"
    with low confidence, not no_fit.
 5. Conversational messages ("hi", "thanks", "what's up") are "query".
+6. Explicit structural intent ("I want to create a workout plan",
+   "build me a project tracker") is always "place" with pathConfidence=1.0.
+   The user is handing you the structure directly — never defer this.
+7. Casual thoughts, observations, and fragments ("thinking about starting
+   health stuff", "ate a steak today") should get LOW pathConfidence
+   unless there's a clear existing node to attach them to. These are
+   better held in short-term memory until the tree has enough structure.
 `.trim();
 
 /**
@@ -439,6 +480,19 @@ export async function classify({
     if (!result.responseHint) result.responseHint = "";
     if (!result.summary) result.summary = message;
 
+    // Validate placementAxes — only meaningful for "place" intent
+    if (result.intent === "place" && result.placementAxes) {
+      const ax = result.placementAxes;
+      const clamp = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+      result.placementAxes = {
+        pathConfidence: clamp(ax.pathConfidence),
+        domainNovelty: clamp(ax.domainNovelty),
+        relationalComplexity: clamp(ax.relationalComplexity),
+      };
+    } else {
+      result.placementAxes = null;
+    }
+
     result.llmProvider = _llmProvider;
     return result;
   } catch (err) {
@@ -448,6 +502,7 @@ export async function classify({
       confidence: 0.5,
       responseHint: "Respond naturally to the user's message.",
       summary: message,
+      placementAxes: null,
       llmProvider: _llmProvider,
     };
   }

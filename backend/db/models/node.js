@@ -58,6 +58,10 @@ const NodeSchema = new mongoose.Schema({
 
   rootOwner: { type: String, ref: "User", default: null }, //if null it is not a root
   contributors: [{ type: String, ref: "User" }], // Users who can contribute to this node from here on and have access to it
+
+  // Tree Dream — daily maintenance cycle (only meaningful on root nodes)
+  dreamTime: { type: String, default: null }, // "HH:MM" format, e.g. "03:00"
+  lastDreamAt: { type: Date, default: null },
 });
 
 NodeSchema.methods.addContributor = function (userId, removerId) {

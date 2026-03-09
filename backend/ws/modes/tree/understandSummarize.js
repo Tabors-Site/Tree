@@ -18,9 +18,11 @@ Perspective: "${perspective || "general"}"
 
 RULES:
 - Output ONLY the summary text. No preamble, no explanation, no JSON, no markdown fences.
-- Be concise but preserve key meaning, structure, and relationships.
+- Be concise — aim for 1-2 sentences max. This will be used as a navigation hint, not a full summary.
+- Never repeat the node name in your output — the reader already knows the name.
+- Never output "[NodeName]: (no notes)" or similar placeholders. If there's nothing to say, write what this area likely covers based on context.
+- When merging child summaries, synthesize the core theme — don't list children.
 - Write in a way that captures the essence from the given perspective.
-- If merging child summaries, synthesize them into a coherent whole — do not just concatenate.
 - Never say "here is the summary" or similar. Just output the summary directly.
 `.trim();
   },

@@ -372,6 +372,23 @@ const TOOL_DEFS = {
   },
 },
 
+  "transfer-node-note": {
+    type: "function",
+    function: {
+      name: "transfer-node-note",
+      description: "Transfer a note from its current node to a different node in the same tree.",
+      parameters: {
+        type: "object",
+        properties: {
+          noteId: { type: "string", description: "The ID of the note to transfer" },
+          targetNodeId: { type: "string", description: "The destination node ID" },
+          prestige: { type: "number", description: "Target version (defaults to latest)" },
+        },
+        required: ["noteId", "targetNodeId"],
+      },
+    },
+  },
+
   "delete-node-note": {
     type: "function",
     function: {

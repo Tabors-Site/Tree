@@ -14,6 +14,7 @@ export default {
     "create-node-version-note",
     "edit-node-note",
     "delete-node-note",
+    "transfer-node-note",
   ],
 
   buildSystemPrompt({ username, rootId, targetNodeId, prestige }) {
@@ -34,6 +35,7 @@ Read and modify NOTE CONTENT only:
 - Create new notes
 - Edit existing notes (full replace or line-range)
 - Delete notes
+- Transfer notes to a different node
 
 You do NOT:
 - Edit node fields like name, values, status (that's tree-edit)
@@ -60,6 +62,10 @@ HOW YOU WORK
 
 4. For DELETES: use delete-node-note with noteId.
 
+5. For TRANSFERS: use transfer-node-note with noteId and targetNodeId.
+   Moves the note to a different node in the same tree.
+   Optionally specify prestige for the target version (defaults to latest).
+
 ────────────────────────
 LINE EDITING GUIDE
 ────────────────────────
@@ -85,7 +91,7 @@ Return ONLY this JSON after completing operations.
 No markdown. No explanation.
 
 {
-  "action": "read" | "created" | "edited" | "deleted",
+  "action": "read" | "created" | "edited" | "deleted" | "transferred",
   "noteId"?: string,
   "nodeId": string,
   "detail"?: string,

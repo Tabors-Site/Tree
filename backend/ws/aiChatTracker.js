@@ -6,6 +6,7 @@
 import { v4 as uuidv4 } from "uuid";
 import AIChat from "../db/models/aiChat.js";
 import Contribution from "../db/models/contribution.js";
+import { createSession, SESSION_TYPES } from "./sessionRegistry.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // AI CONTRIBUTION CONTEXT (in-memory userId → { sessionId, aiChatId })
@@ -31,29 +32,29 @@ export function clearAiContributionContext(userId) {
 // SESSION MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────
 
-const SESSION_TTL = 15 * 60 * 1000; // 15 minutes idle → new session
-
 /**
  * Initialize or retrieve the AI session on a socket.
- * Call before each chat. Rotates if expired.
+ * Call before each chat. Reuses via scoped session if still within idle TTL.
  * Returns the current sessionId.
  */
 export function ensureSession(socket) {
-  const now = Date.now();
+  const scopeKey = `ws:${socket.userId}`;
+  const { sessionId, reused } = createSession({
+    userId: socket.userId,
+    type: SESSION_TYPES.WEBSOCKET_CHAT,
+    scopeKey,
+    description: `Chat session for ${socket.username || "unknown"}`,
+    meta: { visitorId: socket.visitorId },
+  });
 
-  if (
-    !socket._aiSession ||
-    now - socket._aiSession.lastActivity > SESSION_TTL
-  ) {
-    socket._aiSession = { id: uuidv4(), lastActivity: now };
+  if (!reused) {
     console.log(
-      `🆕 New AI session for ${socket.visitorId || socket.userId}: ${socket._aiSession.id}`,
+      `🆕 New AI session for ${socket.visitorId || socket.userId}: ${sessionId}`,
     );
-  } else {
-    socket._aiSession.lastActivity = now;
   }
 
-  return socket._aiSession.id;
+  socket._aiSession = { id: sessionId, lastActivity: Date.now() };
+  return sessionId;
 }
 
 /**
@@ -61,11 +62,21 @@ export function ensureSession(socket) {
  * Returns the new sessionId.
  */
 export function rotateSession(socket) {
-  socket._aiSession = { id: uuidv4(), lastActivity: Date.now() };
+  const { sessionId } = createSession({
+    userId: socket.userId,
+    type: SESSION_TYPES.WEBSOCKET_CHAT,
+    scopeKey: `ws:${socket.userId}`,
+    idleTTL: 0, // force new session by treating any existing as expired
+    description: `Chat session for ${socket.username || "unknown"}`,
+    meta: { visitorId: socket.visitorId },
+  });
+
   console.log(
-    `🔄 Rotated AI session for ${socket.visitorId || socket.userId}: ${socket._aiSession.id}`,
+    `🔄 Rotated AI session for ${socket.visitorId || socket.userId}: ${sessionId}`,
   );
-  return socket._aiSession.id;
+
+  socket._aiSession = { id: sessionId, lastActivity: Date.now() };
+  return sessionId;
 }
 
 /**
@@ -176,27 +187,12 @@ export async function finalizeAIChat({
   // Already finalized — don't double-write
   if (chat.endMessage?.time) return chat;
 
-  // Collect AI contributions linked to this chat
-  let contributions = await Contribution.find({
+  // Collect AI contributions linked to this chat by aiChatId
+  const contributions = await Contribution.find({
     aiChatId: chatId,
   })
     .select("_id")
     .lean();
-
-  // Fallback: old contributions without aiChatId — use time-based window
-  if (!contributions.length) {
-    contributions = await Contribution.find({
-      userId: chat.userId,
-      wasAi: true,
-      aiChatId: null,
-      date: {
-        $gte: chat.startMessage.time,
-        $lte: endTime,
-      },
-    })
-      .select("_id")
-      .lean();
-  }
 
   const contributionIds = contributions.map((c) => c._id);
 

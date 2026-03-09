@@ -323,7 +323,7 @@ export async function getNextCompressionPayloadForLLM(
         n._id,
         runId,
         perspective,
-        `[${realNode.name}]: (no notes)`,
+        "",
         userId,
         true,
       );

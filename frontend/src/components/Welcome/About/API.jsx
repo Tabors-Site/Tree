@@ -1246,6 +1246,18 @@ updateScheduleForNode(datetime | null)`}</div>
 
           <div className="endpoint">
             <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/:version/notes/:noteId/transfer</span>
+            </div>
+            <div className="ep-desc">Transfer a note to a different node in the same tree. Logs contributions on both source and target.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{'{ "targetNodeId": "destination-node-id", "prestige": 0 }'}</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "success": true, "noteId": "...", "from": { "nodeId": "...", "version": 0 }, "to": { "nodeId": "...", "version": 0 } }'}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
               <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/node/:nodeId/:version/notes/book</span>
             </div>

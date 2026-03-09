@@ -216,8 +216,44 @@ export async function getActiveLeafExecutionFrontier(rootId) {
     leaves,
   };
 }
-export async function buildDeepTreeSummary(rootId) {
+const TREE_SUMMARY_MAX_DEPTH = 4;
+const TREE_SUMMARY_MAX_NODES = 60;
+
+export async function buildDeepTreeSummary(rootId, { includeEncodings = false, includeIds = false } = {}) {
   let nodeCount = 0;
+
+  // Optionally load navigation encodings from the latest understanding run
+  let encodingMap = null;
+  if (includeEncodings) {
+    try {
+      const { default: UnderstandingRun } = await import("../db/models/understandingRun.js");
+      const { default: UnderstandingNode } = await import("../db/models/understandingNode.js");
+
+      const latestRun = await UnderstandingRun.findOne({
+        rootNodeId: rootId,
+        perspective: { $regex: /^Summarize this section/ },
+      })
+        .sort({ createdAt: -1 })
+        .select("_id")
+        .lean();
+
+      if (latestRun) {
+        const runId = latestRun._id;
+        const uNodes = await UnderstandingNode.find({})
+          .select("realNodeId perspectiveStates")
+          .lean();
+        encodingMap = new Map();
+        for (const uNode of uNodes) {
+          const state = uNode.perspectiveStates?.get?.(runId) || (uNode.perspectiveStates && uNode.perspectiveStates[runId]);
+          if (state?.encoding) {
+            encodingMap.set(uNode.realNodeId, state.encoding);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("⚠️ Failed to load understanding encodings:", err.message);
+    }
+  }
 
   async function walkNode(nodeId, depth) {
     if (nodeCount >= TREE_SUMMARY_MAX_NODES) return null;
@@ -227,7 +263,7 @@ export async function buildDeepTreeSummary(rootId) {
       includeChildren: true,
       includeParentChain: false,
       includeValues: true,
-      includeNotes: false,
+      includeNotes: true,
     });
 
     const indent = "  ".repeat(depth);
@@ -239,7 +275,20 @@ export async function buildDeepTreeSummary(rootId) {
             .join(", ")})`
         : "";
 
-    let line = `${indent}- ${ctx.name}${valueStr}`;
+    const noteStr = ctx.noteCount > 0 ? ` [${ctx.noteCount} note${ctx.noteCount > 1 ? "s" : ""}]` : "";
+
+    // Append truncated encoding if available
+    let encodingStr = "";
+    if (encodingMap) {
+      const encoding = encodingMap.get(String(nodeId));
+      if (encoding && encoding.trim()) {
+        const truncated = encoding.length > 80 ? encoding.slice(0, 77) + "..." : encoding;
+        encodingStr = ` — "${truncated}"`;
+      }
+    }
+
+    const idStr = includeIds ? ` [id:${ctx.id}]` : "";
+    let line = `${indent}- ${ctx.name}${idStr}${noteStr}${valueStr}${encodingStr}`;
 
     if (depth < TREE_SUMMARY_MAX_DEPTH && ctx.children?.length > 0) {
       const childLines = [];

@@ -1,8 +1,7 @@
 // routesURL/tree.js
-// Direct tree chat endpoint — send a message to a tree, get a response back.
+// All LLM orchestration routes — tree chat/place, raw idea chat/place, understanding.
 
 import express from "express";
-import { v4 as uuidv4 } from "uuid";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
@@ -12,11 +11,15 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
 import authenticate from "../middleware/authenticate.js";
 import { orchestrateTreeRequest } from "../ws/orchestrator/treeOrchestrator.js";
+import { orchestrateRawIdeaPlacement } from "../ws/orchestrator/rawIdeaOrchestrator.js";
+import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
 import { setRootId, getClientForUser } from "../ws/conversation.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
 import { startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../ws/aiChatTracker.js";
 import { enqueue } from "../ws/requestQueue.js";
-import { registerSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../ws/sessionRegistry.js";
+import { createSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../ws/sessionRegistry.js";
+import User from "../db/models/user.js";
+import RawIdea from "../db/models/rawIdea.js";
 
 const router = express.Router();
 
@@ -25,32 +28,6 @@ const nullSocket = {
   to: () => nullSocket,
   broadcast: { emit: () => {} },
 };
-
-// ── API session management (15-min idle TTL, keyed by userId:rootId) ──
-const SESSION_TTL = 15 * 60 * 1000;
-const apiSessions = new Map();
-
-function getOrCreateSession(userId, rootId) {
-  const key = `${userId}:${rootId}`;
-  const now = Date.now();
-  const existing = apiSessions.get(key);
-
-  if (existing && now - existing.lastActivity < SESSION_TTL) {
-    existing.lastActivity = now;
-    return existing.sessionId;
-  }
-
-  const sessionId = uuidv4();
-  apiSessions.set(key, { sessionId, lastActivity: now });
-  return sessionId;
-}
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, val] of apiSessions) {
-    if (now - val.lastActivity > SESSION_TTL) apiSessions.delete(key);
-  }
-}, 5 * 60 * 1000);
 
 /**
  * POST /api/v1/tree/:rootId/chat
@@ -70,15 +47,14 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
   }
 
   const visitorId = `tree-chat:${req.userId}:${Date.now()}`;
-  const sessionId = getOrCreateSession(req.userId, rootId);
-  const abort = new AbortController();
-  registerSession({
-    sessionId,
+  const { sessionId } = createSession({
     userId: req.userId,
     type: SESSION_TYPES.API_TREE_CHAT,
+    scopeKey: `${req.userId}:${rootId}`,
     description: `API tree chat on root ${rootId}`,
     meta: { rootId, visitorId },
   });
+  const abort = new AbortController();
   setSessionAbort(sessionId, abort);
 
   // 19-minute timeout — return gracefully before nginx kills the connection
@@ -147,6 +123,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
         sessionId,
         rootId,
         rootChatId: aiChat?._id || null,
+        sourceType: "tree-chat",
       });
 
       clearTimeout(timer);
@@ -221,15 +198,14 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
   }
 
   const visitorId = `tree-place:${req.userId}:${Date.now()}`;
-  const sessionId = getOrCreateSession(req.userId, rootId);
-  const abort = new AbortController();
-  registerSession({
-    sessionId,
+  const { sessionId } = createSession({
     userId: req.userId,
     type: SESSION_TYPES.API_TREE_PLACE,
+    scopeKey: `${req.userId}:${rootId}`,
     description: `API tree place on root ${rootId}`,
     meta: { rootId, visitorId },
   });
+  const abort = new AbortController();
   setSessionAbort(sessionId, abort);
 
   const TIMEOUT_MS = 19 * 60 * 1000;
@@ -294,6 +270,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
         rootId,
         skipRespond: true,
         rootChatId: aiChat?._id || null,
+        sourceType: "tree-place",
       });
 
       clearTimeout(timer);
@@ -350,5 +327,191 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
     }
   });
 });
+
+// ── Raw Idea: auto-place (fire-and-forget) ──────────────────────────────────
+router.post(
+  "/user/:userId/raw-ideas/:rawIdeaId/place",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { rawIdeaId } = req.params;
+
+      if (req.userId.toString() !== req.params.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const rawIdea = await RawIdea.findById(rawIdeaId);
+      if (!rawIdea || rawIdea.userId === "deleted") {
+        return res.status(404).json({ error: "Raw idea not found" });
+      }
+      if (rawIdea.userId.toString() !== req.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+      if (rawIdea.contentType === "file") {
+        return res
+          .status(422)
+          .json({ error: "File ideas cannot be auto-placed" });
+      }
+      if (rawIdea.status && rawIdea.status !== "pending") {
+        return res.status(409).json({ error: `Already ${rawIdea.status}` });
+      }
+
+      // Block concurrent placements — only one at a time per user
+      const alreadyProcessing = await RawIdea.findOne({
+        userId: req.userId.toString(),
+        status: "processing",
+      });
+      if (alreadyProcessing) {
+        return res.status(409).json({
+          error:
+            "Another idea is already being placed — please wait for it to finish.",
+        });
+      }
+
+      const user = await User.findById(req.userId).select("username").lean();
+
+      // Fire and forget — orchestrator runs in background
+      const source = req.body?.source === "user" ? "user" : "api";
+      orchestrateRawIdeaPlacement({
+        rawIdeaId,
+        userId: req.userId,
+        username: user?.username || "unknown",
+        source,
+      }).catch((err) =>
+        console.error("Raw-idea orchestration failed:", err.message),
+      );
+
+      return res.status(202).json({ message: "Orchestration started" });
+    } catch (err) {
+      console.error("raw-idea orchestrate error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// ── Raw Idea: auto-chat (synchronous, returns response) ─────────────────────
+router.post(
+  "/user/:userId/raw-ideas/:rawIdeaId/chat",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { rawIdeaId } = req.params;
+
+      if (req.userId.toString() !== req.params.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const rawIdea = await RawIdea.findById(rawIdeaId);
+      if (!rawIdea || rawIdea.userId === "deleted") {
+        return res.status(404).json({ error: "Raw idea not found" });
+      }
+      if (rawIdea.userId.toString() !== req.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+      if (rawIdea.contentType === "file") {
+        return res
+          .status(422)
+          .json({ error: "File ideas cannot be auto-placed" });
+      }
+      if (rawIdea.status && rawIdea.status !== "pending") {
+        return res.status(409).json({ error: `Already ${rawIdea.status}` });
+      }
+
+      // Block concurrent placements — only one at a time per user
+      const alreadyProcessing = await RawIdea.findOne({
+        userId: req.userId.toString(),
+        status: "processing",
+      });
+      if (alreadyProcessing) {
+        return res.status(409).json({
+          error:
+            "Another idea is already being placed — please wait for it to finish.",
+        });
+      }
+
+      const user = await User.findById(req.userId).select("username").lean();
+
+      // 19-minute timeout — return gracefully before nginx kills the connection
+      const TIMEOUT_MS = 19 * 60 * 1000;
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        if (!res.headersSent) {
+          res
+            .status(504)
+            .json({
+              success: false,
+              error: "Request timed out. The idea took too long to process.",
+            });
+        }
+      }, TIMEOUT_MS);
+
+      const source = req.body?.source === "user" ? "user" : "api";
+      const result = await orchestrateRawIdeaPlacement({
+        rawIdeaId,
+        userId: req.userId,
+        username: user?.username || "unknown",
+        withResponse: true,
+        source,
+      });
+
+      clearTimeout(timer);
+      if (timedOut) return;
+
+      if (!result || !result.success) {
+        return res.json({
+          success: false,
+          error: result?.reason || "Could not process the idea.",
+        });
+      }
+
+      return res.json({
+        success: true,
+        answer: result.answer,
+        rootId: result.rootId,
+        rootName: result.rootName,
+        targetNodeId: result.targetNodeId,
+      });
+    } catch (err) {
+      console.error("raw-idea chat error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// ── Understanding: orchestrate ──────────────────────────────────────────────
+router.post(
+  "/root/:nodeId/understandings/run/:runId/orchestrate",
+  authenticate,
+  async (req, res) => {
+    const { nodeId, runId } = req.params;
+    const userId = req.userId;
+    const username = req.username;
+    const fromSite = req.body?.source === "user";
+    const source = fromSite ? "user" : "api";
+
+    try {
+      const result = await orchestrateUnderstanding({
+        rootId: nodeId,
+        userId,
+        username,
+        runId,
+        source,
+        fromSite,
+      });
+
+      if ("html" in req.query && result.success) {
+        return res.redirect(
+          `/api/v1/root/${nodeId}/understandings/run/${runId}?token=${req.query.token ?? ""}&html`,
+        );
+      }
+
+      return res.json(result);
+    } catch (err) {
+      console.error("Understanding orchestration error:", err.message);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  },
+);
 
 export default router;
