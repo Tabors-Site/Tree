@@ -30,6 +30,7 @@ import { getDeletedBranchesForUser } from "../core/treeFetch.js";
 
 import { setHtmlShareToken } from "../core/user.js";
 import { maybeResetEnergy } from "../core/energy.js";
+import preUploadCheck from "../middleware/preUploadCheck.js";
 
 import {
   createNewNode,
@@ -73,7 +74,10 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 4 * 1024 * 1024 * 1024 },
+});
 
 const router = express.Router();
 
@@ -4624,6 +4628,7 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
 router.post(
   "/user/:userId/raw-ideas",
   authenticate,
+  preUploadCheck,
   upload.single("file"),
 
   async (req, res) => {
@@ -12657,6 +12662,15 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
     console.error(err);
     res.status(500).json({ error: err.message });
   }
+});
+
+router.use((err, req, res, next) => {
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res
+      .status(413)
+      .json({ success: false, error: "File exceeds maximum size of 4 GB" });
+  }
+  next(err);
 });
 
 export default router;

@@ -19,6 +19,7 @@ import {
 import urlAuth from "../middleware/urlAuth.js";
 import getNodeName from "./helpers/getNameById.js";
 import authenticate from "../middleware/authenticate.js";
+import preUploadCheck from "../middleware/preUploadCheck.js";
 
 const router = express.Router();
 
@@ -37,7 +38,10 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 4 * 1024 * 1024 * 1024 },
+});
 
 
 function escapeHtml(str) {
@@ -3112,6 +3116,7 @@ const preview = escapeHtml(rawPreview);
 router.post(
   "/node/:nodeId/:version/notes",
   authenticate,
+  preUploadCheck,
   upload.single("file"),
 
   async (req, res) => {
@@ -5672,5 +5677,14 @@ try {
 // ─────────────────────────────────────────────────────────────────────────
 
 // NEW NOTE EDITOR
+
+router.use((err, req, res, next) => {
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res
+      .status(413)
+      .json({ success: false, error: "File exceeds maximum size of 4 GB" });
+  }
+  next(err);
+});
 
 export default router;
