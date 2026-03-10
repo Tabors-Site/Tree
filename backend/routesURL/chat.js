@@ -21,7 +21,7 @@ function escapeHtml(str) {
 router.get("/chat", authenticateLite, async (req, res) => {
   try {
     if (!req.userId) {
-      return res.status(401).send("Not authenticated");
+      return res.redirect("/login");
     }
 
     const user = await User.findById(req.userId).select("username roots");

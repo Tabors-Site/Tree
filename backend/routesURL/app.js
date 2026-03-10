@@ -13,7 +13,7 @@ const router = express.Router();
 router.get("/app", authenticateLite, async (req, res) => {
   try {
     if (!req.userId) {
-      return res.status(401).send("Not authenticated");
+      return res.redirect("/login");
     }
 
     const user = await User.findById(req.userId).select(
