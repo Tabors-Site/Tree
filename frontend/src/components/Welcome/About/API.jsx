@@ -1,6 +1,19 @@
 import { Link } from "react-router-dom";
 import "./API.css";
 
+function scrollTo(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function TocLink({ to, children }) {
+  return (
+    <a href={`#${to}`} onClick={(e) => { e.preventDefault(); scrollTo(to); }}>
+      {children}
+    </a>
+  );
+}
+
 const ApiAccessSection = () => {
   return (
     <div className="api-docs">
@@ -29,41 +42,40 @@ const ApiAccessSection = () => {
         <div className="toc">
           <div className="toc-title">Contents</div>
 
-
           <div className="toc-group">
             <div className="toc-group-label">AI</div>
-            <a href="#tree-chat">🧠 Tree Chat</a>
-            <a href="#tree-place">📌 Tree Place</a>
-            <a href="#raw-idea-chat">🤖 Raw Idea Chat</a>
-            <a href="#raw-idea-place">📥 Raw Idea Place</a>
-            <a href="#understand-tree">🔬 Understand Tree</a>
+            <TocLink to="tree-chat">🧠 Tree Chat</TocLink>
+            <TocLink to="tree-place">📌 Tree Place</TocLink>
+            <TocLink to="raw-idea-chat">🤖 Raw Idea Chat</TocLink>
+            <TocLink to="raw-idea-place">📥 Raw Idea Place</TocLink>
+            <TocLink to="understand-tree">🔬 Understand Tree</TocLink>
           </div>
 
           <div className="toc-group">
             <div className="toc-group-label">Getting Started</div>
-            <a href="#overview">🔑 Overview &amp; Authentication</a>
-            <a href="#url-modes">🌐 URL Modes — ?html &amp; ?token</a>
+            <TocLink to="overview">🔑 Overview &amp; Authentication</TocLink>
+            <TocLink to="url-modes">🌐 URL Modes: ?html &amp; ?token</TocLink>
           </div>
 
           <div className="toc-group">
             <div className="toc-group-label">User</div>
-            <a href="#user">👤 User Endpoints</a>
+            <TocLink to="user">👤 User Endpoints</TocLink>
           </div>
 
           <div className="toc-group">
             <div className="toc-group-label">Tree</div>
-            <a href="#root">🌳 Root Endpoints</a>
-            <a href="#book">📖 Book &amp; Sharing</a>
-            <a href="#understandings">🧠 Understandings</a>
+            <TocLink to="root">🌳 Root Endpoints</TocLink>
+            <TocLink to="book">📖 Book &amp; Sharing</TocLink>
+            <TocLink to="understandings">🧠 Understandings</TocLink>
           </div>
 
           <div className="toc-group">
             <div className="toc-group-label">Node</div>
-            <a href="#node">🔷 Node Endpoints</a>
-            <a href="#scripts">⚙️ Scripts</a>
-            <a href="#version">📋 Node Version Endpoints</a>
-            <a href="#transactions">🤝 Transactions</a>
-            <a href="#solana">💎 Solana Wallet</a>
+            <TocLink to="node">🔷 Node Endpoints</TocLink>
+            <TocLink to="scripts">⚙️ Scripts</TocLink>
+            <TocLink to="version">📋 Node Version Endpoints</TocLink>
+            <TocLink to="transactions">🤝 Transactions</TocLink>
+            <TocLink to="solana">💎 Solana Wallet</TocLink>
           </div>
         </div>
 
@@ -103,7 +115,7 @@ const ApiAccessSection = () => {
         {/* ═══════════════════════════════════════════════════════════════ */}
         <div className="section" id="url-modes">
           <div className="section-title">
-            <span className="section-icon">🌐</span> URL Modes — ?html &amp; ?token
+            <span className="section-icon">🌐</span> URL Modes: ?html &amp; ?token
           </div>
           <div className="section-text">
             Every GET endpoint supports two query parameters that change how the

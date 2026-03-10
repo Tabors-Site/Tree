@@ -15,49 +15,9 @@ const StartedAbout = () => {
         <div className="sta-header">
           <h2 className="sta-title">🌱 Getting Started</h2>
           <p className="sta-subtitle">
-            Tree is a living memory system. You plant a tree, talk to it, and it
-            grows on its own. The AI organizes, maintains, and deepens your
-            structure over time. You can also shape it manually whenever you want.
+            Up and running in two minutes. Create your first tree, start talking
+            to it, and watch it grow.
           </p>
-        </div>
-
-        {/* ── WHAT IS A TREE ── */}
-        <div className="sta-section">
-          <div className="sta-section-title">
-            <span className="sta-section-icon">🌳</span> What Is a Tree?
-          </div>
-          <div className="sta-section-text">
-            A tree is persistent, structured memory for the AI. Instead of
-            dumping everything into one flat conversation that gets forgotten,
-            a tree organizes knowledge into branches so the AI only pulls in
-            what it needs for each interaction. No wasted tokens, no lost context.
-            <br /><br />
-            It works like a real brain. Information lives in a hierarchy, gets
-            compressed and summarized over time, and the AI navigates to the
-            relevant parts when you talk to it. You can have as many trees as
-            you want, each one for a different project, topic, or area of your life.
-          </div>
-          <div className="sta-tree-mini">
-            <div className="sta-mini-node root">
-              <span className="sta-mini-dot blue" /> My Project
-            </div>
-            <div className="sta-mini-indent">
-              <div className="sta-mini-node">
-                <span className="sta-mini-dot green" /> Research
-              </div>
-              <div className="sta-mini-indent">
-                <div className="sta-mini-node">Sources</div>
-                <div className="sta-mini-node">Key Findings</div>
-              </div>
-              <div className="sta-mini-node">
-                <span className="sta-mini-dot green" /> Tasks
-              </div>
-              <div className="sta-mini-indent">
-                <div className="sta-mini-node">Write Draft</div>
-                <div className="sta-mini-node">Review Feedback</div>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* ── CREATE YOUR FIRST TREE ── */}

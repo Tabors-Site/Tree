@@ -10,11 +10,11 @@ const AboutHome = () => {
       to: "/about/gettingstarted",
       active: true,
     },
-{
+    {
       emoji: "🔌",
       title: "API Reference",
       desc: "Read and write to your trees programmatically. Build bots, scripts, and integrations.",
-      to: "/about/api/#overview",
+      to: "/about/api",
       active: true,
     },
     {
@@ -61,30 +61,37 @@ const AboutHome = () => {
         {/* ── INTRO ── */}
         <div className="ah-section">
           <div className="ah-section-title">
-             What is Tree?
+            What is Tree?
           </div>
           <div className="ah-section-text">
-        Tree is a shared workspace where you and the AI operate in the same context.
-It is structured as a tree of nodes, which can represent things like plans, instructions, knowledge, code, or tracked metrics.
-Both you and the AI can read from and write to the Tree, allowing the context to evolve over time as work progresses.
+            Tree is persistent, structured memory for the AI. Instead of
+            dumping everything into one flat conversation that gets forgotten,
+            a tree organizes knowledge into branches so the AI only pulls in
+            what it needs for each interaction. No wasted tokens, no lost context.
             <br /><br />
-            Invite collaborators to build together, use it solo to stay
-            organized, or design systems that others can follow. Tree works
-            however you need it to.
+            It works like a real brain. Information lives in a hierarchy, gets
+            compressed and summarized over time, and the AI navigates to the
+            relevant parts when you talk to it. Both you and the AI can read
+            from and write to the tree, so the context evolves as work progresses.
+            <br /><br />
+            You can have as many trees as you want, each one for a different
+            project, topic, or area of your life. Invite collaborators to build
+            together, use it solo to stay organized, or design systems that
+            others can follow. Tree works however you need it to.
           </div>
         </div>
 
         <div className="ah-section">
-  <div className="ah-section-title">
-    Why This Project Exists
-  </div>
-  <div className="ah-section-text">
-    This is a personal project by Tabor Holly.
-    <br /><br />
-It's my attempt at building what I believe large language model technology will need going forward: persistent memory, a navigable and fluid GUI driven by text input, and a unified structure where instructions, knowledge, and history all live together — readable by both humans and LLMs.
-</div>
+          <div className="ah-section-title">
+            Why This Project Exists
+          </div>
+          <div className="ah-section-text">
+            This is a personal project by Tabor Holly.
+            <br /><br />
+            It's my attempt at building what I believe large language model technology will need going forward: persistent memory, a navigable and fluid GUI driven by text input, and a unified structure where instructions, knowledge, and history all live together — readable by both humans and LLMs.
+          </div>
 
-</div>
+        </div>
         {/* ── EXPLORE ── */}
         <div className="ah-section">
           <div className="ah-section-title">

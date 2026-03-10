@@ -1,14 +1,16 @@
-# Tree (Treefficiency v2.0)
+t# Tree (Treefficiency v2.0)
 
 AI-powered knowledge management system where users grow trees of goals, plans, and reflections. LLM acts as conversational tree-builder with background maintenance.
 
 ## Tech Stack
+
 - **Backend**: Node.js + Express 4, MongoDB (Mongoose 8), Socket.IO 4, OpenAI SDK (Ollama/custom endpoints)
 - **Frontend**: React 18 + Vite 6, Cytoscape.js for tree visualization
 - **Auth**: JWT + bcrypt, cookie sessions
 - **Payments**: Stripe (basic/standard/premium/god tiers)
 
 ## Project Structure
+
 ```
 backend/
 ├── core/           # Shared business logic — imported by both mcp/ and routesURL/
@@ -34,6 +36,7 @@ frontend/legacy/    # OLD CODE — ignore, do not reference or modify
 ## Architecture Pattern
 
 **`core/`** contains shared business logic functions. These are imported by:
+
 - **`mcp/server.js`** — exposes them as MCP tools for the AI. When the LLM calls a tool (create node, edit note, etc.), it goes through the MCP server which handles energy deduction and contribution logging.
 - **`routesURL/`** — exposes them as REST endpoints for the frontend/API users.
 
@@ -42,11 +45,13 @@ Both layers use the same core functions, but the MCP path adds AI-specific track
 ## Core Concepts
 
 ### Tree Structure
+
 - **Root Node** → has rootOwner (User), contributors, dreamTime, llmAssignments
 - **Node** → parent/children hierarchy, versions (prestige), values, status (active/completed/trimmed/divider), scripts (vm2)
 - **Contribution** → audit trail for all changes (create/edit/delete/prestige/transaction/understanding)
 
 ### LLM Assignment System (per-mode routing)
+
 - 6 slots on root node: `placement`, `understanding`, `respond`, `notes`, `cleanup`, `drain`
 - Resolution: `llmAssignments[modeGroup]` → `llmAssignments.placement` (fallback) → user default
 - `resolveRootLlmForMode(rootId, modeKey)` in conversation.js handles resolution
@@ -54,18 +59,21 @@ Both layers use the same core functions, but the MCP path adds AI-specific track
 - `processMessage` auto-resolves per-mode LLM, returns `_llmProvider` (internal) / `llmProvider` (external)
 
 ### Understanding System
+
 - **UnderstandingRun** → shadow tree per perspective, bottom-up layer compression
 - **Incremental runs** → `findOrCreateUnderstandingRun` reuses completed runs, `prepareIncrementalRun` detects dirty nodes via `contributionSnapshot`
 - **Orchestrator** → loops nodes depth-first, commits encodings layer by layer
 - POST endpoint supports `incremental: true` to reuse existing runs
 
 ### Background Pipelines
+
 - **Tree Dream** → daily per-root: cleanup (expand+reorganize) → drain (ShortMemory) → understanding
 - **Raw Idea Placement** → pending ideas auto-placed into best root/node
 - **Short-Term Drain** → ShortMemory items clustered → scouted → planned → placed into tree
 - **Cleanup** → expand sparse branches, reorganize/consolidate small nodes
 
 ### WebSocket Conversation Flow
+
 1. Message → conversation.js routes to current mode
 2. Mode builds system prompt with tree context
 3. Translator classifies intent (navigate/create/edit/delete/query/reflect)
@@ -74,12 +82,15 @@ Both layers use the same core functions, but the MCP path adds AI-specific track
 6. Session registry tracks lifecycle, active navigator control
 
 ### Energy System
+
 - 100 daily base (scales with tier), 1 per understanding node
 - Daily reset via cron
 
 ## Conventions
+
 - UUIDs for all primary keys
 - Default LLM: `qwen3.5:27b` via Ollama, customizable per user/root/mode
 - Node paths: "Root > Child > Grandchild" format
 - Session idle TTL: 15 min reuse window
 - `trackChainStep` logs actual LLM used per step via `result._llmProvider || llmProvider`
+- Never use em dashes in user-facing text outputs (HTML pages, error messages, UI copy)

@@ -432,29 +432,29 @@ ${ownerConnections.length === 0
           const age = Math.round((Date.now() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60));
           const ageStr = age < 1 ? "< 1h ago" : age < 24 ? `${age}h ago` : `${Math.round(age / 24)}d ago`;
           const statusBadge = item.status === "escalated"
-            ? `<span style="color:#ff9500;font-size:0.75em;">escalated</span>`
-            : `<span style="color:#8e8e93;font-size:0.75em;">pending</span>`;
+            ? `<span style="color:#ffb347;font-size:0.75em;font-weight:600;">escalated</span>`
+            : `<span style="color:rgba(255,255,255,0.5);font-size:0.75em;">pending</span>`;
           const candidateStr = item.candidates?.length
-            ? `<div style="color:#8e8e93;font-size:0.8em;margin-top:2px;">candidates: ${item.candidates.map(c => escapeHtml(c.nodePath || c.nodeId)).join(", ")}</div>`
+            ? `<div style="color:rgba(255,255,255,0.55);font-size:0.8em;margin-top:2px;">candidates: ${item.candidates.map(c => escapeHtml(c.nodePath || c.nodeId)).join(", ")}</div>`
             : "";
           const reasonStr = item.deferReason
-            ? `<div style="color:#8e8e93;font-size:0.8em;margin-top:2px;">${escapeHtml(item.deferReason)}</div>`
+            ? `<div style="color:rgba(255,255,255,0.55);font-size:0.8em;margin-top:2px;">${escapeHtml(item.deferReason)}</div>`
             : "";
-          return `<div style="padding:8px 10px;border-left:3px solid #ff9500;margin:6px 0;background:rgba(255,149,0,0.08);border-radius:4px;">
+          return `<div style="padding:8px 10px;border-left:3px solid #ff9500;margin:6px 0;background:rgba(255,149,0,0.12);border-radius:4px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
-              <span style="font-size:0.85em;">${escapeHtml(item.content.length > 120 ? item.content.slice(0, 117) + "..." : item.content)}</span>
-              <span style="font-size:0.7em;color:#8e8e93;white-space:nowrap;margin-left:8px;">${ageStr}</span>
+              <span style="font-size:0.85em;color:rgba(255,255,255,0.9);">${escapeHtml(item.content.length > 120 ? item.content.slice(0, 117) + "..." : item.content)}</span>
+              <span style="font-size:0.7em;color:rgba(255,255,255,0.45);white-space:nowrap;margin-left:8px;">${ageStr}</span>
             </div>
             <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
               ${statusBadge}
-              <span style="color:#8e8e93;font-size:0.75em;">via ${escapeHtml(item.sourceType)}</span>
-              ${item.drainAttempts > 0 ? `<span style="color:#ff3b30;font-size:0.75em;">${item.drainAttempts} attempts</span>` : ""}
+              <span style="color:rgba(255,255,255,0.5);font-size:0.75em;">via ${escapeHtml(item.sourceType)}</span>
+              ${item.drainAttempts > 0 ? `<span style="color:#ff6b6b;font-size:0.75em;font-weight:600;">${item.drainAttempts} attempts</span>` : ""}
             </div>
             ${candidateStr}
             ${reasonStr}
           </div>`;
         }).join("")
-      : `<div style="color:#8e8e93;font-size:0.85em;padding:8px;">No deferred items</div>`;
+      : `<div style="color:rgba(255,255,255,0.45);font-size:0.85em;padding:8px;">No deferred items</div>`;
 
     // SAFE JSON
     const jsonDump = JSON.stringify(allData, null, 2)
@@ -1544,7 +1544,7 @@ transition:
     <!-- Deferred Items (Short-Term Holdings) -->
     <div class="content-card">
       <div class="section-header">
-        <h2>Short-Term Holdings ${deferredItems.length > 0 ? `<span style="font-size:0.7em;color:#ff9500;">(${deferredItems.length})</span>` : ""}</h2>
+        <h2>Short-Term Holdings ${deferredItems.length > 0 ? `<span style="font-size:0.7em;color:#ffb347;">(${deferredItems.length})</span>` : ""}</h2>
       </div>
       ${deferredHtml}
     </div>
@@ -1556,79 +1556,86 @@ ${
     (c) => c._id.toString() === req.userId?.toString(),
   )
     ? `
-<div class="content-card">
-  <div class="section-header">
-    <h2>${isOwner ? "Tree Settings" : "Contributor Options"}</h2>
-  </div>
-
-  <div class="settings-group">
-    <h3>Team</h3>
-    ${ownerHtml}
-    ${contributorsHtml}
-    ${inviteFormHtml}
-  </div>
-
-  ${policyHtml ? `
-  <div class="settings-group">
-    <h3>Transaction Policy</h3>
-    ${policyHtml}
-  </div>` : ""}
-
-  ${treeLlmHtml ? `
-  <div class="settings-group">
-    ${treeLlmHtml}
-  </div>` : ""}
 
   ${isOwner ? `
-  <div class="settings-group">
-    <h3>Tree Dream</h3>
-    <p style="color:rgba(255,255,255,0.5);font-size:0.85rem;margin:0 0 12px">
-      Schedule a daily maintenance cycle — cleanup, process deferred items,
-      and update tree understanding.
-    </p>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <input type="time" id="dreamTimeInput" value="${rootMeta.dreamTime || ""}"
-        style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
-               background:rgba(255,255,255,0.06);color:#fff;font-size:0.95rem" />
-      <button onclick="saveDreamTime()" style="padding:8px 14px;border-radius:8px;
-        border:1px solid rgba(72,187,120,0.4);background:rgba(72,187,120,0.15);
-        color:rgba(72,187,120,0.9);font-weight:600;cursor:pointer">Save</button>
-      <button onclick="clearDreamTime()" style="padding:8px 14px;border-radius:8px;
-        border:1px solid rgba(255,107,107,0.4);background:rgba(255,107,107,0.1);
-        color:rgba(255,107,107,0.8);cursor:pointer">Disable</button>
-      <span id="dreamTimeStatus" style="display:none;font-size:0.85rem"></span>
-    </div>
-    ${rootMeta.lastDreamAt ? `<p style="color:rgba(255,255,255,0.4);font-size:0.8rem;margin:8px 0 0">Last dream: ${new Date(rootMeta.lastDreamAt).toLocaleString()}</p>` : ""}
+<div class="content-card">
+  <div class="section-header">
+    <h2>Tree Dream</h2>
   </div>
+  <p style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin:0 0 12px">
+    Schedule a daily maintenance cycle: cleanup, process deferred items,
+    and update tree understanding.
+  </p>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <input type="time" id="dreamTimeInput" value="${rootMeta.dreamTime || ""}"
+      style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
+             background:rgba(255,255,255,0.06);color:#fff;font-size:0.95rem" />
+    <button onclick="saveDreamTime()" style="padding:8px 14px;border-radius:8px;
+      border:1px solid rgba(72,187,120,0.4);background:rgba(72,187,120,0.15);
+      color:rgba(72,187,120,0.9);font-weight:600;cursor:pointer">Save</button>
+    <button onclick="clearDreamTime()" style="padding:8px 14px;border-radius:8px;
+      border:1px solid rgba(255,107,107,0.4);background:rgba(255,107,107,0.1);
+      color:rgba(255,107,107,0.8);cursor:pointer">Disable</button>
+    <span id="dreamTimeStatus" style="display:none;font-size:0.85rem"></span>
+  </div>
+  ${rootMeta.lastDreamAt ? `<p style="color:rgba(255,255,255,0.6);font-size:0.8rem;margin:8px 0 0">Last dream: ${new Date(rootMeta.lastDreamAt).toLocaleString()}</p>` : ""}
+</div>
   ` : ""}
+
+<div class="content-card">
+  <div class="section-header">
+    <h2>Team</h2>
+  </div>
+  ${ownerHtml}
+  ${contributorsHtml}
+  ${inviteFormHtml}
+</div>
+
+  ${policyHtml ? `
+<div class="content-card">
+  <div class="section-header">
+    <h2>Transaction Policy</h2>
+  </div>
+  ${policyHtml}
+</div>` : ""}
+
+  ${treeLlmHtml ? `
+<div class="content-card">
+  <div class="section-header">
+    <h2>Tree Models</h2>
+  </div>
+  ${treeLlmHtml}
+</div>` : ""}
 
   ${
     !isOwner && req.userId
       ? `
-  <div class="settings-group">
-    <h3>Leave Tree</h3>
-    <form
-      method="POST"
-      action="/api/v1/root/${nodeId}/remove-user?token=${req.query.token ?? ""}&html"
-      onsubmit="return confirm('Are you sure you want to leave this tree?')"
-    >
-      <input type="hidden" name="userReceiving" value="${req.userId}" />
-      <button
-        type="submit"
-        style="
-          padding:8px 14px;
-          border-radius:8px;
-          border:1px solid #900;
-          background:rgba(239, 68, 68, 0.15);
-          color:#ff6b6b;
-          font-weight:600;
-          cursor:pointer;
-        "
-      >
-        Leave Tree
-      </button>
-    </form>
+<div class="content-card">
+  <div class="section-header">
+    <h2>Leave Tree</h2>
   </div>
+  <form
+    method="POST"
+    action="/api/v1/root/${nodeId}/remove-user?token=${req.query.token ?? ""}&html"
+    onsubmit="return confirm('Are you sure you want to leave this tree?')"
+  >
+    <input type="hidden" name="userReceiving" value="${req.userId}" />
+    <button
+      type="submit"
+      style="
+        padding:8px 14px;
+        border-radius:8px;
+        border:1px solid #900;
+        background:rgba(239, 68, 68, 0.15);
+        color:#ff6b6b;
+        font-weight:600;
+        cursor:pointer;
+      "
+    >
+      Leave Tree
+    </button>
+  </form>
+</div>
   `
       : ""
   }
@@ -1636,14 +1643,15 @@ ${
   ${
     retireHtml
       ? `
-  <div class="settings-group">
-    <h3>Retire Tree</h3>
-    ${retireHtml}
+<div class="content-card">
+  <div class="section-header">
+    <h2>Retire Tree</h2>
   </div>
+  ${retireHtml}
+</div>
   `
       : ""
   }
-</div>
 `
     : ""
 }

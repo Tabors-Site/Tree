@@ -9,17 +9,9 @@
   padding: 20px;
 }
 
-/* ── CARD (glass wrapper — matches original .card) ── */
+/* ── CARD (transparent wrapper — sections are their own cards) ── */
 .api-docs-card {
   position: relative;
-  overflow: hidden;
-  background: rgba(115, 111, 230, 0.28);
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-  border-radius: 24px;
-  padding: 48px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25);
-  border: 1px solid rgba(255,255,255,0.28);
   color: white;
   animation: apiDocsIn 0.6s ease-out;
 }
@@ -31,7 +23,14 @@
 
 /* ── HEADER ───────────────── */
 .api-docs-header {
-  margin-bottom: 28px;
+  background: rgba(115, 111, 230, 0.28);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,0.28);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  margin-bottom: 20px;
 }
 .api-docs-title {
   font-size: 24px;
@@ -50,10 +49,13 @@
 
 /* ── TOC ──────────────────── */
 .api-docs .toc {
-  background: rgba(255,255,255,0.08);
+  background: rgba(115, 111, 230, 0.28);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
   border-radius: 16px; padding: 20px 24px;
-  border: 1px solid rgba(255,255,255,0.15);
-  margin-bottom: 28px;
+  border: 1px solid rgba(255,255,255,0.28);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  margin-bottom: 20px;
 }
 .api-docs .toc-title { font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
 .api-docs .toc-group { margin-bottom: 10px; }
@@ -67,11 +69,14 @@
 
 /* ── SECTION ──────────────── */
 .api-docs .section {
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(10px);
+  background: rgba(115, 111, 230, 0.28);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
   padding: 28px; border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.28);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
   margin-bottom: 20px;
+  scroll-margin-top: 20px;
 }
 .api-docs .section-title {
   font-size: 22px; font-weight: 700; color: white;
@@ -220,7 +225,7 @@
 /* ── RESPONSIVE ───────────── */
 @media (max-width: 640px) {
   .api-docs { padding: 16px; }
-  .api-docs-card { padding: 24px 16px; border-radius: 20px; }
+  .api-docs-header { padding: 20px 16px; }
   .api-docs .section { padding: 20px 14px; }
   .api-docs .endpoint { padding: 14px; }
   .api-docs .ep-method-url { gap: 6px; }
