@@ -205,6 +205,9 @@ const MODE_TO_ASSIGNMENT = {
   "tree:drain-cluster": "drain",
   "tree:drain-scout": "drain",
   "tree:drain-plan": "drain",
+  // dream notification modes
+  "tree:dream-summary": "cleanup",
+  "tree:dream-thought": "cleanup",
 };
 
 /**
@@ -247,7 +250,7 @@ export function clearUserClientCache(userId) {
 // SESSION STATE (keyed by visitorId)
 // ─────────────────────────────────────────────────────────────────────────
 
-// Each session holds: { modeKey, bigMode, messages[], rootId }
+// Each session holds: { modeKey, bigMode, messages[], rootId, _lastActive }
 const sessions = new Map();
 
 /**
@@ -260,10 +263,27 @@ function getSession(visitorId) {
       bigMode: null,
       messages: [],
       rootId: null,
+      _lastActive: Date.now(),
     });
   }
-  return sessions.get(visitorId);
+  const s = sessions.get(visitorId);
+  s._lastActive = Date.now();
+  return s;
 }
+
+// Sweep stale conversation sessions every 10 minutes (safety net)
+const STALE_SESSION_MS = 30 * 60 * 1000; // 30 min
+setInterval(() => {
+  const now = Date.now();
+  let swept = 0;
+  for (const [id, s] of sessions) {
+    if (now - (s._lastActive || 0) > STALE_SESSION_MS) {
+      sessions.delete(id);
+      swept++;
+    }
+  }
+  if (swept > 0) console.log(`🧹 Swept ${swept} stale conversation session(s) (${sessions.size} remaining)`);
+}, 10 * 60 * 1000);
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODE SWITCHING
@@ -670,7 +690,10 @@ export function getCurrentMode(visitorId) {
 
 export function clearSession(visitorId) {
   sessions.delete(visitorId);
-  console.log(`🧹 Cleared session for ${visitorId}`);
+}
+
+export function conversationSessionCount() {
+  return sessions.size;
 }
 
 /**

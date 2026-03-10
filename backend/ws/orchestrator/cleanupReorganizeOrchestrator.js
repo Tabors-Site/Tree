@@ -9,7 +9,7 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-import { switchMode, processMessage, setRootId, getClientForUser } from "../conversation.js";
+import { switchMode, processMessage, setRootId, getClientForUser, clearSession } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { buildDeepTreeSummary } from "../../core/treeFetch.js";
@@ -48,7 +48,7 @@ function parseJsonSafe(text) {
 export async function orchestrateReorganize({ rootId, userId, username, source = "orchestrator" }) {
   if (activeRuns.has(rootId)) {
     console.log(`⏭️ Cleanup reorganize already running for tree ${rootId}, skipping`);
-    return { success: false, error: "already running" };
+    return { success: false, error: "already running", sessionId: null };
   }
 
   activeRuns.add(rootId);
@@ -127,7 +127,7 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
     if (!plan) {
       console.error("❌ Cleanup reorganize: analysis returned invalid JSON");
       finalizeArgs = { content: "Analysis failed — invalid JSON", stopped: false, modeKey: "cleanup-reorg:complete" };
-      return { success: false, error: "analysis failed" };
+      return { success: false, error: "analysis failed", sessionId };
     }
 
     trackChainStep({
@@ -150,7 +150,7 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
     if (moves.length === 0 && deletes.length === 0) {
       console.log("🧹 Tree is well-organized — no changes needed");
       finalizeArgs = { content: "Tree is well-organized", stopped: false, modeKey: "cleanup-reorg:complete" };
-      return { success: true, moves: 0, deletes: 0 };
+      return { success: true, moves: 0, deletes: 0, sessionId };
     }
 
     console.log(`🧹 Plan: ${moves.length} move(s), ${deletes.length} delete(s)`);
@@ -266,11 +266,11 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
     };
 
     console.log(`🧹 Cleanup reorganize complete: ${moveCount} moved, ${deleteCount} deleted`);
-    return { success: true, moves: moveCount, deletes: deleteCount };
+    return { success: true, moves: moveCount, deletes: deleteCount, sessionId };
   } catch (err) {
     console.error(`❌ Cleanup reorganize error for tree ${rootId}:`, err.message);
     finalizeArgs = { content: err.message, stopped: abort.signal.aborted, modeKey: "cleanup-reorg:complete" };
-    return { success: false, error: err.message };
+    return { success: false, error: err.message, sessionId };
   } finally {
     if (mainChatId) {
       finalizeAIChat({ chatId: mainChatId, ...finalizeArgs }).catch((e) =>
@@ -281,6 +281,7 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
     clearSessionAbort(sessionId);
     endSession(sessionId);
     closeMCPClient(visitorId);
+    clearSession(visitorId);
     activeRuns.delete(rootId);
   }
 }

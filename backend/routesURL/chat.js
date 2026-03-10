@@ -6,6 +6,7 @@ import express from "express";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
 import authenticateLite from "../middleware/authenticateLite.js";
+import { getNotifications } from "../core/notifications.js";
 
 const router = express.Router();
 
@@ -117,6 +118,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .back-btn svg { width: 12px; height: 12px; }
 
     .status-badge { display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 100px; border: 1px solid var(--glass-border-light); font-size: 12px; font-weight: 600; }
+    .status-badge .status-text { display: inline; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 12px var(--accent-glow); animation: pulse 2s ease-in-out infinite; flex-shrink: 0; }
     .status-dot.connected { background: var(--accent); }
     .status-dot.disconnected { background: var(--error); animation: none; }
@@ -288,10 +290,133 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .welcome-message h2 { font-size: 24px; font-weight: 600; margin-bottom: 12px; }
     .welcome-message p { font-size: 15px; color: var(--text-secondary); line-height: 1.6; }
 
+    /* Notifications panel */
+    .notif-btn {
+      font-size: 12px; color: var(--text-muted);
+      background: rgba(255,255,255,0.1); border-radius: 8px;
+      padding: 6px 14px; border: 1px solid var(--glass-border-light);
+      cursor: pointer; transition: all var(--transition-fast);
+      font-family: inherit; position: relative;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .notif-btn:hover { background: rgba(255,255,255,0.18); color: var(--text-primary); }
+    .notif-btn-icon { display: none; font-size: 14px; line-height: 1; }
+    .notif-btn .notif-dot {
+      position: absolute; top: -3px; right: -3px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);
+      display: none;
+    }
+    .notif-btn .notif-dot.has-notifs { display: block; }
+
+    .notif-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      z-index: 9998; display: none;
+    }
+    .notif-overlay.open { display: block; }
+
+    .notif-panel {
+      position: fixed; top: 0; right: -400px; bottom: 0;
+      width: 380px; max-width: 90vw;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      z-index: 9999;
+      display: flex; flex-direction: column;
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: -8px 0 32px rgba(0,0,0,0.3);
+    }
+    .notif-panel.open { right: 0; }
+
+    .notif-panel-header {
+      padding: 20px; display: flex; align-items: center;
+      justify-content: space-between; flex-shrink: 0;
+      border-bottom: 1px solid var(--glass-border-light);
+    }
+    .notif-panel-header h2 { font-size: 18px; font-weight: 600; color: white; }
+    .notif-close {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border-light);
+      color: white; cursor: pointer; font-size: 16px; display: flex;
+      align-items: center; justify-content: center; transition: all var(--transition-fast);
+    }
+    .notif-close:hover { background: rgba(255,255,255,0.2); }
+
+    .notif-list {
+      flex: 1; overflow-y: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .notif-list::-webkit-scrollbar { width: 6px; }
+    .notif-list::-webkit-scrollbar-track { background: transparent; }
+    .notif-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+
+    .notif-item {
+      background: rgba(var(--glass-rgb), var(--glass-alpha));
+      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      border: 1px solid var(--glass-border-light);
+      border-radius: 14px; padding: 16px;
+      animation: fadeInUp 0.3s ease-out backwards;
+      transition: all var(--transition-fast);
+    }
+    .notif-item:hover {
+      background: rgba(var(--glass-rgb), 0.42);
+      transform: translateY(-1px);
+    }
+    .notif-item.type-thought { border-left: 3px solid #9b64dc; }
+    .notif-item.type-summary { border-left: 3px solid #6464d2; }
+
+    .notif-item-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .notif-item-icon { font-size: 18px; flex-shrink: 0; }
+    .notif-item-title {
+      font-size: 14px; font-weight: 600; color: white;
+      flex: 1; line-height: 1.3;
+    }
+    .notif-item-badge {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; padding: 2px 7px; border-radius: 6px;
+      background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.6);
+      border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;
+    }
+    .notif-item-content {
+      font-size: 13px; color: rgba(255,255,255,0.85);
+      line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+    }
+    .notif-item-time {
+      font-size: 11px; color: rgba(255,255,255,0.45);
+      margin-top: 8px;
+    }
+    .notif-empty {
+      text-align: center; color: rgba(255,255,255,0.5);
+      font-size: 14px; padding: 40px 20px;
+    }
+    .notif-empty-icon { font-size: 40px; margin-bottom: 12px; display: block; }
+    .notif-loading { text-align: center; color: rgba(255,255,255,0.5); padding: 40px 20px; font-size: 14px; }
+
     @media (max-width: 600px) {
       .container { max-width: 100%; }
+      .chat-header { padding: 0 12px; }
+      .header-right { gap: 6px; }
       .chat-input-area { padding: 12px 16px 16px; }
+
+      /* Collapse status badge to dot only */
+      .status-badge .status-text { display: none; }
+      .status-badge { padding: 6px; min-width: 20px; justify-content: center; }
+
+      /* Collapse notifications button to icon only */
+      .notif-btn-label { display: none; }
+      .notif-btn-icon { display: inline; }
+      .notif-btn { padding: 6px 8px; }
+
+      /* Shrink other buttons */
       .advanced-btn { padding: 6px 10px; font-size: 11px; }
+      .back-btn { padding: 4px 8px; font-size: 11px; }
+      .back-btn svg { width: 10px; height: 10px; }
+
+      /* Hide title text, keep icon */
+      .chat-title h1 { display: none; }
+
+      .notif-panel { width: 100%; max-width: 100%; }
     }
   </style>
 </head>
@@ -313,9 +438,26 @@ router.get("/chat", authenticateLite, async (req, res) => {
         </button>
         <div class="status-badge">
           <div class="status-dot connecting" id="statusDot"></div>
-          <span id="statusText">Connecting</span>
+          <span class="status-text" id="statusText">Connecting</span>
         </div>
+        <button class="notif-btn" id="notifBtn" onclick="toggleNotifs()">
+          <span class="notif-dot" id="notifDot"></span>
+          <span class="notif-btn-icon">🔔</span>
+          <span class="notif-btn-label">Notifications</span>
+        </button>
         <a href="/app" class="advanced-btn">Advanced</a>
+      </div>
+    </div>
+
+    <!-- Notifications panel -->
+    <div class="notif-overlay" id="notifOverlay" onclick="toggleNotifs()"></div>
+    <div class="notif-panel" id="notifPanel">
+      <div class="notif-panel-header">
+        <h2>Notifications</h2>
+        <button class="notif-close" onclick="toggleNotifs()">&#x2715;</button>
+      </div>
+      <div class="notif-list" id="notifList">
+        <div class="notif-loading">Loading...</div>
       </div>
     </div>
 
@@ -743,12 +885,94 @@ router.get("/chat", authenticateLite, async (req, res) => {
     });
 
     sendBtn.addEventListener("click", sendMessage);
+
+    // ── Notifications ─────────────────────────────────────────────────
+    const notifPanel = document.getElementById("notifPanel");
+    const notifOverlay = document.getElementById("notifOverlay");
+    const notifList = document.getElementById("notifList");
+    const notifDot = document.getElementById("notifDot");
+    let notifOpen = false;
+    let notifLoaded = false;
+
+    function toggleNotifs() {
+      notifOpen = !notifOpen;
+      notifPanel.classList.toggle("open", notifOpen);
+      notifOverlay.classList.toggle("open", notifOpen);
+      if (notifOpen && !notifLoaded) fetchNotifs();
+    }
+
+    async function fetchNotifs() {
+      notifList.innerHTML = '<div class="notif-loading">Loading...</div>';
+      try {
+        const res = await fetch("/api/v1/chat/notifications", { credentials: "include" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+
+        notifLoaded = true;
+        const notifs = data.notifications || [];
+
+        if (notifs.length === 0) {
+          notifList.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">\\ud83d\\udd14</span>No notifications from the last 7 days</div>';
+          notifDot.classList.remove("has-notifs");
+          return;
+        }
+
+        notifDot.classList.add("has-notifs");
+        notifList.innerHTML = notifs.map(function(n, i) {
+          const isThought = n.type === "dream-thought";
+          const icon = isThought ? "\\ud83d\\udcad" : "\\ud83d\\udccb";
+          const badge = isThought ? "Thought" : "Summary";
+          const cls = isThought ? "type-thought" : "type-summary";
+          const date = new Date(n.createdAt).toLocaleDateString(undefined, {
+            month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+          });
+          return '<div class="notif-item ' + cls + '" style="animation-delay:' + (i * 0.04) + 's">' +
+            '<div class="notif-item-header">' +
+              '<span class="notif-item-icon">' + icon + '</span>' +
+              '<span class="notif-item-title">' + escapeHtml(n.title) + '</span>' +
+              '<span class="notif-item-badge">' + badge + '</span>' +
+            '</div>' +
+            '<div class="notif-item-content">' + escapeHtml(n.content) + '</div>' +
+            '<div class="notif-item-time">' + date + '</div>' +
+          '</div>';
+        }).join("");
+      } catch (err) {
+        console.error("Notifications error:", err);
+        notifList.innerHTML = '<div class="notif-empty">Failed to load notifications</div>';
+      }
+    }
+
+    // Check for notifications on load (just count, don't render)
+    fetch("/api/v1/chat/notifications", { credentials: "include" })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.notifications && d.notifications.length > 0) {
+          notifDot.classList.add("has-notifs");
+        }
+      })
+      .catch(function() {});
   </script>
 </body>
 </html>`);
   } catch (err) {
     console.error("Error rendering /chat:", err);
     return res.status(500).send("Internal server error");
+  }
+});
+
+router.get("/chat/notifications", authenticateLite, async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+    const { notifications, total } = await getNotifications({
+      userId: req.userId,
+      rootId: req.query.rootId,
+      limit: 50,
+      sinceDays: 7,
+    });
+    return res.json({ notifications, total });
+  } catch (err) {
+    console.error("Chat notifications error:", err);
+    return res.status(500).json({ error: err.message });
   }
 });
 

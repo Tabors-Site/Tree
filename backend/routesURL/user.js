@@ -24,6 +24,7 @@ import {
   getAllTagsForUser as coreGetAllTagsForUser,
   searchNotesByUser as coreSearchNotesByUser,
 } from "../core/notes.js";
+import { getNotifications } from "../core/notifications.js";
 import { getContributionsByUser } from "../core/contributions.js";
 
 import { getDeletedBranchesForUser } from "../core/treeFetch.js";
@@ -1158,6 +1159,7 @@ text-decoration: none;
         <li><a href="/api/v1/user/${userId}/notes${queryString}">Notes</a></li>
         <li><a href="/api/v1/user/${userId}/tags${queryString}">Mail</a></li>
         <li><a href="/api/v1/user/${userId}/contributions${queryString}">Contributions</a></li>
+        <li><a href="/api/v1/user/${userId}/notifications${queryString}">Notifications</a></li>
         <li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>
         <li><a href="/api/v1/user/${userId}/deleted${queryString}">Deleted</a></li>
         <li><a href="/api/v1/user/${userId}/api-keys${queryString}">API Keys</a></li>
@@ -12660,6 +12662,438 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 `);
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /user/:userId/notifications
+// ─────────────────────────────────────────────────────────────────────────
+router.get("/user/:userId/notifications", urlAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const offset = parseInt(req.query.offset, 10) || 0;
+
+    const { notifications, total } = await getNotifications({
+      userId,
+      rootId: req.query.rootId,
+      limit,
+      offset,
+    });
+
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+    if (!wantHtml) {
+      return res.json({ notifications, total, limit, offset });
+    }
+
+    // ── HTML view ────────────────────────────────────────────────────
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+    const user = await User.findById(userId).lean();
+    const username = user?.username || "Unknown user";
+
+    const esc = (str = "") =>
+      String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const items = notifications.map((n) => {
+      const icon = n.type === "dream-thought" ? "💭" : "📋";
+      const typeLabel = n.type === "dream-thought" ? "Thought" : "Summary";
+      const colorClass = n.type === "dream-thought" ? "glass-purple" : "glass-indigo";
+      const date = new Date(n.createdAt).toLocaleString();
+
+      return `
+      <li class="note-card ${colorClass}">
+        <div class="note-content">
+          <div class="contribution-action">
+            <span style="font-size:20px;margin-right:6px">${icon}</span>
+            ${esc(n.title)}
+            <span class="badge badge-type">${typeLabel}</span>
+          </div>
+          <div style="margin-top:10px;font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;white-space:pre-wrap">${esc(n.content)}</div>
+        </div>
+        <div class="note-meta">
+          ${date}
+        </div>
+      </li>`;
+    }).join("");
+
+    res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${esc(username)} - Notifications</title>
+  <style>
+:root {
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px; height: 600px;
+  background: white;
+  top: -300px; right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px; height: 400px;
+  background: white;
+  bottom: -200px; left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Glass Back Nav ─────────────────────────────── */
+
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(115, 111, 230, var(--glass-alpha-hover));
+  transform: translateY(-1px);
+}
+
+.back-link:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Glass Header ───────────────────────────────── */
+
+.header {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.header:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.header h1 {
+  font-size: 28px; font-weight: 600; color: white;
+  margin-bottom: 8px; line-height: 1.3; letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.header h1 a {
+  color: white; text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.message-count {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.25);
+  color: white; border-radius: 980px;
+  font-size: 14px; font-weight: 600;
+  margin-left: 12px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.header-subtitle {
+  font-size: 14px; color: rgba(255,255,255,0.9);
+  margin-bottom: 16px; font-weight: 400; line-height: 1.5;
+}
+
+/* ── Glass Cards ────────────────────────────────── */
+
+.notes-list {
+  list-style: none;
+  display: flex; flex-direction: column; gap: 16px;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.note-card {
+  --card-rgb: 115, 111, 230;
+  position: relative;
+  background: rgba(var(--card-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  color: white; overflow: hidden;
+}
+
+.note-card:nth-child(1) { animation-delay: 0.25s; }
+.note-card:nth-child(2) { animation-delay: 0.3s; }
+.note-card:nth-child(3) { animation-delay: 0.35s; }
+.note-card:nth-child(4) { animation-delay: 0.4s; }
+.note-card:nth-child(5) { animation-delay: 0.45s; }
+.note-card:nth-child(n+6) { animation-delay: 0.5s; }
+
+.note-card::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.note-card:hover {
+  background: rgba(var(--card-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+}
+
+.note-card:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Color Variants ─────────────────────────────── */
+
+.glass-default  { --card-rgb: 115, 111, 230; }
+.glass-purple   { --card-rgb: 155, 100, 220; }
+.glass-indigo   { --card-rgb: 100, 100, 210; }
+
+/* ── Card Inner ─────────────────────────────────── */
+
+.note-content {
+  margin-bottom: 12px;
+}
+
+.contribution-action {
+  font-size: 15px; line-height: 1.6;
+  color: white; font-weight: 600;
+  word-wrap: break-word;
+}
+
+/* ── Note Meta ──────────────────────────────────── */
+
+.note-meta {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  font-size: 12px; color: rgba(255,255,255,0.85);
+  line-height: 1.8;
+  display: flex; flex-wrap: wrap;
+  align-items: center; gap: 6px;
+}
+
+/* ── Badges ─────────────────────────────────────── */
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 980px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.badge-type {
+  background: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+/* ── Empty State ────────────────────────────────── */
+
+.empty-state {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.empty-state-icon {
+  font-size: 64px; margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+}
+
+.empty-state-text {
+  font-size: 20px; color: white;
+  margin-bottom: 8px; font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px; color: rgba(255,255,255,0.85);
+}
+
+/* ── Responsive ─────────────────────────────────── */
+
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .header { padding: 24px 20px; }
+  .header h1 { font-size: 24px; }
+  .message-count { display: block; margin-left: 0; margin-top: 8px; width: fit-content; }
+  .note-card { padding: 20px 16px; }
+  .back-nav { flex-direction: column; }
+  .back-link { width: 100%; justify-content: center; }
+  .empty-state { padding: 40px 24px; }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container { max-width: 700px; }
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
+    </div>
+
+    <div class="header">
+      <h1>
+        Notifications for
+        <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
+        ${notifications.length > 0 ? `<span class="message-count">${total}</span>` : ""}
+      </h1>
+      <div class="header-subtitle">Dream summaries and thoughts from your trees</div>
+    </div>
+
+    ${
+      items.length
+        ? `<ul class="notes-list">${items}</ul>`
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">🔔</div>
+      <div class="empty-state-text">No notifications yet</div>
+      <div class="empty-state-subtext">Dreams will generate summaries and thoughts automatically</div>
+    </div>`
+    }
+  </div>
+</body>
+</html>`);
+  } catch (err) {
+    console.error("Notifications route error:", err);
     res.status(500).json({ error: err.message });
   }
 });

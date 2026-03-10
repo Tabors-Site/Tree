@@ -583,7 +583,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           }
 
           if (response && !abort.signal.aborted) {
-            socket.emit("chatResponse", { ...response, generation });
+            // Strip internal tracking fields before sending to client
+            const { _llmProvider, _raw, ...publicResponse } = response;
+            socket.emit("chatResponse", { ...publicResponse, generation });
 
             // ── Finalize AIChat (success) ────────────────────────────
             if (aiChat) {

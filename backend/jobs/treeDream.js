@@ -12,6 +12,7 @@ import { orchestrateExpand } from "../ws/orchestrator/cleanupExpandOrchestrator.
 import { drainTree } from "../ws/orchestrator/shortTermDrainOrchestrator.js";
 import { findOrCreateUnderstandingRun } from "../core/understanding.js";
 import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
+import { orchestrateDreamNotify } from "../ws/orchestrator/dreamNotifyOrchestrator.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -62,6 +63,8 @@ async function runTreeDream(rootNode) {
   activeDreams.add(rootId);
   console.log(`💤 Dream starting for "${rootNode.name}" [${rootId.slice(0, 8)}]`);
 
+  const dreamSessionIds = [];
+
   try {
     // ════════════════════════════════════════════════════════════════
     // PHASE 1: CLEANUP (multi-pass)
@@ -74,6 +77,7 @@ async function runTreeDream(rootNode) {
 
       try {
         const reorgResult = await orchestrateReorganize({ rootId, userId, username, source: "background" });
+        if (reorgResult?.sessionId) dreamSessionIds.push(reorgResult.sessionId);
         totalChanges += (reorgResult?.moves || 0) + (reorgResult?.deletes || 0);
       } catch (err) {
         console.error(`❌ Dream cleanup reorganize pass ${pass} failed:`, err.message);
@@ -81,6 +85,7 @@ async function runTreeDream(rootNode) {
 
       try {
         const expandResult = await orchestrateExpand({ rootId, userId, username, source: "background" });
+        if (expandResult?.sessionId) dreamSessionIds.push(expandResult.sessionId);
         totalChanges += expandResult?.expanded || 0;
       } catch (err) {
         console.error(`❌ Dream cleanup expand pass ${pass} failed:`, err.message);
@@ -114,7 +119,8 @@ async function runTreeDream(rootNode) {
       console.log(`💤 Drain pass ${pass}/${MAX_DRAIN_PASSES}: ${pendingCount} pending item(s)`);
 
       try {
-        await drainTree(rootId);
+        const drainResult = await drainTree(rootId);
+        if (drainResult?.sessionId) dreamSessionIds.push(drainResult.sessionId);
       } catch (err) {
         console.error(`❌ Dream drain pass ${pass} failed:`, err.message);
         break;
@@ -141,6 +147,26 @@ async function runTreeDream(rootNode) {
       console.log(`💤 Understanding run complete`);
     } catch (err) {
       console.error(`❌ Dream understanding failed:`, err.message);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // PHASE 4: DREAM NOTIFICATIONS
+    // ════════════════════════════════════════════════════════════════
+
+    if (dreamSessionIds.length > 0) {
+      try {
+        console.log(`📬 Generating dream notifications for "${rootNode.name}"`);
+        await orchestrateDreamNotify({
+          rootId,
+          userId,
+          username,
+          treeName: rootNode.name,
+          dreamSessionIds,
+          source: "background",
+        });
+      } catch (err) {
+        console.error(`❌ Dream notifications failed:`, err.message);
+      }
     }
 
     // ════════════════════════════════════════════════════════════════

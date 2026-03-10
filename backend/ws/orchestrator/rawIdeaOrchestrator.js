@@ -8,7 +8,7 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-import { switchMode, processMessage, setRootId, getClientForUser } from "../conversation.js";
+import { switchMode, processMessage, setRootId, getClientForUser, clearSession } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../aiChatTracker.js";
 import { orchestrateTreeRequest } from "./treeOrchestrator.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
@@ -431,5 +431,6 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     clearSessionAbort(sessionId);
     endSession(sessionId);
     closeMCPClient(visitorId);
+    clearSession(visitorId);
   }
 }

@@ -9,7 +9,7 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-import { switchMode, processMessage, setRootId, getClientForUser } from "../conversation.js";
+import { switchMode, processMessage, setRootId, getClientForUser, clearSession } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { createSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
@@ -108,7 +108,7 @@ async function findExpansionCandidates(rootId) {
 export async function orchestrateExpand({ rootId, userId, username, source = "orchestrator" }) {
   if (activeRuns.has(rootId)) {
     console.log(`⏭️ Cleanup expand already running for tree ${rootId}, skipping`);
-    return { success: false, error: "already running" };
+    return { success: false, error: "already running", sessionId: null };
   }
 
   activeRuns.add(rootId);
@@ -170,7 +170,7 @@ export async function orchestrateExpand({ rootId, userId, username, source = "or
     if (candidates.length === 0) {
       console.log("🧹 No dense notes found — nothing to expand");
       finalizeArgs = { content: "No expansion candidates", stopped: false, modeKey: "cleanup-expand:complete" };
-      return { success: true, expanded: 0 };
+      return { success: true, expanded: 0, sessionId };
     }
 
     console.log(`🧹 Found ${candidates.length} candidate node(s) with dense notes`);
@@ -376,11 +376,11 @@ export async function orchestrateExpand({ rootId, userId, username, source = "or
     };
 
     console.log(`🧹 Cleanup expand complete: ${totalExpansions} expansion(s)`);
-    return { success: true, expanded: totalExpansions };
+    return { success: true, expanded: totalExpansions, sessionId };
   } catch (err) {
     console.error(`❌ Cleanup expand error for tree ${rootId}:`, err.message);
     finalizeArgs = { content: err.message, stopped: abort.signal.aborted, modeKey: "cleanup-expand:complete" };
-    return { success: false, error: err.message };
+    return { success: false, error: err.message, sessionId };
   } finally {
     if (mainChatId) {
       finalizeAIChat({ chatId: mainChatId, ...finalizeArgs }).catch((e) =>
@@ -391,6 +391,7 @@ export async function orchestrateExpand({ rootId, userId, username, source = "or
     clearSessionAbort(sessionId);
     endSession(sessionId);
     closeMCPClient(visitorId);
+    clearSession(visitorId);
     activeRuns.delete(rootId);
   }
 }

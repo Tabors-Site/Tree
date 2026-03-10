@@ -20,6 +20,7 @@ export const SESSION_TYPES = {
   SHORT_TERM_DRAIN: "short-term-drain",
   CLEANUP_REORGANIZE: "cleanup-reorganize",
   CLEANUP_EXPAND: "cleanup-expand",
+  DREAM_NOTIFY: "dream-notify",
 };
 
 // ─────────────────────────────────────────────────────────────────────────

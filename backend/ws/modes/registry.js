@@ -27,6 +27,8 @@ import treeDrainScout from "./tree/drainScout.js";
 import treeDrainPlan from "./tree/drainPlan.js";
 import treeCleanupAnalyze from "./tree/cleanupAnalyze.js";
 import treeCleanupExpandScan from "./tree/cleanupExpandScan.js";
+import treeDreamSummary from "./tree/dreamSummary.js";
+import treeDreamThought from "./tree/dreamThought.js";
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -68,6 +70,8 @@ const ALL_MODES = {
   "tree:drain-plan": treeDrainPlan,
   "tree:cleanup-analyze": treeCleanupAnalyze,
   "tree:cleanup-expand-scan": treeCleanupExpandScan,
+  "tree:dream-summary": treeDreamSummary,
+  "tree:dream-thought": treeDreamThought,
 };
 
 // ─────────────────────────────────────────────────────────────────────────

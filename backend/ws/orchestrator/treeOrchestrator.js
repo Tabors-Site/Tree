@@ -199,10 +199,16 @@ function emitStatus(socket, phase, text) {
  * Emit an internal mode result to the chat so the user can see what's happening.
  */
 function emitModeResult(socket, modeKey, result) {
+  // Strip internal tracking fields before sending to client
+  let sanitized = result;
+  if (result && typeof result === "object") {
+    const { _llmProvider, _raw, ...rest } = result;
+    sanitized = rest;
+  }
   socket.emit("orchestratorStep", {
     modeKey,
     result:
-      typeof result === "string" ? result : JSON.stringify(result, null, 2),
+      typeof sanitized === "string" ? sanitized : JSON.stringify(sanitized, null, 2),
     timestamp: Date.now(),
   });
 }

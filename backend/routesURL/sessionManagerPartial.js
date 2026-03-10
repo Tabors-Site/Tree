@@ -87,6 +87,22 @@ export function dashboardCSS() {
     }
     .dash-back-btn:hover { background: rgba(255,255,255,0.15); color: var(--text-primary); }
 
+    .dash-close-btn {
+      margin-left: auto;
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      color: var(--text-muted);
+      font-size: 16px; line-height: 1;
+      cursor: pointer;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .dash-close-btn:hover { background: rgba(255,255,255,0.15); color: var(--text-primary); }
+    .dash-close-btn:active { transform: scale(0.93); }
+
     /* ── Raw idea processing strip ──────────────────────────────────── */
     .raw-idea-space {
       margin-bottom: 14px;
@@ -548,6 +564,7 @@ export function dashboardHTML() {
           <div id="dashForestView">
             <div class="dash-tree-header">
               <span class="dash-tree-title">Your Trees</span>
+              <button class="dash-close-btn" id="dashCloseBtn1" title="Close dashboard">&times;</button>
             </div>
             <div class="dash-forest" id="dashForestGrid"></div>
           </div>
@@ -557,6 +574,7 @@ export function dashboardHTML() {
             <div class="dash-tree-header">
               <button class="dash-back-btn" id="dashBackBtn">&larr; All Trees</button>
               <span class="dash-tree-title" id="dashTreeTitle">Tree</span>
+              <button class="dash-close-btn" id="dashCloseBtn2" title="Close dashboard">&times;</button>
             </div>
             <div id="dashTreeCanvas"></div>
           </div>
@@ -687,6 +705,12 @@ export function dashboardJS() {
         e.stopPropagation();
         toggleDashboard();
       });
+
+      // Close buttons inside the dashboard view
+      var dashCloseBtn1 = document.getElementById("dashCloseBtn1");
+      var dashCloseBtn2 = document.getElementById("dashCloseBtn2");
+      if (dashCloseBtn1) dashCloseBtn1.addEventListener("click", function() { if (dashboardActive) toggleDashboard(); });
+      if (dashCloseBtn2) dashCloseBtn2.addEventListener("click", function() { if (dashboardActive) toggleDashboard(); });
 
       // Expose closeDashboard so app.js goHome() can dismiss it
       if (window.TreeApp) {

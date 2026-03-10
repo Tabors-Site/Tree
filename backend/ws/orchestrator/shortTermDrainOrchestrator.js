@@ -9,7 +9,7 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-import { switchMode, processMessage, setRootId, getClientForUser } from "../conversation.js";
+import { switchMode, processMessage, setRootId, getClientForUser, clearSession } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { buildDeepTreeSummary } from "../../core/treeFetch.js";
@@ -78,7 +78,7 @@ async function requeueItems(itemIds, reason) {
 export async function drainTree(rootId) {
   if (activeDrains.has(rootId)) {
     console.log(`⏭️ Drain already running for tree ${rootId}, skipping`);
-    return;
+    return { sessionId: null };
   }
 
   // ── Load pending items ───────────────────────────────────────────────
@@ -91,13 +91,13 @@ export async function drainTree(rootId) {
     .limit(MAX_ITEMS_PER_RUN)
     .lean();
 
-  if (!items.length) return;
+  if (!items.length) return { sessionId: null };
 
   // ── Resolve tree owner ───────────────────────────────────────────────
   const rootNode = await Node.findById(rootId).select("rootOwner name").lean();
   if (!rootNode?.rootOwner) {
     console.error(`❌ Drain: tree ${rootId} has no rootOwner`);
-    return;
+    return { sessionId: null };
   }
   const userId = rootNode.rootOwner;
   const user = await User.findById(userId).select("username").lean();
@@ -183,7 +183,7 @@ export async function drainTree(rootId) {
       console.error("❌ Drain: cluster analysis returned no clusters");
       await requeueItems(items.map((i) => i._id), "cluster analysis failed");
       finalizeArgs = { content: "Cluster analysis failed", stopped: false, modeKey: "drain:complete" };
-      return;
+      return { sessionId };
     }
 
     trackChainStep({
@@ -497,6 +497,9 @@ export async function drainTree(rootId) {
     clearSessionAbort(sessionId);
     endSession(sessionId);
     closeMCPClient(visitorId);
+    clearSession(visitorId);
     activeDrains.delete(rootId);
   }
+
+  return { sessionId };
 }

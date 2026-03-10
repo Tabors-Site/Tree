@@ -13,7 +13,7 @@ import authenticate from "../middleware/authenticate.js";
 import { orchestrateTreeRequest } from "../ws/orchestrator/treeOrchestrator.js";
 import { orchestrateRawIdeaPlacement } from "../ws/orchestrator/rawIdeaOrchestrator.js";
 import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
-import { setRootId, getClientForUser } from "../ws/conversation.js";
+import { setRootId, getClientForUser, clearSession } from "../ws/conversation.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
 import { startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../ws/aiChatTracker.js";
 import { enqueue } from "../ws/requestQueue.js";
@@ -176,6 +176,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
       clearSessionAbort(sessionId);
       endSession(sessionId);
       if (!timedOut) closeMCPClient(visitorId);
+      clearSession(visitorId);
     }
   });
 });
@@ -324,6 +325,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
       clearSessionAbort(sessionId);
       endSession(sessionId);
       if (!timedOut) closeMCPClient(visitorId);
+      clearSession(visitorId);
     }
   });
 });

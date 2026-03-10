@@ -13,6 +13,7 @@ import {
   switchMode,
   processMessage,
   getClientForUser,
+  clearSession,
 } from "../conversation.js";
 import {
   trackChainStep,
@@ -434,5 +435,6 @@ export async function orchestrateUnderstanding({
       endSession(sessionId);
     }
     closeMCPClient(visitorId);
+    clearSession(visitorId);
   }
 }
