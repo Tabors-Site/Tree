@@ -12,7 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
 import { switchMode, processMessage, setRootId, getClientForUser, clearSession } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat, clearAiContributionContext } from "../aiChatTracker.js";
-import { connectToMCP, MCP_SERVER_URL } from "../mcp.js";
+import { connectToMCP, MCP_SERVER_URL, closeMCPClient } from "../mcp.js";
 import { createSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
 import AIChat from "../../db/models/aiChat.js";
 import Node from "../../db/models/node.js";
@@ -276,6 +276,7 @@ export async function orchestrateDreamNotify({
       );
     }
     clearAiContributionContext(visitorId);
+    closeMCPClient(visitorId);
     clearSessionAbort(sessionId);
     endSession(sessionId);
     clearSession(visitorId);
