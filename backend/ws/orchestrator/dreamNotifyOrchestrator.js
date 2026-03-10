@@ -276,9 +276,9 @@ export async function orchestrateDreamNotify({
       );
     }
     clearAiContributionContext(visitorId);
-    closeMCPClient(visitorId);
     clearSessionAbort(sessionId);
     endSession(sessionId);
+    closeMCPClient(visitorId);
     clearSession(visitorId);
   }
 }
