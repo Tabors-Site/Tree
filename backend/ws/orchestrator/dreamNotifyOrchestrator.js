@@ -6,8 +6,13 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+
 import { switchMode, processMessage, setRootId, getClientForUser, clearSession } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat, clearAiContributionContext } from "../aiChatTracker.js";
+import { connectToMCP, MCP_SERVER_URL } from "../mcp.js";
 import { createSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
 import AIChat from "../../db/models/aiChat.js";
 import Node from "../../db/models/node.js";
@@ -113,6 +118,10 @@ export async function orchestrateDreamNotify({
   });
   mainChatId = mainChat._id;
 
+  // ── MCP connection ───────────────────────────────────────────────────
+  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, { expiresIn: "1h" });
+  await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+
   console.log(`📬 Dream notifications starting for "${treeName}"`);
 
   try {
@@ -155,6 +164,7 @@ export async function orchestrateDreamNotify({
     );
     const summaryEnd = new Date();
 
+    const summaryLlm = summaryResult?._llmProvider || llmProvider;
     const summary = parseJsonSafe(summaryResult?.answer || summaryResult);
 
     trackChainStep({
@@ -168,7 +178,7 @@ export async function orchestrateDreamNotify({
       output: summary,
       startTime: summaryStart,
       endTime: summaryEnd,
-      llmProvider,
+      llmProvider: summaryLlm,
     });
 
     // ════════════════════════════════════════════════════════════════
@@ -192,6 +202,7 @@ export async function orchestrateDreamNotify({
     );
     const thoughtEnd = new Date();
 
+    const thoughtLlm = thoughtResult?._llmProvider || llmProvider;
     const thought = parseJsonSafe(thoughtResult?.answer || thoughtResult);
 
     trackChainStep({
@@ -205,7 +216,7 @@ export async function orchestrateDreamNotify({
       output: thought,
       startTime: thoughtStart,
       endTime: thoughtEnd,
-      llmProvider,
+      llmProvider: thoughtLlm,
     });
 
     // ════════════════════════════════════════════════════════════════

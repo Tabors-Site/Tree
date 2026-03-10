@@ -56,6 +56,7 @@ const NodeSchema = new mongoose.Schema({
     notes: { type: String, ref: "CustomLlmConnection", default: null },
     cleanup: { type: String, ref: "CustomLlmConnection", default: null },
     drain: { type: String, ref: "CustomLlmConnection", default: null },
+    notification: { type: String, ref: "CustomLlmConnection", default: null },
   },
   children: [{ type: String, ref: "Node" }],
   parent: { type: String, ref: "Node", default: null },

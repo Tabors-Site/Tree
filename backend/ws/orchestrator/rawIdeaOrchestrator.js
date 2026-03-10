@@ -207,7 +207,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     // Build a summary for each root tree
     const rootSummaries = await Promise.all(
       roots.map(async (r) => {
-        const summary = await buildDeepTreeSummary(r._id).catch(() => "(summary unavailable)");
+        const summary = await buildDeepTreeSummary(r._id, { includeEncodings: true }).catch(() => "(summary unavailable)");
         return { rootId: r._id, name: r.name, summary };
       }),
     );

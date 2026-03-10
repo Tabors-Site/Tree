@@ -215,7 +215,7 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
     for (const del of deletes) {
       if (abort.signal.aborted) break;
 
-      // Verify node still exists and is truly empty
+      // Verify node still exists
       const node = await Node.findById(del.nodeId).select("_id name children").lean();
       if (!node) {
         console.warn(`⚠️ Skipping delete — node ${del.nodeId} no longer exists`);

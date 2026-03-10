@@ -756,6 +756,42 @@ rawIdea  — Used for raw idea auto-placement`}</div>
             </div>
             <div className="ep-desc">View AI chat history grouped by session.</div>
           </div>
+
+          <div className="section-spacer"></div>
+
+          {/* ── Notifications ────── */}
+          <div className="sub-title" id="notifications">Notifications</div>
+          <div className="desc-muted">
+            Notifications are generated automatically after tree dreams complete.
+            Each dream produces a summary and a thought for the tree owner and contributors.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/user/:userId/notifications</span>
+            </div>
+            <div className="ep-desc">List notifications for the user, newest first.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="param-row">
+              <span className="param-key">?rootId=ID</span>
+              <span className="param-desc">Filter to a specific tree</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?limit=NUMBER</span>
+              <span className="param-desc">Max results (default 20, max 100)</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?offset=NUMBER</span>
+              <span className="param-desc">Skip N results for pagination</span>
+            </div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{ "notifications": [
+  { "type": "dream-summary", "title": "...", "content": "...", "rootId": "...", "createdAt": "..." },
+  { "type": "dream-thought", "title": "...", "content": "...", "rootId": "...", "createdAt": "..." }
+], "total": 12, "limit": 20, "offset": 0 }`}</div>
+            <div className="ep-note">Types: <code>dream-summary</code> (recap of what the dream did) and <code>dream-thought</code> (a reflective insight based on the dream activity).</div>
+          </div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -887,7 +923,8 @@ understanding — Understanding runs (falls back to placement)
 respond       — Final user-facing responses (falls back to placement)
 notes         — Note creation and editing (falls back to placement)
 cleanup       — Cleanup analysis and expansion (falls back to placement)
-drain         — Short-term memory drain placement (falls back to placement)`}</div>
+drain         — Short-term memory drain placement (falls back to placement)
+notification  — Dream notification summary and thought (falls back to placement)`}</div>
             <div className="ep-note">Pass <code>connectionId: null</code> to unassign and revert to the user's default. The connection must belong to the root owner. Unset slots fall back to <code>placement</code>, then to the user's default LLM.</div>
           </div>
 

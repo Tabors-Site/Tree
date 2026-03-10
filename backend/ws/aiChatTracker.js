@@ -262,6 +262,17 @@ export function trackChainStep({
   const start = startTime || new Date();
   const end = output ? endTime || new Date() : null;
 
+  // Strip internal tracking fields from output before persisting
+  let outputStr = null;
+  if (output) {
+    if (typeof output === "string") {
+      outputStr = output;
+    } else {
+      const { _llmProvider, _raw, ...clean } = output;
+      outputStr = JSON.stringify(clean).slice(0, 2000);
+    }
+  }
+
   // Fire and forget — don't await, don't block the chain
   AIChat.create({
     userId,
@@ -277,11 +288,7 @@ export function trackChainStep({
       time: start,
     },
     endMessage: {
-      content: output
-        ? typeof output === "string"
-          ? output
-          : JSON.stringify(output).slice(0, 2000)
-        : null,
+      content: outputStr,
       time: end,
       stopped: false,
     },

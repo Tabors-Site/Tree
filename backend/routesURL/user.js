@@ -236,16 +236,14 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       left: -100px;
       animation-delay: -10s;
     }
-       html {
-        background: #736fe6;
-        margin: 0;
-        padding: 0;
-        overflow-x: hidden;
-      }
-      body {
-        margin: 0;
-        padding: 0;
-      }
+    html {
+      background: #736fe6;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      height: 100%;
+    }
 
     @keyframes float {
       0%, 100% {

@@ -206,8 +206,8 @@ const MODE_TO_ASSIGNMENT = {
   "tree:drain-scout": "drain",
   "tree:drain-plan": "drain",
   // dream notification modes
-  "tree:dream-summary": "cleanup",
-  "tree:dream-thought": "cleanup",
+  "tree:dream-summary": "notification",
+  "tree:dream-thought": "notification",
 };
 
 /**

@@ -357,6 +357,7 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
           { key: "notes", label: "Notes" },
           { key: "cleanup", label: "Cleanup" },
           { key: "drain", label: "Drain" },
+          { key: "notification", label: "Notification" },
         ];
 
         function buildSlotHtml(slot) {
@@ -2023,7 +2024,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     const { rootId } = req.params;
     const { slot, connectionId } = req.body;
 
-    const validSlots = ["placement", "understanding", "respond", "notes", "cleanup", "drain"];
+    const validSlots = ["placement", "understanding", "respond", "notes", "cleanup", "drain", "notification"];
     if (!validSlots.includes(slot)) {
       return res.status(400).json({ error: `Invalid slot — must be one of: ${validSlots.join(", ")}` });
     }
