@@ -8,16 +8,9 @@ const AboutHome = () => {
       title: "Getting Started",
       desc: "Your first tree, first node, first note. Up and running in two minutes.",
       to: "/about/gettingstarted",
-      active: false,
+      active: true,
     },
-    {
-      emoji: "🧠",
-      title: "How AI Fits In",
-      desc: "Understandings, chat, and how Tree uses AI to surface what matters.",
-      to: "/about/ai",
-      active: false,
-    },
-    {
+{
       emoji: "🔌",
       title: "API Reference",
       desc: "Read and write to your trees programmatically. Build bots, scripts, and integrations.",
@@ -36,6 +29,13 @@ const AboutHome = () => {
       title: "Raw Ideas",
       desc: "Capture thoughts and files. AI picks the right tree and places them automatically.",
       to: "/about/raw-ideas",
+      active: true,
+    },
+    {
+      emoji: "💤",
+      title: "Tree Dreams",
+      desc: "Daily background maintenance: cleanup, drain, and understanding, while you sleep.",
+      to: "/about/dreams",
       active: true,
     },
   ];

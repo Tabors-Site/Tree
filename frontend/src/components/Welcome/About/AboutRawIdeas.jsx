@@ -20,6 +20,17 @@ const AboutRawIdeas = () => {
           </p>
         </div>
 
+        {/* ── WHAT ARE RAW IDEAS ── */}
+        <div className="ari-section">
+          <div className="ari-section-text">
+            You can place raw ideas in the dashboard on your profile home.
+            These are notes where you don't want to assign them to a specific
+            tree, or maybe you're copying AI chats or context from another
+            site. They live outside of your trees and are deposited in
+            automatically every 15 minutes. The Raw Idea Orchestrator will choose the best tree you have and hand it off, or reject if no trees match.
+          </div>
+        </div>
+
         {/* ── HOW IT WORKS ── */}
         <div className="ari-section">
           <div className="ari-section-title">

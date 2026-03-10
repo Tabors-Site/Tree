@@ -141,31 +141,82 @@ const EnergySection = () => {
             <span className="nrg-section-icon">🧠</span> Bring Your Own LLM
           </div>
           <div className="nrg-section-text">
-            If you connect your own LLM provider, <strong>AI actions bypass
-            the energy system entirely</strong>. Understanding runs, AI chat,
-            and any other AI-powered features route directly through your
-            provider at your own cost — using zero Tree energy.
+            If you connect your own LLM provider, <strong>AI chat energy
+            costs are bypassed</strong>. The LLM calls route through your
+            provider at your own cost instead of consuming Tree energy.
+            Tree operations triggered by the AI (creating nodes, editing
+            notes, etc.) still cost energy as normal.
             <br /><br />
-            This means you can run as many understanding passes, chat sessions,
-            and AI analyses as your provider allows, with no daily cap. You
-            also get to choose your model — bring a faster or more capable LLM
-            if the default doesn't suit your workflow.
+            This means you can chat, run understanding passes, and use
+            AI features as much as your provider allows, while only
+            paying energy for the tree changes that result from them.
+          </div>
+
+          <div className="nrg-sub-title" style={{ marginTop: "20px" }}>LLM Slots</div>
+          <div className="nrg-section-text">
+            Tree supports multiple LLM connections so you can use different
+            models for different tasks. There are two levels of assignment:
+          </div>
+
+          <div className="nrg-cost-grid" style={{ marginTop: "12px" }}>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action"><strong>Profile LLMs</strong></span>
+            </div>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action">Default (used everywhere unless overridden)</span>
+            </div>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action">Raw Ideas (auto-placement of raw ideas)</span>
+            </div>
+          </div>
+
+          <div className="nrg-cost-grid" style={{ marginTop: "12px" }}>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action"><strong>Per-Tree LLMs</strong></span>
+            </div>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action">Placement (creating and organizing nodes)</span>
+            </div>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action">Respond (conversation and chat)</span>
+            </div>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action">Notes (writing and editing notes)</span>
+            </div>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action">Understanding (compression and encoding)</span>
+            </div>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action">Cleanup (expand and reorganize)</span>
+            </div>
+            <div className="nrg-cost-row">
+              <span className="nrg-cost-action">Drain (short-term memory placement)</span>
+            </div>
+          </div>
+
+          <div className="nrg-section-text" style={{ marginTop: "14px" }}>
+            Each tree can have its own LLM for each stage. If a tree slot
+            isn't set, it falls back to the tree's placement LLM, then to
+            your profile default. This lets you use a fast, cheap model for
+            bulk operations like cleanup and a more capable one for
+            conversation or understanding.
           </div>
 
           <div className="nrg-highlight">
             <div className="nrg-section-text">
-              <strong>How to connect:</strong> Go to your profile page and add
-              your provider's base URL, API key, and model name. You can
-              enable, disable, or remove the connection at any time. Non-AI
-              actions (creating nodes, posting notes, etc.) still use energy
-              as normal.
+              <strong>How to connect:</strong> Go to your profile page to add
+              LLM providers with a base URL, API key, and model name. Then
+              assign them to profile slots or per-tree slots in the tree
+              settings. You can enable, disable, or swap connections at any
+              time. Non-AI actions (creating nodes, posting notes, etc.)
+              still use energy as normal.
             </div>
           </div>
 
           <div className="nrg-section-text" style={{ marginTop: "12px" }}>
             If your plan expires or downgrades to Basic, your custom LLM
-            connection is automatically revoked. You can re-enable it after
-            upgrading.
+            connections are automatically revoked. You can re-enable them
+            after upgrading.
           </div>
         </div>
 

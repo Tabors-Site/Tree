@@ -1,0 +1,515 @@
+/* ── ABOUT DREAMS — scoped under .about-dreams ── */
+
+.about-dreams {
+  max-width: 820px;
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+  padding: 20px;
+}
+
+.drm-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(115, 111, 230, 0.28);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 24px;
+  padding: 48px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: drmIn 0.6s ease-out;
+}
+
+@keyframes drmIn {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── HEADER ── */
+.drm-header {
+  margin-bottom: 28px;
+}
+
+.drm-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  margin-bottom: 8px;
+}
+
+.drm-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+/* ── SECTIONS ── */
+.drm-section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 28px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 20px;
+}
+
+.drm-section-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 18px;
+  letter-spacing: -0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drm-section-icon { font-size: 24px; }
+
+.drm-section-text {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.7;
+  font-size: 15px;
+}
+
+.drm-section-text code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 13px;
+}
+
+.drm-note {
+  margin-top: 14px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+}
+
+/* ── CODE BLOCK ── */
+.drm-code-block {
+  margin-top: 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.drm-code-label {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(130, 170, 255, 0.15);
+  color: rgba(130, 170, 255, 0.8);
+  margin-bottom: 8px;
+}
+
+.drm-code-block code {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.drm-code-body {
+  color: rgba(255, 200, 50, 0.8);
+}
+
+/* ── STEP CARDS ── */
+.drm-steps-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.drm-step-card {
+  display: flex;
+  gap: 18px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+}
+
+.drm-step-num {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+  padding-top: 3px;
+  width: 24px;
+}
+
+.drm-step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.drm-step-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 6px;
+}
+
+.drm-step-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+
+.drm-step-desc strong { color: rgba(255, 255, 255, 0.85); }
+
+.drm-step-note {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.5;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.drm-step-note code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 11px;
+}
+
+.drm-step-connector {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 0 0 29px;
+}
+
+/* ── SUB-STEPS (cleanup) ── */
+.drm-sub-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.drm-sub-step {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.55;
+}
+
+.drm-sub-step strong {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.drm-sub-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.drm-sub-dot.reorganize { background: rgba(255, 160, 60, 0.7); }
+.drm-sub-dot.expand     { background: rgba(80, 200, 140, 0.7); }
+
+/* ── DRAIN PIPELINE ROW ── */
+.drm-pipeline-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.drm-pipe-stage {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(130, 170, 255, 0.9);
+  background: rgba(130, 170, 255, 0.1);
+  border: 1px solid rgba(130, 170, 255, 0.2);
+}
+
+.drm-pipe-arrow {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+}
+
+/* ── TREE VISUAL (understanding) ── */
+.drm-tree-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  margin-bottom: 4px;
+}
+
+.drm-layer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drm-layer-label {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  width: 90px;
+  text-align: right;
+}
+
+.drm-layer-node {
+  font-size: 14px;
+  color: rgba(130, 170, 255, 0.5);
+}
+
+.drm-layer-node.root {
+  font-size: 18px;
+  color: rgba(255, 200, 50, 0.8);
+}
+
+.drm-layer-node.leaf {
+  font-size: 12px;
+  color: rgba(80, 200, 140, 0.5);
+}
+
+.drm-layer-arrow {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.2);
+  padding-left: 98px;
+}
+
+/* ── SHORT-TERM MEMORY EXAMPLES ── */
+.drm-memory-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.drm-memory-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+}
+
+.drm-memory-source {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.drm-memory-source.chat {
+  background: rgba(130, 170, 255, 0.12);
+  color: rgba(130, 170, 255, 0.8);
+}
+
+.drm-memory-source.idea {
+  background: rgba(255, 180, 50, 0.12);
+  color: rgba(255, 180, 50, 0.8);
+}
+
+.drm-memory-content {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  font-style: italic;
+}
+
+/* ── STATUS ROW ── */
+.drm-status-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.drm-status-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drm-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.drm-status-chip.pending  { color: rgba(255, 200, 50, 0.85); }
+.drm-status-chip.pending  .drm-status-dot { background: rgba(255, 200, 50, 0.7); }
+
+.drm-status-chip.placed   { color: rgba(80, 200, 140, 0.85); }
+.drm-status-chip.placed   .drm-status-dot { background: rgba(80, 200, 140, 0.7); }
+
+.drm-status-chip.escalated { color: rgba(255, 120, 80, 0.85); }
+.drm-status-chip.escalated .drm-status-dot { background: rgba(255, 120, 80, 0.7); }
+
+.drm-status-chip.dismissed { color: rgba(255, 255, 255, 0.4); }
+.drm-status-chip.dismissed .drm-status-dot { background: rgba(255, 255, 255, 0.3); }
+
+/* ── SAFEGUARDS GRID ── */
+.drm-safeguards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.drm-safeguard-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drm-safeguard-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.drm-safeguard-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 4px;
+}
+
+.drm-safeguard-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.55;
+}
+
+.drm-safeguard-desc code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 11px;
+}
+
+/* ── LLM GRID ── */
+.drm-llm-grid {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  margin-bottom: 4px;
+}
+
+.drm-llm-slot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drm-llm-phase {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.drm-llm-key {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 11px;
+  color: rgba(130, 170, 255, 0.7);
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(130, 170, 255, 0.1);
+}
+
+/* ── BACK LINK ── */
+.drm-back-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.drm-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 980px;
+  transition: all 0.3s;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.drm-back-link:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .about-dreams { padding: 16px; }
+  .drm-card { padding: 28px 20px; border-radius: 20px; }
+  .drm-section { padding: 20px 14px; }
+  .drm-safeguards-grid { grid-template-columns: 1fr; }
+  .drm-llm-grid { flex-direction: column; }
+  .drm-pipeline-row { gap: 4px; }
+}
+
+@media (max-width: 480px) {
+  .drm-card { padding: 24px 16px; }
+  .drm-step-card { gap: 12px; }
+}
