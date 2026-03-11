@@ -3,7 +3,9 @@
 // Finds all trees with pending items and processes them sequentially.
 
 import ShortMemory from "../db/models/shortMemory.js";
+import Node from "../db/models/node.js";
 import { drainTree } from "../ws/orchestrator/shortTermDrainOrchestrator.js";
+import { userHasLlm } from "../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // STATE
@@ -34,6 +36,16 @@ export async function runShortTermDrain() {
 
     // Process each tree sequentially to avoid overloading LLM
     for (const rootId of rootIds) {
+      // Skip if owner has no LLM and root has no LLM assigned
+      const rootNode = await Node.findById(rootId).select("rootOwner llmAssignments").lean();
+      if (rootNode) {
+        const hasRootLlm = !!rootNode.llmAssignments?.placement;
+        const ownerId = rootNode.rootOwner?.toString();
+        if (!hasRootLlm && (!ownerId || !await userHasLlm(ownerId))) {
+          console.log(`🧠 Skipping drain for tree ${rootId} — owner has no LLM connection`);
+          continue;
+        }
+      }
       await drainTree(rootId).catch((err) =>
         console.error(`❌ Drain failed for tree ${rootId}:`, err.message),
       );

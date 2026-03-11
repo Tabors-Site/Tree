@@ -520,6 +520,12 @@ router.post(
     const fromSite = req.body?.source === "user";
     const source = fromSite ? "user" : "api";
 
+    const rootNode = await Node.findById(nodeId).select("llmAssignments").lean();
+    const hasRootLlm = !!rootNode?.llmAssignments?.placement;
+    if (!hasRootLlm && !await userHasLlm(userId)) {
+      return res.status(403).json({ success: false, error: "No LLM connection. Visit /setup to set one up." });
+    }
+
     try {
       const result = await orchestrateUnderstanding({
         rootId: nodeId,

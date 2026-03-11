@@ -6,6 +6,7 @@ import Node from "../db/models/node.js";
 import User from "../db/models/user.js";
 import { findOrCreateUnderstandingRun } from "../core/understanding.js";
 import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
+import { userHasLlm } from "../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -46,6 +47,13 @@ async function processTree(rootNode) {
     return;
   }
 
+  // Skip if owner has no LLM and root has no LLM assigned
+  const hasRootLlm = !!rootNode.llmAssignments?.placement;
+  if (!hasRootLlm && !await userHasLlm(userId)) {
+    console.log(`🧠 Skipping understanding for "${rootNode.name}" — owner has no LLM connection`);
+    return;
+  }
+
   console.log(`🧠 Understanding auto-run: starting for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
 
   try {
@@ -82,7 +90,7 @@ export async function runUnderstandingAutoJob() {
   try {
     // Find all root nodes (trees)
     const rootNodes = await Node.find({ rootOwner: { $ne: null } })
-      .select("_id name rootOwner children")
+      .select("_id name rootOwner children llmAssignments")
       .lean();
 
     if (rootNodes.length === 0) {

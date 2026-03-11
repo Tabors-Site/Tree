@@ -5,6 +5,7 @@ import Node from "../db/models/node.js";
 import User from "../db/models/user.js";
 import { orchestrateReorganize } from "../ws/orchestrator/cleanupReorganizeOrchestrator.js";
 import { orchestrateExpand } from "../ws/orchestrator/cleanupExpandOrchestrator.js";
+import { userHasLlm } from "../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -62,6 +63,13 @@ export async function runCleanupAutoJob() {
     }
 
     console.log(`🧹 Targeting biggest tree: "${biggest.name}" (${biggest.children?.length || 0} children)`);
+
+    // Skip if owner has no LLM and root has no LLM assigned
+    const rootFull = await Node.findById(rootId).select("llmAssignments").lean();
+    if (!rootFull?.llmAssignments?.placement && !await userHasLlm(userId)) {
+      console.log(`🧹 Skipping "${biggest.name}" — owner has no LLM connection`);
+      return;
+    }
 
     // Run reorganize first, then expand
     try {

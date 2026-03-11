@@ -344,52 +344,43 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
     let treeLlmHtml = "";
     if (isOwner && rootMeta?.rootOwner) {
       const ownerProfile = rootMeta.rootOwner;
-      const hasPaid = ownerProfile.profileType !== "basic"
-        && ownerProfile.planExpiresAt
-        && ownerProfile.planExpiresAt > new Date();
+      const ownerConnections = await getConnectionsForUser(ownerProfile._id.toString());
+      const llmSlots = [
+        { key: "placement", label: "Placement" },
+        { key: "understanding", label: "Understanding" },
+        { key: "respond", label: "Respond" },
+        { key: "notes", label: "Notes" },
+        { key: "cleanup", label: "Cleanup" },
+        { key: "drain", label: "Drain" },
+        { key: "notification", label: "Notification" },
+      ];
 
-      if (hasPaid) {
-        const ownerConnections = await getConnectionsForUser(ownerProfile._id.toString());
-        const llmSlots = [
-          { key: "placement", label: "Placement" },
-          { key: "understanding", label: "Understanding" },
-          { key: "respond", label: "Respond" },
-          { key: "notes", label: "Notes" },
-          { key: "cleanup", label: "Cleanup" },
-          { key: "drain", label: "Drain" },
-          { key: "notification", label: "Notification" },
-        ];
-
-        function buildSlotHtml(slot) {
-          const current = rootMeta.llmAssignments?.[slot.key] || null;
-          const optHtml = ownerConnections.map(function(c) {
-            return '<div class="custom-select-option' + (current === c._id ? ' selected' : '') + '" data-value="' + c._id + '">'
-              + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</div>';
-          }).join('');
-          const label = current
-            ? (function() { var m = ownerConnections.find(function(c){return c._id === current;}); return m ? escapeHtml(m.name) + ' (' + escapeHtml(m.model) + ')' : 'Default (inherit from profile)'; })()
-            : 'Default (inherit from profile)';
-          return `<p style="font-size:0.85em;opacity:0.6;margin-bottom:4px;margin-top:10px;">${slot.label}</p>
+      function buildSlotHtml(slot) {
+        const current = rootMeta.llmAssignments?.[slot.key] || null;
+        const optHtml = ownerConnections.map(function(c) {
+          return '<div class="custom-select-option' + (current === c._id ? ' selected' : '') + '" data-value="' + c._id + '">'
+            + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</div>';
+        }).join('');
+        const label = current
+          ? (function() { var m = ownerConnections.find(function(c){return c._id === current;}); return m ? escapeHtml(m.name) + ' (' + escapeHtml(m.model) + ')' : 'Account default'; })()
+          : 'Account default';
+        return `<p style="font-size:0.85em;opacity:0.6;margin-bottom:4px;margin-top:10px;">${slot.label}</p>
   <div class="custom-select" data-slot="${slot.key}" style="margin-bottom:4px;">
     <div class="custom-select-trigger">${label}</div>
     <div class="custom-select-options">
-      <div class="custom-select-option${!current ? ' selected' : ''}" data-value="">Default (inherit from profile)</div>
+      <div class="custom-select-option${!current ? ' selected' : ''}" data-value="">Account default</div>
       ${optHtml}
     </div>
   </div>`;
-        }
+      }
 
-        treeLlmHtml = `
+      treeLlmHtml = `
 <h3>AI Models</h3>
+<p style="font-size:0.85em;opacity:0.5;margin-bottom:8px;">If set to account default, your account's main LLM is used. To allow contributors access to AI on this tree, you must explicitly assign a model to each slot.</p>
 ${ownerConnections.length === 0
-  ? '<p style="font-size:0.85em;opacity:0.5;">No custom connections — <a href="/api/v1/user/${ownerProfile._id}${queryString ? queryString + "&" : "?"}html" style="color:inherit;">add one on your profile</a></p>'
+  ? '<p style="font-size:0.85em;opacity:0.5;">No custom connections -- <a href="/api/v1/user/${ownerProfile._id}${queryString ? queryString + "&" : "?"}html" style="color:inherit;">add one on your profile</a></p>'
   : llmSlots.map(buildSlotHtml).join('\n') + '\n  <div class="llm-assign-status" style="font-size:0.8em;margin-top:4px;display:none;"></div>'
 }`;
-      } else {
-        treeLlmHtml = `
-<h3>AI Models</h3>
-<p style="font-size:0.85em;opacity:0.5;">Requires a Standard or Premium plan to assign custom LLMs to trees.</p>`;
-      }
     }
 
     const parentHtml = ancestors.length
