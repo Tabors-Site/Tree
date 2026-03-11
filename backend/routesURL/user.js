@@ -10809,21 +10809,17 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   <!-- Custom LLM -->
   <div class="glass-card" style="animation-delay: 0.3s;">
     <h2>🤖 Custom LLM Endpoints <span style="opacity:0.5;font-size:0.7em">(${connectionCount}/15)</span></h2>
-    <div class="llm-section-wrapper ${isBasic ? "locked" : ""}">
-      <div class="llm-upgrade-overlay">
-        <div class="llm-upgrade-text">🔒 Upgrade Required</div>
-        <div class="llm-upgrade-sub">Custom LLM connections require a Standard or Premium plan</div>
-      </div>
+    <div class="llm-section-wrapper">
       <div class="llm-section-content">
-        <div class="llm-sub">Connect your own OpenAI API-compatible LLMs to bypass energy usage. Assign them to different areas below.</div>
+        <div class="llm-sub">Connect your own OpenAI API-compatible LLMs. Assign them to different areas below.</div>
 
         ${connectionCount > 0 ? '<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">'
           + '<div style="flex:1;min-width:180px;">'
             + '<label class="llm-field-label" style="margin-bottom:4px;display:block;">Profile (Chat)</label>'
             + '<div class="custom-select" id="llmAssignMain" data-slot="main">'
-              + '<div class="custom-select-trigger">' + (mainAssignment ? llmConnections.filter(function(c){return c._id===mainAssignment}).map(function(c){return c.name+' ('+c.model+')'})[0] || 'Default LLM' : 'Default LLM') + '</div>'
+              + '<div class="custom-select-trigger">' + (mainAssignment ? llmConnections.filter(function(c){return c._id===mainAssignment}).map(function(c){return c.name+' ('+c.model+')'})[0] || 'None selected' : 'None selected') + '</div>'
               + '<div class="custom-select-options">'
-                + '<div class="custom-select-option' + (!mainAssignment ? ' selected' : '') + '" data-value="">Default LLM</div>'
+                + '<div class="custom-select-option' + (!mainAssignment ? ' selected' : '') + '" data-value="">None</div>'
                 + llmConnections.map(function(c) {
                     return '<div class="custom-select-option' + (mainAssignment === c._id ? ' selected' : '') + '" data-value="' + c._id + '">' + c.name + ' (' + c.model + ')</div>';
                   }).join('')
@@ -10833,9 +10829,9 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
           + '<div style="flex:1;min-width:180px;">'
             + '<label class="llm-field-label" style="margin-bottom:4px;display:block;">Raw Ideas</label>'
             + '<div class="custom-select" id="llmAssignRawIdea" data-slot="rawIdea">'
-              + '<div class="custom-select-trigger">' + (rawIdeaAssignment ? llmConnections.filter(function(c){return c._id===rawIdeaAssignment}).map(function(c){return c.name+' ('+c.model+')'})[0] || 'Default LLM' : 'Default LLM') + '</div>'
+              + '<div class="custom-select-trigger">' + (rawIdeaAssignment ? llmConnections.filter(function(c){return c._id===rawIdeaAssignment}).map(function(c){return c.name+' ('+c.model+')'})[0] || 'Uses main' : 'Uses main') + '</div>'
               + '<div class="custom-select-options">'
-                + '<div class="custom-select-option' + (!rawIdeaAssignment ? ' selected' : '') + '" data-value="">Default LLM</div>'
+                + '<div class="custom-select-option' + (!rawIdeaAssignment ? ' selected' : '') + '" data-value="">Uses main</div>'
                 + llmConnections.map(function(c) {
                     return '<div class="custom-select-option' + (rawIdeaAssignment === c._id ? ' selected' : '') + '" data-value="' + c._id + '">' + c.name + ' (' + c.model + ')</div>';
                   }).join('')
@@ -10846,7 +10842,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
 
         <div id="llmConnectionsList">
           ${connectionCount === 0
-            ? '<div class="llm-empty-state" style="text-align:center;padding:18px 0;opacity:0.5;">None — using default LLM</div>'
+            ? '<div class="llm-empty-state" style="text-align:center;padding:18px 0;opacity:0.5;">No connections yet</div>'
             : llmConnections.map(function(c) {
                 return '<div class="llm-conn-card" data-id="' + c._id + '" style="border:1px solid var(--glass-border-light);border-radius:10px;padding:12px 14px;margin-bottom:8px;background:rgba(255,255,255,0.03);">'
                   + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
@@ -11463,6 +11459,17 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
       });
     }
     const result = await addCustomLlmConnection(req.params.userId, { name, baseUrl, apiKey, model });
+
+    // Auto-assign as profile chat if none is set
+    try {
+      const user = await User.findById(req.params.userId).select("llmAssignments").lean();
+      if (!user?.llmAssignments?.main) {
+        await assignConnection(req.params.userId, "main", result._id);
+      }
+    } catch (assignErr) {
+      console.error("⚠️ Auto-assign main failed:", assignErr.message);
+    }
+
     return res.status(201).json({ success: true, connection: result });
   } catch (err) {
     console.error("❌ Failed to save custom LLM:", err.message);
@@ -11818,9 +11825,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       const connName = chat.llmProvider?.connectionId?.name;
       const model = connName || chat.llmProvider?.model;
       if (!model) return "";
-      const isCustom = chat.llmProvider?.isCustom;
-      const cls = isCustom ? "chain-model chain-model-custom" : "chain-model";
-      return `<span class="${cls}">${esc(model)}</span>`;
+      return `<span class="chain-model">${esc(model)}</span>`;
     };
 
     // ── Render substep ─────────────────────────────────────
@@ -12032,8 +12037,7 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
       const hasContribs = contribs.length > 0;
       const hasSteps = steps.length > 0;
 
-      const isCustomLlm = chat.llmProvider?.isCustom === true;
-      const modelName = chat.llmProvider?.connectionId?.name || chat.llmProvider?.model || "default";
+      const modelName = chat.llmProvider?.connectionId?.name || chat.llmProvider?.model || "unknown";
 
       const tc = chat.treeContext;
       const treeNodeId = tc?.targetNodeId?._id || tc?.targetNodeId;
@@ -12051,9 +12055,13 @@ router.get("/user/:userId/chats", urlAuth, async (req, res) => {
           ? `<span class="badge badge-done">Done</span>`
           : `<span class="badge badge-pending">Pending</span>`;
 
-      const energyBadge = isCustomLlm
-        ? `<span class="badge badge-external">External</span>`
-        : `<span class="badge badge-energy">⚡2</span>`;
+      const endContent = chat.endMessage?.content || "";
+      const wasNoLlm = endContent.startsWith("No LLM connection");
+      const wasError = endContent.startsWith("Error:");
+      const chatEnergyUsed = (wasError || wasNoLlm || chat.llmProvider?.isCustom === false) ? 2 : 0;
+      const energyBadge = chatEnergyUsed > 0
+        ? `<span class="badge badge-energy">⚡${chatEnergyUsed}</span>`
+        : "";
 
       const contribRows = contribs
         .map((c) => {
@@ -12418,7 +12426,6 @@ details[open] > .chain-substep-summary::before { transform: rotate(90deg); }
   color: rgba(255,255,255,0.4); margin-left: auto; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; max-width: 150px;
 }
-.chain-model-custom { color: #48bb78; }
 
 /* ── Chain: expanded body ───────────────────────── */
 .chain-step-body { padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.08); }
@@ -12550,7 +12557,6 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 .badge-duration { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
 .badge-source   { background: rgba(100,100,210,0.3); color: #fff; }
 .badge-energy   { background: rgba(100,220,255,0.25); color: #fff; border-color: rgba(100,220,255,0.3); }
-.badge-external { background: rgba(168,85,247,0.25); color: #fff; border-color: rgba(168,85,247,0.3); }
 
 /* ── Note Meta ──────────────────────────────────── */
 .note-meta {

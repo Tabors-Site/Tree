@@ -168,14 +168,11 @@ const VALID_SLOTS = ["main", "rawIdea"];
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function addCustomLlmConnection(userId, { name, baseUrl, apiKey, model }) {
-  var user = await User.findById(userId)
-    .select("profileType planExpiresAt")
-    .lean();
+  var user = await User.findById(userId).select("_id profileType").lean();
 
   if (!user) throw new Error("User not found");
-  if (!hasPaidPlan(user)) {
-    throw new Error("Custom LLM connections require an active paid plan");
-  }
+
+  var isGod = user.profileType === "god";
 
   var count = await CustomLlmConnection.countDocuments({ userId });
   if (count >= 15) throw new Error("Maximum of 15 connections reached");
@@ -185,10 +182,12 @@ export async function addCustomLlmConnection(userId, { name, baseUrl, apiKey, mo
   }
 
   var safeModel = validateInputs(baseUrl, apiKey, model, true);
-  var safeBaseUrl = validateCustomBaseUrl(baseUrl);
+  var safeBaseUrl = isGod ? baseUrl.replace(/\/+$/, "") : validateCustomBaseUrl(baseUrl);
 
-  var hostname = new URL(safeBaseUrl).hostname;
-  await resolveAndValidateHost(hostname);
+  if (!isGod) {
+    var hostname = new URL(safeBaseUrl).hostname;
+    await resolveAndValidateHost(hostname);
+  }
 
   var conn = await CustomLlmConnection.create({
     userId,
@@ -207,14 +206,9 @@ export async function addCustomLlmConnection(userId, { name, baseUrl, apiKey, mo
 }
 
 export async function updateCustomLlmConnection(userId, connectionId, { name, baseUrl, apiKey, model }) {
-  var user = await User.findById(userId)
-    .select("profileType planExpiresAt llmAssignments")
-    .lean();
+  var user = await User.findById(userId).select("llmAssignments").lean();
 
   if (!user) throw new Error("User not found");
-  if (!hasPaidPlan(user)) {
-    throw new Error("Custom LLM connections require an active paid plan");
-  }
 
   var existing = await CustomLlmConnection.findOne({ _id: connectionId, userId });
   if (!existing) throw new Error("Connection not found");

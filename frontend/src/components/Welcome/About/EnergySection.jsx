@@ -15,7 +15,7 @@ const EnergySection = () => {
         <div className="energy-docs-header">
           <h2 className="energy-docs-title">⚡ Energy System</h2>
           <p className="energy-docs-subtitle">
-            Energy is how Tree meters usage. Every action costs a small amount
+            Energy is how Tree meters usage. Most actions cost a small amount
             of energy, and your balance resets daily based on your plan.
           </p>
         </div>
@@ -26,12 +26,29 @@ const EnergySection = () => {
             <span className="nrg-section-icon">🔋</span> How Energy Works
           </div>
           <div className="nrg-section-text">
-            Every write action in Tree costs energy. Your balance refills
-            automatically once per day based on your plan.
-           
+            Tree operations like creating nodes, editing content, and running
+            scripts cost energy. Your balance refills automatically once per
+            day based on your plan.
           </div>
+        </div>
 
-        
+        {/* ── AI CHAT ── */}
+        <div className="nrg-section">
+          <div className="nrg-section-title">
+            <span className="nrg-section-icon">💬</span> AI Chat
+          </div>
+          <div className="nrg-section-text">
+            Tree requires you to connect your own LLM provider to use AI
+            features. You bring your own API key and pay your provider
+            directly for LLM usage.
+            <br /><br />
+            <strong>Successful AI chat messages are free</strong> and do not
+            cost energy. Tree operations triggered by the AI (creating nodes,
+            editing notes, etc.) still cost energy as normal.
+            <br /><br />
+            If an AI call fails (bad endpoint, invalid key, etc.), 2 energy
+            is charged to prevent abuse.
+          </div>
         </div>
 
         {/* ── COST TABLE ── */}
@@ -55,10 +72,10 @@ const EnergySection = () => {
               <span className="nrg-cost-amount">2</span>
             </div>
             <div className="nrg-cost-row">
-              <span className="nrg-cost-action">AI chat message</span>
+              <span className="nrg-cost-action">AI chat (only on connection error)</span>
               <span className="nrg-cost-amount">2</span>
             </div>
-               <div className="nrg-cost-row">
+            <div className="nrg-cost-row">
               <span className="nrg-cost-action">And More</span>
               <span className="nrg-cost-amount">+</span>
             </div>
@@ -81,7 +98,7 @@ const EnergySection = () => {
               <div className="nrg-plan-energy">120 / day</div>
               <div className="nrg-plan-desc">
                 Free forever. Enough for daily note-taking, light tree
-                management, and occasional AI chat. No file uploads.
+                management, and AI chat. No file uploads.
               </div>
             </div>
             <div className="nrg-plan">
@@ -89,15 +106,15 @@ const EnergySection = () => {
               <div className="nrg-plan-energy">500 / day</div>
               <div className="nrg-plan-desc">
                 For active users. File uploads up to 1 GB, more room for
-                AI features, scripts, and larger trees.
+                scripts, and larger trees.
               </div>
             </div>
             <div className="nrg-plan">
               <div className="nrg-plan-name">Premium</div>
               <div className="nrg-plan-energy">2,000 / day</div>
               <div className="nrg-plan-desc">
-                For power users and teams. No file size limits, heavy AI
-                usage, and large-scale understanding runs.
+                For power users and teams. No file size limits and
+                large-scale understanding runs.
               </div>
             </div>
           </div>
@@ -117,7 +134,7 @@ const EnergySection = () => {
           <div className="nrg-section-text">
             Need more energy beyond your daily refill? You can purchase
             additional energy packs through Stripe on your profile page.
-            Additional energy doesn't expire daily — it sits in a separate
+            Additional energy doesn't expire daily. It sits in a separate
             balance and is only consumed after your daily energy runs out.
           </div>
         </div>
@@ -130,26 +147,23 @@ const EnergySection = () => {
           <div className="nrg-section-text">
             Your daily energy refills to your plan's limit once every 24 hours,
             measured from your last reset. The reset replaces your daily balance
-            — it does not stack. Additional purchased energy is not affected by
+            and does not stack. Additional purchased energy is not affected by
             the daily reset.
           </div>
         </div>
 
-        {/* ── CUSTOM LLM ── */}
+        {/* ── LLM CONNECTIONS ── */}
         <div className="nrg-section">
           <div className="nrg-section-title">
-            <span className="nrg-section-icon">🧠</span> Bring Your Own LLM
+            <span className="nrg-section-icon">🧠</span> LLM Connections
           </div>
           <div className="nrg-section-text">
-            If you connect your own LLM provider, <strong>AI chat energy
-            costs are bypassed</strong>. The LLM calls route through your
-            provider at your own cost instead of consuming Tree energy.
-            Tree operations triggered by the AI (creating nodes, editing
-            notes, etc.) still cost energy as normal.
-            <br /><br />
-            This means you can chat, run understanding passes, and use
-            AI features as much as your provider allows, while only
-            paying energy for the tree changes that result from them.
+            Tree requires you to connect your own LLM provider to use AI
+            features like chat, understanding, dreams, and raw idea
+            placement. You can use any OpenAI-compatible API endpoint.
+            We recommend <strong>OpenRouter</strong> for the easiest
+            setup. It gives you access to hundreds of models with one
+            API key.
           </div>
 
           <div className="nrg-sub-title" style={{ marginTop: "20px" }}>LLM Slots</div>
@@ -163,7 +177,7 @@ const EnergySection = () => {
               <span className="nrg-cost-action"><strong>Profile LLMs</strong></span>
             </div>
             <div className="nrg-cost-row">
-              <span className="nrg-cost-action">Default (used everywhere unless overridden)</span>
+              <span className="nrg-cost-action">Profile Chat (used everywhere unless overridden)</span>
             </div>
             <div className="nrg-cost-row">
               <span className="nrg-cost-action">Raw Ideas (auto-placement of raw ideas)</span>
@@ -204,19 +218,12 @@ const EnergySection = () => {
 
           <div className="nrg-highlight">
             <div className="nrg-section-text">
-              <strong>How to connect:</strong> Go to your profile page to add
-              LLM providers with a base URL, API key, and model name. Then
-              assign them to profile slots or per-tree slots in the tree
-              settings. You can enable, disable, or swap connections at any
-              time. Non-AI actions (creating nodes, posting notes, etc.)
-              still use energy as normal.
+              <strong>How to connect:</strong> When you first sign up, the
+              setup page will walk you through connecting your first LLM.
+              You can manage connections and slot assignments anytime from
+              your profile's energy page. Any OpenAI-compatible endpoint
+              works. Just provide a base URL, API key, and model name.
             </div>
-          </div>
-
-          <div className="nrg-section-text" style={{ marginTop: "12px" }}>
-            If your plan expires or downgrades to Basic, your custom LLM
-            connections are automatically revoked. You can re-enable them
-            after upgrading.
           </div>
         </div>
 

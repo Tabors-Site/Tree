@@ -14,7 +14,7 @@ import {
 
 import authenticateOptional from "../middleware/authenticateLite.js";
 import authenticateMCP from "../middleware/authenticateMCP.js";
-import authenticateOpenAIConnector from "../middleware/authenticateOpenAIConnector.js";
+
 
 const router = express.Router();
 

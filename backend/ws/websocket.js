@@ -4,7 +4,7 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import { getClientForUser } from "../ws/conversation.js";
+import { getClientForUser, userHasLlm } from "../ws/conversation.js";
 import { updateRecentRoots, getRecentRootsByUserId } from "../core/user.js";
 import {
   connectToMCP,
@@ -481,19 +481,21 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       const visitorId = socket.visitorId || `user:${socket.userId}`;
 
-      // Charge energy upfront (skip if user or root has custom LLM)
+      // Check if user has LLM access
       try {
-        const { isCustom } = await getClientForUser(socket.userId);
-        let skipEnergy = isCustom;
-        if (!skipEnergy) {
+        let hasLlmAccess = await userHasLlm(socket.userId);
+        if (!hasLlmAccess) {
           const activeRootId = getRootId(visitorId);
           if (activeRootId) {
-            const rootNode = await Node.findById(activeRootId).select("llmAssignments").lean();
-            if (rootNode?.llmAssignments?.placement) skipEnergy = true;
+            const rootNode = await Node.findById(activeRootId).select("rootOwner llmAssignments").lean();
+            if (rootNode && rootNode.rootOwner.toString() !== socket.userId.toString() && rootNode.llmAssignments?.placement) {
+              hasLlmAccess = true;
+            }
           }
         }
-        if (!skipEnergy) {
-          await useEnergy({ userId: socket.userId, action: "chat" });
+        if (!hasLlmAccess) {
+          socket.emit("chatError", { error: "You need to set up a custom LLM connection before chatting. Visit /setup to connect one.", generation });
+          return;
         }
       } catch (err) {
         socket.emit("chatError", { error: err.message, generation });
@@ -631,6 +633,15 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           }
 
           console.error("❌ Chat error:", err);
+
+          // Charge energy on LLM failure to prevent spam of fake endpoints
+          try {
+            await useEnergy({ userId: socket.userId, action: "chat" });
+            console.log("⚡ Charged 2 energy for failed LLM call (user:", socket.userId, ")");
+          } catch (energyErr) {
+            console.error("⚠️ Energy charge on error failed:", energyErr.message);
+          }
+
           socket.emit("chatError", { error: err.message, generation });
 
           // ── Finalize AIChat (error) ────────────────────────────────

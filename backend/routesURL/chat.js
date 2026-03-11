@@ -5,8 +5,10 @@
 import express from "express";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
+import CustomLlmConnection from "../db/models/customLlmConnection.js";
 import authenticateLite from "../middleware/authenticateLite.js";
 import { getNotifications } from "../core/notifications.js";
+import { getPendingInvitesForUser, respondToInvite } from "../core/invites.js";
 
 const router = express.Router();
 
@@ -25,9 +27,22 @@ router.get("/chat", authenticateLite, async (req, res) => {
       return res.redirect("/login");
     }
 
-    const user = await User.findById(req.userId).select("username roots");
+    const user = await User.findById(req.userId).select("username roots llmAssignments");
     if (!user) {
       return res.status(404).send("User not found");
+    }
+
+    // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
+    const setupSkipped = req.cookies?.setupSkipped === "1";
+    if (!setupSkipped) {
+      const hasMainLlm = !!(user.llmAssignments?.main);
+      const hasTree = user.roots && user.roots.length > 0;
+      if (!hasMainLlm || !hasTree) {
+        const connCount = hasMainLlm ? 1 : await CustomLlmConnection.countDocuments({ userId: req.userId });
+        if (connCount === 0 || !hasTree) {
+          return res.redirect("/setup");
+        }
+      }
     }
 
     const { username } = user;
@@ -78,13 +93,9 @@ router.get("/chat", authenticateLite, async (req, res) => {
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text-primary); background: #736fe6; }
-
-    .app-bg { position: fixed; inset: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: -2; }
-    .app-bg::before, .app-bg::after { content: ''; position: fixed; border-radius: 50%; opacity: 0.08; animation: float 20s infinite ease-in-out; pointer-events: none; }
-    .app-bg::before { width: 600px; height: 600px; top: -300px; right: -200px; animation-delay: -5s; }
-    .app-bg::after { width: 400px; height: 400px; bottom: -200px; left: -100px; animation-delay: -10s; }
-    @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-30px) rotate(5deg); } }
+    html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text-primary); }
+    html { background: #667eea; }
+    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); background-attachment: fixed; }
 
     /* Layout */
     .container {
@@ -105,8 +116,13 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .chat-title h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
 
     .header-right { display: flex; align-items: center; gap: 10px; }
+    .back-row {
+      display: none; padding: 8px 20px 0;
+      border-bottom: none; flex-shrink: 0;
+    }
+    .back-row.visible { display: flex; }
     .back-btn {
-      display: none; align-items: center; gap: 6px;
+      display: flex; align-items: center; gap: 6px;
       font-size: 12px; color: var(--text-muted);
       background: rgba(255,255,255,0.1); border-radius: 8px;
       padding: 6px 12px; border: 1px solid var(--glass-border-light);
@@ -114,7 +130,6 @@ router.get("/chat", authenticateLite, async (req, res) => {
       font-family: inherit;
     }
     .back-btn:hover { background: rgba(255,255,255,0.18); color: var(--text-primary); }
-    .back-btn.visible { display: flex; }
     .back-btn svg { width: 12px; height: 12px; }
 
     .status-badge { display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border-radius: 100px; border: 1px solid var(--glass-border-light); font-size: 12px; font-weight: 600; }
@@ -393,6 +408,125 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .notif-empty-icon { font-size: 40px; margin-bottom: 12px; display: block; }
     .notif-loading { text-align: center; color: rgba(255,255,255,0.5); padding: 40px 20px; font-size: 14px; }
 
+    /* Notification tabs */
+    .notif-tabs {
+      display: flex; gap: 0; flex-shrink: 0;
+      border-bottom: 1px solid var(--glass-border-light);
+    }
+    .notif-tab {
+      flex: 1; padding: 10px 0; text-align: center;
+      font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5);
+      background: none; border: none; border-bottom: 2px solid transparent;
+      cursor: pointer; font-family: inherit; transition: all var(--transition-fast);
+      position: relative;
+    }
+    .notif-tab:hover { color: rgba(255,255,255,0.8); }
+    .notif-tab.active { color: white; border-bottom-color: white; }
+    .notif-tab .tab-dot {
+      display: none; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); position: absolute; top: 8px; right: calc(50% - 30px);
+    }
+    .notif-tab .tab-dot.visible { display: block; }
+
+    /* Invite items */
+    .invite-item {
+      background: rgba(var(--glass-rgb), var(--glass-alpha));
+      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      border: 1px solid var(--glass-border-light);
+      border-radius: 14px; padding: 16px;
+      border-left: 3px solid #48bb78;
+      animation: fadeInUp 0.3s ease-out backwards;
+    }
+    .invite-item-text { font-size: 13px; color: rgba(255,255,255,0.9); line-height: 1.5; margin-bottom: 10px; }
+    .invite-item-text strong { color: white; }
+    .invite-item-actions { display: flex; gap: 8px; }
+    .invite-item-actions button {
+      flex: 1; padding: 8px; border-radius: 8px; border: none;
+      font-family: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all var(--transition-fast);
+    }
+    .invite-accept { background: var(--accent); color: white; }
+    .invite-accept:hover { filter: brightness(1.1); }
+    .invite-decline { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); border: 1px solid var(--glass-border-light) !important; }
+    .invite-decline:hover { background: rgba(255,255,255,0.18); color: white; }
+
+    /* Members section */
+    .members-section { margin-top: 4px; }
+    .members-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+    .member-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; border-radius: 10px;
+      background: rgba(var(--glass-rgb), var(--glass-alpha));
+      border: 1px solid var(--glass-border-light); margin-bottom: 8px;
+    }
+    .member-name { font-size: 13px; color: white; font-weight: 500; }
+    .member-role { font-size: 11px; color: rgba(255,255,255,0.45); margin-left: 6px; }
+    .member-actions { display: flex; gap: 6px; }
+    .member-actions button {
+      padding: 4px 10px; border-radius: 6px; border: 1px solid var(--glass-border-light);
+      background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6);
+      font-family: inherit; font-size: 11px; cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .member-actions button:hover { background: rgba(255,255,255,0.15); color: white; }
+    .member-actions .btn-danger:hover { background: rgba(239,68,68,0.3); color: #fca5a5; border-color: rgba(239,68,68,0.4); }
+
+    .invite-form {
+      display: flex; gap: 8px; margin-top: 12px;
+    }
+    .invite-form input {
+      flex: 1; padding: 8px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border-light);
+      color: white; font-family: inherit; font-size: 13px; outline: none;
+    }
+    .invite-form input::placeholder { color: rgba(255,255,255,0.35); }
+    .invite-form input:focus { border-color: var(--glass-border); }
+    .invite-form button {
+      padding: 8px 16px; border-radius: 8px; border: none;
+      background: var(--accent); color: white; font-family: inherit;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .invite-form button:hover { filter: brightness(1.1); }
+    .invite-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .invite-status {
+      font-size: 12px; margin-top: 6px; padding: 6px 10px;
+      border-radius: 6px; display: none;
+    }
+    .invite-status.error { display: block; background: rgba(239,68,68,0.15); color: #fca5a5; }
+    .invite-status.success { display: block; background: rgba(16,185,129,0.15); color: #6ee7b7; }
+
+    /* Dream time config */
+    .dream-config {
+      background: rgba(var(--glass-rgb), var(--glass-alpha));
+      border: 1px solid var(--glass-border-light);
+      border-radius: 14px; padding: 14px 16px; margin-bottom: 12px;
+    }
+    .dream-config-label { font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 6px; }
+    .dream-config-row { display: flex; align-items: center; gap: 8px; }
+    .dream-config-row input[type="time"] {
+      padding: 6px 10px; border-radius: 8px;
+      background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border-light);
+      color: white; font-family: inherit; font-size: 13px; outline: none;
+      color-scheme: dark;
+    }
+    .dream-config-row input[type="time"]:focus { border-color: var(--glass-border); }
+    .dream-config-row button {
+      padding: 6px 12px; border-radius: 8px; border: none;
+      font-family: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all var(--transition-fast);
+    }
+    .dream-config-save { background: var(--accent); color: white; }
+    .dream-config-save:hover { filter: brightness(1.1); }
+    .dream-config-off {
+      background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6);
+      border: 1px solid var(--glass-border-light) !important;
+    }
+    .dream-config-off:hover { background: rgba(255,255,255,0.18); color: white; }
+    .dream-config-status { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 6px; }
+    .dream-config-hint { font-size: 12px; color: rgba(255,255,255,0.45); line-height: 1.4; }
+
     @media (max-width: 600px) {
       .container { max-width: 100%; }
       .chat-header { padding: 0 12px; }
@@ -421,7 +555,6 @@ router.get("/chat", authenticateLite, async (req, res) => {
   </style>
 </head>
 <body>
-  <div class="app-bg"></div>
   <div class="container">
     <div class="chat-header">
       <div class="chat-title">
@@ -432,31 +565,40 @@ router.get("/chat", authenticateLite, async (req, res) => {
         <span class="root-name-inline" id="rootName"></span>
       </div>
       <div class="header-right">
-        <button class="back-btn" id="backBtn" onclick="backToTrees()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-          Trees
-        </button>
         <div class="status-badge">
           <div class="status-dot connecting" id="statusDot"></div>
           <span class="status-text" id="statusText">Connecting</span>
         </div>
         <button class="notif-btn" id="notifBtn" onclick="toggleNotifs()">
           <span class="notif-dot" id="notifDot"></span>
-          <span class="notif-btn-icon">🔔</span>
-          <span class="notif-btn-label">Notifications</span>
+          <span class="notif-btn-icon">☰</span>
+          <span class="notif-btn-label">Menu</span>
         </button>
         <a href="/app" class="advanced-btn">Advanced</a>
       </div>
     </div>
+    <div class="back-row" id="backRow">
+      <button class="back-btn" onclick="backToTrees()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back
+      </button>
+    </div>
 
-    <!-- Notifications panel -->
+    <!-- Menu panel -->
     <div class="notif-overlay" id="notifOverlay" onclick="toggleNotifs()"></div>
     <div class="notif-panel" id="notifPanel">
       <div class="notif-panel-header">
-        <h2>Notifications</h2>
+        <h2>Menu</h2>
         <button class="notif-close" onclick="toggleNotifs()">&#x2715;</button>
       </div>
+      <div class="notif-tabs">
+        <button class="notif-tab active" id="tabDreams" onclick="switchTab('dreams')">Dreams<span class="tab-dot" id="dreamsDot"></span></button>
+        <button class="notif-tab" id="tabInvites" onclick="switchTab('invites')">Invites<span class="tab-dot" id="invitesDot"></span></button>
+      </div>
       <div class="notif-list" id="notifList">
+        <div class="notif-loading">Loading...</div>
+      </div>
+      <div class="notif-list" id="invitesList" style="display:none">
         <div class="notif-loading">Loading...</div>
       </div>
     </div>
@@ -467,10 +609,10 @@ router.get("/chat", authenticateLite, async (req, res) => {
           ? `<div class="empty-state">
               <span class="empty-icon">🌱</span>
               <h2>Plant your first tree</h2>
-              <p>A tree starts with a single root — a topic that everything else grows from. It can be broad like <strong>My Life</strong>, focused like <strong>Workout Plan</strong>, or anything in between.</p>
+              <p>A tree starts with a single root, a broad topic that everything else branches out from. Think big categories like <strong>My Life</strong>, <strong>Career</strong>, or <strong>Health</strong>.</p>
               <p style="margin-top:8px;">Name it, and you can start chatting with it right away.</p>
               <form class="create-tree-form" style="margin-top:16px;" onsubmit="createTree(event)">
-                <input type="text" id="newTreeNameEmpty" placeholder="e.g. My Life, Recipe Ideas, Project X..." autocomplete="off" />
+                <input type="text" id="newTreeNameEmpty" placeholder="e.g. My Life" autocomplete="off" />
                 <button type="submit" title="Create tree">+</button>
               </form>
             </div>`
@@ -537,7 +679,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     const chatMessages = document.getElementById("messages");
     const chatInput = document.getElementById("chatInput");
     const sendBtn = document.getElementById("sendBtn");
-    const backBtn = document.getElementById("backBtn");
+    const backRow = document.getElementById("backRow");
     const rootName = document.getElementById("rootName");
 
     function escapeHtml(s) {
@@ -760,7 +902,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       chatArea.classList.add("active");
       rootName.textContent = name;
       rootName.classList.add("visible");
-      backBtn.classList.add("visible");
+      backRow.classList.add("visible");
 
       // Reset chat
       const welcome = chatMessages.querySelector(".welcome-message");
@@ -771,6 +913,14 @@ router.get("/chat", authenticateLite, async (req, res) => {
       socket.emit("setActiveRoot", { rootId });
       socket.emit("urlChanged", { url: "/api/v1/root/" + rootId, rootId });
 
+      // Refresh menu panel for this tree
+      dreamsLoaded = false;
+      invitesLoaded = false;
+      if (notifOpen) {
+        if (activeTab === "dreams") fetchDreams();
+        if (activeTab === "invites") fetchInvites();
+      }
+
       chatInput.focus();
       updateSendBtn();
     }
@@ -780,10 +930,16 @@ router.get("/chat", authenticateLite, async (req, res) => {
       treePicker.style.display = "";
       chatArea.classList.remove("active");
       rootName.classList.remove("visible");
-      backBtn.classList.remove("visible");
+      backRow.classList.remove("visible");
       isSending = false;
       updateSendBtn();
       socket.emit("clearConversation");
+      dreamsLoaded = false;
+      invitesLoaded = false;
+      if (notifOpen) {
+        if (activeTab === "dreams") fetchDreams();
+        if (activeTab === "invites") fetchInvites();
+      }
     }
 
     // ── Messages ──────────────────────────────────────────────────────
@@ -886,44 +1042,90 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     sendBtn.addEventListener("click", sendMessage);
 
-    // ── Notifications ─────────────────────────────────────────────────
+    // ── Notifications + Invites ────────────────────────────────────────
     const notifPanel = document.getElementById("notifPanel");
     const notifOverlay = document.getElementById("notifOverlay");
     const notifList = document.getElementById("notifList");
+    const invitesList = document.getElementById("invitesList");
     const notifDot = document.getElementById("notifDot");
     let notifOpen = false;
-    let notifLoaded = false;
+    let dreamsLoaded = false;
+    let invitesLoaded = false;
+    let activeTab = "dreams";
 
     function toggleNotifs() {
       notifOpen = !notifOpen;
       notifPanel.classList.toggle("open", notifOpen);
       notifOverlay.classList.toggle("open", notifOpen);
-      if (notifOpen && !notifLoaded) fetchNotifs();
+      if (notifOpen) {
+        if (activeTab === "dreams" && !dreamsLoaded) fetchDreams();
+        if (activeTab === "invites" && !invitesLoaded) fetchInvites();
+      }
     }
 
-    async function fetchNotifs() {
+    function switchTab(tab) {
+      activeTab = tab;
+      document.getElementById("tabDreams").classList.toggle("active", tab === "dreams");
+      document.getElementById("tabInvites").classList.toggle("active", tab === "invites");
+      notifList.style.display = tab === "dreams" ? "" : "none";
+      invitesList.style.display = tab === "invites" ? "" : "none";
+      if (tab === "dreams" && !dreamsLoaded) fetchDreams();
+      if (tab === "invites" && !invitesLoaded) fetchInvites();
+    }
+
+    async function fetchDreams() {
       notifList.innerHTML = '<div class="notif-loading">Loading...</div>';
+      dreamsLoaded = false;
       try {
-        const res = await fetch("/api/v1/chat/notifications", { credentials: "include" });
-        const data = await res.json();
+        var dreamUrl = "/api/v1/chat/notifications" + (activeRootId ? "?rootId=" + activeRootId : "");
+        var res = await fetch(dreamUrl, { credentials: "include" });
+        var data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed");
 
-        notifLoaded = true;
-        const notifs = data.notifications || [];
+        dreamsLoaded = true;
+        var notifs = data.notifications || [];
+        var html = "";
+
+        // Dream time config (only when inside a tree and user is owner)
+        if (activeRootId && data.isOwner) {
+          if (data.dreamTime) {
+            html += '<div class="dream-config">' +
+              '<div class="dream-config-label">Dream schedule</div>' +
+              '<div class="dream-config-row">' +
+                '<input type="time" id="dreamTimeInput" value="' + escapeHtml(data.dreamTime) + '" />' +
+                '<button class="dream-config-save" onclick="saveDreamTime()">Save</button>' +
+                '<button class="dream-config-off" onclick="disableDreamTime()">Turn Off</button>' +
+              '</div>' +
+              '<div class="dream-config-status" id="dreamStatus"></div>' +
+            '</div>';
+          } else {
+            html += '<div class="dream-config">' +
+              '<div class="dream-config-hint">Dreams are off for this tree. Set a time to enable nightly dreams. Your tree will reflect, reorganize, and share thoughts with you.</div>' +
+              '<div class="dream-config-row" style="margin-top:8px">' +
+                '<input type="time" id="dreamTimeInput" value="" />' +
+                '<button class="dream-config-save" onclick="saveDreamTime()">Enable</button>' +
+              '</div>' +
+              '<div class="dream-config-status" id="dreamStatus"></div>' +
+            '</div>';
+          }
+        }
 
         if (notifs.length === 0) {
-          notifList.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">\\ud83d\\udd14</span>No notifications from the last 7 days</div>';
-          notifDot.classList.remove("has-notifs");
+          html += '<div class="notif-empty"><span class="notif-empty-icon">\\ud83d\\udd14</span>' +
+            (activeRootId ? 'No dreams from this tree yet' : 'No dream notifications from the last 7 days') +
+          '</div>';
+          notifList.innerHTML = html;
           return;
         }
 
+        document.getElementById("dreamsDot").classList.add("visible");
         notifDot.classList.add("has-notifs");
-        notifList.innerHTML = notifs.map(function(n, i) {
-          const isThought = n.type === "dream-thought";
-          const icon = isThought ? "\\ud83d\\udcad" : "\\ud83d\\udccb";
-          const badge = isThought ? "Thought" : "Summary";
-          const cls = isThought ? "type-thought" : "type-summary";
-          const date = new Date(n.createdAt).toLocaleDateString(undefined, {
+        html += notifs.map(function(n, i) {
+          var isThought = n.type === "dream-thought";
+          var icon = isThought ? "\\ud83d\\udcad" : "\\ud83d\\udccb";
+          var badge = isThought ? "Thought" : "Summary";
+          var cls = isThought ? "type-thought" : "type-summary";
+          var date = new Date(n.createdAt).toLocaleDateString(undefined, {
             month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
           });
           return '<div class="notif-item ' + cls + '" style="animation-delay:' + (i * 0.04) + 's">' +
@@ -936,18 +1138,252 @@ router.get("/chat", authenticateLite, async (req, res) => {
             '<div class="notif-item-time">' + date + '</div>' +
           '</div>';
         }).join("");
+        notifList.innerHTML = html;
       } catch (err) {
-        console.error("Notifications error:", err);
+        console.error("Dreams error:", err);
         notifList.innerHTML = '<div class="notif-empty">Failed to load notifications</div>';
       }
     }
 
-    // Check for notifications on load (just count, don't render)
+    async function saveDreamTime() {
+      var input = document.getElementById("dreamTimeInput");
+      var status = document.getElementById("dreamStatus");
+      if (!input.value) { status.textContent = "Pick a time first"; return; }
+      try {
+        var res = await fetch("/api/v1/root/" + activeRootId + "/dream-time", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ dreamTime: input.value }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+        status.textContent = "Dreams set for " + input.value;
+        dreamsLoaded = false;
+        fetchDreams();
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    }
+
+    async function disableDreamTime() {
+      var status = document.getElementById("dreamStatus");
+      try {
+        var res = await fetch("/api/v1/root/" + activeRootId + "/dream-time", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ dreamTime: null }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+        status.textContent = "Dreams disabled";
+        dreamsLoaded = false;
+        fetchDreams();
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    }
+
+    async function fetchInvites() {
+      invitesList.innerHTML = '<div class="notif-loading">Loading...</div>';
+      invitesLoaded = false;
+      try {
+        var invUrl = "/api/v1/chat/invites" + (activeRootId ? "?rootId=" + activeRootId : "");
+        var res = await fetch(invUrl, { credentials: "include" });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+
+        invitesLoaded = true;
+        var html = "";
+
+        // Pending invites section
+        var invites = data.invites || [];
+        if (invites.length > 0) {
+          document.getElementById("invitesDot").classList.add("visible");
+          notifDot.classList.add("has-notifs");
+          html += invites.map(function(inv, i) {
+            return '<div class="invite-item" style="animation-delay:' + (i * 0.04) + 's">' +
+              '<div class="invite-item-text"><strong>' + escapeHtml(inv.from) + '</strong> invited you to <strong>' + escapeHtml(inv.treeName) + '</strong></div>' +
+              '<div class="invite-item-actions">' +
+                '<button class="invite-accept" onclick="respondInvite(\\'' + inv.id + '\\', true, this)">Accept</button>' +
+                '<button class="invite-decline" onclick="respondInvite(\\'' + inv.id + '\\', false, this)">Decline</button>' +
+              '</div>' +
+            '</div>';
+          }).join("");
+        }
+
+        // Members section (only when inside a tree)
+        if (activeRootId && data.members) {
+          var members = data.members;
+          html += '<div class="members-section">';
+          html += '<div class="members-section-title">Members</div>';
+
+          // Owner
+          if (members.owner) {
+            html += '<div class="member-item">' +
+              '<div><span class="member-name">' + escapeHtml(members.owner.username) + '</span><span class="member-role">Owner</span></div>' +
+            '</div>';
+          }
+
+          // Contributors
+          (members.contributors || []).forEach(function(c) {
+            var isSelf = c._id === CONFIG.userId;
+            var isOwner = members.isOwner;
+            var actions = '';
+            if (isOwner || isSelf) {
+              var label = isSelf ? "Leave" : "Remove";
+              var cls = isSelf ? "btn-danger" : "btn-danger";
+              actions = '<div class="member-actions">';
+              if (isOwner && !isSelf) {
+                actions += '<button onclick="transferOwner(\\'' + c._id + '\\', this)">Transfer</button>';
+              }
+              actions += '<button class="' + cls + '" onclick="removeMember(\\'' + c._id + '\\', \\'' + label + '\\', this)">' + label + '</button>';
+              actions += '</div>';
+            }
+            html += '<div class="member-item">' +
+              '<div><span class="member-name">' + escapeHtml(c.username) + '</span></div>' +
+              actions +
+            '</div>';
+          });
+
+          // Invite form (owner only)
+          if (members.isOwner) {
+            html += '<form class="invite-form" onsubmit="sendInvite(event)">' +
+              '<input type="text" id="inviteUsername" placeholder="Username to invite..." />' +
+              '<button type="submit">Invite</button>' +
+            '</form>' +
+            '<div class="invite-status" id="inviteStatus"></div>';
+          }
+          html += '</div>';
+        }
+
+        if (!html) {
+          html = '<div class="notif-empty"><span class="notif-empty-icon">\\ud83d\\udcec</span>No pending invites</div>';
+        }
+
+        invitesList.innerHTML = html;
+      } catch (err) {
+        console.error("Invites error:", err);
+        invitesList.innerHTML = '<div class="notif-empty">Failed to load invites</div>';
+      }
+    }
+
+    async function respondInvite(inviteId, accept, btn) {
+      var item = btn.closest(".invite-item");
+      item.style.opacity = "0.5";
+      item.style.pointerEvents = "none";
+      try {
+        var res = await fetch("/api/v1/chat/invites/" + inviteId, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ accept: accept }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+        item.remove();
+        // Refresh tree list if accepted
+        if (accept) {
+          location.reload();
+        }
+      } catch (err) {
+        item.style.opacity = "1";
+        item.style.pointerEvents = "";
+        alert(err.message);
+      }
+    }
+
+    async function sendInvite(e) {
+      e.preventDefault();
+      var input = document.getElementById("inviteUsername");
+      var status = document.getElementById("inviteStatus");
+      var username = input.value.trim();
+      if (!username) return;
+
+      status.className = "invite-status";
+      status.textContent = "";
+
+      try {
+        var res = await fetch("/api/v1/root/" + activeRootId + "/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ userReceiving: username }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+
+        status.textContent = "Invite sent!";
+        status.className = "invite-status success";
+        input.value = "";
+      } catch (err) {
+        status.textContent = err.message;
+        status.className = "invite-status error";
+      }
+    }
+
+    async function removeMember(userId, label, btn) {
+      if (!confirm("Are you sure you want to " + label.toLowerCase() + "?")) return;
+      btn.disabled = true;
+      try {
+        var res = await fetch("/api/v1/root/" + activeRootId + "/remove-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ userReceiving: userId }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+        if (userId === CONFIG.userId) {
+          location.reload();
+        } else {
+          invitesLoaded = false;
+          fetchInvites();
+        }
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message);
+      }
+    }
+
+    async function transferOwner(userId, btn) {
+      if (!confirm("Transfer ownership? This cannot be undone.")) return;
+      btn.disabled = true;
+      try {
+        var res = await fetch("/api/v1/root/" + activeRootId + "/transfer-owner", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ userReceiving: userId }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+        invitesLoaded = false;
+        fetchInvites();
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message);
+      }
+    }
+
+    // Check for notifications + invites on load
     fetch("/api/v1/chat/notifications", { credentials: "include" })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.notifications && d.notifications.length > 0) {
           notifDot.classList.add("has-notifs");
+          document.getElementById("dreamsDot").classList.add("visible");
+        }
+      })
+      .catch(function() {});
+
+    fetch("/api/v1/chat/invites", { credentials: "include" })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.invites && d.invites.length > 0) {
+          notifDot.classList.add("has-notifs");
+          document.getElementById("invitesDot").classList.add("visible");
         }
       })
       .catch(function() {});
@@ -963,16 +1399,83 @@ router.get("/chat", authenticateLite, async (req, res) => {
 router.get("/chat/notifications", authenticateLite, async (req, res) => {
   try {
     if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+    const rootId = req.query.rootId;
     const { notifications, total } = await getNotifications({
       userId: req.userId,
-      rootId: req.query.rootId,
+      rootId,
       limit: 50,
       sinceDays: 7,
     });
-    return res.json({ notifications, total });
+
+    // Include dream config when viewing a specific tree
+    let dreamTime = null;
+    let isOwner = false;
+    if (rootId) {
+      const rootNode = await Node.findById(rootId).select("dreamTime rootOwner").lean();
+      if (rootNode) {
+        dreamTime = rootNode.dreamTime || null;
+        isOwner = rootNode.rootOwner?.toString() === req.userId.toString();
+      }
+    }
+
+    return res.json({ notifications, total, dreamTime, isOwner });
   } catch (err) {
     console.error("Chat notifications error:", err);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Invites + Members API for chat panel ──────────────────────────────
+router.get("/chat/invites", authenticateLite, async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+
+    // Pending invites for this user
+    const invites = await getPendingInvitesForUser(req.userId);
+    const inviteList = invites.map((inv) => ({
+      id: inv._id,
+      from: inv.userInviting?.username || "Unknown",
+      treeName: inv.rootId?.name || "Unknown tree",
+      rootId: inv.rootId?._id || inv.rootId,
+    }));
+
+    // Members (only if rootId query param provided = user is in a tree)
+    let members = null;
+    const rootId = req.query.rootId;
+    if (rootId) {
+      const rootNode = await Node.findById(rootId)
+        .populate("rootOwner", "username _id")
+        .populate("contributors", "username _id")
+        .select("rootOwner contributors")
+        .lean();
+      if (rootNode) {
+        members = {
+          owner: rootNode.rootOwner || null,
+          contributors: rootNode.contributors || [],
+          isOwner: rootNode.rootOwner?._id?.toString() === req.userId.toString(),
+        };
+      }
+    }
+
+    return res.json({ invites: inviteList, members });
+  } catch (err) {
+    console.error("Chat invites error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/chat/invites/:inviteId", authenticateLite, async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
+    const { accept } = req.body;
+    await respondToInvite({
+      inviteId: req.params.inviteId,
+      userId: req.userId,
+      acceptInvite: accept === true || accept === "true",
+    });
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 });
 

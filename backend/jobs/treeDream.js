@@ -13,6 +13,7 @@ import { drainTree } from "../ws/orchestrator/shortTermDrainOrchestrator.js";
 import { findOrCreateUnderstandingRun } from "../core/understanding.js";
 import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
 import { orchestrateDreamNotify } from "../ws/orchestrator/dreamNotifyOrchestrator.js";
+import { userHasLlm } from "../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -59,6 +60,13 @@ async function runTreeDream(rootNode) {
     return;
   }
   const username = user.username;
+
+  // Skip if no LLM available (root assignment or user connection)
+  const rootFull = await Node.findById(rootId).select("llmAssignments").lean();
+  if (!rootFull?.llmAssignments?.placement && !await userHasLlm(userId)) {
+    console.log(`💤 Skipping "${rootNode.name}" — owner has no LLM connection`);
+    return;
+  }
 
   activeDreams.add(rootId);
   console.log(`💤 Dream starting for "${rootNode.name}" [${rootId.slice(0, 8)}]`);

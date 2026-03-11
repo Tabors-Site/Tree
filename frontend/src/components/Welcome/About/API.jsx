@@ -676,8 +676,8 @@ const ApiAccessSection = () => {
           <div className="sub-title">Custom LLM Connections</div>
           <div className="desc-muted">
             Connect your own LLM providers for AI features. Each user can have
-            up to 15 connections and assign them to different slots. Requires a
-            paid plan.
+            up to 15 connections and assign them to different slots. Any
+            OpenAI-compatible endpoint works.
           </div>
 
           <div className="endpoint">
@@ -743,7 +743,7 @@ const ApiAccessSection = () => {
             <div className="ep-label">Allowed Slots</div>
             <div className="ep-code">{`main     — Default slot used for tree chat/profile
 rawIdea  — Used for raw idea auto-placement`}</div>
-            <div className="ep-note">Pass <code>connectionId: null</code> to unassign and revert to the server default.</div>
+            <div className="ep-note">Pass <code>connectionId: null</code> to unassign the slot.</div>
           </div>
 
           {/* ── Chat History ─────── */}

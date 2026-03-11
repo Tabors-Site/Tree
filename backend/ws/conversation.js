@@ -24,13 +24,6 @@ dotenv.config();
 // DEFAULT LLM CLIENT (your server)
 // ─────────────────────────────────────────────────────────────────────────
 
-const defaultClient = new OpenAI({
-  baseURL: process.env.OPENAI_BASE_URL || "http://10.0.0.23:11434/v1",
-  apiKey: process.env.OPENAI_API_KEY || "ollama",
-});
-//"gpt-oss:20b";
-//qwen3.5-35b-a3b-GGUF:Q4_K_XL
-//qwen3.5:27b
 const DEFAULT_MODEL = process.env.AI_MODEL || "qwen3.5:27b";
 
 const MAX_MESSAGES = 30;
@@ -74,19 +67,20 @@ async function resolveConnection(connectionId, cacheKey) {
   var conn = await CustomLlmConnection.findById(connectionId).lean();
   if (!conn || !conn.baseUrl || !conn.encryptedApiKey) return null;
 
-  // Verify the connection owner has an active paid plan
-  var owner = await User.findById(conn.userId).select("profileType planExpiresAt").lean();
-  if (!owner || owner.profileType === "basic") return null;
-  if (owner.profileType !== "god" && (!owner.planExpiresAt || new Date(owner.planExpiresAt) <= new Date())) return null;
+  // God plan users can use private/internal IPs (e.g. local Ollama)
+  var owner = await User.findById(conn.userId).select("profileType").lean();
+  var isGod = owner && owner.profileType === "god";
 
-  try {
-    var hostname = new URL(conn.baseUrl).hostname;
-    await resolveAndValidateHost(hostname);
-  } catch (err) {
-    console.error(
-      "Blocked custom LLM connection " + connectionId + ": " + err.message,
-    );
-    return null;
+  if (!isGod) {
+    try {
+      var hostname = new URL(conn.baseUrl).hostname;
+      await resolveAndValidateHost(hostname);
+    } catch (err) {
+      console.error(
+        "Blocked custom LLM connection " + connectionId + ": " + err.message,
+      );
+      return null;
+    }
   }
 
   var apiKey = decrypt(conn.encryptedApiKey);
@@ -115,7 +109,7 @@ async function resolveConnection(connectionId, cacheKey) {
 
 export async function getClientForUser(userId, slot, overrideConnectionId) {
   if (!userId)
-    return { client: defaultClient, model: DEFAULT_MODEL, isCustom: false };
+    return { client: null, model: null, isCustom: false, connectionId: null, noLlm: true, fetchedAt: Date.now() };
 
   slot = slot || "main";
 
@@ -169,15 +163,16 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
     );
   }
 
-  var defaultEntry = {
-    client: defaultClient,
-    model: DEFAULT_MODEL,
+  var noLlmEntry = {
+    client: null,
+    model: null,
     isCustom: false,
     connectionId: null,
+    noLlm: true,
     fetchedAt: Date.now(),
   };
-  userClientCache.set(cacheKey, defaultEntry);
-  return defaultEntry;
+  userClientCache.set(cacheKey, noLlmEntry);
+  return noLlmEntry;
 }
 
 // ── Mode → llmAssignments key mapping ────────────────────────────────────
@@ -244,6 +239,18 @@ export function clearUserClientCache(userId) {
       userClientCache.delete(key);
     }
   }
+}
+
+/**
+ * Quick check: does this user have any custom LLM connection available?
+ * Returns true if user.llmAssignments.main is set OR they have at least one connection.
+ */
+export async function userHasLlm(userId) {
+  if (!userId) return false;
+  var user = await User.findById(userId).select("llmAssignments").lean();
+  if (user?.llmAssignments?.main) return true;
+  var count = await CustomLlmConnection.countDocuments({ userId });
+  return count > 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -395,12 +402,21 @@ export async function processMessage(visitorId, message, ctx) {
     ctx.rootLlmConnectionId ||
     (rootId ? await resolveRootLlmForMode(rootId, session.modeKey) : null);
 
+  const clientEntry = await getClientForUser(ctx.userId, ctx.slot, modeConnectionId);
+  if (clientEntry.noLlm) {
+    // Charge energy to discourage chatting without a connection
+    try {
+      const { useEnergy } = await import("../core/energy.js");
+      await useEnergy({ userId: ctx.userId, action: "chat" });
+    } catch (_) {}
+    return { content: "No LLM connection configured. Set one up at /setup to use AI features.", modeKey: session.modeKey };
+  }
   const {
     client: openai,
     model: MODEL,
     isCustom,
     connectionId: resolvedConnectionId,
-  } = await getClientForUser(ctx.userId, ctx.slot, modeConnectionId);
+  } = clientEntry;
 
   // Ensure MCP client
   let client = mcpClients.get(visitorId);

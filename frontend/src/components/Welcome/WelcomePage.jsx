@@ -76,6 +76,11 @@ const WelcomePage = () => {
         return;
       }
 
+      if (!data.hasLlm) {
+        window.location.href = `${URL}/setup`;
+        return;
+      }
+
       window.location.href = destination;
     } catch (err) {
       console.error("Open App error:", err);

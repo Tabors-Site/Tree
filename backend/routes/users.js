@@ -10,6 +10,8 @@ import {
   verifyEmail,
 } from "../controllers/users.js";
 import authenticate from "../middleware/authenticate.js";
+import User from "../db/models/user.js";
+import CustomLlmConnection from "../db/models/customLlmConnection.js";
 
 const router = express.Router();
 
@@ -64,11 +66,24 @@ router.post(
   setHtmlShareToken
 );
 
-router.post("/verify-token", authenticate, getHtmlShareToken, (req, res) => {
+router.post("/verify-token", authenticate, getHtmlShareToken, async (req, res) => {
+  let hasLlm = false;
+  try {
+    const user = await User.findById(req.userId).select("llmAssignments").lean();
+    if (user?.llmAssignments?.main) {
+      hasLlm = true;
+    } else {
+      const connCount = await CustomLlmConnection.countDocuments({ userId: req.userId });
+      hasLlm = connCount > 0;
+    }
+  } catch (err) {
+    console.error("verify-token LLM check error:", err.message);
+  }
   res.json({
     userId: req.userId,
     username: req.username,
     HTMLShareToken: req.HTMLShareToken,
+    hasLlm,
   });
 });
 

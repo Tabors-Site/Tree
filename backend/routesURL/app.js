@@ -1,6 +1,7 @@
 // routes/app.js
 import express from "express";
 import User from "../db/models/user.js";
+import CustomLlmConnection from "../db/models/customLlmConnection.js";
 import authenticateLite from "../middleware/authenticateLite.js";
 import { dashboardCSS, dashboardHTML, dashboardJS } from "./sessionManagerPartial.js";
 
@@ -17,14 +18,28 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     const user = await User.findById(req.userId).select(
-      "htmlShareToken username roots",
+      "htmlShareToken username roots llmAssignments",
     );
 
     if (!user) {
       return res.status(404).send("User not found");
     }
 
+    // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
+    const setupSkipped = req.cookies?.setupSkipped === "1";
+    if (!setupSkipped) {
+      const hasMainLlm = !!(user.llmAssignments?.main);
+      const hasTree = user.roots && user.roots.length > 0;
+      if (!hasMainLlm || !hasTree) {
+        const connCount = hasMainLlm ? 1 : await CustomLlmConnection.countDocuments({ userId: req.userId });
+        if (connCount === 0 || !hasTree) {
+          return res.redirect("/setup");
+        }
+      }
+    }
+
     const { htmlShareToken, username } = user;
+    const hasLlm = !!(user.llmAssignments?.main) || (await CustomLlmConnection.countDocuments({ userId: req.userId })) > 0;
 
     return res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -220,6 +235,14 @@ router.get("/app", authenticateLite, async (req, res) => {
       transform: scale(0.93);
     }
     .clear-chat-btn svg { width: 14px; height: 14px; }
+    .clear-chat-btn.llm-glow {
+      animation: llmGlow 0.6s ease-in-out 3;
+      border-color: var(--accent);
+    }
+    @keyframes llmGlow {
+      0%, 100% { box-shadow: 0 0 4px rgba(16, 185, 129, 0.3); }
+      50% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.8); background: rgba(16, 185, 129, 0.25); }
+    }
 
     /* Active root name - inline after Tree in header */
     .root-name-inline {
@@ -1360,7 +1383,7 @@ router.get("/app", authenticateLite, async (req, res) => {
             <button class="clear-chat-btn" id="desktopOpenTabBtn" title="Open in new tab">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             </button>
-            <button class="clear-chat-btn" id="desktopCustomAiBtn" title="Custom AI">🤖</button>
+            <button class="clear-chat-btn" id="desktopCustomAiBtn" title="LLM Connections">🤖</button>
           </div>
           <div class="chat-header-right">
             <div class="status-badge">
@@ -1492,7 +1515,7 @@ router.get("/app", authenticateLite, async (req, res) => {
           <button class="clear-chat-btn" id="mobileClearChatBtn" title="Clear conversation">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
           </button>
-          <button class="clear-chat-btn" id="mobileCustomAiBtn" title="Custom AI">🤖</button>
+          <button class="clear-chat-btn" id="mobileCustomAiBtn" title="LLM Connections">🤖</button>
           <button class="mobile-close-btn" id="mobileCloseBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
@@ -1533,7 +1556,8 @@ router.get("/app", authenticateLite, async (req, res) => {
       userId: "${req.userId}",
       username: "${username || req.userId}",
       htmlShareToken: "${htmlShareToken}",
-      homeUrl: "/api/v1/user/${req.userId}?html&token=${htmlShareToken}&inApp=1"
+      homeUrl: "/api/v1/user/${req.userId}?html&token=${htmlShareToken}&inApp=1",
+      hasLlm: ${hasLlm}
     };
 
     // Elements
@@ -1652,6 +1676,20 @@ function buildIframeUrl(raw) {
       isSending = false;
       updateSendButtons();
       lockModeBar(false);
+
+      // Glow the LLM button after a delay so they read the error first
+      if (error && (error.includes("/setup") || error.includes("LLM connection"))) {
+        setTimeout(function() {
+          var glowBtns = [$("desktopCustomAiBtn"), $("mobileCustomAiBtn")];
+          glowBtns.forEach(function(btn) {
+            if (!btn) return;
+            btn.classList.remove("llm-glow");
+            void btn.offsetWidth;
+            btn.classList.add("llm-glow");
+            btn.addEventListener("animationend", function() { btn.classList.remove("llm-glow"); }, { once: true });
+          });
+        }, 2500);
+      }
     });
 
     // Session killed from session manager while chat was in-flight
@@ -2774,8 +2812,12 @@ function goHome() {
 
     $("desktopOpenTabBtn").addEventListener("click", openInNewTab);
 
-    // Custom AI button — navigate iframe to /user/:id/energy and scroll to bottom
+    // LLM Connections button — go to /setup if no LLM, else energy page
     function goCustomAi() {
+      if (!CONFIG.hasLlm) {
+        window.location.href = "/setup";
+        return;
+      }
       const url = buildIframeUrl('/api/v1/user/' + CONFIG.userId + '/energy?html');
       loadingOverlay.classList.add("visible");
       currentIframeUrl = url;

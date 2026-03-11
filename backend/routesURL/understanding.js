@@ -9,6 +9,7 @@ import { getNotes } from "../core/notes.js";
 const router = express.Router();
 
 import Node from "../db/models/node.js";
+import { userHasLlm } from "../ws/conversation.js";
 function buildQueryString(req) {
   const allowedParams = ["token", "html"];
 
@@ -50,6 +51,13 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
       return res.status(404).json({
         error: "Root node not found",
       });
+    }
+
+    // Check LLM access — tree owner needs an LLM or root must have one assigned
+    const hasUserLlm = await userHasLlm(userId);
+    const hasRootLlm = !!rootNode.llmAssignments?.placement;
+    if (!hasUserLlm && !hasRootLlm) {
+      return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
     }
 
     const result = incremental

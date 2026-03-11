@@ -20,19 +20,45 @@ const StartedAbout = () => {
           </p>
         </div>
 
+        {/* ── BRING YOUR OWN LLM ── */}
+        <div className="sta-section">
+          <div className="sta-section-title">
+            <span className="sta-section-icon">🧠</span> Bring Your Own LLM
+          </div>
+          <div className="sta-section-text" style={{ marginBottom: 12 }}>
+            <strong>Tree does not include an AI model.</strong> You need to connect
+            your own LLM provider to use any AI features: chat, dreams,
+            understanding, raw idea placement, and more. You bring the API key
+            and pay your provider directly.
+          </div>
+          <div className="sta-section-text">
+            We recommend <strong>OpenRouter</strong> for the easiest setup. It
+            gives you access to hundreds of models with a single API key. Any
+            OpenAI-compatible endpoint works. OpenRouter, Groq, Together,
+            OpenAI, or even a local server.
+          </div>
+          <div className="sta-section-text" style={{ marginTop: 12 }}>
+            When you sign up, the setup page will walk you through connecting
+            your first model before creating your first tree. Your API key is
+            encrypted in our database and only used to route your requests.
+          </div>
+          <div className="sta-section-text drm-note" style={{ marginTop: 12 }}>
+            Don't have your own LLM? You can still join someone else's tree
+            if they've invited you and have their own model connected. You
+            just won't be able to create or chat with your own trees.
+          </div>
+        </div>
+
         {/* ── CREATE YOUR FIRST TREE ── */}
         <div className="sta-section">
           <div className="sta-section-title">
             <span className="sta-section-icon">✨</span> Create Your First Tree
           </div>
           <div className="sta-section-text">
-            After logging in, you'll have access to two options: <strong>Start Chat</strong> for
-            a simple conversation view, or <strong>Dashboard</strong> for the full
-            tree visualization with manual controls.
-            <br /><br />
-            To create your first tree, hit the <strong>+</strong> button after typing a new root name.
-            In Chat you'll find it at the bottom of the tree list, and in Dashboard
-            it's on your profile home in My Roots. Give it a name and you're in.
+            After connecting your LLM, the setup page will ask you to name your
+            first tree. You can also create trees later -- in Chat hit
+            the <strong>+</strong> button at the bottom of the tree list, or in
+            Dashboard find it on your profile home in My Roots.
           </div>
           <div className="sta-section-text" style={{ marginTop: 14 }}>
             Pick a root name that describes the big picture. It's the top of
@@ -193,7 +219,7 @@ const StartedAbout = () => {
               <span className="sta-next-emoji">⚡</span>
               <div>
                 <div className="sta-next-label">Energy System</div>
-                <div className="sta-next-desc">How usage works, what things cost, and how to bring your own LLM.</div>
+                <div className="sta-next-desc">How usage works, what things cost, and LLM connection details.</div>
               </div>
             </Link>
             <Link className="sta-next-card" to="/about/api">

@@ -13,12 +13,13 @@ import authenticate from "../middleware/authenticate.js";
 import { orchestrateTreeRequest } from "../ws/orchestrator/treeOrchestrator.js";
 import { orchestrateRawIdeaPlacement } from "../ws/orchestrator/rawIdeaOrchestrator.js";
 import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
-import { setRootId, getClientForUser, clearSession } from "../ws/conversation.js";
+import { setRootId, getClientForUser, clearSession, userHasLlm } from "../ws/conversation.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
 import { startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../ws/aiChatTracker.js";
 import { enqueue } from "../ws/requestQueue.js";
 import { createSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../ws/sessionRegistry.js";
 import User from "../db/models/user.js";
+import Node from "../db/models/node.js";
 import RawIdea from "../db/models/rawIdea.js";
 
 const router = express.Router();
@@ -44,6 +45,15 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
 
   if (!message || typeof message !== "string" || !message.trim()) {
     return res.status(400).json({ success: false, answer: "Message is required." });
+  }
+
+  // Check LLM access
+  const rootCheck = await Node.findById(rootId).select("rootOwner llmAssignments").lean();
+  const isOwner = rootCheck?.rootOwner?.toString() === req.userId.toString();
+  const hasUserLlm = await userHasLlm(req.userId);
+  const hasRootLlm = !!rootCheck?.llmAssignments?.placement;
+  if (!hasUserLlm && !hasRootLlm) {
+    return res.status(403).json({ success: false, answer: "No LLM connection. Visit /setup to set one up." });
   }
 
   const visitorId = `tree-chat:${req.userId}:${Date.now()}`;
@@ -196,6 +206,14 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
 
   if (!message || typeof message !== "string" || !message.trim()) {
     return res.status(400).json({ success: false, error: "Message is required." });
+  }
+
+  // Check LLM access
+  const placeRootCheck = await Node.findById(rootId).select("rootOwner llmAssignments").lean();
+  const placeHasUserLlm = await userHasLlm(req.userId);
+  const placeHasRootLlm = !!placeRootCheck?.llmAssignments?.placement;
+  if (!placeHasUserLlm && !placeHasRootLlm) {
+    return res.status(403).json({ success: false, error: "No LLM connection. Visit /setup to set one up." });
   }
 
   const visitorId = `tree-place:${req.userId}:${Date.now()}`;
@@ -358,6 +376,11 @@ router.post(
         return res.status(409).json({ error: `Already ${rawIdea.status}` });
       }
 
+      // Check user has LLM for raw idea placement
+      if (!await userHasLlm(req.userId)) {
+        return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+      }
+
       // Block concurrent placements — only one at a time per user
       const alreadyProcessing = await RawIdea.findOne({
         userId: req.userId.toString(),
@@ -417,6 +440,11 @@ router.post(
       }
       if (rawIdea.status && rawIdea.status !== "pending") {
         return res.status(409).json({ error: `Already ${rawIdea.status}` });
+      }
+
+      // Check user has LLM for raw idea chat
+      if (!await userHasLlm(req.userId)) {
+        return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
       }
 
       // Block concurrent placements — only one at a time per user

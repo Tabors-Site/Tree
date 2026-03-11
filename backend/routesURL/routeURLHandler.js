@@ -7,6 +7,7 @@ import transactions from "./transactions.js";
 import values from "./values.js";
 import appe from "./app.js";
 import chat from "./chat.js";
+import setup from "./setup.js";
 import understanding from "./understanding.js";
 import tree from "./tree.js";
 
@@ -34,6 +35,7 @@ export default function registerURLRoutes(app) {
   app.use("/", root);
   app.use("/", appe);
   app.use("/", chat);
+  app.use("/", setup);
   app.use("/", understanding);
 
   app.use("/", note);

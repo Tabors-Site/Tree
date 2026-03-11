@@ -7,6 +7,7 @@ import RawIdea from "../db/models/rawIdea.js";
 import AIChat from "../db/models/aiChat.js";
 import { orchestrateRawIdeaPlacement } from "../ws/orchestrator/rawIdeaOrchestrator.js";
 import { isUserOnline } from "../ws/websocket.js";
+import { userHasLlm } from "../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -29,6 +30,9 @@ async function processUser(user) {
 
   // Skip if user is currently online — they can trigger it themselves
   if (isUserOnline(userId)) return;
+
+  // Skip if user has no LLM connection
+  if (!await userHasLlm(userId)) return;
 
   // Mirror the button: skip if another idea is already being orchestrated
   const alreadyProcessing = await RawIdea.findOne({

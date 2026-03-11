@@ -189,7 +189,7 @@ const verifyEmail = async (req, res) => {
 
     await tempUser.deleteOne();
     return res.redirect(
-      `https://tree.tabors.site/chat`
+      `https://tree.tabors.site/setup`
     );
   } catch (err) {
     console.error("[verifyEmail]", err);
