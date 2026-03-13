@@ -47,9 +47,9 @@ async function runTreeDream(rootNode) {
     return;
   }
 
-  // Skip tiny trees
-  if (!rootNode.children || rootNode.children.length < MIN_TREE_CHILDREN) {
-    console.log(`💤 Skipping "${rootNode.name}" — too few children (${rootNode.children?.length || 0})`);
+  // Skip empty trees (no children at all)
+  if (!rootNode.children || rootNode.children.length === 0) {
+    console.log(`💤 Skipping "${rootNode.name}" — no children`);
     return;
   }
 
