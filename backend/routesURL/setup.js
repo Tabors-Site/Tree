@@ -244,7 +244,7 @@ router.get("/setup", authenticateLite, async (req, res) => {
       </div>
 
       <div class="video-wrap">
-        <iframe src="https://www.youtube.com/embed/xCiD1q1pFGI" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        <iframe src="https://www.youtube-nocookie.com/embed/_cXGZXdiVgw" allowfullscreen></iframe>
       </div>
 
       <div class="field-row">
