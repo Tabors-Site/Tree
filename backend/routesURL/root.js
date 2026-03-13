@@ -2028,13 +2028,6 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
       return res.status(403).json({ error: "Only the root owner can assign LLM connections" });
     }
 
-    // Validate paid plan
-    const { default: User } = await import("../db/models/user.js");
-    const owner = await User.findById(req.userId).select("profileType planExpiresAt").lean();
-    if (!owner || owner.profileType === "basic" || !owner.planExpiresAt || owner.planExpiresAt <= new Date()) {
-      return res.status(403).json({ error: "Custom LLM connections require an active paid plan" });
-    }
-
     // If assigning, verify connection belongs to root owner
     if (connectionId) {
       const { default: CustomLlmConnection } = await import("../db/models/customLlmConnection.js");
