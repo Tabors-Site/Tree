@@ -10,6 +10,17 @@ import { getClientForUser, resolveRootLlmForMode } from "../conversation.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Robust JSON parser for LLM output -- handles markdown fences, <think> tags, prose wrapping
+function parseLlmJson(text) {
+  if (!text || typeof text !== "string") return null;
+  var cleaned = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+  cleaned = cleaned.replace(/^<think>[\s\S]*?<\/think>\s*/i, "");
+  try { return JSON.parse(cleaned); } catch {}
+  var match = cleaned.match(/\{[\s\S]*\}/);
+  if (match) { try { return JSON.parse(match[0]); } catch {} }
+  return null;
+}
+
 // Load constitution once at startup
 const CONSTITUTION = readFileSync(
   join(__dirname, "treeConstitution.md"),
@@ -469,7 +480,8 @@ export async function classify({
   if (!raw) throw new Error("Empty classifier response");
 
   try {
-    const result = JSON.parse(raw);
+    const result = parseLlmJson(raw);
+    if (!result) throw new Error("No parseable JSON found");
 
     // Validate and default fields
     if (!result.intent) result.intent = "query";
@@ -568,7 +580,8 @@ export async function translateDestructive({
   if (!raw) throw new Error("Empty translator response");
 
   try {
-    const result = JSON.parse(raw);
+    const result = parseLlmJson(raw);
+    if (!result) throw new Error("No parseable JSON found");
 
     // Validate structure
     if (

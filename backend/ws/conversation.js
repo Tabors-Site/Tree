@@ -90,7 +90,17 @@ async function resolveConnection(connectionId, cacheKey) {
   }
 
   var entry = {
-    client: new OpenAI({ baseURL: baseURL, apiKey: apiKey }),
+    client: new OpenAI({
+      baseURL: baseURL,
+      apiKey: apiKey,
+      maxRetries: 3,
+      timeout: 60_000,
+      defaultHeaders: {
+        "HTTP-Referer": "https://tree.tabors.site",
+        "X-OpenRouter-Title": "Tree",
+        "X-OpenRouter-Categories": "personal-agent,general-chat",
+      },
+    }),
     model: conn.model || DEFAULT_MODEL,
     isCustom: true,
     connectionId: conn._id,
@@ -152,6 +162,11 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
     var user = await User.findById(userId).select("llmAssignments").lean();
     var assignments = user && user.llmAssignments;
     var connectionId = (assignments && assignments[slot]) || null;
+
+    // Fall back to "main" slot if the specific slot has no assignment
+    if (!connectionId && slot !== "main" && assignments && assignments.main) {
+      connectionId = assignments.main;
+    }
 
     if (connectionId) {
       var entry = await resolveConnection(connectionId, cacheKey);
@@ -517,6 +532,44 @@ export async function processMessage(visitorId, message, ctx) {
     // Tool results MUST follow their corresponding assistant tool_call message.
     session.messages.push(assistantMessage);
 
+    // Detect models that return tool-call-like text instead of proper function calling
+    // (common with free/cheap models on OpenRouter that don't support tool_use)
+    if (
+      !assistantMessage.tool_calls?.length &&
+      assistantMessage.content &&
+      tools.length > 0
+    ) {
+      const _content = assistantMessage.content;
+      const looksLikeToolCall =
+        /<tool_call>/i.test(_content) ||
+        /<function[=\s]/i.test(_content) ||
+        /```tool_code/i.test(_content);
+
+      if (looksLikeToolCall) {
+        console.warn(`⚠️ Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`);
+        session.messages.pop();
+        const fallbackResponse = await openai.chat.completions.create({
+          model: MODEL,
+          messages: [
+            ...session.messages,
+            { role: "system", content: "Answer the user's question directly in plain text. Do not use XML, function call, or tool_call syntax." },
+          ],
+        }, requestOpts);
+        const fallbackChoice = fallbackResponse.choices?.[0];
+        if (fallbackChoice) {
+          session.messages.push(fallbackChoice.message);
+          if (isInternal) {
+            const raw = fallbackChoice.message.content;
+            const _llmProvider = { isCustom, model: MODEL, connectionId: resolvedConnectionId || null };
+            try { const p = JSON.parse(raw); p._llmProvider = _llmProvider; return p; }
+            catch { return { action: "error", reason: "Model cannot use tools", raw, _llmProvider }; }
+          }
+          answer = fallbackChoice.message.content;
+        }
+        break;
+      }
+    }
+
     // If tools are requested, continue the loop
     if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
       // tool execution happens below
@@ -538,6 +591,16 @@ export async function processMessage(visitorId, message, ctx) {
             const parsed = JSON.parse(stripped);
             parsed._llmProvider = _llmProvider;
             return parsed;
+          } catch (_) {}
+
+          // Try extracting JSON object from text (LLM added preamble before JSON)
+          try {
+            const jsonMatch = raw.match(/\{[\s\S]*\}$/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              parsed._llmProvider = _llmProvider;
+              return parsed;
+            }
           } catch (_) {}
 
           // If it looks like truncated JSON, return it as raw context
