@@ -70,7 +70,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
   <meta charset="UTF-8" />
   <title>Tree Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#667eea" />
+  <meta name="theme-color" content="#736fe6" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -94,7 +94,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text-primary); }
-    html { background: #667eea; }
+    html { background: #736fe6; }
     body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); background-attachment: fixed; }
 
     /* Layout */
@@ -527,6 +527,17 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .dream-config-status { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 6px; }
     .dream-config-hint { font-size: 12px; color: rgba(255,255,255,0.45); line-height: 1.4; }
 
+    .notif-panel-footer {
+      padding: 16px; border-top: 1px solid var(--glass-border-light); flex-shrink: 0;
+    }
+    .logout-btn {
+      width: 100%; padding: 10px; border-radius: 10px;
+      background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5; font-family: inherit; font-size: 13px;
+      cursor: pointer; transition: all var(--transition-fast);
+    }
+    .logout-btn:hover { background: rgba(239,68,68,0.3); color: #fecaca; }
+
     @media (max-width: 600px) {
       .container { max-width: 100%; }
       .chat-header { padding: 0 12px; }
@@ -600,6 +611,9 @@ router.get("/chat", authenticateLite, async (req, res) => {
       </div>
       <div class="notif-list" id="invitesList" style="display:none">
         <div class="notif-loading">Loading...</div>
+      </div>
+      <div class="notif-panel-footer">
+        <button class="logout-btn" onclick="doLogout()">Log out</button>
       </div>
     </div>
 
@@ -992,16 +1006,18 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     // ── Send ──────────────────────────────────────────────────────────
     function sendMessage() {
-      const text = chatInput.value.trim();
-      if (!text || !isRegistered || !activeRootId) return;
-
       if (isSending) {
+        requestGeneration++;
         socket.emit("cancelRequest");
         removeTyping();
+        addMessage("Stopped", "error");
         isSending = false;
         updateSendBtn();
         return;
       }
+
+      const text = chatInput.value.trim();
+      if (!text || !isRegistered || !activeRootId) return;
 
       chatInput.value = "";
       chatInput.style.height = "auto";
@@ -1052,6 +1068,15 @@ router.get("/chat", authenticateLite, async (req, res) => {
     let dreamsLoaded = false;
     let invitesLoaded = false;
     let activeTab = "dreams";
+
+    async function doLogout() {
+      try {
+        await fetch("/api/v1/logout", { method: "POST", credentials: "include" });
+        window.location.href = "/login";
+      } catch(e) {
+        alert("Logout failed");
+      }
+    }
 
     function toggleNotifs() {
       notifOpen = !notifOpen;
