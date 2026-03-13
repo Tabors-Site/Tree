@@ -3,7 +3,11 @@ import express from "express";
 import User from "../db/models/user.js";
 import CustomLlmConnection from "../db/models/customLlmConnection.js";
 import authenticateLite from "../middleware/authenticateLite.js";
-import { dashboardCSS, dashboardHTML, dashboardJS } from "./sessionManagerPartial.js";
+import {
+  dashboardCSS,
+  dashboardHTML,
+  dashboardJS,
+} from "./sessionManagerPartial.js";
 
 const router = express.Router();
 
@@ -28,10 +32,12 @@ router.get("/app", authenticateLite, async (req, res) => {
     // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
     const setupSkipped = req.cookies?.setupSkipped === "1";
     if (!setupSkipped) {
-      const hasMainLlm = !!(user.llmAssignments?.main);
+      const hasMainLlm = !!user.llmAssignments?.main;
       const hasTree = user.roots && user.roots.length > 0;
       if (!hasMainLlm || !hasTree) {
-        const connCount = hasMainLlm ? 1 : await CustomLlmConnection.countDocuments({ userId: req.userId });
+        const connCount = hasMainLlm
+          ? 1
+          : await CustomLlmConnection.countDocuments({ userId: req.userId });
         if (connCount === 0 || !hasTree) {
           return res.redirect("/setup");
         }
@@ -39,7 +45,9 @@ router.get("/app", authenticateLite, async (req, res) => {
     }
 
     const { htmlShareToken, username } = user;
-    const hasLlm = !!(user.llmAssignments?.main) || (await CustomLlmConnection.countDocuments({ userId: req.userId })) > 0;
+    const hasLlm =
+      !!user.llmAssignments?.main ||
+      (await CustomLlmConnection.countDocuments({ userId: req.userId })) > 0;
 
     return res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -238,10 +246,11 @@ router.get("/app", authenticateLite, async (req, res) => {
     .clear-chat-btn.llm-glow {
       animation: llmGlow 0.6s ease-in-out 3;
       border-color: var(--accent);
+      will-change: opacity;
     }
     @keyframes llmGlow {
-      0%, 100% { box-shadow: 0 0 4px rgba(16, 185, 129, 0.3); }
-      50% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.8); background: rgba(16, 185, 129, 0.25); }
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; background: rgba(16, 185, 129, 0.25); }
     }
 
     /* Active root name - inline after Tree in header */
