@@ -118,7 +118,7 @@ async function createNote({
   if (contentType === "file") {
     payload = { type: "file", sizeMB: Math.ceil(file.size / (1024 * 1024)) };
   } else {
-    payload = (content || "").length; // char count for text scaling
+    payload = (content || "").length;
   }
 
   const { energyUsed } = await useEnergy({

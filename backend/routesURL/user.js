@@ -1427,7 +1427,12 @@ text-decoration: none;
       xhr.onerror = fail;
 
       function fail() {
-        alert('Send failed');
+        var msg = 'Send failed';
+        try {
+          var body = JSON.parse(xhr.responseText);
+          if (body.error) msg = body.error;
+        } catch(e) {}
+        alert(msg);
         sendBtn.classList.remove('loading');
         sendBtn.disabled = false;
         progressBar.style.width = '0%';

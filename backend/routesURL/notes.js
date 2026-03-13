@@ -43,14 +43,13 @@ const upload = multer({
   limits: { fileSize: 4 * 1024 * 1024 * 1024 },
 });
 
-
 function escapeHtml(str) {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function renderMedia(fileUrl, mimeType) {
@@ -130,7 +129,8 @@ function renderMediaImmediate(fileUrl, mimeType) {
 function renderBookNode(node, depth, req, version) {
   const level = Math.min(depth, 5);
   const H = `h${level}`;
-  const token = req.query.token ?? "";
+  const token = req.query.token || "";
+  const qs = token ? `?token=${token}&html` : `?html`;
 
   let html = `
     <section class="book-section depth-${depth}">
@@ -138,7 +138,7 @@ function renderBookNode(node, depth, req, version) {
   `;
 
   for (const note of node.notes) {
-    const noteUrl = `/api/v1/node/${node.nodeId}/${note.version}/notes/${note.noteId}?token=${token}&html`;
+    const noteUrl = `/api/v1/node/${node.nodeId}/${note.version}/notes/${note.noteId}${qs}`;
 
     if (note.type === "text") {
       html += `
@@ -212,54 +212,62 @@ router.get("/node/:nodeId/:version/notes/editor", urlAuth, async (req, res) => {
 });
 
 // ── EDIT EXISTING NOTE EDITOR (GET) ───────────────────────────────────
-router.get("/node/:nodeId/:version/notes/:noteId/editor",urlAuth, async (req, res) => {
-  try {
-    const { nodeId, version, noteId } = req.params;
-    const queryString = filterQuery(req);
-    const qs = queryString ? `?${queryString}` : "";
-    const token = req.query.token ?? "";
-    const tokenQS = token ? `?token=${token}&html` : "?html";
+router.get(
+  "/node/:nodeId/:version/notes/:noteId/editor",
+  urlAuth,
+  async (req, res) => {
+    try {
+      const { nodeId, version, noteId } = req.params;
+      const queryString = filterQuery(req);
+      const qs = queryString ? `?${queryString}` : "";
+      const token = req.query.token ?? "";
+      const tokenQS = token ? `?token=${token}&html` : "?html";
 
-    const Note = (await import("../db/models/notes.js")).default;
-    const note = await Note.findById(noteId).lean();
+      const Note = (await import("../db/models/notes.js")).default;
+      const note = await Note.findById(noteId).lean();
 
-    if (!note) return res.status(404).send("Note not found");
+      if (!note) return res.status(404).send("Note not found");
 
-    // File notes can't be edited — redirect to view
-    if (note.contentType !== "text") {
-      return res.redirect(
-        `/api/v1/node/${nodeId}/${version}/notes/${noteId}${tokenQS}`,
+      // File notes can't be edited — redirect to view
+      if (note.contentType !== "text") {
+        return res.redirect(
+          `/api/v1/node/${nodeId}/${version}/notes/${noteId}${tokenQS}`,
+        );
+      }
+
+      return res.send(
+        renderEditorPage({
+          nodeId,
+          version,
+          noteId,
+          noteContent: note.content || "",
+          qs,
+          tokenQS,
+          originalLength: (note.content || "").length,
+        }),
       );
+    } catch (err) {
+      console.error("Editor page error:", err);
+      res.status(500).json({ error: err.message });
     }
-
-    return res.send(
-      renderEditorPage({
-        nodeId,
-        version,
-        noteId,
-        noteContent: note.content || "",
-        qs,
-        tokenQS,
-        originalLength: (note.content || "").length,
-      }),
-    );
-  } catch (err) {
-    console.error("Editor page error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+  },
+);
 
 // ── NOTE EDIT HISTORY ───────────────────────────
-router.get("/node/:nodeId/:version/notes/:noteId/history", urlAuth, async (req, res) => {
-  try {
-    const { noteId } = req.params;
-    const history = await getNoteEditHistory(noteId);
-    return res.json({ history });
-  } catch (err) {
-    console.error("Note history error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+router.get(
+  "/node/:nodeId/:version/notes/:noteId/history",
+  urlAuth,
+  async (req, res) => {
+    try {
+      const { noteId } = req.params;
+      const history = await getNoteEditHistory(noteId);
+      return res.json({ history });
+    } catch (err) {
+      console.error("Note history error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
   try {
@@ -397,7 +405,7 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
       background: rgba(var(--glass-water-rgb), var(--glass-alpha));
       backdrop-filter: blur(22px) saturate(140%);
       -webkit-backdrop-filter: blur(22px) saturate(140%);
-      padding: 16px 20px;
+      padding: 10px 20px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
         inset 0 1px 0 rgba(255, 255, 255, 0.25);
       border-bottom: 1px solid rgba(255, 255, 255, 0.28);
@@ -416,14 +424,14 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       flex-wrap: wrap;
-      margin-bottom: 12px;
+      margin-bottom: 4px;
     }
 
     .nav-left {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
@@ -432,7 +440,7 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 10px 16px;
+      padding: 8px 14px;
       background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(10px);
       color: white;
@@ -548,20 +556,12 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
 
     /* Content Container */
     .content-wrapper {
-      padding: 32px 20px;
+      padding: 24px 20px;
     }
 
     .content {
       max-width: 900px;
       margin: 0 auto;
-      background: rgba(var(--glass-water-rgb), 0.25);
-      backdrop-filter: blur(22px) saturate(140%);
-      -webkit-backdrop-filter: blur(22px) saturate(140%);
-      border-radius: 16px;
-      padding: 48px 64px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-      border: 1px solid rgba(255, 255, 255, 0.28);
       font-family: "Charter", "Georgia", "Iowan Old Style", "Times New Roman", serif;
       line-height: 1.7;
       word-wrap: break-word;
@@ -576,56 +576,48 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
     }
 
     .book-section.depth-1 {
-      margin-bottom: 56px;
-      margin-left: 0;
+      margin-bottom: 48px;
       padding: 24px;
       background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(12px);
       border-radius: 12px;
       border: 1px solid rgba(255, 255, 255, 0.15);
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     }
 
     .book-section.depth-2 {
-      margin-bottom: 40px;
-      margin-left: 16px;
+      margin-bottom: 32px;
+      margin-left: 8px;
       padding: 20px;
-      background: rgba(255, 255, 255, 0.12);
-      backdrop-filter: blur(14px);
+      background: rgba(255, 255, 255, 0.06);
       border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      box-shadow: 0 3px 16px rgba(0, 0, 0, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
     }
 
     .book-section.depth-3 {
-      margin-bottom: 32px;
-      margin-left: 32px;
+      margin-bottom: 24px;
+      margin-left: 8px;
       padding: 16px;
-      background: rgba(255, 255, 255, 0.16);
-      backdrop-filter: blur(16px);
+      background: rgba(255, 255, 255, 0.04);
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     .book-section.depth-4 {
-      margin-bottom: 24px;
-      margin-left: 48px;
+      margin-bottom: 20px;
+      margin-left: 8px;
       padding: 12px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(18px);
+      background: rgba(255, 255, 255, 0.03);
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .book-section.depth-5 {
-      margin-bottom: 20px;
-      margin-left: 64px;
+      margin-bottom: 16px;
+      margin-left: 8px;
       padding: 10px;
-      background: rgba(255, 255, 255, 0.24);
-      backdrop-filter: blur(20px);
+      background: rgba(255, 255, 255, 0.02);
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.06);
     }
 
     /* Heading Hierarchy */
@@ -832,9 +824,6 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
 
     /* Responsive Design */
     @media (max-width: 1024px) {
-      .content {
-        padding: 40px 48px;
-      }
     }
 
     @media (max-width: 768px) {
@@ -858,10 +847,6 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
 
       .content-wrapper {
         padding: 24px 16px;
-      }
-
-      .content {
-        padding: 32px 24px;
       }
 
       h1 {
@@ -888,20 +873,11 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
         font-size: 17px;
       }
 
-      .book-section.depth-2 {
-        margin-left: 8px;
-      }
-
-      .book-section.depth-3 {
-        margin-left: 16px;
-      }
-
-      .book-section.depth-4 {
-        margin-left: 24px;
-      }
-
+      .book-section.depth-2,
+      .book-section.depth-3,
+      .book-section.depth-4,
       .book-section.depth-5 {
-        margin-left: 32px;
+        margin-left: 4px;
       }
     }
 
@@ -919,10 +895,6 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
       .nav-button {
         justify-content: center;
         width: 100%;
-      }
-
-      .content {
-        padding: 24px 16px;
       }
 
       .book-section.depth-1,
@@ -1285,7 +1257,7 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       background: rgba(var(--glass-water-rgb), var(--glass-alpha));
       backdrop-filter: blur(22px) saturate(140%);
       -webkit-backdrop-filter: blur(22px) saturate(140%);
-      padding: 16px 20px;
+      padding: 10px 20px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
         inset 0 1px 0 rgba(255, 255, 255, 0.25);
       border-bottom: 1px solid rgba(255, 255, 255, 0.28);
@@ -1304,14 +1276,14 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       flex-wrap: wrap;
-      margin-bottom: 12px;
+      margin-bottom: 4px;
     }
 
     .nav-left {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
@@ -1320,7 +1292,7 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 10px 16px;
+      padding: 8px 14px;
       background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(10px);
       color: white;
@@ -1436,20 +1408,12 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
 
     /* Content Container */
     .content-wrapper {
-      padding: 32px 20px;
+      padding: 24px 20px;
     }
 
     .content {
       max-width: 900px;
       margin: 0 auto;
-      background: rgba(var(--glass-water-rgb), 0.25);
-      backdrop-filter: blur(22px) saturate(140%);
-      -webkit-backdrop-filter: blur(22px) saturate(140%);
-      border-radius: 16px;
-      padding: 48px 64px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-      border: 1px solid rgba(255, 255, 255, 0.28);
       font-family: "Charter", "Georgia", "Iowan Old Style", "Times New Roman", serif;
       line-height: 1.7;
       word-wrap: break-word;
@@ -1464,56 +1428,48 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
     }
 
     .book-section.depth-1 {
-      margin-bottom: 56px;
-      margin-left: 0;
+      margin-bottom: 48px;
       padding: 24px;
       background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(12px);
       border-radius: 12px;
       border: 1px solid rgba(255, 255, 255, 0.15);
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     }
 
     .book-section.depth-2 {
-      margin-bottom: 40px;
-      margin-left: 16px;
+      margin-bottom: 32px;
+      margin-left: 8px;
       padding: 20px;
-      background: rgba(255, 255, 255, 0.12);
-      backdrop-filter: blur(14px);
+      background: rgba(255, 255, 255, 0.06);
       border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      box-shadow: 0 3px 16px rgba(0, 0, 0, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
     }
 
     .book-section.depth-3 {
-      margin-bottom: 32px;
-      margin-left: 32px;
+      margin-bottom: 24px;
+      margin-left: 8px;
       padding: 16px;
-      background: rgba(255, 255, 255, 0.16);
-      backdrop-filter: blur(16px);
+      background: rgba(255, 255, 255, 0.04);
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     .book-section.depth-4 {
-      margin-bottom: 24px;
-      margin-left: 48px;
+      margin-bottom: 20px;
+      margin-left: 8px;
       padding: 12px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(18px);
+      background: rgba(255, 255, 255, 0.03);
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .book-section.depth-5 {
-      margin-bottom: 20px;
-      margin-left: 64px;
+      margin-bottom: 16px;
+      margin-left: 8px;
       padding: 10px;
-      background: rgba(255, 255, 255, 0.24);
-      backdrop-filter: blur(20px);
+      background: rgba(255, 255, 255, 0.02);
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.06);
     }
 
     /* Heading Hierarchy */
@@ -1720,9 +1676,6 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
 
     /* Responsive Design */
     @media (max-width: 1024px) {
-      .content {
-        padding: 40px 48px;
-      }
     }
 
     @media (max-width: 768px) {
@@ -1746,10 +1699,6 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
 
       .content-wrapper {
         padding: 24px 16px;
-      }
-
-      .content {
-        padding: 32px 24px;
       }
 
       h1 {
@@ -1776,20 +1725,11 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
         font-size: 17px;
       }
 
-      .book-section.depth-2 {
-        margin-left: 8px;
-      }
-
-      .book-section.depth-3 {
-        margin-left: 16px;
-      }
-
-      .book-section.depth-4 {
-        margin-left: 24px;
-      }
-
+      .book-section.depth-2,
+      .book-section.depth-3,
+      .book-section.depth-4,
       .book-section.depth-5 {
-        margin-left: 32px;
+        margin-left: 4px;
       }
     }
 
@@ -1809,10 +1749,6 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
         width: 100%;
       }
 
-      .content {
-        padding: 24px 16px;
-      }
-
       .book-section.depth-1,
       .book-section.depth-2,
       .book-section.depth-3,
@@ -1825,20 +1761,46 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
   </style>
 </head>
 <body>
-
-
-
-      
+  <!-- Share Nav -->
+  <div class="top-nav">
+    <div class="top-nav-content">
+      <div class="nav-buttons">
+        <div class="nav-left">
+          <a href="/" class="nav-button" onclick="event.preventDefault();window.top.location.href='/';">Back to Home</a>
+          <button class="nav-button" id="copyUrlBtn">🔗 Copy URL</button>
+          <button class="nav-button" id="copyTextBtn">📋 Copy Text</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Content -->
   <div class="content-wrapper">
-    <div class="content">
+    <div class="content" id="bookContent">
       ${content}
     </div>
   </div>
 
   <!-- Lazy Media Loader -->
   <script>
+    document.getElementById("copyUrlBtn").addEventListener("click", function() {
+      var url = new URL(window.location.href);
+      url.searchParams.delete("token");
+      if (!url.searchParams.has("html")) url.searchParams.set("html", "");
+      navigator.clipboard.writeText(url.toString()).then(function() {
+        this.textContent = "✔️ Copied";
+        setTimeout(function() { document.getElementById("copyUrlBtn").textContent = "🔗 Copy URL"; }, 900);
+      }.bind(this));
+    });
+
+    document.getElementById("copyTextBtn").addEventListener("click", function() {
+      var text = document.getElementById("bookContent").innerText;
+      navigator.clipboard.writeText(text).then(function() {
+        document.getElementById("copyTextBtn").textContent = "✔️ Copied";
+        setTimeout(function() { document.getElementById("copyTextBtn").textContent = "📋 Copy Text"; }, 900);
+      });
+    });
+
     const lazyObserver = new IntersectionObserver(
       (entries, observer) => {
         entries.forEach(entry => {
@@ -2775,18 +2737,18 @@ input[type="file"].hidden-input {
           const isSelf =
             currentUserId && n.userId && n.userId.toString() === currentUserId;
           const rawPreview =
-  n.contentType === "text"
-    ? n.content.length > 169
-      ? n.content.substring(0, 500) + "..."
-      : n.content
-    : n.content.split("/").pop();
-const preview = escapeHtml(rawPreview);
+            n.contentType === "text"
+              ? n.content.length > 169
+                ? n.content.substring(0, 500) + "..."
+                : n.content
+              : n.content.split("/").pop();
+          const preview = escapeHtml(rawPreview);
 
-        const userLabel = n.userId
-  ? `<a href="/api/v1/user/${n.userId}?token=${
-      req.query.token ?? ""
-    }&html">${escapeHtml(n.username ?? n.userId)}</a>`
-  : escapeHtml(n.username ?? "Unknown user");
+          const userLabel = n.userId
+            ? `<a href="/api/v1/user/${n.userId}?token=${
+                req.query.token ?? ""
+              }&html">${escapeHtml(n.username ?? n.userId)}</a>`
+            : escapeHtml(n.username ?? "Unknown user");
 
           return `
           <li
@@ -3229,8 +3191,8 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
     const nodeUrl = `/api/v1/node/${nodeId}${qs}`;
     const editorUrl = `/api/v1/node/${nodeId}/${version}/notes/${noteId}/editor${qs}`;
     const editorButton = !hasToken
-  ? ""
-  : `
+      ? ""
+      : `
     <a
       href="${editorUrl}"
       class="copy-btn editor-btn"
@@ -3240,12 +3202,11 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
     </a>
   `;
 
-
-   const userLink = note.userId
-  ? `<a href="/api/v1/user/${note.userId._id}${qs}">
+    const userLink = note.userId
+      ? `<a href="/api/v1/user/${note.userId._id}${qs}">
      ${escapeHtml(note.userId.username ?? "Unknown user")}
    </a>`
-  : escapeHtml(note.username ?? "Unknown user");
+      : escapeHtml(note.username ?? "Unknown user");
 
     if (req.query.html !== undefined) {
       if (note.contentType === "text") {
@@ -4185,7 +4146,9 @@ router.post(
       const { targetNodeId, prestige } = req.body;
 
       if (!targetNodeId) {
-        return res.status(400).json({ success: false, error: "targetNodeId is required" });
+        return res
+          .status(400)
+          .json({ success: false, error: "targetNodeId is required" });
       }
 
       const result = await coreTransferNote({
@@ -5668,9 +5631,6 @@ try {
 </body>
 </html>`;
 }
-
-
-
 
 // ─────────────────────────────────────────────────────────────────────────
 // ROUTE HANDLERS — paste these into your router file

@@ -9,7 +9,7 @@ import Node from "../db/models/node.js";
  * ================================ */
 
 // text
-const TEXT_NOTE_CHARS_PER_ENERGY = 100;
+const TEXT_NOTE_CHARS_PER_ENERGY = 1000;
 const TEXT_NOTE_MIN = 1;
 const TEXT_NOTE_MAX = 5;
 
