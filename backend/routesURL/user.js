@@ -5889,7 +5889,13 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")}</title>
+  <title>Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - Tree</title>
+  <meta name="description" content="${escapeHtml((rawIdea.content || "").slice(0, 160))}" />
+  <meta property="og:title" content="Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - Tree" />
+  <meta property="og:description" content="${escapeHtml((rawIdea.content || "").slice(0, 160))}" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Tree" />
+  <meta property="og:image" content="https://tree.tabors.site/tree.png" />
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;

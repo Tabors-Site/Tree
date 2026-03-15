@@ -27,13 +27,61 @@ const STATIC_ROUTES = [
 
 const BLOG_API ="https://tree.tabors.site/api/v1";
 
-// Fetch blog post slugs from the backend API
-async function fetchBlogSlugs() {
+// Per-page metadata for SEO (title, description, og:title, og:description)
+const PAGE_META = {
+  "/": {
+    title: "Tree - A Context Management System",
+    description: "Tree is a context management system for organizing, navigating, and understanding complex information.",
+  },
+  "/about": {
+    title: "About - Tree",
+    description: "Learn what Tree is, how it works, and why it exists.",
+  },
+  "/about/api": {
+    title: "API Reference - Tree",
+    description: "Read and write to your trees programmatically. Build integrations, automations, and bots.",
+  },
+  "/about/energy": {
+    title: "Energy & Pricing - Tree",
+    description: "Understand Tree's energy system, pricing tiers, and LLM costs.",
+  },
+  "/about/raw-ideas": {
+    title: "Raw Ideas - Tree",
+    description: "Capture unstructured thoughts and let Tree's agents place them into your knowledge trees.",
+  },
+  "/about/dreams": {
+    title: "Tree Dreams - Tree",
+    description: "Daily background maintenance that cleans up, drains short-term memory, and compresses understanding.",
+  },
+  "/about/gettingstarted": {
+    title: "Getting Started - Tree",
+    description: "Get started with Tree and learn how to grow your first knowledge tree.",
+  },
+  "/privacy": {
+    title: "Privacy Policy - Tree",
+    description: "How Tree collects, stores, and protects your data.",
+  },
+  "/terms": {
+    title: "Terms of Service - Tree",
+    description: "Terms and conditions for using Tree.",
+  },
+  "/blog": {
+    title: "Blog - Tree",
+    description: "Posts about Tree, knowledge management, and building with AI.",
+  },
+};
+
+// Fetch blog post slugs and titles from the backend API
+async function fetchBlogPosts() {
   try {
     const res = await fetch(`${BLOG_API}/blog/posts`);
     const data = await res.json();
     if (data.success && data.posts) {
-      return data.posts.map((p) => `/blog/${p.slug}`);
+      return data.posts.map((p) => ({
+        route: `/blog/${p.slug}`,
+        title: p.title,
+        summary: p.summary || "",
+      }));
     }
   } catch (err) {
     console.warn("  Could not fetch blog posts (backend running?):", err.message);
@@ -87,8 +135,15 @@ function startServer() {
 async function main() {
   console.log("Starting prerender...");
 
-  // Fetch dynamic blog routes
-  const blogRoutes = await fetchBlogSlugs();
+  // Fetch dynamic blog routes and build metadata for blog posts
+  const blogPosts = await fetchBlogPosts();
+  for (const post of blogPosts) {
+    PAGE_META[post.route] = {
+      title: `${post.title} - Tree Blog`,
+      description: post.summary || `Read "${post.title}" on the Tree blog.`,
+    };
+  }
+  const blogRoutes = blogPosts.map((p) => p.route);
   const routes = [...STATIC_ROUTES, ...blogRoutes];
   console.log(`  ${routes.length} routes (${blogRoutes.length} blog posts)`);
 
@@ -100,6 +155,31 @@ async function main() {
     await page.goto(`http://localhost:${PORT}${route}`, { waitUntil: "networkidle0", timeout: 30000 });
     let html = await page.content();
     await page.close();
+
+    // Fix per-page SEO metadata
+    const canonicalUrl = `https://tree.tabors.site${route === "/" ? "" : route}`;
+    const meta = PAGE_META[route] || PAGE_META["/"];
+    html = html.replace(
+      /<link rel="canonical" href="[^"]*"\s*\/?>/,
+      `<link rel="canonical" href="${canonicalUrl}" />`
+    );
+    html = html.replace(
+      /<meta property="og:url" content="[^"]*"\s*\/?>/,
+      `<meta property="og:url" content="${canonicalUrl}" />`
+    );
+    html = html.replace(/<title>[^<]*<\/title>/, `<title>${meta.title}</title>`);
+    html = html.replace(
+      /<meta name="description" content="[^"]*"\s*\/?>/,
+      `<meta name="description" content="${meta.description}" />`
+    );
+    html = html.replace(
+      /<meta property="og:title" content="[^"]*"\s*\/?>/,
+      `<meta property="og:title" content="${meta.title}" />`
+    );
+    html = html.replace(
+      /<meta property="og:description" content="[^"]*"\s*\/?>/,
+      `<meta property="og:description" content="${meta.description}" />`
+    );
 
     // Strip scripts from content pages so they're fully static (no React hydration)
     // Only keep React on "/" (interactive welcome page)

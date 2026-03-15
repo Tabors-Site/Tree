@@ -68,9 +68,19 @@ router.get("/chat", authenticateLite, async (req, res) => {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Tree Chat</title>
+  <title>Chat - Tree</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#736fe6" />
+  <link rel="icon" href="/tree.png" />
+  <link rel="canonical" href="https://tree.tabors.site/chat" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
+  <meta property="og:title" content="Chat - Tree" />
+  <meta property="og:description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
+  <meta property="og:url" content="https://tree.tabors.site/chat" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Tree" />
+  <meta property="og:image" content="https://tree.tabors.site/tree.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
