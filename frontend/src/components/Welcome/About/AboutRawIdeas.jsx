@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+
 import "./AboutRawIdeas.css";
 
 const AboutRawIdeas = () => {
@@ -8,7 +8,7 @@ const AboutRawIdeas = () => {
 
         {/* ── BACK ── */}
         <div className="al-page-back">
-          <Link className="al-back-link" to="/about">←</Link>
+          <a className="al-back-link" href="/about">←</a>
         </div>
 
         {/* ── HEADER ── */}
@@ -157,7 +157,7 @@ const AboutRawIdeas = () => {
 
         {/* ── BACK LINK ── */}
         <div className="ari-back-links">
-          <Link className="ari-back-link" to="/about">← Back to About</Link>
+          <a className="ari-back-link" href="/about">← Back to About</a>
         </div>
 
       </div>

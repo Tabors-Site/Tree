@@ -10,6 +10,7 @@ import chat from "./chat.js";
 import setup from "./setup.js";
 import understanding from "./understanding.js";
 import tree from "./tree.js";
+import blog from "./blog.js";
 
 import rateLimit from "express-rate-limit";
 
@@ -44,4 +45,5 @@ export default function registerURLRoutes(app) {
   app.use("/", values);
   app.use("/", node);
   app.use("/", tree);
+  app.use("/", blog);
 }

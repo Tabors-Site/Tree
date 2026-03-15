@@ -77,9 +77,9 @@
   }
   
   /* Add cursor style to mimic old computer UI interaction */
-  span {
-    cursor: pointer; /* Change cursor to pointer on hover */
-    text-decoration: underline; /* Underline links for retro clickability */
+  .tree-view-directory span {
+    cursor: pointer;
+    text-decoration: underline;
   }
   
   /* Ensure no horizontal scrollbars */

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+
 import "./TermsSection.css";
 
 const TermsSection = () => {
@@ -137,7 +137,7 @@ const TermsSection = () => {
           <div className="tos-section-title">11. Privacy</div>
           <div className="tos-section-text">
             Your use of the Service is also governed by our{" "}
-            <Link to="/privacy" className="tos-link">Privacy Policy</Link>,
+            <a href="/privacy" className="tos-link">Privacy Policy</a>,
             which explains how we collect, use, store, and protect your information.
           </div>
         </div>

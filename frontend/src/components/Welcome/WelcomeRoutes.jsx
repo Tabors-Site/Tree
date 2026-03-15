@@ -15,6 +15,7 @@ import TermsSection from "./TermsSections.jsx";
 
 import AboutHome from "./About/AboutHome.jsx";
 import AboutLayout from "./About/AboutLayout.jsx";
+import BlogSection from "./Blog/BlogSection.jsx";
 
 const WelcomeRoutes = () => {
   return (
@@ -43,6 +44,9 @@ const WelcomeRoutes = () => {
         <Route path="gettingstarted" element={<StartedAbout />} />
 
       </Route>
+
+      <Route path="/blog" element={<BlogSection />} />
+      <Route path="/blog/:slug" element={<BlogSection />} />
 
     </Routes>
   );

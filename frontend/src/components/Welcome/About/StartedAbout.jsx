@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+
 import "./StartedAbout.css";
 
 const StartedAbout = () => {
@@ -8,7 +8,7 @@ const StartedAbout = () => {
 
         {/* ── BACK ── */}
         <div className="al-page-back">
-          <Link className="al-back-link" to="/about">←</Link>
+          <a className="al-back-link" href="/about">←</a>
         </div>
 
         {/* ── HEADER ── */}
@@ -201,40 +201,40 @@ const StartedAbout = () => {
             Once you're comfortable with the basics, there's a lot more to explore:
           </div>
           <div className="sta-next-grid">
-            <Link className="sta-next-card" to="/about/raw-ideas">
+            <a className="sta-next-card" href="/about/raw-ideas">
               <span className="sta-next-emoji">💡</span>
               <div>
                 <div className="sta-next-label">Raw Ideas</div>
                 <div className="sta-next-desc">Drop in unstructured thoughts and let the AI sort them into your trees.</div>
               </div>
-            </Link>
-            <Link className="sta-next-card" to="/about/dreams">
+            </a>
+            <a className="sta-next-card" href="/about/dreams">
               <span className="sta-next-emoji">💤</span>
               <div>
                 <div className="sta-next-label">Tree Dreams</div>
                 <div className="sta-next-desc">Set a daily schedule for automatic cleanup, organization, and understanding.</div>
               </div>
-            </Link>
-            <Link className="sta-next-card" to="/about/energy">
+            </a>
+            <a className="sta-next-card" href="/about/energy">
               <span className="sta-next-emoji">⚡</span>
               <div>
                 <div className="sta-next-label">Energy System</div>
                 <div className="sta-next-desc">How usage works, what things cost, and LLM connection details.</div>
               </div>
-            </Link>
-            <Link className="sta-next-card" to="/about/api">
+            </a>
+            <a className="sta-next-card" href="/about/api">
               <span className="sta-next-emoji">🔌</span>
               <div>
                 <div className="sta-next-label">API Reference</div>
                 <div className="sta-next-desc">Build bots, scripts, and integrations on top of your trees.</div>
               </div>
-            </Link>
+            </a>
           </div>
         </div>
 
         {/* ── BACK LINK ── */}
         <div className="sta-back-links">
-          <Link className="sta-back-link" to="/about">← Back to About</Link>
+          <a className="sta-back-link" href="/about">← Back to About</a>
         </div>
 
       </div>

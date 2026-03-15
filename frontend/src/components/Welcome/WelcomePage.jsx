@@ -138,6 +138,7 @@ const WelcomePage = () => {
         <footer className="hero-footer">
           <div className="footer-links">
             <a href="/about" className="footer-link">About</a>
+            <a href="/blog" className="footer-link">Blog</a>
             <a href={`/terms`} className="footer-link">Terms</a>
             <a href={`/privacy`} className="footer-link">Privacy</a>
           </div>

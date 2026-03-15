@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+
 import "./EnergySection.css";
 
 const EnergySection = () => {
@@ -8,7 +8,7 @@ const EnergySection = () => {
 
         {/* ── BACK ── */}
         <div className="al-page-back">
-          <Link className="al-back-link" to="/about">←</Link>
+          <a className="al-back-link" href="/about">←</a>
         </div>
 
         {/* ── HEADER ── */}
@@ -229,7 +229,7 @@ const EnergySection = () => {
 
         {/* ── BACK LINK ── */}
         <div className="nrg-back-links">
-          <Link className="nrg-back-link" to="/about">← Back to About</Link>
+          <a className="nrg-back-link" href="/about">← Back to About</a>
         </div>
 
       </div>

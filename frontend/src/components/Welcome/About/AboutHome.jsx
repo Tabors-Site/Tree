@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+
 import "./AboutHome.css";
 
 const AboutHome = () => {
@@ -38,6 +38,13 @@ const AboutHome = () => {
       to: "/about/dreams",
       active: true,
     },
+    {
+      emoji: "📝",
+      title: "Blog",
+      desc: "Ideas, updates, and thoughts on where Tree is going.",
+      to: "/blog",
+      active: true,
+    },
   ];
 
   return (
@@ -46,7 +53,7 @@ const AboutHome = () => {
 
         {/* ── BACK ── */}
         <div className="al-page-back">
-          <Link className="al-back-link" to="/">←</Link>
+          <a className="al-back-link" href="/">←</a>
         </div>
 
         {/* ── HERO ── */}
@@ -104,11 +111,11 @@ const AboutHome = () => {
           <div className="ah-nav-grid">
             {sections.map((s, i) =>
               s.active && s.to ? (
-                <Link key={i} className="ah-nav-item" to={s.to}>
+                <a key={i} className="ah-nav-item" href={s.to}>
                   <div className="ah-nav-emoji">{s.emoji}</div>
                   <div className="ah-nav-title">{s.title}</div>
                   <div className="ah-nav-desc">{s.desc}</div>
-                </Link>
+                </a>
               ) : (
                 <div key={i} className="ah-nav-item disabled">
                   <div className="ah-nav-emoji">{s.emoji}</div>

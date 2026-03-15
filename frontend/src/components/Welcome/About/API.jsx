@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+
 import "./API.css";
 
 function scrollTo(id) {
@@ -21,7 +21,7 @@ const ApiAccessSection = () => {
 
         {/* ── BACK ── */}
         <div className="al-page-back">
-          <Link className="al-back-link" to="/about">←</Link>
+          <a className="al-back-link" href="/about">←</a>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -76,6 +76,11 @@ const ApiAccessSection = () => {
             <TocLink to="version">📋 Node Version Endpoints</TocLink>
             <TocLink to="transactions">🤝 Transactions</TocLink>
             <TocLink to="solana">💎 Solana Wallet</TocLink>
+          </div>
+
+          <div className="toc-group">
+            <div className="toc-group-label">Blog</div>
+            <TocLink to="blog">📝 Blog Endpoints</TocLink>
           </div>
         </div>
 
@@ -1620,10 +1625,63 @@ updateScheduleForNode(datetime | null)`}</div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* BLOG                                                          */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="blog">
+          <div className="section-title">
+            <span className="section-icon">📝</span> Blog
+          </div>
+          <div className="section-text">
+            Public endpoints for reading blog posts. No authentication required.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/blog/posts</span>
+            </div>
+            <div className="ep-desc">List all published blog posts, sorted by newest first.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "posts": [
+    {
+      "title": "Why I Built Tree",
+      "slug": "why-i-built-tree",
+      "summary": "...",
+      "publishedAt": "2026-03-15T...",
+      "authorName": "tabor"
+    }
+  ]
+}`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/blog/posts/:slug</span>
+            </div>
+            <div className="ep-desc">Get a single published blog post by its slug, including full content.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "post": {
+    "title": "Why I Built Tree",
+    "slug": "why-i-built-tree",
+    "content": "<p>Full HTML content...</p>",
+    "summary": "...",
+    "publishedAt": "2026-03-15T...",
+    "authorName": "tabor"
+  }
+}`}</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
         {/* BACK LINK                                                     */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <div className="back-links">
-          <Link className="back-link" to="/about">← Back to About</Link>
+          <a className="back-link" href="/about">← Back to About</a>
         </div>
 
       </div>
