@@ -8,6 +8,7 @@ import registerURLRoutes from "./routesURL/routeURLHandler.js";
 import { initWebSocketServer } from "./ws/websocket.js";
 import { startRawIdeaAutoPlaceJob } from "./jobs/rawIdeaAutoPlace.js";
 import { startTreeDreamJob, runTreeDreamJob } from "./jobs/treeDream.js";
+import { notFoundPage } from "./middleware/notFoundPage.js";
 import mongoose from "./db/config.js"; // Initialize DB connection
 
 import dotenv from "dotenv";
@@ -72,6 +73,14 @@ app.use((req, res, next) => {
 
 registerRoutes(app);
 registerURLRoutes(app);
+
+// Catch-all 404 for unmatched routes
+app.use((req, res) => {
+  if ((req.headers.accept || "").includes("application/json")) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  notFoundPage(res);
+});
 
 const server = http.createServer(app);
 export const wsServer = initWebSocketServer(server);

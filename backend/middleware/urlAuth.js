@@ -83,7 +83,7 @@ p {
   border-radius: 12px;
   font-size: 13px;
   line-height: 1.5;
-  color: rgba(220,120,120,0.95);
+  color: rgba(255,255,255,0.85);
 }
 </style>
 </head>

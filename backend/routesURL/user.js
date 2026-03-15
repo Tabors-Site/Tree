@@ -11,6 +11,7 @@ import User from "../db/models/user.js";
 import { getAIChats } from "../core/aichat.js";
 
 import { createPurchaseSession } from "../routes/billing/purchase.js";
+import { notFoundPage } from "../middleware/notFoundPage.js";
 import {
   addCustomLlmConnection,
   updateCustomLlmConnection,
@@ -5852,7 +5853,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
       .populate("userId", "username")
       .lean();
 
-    if (!rawIdea) return res.status(404).send("Raw idea not found");
+    if (!rawIdea) return notFoundPage(res, "This raw idea doesn't exist or may have been removed.");
 
     // Ownership / visibility check
     if (
@@ -6369,7 +6370,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
         url.searchParams.set('html', '');
       }
       navigator.clipboard.writeText(url.toString()).then(() => {
-        copyUrlBtn.textContent = "URL copied";
+        copyUrlBtn.textContent = "✔️";
         setTimeout(() => (copyUrlBtn.textContent = "🔗"), 900);
       });
     });
@@ -9024,7 +9025,7 @@ router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
       .lean();
 
     if (!user) {
-      return res.status(404).send("User not found");
+      return notFoundPage(res, "This user doesn't exist.");
     }
 
     const token = user.htmlShareToken;

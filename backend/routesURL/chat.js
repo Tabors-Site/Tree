@@ -9,6 +9,7 @@ import CustomLlmConnection from "../db/models/customLlmConnection.js";
 import authenticateLite from "../middleware/authenticateLite.js";
 import { getNotifications } from "../core/notifications.js";
 import { getPendingInvitesForUser, respondToInvite } from "../core/invites.js";
+import { notFoundPage } from "../middleware/notFoundPage.js";
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     const user = await User.findById(req.userId).select("username roots llmAssignments");
     if (!user) {
-      return res.status(404).send("User not found");
+      return notFoundPage(res, "This user doesn't exist.");
     }
 
     // Redirect to setup if user needs LLM or first tree (unless they skipped recently)

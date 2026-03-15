@@ -3,6 +3,7 @@ import express from "express";
 import User from "../db/models/user.js";
 import CustomLlmConnection from "../db/models/customLlmConnection.js";
 import authenticateLite from "../middleware/authenticateLite.js";
+import { notFoundPage } from "../middleware/notFoundPage.js";
 import {
   dashboardCSS,
   dashboardHTML,
@@ -26,7 +27,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).send("User not found");
+      return notFoundPage(res, "This user doesn't exist.");
     }
 
     // Redirect to setup if user needs LLM or first tree (unless they skipped recently)

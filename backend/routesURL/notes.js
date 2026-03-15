@@ -20,6 +20,7 @@ import urlAuth from "../middleware/urlAuth.js";
 import getNodeName from "./helpers/getNameById.js";
 import authenticate from "../middleware/authenticate.js";
 import preUploadCheck from "../middleware/preUploadCheck.js";
+import { notFoundPage } from "../middleware/notFoundPage.js";
 
 const router = express.Router();
 
@@ -226,7 +227,7 @@ router.get(
       const Note = (await import("../db/models/notes.js")).default;
       const note = await Note.findById(noteId).lean();
 
-      if (!note) return res.status(404).send("Note not found");
+      if (!note) return notFoundPage(res, "This note doesn't exist or may have been removed.");
 
       // File notes can't be edited — redirect to view
       if (note.contentType !== "text") {
@@ -1126,12 +1127,12 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
     // 1. Load book from DB
     const bookRecord = await Book.findOne({ shareId }).lean();
     if (!bookRecord) {
-      return res.status(404).send("Book not found");
+      return notFoundPage(res, "This book doesn't exist or may have been removed.");
     }
 
     // Optional safety check
     if (bookRecord.nodeId !== nodeId) {
-      return res.status(400).send("Invalid book link");
+      return notFoundPage(res, "This book link is invalid.");
     }
 
     // 2. Build options FROM DB SETTINGS (NOT QUERY)
@@ -3188,7 +3189,7 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
       .populate("userId", "username")
       .lean();
 
-    if (!note) return res.status(404).send("Note not found");
+    if (!note) return notFoundPage(res, "This note doesn't exist or may have been removed.");
 
     const back = hasToken
       ? `/api/v1/node/${nodeId}/${version}/notes${qs}`
@@ -3674,7 +3675,7 @@ pre.flash::before {
         url.searchParams.set('html', '');
       }
       navigator.clipboard.writeText(url.toString()).then(() => {
-        copyUrlBtn.textContent = "URL copied";
+        copyUrlBtn.textContent = "✔️";
         setTimeout(() => (copyUrlBtn.textContent = "🔗"), 900);
       });
     });
