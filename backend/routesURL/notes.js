@@ -3413,6 +3413,13 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
       transform: translateX(2px);
     }
 
+    .note-time {
+      margin-left: auto;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
+    }
+
     /* Copy Button Bar */
     .copy-bar {
       display: flex;
@@ -3620,6 +3627,7 @@ pre.flash::before {
     <div class="note-card">
       <div class="user-info">
         ${userLink}
+        ${note.createdAt ? `<span class="note-time">${new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at ${new Date(note.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>` : ""}
       </div>
 <div class="copy-bar">
   ${editorButton}
@@ -3666,7 +3674,7 @@ pre.flash::before {
         url.searchParams.set('html', '');
       }
       navigator.clipboard.writeText(url.toString()).then(() => {
-        copyUrlBtn.textContent = "✔️";
+        copyUrlBtn.textContent = "URL copied";
         setTimeout(() => (copyUrlBtn.textContent = "🔗"), 900);
       });
     });
@@ -3873,6 +3881,13 @@ pre.flash::before {
       transform: translateX(2px);
     }
 
+    .note-time {
+      margin-left: auto;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
+    }
+
     /* File Header */
     h1 {
       font-size: 24px;
@@ -4071,6 +4086,7 @@ pre.flash::before {
     <div class="file-card">
       <div class="user-info">
         ${userLink}
+        ${note.createdAt ? `<span class="note-time">${new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at ${new Date(note.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>` : ""}
       </div>
 
 <h1>${escapeHtml(fileName)}</h1>

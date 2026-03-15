@@ -6080,6 +6080,13 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
       transform: translateX(2px);
     }
 
+    .note-time {
+      margin-left: auto;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
+    }
+
     /* Status badge */
     .status-row {
       display: flex;
@@ -6311,6 +6318,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     <div class="raw-idea-card">
       <div class="user-info">
         ${userLink}
+        ${rawIdea.createdAt ? `<span class="note-time">${new Date(rawIdea.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at ${new Date(rawIdea.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>` : ""}
       </div>
 
       ${
@@ -6361,7 +6369,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
         url.searchParams.set('html', '');
       }
       navigator.clipboard.writeText(url.toString()).then(() => {
-        copyUrlBtn.textContent = "✔️";
+        copyUrlBtn.textContent = "URL copied";
         setTimeout(() => (copyUrlBtn.textContent = "🔗"), 900);
       });
     });
@@ -6569,6 +6577,13 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     .user-info a:hover {
       text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
       transform: translateX(2px);
+    }
+
+    .note-time {
+      margin-left: auto;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
     }
 
     /* File Header */
@@ -6779,6 +6794,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     <div class="file-card">
       <div class="user-info">
         ${userLink}
+        ${rawIdea.createdAt ? `<span class="note-time">${new Date(rawIdea.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at ${new Date(rawIdea.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>` : ""}
       </div>
 
       ${
