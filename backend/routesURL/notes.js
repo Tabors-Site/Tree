@@ -134,7 +134,7 @@ function renderBookNode(node, depth, req, version) {
   const qs = token ? `?token=${token}&html` : `?html`;
 
   let html = `
-    <section class="book-section depth-${depth}">
+    <section class="book-section depth-${depth}" id="toc-${node.nodeId}">
       <${H}>${escapeHtml(node.nodeName ?? node.nodeId)}</${H}>
   `;
 
@@ -171,6 +171,34 @@ function renderBookNode(node, depth, req, version) {
   html += `</section>`;
   return html;
 }
+function renderToc(node, maxDepth, depth = 1, isRoot = false) {
+  const children = node.children || [];
+  // maxDepth is relative to root's children (depth 1 = only direct children)
+  const hasChildren = children.length > 0 && (maxDepth === 0 || depth < maxDepth);
+
+  const childList = hasChildren
+    ? `<ul class="toc-list">${children.map((c) => renderToc(c, maxDepth, isRoot ? 1 : depth + 1, false)).join("")}</ul>`
+    : "";
+
+  if (isRoot) return childList;
+
+  const name = escapeHtml(node.nodeName ?? node.nodeId);
+  const link = `<a href="javascript:void(0)" onclick="tocScroll('toc-${node.nodeId}')" class="toc-link">${name}</a>`;
+
+  return `<li>${link}${childList}</li>`;
+}
+
+function renderTocBlock(book, maxDepth) {
+  const inner = renderToc(book, maxDepth, 1, true);
+  return `<nav class="book-toc"><div class="toc-title">Table of Contents</div>${inner}</nav>`;
+}
+
+function getBookDepth(node, depth = 0) {
+  const children = node.children || [];
+  if (children.length === 0) return depth;
+  return Math.max(...children.map((c) => getBookDepth(c, depth + 1)));
+}
+
 const parseBool = (v) => v === "true";
 function normalizeStatusFilters(query) {
   const parse = (v) =>
@@ -282,6 +310,9 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
       textOnly: parseBool(req.query.textOnly),
       statusFilters: normalizeStatusFilters(req.query),
     };
+
+    const tocEnabled = parseBool(req.query.toc);
+    const tocDepth = parseInt(req.query.tocDepth) || 0;
 
     const wantHtml = req.query.html !== undefined;
 
@@ -555,6 +586,30 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
       box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
     }
 
+    .toc-select {
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      color: white;
+      cursor: pointer;
+      font-family: inherit;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 30px;
+    }
+
+    .toc-select option {
+      background: #5a56c4;
+      color: white;
+    }
+
     /* Content Container */
     .content-wrapper {
       padding: 24px 20px;
@@ -907,6 +962,63 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
         padding: 12px;
       }
     }
+
+    html { scroll-behavior: smooth; }
+
+    .book-toc {
+      max-width: 900px;
+      margin: 20px auto 24px;
+      padding: 20px 28px;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+
+    .toc-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .toc-list {
+      list-style: none;
+      padding-left: 18px;
+      margin: 0;
+    }
+
+    .book-toc > .toc-list {
+      padding-left: 0;
+    }
+
+    .book-toc li {
+      margin: 2px 0;
+    }
+
+    .toc-link {
+      display: inline-block;
+      color: white;
+      text-decoration: none;
+      padding: 3px 0;
+      font-size: 15px;
+      font-weight: 500;
+      transition: opacity 0.2s;
+    }
+
+    .toc-link:hover {
+      opacity: 0.7;
+      text-decoration: underline;
+    }
+
+    .book-toc > .toc-list > li > .toc-link {
+      font-weight: 700;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
@@ -971,16 +1083,42 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
         }">
           Trimmed
         </button>
+        <button onclick="toggleFlag('toc')" class="filter-button ${
+          tocEnabled ? "active" : ""
+        }">
+          Table of Contents
+        </button>
+        ${tocEnabled && hasContent ? (() => {
+          const treeDepth = Math.min(getBookDepth(book), 5);
+          if (treeDepth <= 1) return "";
+          let opts = `<option value="0" ${tocDepth === 0 ? "selected" : ""}>All Depths</option>`;
+          for (let i = 1; i <= treeDepth; i++) {
+            opts += `<option value="${i}" ${tocDepth === i ? "selected" : ""}>Depth ${i}${i === 5 ? " (max)" : ""}</option>`;
+          }
+          return `<select class="toc-select" onchange="setTocDepth(this.value)">${opts}</select>`;
+        })() : ""}
       </div>
     </div>
   </div>
 
   <!-- Content -->
   <div class="content-wrapper">
+    ${tocEnabled && hasContent ? renderTocBlock(book, tocDepth) : ""}
     <div class="content">
       ${content}
     </div>
   </div>
+
+  <script>
+    function tocScroll(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var nav = document.querySelector('.top-nav');
+      var offset = nav ? nav.offsetHeight + 12 : 12;
+      var top = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: top, behavior: 'smooth' });
+    }
+  </script>
 
   <!-- Lazy Media Loader -->
   <script>
@@ -1059,6 +1197,17 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
         window.location.href = data.redirect;
       }
     }
+
+    function setTocDepth(val) {
+      const url = new URL(window.location.href);
+      if (val === "0") {
+        url.searchParams.delete("tocDepth");
+      } else {
+        url.searchParams.set("tocDepth", val);
+      }
+      url.searchParams.set("html", "true");
+      window.location.href = url.toString();
+    }
   </script>
 
 </body>
@@ -1066,15 +1215,9 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
   `);
     }
 
-    return res.json({
-      success: true,
-      book,
-    });
+    return res.json({ success: true, book });
   } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
+    return res.status(400).json({ success: false, error: err.message });
   }
 });
 router.post("/root/:nodeId/book/generate", authenticate, async (req, res) => {
@@ -1098,6 +1241,9 @@ router.post("/root/:nodeId/book/generate", authenticate, async (req, res) => {
           : req.query.completed === "true",
 
       true: parseBool(req.query.true),
+
+      toc: parseBool(req.query.toc),
+      tocDepth: parseInt(req.query.tocDepth) || 0,
     };
 
     const { shareId } = await coreGenerateBook({
@@ -1145,6 +1291,9 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
 
       statusFilters: bookRecord.settings,
     };
+
+    const shareTocEnabled = !!bookRecord.settings.toc;
+    const shareTocDepth = bookRecord.settings.tocDepth || 0;
 
     const { book } = await coreGetBook({ nodeId, options });
 
@@ -1413,6 +1562,30 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
     }
 
+    .toc-select {
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      color: white;
+      cursor: pointer;
+      font-family: inherit;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 30px;
+    }
+
+    .toc-select option {
+      background: #5a56c4;
+      color: white;
+    }
+
     /* Content Container */
     .content-wrapper {
       padding: 24px 20px;
@@ -1765,6 +1938,73 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
         padding: 12px;
       }
     }
+
+    html { scroll-behavior: smooth; }
+
+    .book-toc {
+      max-width: 900px;
+      margin: 20px auto 24px;
+      padding: 20px 28px;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+
+    .toc-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .toc-list {
+      list-style: none;
+      padding-left: 18px;
+      margin: 0;
+    }
+
+    .book-toc > .toc-list {
+      padding-left: 0;
+    }
+
+    .book-toc li {
+      margin: 2px 0;
+    }
+
+    .toc-link {
+      display: inline-block;
+      color: white;
+      text-decoration: none;
+      padding: 3px 0;
+      font-size: 15px;
+      font-weight: 500;
+      transition: opacity 0.2s;
+    }
+
+    .toc-link:hover {
+      opacity: 0.7;
+      text-decoration: underline;
+    }
+
+    .book-toc > .toc-list > li > .toc-link {
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .share-book-title {
+      max-width: 900px;
+      margin: 24px auto 0;
+      font-size: 28px;
+      font-weight: 700;
+      color: white;
+      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -1783,10 +2023,22 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
 
   <!-- Content -->
   <div class="content-wrapper">
+    ${shareTocEnabled && hasContent ? `<div class="share-book-title">${escapeHtml(title)}</div>${renderTocBlock(book, shareTocDepth)}` : ""}
     <div class="content" id="bookContent">
       ${content}
     </div>
   </div>
+
+  <script>
+    function tocScroll(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var nav = document.querySelector('.top-nav');
+      var offset = nav ? nav.offsetHeight + 12 : 12;
+      var top = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: top, behavior: 'smooth' });
+    }
+  </script>
 
   <!-- Lazy Media Loader -->
   <script>

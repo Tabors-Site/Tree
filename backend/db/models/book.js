@@ -14,6 +14,10 @@ const BookSettingsSchema = new mongoose.Schema(
     active: { type: Boolean, default: false },
     completed: { type: Boolean, default: false },
     true: { type: Boolean, default: false },
+
+    // table of contents
+    toc: { type: Boolean, default: false },
+    tocDepth: { type: Number, default: 0 },
   },
   { _id: false }
 );

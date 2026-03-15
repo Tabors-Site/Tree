@@ -802,6 +802,9 @@ function normalizeBookSettings(raw = {}) {
     active: !!raw.active,
     completed: !!raw.completed,
     true: !!raw["true"],
+
+    toc: !!raw.toc,
+    tocDepth: parseInt(raw.tocDepth) || 0,
   };
 }
 async function generateBook({ nodeId, settings, userId }) {
