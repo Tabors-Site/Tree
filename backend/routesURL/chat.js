@@ -30,7 +30,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     const user = await User.findById(req.userId).select("username roots llmAssignments");
     if (!user) {
-      return notFoundPage(res, "This user doesn't exist.");
+      return notFoundPage(req, res, "This user doesn't exist.");
     }
 
     // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
@@ -824,6 +824,10 @@ router.get("/chat", authenticateLite, async (req, res) => {
         statusDot.className = "status-dot connected";
         statusText.textContent = "Connected";
         updateSendBtn();
+        if (activeRootId) {
+          socket.emit("setActiveRoot", { rootId: activeRootId });
+          socket.emit("urlChanged", { url: "/api/v1/root/" + activeRootId, rootId: activeRootId });
+        }
       }
     });
 
@@ -854,6 +858,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     socket.on("disconnect", () => {
       isConnected = false;
       isRegistered = false;
+      isSending = false;
       statusDot.className = "status-dot disconnected";
       statusText.textContent = "Disconnected";
       updateSendBtn();
@@ -1062,7 +1067,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       if (isSending) {
         sendBtn.classList.add("stop-mode");
         sendBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
-        sendBtn.disabled = false;
+        sendBtn.disabled = !(isConnected && isRegistered);
         chatInput.disabled = true;
       } else {
         sendBtn.classList.remove("stop-mode");

@@ -76,10 +76,7 @@ registerURLRoutes(app);
 
 // Catch-all 404 for unmatched routes
 app.use((req, res) => {
-  if ((req.headers.accept || "").includes("application/json")) {
-    return res.status(404).json({ error: "Not found" });
-  }
-  notFoundPage(res);
+  notFoundPage(req, res);
 });
 
 const server = http.createServer(app);

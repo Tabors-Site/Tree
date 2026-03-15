@@ -227,7 +227,7 @@ router.get(
       const Note = (await import("../db/models/notes.js")).default;
       const note = await Note.findById(noteId).lean();
 
-      if (!note) return notFoundPage(res, "This note doesn't exist or may have been removed.");
+      if (!note) return notFoundPage(req, res, "This note doesn't exist or may have been removed.");
 
       // File notes can't be edited — redirect to view
       if (note.contentType !== "text") {
@@ -1127,12 +1127,12 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
     // 1. Load book from DB
     const bookRecord = await Book.findOne({ shareId }).lean();
     if (!bookRecord) {
-      return notFoundPage(res, "This book doesn't exist or may have been removed.");
+      return notFoundPage(req, res, "This book doesn't exist or may have been removed.");
     }
 
     // Optional safety check
     if (bookRecord.nodeId !== nodeId) {
-      return notFoundPage(res, "This book link is invalid.");
+      return notFoundPage(req, res, "This book link is invalid.");
     }
 
     // 2. Build options FROM DB SETTINGS (NOT QUERY)
@@ -3189,7 +3189,7 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
       .populate("userId", "username")
       .lean();
 
-    if (!note) return notFoundPage(res, "This note doesn't exist or may have been removed.");
+    if (!note) return notFoundPage(req, res, "This note doesn't exist or may have been removed.");
 
     const back = hasToken
       ? `/api/v1/node/${nodeId}/${version}/notes${qs}`

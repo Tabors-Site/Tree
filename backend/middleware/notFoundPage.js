@@ -1,4 +1,7 @@
-export function notFoundPage(res, message = "This page doesn't exist or may have been moved.") {
+export function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
+  if (!("html" in req.query)) {
+    return res.status(404).json({ error: message });
+  }
   return res.status(404).send(`<!DOCTYPE html>
 <html lang="en">
 <head>

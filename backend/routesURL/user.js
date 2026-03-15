@@ -5853,7 +5853,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
       .populate("userId", "username")
       .lean();
 
-    if (!rawIdea) return notFoundPage(res, "This raw idea doesn't exist or may have been removed.");
+    if (!rawIdea) return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
 
     // Ownership / visibility check
     if (
@@ -9025,7 +9025,7 @@ router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
       .lean();
 
     if (!user) {
-      return notFoundPage(res, "This user doesn't exist.");
+      return notFoundPage(req, res, "This user doesn't exist.");
     }
 
     const token = user.htmlShareToken;

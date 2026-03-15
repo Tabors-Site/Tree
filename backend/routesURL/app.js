@@ -27,7 +27,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     );
 
     if (!user) {
-      return notFoundPage(res, "This user doesn't exist.");
+      return notFoundPage(req, res, "This user doesn't exist.");
     }
 
     // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
