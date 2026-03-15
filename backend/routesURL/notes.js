@@ -174,7 +174,7 @@ function renderBookNode(node, depth, req, version) {
 function renderToc(node, maxDepth, depth = 1, isRoot = false) {
   const children = node.children || [];
   // maxDepth is relative to root's children (depth 1 = only direct children)
-  const hasChildren = children.length > 0 && (maxDepth === 0 || depth < maxDepth);
+  const hasChildren = children.length > 0 && (maxDepth === 0 || isRoot || depth < maxDepth);
 
   const childList = hasChildren
     ? `<ul class="toc-list">${children.map((c) => renderToc(c, maxDepth, isRoot ? 1 : depth + 1, false)).join("")}</ul>`
