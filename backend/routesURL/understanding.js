@@ -1084,6 +1084,7 @@ router.get(
         label.textContent = '🧠 Retry';
         btn.disabled = false;
         if (stopBtn) stopBtn.style.display = 'none';
+        if (refreshBtn) refreshBtn.disabled = false;
       }
     }
 
