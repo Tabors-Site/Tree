@@ -84,7 +84,7 @@ const UnderstandingRunSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ["running", "completed"],
-    default: "running",
+    default: "completed",
   },
 
   lastCompletedAt: {

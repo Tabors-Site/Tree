@@ -157,6 +157,18 @@ router.get(
         if (isDirty) dirtyCount++;
       }
 
+      // Propagate dirty status up the parent chain
+      for (const [uNodeId, isDirty] of Object.entries(dirtyNodes)) {
+        if (!isDirty) continue;
+        let parentId = topology.get(String(uNodeId))?.parent;
+        while (parentId) {
+          if (dirtyNodes[parentId]) break; // already dirty, ancestors will be too
+          dirtyNodes[parentId] = true;
+          dirtyCount++;
+          parentId = topology.get(String(parentId))?.parent;
+        }
+      }
+
       // JSON mode
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       if (!wantHtml) {
@@ -204,12 +216,15 @@ router.get(
       if (rootEntry) {
         const rootUNodeId = rootEntry[0];
         rootIsCompleted = !!completed[rootUNodeId];
-        if (rootIsCompleted) {
-          const rootNode = byId.get(String(rootUNodeId));
-          const rootState = getPS(rootNode, ridStr);
-          if (rootState?.encoding) rootFinalEncoding = rootState.encoding;
-        }
+        const rootNode = byId.get(String(rootUNodeId));
+        const rootState = getPS(rootNode, ridStr);
+        if (rootState?.encoding) rootFinalEncoding = rootState.encoding;
       }
+
+      // Previous final encoding from encoding history (last completed snapshot)
+      const previousFinalEncoding = (run.encodingHistory?.length > 0)
+        ? run.encodingHistory[run.encodingHistory.length - 1].encoding
+        : null;
 
       const tree = rootEntry ? buildTree(rootEntry[0]) : null;
 
@@ -896,7 +911,7 @@ router.get(
         </div>
         <div class="meta-item">
           <div class="meta-label">Status</div>
-          <div class="meta-value">${run.status === "running" ? "🔄 Running" : "✅ Completed"}</div>
+          <div class="meta-value">${run.status === "running" ? "🔄 Running" : dirtyCount > 0 ? "🔄 Refresh" : rootFinalEncoding ? "✅ Completed" : "🆕 New"}</div>
         </div>
         ${run.lastCompletedAt ? `
         <div class="meta-item">
@@ -920,15 +935,23 @@ router.get(
     </div>
 
     ${
-      rootIsCompleted && rootFinalEncoding
+      rootFinalEncoding
         ? `
     <!-- Final Understanding -->
     <div class="glass-card final-card" style="animation-delay: 0.2s;">
-      <div class="meta-label" style="margin-bottom: 4px;">✅ Final Understanding</div>
+      <div class="meta-label" style="margin-bottom: 4px;">${dirtyCount > 0 ? "🔄 Previous Understanding (needs refresh)" : "✅ Final Understanding"}</div>
 <pre>${escapeHtml(rootFinalEncoding)}</pre>
     </div>
     `
-        : ""
+        : previousFinalEncoding
+          ? `
+    <!-- Previous Understanding from history -->
+    <div class="glass-card final-card" style="animation-delay: 0.2s;">
+      <div class="meta-label" style="margin-bottom: 4px;">📜 Previous Understanding</div>
+<pre>${escapeHtml(previousFinalEncoding)}</pre>
+    </div>
+    `
+          : ""
     }
 
     <!-- Progress -->
@@ -942,11 +965,16 @@ router.get(
       </div>
       <div class="progress-sub">${completedCount} of ${totalNodes} nodes compressed${dirtyCount > 0 ? ` · <span style="color:#ffcc00;">${dirtyCount} changed</span>` : ""}</div>
       ${
-        !rootIsCompleted || dirtyCount > 0
+        !rootIsCompleted || dirtyCount > 0 || run.status === "running"
           ? `
-      <button id="processBtn" class="process-btn" onclick="startProcess()">
-        <span id="processBtnLabel">${dirtyCount > 0 && rootIsCompleted ? `🔄 Reprocess (${dirtyCount} changed)` : "🧠 Process"}</span>
-      </button>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button id="processBtn" class="process-btn" onclick="startProcess()"${run.status === "running" ? " disabled" : ""}>
+          <span id="processBtnLabel">${run.status === "running" ? "⏳ Processing…" : dirtyCount > 0 && rootIsCompleted ? `🔄 Reprocess (${dirtyCount} changed)` : "🧠 Process"}</span>
+        </button>
+        <button id="stopBtn" class="process-btn" style="background: rgba(239,68,68,0.35); ${run.status !== "running" ? "display:none;" : ""}" onclick="stopProcess()">
+          <span id="stopBtnLabel">⏹ Stop</span>
+        </button>
+      </div>
       <div id="processStatus" class="process-status"></div>
       `
           : ""
@@ -958,6 +986,40 @@ router.get(
       <h2>Compression Tree</h2>
       ${tree ? renderTree(tree) : "<p style='color: rgba(255,255,255,0.6);'>No tree available</p>"}
     </div>
+
+    ${
+      (run.encodingHistory?.length || 0) > 1 || (run.encodingHistory?.length === 1 && rootFinalEncoding)
+        ? `
+    <!-- Encoding History -->
+    <div class="glass-card" style="animation-delay: 0.35s;">
+      <h2>Previous Understandings</h2>
+      ${run.encodingHistory
+        .slice()
+        .reverse()
+        .filter((e, i) => !(i === 0 && rootFinalEncoding && e.encoding === rootFinalEncoding))
+        .map((e, i) => `
+        <div class="tree-pane complete" style="margin-bottom: 8px; cursor: pointer;" onclick="togglePane('hist-${i}')">
+          <div class="pane-header">
+            <div class="pane-left">
+              <span class="pane-status">📜</span>
+              <div class="pane-title-group">
+                <span class="pane-name">${new Date(e.completedAt).toLocaleString()}</span>
+                <span class="pane-meta">${e.encoding ? e.encoding.length + ' chars' : 'empty'}</span>
+              </div>
+            </div>
+            <span class="pane-chevron" id="chev-hist-${i}">▸</span>
+          </div>
+        </div>
+        <div class="pane-body" id="body-hist-${i}">
+          <div class="pane-encoding">
+<pre>${escapeHtml(e.encoding || '(empty)')}</pre>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    `
+        : ""
+    }
 
   </div>
 
@@ -983,11 +1045,13 @@ router.get(
     async function startProcess() {
       var btn = document.getElementById('processBtn');
       var label = document.getElementById('processBtnLabel');
+      var stopBtn = document.getElementById('stopBtn');
       var status = document.getElementById('processStatus');
       if (!btn) return;
 
       btn.disabled = true;
       label.textContent = '⏳ Processing…';
+      if (stopBtn) stopBtn.style.display = '';
       status.style.display = 'block';
       status.style.color = 'rgba(255,255,255,0.6)';
       status.textContent = 'Running understanding orchestrator — this may take a while…';
@@ -1005,17 +1069,56 @@ router.get(
             ? '✓ Already complete'
             : '✓ Done — ' + (data.nodesProcessed || 0) + ' nodes processed';
           label.textContent = '✅ Complete';
+          if (stopBtn) stopBtn.style.display = 'none';
           setTimeout(function() { location.reload(); }, 1500);
         } else {
           status.style.color = 'rgba(255, 107, 107, 0.9)';
           status.textContent = '✕ ' + (data.error || 'Failed');
           label.textContent = '🧠 Retry';
           btn.disabled = false;
+          if (stopBtn) stopBtn.style.display = 'none';
         }
       } catch (err) {
         status.style.color = 'rgba(255, 107, 107, 0.9)';
         status.textContent = '✕ Network error';
         label.textContent = '🧠 Retry';
+        btn.disabled = false;
+        if (stopBtn) stopBtn.style.display = 'none';
+      }
+    }
+
+    async function stopProcess() {
+      var btn = document.getElementById('stopBtn');
+      var label = document.getElementById('stopBtnLabel');
+      var status = document.getElementById('processStatus');
+      if (!btn) return;
+
+      btn.disabled = true;
+      label.textContent = '⏹ Stopping…';
+
+      try {
+        var res = await fetch('/api/v1/root/${run.rootNodeId}/understandings/run/${run._id}/stop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        var data = await res.json();
+        if (data.success) {
+          status.style.display = 'block';
+          status.style.color = 'rgba(255, 180, 50, 0.9)';
+          status.textContent = 'Stopped';
+          setTimeout(function() { location.reload(); }, 1000);
+        } else {
+          status.style.display = 'block';
+          status.style.color = 'rgba(255, 107, 107, 0.9)';
+          status.textContent = data.error || 'Could not stop';
+          label.textContent = '⏹ Stop';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        status.style.display = 'block';
+        status.style.color = 'rgba(255, 107, 107, 0.9)';
+        status.textContent = 'Network error';
+        label.textContent = '⏹ Stop';
         btn.disabled = false;
       }
     }

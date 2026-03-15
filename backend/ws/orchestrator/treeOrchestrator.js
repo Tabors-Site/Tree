@@ -1068,7 +1068,7 @@ export async function orchestrateTreeRequest({
     chainIndex: chainIndex++,
     modeKey: "classifier",
     input: message,
-    output: classification,
+    output: (({ llmProvider: _, ...rest }) => rest)(classification),
     startTime: classifyStart,
     endTime: classifyEnd,
     llmProvider: classification.llmProvider || llmProvider,

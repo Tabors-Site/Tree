@@ -17,7 +17,7 @@ import { setRootId, getClientForUser, clearSession, userHasLlm } from "../ws/con
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
 import { startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../ws/aiChatTracker.js";
 import { enqueue } from "../ws/requestQueue.js";
-import { createSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../ws/sessionRegistry.js";
+import { createSession, endSession, getSessionsForUser, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../ws/sessionRegistry.js";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
 import RawIdea from "../db/models/rawIdea.js";
@@ -547,6 +547,30 @@ router.post(
       console.error("Understanding orchestration error:", err.message);
       return res.status(500).json({ success: false, error: err.message });
     }
+  },
+);
+
+// ── Understanding: stop active run ──────────────────────────────────────────
+router.post(
+  "/root/:nodeId/understandings/run/:runId/stop",
+  authenticate,
+  async (req, res) => {
+    const { runId } = req.params;
+    const userId = req.userId;
+
+    const sessions = getSessionsForUser(userId);
+    const match = sessions.find(
+      (s) =>
+        s.type === SESSION_TYPES.UNDERSTANDING_ORCHESTRATE &&
+        s.meta?.runId === runId,
+    );
+
+    if (!match) {
+      return res.json({ success: false, error: "No active session found for this run" });
+    }
+
+    endSession(match.sessionId);
+    return res.json({ success: true });
   },
 );
 

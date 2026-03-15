@@ -1502,7 +1502,7 @@ router.get("/app", authenticateLite, async (req, res) => {
             <span class="loading-text">Loading...</span>
           </div>
         </div>
-        <iframe id="viewport" src="/api/v1/user/${req.userId}?html&token=${htmlShareToken}&inApp=1" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation"></iframe>
+        <iframe id="viewport" src="${req.query.rootId ? `/api/v1/root/${req.query.rootId}?html&token=${htmlShareToken}&inApp=1` : `/api/v1/user/${req.userId}?html&token=${htmlShareToken}&inApp=1`}" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation"></iframe>
       </div>
     </div>
   </div>
@@ -1835,7 +1835,9 @@ socket.on("navigate", ({ url, replace }) => {
       recentRoots = roots || [];
       renderRecentRoots();
     });
-let activeRootId = null;
+var _initParams = new URLSearchParams(window.location.search);
+let activeRootId = _initParams.get("rootId") || null;
+if (activeRootId) window.history.replaceState({}, "", "/app");
 
    function getCurrentRootId() {
   if (activeRootId) return activeRootId;

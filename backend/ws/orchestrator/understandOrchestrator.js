@@ -270,6 +270,9 @@ export async function orchestrateUnderstanding({
     });
 
     // ── PHASE 2: Compression loop ───────────────────────────────────────────
+    let emptyRetries = 0;
+    const MAX_EMPTY_RETRIES = 3;
+    let lastEmptyNodeId = null;
     while (true) {
       if (abort.signal.aborted) throw new Error("Session stopped");
 
@@ -298,16 +301,58 @@ export async function orchestrateUnderstanding({
         signal: abort.signal,
       });
 
+      // Handle noLlm early return from processMessage (returns { content } with no answer)
+      if (result && !result.success && result.content && !result.answer) {
+        throw new Error(`No LLM available for understand slot: ${result.content}`);
+      }
+
       const summary =
-        typeof result === "string" ? result : result?.answer || "";
+        typeof result === "string"
+          ? result
+          : (result?.answer || result?.content || "").trim();
       const stepEnd = new Date();
 
       if (!summary) {
+        const nodeId = payload.target.understandingNodeId;
+        // Track consecutive empty retries for the same node
+        if (nodeId === lastEmptyNodeId) {
+          emptyRetries++;
+        } else {
+          emptyRetries = 1;
+          lastEmptyNodeId = nodeId;
+        }
+
         console.warn(
-          `⚠️ Empty summary for node ${payload.target.understandingNodeId}, skipping`,
+          `⚠️ Empty summary for node ${nodeId}, attempt ${emptyRetries}/${MAX_EMPTY_RETRIES}`,
         );
+
+        if (emptyRetries >= MAX_EMPTY_RETRIES) {
+          // Clear pendingMerge so we don't retry this node forever
+          await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
+            $unset: { pendingMerge: "" },
+          });
+          // Commit an empty encoding so the node is marked as processed
+          await commitCompressionResult({
+            mode: payload.mode,
+            understandingRunId,
+            encoding: "(empty)",
+            understandingNodeId: nodeId,
+            currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
+            userId,
+            wasAi: true,
+            aiChatId: mainChatId,
+            sessionId,
+          });
+          nodesProcessed++;
+          console.warn(`⚠️ Committed placeholder for stuck node ${nodeId}, moving on`);
+          emptyRetries = 0;
+          lastEmptyNodeId = null;
+        }
         continue;
       }
+      // Reset empty-retry tracking on success
+      emptyRetries = 0;
+      lastEmptyNodeId = null;
 
       // Commit the summary
       await commitCompressionResult({
@@ -420,6 +465,13 @@ export async function orchestrateUnderstanding({
 
     return { success: false, error: err.message };
   } finally {
+    // Reset status to completed if still marked as running (e.g. abort/crash)
+    try {
+      const currentRun = await UnderstandingRun.findById(understandingRunId).select("status").lean();
+      if (currentRun?.status === "running") {
+        await UnderstandingRun.findByIdAndUpdate(understandingRunId, { status: "completed" });
+      }
+    } catch (_) {}
     activeRuns.delete(understandingRunId);
     if (!isChainStep && mainChatId) {
       finalizeAIChat({ chatId: mainChatId, ...finalizeArgs }).catch((e) =>

@@ -385,6 +385,22 @@ const ApiAccessSection = () => {
               complete, returns the final result immediately.
             </div>
           </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/stop</span>
+            </div>
+            <div className="ep-desc">
+              Stop an active understanding orchestration. Aborts the in-flight
+              session and halts processing. Progress is preserved -- calling
+              orchestrate again will resume from where it stopped.
+            </div>
+            <div className="ep-label">Success Response</div>
+            <div className="ep-code">{`{ "success": true }`}</div>
+            <div className="ep-label">No Active Session</div>
+            <div className="ep-code">{`{ "success": false, "error": "No active session found for this run" }`}</div>
+          </div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -1074,6 +1090,14 @@ notification  — Dream notification summary and thought (falls back to placemen
               <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/:understandingNodeId</span>
             </div>
             <div className="ep-desc">View a node's encoding state from the perspective of a specific understanding run.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/stop</span>
+            </div>
+            <div className="ep-desc">Stop an active understanding orchestration. Progress is preserved and can be resumed.</div>
           </div>
         </div>
 

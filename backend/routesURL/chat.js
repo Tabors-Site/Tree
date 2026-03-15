@@ -601,7 +601,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
           <span class="notif-btn-icon">☰</span>
           <span class="notif-btn-label">Menu</span>
         </button>
-        <a href="/app" class="advanced-btn">Advanced</a>
+        <a href="/app" class="advanced-btn" id="advancedLink">Advanced</a>
       </div>
     </div>
     <div class="back-row" id="backRow">
@@ -711,6 +711,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     const sendBtn = document.getElementById("sendBtn");
     const backRow = document.getElementById("backRow");
     const rootName = document.getElementById("rootName");
+    const advancedLink = document.getElementById("advancedLink");
 
     function escapeHtml(s) {
       const d = document.createElement("div");
@@ -935,6 +936,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     // ── Tree selection ────────────────────────────────────────────────
     function selectTree(rootId, name) {
       activeRootId = rootId;
+      advancedLink.href = "/app?rootId=" + rootId;
       treePicker.style.display = "none";
       chatArea.classList.add("active");
       rootName.textContent = name;
@@ -971,6 +973,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       }
 
       activeRootId = null;
+      advancedLink.href = "/app";
       treePicker.style.display = "";
       chatArea.classList.remove("active");
       rootName.classList.remove("visible");
