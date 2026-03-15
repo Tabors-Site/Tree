@@ -1,0 +1,73 @@
+# Tree
+
+> Tree is an AI-powered knowledge management system where users grow trees of goals, plans, and reflections. An LLM acts as a conversational tree-builder with background maintenance. Built by Tabor Holly.
+
+Tree gives LLMs persistent, structured memory. Any AI agent can create an account, build trees, and use them as long-term memory across conversations. Instead of losing context when a session ends, an agent stores knowledge in a tree and retrieves the relevant branches next time. The tree is the memory layer that LLMs do not have natively.
+
+Trees can hold anything: knowledge bases, project plans, reflections, hierarchical agentic systems, research, task tracking, or any structured system an agent needs to persist and navigate over time.
+
+Humans use Tree the same way. Instead of dumping everything into one flat conversation that gets forgotten, a tree organizes knowledge into branches so the AI only pulls in what it needs for each interaction. Both humans and AI can read from and write to the tree, so context evolves as work progresses.
+
+Users and agents can have multiple trees for different projects, topics, or areas of life. Collaborators can be invited to build together.
+
+Trees dream. Each tree runs a daily background cycle called Tree Dreams that automatically cleans up, drains short-term memory, and compresses understanding. See [Tree Dreams](https://tree.tabors.site/about/dreams) for details.
+
+## How It Works
+
+Tree operations are handled by multiple specialized AI agents. When you send a message, it is routed to the appropriate agent based on context. Each agent receives relevant tree state, performs its task (navigate, create, edit, place, summarize), and passes updated context back. This means the AI always has the right slice of your tree without needing the entire structure in context.
+
+You can interact with trees through:
+- **Tree Chat**: Conversational interface where you talk to your tree and the AI navigates, creates, edits, and responds with full tree context
+- **Tree Place**: Send content directly into a tree without a conversational reply - the AI finds the best location and places it
+- **Raw Idea Chat/Place**: Capture unstructured thoughts, files, or ideas - the AI automatically finds the right tree and node to place them
+- **Understand Tree**: AI-powered compression that builds a shadow tree of summaries from different perspectives, working bottom-up through layers
+- **REST API**: Programmatic access to all tree operations for building integrations, bots, and automations
+
+## Key Features
+
+- Hierarchical node trees with parent/child structure, versioning (prestige), values, and status tracking
+- WebSocket-based conversational AI that navigates and modifies trees via natural language
+- Per-tree LLM assignment system with 6 configurable slots (placement, understanding, respond, notes, cleanup, drain)
+- Energy system for AI operations (100 daily base, scales with subscription tier)
+- Understanding system that creates shadow trees with bottom-up layer compression
+- Raw idea capture with automatic AI placement into the best tree/node
+- Short-term memory drain that clusters, scouts, plans, and places items into trees
+- Node scripts (sandboxed JavaScript via vm2)
+- Solana wallet integration with Jupiter token swaps
+- Full REST API for programmatic access
+- Bring your own LLM - connect custom OpenAI-compatible endpoints (Ollama, OpenRouter, etc.)
+
+## Documentation
+
+- [About Tree](https://tree.tabors.site/about): What Tree is, why it exists, and how it works
+- [Getting Started](https://tree.tabors.site/about/gettingstarted): First tree, first node, first note - up and running in two minutes
+- [API Reference](https://tree.tabors.site/about/api): REST API documentation for reading and writing to trees programmatically
+- [Energy System](https://tree.tabors.site/about/energy): How energy works, costs per operation, and bringing your own LLM
+- [Raw Ideas](https://tree.tabors.site/about/raw-ideas): Capture thoughts and files for automatic AI placement
+- [Tree Dreams](https://tree.tabors.site/about/dreams): Daily background maintenance - cleanup, drain, and understanding
+
+## Legal
+
+- [Terms of Service](https://tree.tabors.site/terms)
+- [Privacy Policy](https://tree.tabors.site/privacy)
+
+## Blog
+
+- [Blog](https://tree.tabors.site/blog): Ideas, updates, and thoughts on where Tree is going
+
+## API Access
+
+Base URL: `https://tree.tabors.site/api/v1`
+
+Authentication via `x-api-key` header. Maximum 10 active keys per user, individually revokable.
+
+### Public Endpoints (no auth)
+- `GET /blog/posts` - List published blog posts
+- `GET /blog/posts/:slug` - Get a single blog post by slug
+
+### Authenticated Endpoints
+- User profile, API key management, contributions, notes
+- Tree/root operations, collaboration (invites, ownership transfer)
+- Node CRUD with versioning, scripts, scheduling
+- AI-powered: Tree Chat, Tree Place, Raw Idea Chat/Place, Understand Tree
+- Custom LLM connections (up to 15 per user)
