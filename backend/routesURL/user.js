@@ -1092,7 +1092,7 @@ text-decoration: none;
   <div class="container">
     <!-- Header -->
     <div class="glass-card header">
-      <a href="/chat" target="_top" class="basic-btn">Basic</a>
+      <a href="/chat" target="_top" class="basic-btn">Back to Basic Chat</a>
       <div class="user-info">
        <a href="/api/v1/user/${userId}/energy${queryString}">
         <h1>@${safeUsername}</h1> </a>

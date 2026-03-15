@@ -1,17 +1,14 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import "./BlogSection.css";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 const BlogSection = () => {
   const { slug } = useParams();
-  const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
   const [activePost, setActivePost] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
   useEffect(() => {
     fetch(`${API_BASE}/api/v1/blog/posts`)
       .then((r) => r.json())
@@ -36,11 +33,6 @@ const BlogSection = () => {
       .catch(() => {});
   }, [slug, posts]);
 
-  const selectPost = (postSlug) => {
-    navigate(`/blog/${postSlug}`);
-    setSidebarOpen(false);
-  };
-
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString(undefined, {
       year: "numeric",
@@ -53,35 +45,37 @@ const BlogSection = () => {
 
   return (
     <div className="blog-page">
+      {/* Hidden checkbox for CSS-only mobile menu toggle (works without JS) */}
+      <input type="checkbox" id="blog-menu-toggle" className="blog-menu-checkbox" />
+
       {/* Top header bar */}
       <header className="blog-header">
-        <a className="blog-header-home" href="/">
-          <span className="blog-header-logo">🌳</span>
-          <span>Tree Blog</span>
-        </a>
-        <div className="blog-header-right">
-          <a className="blog-menu-btn" href="/blog">
+        <div className="blog-header-left">
+          <label htmlFor="blog-menu-toggle" className="blog-menu-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="3" y1="6" x2="21" y2="6"/>
               <line x1="3" y1="12" x2="21" y2="12"/>
               <line x1="3" y1="18" x2="21" y2="18"/>
             </svg>
+          </label>
+          <a className="blog-header-home" href="/">
+            <span className="blog-header-logo">🌳</span>
+            <span>Blog</span>
           </a>
-          <a href="/chat" className="blog-header-back">Start Chat</a>
         </div>
+        <a href="/chat" className="blog-header-back">Start Chat</a>
       </header>
 
       {/* Body: sidebar + content */}
       <div className="blog-body">
         {/* Sidebar */}
-        <nav className={`blog-nav ${sidebarOpen ? "open" : ""}`}>
+        <nav className="blog-nav">
           <div className="blog-nav-list">
             {posts.map((p) => (
               <a
                 key={p.slug}
                 className={`blog-nav-item ${p.slug === activeSlug ? "active" : ""}`}
                 href={`/blog/${p.slug}`}
-                onClick={(e) => { e.preventDefault(); selectPost(p.slug); }}
               >
                 <span className="blog-nav-item-title">{p.title}</span>
                 <span className="blog-nav-item-date">{formatDate(p.publishedAt)}</span>
@@ -90,10 +84,8 @@ const BlogSection = () => {
           </div>
         </nav>
 
-        {/* Mobile overlay */}
-        {sidebarOpen && (
-          <div className="blog-overlay" onClick={() => setSidebarOpen(false)} />
-        )}
+        {/* Mobile overlay - clicking closes menu via label */}
+        <label htmlFor="blog-menu-toggle" className="blog-overlay" />
 
         {/* Main content */}
         <main className="blog-main">

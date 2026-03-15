@@ -108,7 +108,7 @@
   transform: translateY(-1px);
 }
 
-.blog-header-right {
+.blog-header-left {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -384,12 +384,27 @@
   font-size: 16px;
 }
 
+/* ── Checkbox hack for menu toggle (works without JS) ── */
+.blog-menu-checkbox {
+  display: none;
+}
+
+.blog-menu-checkbox:checked ~ .blog-body .blog-nav {
+  transform: translateX(0);
+}
+
+.blog-menu-checkbox:checked ~ .blog-body .blog-overlay {
+  display: block;
+}
+
 /* ── Mobile overlay ── */
 .blog-overlay {
+  display: none;
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
   z-index: 90;
+  cursor: pointer;
 }
 
 /* ── Mobile ── */
@@ -420,7 +435,7 @@
   .blog-nav {
     position: fixed;
     left: 0;
-    top: 0;
+    top: 57px;
     bottom: 0;
     z-index: 100;
     transform: translateX(-100%);
