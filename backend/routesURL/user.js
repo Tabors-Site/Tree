@@ -432,6 +432,32 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
     }
 
+    .header { position: relative; }
+
+    .basic-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      padding: 8px 16px;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(16, 185, 129, 0.3);
+      backdrop-filter: blur(10px);
+      color: white;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+      text-decoration: none;
+    }
+
+    .basic-btn:hover {
+      background: rgba(16, 185, 129, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+    }
+
     /* User ID */
     .user-id-container {
       display: flex;
@@ -1066,6 +1092,7 @@ text-decoration: none;
   <div class="container">
     <!-- Header -->
     <div class="glass-card header">
+      <a href="/chat" target="_top" class="basic-btn">Basic</a>
       <div class="user-info">
        <a href="/api/v1/user/${userId}/energy${queryString}">
         <h1>@${safeUsername}</h1> </a>

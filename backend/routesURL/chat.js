@@ -161,11 +161,12 @@ router.get("/chat", authenticateLite, async (req, res) => {
     /* Tree picker */
     .tree-picker {
       flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      padding: 40px 20px; gap: 24px;
+      align-items: center;
+      padding: 32px 20px 40px; gap: 24px;
+      overflow-y: auto; min-height: 0;
     }
-    .tree-picker-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
-    .tree-picker-sub { color: var(--text-muted); font-size: 15px; text-align: center; }
+    .tree-picker-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; flex-shrink: 0; }
+    .tree-picker-sub { color: var(--text-muted); font-size: 15px; text-align: center; flex-shrink: 0; }
     .tree-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; }
     .tree-item {
       background: rgba(var(--glass-rgb), var(--glass-alpha));
@@ -199,6 +200,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     /* Create tree form */
     .create-tree-form {
       display: flex; gap: 8px; width: 100%; max-width: 420px; margin-top: 8px;
+      flex-shrink: 0; padding-bottom: 8px;
     }
     .create-tree-form input {
       flex: 1; padding: 14px 18px; font-size: 15px;
@@ -291,6 +293,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .input-container:focus-within { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1); }
     .chat-input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; font-family: inherit; font-size: 15px; color: var(--text-primary); resize: none; max-height: 120px; line-height: 1.5; }
     .chat-input::placeholder { color: var(--text-muted); }
+    .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
     .send-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--accent); border: none; border-radius: 12px; color: white; cursor: pointer; transition: all var(--transition-fast); flex-shrink: 0; box-shadow: 0 4px 15px var(--accent-glow); }
     .send-btn:hover:not(:disabled) { transform: scale(1.08); box-shadow: 0 6px 25px var(--accent-glow); }
     .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -304,6 +307,8 @@ router.get("/chat", authenticateLite, async (req, res) => {
     @keyframes floatIcon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
     .welcome-message h2 { font-size: 24px; font-weight: 600; margin-bottom: 12px; }
     .welcome-message p { font-size: 15px; color: var(--text-secondary); line-height: 1.6; }
+    .welcome-message.disconnected { opacity: 0.7; }
+    .welcome-message.disconnected .welcome-icon { filter: grayscale(0.5) drop-shadow(0 8px 32px rgba(0, 0, 0, 0.3)); animation: none; }
 
     /* Notifications panel */
     .notif-btn {
@@ -841,6 +846,8 @@ router.get("/chat", authenticateLite, async (req, res) => {
       statusDot.className = "status-dot disconnected";
       statusText.textContent = "Disconnected";
       updateSendBtn();
+
+      chatMessages.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from Tree. Please refresh the page to reconnect.</p></div>';
     });
 
     // Ignore navigate events — no iframe
@@ -940,6 +947,13 @@ router.get("/chat", authenticateLite, async (req, res) => {
     }
 
     function backToTrees() {
+      // Cancel any in-flight request
+      if (isSending) {
+        requestGeneration++;
+        socket.emit("cancelRequest");
+        removeTyping();
+      }
+
       activeRootId = null;
       treePicker.style.display = "";
       chatArea.classList.remove("active");
@@ -947,6 +961,9 @@ router.get("/chat", authenticateLite, async (req, res) => {
       backRow.classList.remove("visible");
       isSending = false;
       updateSendBtn();
+
+      // Tell server we're going home so it properly exits tree mode
+      socket.emit("urlChanged", { url: "/api/v1/user/" + CONFIG.userId });
       socket.emit("clearConversation");
       dreamsLoaded = false;
       invitesLoaded = false;
@@ -1035,10 +1052,12 @@ router.get("/chat", authenticateLite, async (req, res) => {
         sendBtn.classList.add("stop-mode");
         sendBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
         sendBtn.disabled = false;
+        chatInput.disabled = true;
       } else {
         sendBtn.classList.remove("stop-mode");
         sendBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
         sendBtn.disabled = !(hasText && isRegistered && activeRootId);
+        chatInput.disabled = false;
       }
     }
 
@@ -1053,6 +1072,10 @@ router.get("/chat", authenticateLite, async (req, res) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
+        // On mobile, blur to dismiss keyboard so user can see the response
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+          chatInput.blur();
+        }
       }
     });
 

@@ -620,6 +620,7 @@ router.get("/app", authenticateLite, async (req, res) => {
     .input-container:focus-within { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1); }
     .chat-input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; font-family: inherit; font-size: 15px; color: var(--text-primary); resize: none; max-height: 120px; line-height: 1.5; }
     .chat-input::placeholder { color: var(--text-muted); }
+    .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
     .send-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--accent); border: none; border-radius: 12px; color: white; cursor: pointer; transition: all var(--transition-fast); flex-shrink: 0; box-shadow: 0 4px 15px var(--accent-glow); }
     .send-btn:hover:not(:disabled) { transform: scale(1.08); box-shadow: 0 6px 25px var(--accent-glow); }
     .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -2435,9 +2436,11 @@ if (rootMatch) {
     function updateSendButtons() {
       const desktopText = chatInput.value.trim();
       const mobileSheetText = mobileSheetInput.value.trim();
-      
+
       sendBtn.disabled = isSending ? false : !(desktopText && isRegistered);
       mobileSheetSendBtn.disabled = isSending ? false : !(mobileSheetText && isRegistered);
+      chatInput.disabled = isSending;
+      mobileSheetInput.disabled = isSending;
     }
 
     // Input handlers - Desktop
