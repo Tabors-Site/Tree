@@ -34,8 +34,11 @@ const NotFound = () => {
                     marginBottom: "12px",
                     fontSize: "13px",
                     fontWeight: 700,
-                    color: "rgba(255,255,255,0.35)",
+                    color: "#dc2626",
                     letterSpacing: "1px",
+                    background: "rgba(255,255,255,0.18)",
+                    borderRadius: "10px",
+                    padding: "6px 16px",
                 }}>404</div>
                 <a href="/" style={{ textDecoration: "none" }}>
                     <div style={{ fontSize: "48px", marginBottom: "8px", animation: "heroGrow 4.5s ease-in-out infinite" }}>🌳</div>

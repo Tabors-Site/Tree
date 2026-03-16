@@ -2,15 +2,22 @@ export function notFoundPage(req, res, message = "This page doesn't exist or may
   if (!("html" in req.query)) {
     return res.status(404).json({ error: message });
   }
-  return res.status(404).send(`<!DOCTYPE html>
+  return res.status(404).send(errorHtml(404, "Page Not Found", message));
+}
+
+export function errorHtml(status, title, message) {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#667eea">
-<title>Page Not Found - Tree</title>
+<meta name="theme-color" content="#736fe6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>${title} - Tree</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: #736fe6; }
 html, body { height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -34,7 +41,27 @@ body {
   text-align: center;
   box-shadow: 0 20px 60px rgba(0,0,0,0.2);
 }
-.icon { font-size: 48px; margin-bottom: 20px; }
+.code {
+  display: inline-block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #dc2626;
+  letter-spacing: 1px;
+  background: rgba(255,255,255,0.18);
+  border-radius: 10px;
+  padding: 6px 16px;
+}
+.icon { font-size: 48px; margin-bottom: 8px; }
+.brand {
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 20px;
+  text-decoration: none;
+  display: block;
+}
+.brand:hover { opacity: 0.9; }
 h1 {
   font-size: 22px;
   font-weight: 700;
@@ -63,14 +90,6 @@ p {
   background: rgba(255,255,255,0.28);
   transform: translateY(-1px);
 }
-.code {
-  display: inline-block;
-  margin-bottom: 12px;
-  font-size: 13px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.35);
-  letter-spacing: 1px;
-}
 .ai-note {
   margin-top: 20px;
   padding: 12px 16px;
@@ -81,17 +100,25 @@ p {
   line-height: 1.5;
   color: rgba(255,255,255,0.85);
 }
+@keyframes heroGrow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+.icon { animation: heroGrow 4.5s ease-in-out infinite; }
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="code">404</div>
-  <div class="icon">🌲</div>
-  <h1>Page Not Found</h1>
+  <div class="code">${status}</div>
+  <a href="/" class="brand" onclick="event.preventDefault(); window.top.location.href='/';">
+    <div class="icon">\u{1F333}</div>
+    Tree
+  </a>
+  <h1>${title}</h1>
   <p>${message}</p>
   <a href="/" class="btn" onclick="event.preventDefault(); window.top.location.href='/';">Back to Home</a>
   <div class="ai-note">If this was triggered by an AI automated process, wait a moment. You may be redirected shortly.</div>
 </div>
 </body>
-</html>`);
+</html>`;
 }

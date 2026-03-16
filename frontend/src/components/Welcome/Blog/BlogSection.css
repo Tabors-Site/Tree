@@ -9,6 +9,7 @@
   left: 0;
   right: 0;
   bottom: 0;
+  overflow: hidden;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   color: #fff;
@@ -197,6 +198,8 @@
 .blog-main {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -466,9 +469,15 @@
     padding: 0;
   }
 
+  .blog-article-header {
+    margin: 0 -20px 24px;
+    padding: 24px 20px 20px;
+    border-radius: 0;
+  }
+
   .blog-article-body {
-    font-size: 16px;
-    line-height: 1.75;
+    font-size: 16.5px;
+    line-height: 1.8;
   }
 }
 
@@ -482,7 +491,7 @@
   }
 
   .blog-article-body {
-    font-size: 15px;
+    font-size: 15.5px;
   }
 
   .blog-article-body h2 {

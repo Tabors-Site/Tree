@@ -8,6 +8,7 @@ const BlogSection = () => {
   const { slug } = useParams();
   const [posts, setPosts] = useState([]);
   const [activePost, setActivePost] = useState(null);
+  const [postNotFound, setPostNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     fetch(`${API_BASE}/api/v1/blog/posts`)
@@ -25,12 +26,14 @@ const BlogSection = () => {
     if (!targetSlug) return;
 
     setActivePost(null);
+    setPostNotFound(false);
     fetch(`${API_BASE}/api/v1/blog/posts/${targetSlug}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.success) setActivePost(data.post);
+        else setPostNotFound(true);
       })
-      .catch(() => {});
+      .catch(() => setPostNotFound(true));
   }, [slug, posts]);
 
   const formatDate = (dateStr) => {
@@ -110,6 +113,8 @@ const BlogSection = () => {
                   dangerouslySetInnerHTML={{ __html: activePost.content }}
                 />
               </article>
+            ) : postNotFound ? (
+              <div className="blog-empty">Post not found.</div>
             ) : (
               <div className="blog-loading">Loading post...</div>
             )}
