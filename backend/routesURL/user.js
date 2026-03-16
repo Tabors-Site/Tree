@@ -9827,7 +9827,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     margin-bottom: 24px;
     animation: fadeInUp 0.6s ease-out both;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .glass-card::before {
