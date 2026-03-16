@@ -5855,12 +5855,15 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
 
     if (!rawIdea) return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
 
-    // Ownership / visibility check
-    if (
-      rawIdea.userId !== "empty" &&
-      rawIdea.userId?._id?.toString() !== userId.toString()
-    ) {
-      return res.status(403).send("Not authorized");
+    // Block soft-deleted or orphaned raw ideas
+    const rawUserId = rawIdea.userId?._id?.toString?.() ?? rawIdea.userId;
+    if (["deleted", "empty", "null", "system"].includes(rawUserId)) {
+      return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
+    }
+
+    // Chain validation: URL userId must match the record's actual owner
+    if (rawUserId !== userId.toString()) {
+      return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
     }
 
     const token = req.query.token ?? "";

@@ -3443,6 +3443,15 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
 
     if (!note) return notFoundPage(req, res, "This note doesn't exist or may have been removed.");
 
+    // Chain validation: every URL segment must match the actual record
+    if (
+      note.nodeId !== nodeId ||
+      note.version !== version ||
+      ["deleted", "empty", "null", "system"].includes(note.userId?._id?.toString?.() ?? note.userId)
+    ) {
+      return notFoundPage(req, res, "This note doesn't exist or may have been removed.");
+    }
+
     const back = hasToken
       ? `/api/v1/node/${nodeId}/${version}/notes${qs}`
       : "https://tree.tabors.site";

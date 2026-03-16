@@ -13,6 +13,9 @@ import tree from "./tree.js";
 import blog from "./blog.js";
 
 import rateLimit from "express-rate-limit";
+import { notFoundPage } from "../middleware/notFoundPage.js";
+
+const BLOCKED_IDS = ["deleted", "empty", "null", "system"];
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -30,6 +33,15 @@ const apiLimiter = rateLimit({
 
 
 export default function registerURLRoutes(app) {
+
+  app.param("userId", (req, res, next, val) => {
+    if (BLOCKED_IDS.includes(val)) return notFoundPage(req, res);
+    next();
+  });
+  app.param("nodeId", (req, res, next, val) => {
+    if (BLOCKED_IDS.includes(val)) return notFoundPage(req, res);
+    next();
+  });
 
   app.use(apiLimiter);
   app.use("/", user);
