@@ -244,9 +244,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     /* Messages — matches app.js */
     .chat-messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; }
-    .chat-messages::-webkit-scrollbar { width: 6px; }
-    .chat-messages::-webkit-scrollbar-track { background: transparent; }
-    .chat-messages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-track { background: transparent; margin: 8px 0; }
+    .chat-messages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+    .chat-messages { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.12) transparent; }
 
     .message { display: flex; gap: 12px; animation: messageIn 0.3s ease-out; min-width: 0; max-width: 100%; }
     @keyframes messageIn { from { opacity: 0; transform: translateY(10px); } }
@@ -302,7 +304,12 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .chat-input-area { padding: 16px 20px 20px; border-top: 1px solid var(--glass-border-light); }
     .input-container { display: flex; align-items: flex-end; gap: 12px; padding: 14px 18px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border: 1px solid var(--glass-border-light); border-radius: 18px; transition: all var(--transition-fast); }
     .input-container:focus-within { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1); }
-    .chat-input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; font-family: inherit; font-size: 15px; color: var(--text-primary); resize: none; max-height: 120px; line-height: 1.5; }
+    .chat-input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; font-family: inherit; font-size: 15px; color: var(--text-primary); resize: none; max-height: 120px; line-height: 1.5; overflow-y: auto; }
+    .chat-input::-webkit-scrollbar { width: 4px; }
+    .chat-input::-webkit-scrollbar-track { background: transparent; }
+    .chat-input::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+    .chat-input::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+    .chat-area.empty .chat-input { max-height: 40vh; }
     .chat-input::placeholder { color: var(--text-muted); }
     .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
     .send-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--accent); border: none; border-radius: 12px; color: white; cursor: pointer; transition: all var(--transition-fast); flex-shrink: 0; box-shadow: 0 4px 15px var(--accent-glow); }
@@ -312,16 +319,35 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .send-btn.stop-mode { background: rgba(239, 68, 68, 0.7); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); }
     .send-btn.stop-mode:hover:not(:disabled) { background: rgba(239, 68, 68, 0.9); box-shadow: 0 6px 25px rgba(239, 68, 68, 0.5); }
 
+    /* Empty state — input pinned to vertical center, welcome above it */
+    .chat-area.empty { position: relative; }
+    .chat-area.empty .chat-input-area { position: absolute; top: 40%; left: 50%; transform: translate(-50%, 0); border-top: none; max-width: 600px; width: calc(100% - 40px); }
+    .chat-area.empty .chat-messages { position: absolute; top: 40%; left: 0; right: 0; transform: translateY(-100%); display: flex; flex-direction: column; align-items: center; overflow: visible; flex: none; }
+
     /* Welcome message */
     .welcome-message { text-align: center; padding: 40px 20px; }
     .welcome-icon { font-size: 64px; margin-bottom: 20px; display: inline-block; filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.3)); animation: floatIcon 3s ease-in-out infinite; }
     @keyframes floatIcon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    .chat-area.empty .welcome-message { padding: 8px 20px; }
+    .chat-area.empty .welcome-icon { font-size: 48px; margin-bottom: 12px; }
+    .chat-area.empty .welcome-message h2 { font-size: 18px; margin-bottom: 6px; }
+    .chat-area.empty .welcome-message p { font-size: 13px; }
     .welcome-message h2 { font-size: 24px; font-weight: 600; margin-bottom: 12px; }
     .welcome-message p { font-size: 15px; color: var(--text-secondary); line-height: 1.6; }
     .welcome-message.disconnected { opacity: 0.7; }
     .welcome-message.disconnected .welcome-icon { filter: grayscale(0.5) drop-shadow(0 8px 32px rgba(0, 0, 0, 0.3)); animation: none; }
 
     /* Notifications panel */
+    .clear-chat-btn {
+      background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border-light);
+      border-radius: 8px; padding: 6px 8px; cursor: pointer;
+      color: var(--text-muted); transition: all var(--transition-fast);
+      display: none; align-items: center; justify-content: center;
+    }
+    .clear-chat-btn.visible { display: flex; }
+    .clear-chat-btn:hover { background: rgba(255,255,255,0.2); color: var(--text-primary); }
+    .clear-chat-btn:active { transform: scale(0.93); }
+    .clear-chat-btn svg { width: 14px; height: 14px; }
     .notif-btn {
       font-size: 12px; color: var(--text-muted);
       background: rgba(255,255,255,0.1); border-radius: 8px;
@@ -577,7 +603,13 @@ router.get("/chat", authenticateLite, async (req, res) => {
       /* Hide title text, keep icon */
       .chat-title h1 { display: none; }
 
-      .notif-panel { width: 100%; max-width: 100%; }
+      .notif-panel { width: 100%; max-width: 100%; right: -100%; }
+      .notif-panel.open { right: 0; }
+
+      /* Empty state — mobile: push to top */
+      .chat-area.empty { overflow: visible; }
+      .chat-area.empty .chat-messages { position: static; flex: 0; padding-top: 0; transform: none; overflow: visible; }
+      .chat-area.empty .chat-input-area { position: static; transform: none; width: 100%; max-width: 100%; margin: 0; }
     }
   </style>
 </head>
@@ -596,6 +628,9 @@ router.get("/chat", authenticateLite, async (req, res) => {
           <div class="status-dot connecting" id="statusDot"></div>
           <span class="status-text" id="statusText">Connecting</span>
         </div>
+        <button class="clear-chat-btn" id="clearChatBtn" title="Clear conversation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
         <button class="notif-btn" id="notifBtn" onclick="toggleNotifs()">
           <span class="notif-dot" id="notifDot"></span>
           <span class="notif-btn-icon">☰</span>
@@ -667,7 +702,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       </form>` : ""}
     </div>
 
-    <div class="chat-area" id="chatArea">
+    <div class="chat-area empty" id="chatArea">
       <div class="chat-messages" id="messages">
         <div class="welcome-message" id="welcomeMsg">
           <div class="welcome-icon">🌳</div>
@@ -824,6 +859,15 @@ router.get("/chat", authenticateLite, async (req, res) => {
         isRegistered = true;
         statusDot.className = "status-dot connected";
         statusText.textContent = "Connected";
+
+        // Clear disconnected message on reconnect
+        const disc = chatMessages.querySelector(".welcome-message.disconnected");
+        if (disc) {
+          disc.remove();
+          chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">🌳</div><h2>Start chatting</h2><p>Ask anything about your tree or tell it something new.</p></div>';
+          chatArea.classList.add("empty");
+        }
+
         updateSendBtn();
         if (activeRootId) {
           socket.emit("setActiveRoot", { rootId: activeRootId });
@@ -947,6 +991,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       const welcome = chatMessages.querySelector(".welcome-message");
       if (welcome) welcome.style.display = "";
       chatMessages.querySelectorAll(".message, .typing-indicator").forEach(el => el.remove());
+      chatArea.classList.add("empty");
 
       // Tell server about this root
       socket.emit("setActiveRoot", { rootId });
@@ -960,7 +1005,6 @@ router.get("/chat", authenticateLite, async (req, res) => {
         if (activeTab === "invites") fetchInvites();
       }
 
-      chatInput.focus();
       updateSendBtn();
     }
 
@@ -978,6 +1022,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       chatArea.classList.remove("active");
       rootName.classList.remove("visible");
       backRow.classList.remove("visible");
+      document.getElementById("clearChatBtn").classList.remove("visible");
       isSending = false;
       updateSendBtn();
 
@@ -995,7 +1040,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
     // ── Messages ──────────────────────────────────────────────────────
     function addMessage(content, role) {
       const welcome = chatMessages.querySelector(".welcome-message");
-      if (welcome) welcome.remove();
+      if (welcome) {
+        welcome.remove();
+        document.getElementById("chatArea").classList.remove("empty");
+        document.getElementById("clearChatBtn").classList.add("visible");
+      }
 
       const msg = document.createElement("div");
       msg.className = "message " + role;
@@ -1082,8 +1131,9 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     // ── Input handlers ────────────────────────────────────────────────
     chatInput.addEventListener("input", () => {
+      const maxH = chatArea.classList.contains("empty") ? window.innerHeight * 0.4 : 120;
       chatInput.style.height = "auto";
-      chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + "px";
+      chatInput.style.height = Math.min(chatInput.scrollHeight, maxH) + "px";
       updateSendBtn();
     });
 
@@ -1099,6 +1149,20 @@ router.get("/chat", authenticateLite, async (req, res) => {
     });
 
     sendBtn.addEventListener("click", sendMessage);
+
+    document.getElementById("clearChatBtn").addEventListener("click", () => {
+      if (!isRegistered) return;
+      if (isSending) {
+        socket.emit("cancelRequest");
+        removeTyping();
+        isSending = false;
+      }
+      socket.emit("clearConversation");
+      chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">🌳</div><h2>Start chatting</h2><p>Ask anything about your tree or tell it something new.</p></div>';
+      chatArea.classList.add("empty");
+      document.getElementById("clearChatBtn").classList.remove("visible");
+      updateSendBtn();
+    });
 
     // ── Notifications + Invites ────────────────────────────────────────
     const notifPanel = document.getElementById("notifPanel");
