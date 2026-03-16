@@ -13,6 +13,7 @@ import {
   switchMode,
   processMessage,
   getClientForUser,
+  resolveRootLlmForMode,
   clearSession,
 } from "../conversation.js";
 import {
@@ -220,7 +221,8 @@ export async function orchestrateUnderstanding({
   // ── Resolve base LLM for tracking (processMessage auto-resolves per-mode) ──
   let llmProvider;
   try {
-    const clientInfo = await getClientForUser(userId, "understand");
+    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:understand");
+    const clientInfo = await getClientForUser(userId, "understand", modeConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
