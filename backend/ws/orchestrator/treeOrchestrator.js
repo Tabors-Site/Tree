@@ -10,6 +10,7 @@ import {
   getCurrentNodeId,
   resetConversation,
   getClientForUser,
+  resolveRootLlmForMode,
 } from "../conversation.js";
 import { classify, translateDestructive } from "./translator.js";
 import { trackChainStep, setAiContributionContext } from "../aiChatTracker.js";
@@ -945,7 +946,8 @@ export async function orchestrateTreeRequest({
   // Resolve base llmProvider for tracking (processMessage auto-resolves per-mode)
   let llmProvider = { isCustom: false, model: null, connectionId: null };
   try {
-    const clientInfo = await getClientForUser(userId, slot);
+    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:librarian");
+    const clientInfo = await getClientForUser(userId, slot, modeConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
@@ -1035,6 +1037,9 @@ export async function orchestrateTreeRequest({
     });
   } catch (err) {
     if (signal?.aborted) return null;
+    if (err.message === "NO_LLM") {
+      throw new Error("No LLM connection configured. Set one up at /setup or assign one to this tree.");
+    }
     console.error("❌ Classification failed:", err.message);
     classification = {
       intent: "query",

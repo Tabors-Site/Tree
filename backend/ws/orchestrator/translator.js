@@ -450,7 +450,8 @@ export async function classify({
   rootId,
 }) {
   const overrideId = rootId ? await resolveRootLlmForMode(rootId, "tree:librarian") : null;
-  const { client: openai, model, isCustom, connectionId } = await getClientForUser(userId, slot, overrideId);
+  const { client: openai, model, isCustom, connectionId, noLlm } = await getClientForUser(userId, slot, overrideId);
+  if (noLlm) throw new Error("NO_LLM");
   const _llmProvider = { isCustom, model, connectionId: connectionId || null };
 
   let contextBlock = "";
@@ -549,7 +550,8 @@ export async function translateDestructive({
   rootId,
 }) {
   const overrideId = rootId ? await resolveRootLlmForMode(rootId, "tree:structure") : null;
-  const { client: openai, model, isCustom, connectionId } = await getClientForUser(userId, slot, overrideId);
+  const { client: openai, model, isCustom, connectionId, noLlm } = await getClientForUser(userId, slot, overrideId);
+  if (noLlm) throw new Error("NO_LLM");
   const _llmProvider = { isCustom, model, connectionId: connectionId || null };
 
   // Build context block

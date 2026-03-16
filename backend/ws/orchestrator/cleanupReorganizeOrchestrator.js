@@ -9,7 +9,7 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-import { switchMode, processMessage, setRootId, getClientForUser, clearSession } from "../conversation.js";
+import { switchMode, processMessage, setRootId, getClientForUser, resolveRootLlmForMode, clearSession } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { buildDeepTreeSummary } from "../../core/treeFetch.js";
@@ -70,7 +70,8 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
   // ── LLM provider ────────────────────────────────────────────────────
   let llmProvider;
   try {
-    const clientInfo = await getClientForUser(userId, "main");
+    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:cleanup-analyze");
+    const clientInfo = await getClientForUser(userId, "main", modeConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,

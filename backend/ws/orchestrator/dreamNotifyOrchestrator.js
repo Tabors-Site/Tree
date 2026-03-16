@@ -10,7 +10,7 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-import { switchMode, processMessage, setRootId, getClientForUser, clearSession } from "../conversation.js";
+import { switchMode, processMessage, setRootId, getClientForUser, resolveRootLlmForMode, clearSession } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat, clearAiContributionContext } from "../aiChatTracker.js";
 import { connectToMCP, MCP_SERVER_URL, closeMCPClient } from "../mcp.js";
 import { createSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
@@ -97,7 +97,8 @@ export async function orchestrateDreamNotify({
   // ── LLM provider ────────────────────────────────────────────────────
   let llmProvider;
   try {
-    const clientInfo = await getClientForUser(userId, "main");
+    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:dream-summary");
+    const clientInfo = await getClientForUser(userId, "main", modeConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
