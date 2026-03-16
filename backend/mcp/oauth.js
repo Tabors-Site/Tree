@@ -292,25 +292,6 @@ export function renderLoginPage(req, res) {
       letter-spacing: -0.5px;
     }
 
-    .oauth-hint {
-      font-size: 15px;
-      color: rgba(255, 255, 255, 0.9);
-      margin-bottom: 32px;
-      line-height: 1.6;
-      padding: 16px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      border-left: 4px solid rgba(255, 255, 255, 0.5);
-      text-align: left;
-      font-weight: 400;
-    }
-
-    .oauth-hint::before {
-      content: 'ℹ️ ';
-      margin-right: 6px;
-    }
-
     /* Form */
     form {
       margin-bottom: 16px;
@@ -576,10 +557,6 @@ export function renderLoginPage(req, res) {
   <div class="login-container">
     <h2>Welcome Back</h2>
 
-    <p id="oauthHint" class="oauth-hint" style="display:none;">
-      Please log in to continue.
-    </p>
-
     <form id="loginForm">
       <div class="input-group">
         <label for="username">Username</label>
@@ -631,10 +608,6 @@ export function renderLoginPage(req, res) {
   <script>
     const apiUrl = "https://tree.tabors.site";
     const redirectAfterLogin = "${redirect}" || null;
-
-    if (redirectAfterLogin) {
-      document.getElementById("oauthHint").style.display = "block";
-    }
 
     // Secondary button handlers
     document.getElementById("registerBtn").addEventListener("click", () => {
