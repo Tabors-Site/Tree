@@ -41,9 +41,10 @@ OUTPUT FORMAT (STRICT JSON ONLY)
 
 RULES
 - NEVER move or delete the root node (depth 0)
-- Only delete nodes that are EMPTY — no notes, no values, no children with content
+- Only delete nodes that are clearly broken hierarchy (duplicates, redundant structure) or completely irrelevant to the tree
+- Empty nodes that fit the tree's structure should be LEFT ALONE — they may be placeholders waiting to be filled
 - Nodes with [N notes] annotations have user content — NEVER delete these, move them instead
-- Prefer moving over deleting — if a node has content but is misplaced, MOVE it
+- Prefer moving over deleting — when in doubt, MOVE instead of delete
 - Max 5 moves and 3 deletes per analysis
 - If the tree is well-organized, return empty arrays: { "moves": [], "deletes": [], "summary": "Tree is well-organized" }
 - Use the [id:xxx] values from the tree summary for nodeId and newParentId
