@@ -45,7 +45,7 @@ const StartedAbout = () => {
           <div className="sta-section-text drm-note" style={{ marginTop: 12 }}>
             Don't have your own LLM? You can still join someone else's tree
             if they've invited you and have their own model connected. You
-            just won't be able to create or chat with your own trees.
+            just won't be able to use AI features with your own trees.
           </div>
         </div>
 
@@ -56,14 +56,14 @@ const StartedAbout = () => {
           </div>
           <div className="sta-section-text">
             After connecting your LLM, the setup page will ask you to name your
-            first tree. You can also create trees later -- in Chat hit
+            first tree. You can also create trees later such as in Chat hit
             the <strong>+</strong> button at the bottom of the tree list, or in
             Dashboard find it on your profile home in My Roots.
           </div>
           <div className="sta-section-text" style={{ marginTop: 14 }}>
             Pick a root name that describes the big picture. It's the top of
             your hierarchy, so keep it broad enough to branch out from.
-            Something like "Work Projects", "Learning Plan", or "Trip to Japan"
+            Something like "Crypto Trading", "Learning Plan", or "Trip to Japan"
             works well. Once the tree exists, you can start talking to it
             and the AI will build it out from there.
           </div>
