@@ -16,6 +16,7 @@ import TermsSection from "./TermsSections.jsx";
 import AboutHome from "./About/AboutHome.jsx";
 import AboutLayout from "./About/AboutLayout.jsx";
 import BlogSection from "./Blog/BlogSection.jsx";
+import NotFound from "./NotFound.jsx";
 
 const WelcomeRoutes = () => {
   return (
@@ -48,6 +49,7 @@ const WelcomeRoutes = () => {
       <Route path="/blog" element={<BlogSection />} />
       <Route path="/blog/:slug" element={<BlogSection />} />
 
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };
