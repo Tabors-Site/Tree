@@ -75,8 +75,13 @@ async function extractTaggedUsersAndRewrite(content) {
 }
 export const NOTE_TEXT_MAX_CHARS = 5000;
 
-export function assertNoteTextWithinLimit(content) {
+export async function assertNoteTextWithinLimit(content, userId) {
   if (!content) return;
+
+  if (userId) {
+    const user = await User.findById(userId).select("profileType").lean();
+    if (user?.profileType === "god") return;
+  }
 
   if (content.length > NOTE_TEXT_MAX_CHARS) {
     throw new Error(
@@ -110,7 +115,7 @@ async function createNote({
     filePath = file.filename;
   } else {
     // ⬅️ ADD HERE
-    assertNoteTextWithinLimit(content || "");
+    await assertNoteTextWithinLimit(content || "", userId);
   }
 
   // ── ENERGY ──────────────────────────────────────
@@ -249,7 +254,7 @@ async function editNote({
     newContent = content ?? "";
   }
 
-  assertNoteTextWithinLimit(newContent);
+  await assertNoteTextWithinLimit(newContent, userId);
 
   if (oldContent === newContent) {
     return {
