@@ -6384,11 +6384,12 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
       }
 
       // ---------- FILE ----------
-      const fileUrl = `/api/v1/uploads/${rawIdea.content}`;
-      const filePath = path.join(process.cwd(), "uploads", rawIdea.content);
-      const mimeType = mime.lookup(filePath) || "application/octet-stream";
-      const mediaHtml = renderMedia(fileUrl, mimeType);
-      const fileName = rawIdea.content;
+      const fileDeleted = rawIdea.content === "File was deleted";
+      const fileUrl = fileDeleted ? "" : `/api/v1/uploads/${rawIdea.content}`;
+      const filePath = fileDeleted ? "" : path.join(process.cwd(), "uploads", rawIdea.content);
+      const mimeType = fileDeleted ? "" : (mime.lookup(filePath) || "application/octet-stream");
+      const mediaHtml = fileDeleted ? "" : renderMedia(fileUrl, mimeType);
+      const fileName = fileDeleted ? "File was deleted" : rawIdea.content;
 
       return res.send(`
 <!DOCTYPE html>
@@ -6813,17 +6814,13 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
 
       <h1>${escapeHtml(fileName)}</h1>
 
-      <div class="action-bar">
-        <a class="download" href="${fileUrl}" download>
-          Download
-        </a>
-        <button id="copyUrlBtn" class="copy-url-btn">
-          Share
-        </button>
-      </div>
+      ${fileDeleted ? "" : `<div class="action-bar">
+        <a class="download" href="${fileUrl}" download>Download</a>
+        <button id="copyUrlBtn" class="copy-url-btn">Share</button>
+      </div>`}
 
       <div class="media">
-        ${mediaHtml}
+        ${fileDeleted ? `<p style="color:rgba(255,255,255,0.6); padding:40px 0;">File was deleted</p>` : mediaHtml}
       </div>
     </div>
   </div>

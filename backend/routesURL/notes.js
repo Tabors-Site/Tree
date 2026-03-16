@@ -3946,11 +3946,12 @@ pre.flash::before {
 `);
       }
 
-      const fileUrl = `/api/v1/uploads/${note.content}`;
-      const filePath = path.join(uploadsFolder, note.content);
-      const mimeType = mime.lookup(filePath) || "application/octet-stream";
-      const mediaHtml = renderMediaImmediate(fileUrl, mimeType);
-      const fileName = path.basename(note.content);
+      const fileDeleted = note.content === "File was deleted";
+      const fileUrl = fileDeleted ? "" : `/api/v1/uploads/${note.content}`;
+      const filePath = fileDeleted ? "" : path.join(uploadsFolder, note.content);
+      const mimeType = fileDeleted ? "" : (mime.lookup(filePath) || "application/octet-stream");
+      const mediaHtml = fileDeleted ? "" : renderMediaImmediate(fileUrl, mimeType);
+      const fileName = fileDeleted ? "File was deleted" : path.basename(note.content);
 
       return res.send(`
 <!DOCTYPE html>
@@ -4353,17 +4354,13 @@ pre.flash::before {
 
 <h1>${escapeHtml(fileName)}</h1>
 
-      <div class="action-bar">
-        <a class="download" href="${fileUrl}" download>
-          Download
-        </a>
-        <button id="copyUrlBtn" class="copy-url-btn">
-          Share
-        </button>
-      </div>
+      ${fileDeleted ? "" : `<div class="action-bar">
+        <a class="download" href="${fileUrl}" download>Download</a>
+        <button id="copyUrlBtn" class="copy-url-btn">Share</button>
+      </div>`}
 
       <div class="media">
-        ${mediaHtml}
+        ${fileDeleted ? `<p style="color:rgba(255,255,255,0.6); padding:40px 0;">File was deleted</p>` : mediaHtml}
       </div>
     </div>
   </div>
