@@ -42,6 +42,10 @@ export default function registerURLRoutes(app) {
     if (BLOCKED_IDS.includes(val)) return notFoundPage(req, res);
     next();
   });
+  app.param("rootId", (req, res, next, val) => {
+    if (BLOCKED_IDS.includes(val)) return notFoundPage(req, res);
+    next();
+  });
 
   app.use(apiLimiter);
   app.use("/", user);
