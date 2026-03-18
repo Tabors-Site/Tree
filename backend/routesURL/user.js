@@ -55,6 +55,7 @@ import RawIdea from "../db/models/rawIdea.js";
 
 import {
   createApiKey,
+  generateApiKey,
   listApiKeys,
   deleteApiKey,
 } from "../controllers/users.js";
@@ -8352,7 +8353,193 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
     return res.status(403).json({ message: "Not authorized" });
   }
 
-  return createApiKey(req, res);
+  const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+  if (!wantHtml) {
+    return createApiKey(req, res);
+  }
+
+  // HTML mode: create key and show it on a dedicated page
+  try {
+    const userId = req.userId;
+    const { name, revokeOld = false } = req.body;
+    const safeName = (name?.trim().slice(0, 64) || "API Key").replace(/<[^>]*>/g, "");
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).send("User not found");
+
+    if (user.apiKeys.filter((k) => !k.revoked).length >= 10) {
+      const token = req.query.token ?? "";
+      const qs = token ? `?token=${token}&html` : `?html`;
+      return res.redirect(`/api/v1/user/${userId}/api-keys${qs}&error=limit`);
+    }
+
+    if (revokeOld) {
+      user.apiKeys.forEach((k) => (k.revoked = true));
+    }
+
+    const { rawKey, keyHash } = await generateApiKey();
+    user.apiKeys.push({ keyHash, name: safeName });
+    await user.save();
+
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+    const esc = (str = "") =>
+      String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    return res.status(201).send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <title>API Key Created</title>
+  <style>
+:root {
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #736fe6; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh; padding: 20px; color: #1a1a1a;
+  position: relative; overflow-x: hidden;
+}
+body::before, body::after {
+  content: ''; position: fixed; border-radius: 50%; opacity: 0.08;
+  animation: float 20s infinite ease-in-out; pointer-events: none;
+}
+body::before { width: 600px; height: 600px; background: white; top: -300px; right: -200px; }
+body::after { width: 400px; height: 400px; background: white; bottom: -200px; left: -100px; }
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.container { max-width: 600px; margin: 0 auto; position: relative; z-index: 1; }
+.back-nav { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; animation: fadeInUp 0.5s ease-out; }
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
+  background: rgba(115,111,230,var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%); color: white; text-decoration: none;
+  border-radius: 980px; font-weight: 600; font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28); position: relative; overflow: hidden;
+}
+.back-link::before {
+  content: ""; position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
+}
+.back-link:hover { background: rgba(115,111,230,var(--glass-alpha-hover)); transform: translateY(-1px); }
+.back-link:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+.card {
+  position: relative;
+  background: rgba(115,111,230,var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 20px; padding: 40px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white; animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+.card-title {
+  font-size: 22px; font-weight: 700; margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+.card-name {
+  font-size: 14px; color: rgba(255,255,255,0.6); margin-bottom: 20px;
+}
+.warning {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; margin-bottom: 20px;
+  background: rgba(255,179,71,0.15); border: 1px solid rgba(255,179,71,0.3);
+  border-radius: 10px; font-size: 13px; font-weight: 500;
+  color: rgba(255,220,150,0.95); line-height: 1.5;
+}
+.key-block {
+  position: relative;
+  background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px; padding: 16px 60px 16px 16px;
+  font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 14px; color: rgba(255,255,255,0.95);
+  word-break: break-all; line-height: 1.6;
+  margin-bottom: 24px;
+}
+.copy-btn {
+  position: absolute; top: 10px; right: 10px;
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px; padding: 8px 14px;
+  color: white; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+  backdrop-filter: blur(10px);
+}
+.copy-btn:hover {
+  background: rgba(255,255,255,0.25); transform: translateY(-1px);
+}
+.copy-btn.copied {
+  background: rgba(72,187,120,0.3); border-color: rgba(72,187,120,0.4);
+}
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .card { padding: 28px 20px; }
+  .back-nav { flex-direction: column; }
+  .back-link { width: 100%; justify-content: center; }
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">&lt;- Back to Profile</a>
+      <a href="/api/v1/user/${userId}/api-keys${tokenQS}" class="back-link">API Keys</a>
+    </div>
+
+    <div class="card">
+      <div class="card-title">API Key Created</div>
+      <div class="card-name">${esc(safeName)}</div>
+
+      <div class="warning">
+        This key will only be shown once. Copy it now and store it securely.
+      </div>
+
+      <div class="key-block" id="keyBlock">
+        ${esc(rawKey)}
+        <button class="copy-btn" id="copyBtn" onclick="copyKey()">📋</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function copyKey() {
+      var block = document.getElementById("keyBlock");
+      var btn = document.getElementById("copyBtn");
+      var key = block.textContent.replace(btn.textContent, "").trim();
+      navigator.clipboard.writeText(key).then(function() {
+        var btn = document.getElementById("copyBtn");
+        btn.textContent = "\u2705";
+        btn.classList.add("copied");
+        setTimeout(function() {
+          btn.textContent = "\uD83D\uDCCB";
+          btn.classList.remove("copied");
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
+`);
+  } catch (err) {
+    console.error("API key create (html) error:", err);
+    return res.status(500).send("Failed to create API key");
+  }
 });
 
 router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
