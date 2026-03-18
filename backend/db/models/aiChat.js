@@ -59,7 +59,7 @@ const AIChatSchema = new mongoose.Schema({
     // "script" = automated trigger from note/script
     source: {
       type: String,
-      enum: ["user", "api", "orchestrator", "background", "script", "system"],
+      enum: ["user", "api", "orchestrator", "background", "script", "system", "gateway"],
       default: "user",
       required: true,
     },
@@ -171,6 +171,9 @@ const AIChatSchema = new mongoose.Schema({
 
 // Query all steps in a chain
 AIChatSchema.index({ sessionId: 1, chainIndex: 1 });
+
+// Query by target node (sparse — most home-mode chats lack this field)
+AIChatSchema.index({ "treeContext.targetNodeId": 1 }, { sparse: true });
 
 const AIChat = mongoose.model("AIChat", AIChatSchema);
 

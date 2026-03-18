@@ -53,22 +53,40 @@ async function sendTelegram(secrets, metadata, notification) {
 }
 
 async function sendDiscord(secrets, metadata, notification) {
-  var { webhookUrl } = secrets;
-
   var content = `**${notification.title}**\n\n${notification.content}`;
   if (content.length > 2000) {
     content = content.slice(0, 1997) + "...";
   }
 
-  var res = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
+  if (secrets.webhookUrl) {
+    // Output via webhook
+    var res = await fetch(secrets.webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
 
-  if (!res.ok) {
-    var body = await res.text();
-    throw new Error(`Discord webhook error ${res.status}: ${body}`);
+    if (!res.ok) {
+      var body = await res.text();
+      throw new Error(`Discord webhook error ${res.status}: ${body}`);
+    }
+  } else if (secrets.botToken && metadata.discordChannelId) {
+    // Input channel - send via bot API
+    var res = await fetch(`https://discord.com/api/v10/channels/${metadata.discordChannelId}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bot ${secrets.botToken}`,
+      },
+      body: JSON.stringify({ content }),
+    });
+
+    if (!res.ok) {
+      var body = await res.text();
+      throw new Error(`Discord bot API error ${res.status}: ${body}`);
+    }
+  } else {
+    throw new Error("Discord channel has no webhookUrl or botToken configured");
   }
 }
 

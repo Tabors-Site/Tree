@@ -4780,6 +4780,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
       { key: "processing", label: "Active" },
       { key: "succeeded", label: "Finished" },
       { key: "stuck", label: "Stuck" },
+      { key: "deferred", label: "Deferred" },
       { key: "deleted", label: "Deleted" },
     ];
 

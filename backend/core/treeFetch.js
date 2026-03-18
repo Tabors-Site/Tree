@@ -111,6 +111,29 @@ export async function isDescendant(ancestorId, nodeId) {
   return false;
 }
 
+export async function getDescendantIds(nodeId) {
+  const queue = [nodeId];
+  const visited = new Set([nodeId]);
+  while (queue.length > 0) {
+    const batch = queue.splice(0, 100);
+    const nodes = await Node.find({ _id: { $in: batch } })
+      .select("_id children")
+      .lean();
+    for (const n of nodes) {
+      if (Array.isArray(n.children)) {
+        for (const childId of n.children) {
+          const cid = String(childId);
+          if (!visited.has(cid)) {
+            visited.add(cid);
+            queue.push(cid);
+          }
+        }
+      }
+    }
+  }
+  return [...visited];
+}
+
 export async function getDeletedBranchesForUser(userId) {
   if (!userId) {
     throw new Error("userId is required");

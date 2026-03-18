@@ -186,6 +186,53 @@ const GatewayAbout = () => {
           </div>
         </div>
 
+        {/* ── QUEUE PROTECTION ── */}
+        <div className="gtw-section">
+          <div className="gtw-section-title">
+            <span className="gtw-section-icon">🛡️</span> Queue Protection
+          </div>
+          <div className="gtw-section-text">
+            Each input channel can process up to 2 messages at the same time.
+            If a third message arrives while those are still running, the channel
+            either responds with a busy message or stays silent, depending on the
+            channel{"'"}s queue behavior setting.
+            <br /><br />
+            <strong>Respond</strong> (default) -- replies with "I{"'"}m already
+            processing your last 2 messages. Please send again later."
+            <br /><br />
+            <strong>Silent</strong> -- drops the overflow message without
+            responding. Good for high-traffic channels where you don{"'"}t want
+            noise.
+          </div>
+        </div>
+
+        {/* ── CANCEL COMMAND ── */}
+        <div className="gtw-section">
+          <div className="gtw-section-title">
+            <span className="gtw-section-icon">🚫</span> Cancel Command
+          </div>
+          <div className="gtw-section-text">
+            Send <strong>cancel</strong> to any input channel to immediately
+            abort all active processing on that channel. The tree stops whatever
+            it was doing and replies "All active tasks cancelled." This is useful
+            if you sent something by mistake or the AI is taking too long.
+          </div>
+        </div>
+
+        {/* ── DISCORD TIER REQUIREMENT ── */}
+        <div className="gtw-section">
+          <div className="gtw-section-title">
+            <span className="gtw-section-icon">🎮</span> Discord Input
+          </div>
+          <div className="gtw-section-text">
+            Discord output channels use a simple webhook URL (free for all tiers).
+            Discord input channels require a Discord bot that maintains a
+            persistent connection, so they are gated to Standard, Premium, and
+            God tier subscribers. Telegram input channels are available to all
+            tiers since they use lightweight HTTP webhooks.
+          </div>
+        </div>
+
         {/* ── MANAGING CHANNELS ── */}
         <div className="gtw-section">
           <div className="gtw-section-title">

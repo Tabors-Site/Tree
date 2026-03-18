@@ -12,6 +12,7 @@ import setup from "./setup.js";
 import understanding from "./understanding.js";
 import tree from "./tree.js";
 import blog from "./blog.js";
+import gatewayWebhooks from "./gatewayWebhooks.js";
 
 import rateLimit from "express-rate-limit";
 import { notFoundPage } from "../middleware/notFoundPage.js";
@@ -64,4 +65,5 @@ export default function registerURLRoutes(app) {
   app.use("/", node);
   app.use("/", tree);
   app.use("/", blog);
+  app.use("/", gatewayWebhooks);
 }

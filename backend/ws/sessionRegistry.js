@@ -22,6 +22,7 @@ export const SESSION_TYPES = {
   CLEANUP_REORGANIZE: "cleanup-reorganize",
   CLEANUP_EXPAND: "cleanup-expand",
   DREAM_NOTIFY: "dream-notify",
+  GATEWAY_INPUT: "gateway-input",
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -353,6 +354,28 @@ export function abortSession(sessionId) {
  */
 export function clearSessionAbort(sessionId) {
   sessionAbortControllers.delete(sessionId);
+}
+
+/**
+ * Abort all active sessions for a given scopeKey (e.g. "gw:channelId").
+ * Triggers AbortController for each, then ends the session.
+ * @returns {number} count of sessions aborted
+ */
+export function abortSessionsByScope(scopeKey) {
+  const scoped = scopedSessions.get(scopeKey);
+  if (!scoped) return 0;
+
+  const sessionId = scoped.sessionId;
+  const session = sessions.get(sessionId);
+  if (!session) {
+    scopedSessions.delete(scopeKey);
+    return 0;
+  }
+
+  abortSession(sessionId);
+  endSession(sessionId);
+  scopedSessions.delete(scopeKey);
+  return 1;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

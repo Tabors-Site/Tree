@@ -629,7 +629,7 @@ const ApiAccessSection = () => {
             <div className="ep-label">Query Parameters</div>
             <div className="param-row">
               <span className="param-key">?status=VALUE</span>
-              <span className="param-desc">Filter by status. One of: <code>pending</code> (default), <code>processing</code>, <code>succeeded</code>, <code>stuck</code>, <code>deleted</code>, <code>all</code></span>
+              <span className="param-desc">Filter by status. One of: <code>pending</code> (default), <code>processing</code>, <code>succeeded</code>, <code>stuck</code>, <code>deferred</code>, <code>deleted</code>, <code>all</code></span>
             </div>
             <div className="param-row">
               <span className="param-key">?q=SEARCH</span>

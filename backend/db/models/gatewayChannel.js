@@ -63,6 +63,12 @@ const GatewayChannelSchema = new mongoose.Schema(
       default: ["dream-summary", "dream-thought"],
     },
 
+    queueBehavior: {
+      type: String,
+      enum: ["respond", "silent"],
+      default: "respond",
+    },
+
     lastDispatchAt: {
       type: Date,
       default: null,

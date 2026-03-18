@@ -91,8 +91,15 @@ server.listen(PORT, "0.0.0.0", async () => {
   // Wait for MongoDB before running immediately
   mongoose.connection.on("connected", () => {
     runTreeDreamJob();
+    // Connect Discord bots for gateway input channels
+    import("./core/discordBotManager.js")
+      .then(({ startupScan }) => startupScan())
+      .catch((err) => console.error("Discord bot startup scan failed:", err.message));
   });
   if (mongoose.connection.readyState === 1) {
     runTreeDreamJob();
+    import("./core/discordBotManager.js")
+      .then(({ startupScan }) => startupScan())
+      .catch((err) => console.error("Discord bot startup scan failed:", err.message));
   }
 });
