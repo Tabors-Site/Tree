@@ -1599,6 +1599,24 @@ ${
   ${treeLlmHtml}
 </div>` : ""}
 
+  ${isOwner ? `
+<div class="content-card">
+  <div class="section-header">
+    <h2>Gateway</h2>
+  </div>
+  <p style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin:0 0 12px">
+    Manage output channels for this tree -- send dream summaries and notifications to Telegram, Discord, or your browser.
+  </p>
+  <a href="/api/v1/root/${nodeId}/gateway${queryString}"
+     style="display:inline-block;padding:8px 16px;border-radius:8px;
+            border:1px solid rgba(115,111,230,0.4);background:rgba(115,111,230,0.15);
+            color:rgba(200,200,255,0.95);font-weight:600;text-decoration:none;
+            font-size:0.9rem;cursor:pointer">
+    Manage Channels
+  </a>
+</div>
+  ` : ""}
+
   ${
     !isOwner && req.userId
       ? `
@@ -2052,6 +2070,554 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     return res.json({ success: true, slot, connectionId: connectionId || null });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GATEWAY PAGE (HTML)
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const queryString = req.query.token ? `?token=${req.query.token}&html` : "?html";
+
+    const root = await Node.findById(rootId).select("name rootOwner contributors").lean();
+    if (!root) return res.status(404).json({ error: "Root not found" });
+    if (!root.rootOwner) return res.status(400).json({ error: "Node is not a root" });
+
+    const isOwner = root.rootOwner.toString() === req.userId.toString();
+    if (!isOwner) return res.status(403).json({ error: "Only the root owner can manage the gateway" });
+
+    const { getChannelsForRoot } = await import("../core/gateway.js");
+    const channels = await getChannelsForRoot(rootId);
+
+    const channelRows = channels.length === 0
+      ? '<p style="color:rgba(255,255,255,0.5);font-size:0.9rem;">No channels configured yet. Add one below.</p>'
+      : channels.map(function(ch) {
+          var typeBadge = ch.type === "telegram" ? "TG"
+            : ch.type === "discord" ? "DC"
+            : "WEB";
+          var typeColor = ch.type === "telegram" ? "rgba(0,136,204,0.8)"
+            : ch.type === "discord" ? "rgba(88,101,242,0.8)"
+            : "rgba(72,187,120,0.8)";
+          var statusDot = ch.enabled
+            ? '<span style="color:rgba(72,187,120,0.9);">&#9679;</span>'
+            : '<span style="color:rgba(255,107,107,0.9);">&#9679;</span>';
+          var notifList = (ch.notificationTypes || []).join(", ");
+          var lastDispatch = ch.lastDispatchAt
+            ? new Date(ch.lastDispatchAt).toLocaleString()
+            : "Never";
+          var lastErr = ch.lastError
+            ? '<span style="color:rgba(255,107,107,0.8);font-size:0.75rem;">' + escapeHtml(ch.lastError) + '</span>'
+            : '';
+
+          var dirLabel = ch.direction === "input-output" ? "I/O"
+            : ch.direction === "input" ? "IN"
+            : "OUT";
+          var modeLabel = ch.mode === "read-write" ? "CHAT"
+            : ch.mode === "read" ? "QUERY"
+            : "PLACE";
+
+          return `
+<div class="channel-row" data-id="${ch._id}" style="
+  background:rgba(255,255,255,0.06);border-radius:12px;padding:16px;margin-bottom:12px;
+  border:1px solid rgba(255,255,255,0.1);position:relative;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      ${statusDot}
+      <span style="font-weight:600;color:#fff;">${escapeHtml(ch.name)}</span>
+      <span style="background:${typeColor};color:#fff;font-size:0.7rem;padding:2px 8px;border-radius:4px;font-weight:600;">${typeBadge}</span>
+      <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.7);font-size:0.65rem;padding:2px 6px;border-radius:4px;">${dirLabel}</span>
+      <span style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);font-size:0.65rem;padding:2px 6px;border-radius:4px;">${modeLabel}</span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="testChannel('${ch._id}')" style="
+        padding:4px 12px;border-radius:6px;border:1px solid rgba(115,111,230,0.4);
+        background:rgba(115,111,230,0.15);color:rgba(200,200,255,0.9);font-size:0.8rem;cursor:pointer;">
+        Test</button>
+      <button onclick="toggleChannel('${ch._id}', ${!ch.enabled})" style="
+        padding:4px 12px;border-radius:6px;border:1px solid rgba(255,179,71,0.4);
+        background:rgba(255,179,71,0.1);color:rgba(255,179,71,0.9);font-size:0.8rem;cursor:pointer;">
+        ${ch.enabled ? "Disable" : "Enable"}</button>
+      <button onclick="deleteChannel('${ch._id}')" style="
+        padding:4px 12px;border-radius:6px;border:1px solid rgba(255,107,107,0.4);
+        background:rgba(255,107,107,0.1);color:rgba(255,107,107,0.8);font-size:0.8rem;cursor:pointer;">
+        Delete</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:0.8rem;color:rgba(255,255,255,0.5);">
+    ${ch.config?.displayIdentifier ? escapeHtml(ch.config.displayIdentifier) + ' &middot; ' : ''}
+    ${notifList} &middot; Last sent: ${lastDispatch}
+  </div>
+  ${lastErr ? '<div style="margin-top:4px;">' + lastErr + '</div>' : ''}
+</div>`;
+        }).join('\n');
+
+    return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <title>Gateway -- ${escapeHtml(root.name)}</title>
+  <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh; padding: 20px; color: #fff;
+      position: relative; overflow-x: hidden;
+    }
+    body::before, body::after {
+      content: ''; position: fixed; border-radius: 50%; opacity: 0.08;
+      animation: float 20s infinite ease-in-out; pointer-events: none;
+    }
+    body::before { width: 600px; height: 600px; background: white; top: -300px; right: -200px; }
+    body::after { width: 400px; height: 400px; background: white; bottom: -200px; left: -100px; }
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-30px) rotate(5deg); }
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .container { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+    .content-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px; padding: 28px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+      border: 1px solid rgba(255,255,255,0.28);
+      margin-bottom: 24px; animation: fadeInUp 0.6s ease-out both;
+    }
+    .section-header h2 { color: #fff; font-size: 1.3rem; font-weight: 700; margin-bottom: 16px; }
+    .back-nav {
+      display: flex; gap: 12px; margin-bottom: 20px; animation: fadeInUp 0.5s ease-out;
+    }
+    .back-nav a {
+      background: rgba(var(--glass-water-rgb), 0.25);
+      backdrop-filter: blur(12px); border-radius: 10px; padding: 8px 16px;
+      color: rgba(255,255,255,0.9); text-decoration: none; font-size: 0.85rem;
+      border: 1px solid rgba(255,255,255,0.15); font-weight: 500;
+    }
+    .back-nav a:hover { background: rgba(var(--glass-water-rgb), 0.35); }
+    label { display: block; font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-bottom: 4px; margin-top: 12px; }
+    input, select {
+      width: 100%; padding: 10px 14px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08);
+      color: #fff; font-size: 0.9rem; outline: none;
+    }
+    input:focus, select:focus { border-color: rgba(115,111,230,0.6); }
+    select option { background: #3a3a6e; color: #fff; }
+    .btn-primary {
+      padding: 10px 20px; border-radius: 8px; border: 1px solid rgba(72,187,120,0.4);
+      background: rgba(72,187,120,0.15); color: rgba(72,187,120,0.95);
+      font-weight: 600; cursor: pointer; font-size: 0.9rem; margin-top: 16px;
+    }
+    .btn-primary:hover { background: rgba(72,187,120,0.25); }
+    .checkbox-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 6px;
+    }
+    .checkbox-row input[type="checkbox"] { width: auto; }
+    #gatewayStatus {
+      display: none; font-size: 0.85rem; margin-top: 12px; padding: 8px 12px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="back-nav">
+    <a href="/api/v1/root/${rootId}${queryString}">Back to Tree</a>
+  </div>
+
+  <div class="content-card">
+    <div class="section-header">
+      <h2>Gateway Channels</h2>
+    </div>
+    <p style="color:rgba(255,255,255,0.6);font-size:0.85rem;margin-bottom:16px;">
+      Output channels push notifications from this tree to external services.
+    </p>
+    <div id="channelList">
+      ${channelRows}
+    </div>
+  </div>
+
+  <div class="content-card" style="animation-delay:0.1s;">
+    <div class="section-header">
+      <h2>Add Channel</h2>
+    </div>
+
+    <label for="channelName">Channel Name</label>
+    <input type="text" id="channelName" placeholder="e.g. My Discord Updates" maxlength="100" />
+
+    <label for="channelType">Type</label>
+    <select id="channelType" onchange="updateFormFields()">
+      <option value="telegram">Telegram</option>
+      <option value="discord">Discord</option>
+      <option value="webapp">Web Push (this browser)</option>
+    </select>
+
+    <label for="channelDirection">Direction</label>
+    <select id="channelDirection" onchange="updateFormFields()">
+      <option value="output">Output (send notifications out)</option>
+      <option value="input">Input (receive messages in)</option>
+      <option value="input-output">Input/Output (bidirectional chat)</option>
+    </select>
+
+    <label for="channelMode">Mode</label>
+    <select id="channelMode">
+      <option value="write">Place (scans tree, makes edits, no response)</option>
+      <option value="read">Query (reads tree, responds, no edits)</option>
+      <option value="read-write">Chat (reads tree, makes edits, responds)</option>
+    </select>
+
+    <div id="outputConfigSection">
+      <div id="telegramFields" style="margin-top:8px;">
+        <label for="tgBotToken">Bot Token</label>
+        <input type="password" id="tgBotToken" placeholder="123456:ABC-DEF..." />
+        <label for="tgChatId">Chat ID</label>
+        <input type="text" id="tgChatId" placeholder="-1001234567890" />
+      </div>
+
+      <div id="discordFields" style="display:none;">
+        <label for="dcWebhookUrl">Webhook URL</label>
+        <input type="password" id="dcWebhookUrl" placeholder="https://discord.com/api/webhooks/..." />
+      </div>
+
+      <div id="webappFields" style="display:none;">
+        <p style="color:rgba(255,255,255,0.6);font-size:0.85rem;margin-top:12px;">
+          Your browser will ask for notification permission when you add this channel.
+        </p>
+      </div>
+
+      <label style="margin-top:16px;">Notification Types</label>
+      <div class="checkbox-row">
+        <input type="checkbox" id="notifSummary" checked /> <label for="notifSummary" style="margin:0;">Dream Summary</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="notifThought" checked /> <label for="notifThought" style="margin:0;">Dream Thought</label>
+      </div>
+    </div>
+
+    <div id="inputOnlyNotice" style="display:none;">
+      <p style="color:rgba(255,179,71,0.8);font-size:0.85rem;margin-top:16px;">
+        Input channel support is coming soon. The channel will be saved but won't process incoming messages yet.
+      </p>
+    </div>
+
+    <button class="btn-primary" onclick="addChannel()">Add Channel</button>
+    <div id="gatewayStatus"></div>
+  </div>
+
+</div>
+
+<script>
+var ROOT_ID = "${rootId}";
+
+function updateFormFields() {
+  var type = document.getElementById("channelType").value;
+  var direction = document.getElementById("channelDirection").value;
+  var hasOutput = direction === "output" || direction === "input-output";
+
+  // Webapp can only be output
+  var dirSelect = document.getElementById("channelDirection");
+  var modeSelect = document.getElementById("channelMode");
+  var modeLabel = document.querySelector('label[for="channelMode"]');
+  if (type === "webapp") {
+    dirSelect.value = "output";
+    dirSelect.disabled = true;
+    hasOutput = true;
+  } else {
+    dirSelect.disabled = false;
+  }
+
+  // Mode only relevant for channels with input capability
+  var hasInput = direction === "input" || direction === "input-output";
+  modeSelect.style.display = hasInput ? "block" : "none";
+  modeLabel.style.display = hasInput ? "block" : "none";
+
+  // Smart defaults per direction
+  if (direction === "input") {
+    modeSelect.value = "write";
+  } else if (direction === "input-output") {
+    modeSelect.value = "read-write";
+  }
+
+  // Show/hide output config (webhook fields + notification types) based on direction
+  document.getElementById("outputConfigSection").style.display = hasOutput ? "block" : "none";
+  document.getElementById("inputOnlyNotice").style.display = !hasOutput ? "block" : "none";
+
+  // Show/hide type-specific fields within output config
+  document.getElementById("telegramFields").style.display = hasOutput && type === "telegram" ? "block" : "none";
+  document.getElementById("discordFields").style.display = hasOutput && type === "discord" ? "block" : "none";
+  document.getElementById("webappFields").style.display = hasOutput && type === "webapp" ? "block" : "none";
+}
+
+function showStatus(msg, isError) {
+  var el = document.getElementById("gatewayStatus");
+  el.style.display = "block";
+  el.style.background = isError ? "rgba(255,107,107,0.15)" : "rgba(72,187,120,0.15)";
+  el.style.color = isError ? "rgba(255,107,107,0.95)" : "rgba(72,187,120,0.95)";
+  el.textContent = msg;
+  if (!isError) setTimeout(function() { el.style.display = "none"; }, 4000);
+}
+
+async function getWebPushSubscription() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    throw new Error("Push notifications are not supported in this browser");
+  }
+
+  var permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    throw new Error("Notification permission denied");
+  }
+
+  var reg = await navigator.serviceWorker.register("/sw.js");
+  await navigator.serviceWorker.ready;
+
+  var vapidKey = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/vapid-key")
+    .then(function(r) { return r.json(); });
+
+  if (!vapidKey.key) throw new Error("VAPID key not configured on server");
+
+  var sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(vapidKey.key),
+  });
+
+  return sub.toJSON();
+}
+
+function urlBase64ToUint8Array(base64String) {
+  var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  var rawData = atob(base64);
+  var outputArray = new Uint8Array(rawData.length);
+  for (var i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function addChannel() {
+  var name = document.getElementById("channelName").value.trim();
+  var type = document.getElementById("channelType").value;
+  var direction = document.getElementById("channelDirection").value;
+  var mode = document.getElementById("channelMode").value;
+  var hasOutput = direction === "output" || direction === "input-output";
+
+  if (!name) { showStatus("Please enter a channel name", true); return; }
+
+  var config = {};
+
+  try {
+    if (hasOutput) {
+      if (type === "telegram") {
+        var botToken = document.getElementById("tgBotToken").value.trim();
+        var chatId = document.getElementById("tgChatId").value.trim();
+        if (!botToken || !chatId) { showStatus("Bot token and chat ID are required", true); return; }
+        config = { botToken: botToken, chatId: chatId };
+      } else if (type === "discord") {
+        var webhookUrl = document.getElementById("dcWebhookUrl").value.trim();
+        if (!webhookUrl) { showStatus("Webhook URL is required", true); return; }
+        config = { webhookUrl: webhookUrl };
+      } else if (type === "webapp") {
+        var subscription = await getWebPushSubscription();
+        config = { subscription: subscription, displayIdentifier: navigator.userAgent.split(" ").pop() || "Browser" };
+      }
+    }
+  } catch (err) {
+    showStatus(err.message, true);
+    return;
+  }
+
+  var notificationTypes = [];
+  if (hasOutput) {
+    if (document.getElementById("notifSummary").checked) notificationTypes.push("dream-summary");
+    if (document.getElementById("notifThought").checked) notificationTypes.push("dream-thought");
+    if (notificationTypes.length === 0) { showStatus("Select at least one notification type", true); return; }
+  }
+
+  try {
+    var res = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/channels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name, type: type, direction: direction, mode: mode, config: config, notificationTypes: notificationTypes }),
+    });
+    var data = await res.json();
+    if (!res.ok) { showStatus(data.error || "Failed to add channel", true); return; }
+    showStatus("Channel added successfully");
+    setTimeout(function() { location.reload(); }, 1000);
+  } catch (err) {
+    showStatus("Network error: " + err.message, true);
+  }
+}
+
+async function testChannel(channelId) {
+  try {
+    var res = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/channels/" + channelId + "/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    var data = await res.json();
+    if (!res.ok) { alert(data.error || "Test failed"); return; }
+    alert("Test notification sent!");
+  } catch (err) { alert("Network error"); }
+}
+
+async function toggleChannel(channelId, enabled) {
+  try {
+    var res = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/channels/" + channelId, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: enabled }),
+    });
+    if (res.ok) location.reload();
+    else { var data = await res.json(); alert(data.error || "Failed"); }
+  } catch (err) { alert("Network error"); }
+}
+
+async function deleteChannel(channelId) {
+  if (!confirm("Delete this channel?")) return;
+  try {
+    var res = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/channels/" + channelId, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (res.ok) location.reload();
+    else { var data = await res.json(); alert(data.error || "Failed"); }
+  } catch (err) { alert("Network error"); }
+}
+</script>
+</body>
+</html>
+`);
+  } catch (err) {
+    console.error("Error in /root/:rootId/gateway:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// GATEWAY CHANNELS (API)
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get("/root/:rootId/gateway/vapid-key", authenticate, async (req, res) => {
+  return res.json({ key: process.env.VAPID_PUBLIC_KEY || null });
+});
+
+router.get("/root/:rootId/gateway/channels", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+
+    const root = await Node.findById(rootId).select("rootOwner contributors").lean();
+    if (!root) return res.status(404).json({ error: "Root not found" });
+    if (!root.rootOwner) return res.status(400).json({ error: "Node is not a root" });
+
+    const isOwner = root.rootOwner.toString() === req.userId.toString();
+    const isContributor = (root.contributors || []).some(
+      (c) => c.toString() === req.userId.toString(),
+    );
+    if (!isOwner && !isContributor) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const { getChannelsForRoot } = await import("../core/gateway.js");
+    const channels = await getChannelsForRoot(rootId);
+    return res.json({ success: true, channels });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/root/:rootId/gateway/channels", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const { name, type, config, notificationTypes } = req.body;
+
+    const { addGatewayChannel } = await import("../core/gateway.js");
+    const channel = await addGatewayChannel(req.userId, rootId, {
+      name,
+      type,
+      config,
+      notificationTypes,
+    });
+
+    return res.status(201).json({ success: true, channel });
+  } catch (err) {
+    var status = err.message.includes("not found") ? 404
+      : err.message.includes("Not authorized") || err.message.includes("Only the root") ? 403
+      : 400;
+    return res.status(status).json({ error: err.message });
+  }
+});
+
+router.put("/root/:rootId/gateway/channels/:channelId", authenticate, async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { name, enabled, config, notificationTypes } = req.body;
+
+    const { updateGatewayChannel } = await import("../core/gateway.js");
+    const channel = await updateGatewayChannel(req.userId, channelId, {
+      name,
+      enabled,
+      config,
+      notificationTypes,
+    });
+
+    return res.json({ success: true, channel });
+  } catch (err) {
+    var status = err.message.includes("not found") ? 404 : 400;
+    return res.status(status).json({ error: err.message });
+  }
+});
+
+router.delete("/root/:rootId/gateway/channels/:channelId", authenticate, async (req, res) => {
+  try {
+    const { channelId } = req.params;
+
+    const { deleteGatewayChannel } = await import("../core/gateway.js");
+    await deleteGatewayChannel(req.userId, channelId);
+
+    return res.json({ success: true, removed: true });
+  } catch (err) {
+    var status = err.message.includes("not found") ? 404 : 400;
+    return res.status(status).json({ error: err.message });
+  }
+});
+
+router.post("/root/:rootId/gateway/channels/:channelId/test", authenticate, async (req, res) => {
+  try {
+    const { rootId, channelId } = req.params;
+
+    // Verify root access
+    const root = await Node.findById(rootId).select("rootOwner contributors").lean();
+    if (!root) return res.status(404).json({ error: "Root not found" });
+    if (!root.rootOwner) return res.status(400).json({ error: "Node is not a root" });
+
+    const isOwner = root.rootOwner.toString() === req.userId.toString();
+    const isContributor = (root.contributors || []).some(
+      (c) => c.toString() === req.userId.toString(),
+    );
+    if (!isOwner && !isContributor) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const { dispatchTestNotification } = await import("../core/gatewayDispatch.js");
+    var result = await dispatchTestNotification(channelId);
+
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 });
 

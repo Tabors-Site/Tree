@@ -13,6 +13,7 @@ export const SESSION_TYPES = {
   WEBSOCKET_CHAT: "websocket-chat",
   API_TREE_CHAT: "api-tree-chat",
   API_TREE_PLACE: "api-tree-place",
+  API_TREE_QUERY: "api-tree-query",
   RAW_IDEA_ORCHESTRATE: "raw-idea-orchestrate",
   RAW_IDEA_CHAT: "raw-idea-chat",
   UNDERSTANDING_ORCHESTRATE: "understanding-orchestrate",

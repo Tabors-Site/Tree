@@ -46,6 +46,7 @@ const ApiAccessSection = () => {
             <div className="toc-group-label">AI</div>
             <TocLink to="tree-chat">🧠 Tree Chat</TocLink>
             <TocLink to="tree-place">📌 Tree Place</TocLink>
+            <TocLink to="tree-query">🔍 Tree Query</TocLink>
             <TocLink to="raw-idea-chat">🤖 Raw Idea Chat</TocLink>
             <TocLink to="raw-idea-place">📥 Raw Idea Place</TocLink>
             <TocLink to="understand-tree">🔬 Understand Tree</TocLink>
@@ -66,6 +67,7 @@ const ApiAccessSection = () => {
           <div className="toc-group">
             <div className="toc-group-label">Tree</div>
             <TocLink to="root">🌳 Root Endpoints</TocLink>
+            <TocLink to="gateway">📡 Gateway Channels</TocLink>
             <TocLink to="book">📖 Book &amp; Sharing</TocLink>
             <TocLink to="understandings">🧠 Understandings</TocLink>
           </div>
@@ -229,6 +231,41 @@ const ApiAccessSection = () => {
               Same orchestration as Tree Chat, minus the final response generation.
               Useful for bulk ingestion or automated pipelines where you don&#39;t need
               a conversational reply.
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  TREE QUERY                                                    */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="tree-query">
+          <div className="section-title">
+            <span className="section-icon">🔍</span> Tree Query
+          </div>
+          <div className="section-text">
+            Talk to your tree without it making any changes. The AI reads the
+            tree and generates a response, but will never create, edit, or
+            delete nodes. Useful for asking questions, getting summaries, or
+            exploring what{"'"}s in your tree without risk of modification.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/query</span>
+            </div>
+            <div className="ep-desc">
+              Query a tree in read-only mode. The AI reads the tree and responds
+              but cannot make any edits.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{'{ "message": "what are my top priorities right now?" }'}</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "success": true, "answer": "Based on your tree, your top priorities are..." }'}</div>
+            <div className="ep-note">
+              Same orchestration as Tree Chat, but the classifier intent is forced
+              to query-only. Even if the message sounds like a placement request,
+              the AI will only respond with information and never edit the tree.
             </div>
           </div>
         </div>
@@ -1003,6 +1040,96 @@ notification  — Dream notification summary and thought (falls back to placemen
               <span className="param-key">?day=YYYY-MM-DD</span>
               <span className="param-desc">Filter by day (HTML mode)</span>
             </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  GATEWAY CHANNELS                                              */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="gateway">
+          <div className="section-title">
+            <span className="section-icon">📡</span> Gateway Channels
+          </div>
+          <div className="section-text">
+            Gateway channels push notifications from a tree to external services
+            like Telegram, Discord, or browser push notifications. Each root can
+            have up to 10 channels. Channels have a direction (input, output, or
+            input-output) and a mode (place, query, or chat) for future
+            bidirectional support.
+          </div>
+
+          {/* ── List ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels</span>
+            </div>
+            <div className="ep-desc">List all gateway channels for a root. Secrets are excluded from the response.</div>
+          </div>
+
+          {/* ── Create ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels</span>
+            </div>
+            <div className="ep-desc">Create a new gateway channel.</div>
+            <div className="ep-label">Request Body (Telegram)</div>
+            <div className="ep-code">{`{
+  "name": "My Telegram Bot",
+  "type": "telegram",
+  "config": { "botToken": "123:ABC...", "chatId": "-100123..." },
+  "notificationTypes": ["dream-summary", "dream-thought"]
+}`}</div>
+            <div className="ep-label">Request Body (Discord)</div>
+            <div className="ep-code">{`{
+  "name": "Dream Updates",
+  "type": "discord",
+  "config": { "webhookUrl": "https://discord.com/api/webhooks/..." },
+  "notificationTypes": ["dream-summary"]
+}`}</div>
+            <div className="ep-label">Channel Types</div>
+            <div className="ep-code">{`telegram  — Bot token + chat ID
+discord   — Webhook URL
+webapp    — Browser push notification (subscription object)`}</div>
+            <div className="ep-label">Notification Types</div>
+            <div className="ep-code">{`dream-summary  — Nightly dream summary
+dream-thought  — Nightly dream thought`}</div>
+            <div className="ep-note">
+              All secrets (bot tokens, webhook URLs, push subscriptions) are
+              encrypted at rest using AES-256-CBC. Maximum 10 channels per root.
+            </div>
+          </div>
+
+          {/* ── Update ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method put">PUT</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId</span>
+            </div>
+            <div className="ep-desc">Update a channel{"'"}s name, enabled status, notification types, or config.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "enabled": false }`}</div>
+          </div>
+
+          {/* ── Delete ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method delete">DELETE</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId</span>
+            </div>
+            <div className="ep-desc">Delete a gateway channel. Only the channel creator can delete it.</div>
+          </div>
+
+          {/* ── Test ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId/test</span>
+            </div>
+            <div className="ep-desc">Send a test notification through a channel to verify it works.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "success": true }'}</div>
           </div>
         </div>
 

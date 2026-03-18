@@ -21,6 +21,7 @@ const STATIC_ROUTES = [
   "/about/dreams",
   "/about/gettingstarted",
   "/about/cli",
+  "/about/gateway",
   "/privacy",
   "/terms",
   "/blog",
@@ -61,6 +62,10 @@ const PAGE_META = {
   "/about/cli": {
     title: "CLI - Tree",
     description: "Navigate and manage your trees from the terminal with treef-cli.",
+  },
+  "/about/gateway": {
+    title: "Gateway - Tree",
+    description: "Connect your trees to Telegram, Discord, and push notifications with gateway channels.",
   },
   "/privacy": {
     title: "Privacy Policy - Tree",

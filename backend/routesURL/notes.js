@@ -1430,32 +1430,27 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
 
     .nav-buttons {
       display: flex;
-      justify-content: space-between;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 4px;
-    }
-
-    .nav-left {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
 
     /* Glass Navigation Buttons */
     .nav-button {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 14px;
+      justify-content: center;
+      gap: 4px;
+      padding: 8px 10px;
+      flex: 1;
       background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(10px);
       color: white;
       text-decoration: none;
       border-radius: 980px;
       font-weight: 600;
-      font-size: 14px;
+      font-size: 13px;
+      white-space: nowrap;
       transition: all 0.3s;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       border: 1px solid rgba(255, 255, 255, 0.3);
@@ -1706,7 +1701,7 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       padding: 0;
       font-size: 18px;
       line-height: 1.8;
-      color: white;
+      color: #F5F5DC;
       word-wrap: break-word;
       overflow-wrap: break-word;
       font-weight: 400;
@@ -1914,19 +1909,10 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
     }
 
     @media (max-width: 480px) {
-      .nav-buttons {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .nav-left {
-        width: 100%;
-        flex-direction: column;
-      }
-
       .nav-button {
-        justify-content: center;
-        width: 100%;
+        padding: 8px 6px;
+        font-size: 11px;
+        gap: 2px;
       }
 
       .book-section.depth-1,
@@ -2005,6 +1991,57 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       text-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
       text-align: center;
     }
+
+    /* Title toggle active state */
+    .nav-button.active {
+      background: rgba(255, 255, 255, 0.4);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* Hide titles mode */
+    #bookContent.hide-titles h1,
+    #bookContent.hide-titles h2,
+    #bookContent.hide-titles h3,
+    #bookContent.hide-titles h4,
+    #bookContent.hide-titles h5 {
+      display: none;
+    }
+
+    /* TOC scroll-to-top circle */
+    .toc-top-btn {
+      position: fixed;
+      top: 60px;
+      right: 16px;
+      z-index: 200;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(var(--glass-water-rgb), 0.5);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s;
+      touch-action: manipulation;
+    }
+
+    .toc-top-btn.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .toc-top-btn:hover {
+      background: rgba(var(--glass-water-rgb), 0.7);
+      transform: scale(1.1);
+    }
   </style>
 </head>
 <body>
@@ -2012,14 +2049,15 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
   <div class="top-nav">
     <div class="top-nav-content">
       <div class="nav-buttons">
-        <div class="nav-left">
-          <a href="/" class="nav-button" onclick="event.preventDefault();window.top.location.href='/';">Back to Home</a>
-          <button class="nav-button" id="copyUrlBtn">🔗 Copy URL</button>
-          <button class="nav-button" id="copyTextBtn">📋 Copy Text</button>
-        </div>
+        <a href="/" class="nav-button" onclick="event.preventDefault();window.top.location.href='/';">Home</a>
+        <button class="nav-button" id="copyUrlBtn">Copy URL</button>
+        <button class="nav-button" id="copyTextBtn">Copy Text</button>
+        <button class="nav-button" id="toggleTitlesBtn" onclick="toggleTitles()" title="Toggle Titles">Aa</button>
       </div>
     </div>
   </div>
+
+  ${shareTocEnabled && hasContent ? `<button class="toc-top-btn" id="tocTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})">&#9650;</button>` : ""}
 
   <!-- Content -->
   <div class="content-wrapper">
@@ -2038,6 +2076,31 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       var top = el.getBoundingClientRect().top + window.scrollY - offset;
       window.scrollTo({ top: top, behavior: 'smooth' });
     }
+
+    function toggleTitles() {
+      var bc = document.getElementById('bookContent');
+      var btn = document.getElementById('toggleTitlesBtn');
+      bc.classList.toggle('hide-titles');
+      if (bc.classList.contains('hide-titles')) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+
+    ${shareTocEnabled && hasContent ? `
+    (function() {
+      var tocBtn = document.getElementById('tocTopBtn');
+      if (!tocBtn) return;
+      window.addEventListener('scroll', function() {
+        if (window.scrollY > 200) {
+          tocBtn.classList.add('visible');
+        } else {
+          tocBtn.classList.remove('visible');
+        }
+      }, { passive: true });
+    })();
+    ` : ""}
   </script>
 
   <!-- Lazy Media Loader -->
@@ -2047,16 +2110,16 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       url.searchParams.delete("token");
       if (!url.searchParams.has("html")) url.searchParams.set("html", "");
       navigator.clipboard.writeText(url.toString()).then(function() {
-        this.textContent = "✔️ Copied";
-        setTimeout(function() { document.getElementById("copyUrlBtn").textContent = "🔗 Copy URL"; }, 900);
+        this.textContent = "Copied";
+        setTimeout(function() { document.getElementById("copyUrlBtn").textContent = "Copy URL"; }, 900);
       }.bind(this));
     });
 
     document.getElementById("copyTextBtn").addEventListener("click", function() {
       var text = document.getElementById("bookContent").innerText;
       navigator.clipboard.writeText(text).then(function() {
-        document.getElementById("copyTextBtn").textContent = "✔️ Copied";
-        setTimeout(function() { document.getElementById("copyTextBtn").textContent = "📋 Copy Text"; }, 900);
+        document.getElementById("copyTextBtn").textContent = "Copied";
+        setTimeout(function() { document.getElementById("copyTextBtn").textContent = "Copy Text"; }, 900);
       });
     });
 

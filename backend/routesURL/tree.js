@@ -348,6 +348,158 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
   });
 });
 
+/**
+ * POST /api/v1/tree/:rootId/query
+ * Query the tree (read-only). Responds with information but makes no edits.
+ *
+ * Body: { message: string }
+ * Response: { success, answer }
+ */
+router.post("/root/:rootId/query", authenticate, async (req, res) => {
+  const { rootId } = req.params;
+  const { message } = req.body;
+
+  console.log(`🔍 Tree query: rootId=${rootId} user=${req.username} message="${message?.slice(0, 80)}"`);
+
+  if (!message || typeof message !== "string" || !message.trim()) {
+    return res.status(400).json({ success: false, answer: "Message is required." });
+  }
+
+  const rootCheck = await Node.findById(rootId).select("rootOwner llmAssignments").lean();
+  const hasUserLlm = await userHasLlm(req.userId);
+  const hasRootLlm = !!rootCheck?.llmAssignments?.placement;
+  if (!hasUserLlm && !hasRootLlm) {
+    return res.status(403).json({ success: false, answer: "No LLM connection. Visit /setup to set one up." });
+  }
+
+  const visitorId = `tree-query:${req.userId}:${Date.now()}`;
+  const { sessionId } = createSession({
+    userId: req.userId,
+    type: SESSION_TYPES.API_TREE_QUERY,
+    scopeKey: `${req.userId}:${rootId}`,
+    description: `API tree query on root ${rootId}`,
+    meta: { rootId, visitorId },
+  });
+  const abort = new AbortController();
+  setSessionAbort(sessionId, abort);
+
+  const TIMEOUT_MS = 19 * 60 * 1000;
+  let timedOut = false;
+  let aiChat = null;
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    console.error(`⏱️ Tree query timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
+    closeMCPClient(visitorId);
+    clearAiContributionContext(visitorId);
+    if (aiChat) {
+      finalizeAIChat({
+        chatId: aiChat._id,
+        content: "Error: Request timed out",
+        stopped: false,
+      }).catch(() => {});
+    }
+    if (!res.headersSent) {
+      res.status(504).json({ success: false, answer: "Request timed out. The tree took too long to respond." });
+    }
+  }, TIMEOUT_MS);
+
+  try {
+    const clientInfo = await getClientForUser(req.userId);
+    aiChat = await startAIChat({
+      userId: req.userId,
+      sessionId,
+      message: message.slice(0, 5000),
+      source: "api",
+      modeKey: "tree:query",
+      llmProvider: {
+        isCustom: clientInfo.isCustom,
+        model: clientInfo.model,
+        connectionId: clientInfo.connectionId || null,
+      },
+      treeContext: { targetNodeId: rootId },
+    });
+    if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
+  } catch (err) {
+    console.error("⚠️ Failed to create AIChat:", err.message);
+  }
+
+  await enqueue(sessionId, async () => {
+    try {
+      const internalJwt = jwt.sign(
+        { userId: req.userId.toString(), username: req.username, visitorId },
+        JWT_SECRET,
+        { expiresIn: "1h" },
+      );
+      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+
+      setRootId(visitorId, rootId);
+
+      const result = await orchestrateTreeRequest({
+        visitorId,
+        message: message.trim(),
+        socket: nullSocket,
+        username: req.username,
+        userId: req.userId,
+        signal: abort.signal,
+        sessionId,
+        rootId,
+        forceQueryOnly: true,
+        rootChatId: aiChat?._id || null,
+        sourceType: "tree-query",
+      });
+
+      clearTimeout(timer);
+      if (timedOut) return;
+
+      if (aiChat) {
+        const answer = result?.answer || result?.reason || null;
+        finalizeAIChat({
+          chatId: aiChat._id,
+          content: answer,
+          stopped: false,
+          modeKey: result?.modeKey || "tree:orchestrator",
+        }).catch((err) => console.error("⚠️ AIChat finalize failed:", err.message));
+      }
+
+      if (!result || !result.success) {
+        return res.json({
+          success: false,
+          answer: result?.answer || "Could not process your message.",
+        });
+      }
+
+      return res.json({
+        success: true,
+        answer: result.answer,
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      if (timedOut) return;
+      console.error("❌ Tree query error:", err.message);
+
+      if (aiChat) {
+        finalizeAIChat({
+          chatId: aiChat._id,
+          content: abort.signal.aborted ? null : `Error: ${err.message}`,
+          stopped: abort.signal.aborted,
+        }).catch((e) => console.error("⚠️ AIChat error finalize failed:", e.message));
+      }
+
+      if (!res.headersSent) {
+        return res.status(500).json({ success: false, answer: "Something went wrong." });
+      }
+    } finally {
+      clearTimeout(timer);
+      clearAiContributionContext(visitorId);
+      clearSessionAbort(sessionId);
+      endSession(sessionId);
+      if (!timedOut) closeMCPClient(visitorId);
+      clearSession(visitorId);
+    }
+  });
+});
+
 // ── Raw Idea: auto-place (fire-and-forget) ──────────────────────────────────
 router.post(
   "/user/:userId/raw-ideas/:rawIdeaId/place",

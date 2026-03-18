@@ -46,6 +46,13 @@ const AboutHome = () => {
       active: true,
     },
     {
+      emoji: "📡",
+      title: "Gateway",
+      desc: "Connect your trees to Telegram, Discord, and push notifications. Output channels, input modes, and more.",
+      to: "/about/gateway",
+      active: true,
+    },
+    {
       emoji: "📝",
       title: "Blog",
       desc: "Ideas, updates, and thoughts on where Tree is going.",

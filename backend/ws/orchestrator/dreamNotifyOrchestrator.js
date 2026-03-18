@@ -260,6 +260,20 @@ export async function orchestrateDreamNotify({
     if (notifications.length > 0) {
       await Notification.insertMany(notifications);
       console.log(`📬 Created ${notifications.length} notification(s) for ${recipients.size} user(s)`);
+
+      // Dispatch to gateway channels (fire-and-forget)
+      const uniqueNotifs = [];
+      if (summary?.title && summary?.content) {
+        uniqueNotifs.push({ type: "dream-summary", title: summary.title, content: summary.content });
+      }
+      if (thought?.title && thought?.content) {
+        uniqueNotifs.push({ type: "dream-thought", title: thought.title, content: thought.content });
+      }
+      if (uniqueNotifs.length > 0) {
+        import("../../core/gatewayDispatch.js")
+          .then(({ dispatchNotifications }) => dispatchNotifications(rootId, uniqueNotifs))
+          .catch((err) => console.error(`Gateway dispatch error for root ${rootId}:`, err.message));
+      }
     }
 
     finalizeArgs = {
