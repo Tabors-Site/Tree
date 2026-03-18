@@ -826,7 +826,74 @@ rawIdea  — Used for raw idea auto-placement`}</div>
               <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/user/:userId/chats</span>
             </div>
-            <div className="ep-desc">View AI chat history grouped by session.</div>
+            <div className="ep-desc">View AI chat history for a user, grouped by session.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="param-row">
+              <span className="param-key">?limit=NUMBER</span>
+              <span className="param-desc">Max sessions to return (default 10, max 10)</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?sessionId=ID</span>
+              <span className="param-desc">Filter to a specific session</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?startDate=ISO</span>
+              <span className="param-desc">Filter chats after this date</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?endDate=ISO</span>
+              <span className="param-desc">Filter chats before this date</span>
+            </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/chats</span>
+            </div>
+            <div className="ep-desc">View AI chat sessions that targeted or modified a specific node.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="param-row">
+              <span className="param-key">?limit=NUMBER</span>
+              <span className="param-desc">Max sessions to return (default 10, max 10)</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?sessionId=ID</span>
+              <span className="param-desc">Filter to a specific session</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?startDate=ISO</span>
+              <span className="param-desc">Filter chats after this date</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?endDate=ISO</span>
+              <span className="param-desc">Filter chats before this date</span>
+            </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/chats</span>
+            </div>
+            <div className="ep-desc">View all AI chat sessions across an entire tree and its descendants.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="param-row">
+              <span className="param-key">?limit=NUMBER</span>
+              <span className="param-desc">Max sessions to return (default 10, max 10)</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?sessionId=ID</span>
+              <span className="param-desc">Filter to a specific session</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?startDate=ISO</span>
+              <span className="param-desc">Filter chats after this date</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?endDate=ISO</span>
+              <span className="param-desc">Filter chats before this date</span>
+            </div>
           </div>
 
           <div className="section-spacer"></div>
@@ -1051,11 +1118,11 @@ notification  — Dream notification summary and thought (falls back to placemen
             <span className="section-icon">📡</span> Gateway Channels
           </div>
           <div className="section-text">
-            Gateway channels push notifications from a tree to external services
-            like Telegram, Discord, or browser push notifications. Each root can
-            have up to 10 channels. Channels have a direction (input, output, or
-            input-output) and a mode (place, query, or chat) for future
-            bidirectional support.
+            Gateway channels connect your tree to external services like Telegram,
+            Discord, and browser push notifications. Each root can have up to 10
+            channels. Channels have a <strong>direction</strong> (input, output,
+            or input-output), a <strong>mode</strong> (place, query, or chat),
+            and <strong>queue protection</strong> for input channels.
           </div>
 
           {/* ── List ── */}
@@ -1074,30 +1141,67 @@ notification  — Dream notification summary and thought (falls back to placemen
               <span className="ep-url">/api/v1/root/:rootId/gateway/channels</span>
             </div>
             <div className="ep-desc">Create a new gateway channel.</div>
-            <div className="ep-label">Request Body (Telegram)</div>
+            <div className="ep-label">Request Body (Telegram - Output)</div>
             <div className="ep-code">{`{
   "name": "My Telegram Bot",
   "type": "telegram",
+  "direction": "output",
   "config": { "botToken": "123:ABC...", "chatId": "-100123..." },
   "notificationTypes": ["dream-summary", "dream-thought"]
 }`}</div>
-            <div className="ep-label">Request Body (Discord)</div>
+            <div className="ep-label">Request Body (Telegram - Input/Output Chat)</div>
+            <div className="ep-code">{`{
+  "name": "Tree Chat Bot",
+  "type": "telegram",
+  "direction": "input-output",
+  "mode": "read-write",
+  "config": { "botToken": "123:ABC...", "chatId": "-100123..." },
+  "notificationTypes": ["dream-summary"],
+  "queueBehavior": "respond"
+}`}</div>
+            <div className="ep-label">Request Body (Discord - Output)</div>
             <div className="ep-code">{`{
   "name": "Dream Updates",
   "type": "discord",
+  "direction": "output",
   "config": { "webhookUrl": "https://discord.com/api/webhooks/..." },
   "notificationTypes": ["dream-summary"]
 }`}</div>
+            <div className="ep-label">Request Body (Discord - Input/Output)</div>
+            <div className="ep-code">{`{
+  "name": "Discord Tree Chat",
+  "type": "discord",
+  "direction": "input-output",
+  "mode": "read-write",
+  "config": {
+    "botToken": "discord-bot-token...",
+    "discordChannelId": "1234567890123456789"
+  },
+  "queueBehavior": "respond"
+}`}</div>
             <div className="ep-label">Channel Types</div>
-            <div className="ep-code">{`telegram  — Bot token + chat ID
-discord   — Webhook URL
-webapp    — Browser push notification (subscription object)`}</div>
-            <div className="ep-label">Notification Types</div>
-            <div className="ep-code">{`dream-summary  — Nightly dream summary
-dream-thought  — Nightly dream thought`}</div>
+            <div className="ep-code">{`telegram  - Bot token + chat ID (input, output, or both)
+discord   - Webhook URL (output) or bot token + channel ID (input)
+webapp    - Browser push notification (output only)`}</div>
+            <div className="ep-label">Direction</div>
+            <div className="ep-code">{`output        - Push notifications out (dream summaries, etc.)
+input         - Receive messages in (place content, no response)
+input-output  - Bidirectional (send messages, get responses)`}</div>
+            <div className="ep-label">Mode (for input channels)</div>
+            <div className="ep-code">{`write       - Place mode: scans tree, makes edits, no response
+read        - Query mode: reads tree, responds, no edits
+read-write  - Chat mode: reads tree, makes edits, responds`}</div>
+            <div className="ep-label">Queue Behavior (for input channels)</div>
+            <div className="ep-code">{`respond  - Replies "busy" when 2+ messages processing (default)
+silent   - Drops overflow messages without responding`}</div>
+            <div className="ep-label">Notification Types (for output channels)</div>
+            <div className="ep-code">{`dream-summary  - Nightly dream summary
+dream-thought  - Nightly dream thought`}</div>
             <div className="ep-note">
               All secrets (bot tokens, webhook URLs, push subscriptions) are
               encrypted at rest using AES-256-CBC. Maximum 10 channels per root.
+              Discord input channels require Standard tier or above.
+              Send "cancel" to any input channel to abort all active processing.
             </div>
           </div>
 
@@ -1107,9 +1211,11 @@ dream-thought  — Nightly dream thought`}</div>
               <span className="ep-method put">PUT</span>
               <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId</span>
             </div>
-            <div className="ep-desc">Update a channel{"'"}s name, enabled status, notification types, or config.</div>
+            <div className="ep-desc">Update a channel{"'"}s name, enabled status, notification types, queue behavior, or config.</div>
             <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{ "enabled": false }`}</div>
+            <div className="ep-code">{`{ "enabled": false }
+{ "queueBehavior": "silent" }
+{ "notificationTypes": ["dream-summary"] }`}</div>
           </div>
 
           {/* ── Delete ── */}
@@ -1118,7 +1224,10 @@ dream-thought  — Nightly dream thought`}</div>
               <span className="ep-method delete">DELETE</span>
               <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId</span>
             </div>
-            <div className="ep-desc">Delete a gateway channel. Only the channel creator can delete it.</div>
+            <div className="ep-desc">
+              Delete a gateway channel. Only the channel creator can delete it.
+              Automatically unregisters Telegram webhooks and disconnects Discord bots.
+            </div>
           </div>
 
           {/* ── Test ── */}
@@ -1131,6 +1240,7 @@ dream-thought  — Nightly dream thought`}</div>
             <div className="ep-label">Response</div>
             <div className="ep-code">{'{ "success": true }'}</div>
           </div>
+
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
