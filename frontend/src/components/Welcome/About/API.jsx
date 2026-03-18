@@ -60,6 +60,7 @@ const ApiAccessSection = () => {
           <div className="toc-group">
             <div className="toc-group-label">User</div>
             <TocLink to="user">👤 User Endpoints</TocLink>
+            <TocLink to="me">👋 Identity (Me)</TocLink>
           </div>
 
           <div className="toc-group">
@@ -469,6 +470,19 @@ const ApiAccessSection = () => {
               <span className="ep-url">/api/v1/user/:userId/api-keys/:keyId</span>
             </div>
             <div className="ep-desc">Revoke an API key. It will no longer authenticate requests.</div>
+          </div>
+
+          {/* ── Identity (Me) ───── */}
+          <div className="sub-title" id="me">Identity (Me)</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/me</span>
+            </div>
+            <div className="ep-desc">Returns the userId and username associated with the API key in the request. Useful for login flows and discovering your userId without knowing it ahead of time.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "success": true, "userId": "abc-123", "username": "tabor" }'}</div>
           </div>
 
           {/* ── Share Token ──────── */}

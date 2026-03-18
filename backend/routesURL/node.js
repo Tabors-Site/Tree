@@ -166,19 +166,18 @@ router.get("/node/:nodeId", urlAuth, async (req, res) => {
     const queryString = filterQuery(req);
     const qs = queryString ? `?${queryString}` : "";
 
+    const children = await Node.find({ _id: { $in: node.children } })
+      .select("name _id status")
+      .lean();
+    node.children = children;
+
     // ---------------------------------------------------------
     // HTML MODE
     // ---------------------------------------------------------
     if (req.query.html !== undefined) {
-      // Versions
-
       const parentName = node.parent
         ? (await Node.findById(node.parent, "name").lean())?.name
         : null;
-
-      const children = await Node.find({ _id: { $in: node.children } })
-        .select("name _id")
-        .lean();
 
       // ---------------------------------------------------------
       // NEW: Root View button
@@ -947,11 +946,7 @@ html, body {
         ${
           node.children && node.children.length
             ? node.children
-                .map((c) => {
-                  const child = children.find((child) => child._id === c);
-                  const name = child ? child.name : c;
-                  return `<li><a href="/api/v1/node/${c}${qs}">${name}</a></li>`;
-                })
+                .map((c) => `<li><a href="/api/v1/node/${c._id}${qs}">${c.name}</a></li>`)
                 .join("")
             : `<li><em>No children yet</em></li>`
         }
