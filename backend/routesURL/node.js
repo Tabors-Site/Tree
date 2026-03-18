@@ -13,8 +13,19 @@ import { editStatus, addPrestige } from "../core/statuses.js";
 import { updateSchedule } from "../core/schedules.js";
 
 import Node from "../db/models/node.js";
+import { resolveVersion } from "../core/treeFetch.js";
 
 const router = express.Router();
+
+// Resolve "latest" to actual prestige number for any route with :version
+router.param("version", async (req, res, next, val) => {
+  try {
+    req.params.version = String(await resolveVersion(req.params.nodeId, val));
+    next();
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+});
 
 import getNodeName from "./helpers/getNameById.js";
 

@@ -21,8 +21,19 @@ import getNodeName from "./helpers/getNameById.js";
 import authenticate from "../middleware/authenticate.js";
 import preUploadCheck from "../middleware/preUploadCheck.js";
 import { notFoundPage } from "../middleware/notFoundPage.js";
+import { resolveVersion } from "../core/treeFetch.js";
 
 const router = express.Router();
+
+// Resolve "latest" to actual prestige number for any route with :version
+router.param("version", async (req, res, next, val) => {
+  try {
+    req.params.version = String(await resolveVersion(req.params.nodeId, val));
+    next();
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+});
 
 const uploadsFolder = path.join(process.cwd(), "uploads");
 

@@ -2,6 +2,16 @@ import Node from "../db/models/node.js";
 import Note from "../db/models/notes.js"; // adjust import
 
 import User from "../db/models/user.js";
+
+export async function resolveVersion(nodeId, version) {
+  if (version === "latest") {
+    const node = await Node.findById(nodeId).select("prestige").lean();
+    if (!node) throw new Error("Node not found");
+    return node.prestige;
+  }
+  return Number(version);
+}
+
 export async function buildPathString(nodeId) {
   const segments = [];
   let cursor = nodeId;

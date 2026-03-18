@@ -2,8 +2,19 @@ import express from "express";
 import urlAuth from "../middleware/urlAuth.js";
 import { findNodeById } from "../db/utils.js";
 import Node from "../db/models/node.js";
+import { resolveVersion } from "../core/treeFetch.js";
 
 const router = express.Router();
+
+// Resolve "latest" to actual prestige number for any route with :version
+router.param("version", async (req, res, next, val) => {
+  try {
+    req.params.version = String(await resolveVersion(req.params.nodeId, val));
+    next();
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+});
 
 const allowedParams = ["token", "html"];
 import authenticate from "../middleware/authenticate.js";
