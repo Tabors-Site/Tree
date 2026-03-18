@@ -934,6 +934,7 @@ export async function orchestrateTreeRequest({
   sessionId,
   rootId: rootIdParam,
   skipRespond = false,
+  forceQueryOnly = false,
   slot,
   rootChatId = null,
   sourceType = null,
@@ -1052,6 +1053,15 @@ export async function orchestrateTreeRequest({
 
   if (signal?.aborted) return null;
 
+  // ────────────────────────────────────────────────────────
+  // FORCE QUERY ONLY — override intent for read-only mode
+  // ────────────────────────────────────────────────────────
+
+  if (forceQueryOnly && classification.intent !== "no_fit") {
+    classification.intent = "query";
+    console.log("🔒 Forced query-only mode (no tree edits)");
+  }
+
   const confidence = classification.confidence ?? 0.5;
 
   console.log(
@@ -1064,7 +1074,7 @@ export async function orchestrateTreeRequest({
     confidence,
   });
 
-  // Track classification step
+  // Track classification step (after override so logs reflect actual intent used)
   modesUsed.push("classifier");
   trackChainStep({
     userId,
@@ -1111,7 +1121,8 @@ export async function orchestrateTreeRequest({
     classification.placementAxes = null;
   }
 
-  const deferDecision = classification.intent === "place" && !classification.placementAxes
+  const deferDecision = forceQueryOnly ? { defer: false }
+    : classification.intent === "place" && !classification.placementAxes
     ? { defer: true, reason: "User explicitly requested deferral" }
     : shouldDeferToMemory(classification);
   if (deferDecision.defer) {
@@ -1192,6 +1203,7 @@ export async function orchestrateTreeRequest({
       modesUsed,
       chainIndex,
       skipRespond,
+      forceQueryOnly,
       llmProvider,
       rootChatId,
     });
@@ -1397,6 +1409,7 @@ async function runLibrarianFlow({
   modesUsed,
   chainIndex,
   skipRespond = false,
+  forceQueryOnly = false,
   llmProvider,
   rootChatId,
 }) {
@@ -1498,8 +1511,14 @@ async function runLibrarianFlow({
     },
   });
 
-  const plan = libPlan?.plan || [];
+  var plan = libPlan?.plan || [];
   const responseHint = libPlan?.responseHint || classification.responseHint || "";
+
+  // Force empty plan in query-only mode — no edits regardless of librarian output
+  if (forceQueryOnly && plan.length > 0) {
+    console.log(`🔒 Query-only: discarding ${plan.length} librarian step(s)`);
+    plan = [];
+  }
 
   console.log(
     `📚 Librarian: ${plan.length} step(s) | "${libPlan?.summary || "no summary"}"`,

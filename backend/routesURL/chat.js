@@ -319,6 +319,19 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .send-btn.stop-mode { background: rgba(239, 68, 68, 0.7); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); }
     .send-btn.stop-mode:hover:not(:disabled) { background: rgba(239, 68, 68, 0.9); box-shadow: 0 6px 25px rgba(239, 68, 68, 0.5); }
 
+    /* Mode toggle */
+    .mode-toggle { display: flex; gap: 4px; padding: 0 2px 10px; }
+    .mode-btn { padding: 4px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: var(--text-muted); font-size: 12px; font-weight: 500; cursor: pointer; transition: all var(--transition-fast); font-family: inherit; }
+    .mode-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-secondary); }
+    .mode-btn.active { background: rgba(255,255,255,0.18); color: var(--text-primary); border-color: rgba(255,255,255,0.25); }
+    .mode-btn.active[data-mode="chat"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .mode-btn.active[data-mode="place"] { background: rgba(72,187,120,0.4); border-color: rgba(72,187,120,0.5); color: #fff; }
+    .mode-btn.active[data-mode="query"] { background: rgba(115,111,230,0.4); border-color: rgba(115,111,230,0.5); color: #fff; }
+    .mode-hint { font-size: 11px; color: var(--text-muted); padding: 0 4px 6px; opacity: 0.7; }
+
+    /* Place result message */
+    .place-result { font-size: 13px; color: var(--text-muted); padding: 8px 14px; background: rgba(72,187,120,0.08); border-radius: 12px; border: 1px solid rgba(72,187,120,0.15); margin: 4px 0; }
+
     /* Empty state — input pinned to vertical center, welcome above it */
     .chat-area.empty { position: relative; }
     .chat-area.empty .chat-input-area { position: absolute; top: 40%; left: 50%; transform: translate(-50%, 0); border-top: none; max-width: 600px; width: calc(100% - 40px); }
@@ -711,6 +724,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
         </div>
       </div>
       <div class="chat-input-area">
+        <div class="mode-toggle" id="modeToggle">
+          <button class="mode-btn active" data-mode="chat">Chat</button>
+          <button class="mode-btn" data-mode="place">Place</button>
+          <button class="mode-btn" data-mode="query">Query</button>
+        </div>
         <div class="input-container">
           <textarea class="chat-input" id="chatInput" placeholder="Say something..." rows="1"></textarea>
           <button class="send-btn" id="sendBtn" disabled>
@@ -735,6 +753,19 @@ router.get("/chat", authenticateLite, async (req, res) => {
     let isRegistered = false;
     let isSending = false;
     let requestGeneration = 0;
+    let chatMode = "chat";
+
+    // Mode toggle
+    const modeToggle = document.getElementById("modeToggle");
+    const modePlaceholders = { chat: "Full conversation. Places content and responds.", place: "Places content onto your tree but doesn't respond.", query: "Talk to your tree without it making any changes." };
+    modeToggle.addEventListener("click", function(e) {
+      var btn = e.target.closest(".mode-btn");
+      if (!btn || isSending) return;
+      chatMode = btn.dataset.mode;
+      modeToggle.querySelectorAll(".mode-btn").forEach(function(b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      document.getElementById("chatInput").placeholder = modePlaceholders[chatMode] || "Say something...";
+    });
 
     // Elements
     const statusDot = document.getElementById("statusDot");
@@ -880,6 +911,21 @@ router.get("/chat", authenticateLite, async (req, res) => {
       if (generation !== undefined && generation < requestGeneration) return;
       removeTyping();
       addMessage(answer, "assistant");
+      isSending = false;
+      updateSendBtn();
+    });
+
+    socket.on("placeResult", ({ stepSummaries, targetPath, generation }) => {
+      if (generation !== undefined && generation < requestGeneration) return;
+      var el = document.getElementById("placeStatus");
+      var summary = (stepSummaries && stepSummaries.length > 0)
+        ? "Placed on: " + (targetPath || stepSummaries.map(function(s) { return s.summary || s; }).join(", "))
+        : "Nothing to place for that message.";
+      if (el) {
+        el.querySelector(".place-result").textContent = summary;
+      } else {
+        addMessage(summary, "place-status");
+      }
       isSending = false;
       updateSendBtn();
     });
@@ -1047,6 +1093,15 @@ router.get("/chat", authenticateLite, async (req, res) => {
       }
 
       const msg = document.createElement("div");
+      if (role === "place-status") {
+        msg.className = "message assistant";
+        msg.id = "placeStatus";
+        msg.innerHTML = '<div class="message-avatar">\\ud83c\\udf33</div><div class="message-content"><div class="place-result">' + escapeHtml(content) + '</div></div>';
+        chatMessages.appendChild(msg);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return;
+      }
+
       msg.className = "message " + role;
 
       const formattedContent = role === "assistant" ? formatMessageContent(content) : escapeHtml(content);
@@ -1107,11 +1162,15 @@ router.get("/chat", authenticateLite, async (req, res) => {
       chatInput.value = "";
       chatInput.style.height = "auto";
       addMessage(text, "user");
-      addTyping();
+      if (chatMode === "place") {
+        addMessage("Placing...", "place-status");
+      } else {
+        addTyping();
+      }
       isSending = true;
       requestGeneration++;
       updateSendBtn();
-      socket.emit("chat", { message: text, username: CONFIG.username, generation: requestGeneration });
+      socket.emit("chat", { message: text, username: CONFIG.username, generation: requestGeneration, mode: chatMode });
     }
 
     function updateSendBtn() {

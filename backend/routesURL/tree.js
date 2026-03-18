@@ -21,6 +21,7 @@ import { createSession, endSession, getSessionsForUser, setSessionAbort, clearSe
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
 import RawIdea from "../db/models/rawIdea.js";
+import { resolveTreeAccess } from "../core/authenticate.js";
 
 const router = express.Router();
 
@@ -43,13 +44,18 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
 
   console.log(`🌳 Tree chat: rootId=${rootId} user=${req.username} message="${message?.slice(0, 80)}"`);
 
-  if (!message || typeof message !== "string" || !message.trim()) {
-    return res.status(400).json({ success: false, answer: "Message is required." });
+  if (!message || typeof message !== "string" || !message.trim() || message.length > 5000) {
+    return res.status(400).json({ success: false, answer: "Message is required and must be under 5000 characters." });
+  }
+
+  // Check tree access
+  const access = await resolveTreeAccess(rootId, req.userId);
+  if (!access.isOwner && !access.isContributor) {
+    return res.status(403).json({ success: false, answer: "Not authorized to access this tree." });
   }
 
   // Check LLM access
   const rootCheck = await Node.findById(rootId).select("rootOwner llmAssignments").lean();
-  const isOwner = rootCheck?.rootOwner?.toString() === req.userId.toString();
   const hasUserLlm = await userHasLlm(req.userId);
   const hasRootLlm = !!rootCheck?.llmAssignments?.placement;
   if (!hasUserLlm && !hasRootLlm) {
@@ -204,8 +210,14 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
 
   console.log(`📌 Tree place: rootId=${rootId} user=${req.username} message="${message?.slice(0, 80)}"`);
 
-  if (!message || typeof message !== "string" || !message.trim()) {
-    return res.status(400).json({ success: false, error: "Message is required." });
+  if (!message || typeof message !== "string" || !message.trim() || message.length > 5000) {
+    return res.status(400).json({ success: false, error: "Message is required and must be under 5000 characters." });
+  }
+
+  // Check tree access
+  const placeAccess = await resolveTreeAccess(rootId, req.userId);
+  if (!placeAccess.isOwner && !placeAccess.isContributor) {
+    return res.status(403).json({ success: false, error: "Not authorized to access this tree." });
   }
 
   // Check LLM access
@@ -361,8 +373,14 @@ router.post("/root/:rootId/query", authenticate, async (req, res) => {
 
   console.log(`🔍 Tree query: rootId=${rootId} user=${req.username} message="${message?.slice(0, 80)}"`);
 
-  if (!message || typeof message !== "string" || !message.trim()) {
-    return res.status(400).json({ success: false, answer: "Message is required." });
+  if (!message || typeof message !== "string" || !message.trim() || message.length > 5000) {
+    return res.status(400).json({ success: false, answer: "Message is required and must be under 5000 characters." });
+  }
+
+  // Check tree access
+  const queryAccess = await resolveTreeAccess(rootId, req.userId);
+  if (!queryAccess.isOwner && !queryAccess.isContributor) {
+    return res.status(403).json({ success: false, answer: "Not authorized to access this tree." });
   }
 
   const rootCheck = await Node.findById(rootId).select("rootOwner llmAssignments").lean();

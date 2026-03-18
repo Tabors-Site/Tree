@@ -470,7 +470,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
 
     // ── CHAT ──────────────────────────────────────────────────────────
-    socket.on("chat", async ({ message, username, generation }) => {
+    socket.on("chat", async ({ message, username, generation, mode: chatMode }) => {
       if (!message || !username) {
         socket.emit("chatError", {
           error: "Missing message or username",
@@ -478,6 +478,18 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         });
         return;
       }
+
+      if (typeof message !== "string" || message.length > 5000) {
+        socket.emit("chatError", {
+          error: "Message must be under 5000 characters.",
+          generation,
+        });
+        return;
+      }
+
+      // Validate chat mode
+      const validModes = ["chat", "place", "query"];
+      const safeChatMode = validModes.includes(chatMode) ? chatMode : "chat";
 
       const visitorId = socket.visitorId || `user:${socket.userId}`;
 
@@ -566,8 +578,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
               userId: socket.userId,
               signal: abort.signal,
               sessionId,
+              skipRespond: safeChatMode === "place",
+              forceQueryOnly: safeChatMode === "query",
               rootChatId: aiChat?._id || null,
-              sourceType: "tree-chat",
+              sourceType: safeChatMode === "place" ? "ws-tree-place" : safeChatMode === "query" ? "ws-tree-query" : "tree-chat",
             });
           } else {
             response = await processMessage(visitorId, message, {
@@ -587,7 +601,16 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           if (response && !abort.signal.aborted) {
             // Strip internal tracking fields before sending to client
             const { _llmProvider, _raw, llmProvider: _lp, ...publicResponse } = response;
-            socket.emit("chatResponse", { ...publicResponse, generation });
+            if (safeChatMode === "place") {
+              socket.emit("placeResult", {
+                success: publicResponse.success,
+                stepSummaries: publicResponse.stepSummaries || [],
+                targetPath: publicResponse.lastTargetPath || null,
+                generation,
+              });
+            } else {
+              socket.emit("chatResponse", { ...publicResponse, generation });
+            }
 
             // ── Finalize AIChat (success) ────────────────────────────
             if (aiChat) {

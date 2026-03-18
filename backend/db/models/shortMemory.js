@@ -48,7 +48,7 @@ const ShortMemorySchema = new mongoose.Schema({
   },
   sourceType: {
     type: String,
-    enum: ["tree-chat", "tree-place", "raw-idea-chat", "raw-idea-place"],
+    enum: ["tree-chat", "tree-place", "tree-query", "ws-tree-place", "ws-tree-query", "ws-tree-chat", "raw-idea-chat", "raw-idea-place"],
     required: true,
   },
   sourceId: {
