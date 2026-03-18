@@ -116,7 +116,11 @@ const CLIAbout = () => {
           <CmdRow cmd="rename <name> <new>" desc="Rename a node" />
           <CmdRow cmd="mv <name> <destId>" desc="Move a node to a new parent" />
           <CmdRow cmd="status <name> <status>" desc="Set status (active, completed, trimmed)" />
-          <CmdRow cmd="schedule <datetime> [reeffect]" desc="Set schedule (e.g. 1/11/2025 3, or 'clear')" />
+          <CmdRow cmd="schedule <datetime> [reeffect]" desc="Set schedule (e.g. 1/11/2025 3, 1/11/2025 11:45pm 5, or 'clear')" />
+          <div className="cli-note" style={{ marginTop: 6, marginBottom: 10 }}>
+            Date is MM/DD/YYYY, time is HH:MM or HH:MMam/pm, reeffect is hours (default 0).
+            Omit time for midnight. Omit date for today. Use &quot;clear&quot; to remove.
+          </div>
           <CmdRow cmd="prestige" desc="Prestige the current node (create a new version)" />
           <CmdRow cmd="calendar" desc="Show scheduled dates across the tree" />
           <CmdRow cmd="dream-time <HH:MM>" desc="Set nightly dream time (or 'clear')" />
