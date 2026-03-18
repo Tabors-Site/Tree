@@ -20,6 +20,7 @@ const STATIC_ROUTES = [
   "/about/raw-ideas",
   "/about/dreams",
   "/about/gettingstarted",
+  "/about/cli",
   "/privacy",
   "/terms",
   "/blog",
@@ -56,6 +57,10 @@ const PAGE_META = {
   "/about/gettingstarted": {
     title: "Getting Started - Tree",
     description: "Get started with Tree and learn how to grow your first knowledge tree.",
+  },
+  "/about/cli": {
+    title: "CLI - Tree",
+    description: "Navigate and manage your trees from the terminal with treef-cli.",
   },
   "/privacy": {
     title: "Privacy Policy - Tree",

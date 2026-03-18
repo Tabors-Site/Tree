@@ -374,9 +374,9 @@ export async function editNodeName({ nodeId, newName, userId, wasAi = false, aiC
   if (newName.length > 150) {
     throw new Error("Node name must be 150 characters or fewer");
   }
-  if (containsHtml(name)) {
-  throw new Error("Node name cannot contain HTML tags");
-}
+  if (containsHtml(newName)) {
+    throw new Error("Node name cannot contain HTML tags");
+  }
   const node = await Node.findById(nodeId);
   if (!node) {
     throw new Error("Node not found");

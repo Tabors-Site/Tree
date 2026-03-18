@@ -6,6 +6,7 @@ import EnergySection from "./About/EnergySection.jsx";
 import AboutRawIdeas from "./About/AboutRawIdeas.jsx";
 import DreamsAbout from "./About/DreamsAbout.jsx";
 import StartedAbout from "./About/StartedAbout.jsx";
+import CLIAbout from "./About/CLIAbout.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 import MustLogin from "./MustLogin.jsx";
@@ -43,6 +44,7 @@ const WelcomeRoutes = () => {
         <Route path="raw-ideas" element={<AboutRawIdeas />} />
         <Route path="dreams" element={<DreamsAbout />} />
         <Route path="gettingstarted" element={<StartedAbout />} />
+        <Route path="cli" element={<CLIAbout />} />
 
       </Route>
 

@@ -39,6 +39,13 @@ const AboutHome = () => {
       active: true,
     },
     {
+      emoji: "💻",
+      title: "CLI",
+      desc: "Navigate and manage your trees from the terminal. Install, configure, and use treef-cli.",
+      to: "/about/cli",
+      active: true,
+    },
+    {
       emoji: "📝",
       title: "Blog",
       desc: "Ideas, updates, and thoughts on where Tree is going.",

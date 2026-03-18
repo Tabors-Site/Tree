@@ -3,7 +3,9 @@
     "allow": [
       "Bash(grep -rn / /home/tabor/github/Tree/backend/routesURL --include=*.js)",
       "Bash(grep -r \"book/generate\\\\|book.*generate\" /home/tabor/github/Tree/frontend/src --include=*.js --include=*.jsx --include=*.ts --include=*.tsx)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(find /home/tabor/github/Tree/backend/ws/orchestrator -type f -name *.js)",
+      "Bash(find /home/tabor/github/Tree/backend/ws/modes -type f -name *.js)"
     ]
   }
 }
