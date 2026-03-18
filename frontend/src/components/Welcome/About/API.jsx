@@ -871,8 +871,8 @@ rawIdea  — Used for raw idea auto-placement`}</div>
             <div className="ep-note">Pass <code>connectionId: null</code> to unassign the slot.</div>
           </div>
 
-          {/* ── Chat History ─────── */}
-          <div className="sub-title">AI Chat History</div>
+          {/* ── AI Chats ─────────── */}
+          <div className="sub-title">AI Chats</div>
 
           <div className="endpoint">
             <div className="ep-method-url">
@@ -880,56 +880,6 @@ rawIdea  — Used for raw idea auto-placement`}</div>
               <span className="ep-url">/api/v1/user/:userId/chats</span>
             </div>
             <div className="ep-desc">View AI chat history for a user, grouped by session.</div>
-            <div className="ep-label">Query Parameters</div>
-            <div className="param-row">
-              <span className="param-key">?limit=NUMBER</span>
-              <span className="param-desc">Max sessions to return (default 10, max 10)</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">?sessionId=ID</span>
-              <span className="param-desc">Filter to a specific session</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">?startDate=ISO</span>
-              <span className="param-desc">Filter chats after this date</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">?endDate=ISO</span>
-              <span className="param-desc">Filter chats before this date</span>
-            </div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/chats</span>
-            </div>
-            <div className="ep-desc">View AI chat sessions that targeted or modified a specific node.</div>
-            <div className="ep-label">Query Parameters</div>
-            <div className="param-row">
-              <span className="param-key">?limit=NUMBER</span>
-              <span className="param-desc">Max sessions to return (default 10, max 10)</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">?sessionId=ID</span>
-              <span className="param-desc">Filter to a specific session</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">?startDate=ISO</span>
-              <span className="param-desc">Filter chats after this date</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">?endDate=ISO</span>
-              <span className="param-desc">Filter chats before this date</span>
-            </div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/root/:rootId/chats</span>
-            </div>
-            <div className="ep-desc">View all AI chat sessions across an entire tree and its descendants.</div>
             <div className="ep-label">Query Parameters</div>
             <div className="param-row">
               <span className="param-key">?limit=NUMBER</span>
@@ -1134,6 +1084,36 @@ notification  — Dream notification summary and thought (falls back to placemen
             <div className="ep-label">Request Body</div>
             <div className="ep-code">{`{ "dreamTime": "03:00" }`}</div>
             <div className="ep-note">Use 24-hour <code>HH:MM</code> format. Pass <code>null</code> or omit to disable dreaming.</div>
+          </div>
+
+          <div className="section-spacer"></div>
+
+          {/* ── AI Chats ─────────── */}
+          <div className="sub-title">AI Chats</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/chats</span>
+            </div>
+            <div className="ep-desc">View all AI chat sessions across the entire tree and its descendants.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="param-row">
+              <span className="param-key">?limit=NUMBER</span>
+              <span className="param-desc">Max sessions to return (default 10, max 10)</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?sessionId=ID</span>
+              <span className="param-desc">Filter to a specific session</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?startDate=ISO</span>
+              <span className="param-desc">Filter chats after this date</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?endDate=ISO</span>
+              <span className="param-desc">Filter chats before this date</span>
+            </div>
           </div>
 
           <div className="section-spacer"></div>
@@ -1759,6 +1739,36 @@ updateScheduleForNode(datetime | null)`}</div>
             <div className="ep-desc">Set a goal on this version.</div>
             <div className="ep-label">Request Body</div>
             <div className="ep-code">{'{ "key": "revenue", "goal": 100000 }'}</div>
+          </div>
+
+          <div className="section-spacer"></div>
+
+          {/* ── AI Chats ─────────── */}
+          <div className="sub-title">AI Chats</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/chats</span>
+            </div>
+            <div className="ep-desc">View AI chat sessions that targeted or modified this node.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="param-row">
+              <span className="param-key">?limit=NUMBER</span>
+              <span className="param-desc">Max sessions to return (default 10, max 10)</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?sessionId=ID</span>
+              <span className="param-desc">Filter to a specific session</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?startDate=ISO</span>
+              <span className="param-desc">Filter chats after this date</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?endDate=ISO</span>
+              <span className="param-desc">Filter chats before this date</span>
+            </div>
           </div>
         </div>
 
