@@ -21,6 +21,7 @@ import { createSession, endSession, getSessionsForUser, setSessionAbort, clearSe
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
 import RawIdea from "../db/models/rawIdea.js";
+import { createRawIdea } from "../core/rawIdea.js";
 import { resolveTreeAccess } from "../core/authenticate.js";
 
 const router = express.Router();
@@ -517,6 +518,147 @@ router.post("/root/:rootId/query", authenticate, async (req, res) => {
     }
   });
 });
+
+// ── Raw Idea: combined create + place (fire-and-forget) ─────────────────────
+router.post(
+  "/user/:userId/raw-ideas/place",
+  authenticate,
+  async (req, res) => {
+    try {
+      if (req.userId.toString() !== req.params.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const content = req.body?.content;
+      if (!content || typeof content !== "string" || !content.trim()) {
+        return res.status(400).json({ error: "content (text string) is required" });
+      }
+
+      if (!await userHasLlm(req.userId)) {
+        return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+      }
+
+      const alreadyProcessing = await RawIdea.findOne({
+        userId: req.userId.toString(),
+        status: "processing",
+      });
+      if (alreadyProcessing) {
+        return res.status(409).json({
+          error: "Another idea is already being placed -- please wait for it to finish.",
+        });
+      }
+
+      const result = await createRawIdea({
+        contentType: "text",
+        content: content.trim(),
+        userId: req.userId,
+      });
+
+      const user = await User.findById(req.userId).select("username").lean();
+      const source = req.body?.source === "user" ? "user" : "api";
+
+      orchestrateRawIdeaPlacement({
+        rawIdeaId: result.rawIdea._id,
+        userId: req.userId,
+        username: user?.username || "unknown",
+        source,
+      }).catch((err) =>
+        console.error("Raw-idea orchestration failed:", err.message),
+      );
+
+      return res.status(202).json({
+        message: "Orchestration started",
+        rawIdeaId: result.rawIdea._id,
+      });
+    } catch (err) {
+      console.error("raw-idea create+place error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// ── Raw Idea: combined create + chat (synchronous, returns response) ────────
+router.post(
+  "/user/:userId/raw-ideas/chat",
+  authenticate,
+  async (req, res) => {
+    try {
+      if (req.userId.toString() !== req.params.userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const content = req.body?.content;
+      if (!content || typeof content !== "string" || !content.trim()) {
+        return res.status(400).json({ error: "content (text string) is required" });
+      }
+
+      if (!await userHasLlm(req.userId)) {
+        return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+      }
+
+      const alreadyProcessing = await RawIdea.findOne({
+        userId: req.userId.toString(),
+        status: "processing",
+      });
+      if (alreadyProcessing) {
+        return res.status(409).json({
+          error: "Another idea is already being placed -- please wait for it to finish.",
+        });
+      }
+
+      const result = await createRawIdea({
+        contentType: "text",
+        content: content.trim(),
+        userId: req.userId,
+      });
+
+      const user = await User.findById(req.userId).select("username").lean();
+
+      const TIMEOUT_MS = 19 * 60 * 1000;
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        if (!res.headersSent) {
+          res.status(504).json({
+            success: false,
+            error: "Request timed out. The idea took too long to process.",
+          });
+        }
+      }, TIMEOUT_MS);
+
+      const source = req.body?.source === "user" ? "user" : "api";
+      const orchResult = await orchestrateRawIdeaPlacement({
+        rawIdeaId: result.rawIdea._id,
+        userId: req.userId,
+        username: user?.username || "unknown",
+        withResponse: true,
+        source,
+      });
+
+      clearTimeout(timer);
+      if (timedOut) return;
+
+      if (!orchResult || !orchResult.success) {
+        return res.json({
+          success: false,
+          error: orchResult?.reason || "Could not process the idea.",
+        });
+      }
+
+      return res.json({
+        success: true,
+        answer: orchResult.answer,
+        rootId: orchResult.rootId,
+        rootName: orchResult.rootName,
+        targetNodeId: orchResult.targetNodeId,
+        rawIdeaId: result.rawIdea._id,
+      });
+    } catch (err) {
+      console.error("raw-idea create+chat error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 // ── Raw Idea: auto-place (fire-and-forget) ──────────────────────────────────
 router.post(

@@ -476,10 +476,31 @@ async function searchRawIdeasByUser({
   };
 }
 
+const AUTO_PLACE_ELIGIBLE = ["standard", "premium", "god"];
+
+async function toggleAutoPlace({ userId, enabled }) {
+  if (!userId) throw new Error("Missing required parameter: userId");
+  if (typeof enabled !== "boolean") throw new Error("enabled must be a boolean");
+
+  const user = await User.findById(userId).select("profileType rawIdeaAutoPlace");
+  if (!user) throw new Error("User not found");
+
+  if (!AUTO_PLACE_ELIGIBLE.includes(user.profileType)) {
+    throw new Error("Auto-place is only available on Standard, Premium, and God plans.");
+  }
+
+  user.rawIdeaAutoPlace = enabled;
+  await user.save();
+
+  return { message: `Auto-place ${enabled ? "enabled" : "disabled"}`, enabled };
+}
+
 export {
   createRawIdea,
   convertRawIdeaToNote,
   deleteRawIdeaAndFile,
   getRawIdeas,
   searchRawIdeasByUser,
+  toggleAutoPlace,
+  AUTO_PLACE_ELIGIBLE,
 };

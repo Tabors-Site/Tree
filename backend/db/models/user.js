@@ -129,6 +129,10 @@ const UserSchema = new mongoose.Schema({
     main: { type: String, ref: "CustomLlmConnection", default: null },
     rawIdea: { type: String, ref: "CustomLlmConnection", default: null },
   },
+  rawIdeaAutoPlace: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 

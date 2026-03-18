@@ -13,7 +13,7 @@ import { userHasLlm } from "../ws/conversation.js";
 // CONFIG
 // ─────────────────────────────────────────────────────────────────────────
 
-const ELIGIBLE_PLANS = ["premium", "god"];
+const ELIGIBLE_PLANS = ["standard", "premium", "god"];
 
 // ─────────────────────────────────────────────────────────────────────────
 // STATE
@@ -81,7 +81,10 @@ async function processUser(user) {
 export async function runRawIdeaAutoPlace() {
   console.log("⏰ Raw idea auto-place job running…");
   try {
-    const users = await User.find({ profileType: { $in: ELIGIBLE_PLANS } })
+    const users = await User.find({
+      profileType: { $in: ELIGIBLE_PLANS },
+      rawIdeaAutoPlace: { $ne: false },
+    })
       .select("_id username profileType")
       .lean();
 

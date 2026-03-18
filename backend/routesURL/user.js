@@ -48,6 +48,8 @@ import {
   searchRawIdeasByUser as coreSearchRawIdeasByUser,
   deleteRawIdeaAndFile as coreDeleteRawIdeaAndFile,
   convertRawIdeaToNote as coreConvertRawIdeaToNote,
+  toggleAutoPlace as coreToggleAutoPlace,
+  AUTO_PLACE_ELIGIBLE,
 } from "../core/rawIdea.js";
 import RawIdea from "../db/models/rawIdea.js";
 
@@ -4792,12 +4794,64 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>${escapeHtml(user.username)} — Raw Ideas</title>
+<title>${escapeHtml(user.username)} -- Raw Ideas</title>
   <style>
 :root {
   --glass-water-rgb: 115, 111, 230;
   --glass-alpha: 0.28;
   --glass-alpha-hover: 0.38;
+}
+
+.auto-place-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+}
+.auto-place-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+.auto-place-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 2px;
+}
+.auto-place-toggle {
+  position: relative;
+  width: 54px; height: 28px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(18px);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+.auto-place-toggle.active {
+  background: rgba(72, 187, 178, 0.45);
+  box-shadow: 0 0 16px rgba(72, 187, 178, 0.35);
+}
+.auto-place-toggle.muted {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.auto-place-toggle-knob {
+  position: absolute;
+  top: 4px; left: 4px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.auto-place-toggle.active .auto-place-toggle-knob {
+  left: 28px;
 }
 
 * {
@@ -5539,7 +5593,25 @@ body::after {
 <a href="/api/v1/user/${userId}${tokenQS}">${escapeHtml(user.username)}</a>
       </h1>
       <div class="header-subtitle">
-These will be placed onto your tree's automatically while you dream (Premium Plan only)</div>
+These will be placed onto your trees automatically while you dream (Standard+ plans)</div>
+
+      <div class="auto-place-row">
+        <div>
+          <div class="auto-place-label">Auto-place ideas</div>
+          <div class="auto-place-hint">${
+            AUTO_PLACE_ELIGIBLE.includes(user.profileType)
+              ? "Pending ideas are placed automatically every 15 minutes while you're offline."
+              : "Available on Standard, Premium, and God plans."
+          }</div>
+        </div>
+        <div
+          id="autoPlaceToggle"
+          class="auto-place-toggle${user.rawIdeaAutoPlace !== false ? " active" : ""}${!AUTO_PLACE_ELIGIBLE.includes(user.profileType) ? " muted" : ""}"
+          onclick="${AUTO_PLACE_ELIGIBLE.includes(user.profileType) ? "toggleAutoPlace()" : ""}"
+        >
+          <div class="auto-place-toggle-knob"></div>
+        </div>
+      </div>
 
       <!-- Search Form -->
       <form method="GET" action="/api/v1/user/${userId}/raw-ideas" class="search-form">
@@ -5737,6 +5809,28 @@ These will be placed onto your tree's automatically while you dream (Premium Pla
         return;
       }
     }, true);
+
+    async function toggleAutoPlace() {
+      var toggle = document.getElementById("autoPlaceToggle");
+      if (!toggle || toggle.classList.contains("muted")) return;
+      var isActive = toggle.classList.contains("active");
+      var newEnabled = !isActive;
+      toggle.classList.toggle("active");
+      try {
+        var res = await fetch(
+          "/api/v1/user/${userId}/raw-ideas/auto-place" + tokenQs,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: newEnabled }) }
+        );
+        var data = await res.json();
+        if (!data.success) {
+          toggle.classList.toggle("active");
+          alert(data.error || "Failed to toggle");
+        }
+      } catch (err) {
+        toggle.classList.toggle("active");
+        alert("Error: " + (err.message || "Unknown"));
+      }
+    }
   </script>
 </body>
 </html>
@@ -5746,6 +5840,30 @@ These will be placed onto your tree's automatically while you dream (Premium Pla
     res.status(400).json({ success: false, error: err.message });
   }
 });
+
+// ── Toggle raw idea auto-place ───────────────────────────────────────────────
+router.post(
+  "/user/:userId/raw-ideas/auto-place",
+  authenticate,
+  async (req, res) => {
+    try {
+      if (req.userId.toString() !== req.params.userId.toString()) {
+        return res.status(403).json({ success: false, error: "Not authorized" });
+      }
+
+      const enabled = req.body?.enabled;
+      if (typeof enabled !== "boolean") {
+        return res.status(400).json({ success: false, error: "enabled (boolean) is required" });
+      }
+
+      const result = await coreToggleAutoPlace({ userId: req.userId, enabled });
+      return res.json({ success: true, enabled: result.enabled });
+    } catch (err) {
+      const status = err.message.includes("only available on") ? 403 : 500;
+      return res.status(status).json({ success: false, error: err.message });
+    }
+  },
+);
 
 router.delete(
   "/user/:userId/raw-ideas/:rawIdeaId",

@@ -287,12 +287,40 @@ const ApiAccessSection = () => {
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/chat</span>
+            </div>
+            <div className="ep-desc">
+              Send text content directly. Creates the raw idea, places it on the
+              best tree, and returns the AI&#39;s response -- all in one call.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "content": "Your idea text here" }`}</div>
+            <div className="ep-label">Success Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "answer": "Your idea about X was placed under ...",
+  "rootId": "abc123",
+  "rootName": "My Tree",
+  "targetNodeId": "def456",
+  "rawIdeaId": "ghi789"
+}`}</div>
+            <div className="ep-label">Failure Response</div>
+            <div className="ep-code">{`{ "success": false, "error": "No trees available for this user" }`}</div>
+            <div className="ep-note">
+              This is a long-running request (up to 19 minutes) -- the AI is doing
+              real work behind the scenes.
+            </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/chat</span>
             </div>
             <div className="ep-desc">
-              Place a raw idea and return the AI&#39;s response. The AI picks
-              the best tree, places the idea, generates a response, and returns
-              everything in one call.
+              Same as above, but for an existing raw idea. Create a raw idea first
+              via <code>POST /api/v1/user/:userId/raw-ideas</code>, then call this endpoint.
+              Only works for <code>pending</code> text ideas.
             </div>
             <div className="ep-label">Success Response</div>
             <div className="ep-code">{`{
@@ -305,9 +333,7 @@ const ApiAccessSection = () => {
             <div className="ep-label">Failure Response</div>
             <div className="ep-code">{`{ "success": false, "error": "No trees available for this user" }`}</div>
             <div className="ep-note">
-              Create a raw idea first via <code>POST /api/v1/user/:userId/raw-ideas</code>,
-              then call this endpoint. Only works for <code>pending</code> text ideas.
-              This is a long-running request (up to 19 minutes) — the AI is doing
+              This is a long-running request (up to 19 minutes) -- the AI is doing
               real work behind the scenes.
             </div>
           </div>
@@ -333,20 +359,34 @@ const ApiAccessSection = () => {
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/place</span>
+            </div>
+            <div className="ep-desc">
+              Send text content directly. Creates the raw idea and triggers
+              AI placement in the background -- all in one call. Fire-and-forget.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "content": "Your idea text here" }`}</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "message": "Orchestration started", "rawIdeaId": "abc123" }  // 202 Accepted'}</div>
+            <div className="ep-note">
+              Poll the idea&#39;s status via <code>GET /api/v1/user/:userId/raw-ideas/:rawIdeaId</code> to track progress.
+              Use Raw Idea Chat above if you need a conversational reply.
+            </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/place</span>
             </div>
             <div className="ep-desc">
-              Trigger AI placement for a raw idea. The AI evaluates all your
-              trees, picks the best fit, navigates to the right location, and
-              places the idea as a note or new structure.
+              Same as above, but for an existing raw idea. Create a raw idea first
+              via <code>POST /api/v1/user/:userId/raw-ideas</code>, then trigger orchestration.
+              Only works for <code>pending</code> text ideas.
             </div>
             <div className="ep-label">Response</div>
             <div className="ep-code">{'{ "message": "Orchestration started" }  // 202 Accepted'}</div>
-            <div className="ep-note">
-              Create a raw idea first via <code>POST /api/v1/user/:userId/raw-ideas</code>,
-              then trigger orchestration. Poll the idea&#39;s status to track progress.
-              Only works for <code>pending</code> text ideas.
-            </div>
           </div>
         </div>
 
@@ -676,6 +716,19 @@ const ApiAccessSection = () => {
             </div>
             <div className="ep-desc">Permanently delete a raw idea.</div>
             <div className="ep-note">Returns 409 if the idea has status <code>processing</code> or <code>succeeded</code>.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/auto-place</span>
+            </div>
+            <div className="ep-desc">Toggle automatic raw idea placement. When enabled, pending ideas are placed every 15 minutes while you are offline.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{'{ "enabled": true }'}</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "success": true, "enabled": true }'}</div>
+            <div className="ep-note">Requires Standard, Premium, or God plan. Returns 403 for Basic tier users.</div>
           </div>
 
           <div className="section-spacer"></div>
