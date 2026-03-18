@@ -54,7 +54,7 @@ const CLIAbout = () => {
           </div>
           <div className="cli-code-block">treef login --key YOUR_API_KEY</div>
           <div className="cli-note">
-            Credentials are stored locally in ~/.tree-cli/config.json. You only
+            Credentials are stored locally in ~/.treef-cli/config.json. You only
             need to do this once.
           </div>
         </div>
@@ -89,6 +89,9 @@ const CLIAbout = () => {
           <CmdRow cmd="rm-idea <id> -f" desc="Delete an idea" />
           <CmdRow cmd="idea-place <id>" desc="AI places the idea in the best tree" />
           <CmdRow cmd="idea-transfer <id> <nodeId>" desc="Move an idea to a specific node" />
+          <CmdRow cmd="notes" desc="List your user-level notes" />
+          <CmdRow cmd="chats" desc="List recent AI chat sessions" />
+          <CmdRow cmd="contributions" desc="List your recent contributions" />
         </div>
 
         {/* ── NAVIGATION ── */}
@@ -113,6 +116,10 @@ const CLIAbout = () => {
           <CmdRow cmd="rename <name> <new>" desc="Rename a node" />
           <CmdRow cmd="mv <name> <destId>" desc="Move a node to a new parent" />
           <CmdRow cmd="status <name> <status>" desc="Set status (active, completed, trimmed)" />
+          <CmdRow cmd="schedule <datetime> [reeffect]" desc="Set schedule (e.g. 1/11/2025 3, or 'clear')" />
+          <CmdRow cmd="prestige" desc="Prestige the current node (create a new version)" />
+          <CmdRow cmd="calendar" desc="Show scheduled dates across the tree" />
+          <CmdRow cmd="dream-time <HH:MM>" desc="Set nightly dream time (or 'clear')" />
         </div>
 
         {/* ── NOTES & VALUES ── */}
@@ -123,8 +130,11 @@ const CLIAbout = () => {
           <CmdRow cmd="notes" desc="View notes on the current node" />
           <CmdRow cmd="note <content>" desc="Add a note" />
           <CmdRow cmd="rm-note <id> -f" desc="Delete a note" />
+          <CmdRow cmd="book" desc="Print the full book of notes from current node down" />
+          <CmdRow cmd="contributions" desc="List contributions for the current node" />
           <CmdRow cmd="values" desc="Display key-value pairs" />
-          <CmdRow cmd="set <key> <value>" desc="Create or update a value" />
+          <CmdRow cmd="value <key> <value>" desc="Set a value" />
+          <CmdRow cmd="goal <key> <goal>" desc="Set a goal" />
         </div>
 
         {/* ── AI ── */}
@@ -132,8 +142,9 @@ const CLIAbout = () => {
           <div className="cli-section-title">
             <span className="cli-section-icon">🧠</span> AI
           </div>
-          <CmdRow cmd="chat <message>" desc="Talk to the AI about the current branch" />
-          <CmdRow cmd="place <message>" desc="AI organizes content into the current branch" />
+          <CmdRow cmd="chat <message>" desc="Full conversation -- reads tree, makes edits, responds" />
+          <CmdRow cmd="place <message>" desc="Places content onto the tree without responding" />
+          <CmdRow cmd="query <message>" desc="Ask about the tree without making any changes" />
         </div>
 
         {/* ── UNDERSTANDING ── */}
