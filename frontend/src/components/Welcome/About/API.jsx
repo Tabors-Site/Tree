@@ -302,6 +302,11 @@ const ApiAccessSection = () => {
   "rootId": "abc123",
   "rootName": "My Tree",
   "targetNodeId": "def456",
+  "targetNodePath": [
+    { "_id": "abc123", "name": "My Tree" },
+    { "_id": "xyz789", "name": "Health" },
+    { "_id": "def456", "name": "Sleep" }
+  ],
   "rawIdeaId": "ghi789"
 }`}</div>
             <div className="ep-label">Failure Response</div>
@@ -328,7 +333,12 @@ const ApiAccessSection = () => {
   "answer": "Your idea about X was placed under ...",
   "rootId": "abc123",
   "rootName": "My Tree",
-  "targetNodeId": "def456"
+  "targetNodeId": "def456",
+  "targetNodePath": [
+    { "_id": "abc123", "name": "My Tree" },
+    { "_id": "xyz789", "name": "Health" },
+    { "_id": "def456", "name": "Sleep" }
+  ]
 }`}</div>
             <div className="ep-label">Failure Response</div>
             <div className="ep-code">{`{ "success": false, "error": "No trees available for this user" }`}</div>
