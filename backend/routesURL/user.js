@@ -7562,13 +7562,13 @@ router.post(
   async (req, res) => {
     try {
       const { userId, inviteId } = req.params;
-      const { accept } = req.body; // "true" or "false"
+      const { accept } = req.body;
 
       if (req.userId.toString() !== userId.toString()) {
         return res.status(403).json({ error: "Not authorized" });
       }
 
-      const acceptInvite = accept === "true";
+      const acceptInvite = accept === true || accept === "true";
 
       await respondToInvite({
         inviteId,

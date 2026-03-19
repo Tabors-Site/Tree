@@ -12,14 +12,18 @@ const WelcomePage = () => {
   }, []);
   const bannerMessages = [
     "Welcome to Tree. Click Start Chat to get started.",
-    "New: Trees can now dream. Set a sleep schedule and let your Tree organize itself overnight.",
-    "New: Understanding runs detect changes incrementally — only dirty branches get reprocessed.",
-    "New: Session dashboards track every AI process running across your Trees in real time.",
-    "New: Start Chat offers a streamlined interface. Use the Dashboard for full control.",
+    "CLI available. Install with npm install -g treef-cli and manage your trees from the terminal.",
+    "New: Gateway channels are live. Connect Telegram, Discord, or web push for input, output, or full chat.",
+    "Trees can now dream. Set a sleep schedule and let your Tree organize itself overnight.",
+    "Understanding runs detect changes incrementally — only dirty branches get reprocessed.",
+    "New:Session dashboards track every AI process running across your Trees in real time.",
+    "Start Chat offers a streamlined interface. Use the Dashboard for full control.",
     "Understanding runs summarize your entire Tree from any perspective you define.",
     "Collaborative workspaces are live. Invite others to build together.",
     "Custom LLM support is available. Bring your own key in OpenAI-compatible format.",
     "This project is in active development. Expect occasional downtime as new features ship.",
+    "New perspectives are revealing.",
+
   ];
 
   const [bannerIndex, setBannerIndex] = useState(0);

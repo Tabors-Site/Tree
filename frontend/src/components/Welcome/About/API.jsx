@@ -43,6 +43,13 @@ const ApiAccessSection = () => {
           <div className="toc-title">Contents</div>
 
           <div className="toc-group">
+            <div className="toc-group-label">Getting Started</div>
+            <TocLink to="overview">🔑 Overview &amp; Authentication</TocLink>
+            <TocLink to="me">👋 Identity (Me)</TocLink>
+            <TocLink to="url-modes">🌐 URL Modes: ?html &amp; ?token</TocLink>
+          </div>
+
+          <div className="toc-group">
             <div className="toc-group-label">AI</div>
             <TocLink to="tree-chat">🧠 Tree Chat</TocLink>
             <TocLink to="tree-place">📌 Tree Place</TocLink>
@@ -53,15 +60,8 @@ const ApiAccessSection = () => {
           </div>
 
           <div className="toc-group">
-            <div className="toc-group-label">Getting Started</div>
-            <TocLink to="overview">🔑 Overview &amp; Authentication</TocLink>
-            <TocLink to="url-modes">🌐 URL Modes: ?html &amp; ?token</TocLink>
-          </div>
-
-          <div className="toc-group">
             <div className="toc-group-label">User</div>
             <TocLink to="user">👤 User Endpoints</TocLink>
-            <TocLink to="me">👋 Identity (Me)</TocLink>
           </div>
 
           <div className="toc-group">
@@ -116,6 +116,55 @@ const ApiAccessSection = () => {
           </div>
 
 
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  IDENTITY (ME)                                                */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="me">
+          <div className="section-title">
+            <span className="section-icon">👋</span> Identity (Me)
+          </div>
+          <div className="section-text">
+            Use this endpoint to verify your API key and discover your userId.
+            This is the first call most integrations make.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/me</span>
+            </div>
+            <div className="ep-desc">
+              Returns your identity, plan, energy, and share token.
+            </div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">
+{`{
+  "success": true,
+  "userId": "abc-123",
+  "username": "tabor",
+  "profileType": "god",
+  "planExpiresAt": "2026-12-31T...",
+  "email": "you@email.com",
+  "shareToken": "your-share-token",
+  "storageUsageMb": 12.5,
+  "energy": {
+    "available": 87,
+    "additional": 100,
+    "total": 187
+  }
+}`}
+            </div>
+          </div>
+
+          <div className="highlight-box">
+            <div className="section-text">
+              <strong>Generate API keys</strong> from your profile page at{" "}
+              <code>/api/v1/user/:userId/api-keys?html</code>. You can have up
+              to 10 active keys and revoke them individually.
+            </div>
+          </div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -557,19 +606,6 @@ const ApiAccessSection = () => {
               <span className="ep-url">/api/v1/user/:userId/api-keys/:keyId</span>
             </div>
             <div className="ep-desc">Revoke an API key. It will no longer authenticate requests.</div>
-          </div>
-
-          {/* ── Identity (Me) ───── */}
-          <div className="sub-title" id="me">Identity (Me)</div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/me</span>
-            </div>
-            <div className="ep-desc">Returns the userId and username associated with the API key in the request. Useful for login flows and discovering your userId without knowing it ahead of time.</div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{'{ "success": true, "userId": "abc-123", "username": "tabor" }'}</div>
           </div>
 
           {/* ── Share Token ──────── */}

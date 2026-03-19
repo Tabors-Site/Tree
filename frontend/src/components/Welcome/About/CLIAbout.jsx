@@ -20,16 +20,11 @@ const CLIAbout = () => {
 
         {/* ── HEADER ── */}
         <div className="cli-header">
-          <h2 className="cli-title">💻 CLI</h2>
+          <h2 className="cli-title">💻 treef-cli</h2>
           <p className="cli-subtitle">
-            Navigate and manage your trees from the terminal. treef-cli maps
-            familiar filesystem commands to the Tree API so you can work with
-            your trees the way you work with directories.
-          </p>
-          <p className="cli-subtitle" style={{ marginTop: 8 }}>
-            The CLI is not as built out as the web app and API, but the main
-            features are there and it will be continuously expanded. If you
-            prefer working from a terminal, this is for you.
+            Navigate and manage your trees like a filesystem from the terminal.
+            All commands map to the <a href="/about/api" style={{ color: "rgba(255,255,255,0.85)" }}>Tree REST API</a>.
+            Config stored in <code>~/.treef-cli/config.json</code>.
           </p>
         </div>
 
@@ -38,24 +33,38 @@ const CLIAbout = () => {
           <div className="cli-section-title">
             <span className="cli-section-icon">📦</span> Install
           </div>
-          <div className="cli-section-text">
-            Install globally with npm:
-          </div>
           <div className="cli-code-block">npm install -g treef-cli</div>
         </div>
 
-        {/* ── LOGIN ── */}
+        {/* ── GET STARTED ── */}
         <div className="cli-section">
           <div className="cli-section-title">
-            <span className="cli-section-icon">🔑</span> Login
+            <span className="cli-section-icon">🚀</span> Get Started
           </div>
-          <div className="cli-section-text">
-            Create an API key from your profile page, then authenticate:
+          <div className="cli-code-block">
+{`treef login --key YOUR_API_KEY    # get your key from tree.tabors.site
+treef start                       # launch the interactive shell`}
           </div>
-          <div className="cli-code-block">treef login --key YOUR_API_KEY</div>
-          <div className="cli-note">
-            Credentials are stored locally in ~/.treef-cli/config.json. You only
-            need to do this once.
+          <div className="cli-code-block" style={{ marginTop: 12 }}>
+{`roots                        # list your trees
+root Life Plan               # enter a tree
+ls                           # list children
+mkdir Health, Work, Projects # create nodes
+cd Health                    # navigate deeper
+
+chat make me a weekly workout plan
+tree                         # see the structure it built
+cd Workouts                  # go into a node it created
+place did 20 pushups today   # AI logs it in the right spot
+note stretch before next session
+
+cd /                         # back to tree root
+cd Health/Workouts -r        # path chaining + deep search
+values --global              # see values across the whole tree
+
+idea i should track my sleep # AI places it in the right tree
+home                         # back to user home
+exit                         # leave the shell`}
           </div>
         </div>
 
@@ -64,11 +73,11 @@ const CLIAbout = () => {
           <div className="cli-section-title">
             <span className="cli-section-icon">🖥️</span> Session
           </div>
-          <CmdRow cmd="treef start" desc="Launch interactive shell mode" />
-          <CmdRow cmd="treef stop / exit" desc="Exit the shell" />
-          <CmdRow cmd="treef login --key KEY" desc="Authenticate with an API key" />
-          <CmdRow cmd="treef logout" desc="Remove stored credentials" />
-          <CmdRow cmd="whoami" desc="Show current user and active tree" />
+          <CmdRow cmd="start / shell" desc="Launch interactive shell" />
+          <CmdRow cmd="stop / exit" desc="Exit the shell" />
+          <CmdRow cmd="login --key <key>" desc="Authenticate with your API key" />
+          <CmdRow cmd="logout" desc="Clear stored credentials" />
+          <CmdRow cmd="whoami" desc="Show login, plan, energy, and active tree" />
         </div>
 
         {/* ── HOME ── */}
@@ -77,38 +86,55 @@ const CLIAbout = () => {
             <span className="cli-section-icon">🏠</span> User Home
           </div>
           <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Commands available without entering a tree.
+            Commands available without entering a tree. <code>ls</code> and <code>cd</code> also work from home to list/enter trees.
           </div>
-          <CmdRow cmd="roots" desc="List all your root trees" />
-          <CmdRow cmd="use <name>" desc="Switch the active tree" />
-          <CmdRow cmd="root <name>" desc="Switch the active tree (alias for use)" />
-          <CmdRow cmd="mkroot <name>" desc="Create a new root tree" />
-          <CmdRow cmd="home" desc="Return to user home from any tree" />
-          <CmdRow cmd="ideas" desc="List pending/stuck/processing ideas. Flags: --pending --processing --stuck --done --all. Stack to combine" />
-          <CmdRow cmd="idea <message>" desc="Send an idea, get an AI response, and auto-navigate to where it was placed" />
-          <CmdRow cmd="idea-store <content>" desc="Save a raw idea for later without processing" />
-          <CmdRow cmd="rm-idea <id> -f" desc="Delete an idea" />
-          <CmdRow cmd="idea-place <id or message>" desc="AI-place an idea (fire-and-forget). Pass a raw idea ID or type content directly" />
-          <CmdRow cmd="idea-auto [on|off]" desc="Toggle automatic placement of pending raw ideas every 15 min (Standard plan+). No arg = show current status" />
-          <CmdRow cmd="idea-transfer <id> <nodeId>" desc="Manually transfer an idea to a specific node" />
-          <CmdRow cmd="notes" desc="List your user-level notes" />
-          <CmdRow cmd="chats" desc="In home: all your AI chats across every tree. In tree: current node's chats" />
-          <CmdRow cmd="contributions" desc="List your recent contributions" />
+          <CmdRow cmd="roots" desc="List all your trees" />
+          <CmdRow cmd="use <name> / root <name>" desc="Enter a tree by name or ID" />
+          <CmdRow cmd="mkroot <name>" desc="Create a new tree" />
+          <CmdRow cmd="retire/leave [name] -f" desc="Leave a shared tree or delete if sole owner" />
+          <CmdRow cmd="home" desc="Leave current tree, return home" />
+          <CmdRow cmd="invites" desc="List pending invites from other users" />
+          <CmdRow cmd="tags / mail" desc="Notes where you've been @tagged" />
+          <CmdRow cmd="notes" desc="Your user-level notes. -l limit, -q search" />
+          <CmdRow cmd="chats" desc="All AI chats across your trees. -l limit" />
+          <CmdRow cmd="contributions" desc="Your recent contributions" />
+          <CmdRow cmd="share-token [token]" desc="Show or set your share token" />
+          <CmdRow cmd="share idea <id>" desc="Public link to a raw idea" />
+        </div>
+
+        {/* ── RAW IDEAS ── */}
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">💡</span> Raw Ideas
+          </div>
+          <div className="cli-section-text" style={{ marginBottom: 14 }}>
+            Capture ideas from anywhere. AI figures out where they belong.
+          </div>
+          <CmdRow cmd="ideas" desc="List ideas. -p pending, -r processing, -s stuck, -d done, -a all, -q search, -l limit" />
+          <CmdRow cmd="cat idea <id or #>" desc="View full content of a raw idea" />
+          <CmdRow cmd="idea <message>" desc="AI places your idea in the right tree and navigates you there" />
+          <CmdRow cmd="idea-store <message>" desc="Save an idea for later without processing" />
+          <CmdRow cmd="idea-place <id or message>" desc="AI-place an idea (fire-and-forget)" />
+          <CmdRow cmd="idea-auto [on/off]" desc="Toggle auto-placement every 15 min (Standard plan+)" />
+          <CmdRow cmd="idea-transfer <id> <nodeId>" desc="Manually move an idea to a specific node" />
+          <CmdRow cmd="rm-idea <id> -f" desc="Delete a raw idea" />
         </div>
 
         {/* ── NAVIGATION ── */}
         <div className="cli-section">
           <div className="cli-section-title">
-            <span className="cli-section-icon">🧭</span> Tree Navigation
+            <span className="cli-section-icon">🧭</span> Navigation
           </div>
           <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Commands available once you are inside a tree.
+            Inside a tree. <code>ls</code> and <code>cd</code> also work from home (listing/entering trees).
           </div>
-          <CmdRow cmd="pwd" desc="Show current path in the tree" />
-          <CmdRow cmd="ls" desc="List children of the current node" />
-          <CmdRow cmd="ls -l" desc="Long format with IDs and status" />
-          <CmdRow cmd="cd <name>" desc="Enter a child node (supports .. and /)" />
-          <CmdRow cmd="tree" desc="Visualize the subtree from current location" />
+          <CmdRow cmd="pwd" desc="Print current path" />
+          <CmdRow cmd="ls / ls -l" desc="List children. Long format shows IDs and status" />
+          <CmdRow cmd="cd <name>" desc="Navigate into a child. Supports .., /, -r (search whole tree), path chaining (A/B/C)" />
+          <CmdRow cmd="tree" desc="Render subtree. -a active, -c completed, -t trimmed" />
+          <div className="cli-note" style={{ marginTop: 8 }}>
+            Nodes have three statuses: <strong>active</strong> (green), <strong>completed</strong> (gray), <strong>trimmed</strong> (dim).
+          </div>
         </div>
 
         {/* ── NODE MANAGEMENT ── */}
@@ -116,12 +142,30 @@ const CLIAbout = () => {
           <div className="cli-section-title">
             <span className="cli-section-icon">🔷</span> Node Management
           </div>
-          <CmdRow cmd="mkdir <name>" desc="Create a child node. Comma-separate for multiple: mkdir foo, bar, baz" />
-          <CmdRow cmd="rm <name> -f" desc="Soft-delete a node" />
-          <CmdRow cmd="rename <name> <new>" desc="Rename a node" />
+          <CmdRow cmd="mkdir <name>" desc="Create child node(s). Comma-separate for multiple: mkdir foo, bar" />
+          <CmdRow cmd="rm <name> -f" desc="Delete a node (soft delete)" />
+          <CmdRow cmd="rename <name> <new>" desc="Rename a child node" />
           <CmdRow cmd="mv <name> <destId>" desc="Move a node to a new parent" />
-          <CmdRow cmd="status <name> <status>" desc="Set status (active, completed, trimmed)" />
-          <CmdRow cmd="prestige" desc="Prestige the current node (create a new version)" />
+          <CmdRow cmd="complete" desc="Set current node and all children to completed" />
+          <CmdRow cmd="activate" desc="Set current node and all children to active" />
+          <CmdRow cmd="trim" desc="Set current node and all children to trimmed" />
+          <CmdRow cmd="prestige" desc="Create a new version of the current node" />
+        </div>
+
+        {/* ── NOTES & VALUES ── */}
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">📝</span> Notes &amp; Values
+          </div>
+          <CmdRow cmd="note <content>" desc="Post a note on the current node" />
+          <CmdRow cmd="notes" desc="List notes on the current node. -l limit, -q search" />
+          <CmdRow cmd="cat note <id or #>" desc="View full content of a note" />
+          <CmdRow cmd="rm-note <id> -f" desc="Delete a note" />
+          <CmdRow cmd="book" desc="Print the full book of notes from current node down" />
+          <CmdRow cmd="contributions" desc="List contributions on the current node" />
+          <CmdRow cmd="values" desc="List values on the current node. -g global totals, -t per-node tree breakdown" />
+          <CmdRow cmd="value <key> <val>" desc="Set a value" />
+          <CmdRow cmd="goal <key> <goal>" desc="Set a goal" />
         </div>
 
         {/* ── SCHEDULING ── */}
@@ -130,27 +174,46 @@ const CLIAbout = () => {
             <span className="cli-section-icon">📅</span> Scheduling
           </div>
           <div className="cli-note" style={{ marginBottom: 10 }}>
-            Date is MM/DD/YYYY, time is HH:MM or HH:MMam/pm, reeffect is hours (default 0).
-            Omit time for midnight. Omit date for today. Use &quot;clear&quot; to remove.
+            Date: <code>MM/DD/YYYY</code>. Time: <code>HH:MM</code> or <code>HH:MMam/pm</code>. Reeffect: hours. Use <code>clear</code> to remove.
           </div>
-          <CmdRow cmd="schedule <datetime> [reeffect]" desc="Set schedule (e.g. 1/11/2025 3, 1/11/2025 11:45pm 5, or 'clear')" />
-          <CmdRow cmd="calendar" desc="Show scheduled dates across the tree" />
-          <CmdRow cmd="dream-time <HH:MM>" desc="Set nightly dream time (or 'clear')" />
+          <CmdRow cmd="schedule <date> [time] [reeffect]" desc="Set schedule (e.g. 1/11/2025 3, 1/11/2025 11:45pm 5, clear)" />
+          <CmdRow cmd="calendar" desc="Show scheduled dates. -m month (1-12 or name), -y year" />
+          <CmdRow cmd="dream-time <HH:MM>" desc="Set nightly dream time (or clear)" />
         </div>
 
-        {/* ── NOTES & VALUES ── */}
+        {/* ── COLLABORATION ── */}
         <div className="cli-section">
           <div className="cli-section-title">
-            <span className="cli-section-icon">📝</span> Notes & Values
+            <span className="cli-section-icon">🤝</span> Collaboration
           </div>
-          <CmdRow cmd="notes" desc="View notes on the current node" />
-          <CmdRow cmd="note <content>" desc="Add a note" />
-          <CmdRow cmd="rm-note <id> -f" desc="Delete a note" />
-          <CmdRow cmd="book" desc="Print the full book of notes from current node down" />
-          <CmdRow cmd="contributions" desc="List contributions for the current node" />
-          <CmdRow cmd="values" desc="Display key-value pairs" />
-          <CmdRow cmd="value <key> <value>" desc="Set a value" />
-          <CmdRow cmd="goal <key> <goal>" desc="Set a goal" />
+          <CmdRow cmd="team" desc="Show owner and contributors" />
+          <CmdRow cmd="invite <username>" desc="Invite a user to the current tree" />
+          <CmdRow cmd="invite accept <id>" desc="Accept a pending invite" />
+          <CmdRow cmd="invite deny <id>" desc="Decline a pending invite" />
+          <CmdRow cmd="kick <username>" desc="Remove a contributor" />
+          <CmdRow cmd="owner <username>" desc="Transfer tree ownership" />
+        </div>
+
+        {/* ── LINKS & SHARING ── */}
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">🔗</span> Links &amp; Sharing
+          </div>
+          <div className="cli-section-text" style={{ marginBottom: 14 }}>
+            Clickable terminal hyperlinks. <code>link</code> uses your share token; <code>share</code> generates public links.
+          </div>
+          <div className="cli-note" style={{ marginBottom: 10 }}>In a tree:</div>
+          <CmdRow cmd="link" desc="Link to current node" />
+          <CmdRow cmd="link root" desc="Link to tree root" />
+          <CmdRow cmd="link book" desc="Link to book view" />
+          <CmdRow cmd="link gateway" desc="Link to gateway channels" />
+          <CmdRow cmd="link note <id>" desc="Link to a specific note" />
+          <CmdRow cmd="share note <id>" desc="Public link to a note" />
+          <CmdRow cmd="share book" desc="Public book share link (TOC included)" />
+          <div className="cli-note" style={{ marginBottom: 10, marginTop: 14 }}>From home:</div>
+          <CmdRow cmd="link" desc="Link to your profile" />
+          <CmdRow cmd="link ideas" desc="Link to your raw ideas" />
+          <CmdRow cmd="link idea <id>" desc="Link to a specific raw idea" />
         </div>
 
         {/* ── AI ── */}
@@ -158,22 +221,22 @@ const CLIAbout = () => {
           <div className="cli-section-title">
             <span className="cli-section-icon">🧠</span> AI
           </div>
-          <CmdRow cmd="chat <message>" desc="Full conversation -- reads tree, makes edits, responds" />
-          <CmdRow cmd="place <message>" desc="Places content onto the tree without responding" />
-          <CmdRow cmd="query <message>" desc="Ask about the tree without making any changes" />
-          <CmdRow cmd="chats" desc="View past AI chat history for the current node" />
-          <CmdRow cmd="chats tree" desc="View all AI chat history across the whole tree" />
+          <CmdRow cmd="chat <message>" desc="Chat with AI about the current branch" />
+          <CmdRow cmd="place <message>" desc="AI writes content into the branch" />
+          <CmdRow cmd="query <message>" desc="Ask AI about the branch (read-only, no writes)" />
+          <CmdRow cmd="chats" desc="Chat history for current node. -l limit" />
+          <CmdRow cmd="chats tree" desc="All chat history across the whole tree" />
         </div>
 
         {/* ── UNDERSTANDING ── */}
         <div className="cli-section">
           <div className="cli-section-title">
-            <span className="cli-section-icon">🔬</span> Understanding
+            <span className="cli-section-icon">🔬</span> Understanding Runs
           </div>
-          <CmdRow cmd="understand [perspective]" desc="Start an understanding run" />
-          <CmdRow cmd="understandings" desc="List all runs" />
-          <CmdRow cmd="understand-status <runId>" desc="Check run progress" />
-          <CmdRow cmd="understand-stop <runId>" desc="Stop a running analysis" />
+          <CmdRow cmd="understand [perspective]" desc="Start an understanding run. Returns final encoding" />
+          <CmdRow cmd="understandings" desc="List runs" />
+          <CmdRow cmd="understand-status <runId>" desc="Check progress" />
+          <CmdRow cmd="understand-stop <runId>" desc="Stop a run" />
         </div>
 
         {/* ── BLOG ── */}
@@ -182,16 +245,55 @@ const CLIAbout = () => {
             <span className="cli-section-icon">📰</span> Blog
           </div>
           <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Posts from the Tree creator -- updates, ideas, and what&apos;s coming next. No login required.
+            No login required.
           </div>
-          <CmdRow cmd="blogs" desc="List all published blog posts with summaries" />
-          <CmdRow cmd="blog <slug or number>" desc="Read a post by slug (blog why-i-built-tree) or list number (blog 1)" />
+          <CmdRow cmd="blogs" desc="List published posts" />
+          <CmdRow cmd="blog <slug or number>" desc="Read a post by slug or list number" />
         </div>
 
         {/* ── NAME MATCHING ── */}
-        <div className="cli-note" style={{ marginTop: 8 }}>
-          <strong>Name matching:</strong> All commands accept names or IDs. No quotes needed for multi-word names.
-          Matching is fuzzy -- exact ID prefix, exact name, starts with, or contains. If ambiguous, you will be prompted to pick by ID.
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">🔍</span> Name Matching
+          </div>
+          <div className="cli-section-text">
+            All commands accept names or IDs. No quotes needed for multi-word names. Matching order:
+          </div>
+          <div className="cli-note" style={{ marginTop: 8 }}>
+            1. Exact ID or ID prefix<br />
+            2. Exact name (case-insensitive)<br />
+            3. Name starts with query<br />
+            4. Name contains query
+          </div>
+          <div className="cli-note" style={{ marginTop: 8 }}>
+            Multiple matches prompt you to disambiguate by ID.
+          </div>
+        </div>
+
+        {/* ── LINKS ── */}
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">📎</span> Links
+          </div>
+          <div className="cli-section-text">
+            <a href="https://tree.tabors.site" style={{ color: "rgba(255,255,255,0.85)" }}>Tree</a>
+            {" | "}
+            <a href="/about/gettingstarted" style={{ color: "rgba(255,255,255,0.85)" }}>Getting Started</a>
+            {" | "}
+            <a href="/about/raw-ideas" style={{ color: "rgba(255,255,255,0.85)" }}>Raw Ideas</a>
+            {" | "}
+            <a href="/about/energy" style={{ color: "rgba(255,255,255,0.85)" }}>Energy</a>
+            {" | "}
+            <a href="/about/dreams" style={{ color: "rgba(255,255,255,0.85)" }}>Dreams</a>
+            {" | "}
+            <a href="/about/gateway" style={{ color: "rgba(255,255,255,0.85)" }}>Gateway</a>
+            {" | "}
+            <a href="/about/api" style={{ color: "rgba(255,255,255,0.85)" }}>API</a>
+            {" | "}
+            <a href="/about/cli" style={{ color: "rgba(255,255,255,0.85)" }}>CLI Guide</a>
+            {" | "}
+            <a href="/blog" style={{ color: "rgba(255,255,255,0.85)" }}>Blog</a>
+          </div>
         </div>
 
       </div>
