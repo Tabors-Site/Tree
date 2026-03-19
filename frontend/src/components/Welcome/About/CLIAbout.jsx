@@ -92,7 +92,7 @@ const CLIAbout = () => {
           <CmdRow cmd="idea-auto [on|off]" desc="Toggle automatic placement of pending raw ideas every 15 min (Standard plan+). No arg = show current status" />
           <CmdRow cmd="idea-transfer <id> <nodeId>" desc="Manually transfer an idea to a specific node" />
           <CmdRow cmd="notes" desc="List your user-level notes" />
-          <CmdRow cmd="chats" desc="In home: your profile chats. In tree: current node's chats" />
+          <CmdRow cmd="chats" desc="In home: all your AI chats across every tree. In tree: current node's chats" />
           <CmdRow cmd="contributions" desc="List your recent contributions" />
         </div>
 
