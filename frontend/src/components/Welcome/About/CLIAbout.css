@@ -136,7 +136,7 @@
 .cli-cmd-name {
   font-family: "JetBrains Mono", "SF Mono", monospace;
   font-size: 13px;
-  color: rgba(180, 210, 255, 1);
+  color: white;
   white-space: nowrap;
   min-width: 200px;
   flex-shrink: 0;

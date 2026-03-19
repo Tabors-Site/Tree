@@ -36,38 +36,6 @@ const CLIAbout = () => {
           <div className="cli-code-block">npm install -g treef-cli</div>
         </div>
 
-        {/* ── GET STARTED ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🚀</span> Get Started
-          </div>
-          <div className="cli-code-block">
-{`treef login --key YOUR_API_KEY    # get your key from tree.tabors.site
-treef start                       # launch the interactive shell`}
-          </div>
-          <div className="cli-code-block" style={{ marginTop: 12 }}>
-{`roots                        # list your trees
-root Life Plan               # enter a tree
-ls                           # list children
-mkdir Health, Work, Projects # create nodes
-cd Health                    # navigate deeper
-
-chat make me a weekly workout plan
-tree                         # see the structure it built
-cd Workouts                  # go into a node it created
-place did 20 pushups today   # AI logs it in the right spot
-note stretch before next session
-
-cd /                         # back to tree root
-cd Health/Workouts -r        # path chaining + deep search
-values --global              # see values across the whole tree
-
-idea i should track my sleep # AI places it in the right tree
-home                         # back to user home
-exit                         # leave the shell`}
-          </div>
-        </div>
-
         {/* ── SESSION ── */}
         <div className="cli-section">
           <div className="cli-section-title">
