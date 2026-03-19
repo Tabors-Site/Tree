@@ -336,8 +336,17 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
     rawIdea.placedAt = new Date();
     await rawIdea.save();
 
-    const targetNode = await Node.findById(targetNodeId).select("prestige").lean();
+    const targetNode = await Node.findById(targetNodeId).select("prestige name parent").lean();
     const nodeVersion = targetNode?.prestige?.toString() ?? "0";
+
+    // Build full path from root → target node
+    const targetNodePath = [];
+    let cursor = targetNode;
+    while (cursor) {
+      targetNodePath.unshift({ _id: cursor._id, name: cursor.name });
+      if (!cursor.parent || cursor.parent === "deleted") break;
+      cursor = await Node.findById(cursor.parent).select("_id name parent").lean();
+    }
 
     await logContribution({
       userId,
@@ -383,6 +392,7 @@ export async function orchestrateRawIdeaPlacement({ rawIdeaId, userId, username,
         rootId: chosenRootId,
         rootName: parsed.rootName || null,
         targetNodeId,
+        targetNodePath,
       };
     }
   } catch (err) {
