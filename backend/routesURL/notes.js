@@ -1198,10 +1198,12 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
     }
 
     async function generateShare() {
-      const res = await fetch(
-        window.location.pathname + "/generate" + window.location.search,
-        { method: "POST" }
-      );
+      const params = Object.fromEntries(new URLSearchParams(window.location.search));
+      const res = await fetch(window.location.pathname + "/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
 
       const data = await res.json();
       if (data.redirect) {
@@ -1235,26 +1237,16 @@ router.post("/root/:nodeId/book/generate", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
-    // 🔁 SAME parsing logic as GET
     const settings = {
-      latestVersionOnly: parseBool(req.query.latestVersionOnly),
-      lastNoteOnly: parseBool(req.query.lastNoteOnly),
-      leafNotesOnly: parseBool(req.query.leafNotesOnly),
-      filesOnly: parseBool(req.query.filesOnly),
-      textOnly: parseBool(req.query.textOnly),
-
-      active:
-        req.query.active === undefined ? true : req.query.active === "true",
-
-      completed:
-        req.query.completed === undefined
-          ? true
-          : req.query.completed === "true",
-
-      true: parseBool(req.query.true),
-
-      toc: parseBool(req.query.toc),
-      tocDepth: parseInt(req.query.tocDepth) || 0,
+      latestVersionOnly: !!req.body.latestVersionOnly,
+      lastNoteOnly:      !!req.body.lastNoteOnly,
+      leafNotesOnly:     !!req.body.leafNotesOnly,
+      filesOnly:         !!req.body.filesOnly,
+      textOnly:          !!req.body.textOnly,
+      active:            req.body.active !== undefined ? !!req.body.active : true,
+      completed:         req.body.completed !== undefined ? !!req.body.completed : true,
+      toc:               !!req.body.toc,
+      tocDepth:          parseInt(req.body.tocDepth) || 0,
     };
 
     const { shareId } = await coreGenerateBook({
@@ -2199,10 +2191,12 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
     }
 
     async function generateShare() {
-      const res = await fetch(
-        window.location.pathname + "/generate" + window.location.search,
-        { method: "POST" }
-      );
+      const params = Object.fromEntries(new URLSearchParams(window.location.search));
+      const res = await fetch(window.location.pathname + "/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
 
       const data = await res.json();
       if (data.redirect) {

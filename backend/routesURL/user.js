@@ -9912,18 +9912,23 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
       htmlShareToken: req.body.htmlShareToken,
     });
 
-    // 3️⃣ Conditional redirect
-    if (!hadShareTokenBefore) {
-      return res.redirect("/app");
+    // 3️⃣ Respond
+    if ("html" in req.query) {
+      if (!hadShareTokenBefore) {
+        return res.redirect("/app");
+      }
+      return res.redirect(
+        `/api/v1/user/${userId}?token=${u.htmlShareToken ?? ""}&html`,
+      );
     }
 
-    // existing behavior
-    return res.redirect(
-      `/api/v1/user/${userId}?token=${u.htmlShareToken ?? ""}&html`,
-    );
+    return res.json({ success: true, shareToken: u.htmlShareToken });
   } catch (err) {
     console.error("shareToken update error:", err);
-    res.status(400).send(err.message || "Failed to update share token");
+    if ("html" in req.query) {
+      return res.status(400).send(err.message || "Failed to update share token");
+    }
+    return res.status(400).json({ error: err.message || "Failed to update share token" });
   }
 });
 
