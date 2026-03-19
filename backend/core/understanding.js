@@ -66,7 +66,7 @@ if (containsHtml(perspective)) {
   const { energyUsed } = await useEnergy({
     userId,
     action: "understanding",
-    payload: createdUNodes.size, // 🔥 1 energy per node
+    payload: createdUNodes.size, // 2 energy per node
   });
   run.nodeMap = Object.fromEntries(nodeMap);
   run.topology = Object.fromEntries(topology);

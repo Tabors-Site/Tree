@@ -659,7 +659,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
           // Charge energy on LLM failure to prevent spam of fake endpoints
           try {
-            await useEnergy({ userId: socket.userId, action: "chat" });
+            await useEnergy({ userId: socket.userId, action: "chatError" });
             console.log("⚡ Charged 2 energy for failed LLM call (user:", socket.userId, ")");
           } catch (energyErr) {
             console.error("⚠️ Energy charge on error failed:", energyErr.message);

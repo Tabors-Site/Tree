@@ -104,7 +104,7 @@ const UserSchema = new mongoose.Schema({
     type: EnergySchema,
     required: true,
     default: () => ({
-      amount: 250,//a little higher for new users. default reset is 100 for basic
+      amount: 350,// matches basic daily limit
       lastResetAt: new Date(),
     }),
   },

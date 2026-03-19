@@ -422,7 +422,7 @@ export async function processMessage(visitorId, message, ctx) {
     // Charge energy to discourage chatting without a connection
     try {
       const { useEnergy } = await import("../core/energy.js");
-      await useEnergy({ userId: ctx.userId, action: "chat" });
+      await useEnergy({ userId: ctx.userId, action: "chatError" });
     } catch (_) {}
     return { content: "No LLM connection configured. Set one up at /setup to use AI features.", modeKey: session.modeKey };
   }

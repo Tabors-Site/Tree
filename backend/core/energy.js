@@ -26,9 +26,9 @@ const HARD_LIMIT_MB = 1024;
 
 // daily limits (unchanged)
 export const DAILY_LIMITS = {
-  basic: 120,
-  standard: 500,
-  premium: 2000,
+  basic: 350,
+  standard: 1500,
+  premium: 8000,
   god: 10_000_000_000,
 };
 
@@ -61,7 +61,7 @@ export function calculateFileEnergy(sizeMB) {
  * ================================ */
 
 const BASE_ACTION_COSTS = {
-  // 1 energy
+  // 1 energy — small edits (~1 KB contribution record each)
   editStatus: 1,
   editValue: 1,
   removeNote: 1,
@@ -71,15 +71,19 @@ const BASE_ACTION_COSTS = {
   updateParent: 1,
   updateChildNode: 1,
   branchLifecycle: 1,
-  prestige: 1,
-  executeScript: 1,
   invite: 1,
-  chat: 2,
+  delete: 1,
 
-  // 2 energy
-  create: 2,
-  delete: 2,
+  // 2 energy — heavier operations
+  prestige: 2,
+  executeScript: 2,
   transaction: 2,
+
+  // 2 energy — failed/missing LLM penalty
+  chatError: 2,
+
+  // 3 energy — node creation (3-5 KB stored)
+  create: 3,
 };
 
 const CONTENT_ACTIONS = new Set(["note", "rawIdea", "editScript"]);
@@ -123,10 +127,10 @@ export function calculateEnergyCost(action, payload) {
     );
   }
 
-  /* ---------- VARIABLE COUNT (NEW) ---------- */
+  /* ---------- VARIABLE COUNT (understanding: 2 per node) ---------- */
   if (VARIABLE_ACTIONS.has(action)) {
     const amount = typeof payload === "number" ? payload : 1;
-    return Math.max(1, amount);
+    return Math.max(2, amount * 2);
   }
 
   /* ---------- FIXED ---------- */

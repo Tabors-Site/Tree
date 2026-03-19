@@ -64,20 +64,20 @@ const EnergySection = () => {
               <span className="nrg-cost-amount">1</span>
             </div>
             <div className="nrg-cost-row">
-              <span className="nrg-cost-action">Move node, prestige, run script, invite</span>
+              <span className="nrg-cost-action">Move node, delete node, invite</span>
               <span className="nrg-cost-amount">1</span>
             </div>
             <div className="nrg-cost-row">
-              <span className="nrg-cost-action">Create node, delete branch, transaction</span>
+              <span className="nrg-cost-action">Prestige, run script, transaction</span>
               <span className="nrg-cost-amount">2</span>
             </div>
             <div className="nrg-cost-row">
-              <span className="nrg-cost-action">AI chat (only on connection error)</span>
-              <span className="nrg-cost-amount">2</span>
+              <span className="nrg-cost-action">Create node</span>
+              <span className="nrg-cost-amount">3</span>
             </div>
             <div className="nrg-cost-row">
-              <span className="nrg-cost-action">And More</span>
-              <span className="nrg-cost-amount">+</span>
+              <span className="nrg-cost-action">AI chat messages</span>
+              <span className="nrg-cost-amount">Free</span>
             </div>
           </div>
         </div>
@@ -95,15 +95,15 @@ const EnergySection = () => {
           <div className="nrg-plan-grid">
             <div className="nrg-plan">
               <div className="nrg-plan-name">Basic</div>
-              <div className="nrg-plan-energy">120 / day</div>
+              <div className="nrg-plan-energy">350 / day</div>
               <div className="nrg-plan-desc">
-                Free forever. Enough for daily note-taking, light tree
+                Free forever. Enough for daily note-taking, tree
                 management, and AI chat. No file uploads.
               </div>
             </div>
             <div className="nrg-plan">
               <div className="nrg-plan-name">Standard</div>
-              <div className="nrg-plan-energy">500 / day</div>
+              <div className="nrg-plan-energy">1,500 / day</div>
               <div className="nrg-plan-desc">
                 For active users. File uploads up to 1 GB, more room for
                 scripts, and larger trees.
@@ -111,7 +111,7 @@ const EnergySection = () => {
             </div>
             <div className="nrg-plan">
               <div className="nrg-plan-name">Premium</div>
-              <div className="nrg-plan-energy">2,000 / day</div>
+              <div className="nrg-plan-energy">8,000 / day</div>
               <div className="nrg-plan-desc">
                 For power users and teams. No file size limits and
                 large-scale understanding runs.

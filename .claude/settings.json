@@ -5,7 +5,9 @@
       "Bash(grep -r \"book/generate\\\\|book.*generate\" /home/tabor/github/Tree/frontend/src --include=*.js --include=*.jsx --include=*.ts --include=*.tsx)",
       "Bash(done)",
       "Bash(find /home/tabor/github/Tree/backend/ws/orchestrator -type f -name *.js)",
-      "Bash(find /home/tabor/github/Tree/backend/ws/modes -type f -name *.js)"
+      "Bash(find /home/tabor/github/Tree/backend/ws/modes -type f -name *.js)",
+      "Bash(grep -l \"useEnergy\" /home/tabor/github/Tree/backend/routesURL/*.js)",
+      "Bash(grep -l \"useEnergy\" /home/tabor/github/Tree/backend/core/*.js)"
     ]
   }
 }

@@ -11116,7 +11116,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
       <div class="plan-box disabled" data-plan="basic">
         <div class="plan-name">Basic</div>
         <div class="plan-price">Free</div>
-        <div class="plan-period">120 daily energy</div>
+        <div class="plan-period">350 daily energy</div>
         <div class="plan-features">
           <div class="plan-feature">No file uploads</div>
           <div class="plan-feature dim">Limited access</div>
@@ -11128,7 +11128,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
         <div class="plan-price">$20</div>
         <div class="plan-period">per 30 days</div>
         <div class="plan-features">
-          <div class="plan-feature">500 daily energy</div>
+          <div class="plan-feature">1,500 daily energy</div>
           <div class="plan-feature">File uploads</div>
         </div>
         ${profileType === "standard" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
@@ -11138,7 +11138,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
         <div class="plan-price">$100</div>
         <div class="plan-period">per 30 days</div>
         <div class="plan-features">
-          <div class="plan-feature">2,000 daily energy</div>
+          <div class="plan-feature">8,000 daily energy</div>
           <div class="plan-feature">Full access</div>
           <div class="plan-feature highlight">Offline LLM processing</div>
         </div>
