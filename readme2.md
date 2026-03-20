@@ -1,10 +1,10 @@
-# Tree Land Node
+# TreeOS Land Node
 
-A self-hosted node in the Tree distributed network. Each Land is a standalone server that hosts trees for its local users, runs its own AI and background jobs, and can connect to other Lands through the Canopy protocol.
+A self-hosted node in the TreeOS distributed network. Each Land is a standalone server that hosts trees for its local users, runs its own AI and background jobs, and can connect to other Lands through the Canopy protocol.
 
 ## What is a Land?
 
-A Land is a single instance of the Tree application. Your own server with your own database, your own users, and your own trees. Lands can operate completely independently, or they can connect to the wider Tree network to enable cross-land collaboration.
+A Land is a single instance of the TreeOS application. Your own server with your own database, your own users, and your own trees. Lands can operate completely independently, or they can connect to the wider TreeOS network to enable cross-land collaboration.
 
 Think of it like email. Your Land is your mail server. You can send and receive with anyone on any other server, but your data lives on yours.
 
@@ -24,51 +24,99 @@ Mycelium    The underground network linking trees within or across lands
 
 ```bash
 # Clone the repo
-git clone <repo-url> tree-land
-cd tree-land
+git clone <repo-url> treeos-land
+cd treeos-land
 
 # Configure your land
 cp .env.example .env
 # Edit .env: set LAND_DOMAIN to your domain (or leave as localhost for local use)
 
+# Install dependencies
+npm run install:all
+
 # Start your land
-docker compose up
+npm start
 ```
 
-That's it. Your land is running with its own MongoDB instance.
+That's it. Your land is running. Point it at a MongoDB instance and you have the full TreeOS application.
 
 ## What You Get
 
-- Full Tree application (frontend + backend + database)
+- The full TreeOS application served directly from the backend (no separate frontend build needed)
 - AI powered tree management with your own LLM connections (defaults to local Ollama)
 - Background jobs: tree dreaming, raw idea placement, short term memory drain, understanding runs
 - WebSocket real time chat and tree interaction
 - Gateway integrations (Discord, Telegram)
 - No artificial energy limits on self-hosted lands
 
+## Project Structure
+
+```
+treeos-land/
+  .env                  # single config file for the whole project
+  package.json          # root scripts (npm start, npm run build, etc.)
+  backend/              # the Land server (this is the app)
+  frontend/             # optional static site (landing page, about page)
+```
+
+**The backend is the app.** It serves the full TreeOS UI as server rendered HTML, handles the REST API, runs WebSocket connections, executes AI tool calls, and manages background jobs. Everything you need to run a Land is in `backend/`.
+
+**The frontend is optional.** It is a React + Vite static site for landing pages and about pages. You do not need to build or deploy it. Your Land works completely without it. If you want a marketing site or custom landing page, you can build it with `npm run build`, but it has nothing to do with the core TreeOS functionality.
+
+### Backend Layout
+
+```
+backend/
+  server.js               # entry point
+  routes/
+    api/                   # REST JSON endpoints (nodes, notes, users, values, etc.)
+    html/                  # TreeOS app UI (server rendered pages)
+    billing/               # Stripe purchase and webhook
+    canopy.js              # Canopy protocol endpoints
+  routesFrontend/          # landing pages, setup flow, onboarding (server rendered)
+  ws/                      # WebSocket server (real time chat and tree interaction)
+  mcp/                     # MCP server (AI tool execution)
+  jobs/                    # background jobs (dreams, drain, understanding, cleanup)
+  canopy/                  # land identity, peering, event outbox
+  core/                    # shared business logic
+  db/                      # Mongoose models and config
+  middleware/              # auth, rate limiting
+```
+
+### Root Scripts
+
+| Command | What It Does |
+|---------|-------------|
+| `npm start` | Runs the backend (`node server.js`) |
+| `npm run build` | Builds the optional frontend (`vite build`) |
+| `npm run dev:frontend` | Runs the Vite dev server for the frontend |
+| `npm run install:all` | Installs dependencies in both backend and frontend |
+
 ## Configuration
+
+All environment variables live in a single `.env` file at the project root.
 
 ### Required
 
-| Variable      | Description               | Default                      |
-| ------------- | ------------------------- | ---------------------------- |
-| `LAND_DOMAIN` | Your land's public domain | `localhost`                  |
-| `MONGODB_URI` | MongoDB connection string | `mongodb://mongo:27017/tree` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LAND_DOMAIN` | Your land's public domain | `localhost` |
+| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
 
 ### Optional
 
-| Variable            | Description                             | Default                 |
-| ------------------- | --------------------------------------- | ----------------------- |
-| `LAND_NAME`         | Display name for your land              | `My Land`               |
-| `DIRECTORY_URL`     | Directory service for network discovery | (none, standalone mode) |
-| `LAND_DEFAULT_TIER` | Default energy tier for new users       | `god`                   |
-| `PORT`              | Server port                             | `80`                    |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LAND_NAME` | Display name for your land | `My Land` |
+| `DIRECTORY_URL` | Directory service for peer discovery (coming soon) | (none, manual peering) |
+| `LAND_DEFAULT_TIER` | Default energy tier for new users | `god` |
+| `PORT` | Server port | `3000` |
 
 See `.env.example` for the full list.
 
 ## Canopy Protocol
 
-Your Land can connect to other Lands in the Tree network. The Canopy protocol is how lands communicate. It is a REST API contract, a set of HTTP endpoints that every land implements to participate in the network.
+Your Land can connect to other Lands in the TreeOS network. The Canopy protocol is how lands communicate. It is a REST API contract, a set of HTTP endpoints that every land implements to participate in the network.
 
 Connection is opt in. Your Land works fully standalone without it.
 
@@ -84,22 +132,21 @@ Connection is opt in. Your Land works fully standalone without it.
 ### Connecting to the Network
 
 1. Set `LAND_DOMAIN` to your public domain in `.env`
-2. Set `DIRECTORY_URL` to a directory service URL (or run your own)
-3. Your Land auto-registers with the directory on startup
-4. Users on other Lands can now find and invite your users
-
-Or connect directly to a specific land without the directory:
+2. Add a peer land directly:
 
 ```
 POST /canopy/admin/peer/add
 { "url": "https://other-land.example.com" }
 ```
 
+3. Both lands exchange public keys and can now communicate
+4. Users on either land can invite each other to collaborate on trees
+
 ### Cross-Land Collaboration
 
 When a user on another Land invites you to their tree:
 
-1. You see the invite on your Land's frontend
+1. You see the invite on your Land
 2. You accept it
 3. The tree appears in your tree list alongside your local trees
 4. All interaction goes through your Land's API (proxied to the tree's Land behind the scenes)
@@ -114,62 +161,45 @@ When a user on another Land invites you to their tree:
 - Per-land and per-user rate limiting on all canopy endpoints
 - Lands can block peers and remove remote contributors at any time
 
-## Architecture
-
-```
-Your Land
-+-- Frontend (React + Vite)
-|   +-- Connects to your backend API only
-+-- Backend (Node.js + Express)
-|   +-- REST API (your users + frontend)
-|   +-- Canopy API (other Lands)
-|   +-- WebSocket (real time chat and tree interaction)
-|   +-- MCP Server (AI tool execution)
-|   +-- Background Jobs (dreams, drain, understanding, cleanup)
-+-- MongoDB (your data, your trees, your users)
-```
-
-Trees are hierarchical knowledge structures. Each tree has an owner, optional contributors, and an AI that maintains it through background processes (dreaming, understanding, cleanup). The AI uses LLM connections configured by the tree owner.
-
 ## Canopy API Reference
 
 The canopy protocol endpoints. Any implementation that speaks this protocol can participate in the network.
 
 ### Public Endpoints (no auth)
 
-| Endpoint                     | Purpose                                     |
-| ---------------------------- | ------------------------------------------- |
-| `GET /canopy/info`           | Land metadata, public key, protocol version |
-| `GET /canopy/redirect`       | Domain redirect info (if land moved)        |
-| `GET /canopy/user/:username` | Resolve a local user by username            |
-| `GET /canopy/public-trees`   | List public trees on this land              |
-| `POST /canopy/peer/register` | Register as a peer (mutual introduction)    |
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /canopy/info` | Land metadata, public key, protocol version |
+| `GET /canopy/redirect` | Domain redirect info (if land moved) |
+| `GET /canopy/user/:username` | Resolve a local user by username |
+| `GET /canopy/public-trees` | List public trees on this land |
+| `POST /canopy/peer/register` | Register as a peer (mutual introduction) |
 
 ### Authenticated Endpoints (require CanopyToken)
 
-| Endpoint                           | Purpose                                 |
-| ---------------------------------- | --------------------------------------- |
-| `POST /canopy/invite/offer`        | Notify about a cross-land invitation    |
-| `POST /canopy/invite/accept`       | Confirm invite acceptance               |
-| `POST /canopy/invite/decline`      | Confirm invite decline                  |
-| `GET /canopy/tree/:rootId`         | Access a tree as a remote contributor   |
-| `POST /canopy/energy/report`       | Report energy usage to user's home land |
-| `POST /canopy/notify`              | Push notification to remote user's land |
-| `POST /canopy/account/transfer-in` | Receive an account transfer             |
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /canopy/invite/offer` | Notify about a cross-land invitation |
+| `POST /canopy/invite/accept` | Confirm invite acceptance |
+| `POST /canopy/invite/decline` | Confirm invite decline |
+| `GET /canopy/tree/:rootId` | Access a tree as a remote contributor |
+| `POST /canopy/energy/report` | Report energy usage to user's home land |
+| `POST /canopy/notify` | Push notification to remote user's land |
+| `POST /canopy/account/transfer-in` | Receive an account transfer |
 
 ### Admin Endpoints (require local user auth)
 
-| Endpoint                                   | Purpose                          |
-| ------------------------------------------ | -------------------------------- |
-| `POST /canopy/admin/peer/add`              | Add a peer land by URL           |
-| `DELETE /canopy/admin/peer/:domain`        | Remove a peer                    |
-| `POST /canopy/admin/peer/:domain/block`    | Block a peer                     |
-| `POST /canopy/admin/peer/:domain/unblock`  | Unblock a peer                   |
-| `GET /canopy/admin/peers`                  | List all peers and status        |
-| `POST /canopy/admin/heartbeat`             | Manually trigger heartbeat check |
-| `POST /canopy/admin/invite-remote`         | Invite a user from another land  |
-| `GET /canopy/admin/events/failed`          | View failed outbox events        |
-| `POST /canopy/admin/events/:eventId/retry` | Retry a failed event             |
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /canopy/admin/peer/add` | Add a peer land by URL |
+| `DELETE /canopy/admin/peer/:domain` | Remove a peer |
+| `POST /canopy/admin/peer/:domain/block` | Block a peer |
+| `POST /canopy/admin/peer/:domain/unblock` | Unblock a peer |
+| `GET /canopy/admin/peers` | List all peers and status |
+| `POST /canopy/admin/heartbeat` | Manually trigger heartbeat check |
+| `POST /canopy/admin/invite-remote` | Invite a user from another land |
+| `GET /canopy/admin/events/failed` | View failed outbox events |
+| `POST /canopy/admin/events/:eventId/retry` | Retry a failed event |
 
 All requests between lands use this header format:
 
@@ -190,9 +220,9 @@ Lands monitor their peers via periodic heartbeats (`GET /canopy/info` every 5 mi
 
 Your trees are unaffected when a peer goes down. Remote trees on that peer are temporarily inaccessible until it comes back.
 
-## Building a Custom Frontend
+## Building a Custom Client
 
-Your Land's API is standard REST + WebSocket. You can build any frontend you want. The canopy protocol is also REST, so custom backend implementations can participate in the network as long as they implement the protocol endpoints.
+The TreeOS app UI is server rendered from the backend. But your Land's API is standard REST + WebSocket, so you can build any client you want on top of it. The canopy protocol is also REST, so custom backend implementations can participate in the network as long as they implement the protocol endpoints.
 
 ## Data Sovereignty
 

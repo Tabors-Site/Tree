@@ -1,9 +1,12 @@
 node_modules/
 .env
 dist/
-
+*.log
 
 backend/node_modules
 backend/uploads
 backend/.land/
 backend/.env
+
+frontend/node_modules
+frontend/dist/

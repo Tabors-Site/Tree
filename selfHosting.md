@@ -1,28 +1,76 @@
 # Self Hosting Guide
 
-Everything a developer needs to know to run, customize, and connect their own Tree Land node.
+Everything a developer needs to know to run, customize, and connect their own TreeOS Land node.
 
 ## Table of Contents
 
-1. What You Can Change
-2. What Must Stay the Same
-3. Environment Variables
-4. Canopy Protocol Versioning
-5. WebSocket System
-6. LLM Configuration
-7. Background Jobs
-8. Energy System
-9. MCP Tools
-10. Gateway Integrations
-11. Billing and Payments
-12. Authentication
-13. Database Models
-14. Frontend
-15. HTML Renders
+1. Project Structure
+2. What You Can Change
+3. What Must Stay the Same
+4. Environment Variables
+5. Canopy Protocol Versioning
+6. WebSocket System
+7. LLM Configuration
+8. Background Jobs
+9. Energy System
+10. MCP Tools
+11. Gateway Integrations
+12. Billing and Payments
+13. Authentication
+14. Database Models
 
 ---
 
-## 1. What You Can Change (Freely)
+## 1. Project Structure
+
+```
+treeos-land/
+  .env                  # single config file for the whole project
+  package.json          # root scripts
+  backend/              # the Land server (this is the app)
+  frontend/             # optional static site (landing page, about page)
+```
+
+**The backend is the entire application.** `npm start` runs the backend and you have a fully working Land. The backend serves the TreeOS UI as server rendered HTML, handles the REST API, runs WebSocket connections, executes AI tool calls, and manages background jobs.
+
+**The frontend is optional.** It is a React + Vite static site for landing pages and about pages only. You do not need to build or deploy it. Your Land works completely without it.
+
+### Backend Layout
+
+```
+backend/
+  server.js               # entry point
+  routes/
+    api/                   # REST JSON endpoints (nodes, notes, users, values, etc.)
+    html/                  # TreeOS app UI (server rendered pages)
+    billing/               # Stripe purchase and webhook
+    canopy.js              # Canopy protocol endpoints
+  routesFrontend/          # landing pages, setup flow, onboarding (server rendered)
+  ws/                      # WebSocket server (real time chat and tree interaction)
+  mcp/                     # MCP server (AI tool execution)
+  jobs/                    # background jobs (dreams, drain, understanding, cleanup)
+  canopy/                  # land identity, peering, event outbox
+  core/                    # shared business logic
+  db/                      # Mongoose models and config
+  middleware/              # auth, rate limiting
+```
+
+The app UI lives in `routes/html/` (chat, nodes, notes, contributions, transactions, understanding, values, user, root). The landing and setup pages live in `routesFrontend/`. Both are server rendered. There is no separate frontend build step needed.
+
+### Root Scripts
+
+| Command | What It Does |
+|---------|-------------|
+| `npm start` | Runs the backend. This is your Land. |
+| `npm run build` | Builds the optional frontend (landing pages only) |
+| `npm run dev:frontend` | Runs the Vite dev server for the optional frontend |
+| `npm run install:all` | Installs dependencies in both backend and frontend |
+
+All environment variables live in a single `.env` file at the project root. Both backend and frontend read from this file.
+
+---
+
+## 2. What You Can Change (Freely)
 
 These are yours to modify however you want. They do not affect canopy compatibility.
 
@@ -61,18 +109,16 @@ These are yours to modify however you want. They do not affect canopy compatibil
 - Disable entirely by leaving Stripe env vars empty
 - Self-hosted lands default to "god" tier (unlimited energy)
 
-**Frontend:**
-- All UI components, routing, styling
-- Cytoscape.js visualization configuration
-- Custom themes
-- Build your own frontend entirely (just speak the same API)
-
-**HTML Renders:**
-- The HTML page renders inside routesURL functions will eventually be extracted to standalone files outside the route handlers. This will make them pure templates that are easy to toggle on or off per land deployment. For now they are inline, but plan for them being configurable flags.
+**App UI and Landing Pages:**
+- All server rendered pages in `routes/html/` and `routesFrontend/`
+- Page templates, styling, layout
+- Toggle HTML renders on/off with `ENABLE_FRONTEND_HTML`
+- The optional `frontend/` React site (landing/about pages)
+- Build your own client entirely (just speak the same API)
 
 ---
 
-## 2. What Must Stay the Same (Canopy Contract)
+## 3. What Must Stay the Same (Canopy Contract)
 
 If you want your land to participate in the canopy network, these parts are locked. Changing them will break federation with other lands.
 
@@ -119,13 +165,13 @@ These endpoints must return the expected response shapes. The request/response s
 
 ---
 
-## 3. Environment Variables
+## 4. Environment Variables
 
 ### Required
 
 | Variable | What It Does | Default |
 |----------|-------------|---------|
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017/tree` |
+| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
 | `JWT_SECRET` | Signs user auth tokens. Change this. | `your_secret_key` |
 | `CUSTOM_LLM_API_SECRET_KEY` | Encrypts stored LLM API keys (AES-256-CBC). 32+ chars. | none |
 
@@ -136,32 +182,40 @@ These endpoints must return the expected response shapes. The request/response s
 | `LAND_DOMAIN` | Public domain of this land node | `localhost` |
 | `LAND_NAME` | Display name shown to other lands | `My Land` |
 | `LAND_KEY_DIR` | Where to store the Ed25519 keypair | `.land` |
-| `PORT` | Server port | `80` |
+| `PORT` | Server port | `3000` |
 
 ### Canopy Network (optional)
 
 | Variable | What It Does | Default |
 |----------|-------------|---------|
-| `DIRECTORY_URL` | Directory service for peer discovery. Leave empty for standalone. | none |
+| `DIRECTORY_URL` | Directory service for automatic peer discovery (coming soon). Leave empty for manual peering. | none |
 | `LAND_REDIRECT_TO` | If you moved domains, set old domain to serve this redirect. | none |
 | `LAND_DEFAULT_TIER` | Default profile tier for new users | `god` |
 
-### Frontend
+### Domains and CORS
 
 | Variable | What It Does | Default |
 |----------|-------------|---------|
 | `TREE_FRONTEND_DOMAIN` | Frontend URL (CORS whitelist) | none |
 | `ROOT_FRONTEND_DOMAIN` | Root app frontend URL | none |
-| `BE_FRONTEND_DOMAIN` | BE app frontend URL | none |
-| `FRONTEND_PORT` | Frontend dev server port | `3000` |
-| `VITE_TREE_API_URL` | API endpoint the frontend calls | none |
+| `ENABLE_FRONTEND_HTML` | Toggle inline HTML page renders on/off | `true` |
+
+### Optional Frontend (landing page only)
+
+| Variable | What It Does | Default |
+|----------|-------------|---------|
+| `VITE_TREE_API_URL` | API endpoint the frontend calls (include /api/v1) | none |
+| `VITE_ROOT_API` | Root app API endpoint for the frontend | none |
+
+These VITE_ vars only matter if you build the optional `frontend/` React site.
 
 ### LLM
 
 | Variable | What It Does | Default |
 |----------|-------------|---------|
-| `AI_MODEL` | Default LLM model name | `qwen3.5:27b` |
-| `OLLAMA_URL` | Ollama endpoint if using local Ollama | none |
+| `AI_MODEL` | Default LLM model name (fallback when no custom connection is configured) | `qwen3.5:27b` |
+
+LLM endpoints are configured per user through `CustomLlmConnection` records in the database, not through env vars. Users add their own connections (any OpenAI-compatible endpoint) via the app. `AI_MODEL` is only the fallback model name.
 
 ### Email (optional)
 
@@ -195,7 +249,7 @@ These endpoints must return the expected response shapes. The request/response s
 
 ---
 
-## 4. Canopy Protocol Versioning
+## 5. Canopy Protocol Versioning
 
 The canopy protocol has a version number. Every request between lands includes this version. This is how different lands running different code versions can still communicate (or gracefully reject each other).
 
@@ -213,7 +267,7 @@ The canopy protocol has a version number. Every request between lands includes t
 - Changes to authentication flow
 
 **What does NOT increment the version:**
-- Changes to your frontend
+- Changes to your app UI or landing pages
 - Changes to energy costs or tier limits
 - Changes to LLM configuration
 - Changes to background job timing
@@ -226,9 +280,9 @@ App code can diverge freely between lands. Only the ~10 canopy endpoints need to
 
 ---
 
-## 5. WebSocket System
+## 6. WebSocket System
 
-The WebSocket server handles real-time interaction between the frontend and backend.
+The WebSocket server handles real-time interaction between clients and the backend.
 
 **Connection flow:**
 1. Client connects to WebSocket server
@@ -253,17 +307,17 @@ The WebSocket server handles real-time interaction between the frontend and back
 - Mode-specific system prompts (what the AI says/does in each mode)
 - Tool availability per mode (which MCP tools the AI can use)
 - Session idle timeout (default 15 min)
-- Frontend domain whitelist for CORS
+- Domain whitelist for CORS
 
 **Do not modify:**
-- WebSocket event names (frontend depends on these)
+- WebSocket event names (the app UI depends on these)
 - Session registry lifecycle (types: websocket_chat, api, orchestration, scheduled)
 - Active navigator enforcement (one user drives tree changes at a time per root)
 - AIChat tracking (every LLM call logged with sessionId + chainIndex)
 
 ---
 
-## 6. LLM Configuration
+## 7. LLM Configuration
 
 Tree uses OpenAI-compatible APIs for all LLM calls. You can point it at anything.
 
@@ -291,7 +345,7 @@ Tree uses OpenAI-compatible APIs for all LLM calls. You can point it at anything
 
 ---
 
-## 7. Background Jobs
+## 8. Background Jobs
 
 Jobs run in-process on intervals. Each land runs its own jobs for its own trees.
 
@@ -320,7 +374,7 @@ Jobs run in-process on intervals. Each land runs its own jobs for its own trees.
 
 ---
 
-## 8. Energy System
+## 9. Energy System
 
 Energy is a usage meter that limits how much a user can do per day.
 
@@ -351,7 +405,7 @@ Self-hosted lands default to "god" tier (LAND_DEFAULT_TIER=god).
 
 ---
 
-## 9. MCP Tools
+## 10. MCP Tools
 
 The MCP (Model Context Protocol) server runs in-process and exposes tools that the LLM can call during conversations.
 
@@ -371,7 +425,7 @@ The MCP (Model Context Protocol) server runs in-process and exposes tools that t
 
 ---
 
-## 10. Gateway Integrations
+## 11. Gateway Integrations
 
 Gateways connect external services (Discord, Telegram, web apps) to trees.
 
@@ -390,7 +444,7 @@ Gateways connect external services (Discord, Telegram, web apps) to trees.
 
 ---
 
-## 11. Billing and Payments
+## 12. Billing and Payments
 
 Stripe integration for plan upgrades and energy purchases.
 
@@ -408,14 +462,14 @@ Stripe integration for plan upgrades and energy purchases.
 
 ---
 
-## 12. Authentication
+## 13. Authentication
 
 Three auth methods:
 
 **JWT (primary):**
 - Signed with JWT_SECRET
 - Sent as Bearer token in Authorization header or as cookie
-- Used by the frontend for all API calls
+- Used by the app UI for all API calls
 
 **API Key:**
 - Users generate API keys from their account
@@ -438,7 +492,7 @@ Three auth methods:
 
 ---
 
-## 13. Database Models
+## 14. Database Models
 
 18 Mongoose models. All use UUID v4 for primary keys. All refs are string IDs.
 
@@ -469,33 +523,6 @@ Three auth methods:
 - **CanopyEvent** . outbox for async event delivery
 
 **You can add new models freely.** You can add fields to existing models. Do not remove or rename fields that are part of the canopy contract (User.username, User.isRemote, User.homeLand, Node.rootOwner, Node.contributors, Node.visibility, Contribution.wasRemote, Contribution.homeLand).
-
----
-
-## 14. Frontend
-
-React 18 + Vite 6. Cytoscape.js for tree visualization.
-
-**Key env vars:**
-- `VITE_TREE_API_URL` . backend API endpoint
-- `VITE_ROOT_API` . root app API
-
-**The frontend talks to one URL.** In standalone mode, that's your land's backend. With canopy, remote tree access is proxied through your land's backend, so the frontend never needs to know about other lands.
-
-**WebSocket messages:** The frontend sends/receives events matching the backend's WebSocket event names. If you build a custom frontend, match these event names and payload shapes.
-
-**Fully customizable:** Everything. Build your own frontend if you want. As long as it speaks the same API and WebSocket events, it works.
-
----
-
-## 15. HTML Renders
-
-Currently, some routes in `backend/routesURL/` have inline HTML renders (page templates built inside the route handler functions). These will be extracted to standalone template files so they can be toggled on or off per land deployment via configuration flags.
-
-**What this means for self-hosters:**
-- For now, if you want to disable or customize a rendered page, you modify the route handler directly
-- In the future, templates will be external files with a flag system to enable/disable them per land
-- Plan for this when customizing: keep your HTML changes isolated so they're easy to migrate when the template system ships
 
 ---
 
