@@ -13,6 +13,7 @@ import understanding from "./understanding.js";
 import tree from "./tree.js";
 import blog from "./blog.js";
 import gatewayWebhooks from "./gatewayWebhooks.js";
+import canopy from "./canopy.js";
 
 import rateLimit from "express-rate-limit";
 import { notFoundPage } from "../middleware/notFoundPage.js";
@@ -66,4 +67,5 @@ export default function registerURLRoutes(app) {
   app.use("/", tree);
   app.use("/", blog);
   app.use("/", gatewayWebhooks);
+  app.use("/", canopy);
 }

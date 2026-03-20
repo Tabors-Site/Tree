@@ -133,6 +133,16 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+
+  // Canopy (distributed network) fields
+  isRemote: {
+    type: Boolean,
+    default: false,
+  },
+  homeLand: {
+    type: String,
+    default: null,
+  },
 });
 
 

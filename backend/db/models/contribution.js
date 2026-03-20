@@ -372,6 +372,16 @@ const ContributionSchema = new mongoose.Schema({
       _id: false,
     },
   },
+  // Canopy (distributed network) fields
+  wasRemote: {
+    type: Boolean,
+    default: false,
+  },
+  homeLand: {
+    type: String,
+    default: null,
+  },
+
   understandingMeta: {
     type: {
       stage: {

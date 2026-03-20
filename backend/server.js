@@ -10,9 +10,11 @@ import { startRawIdeaAutoPlaceJob } from "./jobs/rawIdeaAutoPlace.js";
 import { startTreeDreamJob, runTreeDreamJob } from "./jobs/treeDream.js";
 import { notFoundPage } from "./middleware/notFoundPage.js";
 import mongoose from "./db/config.js"; // Initialize DB connection
+import { getLandIdentity } from "./canopy/identity.js";
+import { startHeartbeatJob } from "./canopy/peers.js";
+import { startOutboxJob } from "./canopy/events.js";
 
 import dotenv from "dotenv";
-//import { initWebSocketServer } from "./ws/websocket.js";
 
 dotenv.config();
 
@@ -85,21 +87,43 @@ export const wsServer = initWebSocketServer(server);
 const PORT = process.env.PORT || 80; //
 
 server.listen(PORT, "0.0.0.0", async () => {
-  console.log(`Express server (Tree/MCP coupled) running on port ${PORT}`);
+  // Initialize land identity (generates keypair on first boot)
+  const land = getLandIdentity();
+  console.log("[Land] Initializing Tree Land Node...");
+  console.log(`[Land] Domain: ${land.domain}`);
+  console.log(`[Land] Name: ${land.name}`);
+  console.log(`[Land] Land ID: ${land.landId}`);
+  console.log(`[Land] Canopy Protocol Version: ${land.protocolVersion}`);
+
   startRawIdeaAutoPlaceJob({ intervalMs: 15 * 60 * 1000 });
   startTreeDreamJob({ intervalMs: 30 * 60 * 1000 });
-  // Wait for MongoDB before running immediately
-  mongoose.connection.on("connected", () => {
+
+  // Wait for MongoDB before running startup tasks
+  const onDbReady = () => {
+    console.log("[Land] MongoDB connected");
     runTreeDreamJob();
+    console.log("[Land] Background jobs started (dream, drain, cleanup, understanding)");
+
+    // Start canopy network jobs
+    startHeartbeatJob();
+    startOutboxJob();
+    console.log("[Land] Canopy API ready");
+
     // Connect Discord bots for gateway input channels
     import("./core/discordBotManager.js")
-      .then(({ startupScan }) => startupScan())
-      .catch((err) => console.error("Discord bot startup scan failed:", err.message));
-  });
+      .then(({ startupScan }) => {
+        startupScan();
+        console.log("[Land] Gateway scan complete");
+        console.log(`[Land] Land node online. Listening on port ${PORT}`);
+      })
+      .catch((err) => {
+        console.error("[Land] Discord bot startup scan failed:", err.message);
+        console.log(`[Land] Land node online. Listening on port ${PORT}`);
+      });
+  };
+
+  mongoose.connection.on("connected", onDbReady);
   if (mongoose.connection.readyState === 1) {
-    runTreeDreamJob();
-    import("./core/discordBotManager.js")
-      .then(({ startupScan }) => startupScan())
-      .catch((err) => console.error("Discord bot startup scan failed:", err.message));
+    onDbReady();
   }
 });
