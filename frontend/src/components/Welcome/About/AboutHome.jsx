@@ -41,7 +41,7 @@ const AboutHome = () => {
     {
       emoji: "💻",
       title: "CLI",
-      desc: "Navigate and manage your trees from the terminal. Install, configure, and use TreeOS-cli.",
+      desc: "Navigate and manage your trees from the terminal. Install, configure, and use the TreeOS CLI.",
       to: "/about/cli",
       active: true,
     },

@@ -20,11 +20,11 @@ const CLIAbout = () => {
 
         {/* ── HEADER ── */}
         <div className="cli-header">
-          <h2 className="cli-title">💻 TreeOS-cli</h2>
+          <h2 className="cli-title">💻 TreeOS CLI</h2>
           <p className="cli-subtitle">
             Navigate and manage your trees like a filesystem from the terminal.
             All commands map to the <a href="/about/api" style={{ color: "rgba(255,255,255,0.85)" }}>TreeOS REST API</a>.
-            Config stored in <code>~/.TreeOS-cli/config.json</code>.
+            Config stored in <code>~/.treeos/config.json</code>.
           </p>
         </div>
 
