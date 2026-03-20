@@ -1,17 +1,6 @@
-// routesURL/chat.js
-// Simple chat-only interface for tree conversations.
-// No iframe, no tree view — just pick a tree and talk.
-
-import express from "express";
-import User from "../db/models/user.js";
-import Node from "../db/models/node.js";
-import CustomLlmConnection from "../db/models/customLlmConnection.js";
-import authenticateLite from "../middleware/authenticateLite.js";
-import { getNotifications } from "../core/notifications.js";
-import { getPendingInvitesForUser, respondToInvite } from "../core/invites.js";
-import { notFoundPage } from "../middleware/notFoundPage.js";
-
-const router = express.Router();
+/* ─────────────────────────────────────────────── */
+/* HTML renderer for chat page                     */
+/* ─────────────────────────────────────────────── */
 
 function escapeHtml(str) {
   return str
@@ -22,53 +11,8 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-router.get("/chat", authenticateLite, async (req, res) => {
-  try {
-    if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
-    }
-    if (!req.userId) {
-      return res.redirect("/login");
-    }
-
-    const user = await User.findById(req.userId).select("username roots llmAssignments");
-    if (!user) {
-      return notFoundPage(req, res, "This user doesn't exist.");
-    }
-
-    // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
-    const setupSkipped = req.cookies?.setupSkipped === "1";
-    if (!setupSkipped) {
-      const hasMainLlm = !!(user.llmAssignments?.main);
-      const hasTree = user.roots && user.roots.length > 0;
-      if (!hasMainLlm || !hasTree) {
-        const connCount = hasMainLlm ? 1 : await CustomLlmConnection.countDocuments({ userId: req.userId });
-        if (connCount === 0 || !hasTree) {
-          return res.redirect("/setup");
-        }
-      }
-    }
-
-    const { username } = user;
-
-    // Load user's trees
-    const rootIds = (user.roots || []).map(String);
-    let trees = [];
-    if (rootIds.length > 0) {
-      trees = await Node.find({ _id: { $in: rootIds } })
-        .select("_id name children")
-        .lean();
-    }
-
-    const treesJSON = JSON.stringify(
-      trees.map((t) => ({
-        id: t._id,
-        name: t.name,
-        childCount: t.children?.length || 0,
-      })),
-    );
-
-    return res.send(`<!DOCTYPE html>
+export function renderChat({ username, userId, treesJSON, trees }) {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -746,7 +690,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
   <script>
     const CONFIG = {
       username: "${escapeHtml(username)}",
-      userId: "${req.userId}",
+      userId: "${userId}",
       trees: ${treesJSON},
     };
 
@@ -1582,94 +1526,6 @@ router.get("/chat", authenticateLite, async (req, res) => {
       .catch(function() {});
   </script>
 </body>
-</html>`);
-  } catch (err) {
-    console.error("Error rendering /chat:", err);
-    return res.status(500).send("Internal server error");
-  }
-});
-
-router.get("/chat/notifications", authenticateLite, async (req, res) => {
-  try {
-    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
-    const rootId = req.query.rootId;
-    const { notifications, total } = await getNotifications({
-      userId: req.userId,
-      rootId,
-      limit: 50,
-      sinceDays: 7,
-    });
-
-    // Include dream config when viewing a specific tree
-    let dreamTime = null;
-    let isOwner = false;
-    if (rootId) {
-      const rootNode = await Node.findById(rootId).select("dreamTime rootOwner").lean();
-      if (rootNode) {
-        dreamTime = rootNode.dreamTime || null;
-        isOwner = rootNode.rootOwner?.toString() === req.userId.toString();
-      }
-    }
-
-    return res.json({ notifications, total, dreamTime, isOwner });
-  } catch (err) {
-    console.error("Chat notifications error:", err);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// ── Invites + Members API for chat panel ──────────────────────────────
-router.get("/chat/invites", authenticateLite, async (req, res) => {
-  try {
-    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
-
-    // Pending invites for this user
-    const invites = await getPendingInvitesForUser(req.userId);
-    const inviteList = invites.map((inv) => ({
-      id: inv._id,
-      from: inv.userInviting?.username || "Unknown",
-      treeName: inv.rootId?.name || "Unknown tree",
-      rootId: inv.rootId?._id || inv.rootId,
-    }));
-
-    // Members (only if rootId query param provided = user is in a tree)
-    let members = null;
-    const rootId = req.query.rootId;
-    if (rootId) {
-      const rootNode = await Node.findById(rootId)
-        .populate("rootOwner", "username _id")
-        .populate("contributors", "username _id")
-        .select("rootOwner contributors")
-        .lean();
-      if (rootNode) {
-        members = {
-          owner: rootNode.rootOwner || null,
-          contributors: rootNode.contributors || [],
-          isOwner: rootNode.rootOwner?._id?.toString() === req.userId.toString(),
-        };
-      }
-    }
-
-    return res.json({ invites: inviteList, members });
-  } catch (err) {
-    console.error("Chat invites error:", err);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-router.post("/chat/invites/:inviteId", authenticateLite, async (req, res) => {
-  try {
-    if (!req.userId) return res.status(401).json({ error: "Not authenticated" });
-    const { accept } = req.body;
-    await respondToInvite({
-      inviteId: req.params.inviteId,
-      userId: req.userId,
-      acceptInvite: accept === true || accept === "true",
-    });
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(400).json({ error: err.message });
-  }
-});
-
-export default router;
+</html>
+`;
+}

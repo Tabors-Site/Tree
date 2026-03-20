@@ -7,7 +7,15 @@
       "Bash(find /home/tabor/github/Tree/backend/ws/orchestrator -type f -name *.js)",
       "Bash(find /home/tabor/github/Tree/backend/ws/modes -type f -name *.js)",
       "Bash(grep -l \"useEnergy\" /home/tabor/github/Tree/backend/routesURL/*.js)",
-      "Bash(grep -l \"useEnergy\" /home/tabor/github/Tree/backend/core/*.js)"
+      "Bash(grep -l \"useEnergy\" /home/tabor/github/Tree/backend/core/*.js)",
+      "Bash(cp /home/tabor/github/Tree/backend/routesURL/user.js.new /tmp/user_check.mjs)",
+      "Bash(node --check /tmp/user_check.mjs)",
+      "Bash(node _cleanup.mjs)",
+      "Bash(cp /home/tabor/github/Tree/backend/routesURL/user.js.new /tmp/user_check2.mjs)",
+      "Bash(node --check /tmp/user_check2.mjs)",
+      "Bash(cp /home/tabor/github/Tree/backend/routesURL/user.js.new /tmp/user_final.mjs)",
+      "Bash(node --check /tmp/user_final.mjs)",
+      "Bash(node --check /home/tabor/github/Tree/backend/routesURL/user.js)"
     ]
   }
 }

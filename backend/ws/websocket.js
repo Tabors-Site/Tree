@@ -13,7 +13,7 @@ import {
   MCP_SERVER_URL,
 } from "./mcp.js";
 import { useEnergy } from "../core/energy.js";
-import { getNodeName } from "../controllers/treeDataFetching.js";
+import { getNodeName } from "../core/treeDataFetching.js";
 import Node from "../db/models/node.js";
 import { orchestrateTreeRequest } from "./orchestrator/treeOrchestrator.js";
 import { enqueue } from "./requestQueue.js";
@@ -126,9 +126,15 @@ async function loadTreeForDashboard(rootId) {
       id: String(obj._id),
       name: obj.name,
       prestige: obj.prestige || 0,
-      status: obj.versions?.find((v) => v.prestige === obj.prestige)?.status || "active",
+      status:
+        obj.versions?.find((v) => v.prestige === obj.prestige)?.status ||
+        "active",
       children: (obj.children || []).map((c) =>
-        simplify(typeof c === "object" && c !== null ? c : { _id: c, name: "?", children: [], versions: [], prestige: 0 }),
+        simplify(
+          typeof c === "object" && c !== null
+            ? c
+            : { _id: c, name: "?", children: [], versions: [], prestige: 0 },
+        ),
       ),
     };
   };
@@ -332,9 +338,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       // Only switch to HOME if the URL explicitly matches /user/ routes —
       // don't let bad/invalid tool URLs (which fall through to HOME default)
       // kill an active tree session.
-      const isExplicitHome = /^(\/api\/v1)?\/user\//.test((url || "").split("?")[0]);
+      const isExplicitHome = /^(\/api\/v1)?\/user\//.test(
+        (url || "").split("?")[0],
+      );
       const shouldSwitch = currentBig !== newBigMode || !currentMode;
-      if (shouldSwitch && (newBigMode !== BIG_MODES.HOME || isExplicitHome || !currentMode)) {
+      if (
+        shouldSwitch &&
+        (newBigMode !== BIG_MODES.HOME || isExplicitHome || !currentMode)
+      ) {
         // Finalize any in-flight chat
         await finalizeOpenChat(socket);
 
@@ -470,221 +481,260 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
 
     // ── CHAT ──────────────────────────────────────────────────────────
-    socket.on("chat", async ({ message, username, generation, mode: chatMode }) => {
-      if (!message || !username) {
-        socket.emit("chatError", {
-          error: "Missing message or username",
-          generation,
-        });
-        return;
-      }
-
-      if (typeof message !== "string" || message.length > 5000) {
-        socket.emit("chatError", {
-          error: "Message must be under 5000 characters.",
-          generation,
-        });
-        return;
-      }
-
-      // Validate chat mode
-      const validModes = ["chat", "place", "query"];
-      const safeChatMode = validModes.includes(chatMode) ? chatMode : "chat";
-
-      const visitorId = socket.visitorId || `user:${socket.userId}`;
-
-      // Check if user has LLM access
-      try {
-        let hasLlmAccess = await userHasLlm(socket.userId);
-        if (!hasLlmAccess) {
-          const activeRootId = getRootId(visitorId);
-          if (activeRootId) {
-            const rootNode = await Node.findById(activeRootId).select("rootOwner llmAssignments").lean();
-            if (rootNode && rootNode.rootOwner.toString() !== socket.userId.toString() && rootNode.llmAssignments?.placement) {
-              hasLlmAccess = true;
-            }
-          }
-        }
-        if (!hasLlmAccess) {
-          socket.emit("chatError", { error: "You need to set up a custom LLM connection before chatting. Visit /setup to connect one.", generation });
+    socket.on(
+      "chat",
+      async ({ message, username, generation, mode: chatMode }) => {
+        if (!message || !username) {
+          socket.emit("chatError", {
+            error: "Missing message or username",
+            generation,
+          });
           return;
         }
-      } catch (err) {
-        socket.emit("chatError", { error: err.message, generation });
-        return;
-      }
 
-      // Serialize messages per visitorId — wait for previous message to finish
-      await enqueue(visitorId, async () => {
-        // Abort any previous in-flight request
-        if (socket._chatAbort) {
-          socket._chatAbort.abort();
-        }
-        const abort = new AbortController();
-        socket._chatAbort = abort;
-
-        // ── Session + AIChat tracking ──────────────────────────────────
-        // Finalize any leftover chat from a previous turn
-        await finalizeOpenChat(socket);
-
-        const sessionId = ensureSession(socket);
-        syncRegistrySession(socket);
-        const preMode = getCurrentMode(visitorId) || "home:default";
-
-        // Resolve client info for tracking (include root override if present)
-        const trackingRootId = getRootId(visitorId);
-        let rootLlmOverride = null;
-        if (trackingRootId) {
-          const rn = await Node.findById(trackingRootId).select("llmAssignments").lean();
-          rootLlmOverride = rn?.llmAssignments?.placement || null;
-        }
-        const clientInfo = await getClientForUser(socket.userId, undefined, rootLlmOverride);
-
-        let aiChat = null;
-        try {
-          const activeRootId = trackingRootId;
-          aiChat = await startAIChat({
-            userId: socket.userId,
-            sessionId,
-            message: message.slice(0, 5000),
-            source: "user",
-            modeKey: preMode,
-            llmProvider: {
-              isCustom: clientInfo.isCustom,
-              model: clientInfo.model,
-              connectionId: clientInfo.connectionId || null,
-            },
-            ...(activeRootId
-              ? { treeContext: { targetNodeId: activeRootId } }
-              : {}),
+        if (typeof message !== "string" || message.length > 5000) {
+          socket.emit("chatError", {
+            error: "Message must be under 5000 characters.",
+            generation,
           });
-          setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
-          setAiContributionContext(socket.visitorId, sessionId, aiChat._id);
-        } catch (err) {
-          console.error("⚠️ Failed to create AIChat:", err.message);
+          return;
         }
 
+        // Validate chat mode
+        const validModes = ["chat", "place", "query"];
+        const safeChatMode = validModes.includes(chatMode) ? chatMode : "chat";
+
+        const visitorId = socket.visitorId || `user:${socket.userId}`;
+
+        // Check if user has LLM access
         try {
-          const currentMode = getCurrentMode(visitorId);
-          const bigMode = currentMode?.split(":")[0] || null;
-          let response;
-
-          if (bigMode === "tree") {
-            response = await orchestrateTreeRequest({
-              visitorId,
-              message,
-              socket,
-              username,
-              userId: socket.userId,
-              signal: abort.signal,
-              sessionId,
-              skipRespond: safeChatMode === "place",
-              forceQueryOnly: safeChatMode === "query",
-              rootChatId: aiChat?._id || null,
-              sourceType: safeChatMode === "place" ? "ws-tree-place" : safeChatMode === "query" ? "ws-tree-query" : "tree-chat",
-            });
-          } else {
-            response = await processMessage(visitorId, message, {
-              username,
-              userId: socket.userId,
-              rootId: getRootId(visitorId),
-              signal: abort.signal,
-              onToolResults(results) {
-                if (abort.signal.aborted) return;
-                for (const r of results) {
-                  socket.emit("toolResult", r);
-                }
-              },
-            });
+          let hasLlmAccess = await userHasLlm(socket.userId);
+          if (!hasLlmAccess) {
+            const activeRootId = getRootId(visitorId);
+            if (activeRootId) {
+              const rootNode = await Node.findById(activeRootId)
+                .select("rootOwner llmAssignments")
+                .lean();
+              if (
+                rootNode &&
+                rootNode.rootOwner.toString() !== socket.userId.toString() &&
+                rootNode.llmAssignments?.placement
+              ) {
+                hasLlmAccess = true;
+              }
+            }
           }
-
-          if (response && !abort.signal.aborted) {
-            // Strip internal tracking fields before sending to client
-            const { _llmProvider, _raw, llmProvider: _lp, ...publicResponse } = response;
-            if (safeChatMode === "place") {
-              socket.emit("placeResult", {
-                success: publicResponse.success,
-                stepSummaries: publicResponse.stepSummaries || [],
-                targetPath: publicResponse.lastTargetPath || null,
-                generation,
-              });
-            } else {
-              socket.emit("chatResponse", { ...publicResponse, generation });
-            }
-
-            // ── Finalize AIChat (success) ────────────────────────────
-            if (aiChat) {
-              const finalMode = response.modeKey || getCurrentMode(visitorId);
-              finalizeAIChat({
-                chatId: aiChat._id,
-                content: response.answer || null,
-                stopped: false,
-                modeKey: finalMode,
-              }).catch((err) =>
-                console.error("⚠️ AIChat finalize failed:", err.message),
-              );
-            }
-            clearAiContributionContext(socket.visitorId);
-            clearActiveChat(socket);
-          } else if (abort.signal.aborted) {
-            // ── Finalize AIChat (cancelled mid-flight) ───────────────
-            if (aiChat) {
-              finalizeAIChat({
-                chatId: aiChat._id,
-                content: null,
-                stopped: true,
-              }).catch((err) =>
-                console.error("⚠️ AIChat cancel finalize failed:", err.message),
-              );
-            }
-            clearAiContributionContext(socket.visitorId);
-            clearActiveChat(socket);
-          }
-        } catch (err) {
-          if (abort.signal.aborted) {
-            if (aiChat) {
-              finalizeAIChat({
-                chatId: aiChat._id,
-                content: null,
-                stopped: true,
-              }).catch((e) =>
-                console.error("⚠️ AIChat abort finalize failed:", e.message),
-              );
-            }
-            clearActiveChat(socket);
+          if (!hasLlmAccess) {
+            socket.emit("chatError", {
+              error:
+                "You need to set up a custom LLM connection before chatting. Visit /setup to connect one.",
+              generation,
+            });
             return;
           }
-
-          console.error("❌ Chat error:", err);
-
-          // Charge energy on LLM failure to prevent spam of fake endpoints
-          try {
-            await useEnergy({ userId: socket.userId, action: "chatError" });
-            console.log("⚡ Charged 2 energy for failed LLM call (user:", socket.userId, ")");
-          } catch (energyErr) {
-            console.error("⚠️ Energy charge on error failed:", energyErr.message);
-          }
-
+        } catch (err) {
           socket.emit("chatError", { error: err.message, generation });
-
-          // ── Finalize AIChat (error) ────────────────────────────────
-          if (aiChat) {
-            finalizeAIChat({
-              chatId: aiChat._id,
-              content: `Error: ${err.message}`,
-              stopped: false,
-            }).catch((e) =>
-              console.error("⚠️ AIChat error finalize failed:", e.message),
-            );
-          }
-          clearActiveChat(socket);
-        } finally {
-          if (socket._chatAbort === abort) {
-            socket._chatAbort = null;
-          }
+          return;
         }
-      });
-    });
+
+        // Serialize messages per visitorId — wait for previous message to finish
+        await enqueue(visitorId, async () => {
+          // Abort any previous in-flight request
+          if (socket._chatAbort) {
+            socket._chatAbort.abort();
+          }
+          const abort = new AbortController();
+          socket._chatAbort = abort;
+
+          // ── Session + AIChat tracking ──────────────────────────────────
+          // Finalize any leftover chat from a previous turn
+          await finalizeOpenChat(socket);
+
+          const sessionId = ensureSession(socket);
+          syncRegistrySession(socket);
+          const preMode = getCurrentMode(visitorId) || "home:default";
+
+          // Resolve client info for tracking (include root override if present)
+          const trackingRootId = getRootId(visitorId);
+          let rootLlmOverride = null;
+          if (trackingRootId) {
+            const rn = await Node.findById(trackingRootId)
+              .select("llmAssignments")
+              .lean();
+            rootLlmOverride = rn?.llmAssignments?.placement || null;
+          }
+          const clientInfo = await getClientForUser(
+            socket.userId,
+            undefined,
+            rootLlmOverride,
+          );
+
+          let aiChat = null;
+          try {
+            const activeRootId = trackingRootId;
+            aiChat = await startAIChat({
+              userId: socket.userId,
+              sessionId,
+              message: message.slice(0, 5000),
+              source: "user",
+              modeKey: preMode,
+              llmProvider: {
+                isCustom: clientInfo.isCustom,
+                model: clientInfo.model,
+                connectionId: clientInfo.connectionId || null,
+              },
+              ...(activeRootId
+                ? { treeContext: { targetNodeId: activeRootId } }
+                : {}),
+            });
+            setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
+            setAiContributionContext(socket.visitorId, sessionId, aiChat._id);
+          } catch (err) {
+            console.error("⚠️ Failed to create AIChat:", err.message);
+          }
+
+          try {
+            const currentMode = getCurrentMode(visitorId);
+            const bigMode = currentMode?.split(":")[0] || null;
+            let response;
+
+            if (bigMode === "tree") {
+              response = await orchestrateTreeRequest({
+                visitorId,
+                message,
+                socket,
+                username,
+                userId: socket.userId,
+                signal: abort.signal,
+                sessionId,
+                skipRespond: safeChatMode === "place",
+                forceQueryOnly: safeChatMode === "query",
+                rootChatId: aiChat?._id || null,
+                sourceType:
+                  safeChatMode === "place"
+                    ? "ws-tree-place"
+                    : safeChatMode === "query"
+                      ? "ws-tree-query"
+                      : "tree-chat",
+              });
+            } else {
+              response = await processMessage(visitorId, message, {
+                username,
+                userId: socket.userId,
+                rootId: getRootId(visitorId),
+                signal: abort.signal,
+                onToolResults(results) {
+                  if (abort.signal.aborted) return;
+                  for (const r of results) {
+                    socket.emit("toolResult", r);
+                  }
+                },
+              });
+            }
+
+            if (response && !abort.signal.aborted) {
+              // Strip internal tracking fields before sending to client
+              const {
+                _llmProvider,
+                _raw,
+                llmProvider: _lp,
+                ...publicResponse
+              } = response;
+              if (safeChatMode === "place") {
+                socket.emit("placeResult", {
+                  success: publicResponse.success,
+                  stepSummaries: publicResponse.stepSummaries || [],
+                  targetPath: publicResponse.lastTargetPath || null,
+                  generation,
+                });
+              } else {
+                socket.emit("chatResponse", { ...publicResponse, generation });
+              }
+
+              // ── Finalize AIChat (success) ────────────────────────────
+              if (aiChat) {
+                const finalMode = response.modeKey || getCurrentMode(visitorId);
+                finalizeAIChat({
+                  chatId: aiChat._id,
+                  content: response.answer || null,
+                  stopped: false,
+                  modeKey: finalMode,
+                }).catch((err) =>
+                  console.error("⚠️ AIChat finalize failed:", err.message),
+                );
+              }
+              clearAiContributionContext(socket.visitorId);
+              clearActiveChat(socket);
+            } else if (abort.signal.aborted) {
+              // ── Finalize AIChat (cancelled mid-flight) ───────────────
+              if (aiChat) {
+                finalizeAIChat({
+                  chatId: aiChat._id,
+                  content: null,
+                  stopped: true,
+                }).catch((err) =>
+                  console.error(
+                    "⚠️ AIChat cancel finalize failed:",
+                    err.message,
+                  ),
+                );
+              }
+              clearAiContributionContext(socket.visitorId);
+              clearActiveChat(socket);
+            }
+          } catch (err) {
+            if (abort.signal.aborted) {
+              if (aiChat) {
+                finalizeAIChat({
+                  chatId: aiChat._id,
+                  content: null,
+                  stopped: true,
+                }).catch((e) =>
+                  console.error("⚠️ AIChat abort finalize failed:", e.message),
+                );
+              }
+              clearActiveChat(socket);
+              return;
+            }
+
+            console.error("❌ Chat error:", err);
+
+            // Charge energy on LLM failure to prevent spam of fake endpoints
+            try {
+              await useEnergy({ userId: socket.userId, action: "chatError" });
+              console.log(
+                "⚡ Charged 2 energy for failed LLM call (user:",
+                socket.userId,
+                ")",
+              );
+            } catch (energyErr) {
+              console.error(
+                "⚠️ Energy charge on error failed:",
+                energyErr.message,
+              );
+            }
+
+            socket.emit("chatError", { error: err.message, generation });
+
+            // ── Finalize AIChat (error) ────────────────────────────────
+            if (aiChat) {
+              finalizeAIChat({
+                chatId: aiChat._id,
+                content: `Error: ${err.message}`,
+                stopped: false,
+              }).catch((e) =>
+                console.error("⚠️ AIChat error finalize failed:", e.message),
+              );
+            }
+            clearActiveChat(socket);
+          } finally {
+            if (socket._chatAbort === abort) {
+              socket._chatAbort = null;
+            }
+          }
+        });
+      },
+    );
 
     // ── CANCEL REQUEST ────────────────────────────────────────────────
     socket.on("cancelRequest", () => {
@@ -815,7 +865,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (!socket.userId || !sessionId) return;
       const session = getSession(sessionId);
       if (!session || session.userId !== String(socket.userId)) return;
-      console.log(`🛑 Session stopped by user: ${session.type} [${sessionId.slice(0, 8)}]`);
+      console.log(
+        `🛑 Session stopped by user: ${session.type} [${sessionId.slice(0, 8)}]`,
+      );
       endSession(sessionId);
       // If it was the user's own chat abort, cancel in-flight request
       if (sessionId === socket._registrySessionId) {
@@ -854,7 +906,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     socket.on("getDashboardRoots", async () => {
       if (!socket.userId) return;
       try {
-        const roots = await Node.find({ rootOwner: socket.userId, parent: { $ne: "deleted" } }).select("_id name children");
+        const roots = await Node.find({
+          rootOwner: socket.userId,
+          parent: { $ne: "deleted" },
+        }).select("_id name children");
         const simplified = roots.map((r) => ({
           id: String(r._id),
           name: r.name,
@@ -869,7 +924,11 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     socket.on("getDashboardChats", async ({ sessionId }) => {
       if (!socket.userId || !sessionId) return;
       try {
-        const { sessions } = await getAIChats({ userId: socket.userId, sessionId, sessionLimit: 1 });
+        const { sessions } = await getAIChats({
+          userId: socket.userId,
+          sessionId,
+          sessionLimit: 1,
+        });
         const chats = sessions.flatMap((s) => s.chats);
         socket.emit("dashboardChats", { sessionId, chats });
       } catch (err) {
@@ -965,19 +1024,28 @@ export function emitToVisitor(visitorId, event, data) {
   if (socketId) io.to(socketId).emit(event, data);
 }
 
-export function emitNavigate({ userId, url, replace = false, sessionId = null }) {
+export function emitNavigate({
+  userId,
+  url,
+  replace = false,
+  sessionId = null,
+}) {
   if (!io) return;
 
   // If sessionId provided, only allow if this session is the active navigator
   if (sessionId && !canNavigate(sessionId)) {
-    console.log(`🚫 Nav blocked: session ${sessionId.slice(0, 8)} is not active navigator for user ${userId}`);
+    console.log(
+      `🚫 Nav blocked: session ${sessionId.slice(0, 8)} is not active navigator for user ${userId}`,
+    );
     return;
   }
 
   const socketId = authSessions.get(userId);
   if (socketId) {
     io.to(socketId).emit("navigate", { url, replace });
-    console.log(`📍 Navigated user ${userId} to ${url} (session: ${sessionId ? sessionId.slice(0, 8) : "ungated"})`);
+    console.log(
+      `📍 Navigated user ${userId} to ${url} (session: ${sessionId ? sessionId.slice(0, 8) : "ungated"})`,
+    );
   }
 }
 

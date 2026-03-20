@@ -8,10 +8,16 @@ import {
   forgotPassword,
   resetPassword,
   verifyEmail,
-} from "../controllers/users.js";
+} from "../core/users.js";
 import authenticate from "../middleware/authenticate.js";
 import User from "../db/models/user.js";
 import CustomLlmConnection from "../db/models/customLlmConnection.js";
+
+import {
+  renderLoginPage,
+  renderRegisterPage,
+  renderForgotPasswordPage,
+} from "../core/login.js";
 
 const router = express.Router();
 
@@ -63,32 +69,54 @@ router.post(
   "/setHTMLShareToken",
   authenticate,
   loginLimiter,
-  setHtmlShareToken
+  setHtmlShareToken,
 );
 
-router.post("/verify-token", authenticate, getHtmlShareToken, async (req, res) => {
-  let hasLlm = false;
-  try {
-    const user = await User.findById(req.userId).select("llmAssignments").lean();
-    if (user?.llmAssignments?.main) {
-      hasLlm = true;
-    } else {
-      const connCount = await CustomLlmConnection.countDocuments({ userId: req.userId });
-      hasLlm = connCount > 0;
+router.post(
+  "/verify-token",
+  authenticate,
+  getHtmlShareToken,
+  async (req, res) => {
+    let hasLlm = false;
+    try {
+      const user = await User.findById(req.userId)
+        .select("llmAssignments")
+        .lean();
+      if (user?.llmAssignments?.main) {
+        hasLlm = true;
+      } else {
+        const connCount = await CustomLlmConnection.countDocuments({
+          userId: req.userId,
+        });
+        hasLlm = connCount > 0;
+      }
+    } catch (err) {
+      console.error("verify-token LLM check error:", err.message);
     }
-  } catch (err) {
-    console.error("verify-token LLM check error:", err.message);
-  }
-  res.json({
-    userId: req.userId,
-    username: req.username,
-    HTMLShareToken: req.HTMLShareToken,
-    hasLlm,
-  });
-});
+    res.json({
+      userId: req.userId,
+      username: req.username,
+      HTMLShareToken: req.HTMLShareToken,
+      hasLlm,
+    });
+  },
+);
 
 router.post("/forgot-password", emailLimiter, forgotPassword);
 router.post("/user/reset-password", resetPassword);
 router.get("/user/verify/:token", verifyEmail);
+
+router.get("/login", (req, res, next) => {
+  if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
+  renderLoginPage(req, res, next);
+});
+router.get("/register", (req, res, next) => {
+  if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
+  renderRegisterPage(req, res, next);
+});
+router.get("/forgot-password", (req, res, next) => {
+  if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
+  renderForgotPasswordPage(req, res, next);
+});
 
 export default router;

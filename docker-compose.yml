@@ -1,0 +1,36 @@
+services:
+  tree:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/tree
+    ports:
+      - "${PORT:-80}:80"
+    volumes:
+      - land-keys:/app/.land
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - tree
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    volumes:
+      - tree-data:/data/db
+    restart: unless-stopped
+
+volumes:
+  tree-data:
+  land-keys:

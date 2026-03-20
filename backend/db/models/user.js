@@ -2,19 +2,17 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 
-
 import { v4 as uuidv4 } from "uuid";
 function generateHtmlShareToken() {
   return crypto.randomBytes(16).toString("base64url"); // URL-safe
 }
-
 
 const RecentRootSchema = new mongoose.Schema(
   {
     rootId: {
       type: String,
       required: true,
-      ref: "Node"
+      ref: "Node",
     },
 
     rootName: {
@@ -28,7 +26,7 @@ const RecentRootSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const ApiKeySchema = new mongoose.Schema(
@@ -41,17 +39,7 @@ const ApiKeySchema = new mongoose.Schema(
 
     usageCount: { type: Number, default: 0 },
   },
-  { timestamps: { createdAt: true, updatedAt: false } }
-);
-
-const OpenAIConnectorSchema = new mongoose.Schema(
-  {
-    token: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now },
-    lastUsedAt: { type: Date, default: null },
-    revoked: { type: Boolean, default: false },
-  },
-  { _id: false }
+  { timestamps: { createdAt: true, updatedAt: false } },
 );
 
 const EnergySchema = new mongoose.Schema(
@@ -66,7 +54,7 @@ const EnergySchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const UserSchema = new mongoose.Schema({
@@ -83,7 +71,7 @@ const UserSchema = new mongoose.Schema({
   apiKeys: [ApiKeySchema],
 
   roots: [{ type: String, ref: "Node" }],
-  
+
   recentRoots: {
     type: [RecentRootSchema],
     default: [],
@@ -96,35 +84,32 @@ const UserSchema = new mongoose.Schema({
   },
 
   planExpiresAt: {
-  type: Date,
-  default: null,  // null = basic/no paid plan
-},
+    type: Date,
+    default: null, // null = basic/no paid plan
+  },
 
   availableEnergy: {
     type: EnergySchema,
     required: true,
     default: () => ({
-      amount: 350,// matches basic daily limit
+      amount: 350, // matches basic daily limit
       lastResetAt: new Date(),
     }),
   },
 
   additionalEnergy: {
-  type: EnergySchema,
-  required: true,
-  default: () => ({
-    amount: 0,
-    lastResetAt: new Date(),
-  }),
-},
+    type: EnergySchema,
+    required: true,
+    default: () => ({
+      amount: 0,
+      lastResetAt: new Date(),
+    }),
+  },
   storageUsage: {
     type: Number, // in MB
     default: 0,
   },
-  openAiConnector: {
-    type: OpenAIConnectorSchema,
-    required: false,
-  },
+
   llmAssignments: {
     main: { type: String, ref: "CustomLlmConnection", default: null },
     rawIdea: { type: String, ref: "CustomLlmConnection", default: null },
@@ -145,7 +130,6 @@ const UserSchema = new mongoose.Schema({
   },
 });
 
-
 // Hash password before saving
 UserSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
@@ -164,7 +148,6 @@ UserSchema.pre("save", async function (next) {
 UserSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
-
 
 //generate share token on new account
 UserSchema.pre("save", async function (next) {

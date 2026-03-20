@@ -18,6 +18,9 @@ const router = express.Router();
  */
 router.get("/app", authenticateLite, async (req, res) => {
   try {
+    if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+      return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
+    }
     if (!req.userId) {
       return res.redirect("/login");
     }

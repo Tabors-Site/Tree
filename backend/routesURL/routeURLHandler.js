@@ -15,6 +15,12 @@ import blog from "./blog.js";
 import gatewayWebhooks from "./gatewayWebhooks.js";
 import canopy from "./canopy.js";
 
+import {
+  renderLoginPage,
+  renderRegisterPage,
+  renderForgotPasswordPage,
+} from "../core/login.js";
+
 import rateLimit from "express-rate-limit";
 import { notFoundPage } from "../middleware/notFoundPage.js";
 
@@ -22,7 +28,7 @@ const BLOCKED_IDS = ["deleted", "empty", "null", "system"];
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1800,               // same rate as 60 / 30s
+  max: 1800, // same rate as 60 / 30s
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -34,9 +40,7 @@ const apiLimiter = rateLimit({
   },
 });
 
-
 export default function registerURLRoutes(app) {
-
   app.param("userId", (req, res, next, val) => {
     if (BLOCKED_IDS.includes(val)) return notFoundPage(req, res);
     next();
@@ -51,21 +55,28 @@ export default function registerURLRoutes(app) {
   });
 
   app.use(apiLimiter);
-  app.use("/", me);
-  app.use("/", user);
-  app.use("/", root);
+
+  // HTML pages served at root (flat paths from nginx)
+  app.use("/", setup);
+  app.use("/api/v1", blog);
+
   app.use("/", appe);
   app.use("/", chat);
-  app.use("/", setup);
-  app.use("/", understanding);
 
-  app.use("/", note);
-  app.use("/", contributions);
-  app.use("/", transactions);
-  app.use("/", values);
-  app.use("/", node);
-  app.use("/", tree);
-  app.use("/", blog);
-  app.use("/", gatewayWebhooks);
+  // Same routes also available under /api/v1 for frontend API calls
+  app.use("/api/v1", me);
+  app.use("/api/v1", user);
+  app.use("/api/v1", root);
+  app.use("/api/v1", chat);
+  app.use("/api/v1", understanding);
+  app.use("/api/v1", note);
+  app.use("/api/v1", contributions);
+  app.use("/api/v1", transactions);
+  app.use("/api/v1", values);
+  app.use("/api/v1", node);
+  app.use("/api/v1", tree);
+  app.use("/api/v1", gatewayWebhooks);
+
+  // Canopy protocol stays at /canopy (not versioned with API)
   app.use("/", canopy);
 }

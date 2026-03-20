@@ -1,4 +1,4 @@
-import express from 'express';
+import express from "express";
 
 import {
   getRootDetails,
@@ -7,9 +7,9 @@ import {
   getRootNodes,
   getTreeForAi,
   getAllData,
-} from '../controllers/treeDataFetching.js';
+} from "../core/treeDataFetching.js";
 
-import authenticate from '../middleware/authenticate.js';
+import authenticate from "../middleware/authenticate.js";
 
 const router = express.Router();
 
