@@ -1,7 +1,11 @@
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import jwt from "jsonwebtoken";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 //mainly for use with shared HTML pages  that sometimes need full auth for POST access
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 export default function authenticateOptional(req, res, next) {

@@ -1,8 +1,12 @@
 import GatewayChannel from "../db/models/gatewayChannel.js";
 import crypto from "crypto";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../../..", ".env") });
 
 const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";

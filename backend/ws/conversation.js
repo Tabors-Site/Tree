@@ -3,6 +3,8 @@
 
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import crypto from "crypto";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
@@ -18,7 +20,10 @@ import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
 
 import { resolveAndValidateHost } from "../core/llms/customLLM.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 // ─────────────────────────────────────────────────────────────────────────
 // DEFAULT LLM CLIENT (your server)

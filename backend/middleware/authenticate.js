@@ -1,10 +1,15 @@
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import bcrypt from "bcrypt";
 import User from "../db/models/user.js";
 import { resolveTreeAccess } from "../core/authenticate.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
