@@ -54,19 +54,19 @@ router.get("/app", authenticateLite, async (req, res) => {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dashboard - Tree</title>
+  <title>Dashboard - TreeOS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#667eea" />
   <link rel="icon" href="/tree.png" />
-  <link rel="canonical" href="https://tree.tabors.site/app" />
+  <link rel="canonical" href="https://treeOS.ai/app" />
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="description" content="Tree dashboard with tree visualization, chat, and knowledge management tools." />
-  <meta property="og:title" content="Dashboard - Tree" />
-  <meta property="og:description" content="Tree dashboard with tree visualization, chat, and knowledge management tools." />
-  <meta property="og:url" content="https://tree.tabors.site/app" />
+  <meta name="description" content="TreeOS dashboard with tree visualization, chat, and knowledge management tools." />
+  <meta property="og:title" content="Dashboard - TreeOS" />
+  <meta property="og:description" content="TreeOS dashboard with tree visualization, chat, and knowledge management tools." />
+  <meta property="og:url" content="https://treeOS.ai/app" />
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Tree" />
-  <meta property="og:image" content="https://tree.tabors.site/tree.png" />
+  <meta property="og:site_name" content="TreeOS" />
+  <meta property="og:image" content="https://treeOS.ai/tree.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1517,7 +1517,7 @@ router.get("/app", authenticateLite, async (req, res) => {
       <div class="drag-handle"></div>
       <div class="mobile-sheet-title-row">
         <div class="mobile-sheet-title">
-          <a href="/" class="mobile-tree-icon-wrapper" title="Back to Tree">
+          <a href="/" class="mobile-tree-icon-wrapper" title="Back to TreeOS">
             <div class="mobile-status-indicator connecting" id="mobileStatusIndicator"></div>
             <span class="tree-icon">🌳</span>
           </a>
@@ -1822,7 +1822,7 @@ socket.on("navigate", ({ url, replace }) => {
       navIndicators.forEach(el => { if (el) el.classList.remove("active"); });
 
       [chatMessages, mobileChatMessages].forEach(container => {
-        container.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from Tree. Please refresh the whole website to reconnect.</p></div>';
+        container.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from TreeOS. Please refresh the whole website to reconnect.</p></div>';
       });
     });
 
@@ -2153,7 +2153,7 @@ if (activeRootId) window.history.replaceState({}, "", "/app");
     // ================================================================
 
     const MODE_WELCOMES = {
-      "home:default": { icon: "🌳", title: "Welcome to Tree", desc: "Your intelligent workspace is ready — build, explore, and reflect" },
+      "home:default": { icon: "🌳", title: "Welcome to TreeOS", desc: "Your intelligent workspace is ready — build, explore, and reflect" },
       "home:raw-idea-placement": { icon: "💡", title: "Raw Ideas", desc: "Capture unstructured thoughts and gradually grow them into trees (work in progress)" },
       "home:reflect": { icon: "🔮", title: "Reflect", desc: "Review your notes, tags, and contributions across all your trees" },
       "tree:structure": { icon: "🏗️", title: "Structure Mode", desc: "Create, reorganize, and grow the overall shape of your tree" },

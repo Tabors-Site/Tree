@@ -53,7 +53,7 @@ app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader(
     "Content-Security-Policy",
-    "frame-ancestors 'self' https://tree.tabors.site https://*.tabors.site",
+    "frame-ancestors 'self' https://treeOS.ai https://*.tabors.site",
   );
 
   res.setHeader("X-XSS-Protection", "1; mode=block");

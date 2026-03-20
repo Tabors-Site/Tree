@@ -18,7 +18,7 @@ const MustLogin = () => {
                 </button>
                 <button
                     className="primary-btn"
-                    onClick={() => (window.location.href = "https://tree.tabors.site/login")}
+                    onClick={() => (window.location.href = "https://treeOS.ai/login")}
                 >
                     Login
                 </button>

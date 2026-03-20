@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tree.tabors.site/sitemap.xml
+Sitemap: https://treeOS.ai/sitemap.xml

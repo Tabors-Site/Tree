@@ -96,8 +96,8 @@ async function resolveConnection(connectionId, cacheKey) {
       maxRetries: 3,
       timeout: 60_000,
       defaultHeaders: {
-        "HTTP-Referer": "https://tree.tabors.site",
-        "X-OpenRouter-Title": "Tree",
+        "HTTP-Referer": "https://treeOS.ai",
+        "X-OpenRouter-Title": "TreeOS",
         "X-OpenRouter-Categories": "personal-agent,general-chat",
       },
     }),

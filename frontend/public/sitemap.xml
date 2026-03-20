@@ -2,77 +2,91 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
   <url>
-    <loc>https://tree.tabors.site/</loc>
+    <loc>https://treeOS.ai/</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/about</loc>
+    <loc>https://treeOS.ai/about</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/about/api</loc>
+    <loc>https://treeOS.ai/about/api</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/about/energy</loc>
+    <loc>https://treeOS.ai/about/energy</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/about/raw-ideas</loc>
+    <loc>https://treeOS.ai/about/raw-ideas</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/about/gettingstarted</loc>
+    <loc>https://treeOS.ai/about/gettingstarted</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/about/dreams</loc>
+    <loc>https://treeOS.ai/about/dreams</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/blog</loc>
+    <loc>https://treeOS.ai/about/cli</loc>
+    <lastmod>2026-03-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://treeOS.ai/about/gateway</loc>
+    <lastmod>2026-03-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://treeOS.ai/blog</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/terms</loc>
-    <lastmod>2026-02-13</lastmod>
+    <loc>https://treeOS.ai/terms</loc>
+    <lastmod>2026-03-19</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/privacy</loc>
-    <lastmod>2026-02-13</lastmod>
+    <loc>https://treeOS.ai/privacy</loc>
+    <lastmod>2026-03-19</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
   <url>
-    <loc>https://tree.tabors.site/llms.txt</loc>
+    <loc>https://treeOS.ai/llms.txt</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>

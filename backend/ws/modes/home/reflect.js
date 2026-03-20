@@ -16,7 +16,7 @@ export default {
   ],
 
   buildSystemPrompt({ username, userId }) {
-    return `You are Tree Helper, operating in HOME REFLECT mode.
+    return `You are TreeOS Helper, operating in HOME REFLECT mode.
 
 [Context]
 - User: ${username}

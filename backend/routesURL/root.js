@@ -469,7 +469,7 @@ ${ownerConnections.length === 0
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>${escapeHtml(allData.name)} — Tree</title>
+<title>${escapeHtml(allData.name)} - TreeOS</title>
   <style>
    :root {
       --glass-water-rgb: 115, 111, 230;
@@ -4993,7 +4993,7 @@ router.get("/root/:rootId/chats", urlAuth, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${esc(rootName)} -- Tree AI Chats</title>
+  <title>${esc(rootName)} -- TreeOS AI Chats</title>
   <style>
 :root {
   --glass-alpha: 0.28;

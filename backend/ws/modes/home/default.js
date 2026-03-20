@@ -10,7 +10,7 @@ export default {
   toolNames: ["get-root-nodes", "get-tree", "create-tree"],
 
   buildSystemPrompt({ username, userId }) {
-    return `You are Tree Helper, operating in HOME mode.
+    return `You are TreeOS Helper, operating in HOME mode.
 
 [Context]
 - User: ${username}

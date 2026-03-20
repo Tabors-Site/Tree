@@ -379,7 +379,7 @@ async function registerInputChannel(channel) {
   if (channel.type === "telegram") {
     var secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
     var secretToken = crypto.randomBytes(32).toString("hex");
-    var webhookUrl = `${process.env.BASE_URL || "https://tree.tabors.site"}/api/v1/gateway/telegram/${channel._id}`;
+    var webhookUrl = `${process.env.BASE_URL || "https://treeOS.ai"}/api/v1/gateway/telegram/${channel._id}`;
 
     var res = await fetch(`https://api.telegram.org/bot${secrets.botToken}/setWebhook`, {
       method: "POST",

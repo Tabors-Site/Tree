@@ -47,7 +47,7 @@ const NotFound = () => {
                         fontWeight: 700,
                         marginBottom: "20px",
                         color: "white",
-                    }}>Tree</div>
+                    }}>TreeOS</div>
                 </a>
                 <h1 style={{
                     fontSize: "22px",

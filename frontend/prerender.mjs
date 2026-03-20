@@ -27,7 +27,7 @@ const STATIC_ROUTES = [
   "/blog",
 ];
 
-const BLOG_API ="https://tree.tabors.site/api/v1";
+const BLOG_API ="https://treeOS.ai/api/v1";
 
 // Per-page metadata for SEO (title, description, og:title, og:description)
 const PAGE_META = {
@@ -167,7 +167,7 @@ async function main() {
     await page.close();
 
     // Fix per-page SEO metadata
-    const canonicalUrl = `https://tree.tabors.site${route === "/" ? "" : route}`;
+    const canonicalUrl = `https://treeOS.ai${route === "/" ? "" : route}`;
     const meta = PAGE_META[route] || PAGE_META["/"];
     html = html.replace(
       /<link rel="canonical" href="[^"]*"\s*\/?>/,

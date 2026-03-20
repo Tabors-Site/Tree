@@ -1326,13 +1326,13 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Book: ${escapeHtml(title)} - Tree</title>
-  <meta name="description" content="Book view of ${escapeHtml(title)} on Tree." />
-  <meta property="og:title" content="Book: ${escapeHtml(title)} - Tree" />
-  <meta property="og:description" content="Book view of ${escapeHtml(title)} on Tree." />
+  <title>Book: ${escapeHtml(title)} - TreeOS</title>
+  <meta name="description" content="Book view of ${escapeHtml(title)} on TreeOS." />
+  <meta property="og:title" content="Book: ${escapeHtml(title)} - TreeOS" />
+  <meta property="og:description" content="Book view of ${escapeHtml(title)} on TreeOS." />
   <meta property="og:type" content="article" />
-  <meta property="og:site_name" content="Tree" />
-  <meta property="og:image" content="https://tree.tabors.site/tree.png" />
+  <meta property="og:site_name" content="TreeOS" />
+  <meta property="og:image" content="https://treeOS.ai/tree.png" />
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -3522,7 +3522,7 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
 
     const back = hasToken
       ? `/api/v1/node/${nodeId}/${version}/notes${qs}`
-      : "https://tree.tabors.site";
+      : "https://treeOS.ai";
     const backText = hasToken ? "← Back to Notes" : "← Back to Home";
     const nodeUrl = `/api/v1/node/${nodeId}${qs}`;
     const editorUrl = `/api/v1/node/${nodeId}/${version}/notes/${noteId}/editor${qs}`;
@@ -3554,13 +3554,13 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Note by ${escapeHtml(note.userId?.username || "User")} - Tree</title>
+<title>Note by ${escapeHtml(note.userId?.username || "User")} - TreeOS</title>
   <meta name="description" content="${escapeHtml((note.content || "").slice(0, 160))}" />
-  <meta property="og:title" content="Note by ${escapeHtml(note.userId?.username || "User")} - Tree" />
+  <meta property="og:title" content="Note by ${escapeHtml(note.userId?.username || "User")} - TreeOS" />
   <meta property="og:description" content="${escapeHtml((note.content || "").slice(0, 160))}" />
   <meta property="og:type" content="article" />
-  <meta property="og:site_name" content="Tree" />
-  <meta property="og:image" content="https://tree.tabors.site/tree.png" />
+  <meta property="og:site_name" content="TreeOS" />
+  <meta property="og:image" content="https://treeOS.ai/tree.png" />
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;

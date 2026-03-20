@@ -38,6 +38,7 @@ function encrypt(text) {
 const BLOCKED_HOSTS = new Set([
   "localhost",
   "tree.tabors.site",
+  "treeOS.ai",
   "0.0.0.0",
   "[::1]",
   "metadata.google.internal",

@@ -3989,7 +3989,7 @@ router.get("/user/reset-password/:token", async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#736fe6">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Tree - Link Expired</title>
+  <title>TreeOS - Link Expired</title>
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -4140,7 +4140,7 @@ router.get("/user/reset-password/:token", async (req, res) => {
   <div class="brand-header">
     <a href="/" style="text-decoration: none;">
       <div class="brand-logo">🌳</div>
-      <h1 class="brand-title">Tree</h1>
+      <h1 class="brand-title">TreeOS</h1>
     </a>
   </div>
 
@@ -4162,7 +4162,7 @@ router.get("/user/reset-password/:token", async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#736fe6">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Tree - Reset Password</title>
+  <title>TreeOS - Reset Password</title>
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -4435,7 +4435,7 @@ router.get("/user/reset-password/:token", async (req, res) => {
   <div class="brand-header">
     <a href="/" style="text-decoration: none;">
       <div class="brand-logo">🌳</div>
-      <h1 class="brand-title">Tree</h1>
+      <h1 class="brand-title">TreeOS</h1>
     </a>
   </div>
 
@@ -5992,7 +5992,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     const hasToken = !!token;
     const back = hasToken
       ? `/api/v1/user/${userId}/raw-ideas${tokenQS}`
-      : "https://tree.tabors.site";
+      : "https://treeOS.ai";
     const backText = hasToken ? "← Back to Raw Ideas" : "← Back to Home";
     const userLink =
       rawIdea.userId && rawIdea.userId !== "empty"
@@ -6013,13 +6013,13 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - Tree</title>
+  <title>Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - TreeOS</title>
   <meta name="description" content="${escapeHtml((rawIdea.content || "").slice(0, 160))}" />
-  <meta property="og:title" content="Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - Tree" />
+  <meta property="og:title" content="Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - TreeOS" />
   <meta property="og:description" content="${escapeHtml((rawIdea.content || "").slice(0, 160))}" />
   <meta property="og:type" content="article" />
-  <meta property="og:site_name" content="Tree" />
-  <meta property="og:image" content="https://tree.tabors.site/tree.png" />
+  <meta property="og:site_name" content="TreeOS" />
+  <meta property="og:image" content="https://treeOS.ai/tree.png" />
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -9862,7 +9862,7 @@ input:focus {
           ← Back to Profile
         </a>
         <a class="back-link" target="_top" href="/">
-          ← Back to tree.tabors.site
+          ← Back to treeOS.ai
         </a>
       </div>
     </div>

@@ -39,7 +39,7 @@ router.get("/setup", authenticateLite, async (req, res) => {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Setup - Tree</title>
+  <title>Setup - TreeOS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#667eea" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -238,7 +238,7 @@ router.get("/setup", authenticateLite, async (req, res) => {
     <div class="glass-card" id="stepLlm" ${needsLlm ? "" : 'style="display:none"'}>
       <h2>Connect Your LLM</h2>
       <div class="sub">
-        Tree uses AI to help you build and organize your knowledge. You'll need to connect your own LLM provider
+        TreeOS uses AI to help you build and organize your knowledge. You'll need to connect your own LLM provider
         using any OpenAI-compatible API endpoint. We recommend <strong>OpenRouter</strong> for the easiest setup.
         It gives you access to hundreds of models with one API key.
       </div>

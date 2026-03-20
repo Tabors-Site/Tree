@@ -41,7 +41,7 @@ const AboutHome = () => {
     {
       emoji: "💻",
       title: "CLI",
-      desc: "Navigate and manage your trees from the terminal. Install, configure, and use treef-cli.",
+      desc: "Navigate and manage your trees from the terminal. Install, configure, and use TreeOS-cli.",
       to: "/about/cli",
       active: true,
     },
@@ -55,7 +55,7 @@ const AboutHome = () => {
     {
       emoji: "📝",
       title: "Blog",
-      desc: "Ideas, updates, and thoughts on where Tree is going.",
+      desc: "Ideas, updates, and thoughts on where TreeOS is going.",
       to: "/blog",
       active: true,
     },
@@ -73,7 +73,7 @@ const AboutHome = () => {
         {/* ── HERO ── */}
         <div className="ah-hero">
           <div className="ah-logo">🌳</div>
-          <h1>Tree</h1>
+          <h1>TreeOS</h1>
           <p className="ah-tagline">
             A living structure for everything you're building, thinking, and tracking.
           </p>
@@ -82,10 +82,10 @@ const AboutHome = () => {
         {/* ── INTRO ── */}
         <div className="ah-section">
           <div className="ah-section-title">
-            What is Tree?
+            What is TreeOS?
           </div>
           <div className="ah-section-text">
-            Tree is persistent, structured memory for the AI. Instead of
+            TreeOS is persistent, structured memory for the AI. Instead of
             dumping everything into one flat conversation that gets forgotten,
             a tree organizes knowledge into branches so the AI only pulls in
             what it needs for each interaction. No wasted tokens, no lost context.
@@ -98,7 +98,7 @@ const AboutHome = () => {
             You can have as many trees as you want, each one for a different
             project, topic, or area of your life. Invite collaborators to build
             together, use it solo to stay organized, or design systems that
-            others can follow. Tree works however you need it to.
+            others can follow. TreeOS works however you need it to.
           </div>
         </div>
 
@@ -119,7 +119,7 @@ const AboutHome = () => {
             <span className="ah-section-icon">📚</span> Explore
           </div>
           <div className="ah-section-text" style={{ marginBottom: "20px" }}>
-            Dive deeper into how Tree works and what you can build with it.
+            Dive deeper into how TreeOS works and what you can build with it.
           </div>
 
           <div className="ah-nav-grid">

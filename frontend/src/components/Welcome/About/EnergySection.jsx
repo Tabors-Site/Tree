@@ -15,7 +15,7 @@ const EnergySection = () => {
         <div className="energy-docs-header">
           <h2 className="energy-docs-title">⚡ Energy System</h2>
           <p className="energy-docs-subtitle">
-            Energy is how Tree meters usage. Most actions cost a small amount
+            Energy is how TreeOS meters usage. Most actions cost a small amount
             of energy, and your balance resets daily based on your plan.
           </p>
         </div>
@@ -26,7 +26,7 @@ const EnergySection = () => {
             <span className="nrg-section-icon">🔋</span> How Energy Works
           </div>
           <div className="nrg-section-text">
-            Tree operations like creating nodes, editing content, and running
+            TreeOS operations like creating nodes, editing content, and running
             scripts cost energy. Your balance refills automatically once per
             day based on your plan.
           </div>
@@ -38,12 +38,12 @@ const EnergySection = () => {
             <span className="nrg-section-icon">💬</span> AI Chat
           </div>
           <div className="nrg-section-text">
-            Tree requires you to connect your own LLM provider to use AI
+            TreeOS requires you to connect your own LLM provider to use AI
             features. You bring your own API key and pay your provider
             directly for LLM usage.
             <br /><br />
             <strong>Successful AI chat messages are free</strong> and do not
-            cost energy. Tree operations triggered by the AI (creating nodes,
+            cost energy. TreeOS operations triggered by the AI (creating nodes,
             editing notes, etc.) still cost energy as normal.
             <br /><br />
             If an AI call fails (bad endpoint, invalid key, etc.), 2 energy
@@ -88,7 +88,7 @@ const EnergySection = () => {
             <span className="nrg-section-icon">🎫</span> Plans
           </div>
           <div className="nrg-section-text">
-            Your plan determines how much energy you receive each day. Tree
+            Your plan determines how much energy you receive each day. TreeOS
             offers three tiers:
           </div>
 
@@ -158,7 +158,7 @@ const EnergySection = () => {
             <span className="nrg-section-icon">🧠</span> LLM Connections
           </div>
           <div className="nrg-section-text">
-            Tree requires you to connect your own LLM provider to use AI
+            TreeOS requires you to connect your own LLM provider to use AI
             features like chat, understanding, dreams, and raw idea
             placement. You can use any OpenAI-compatible API endpoint.
             We recommend <strong>OpenRouter</strong> for the easiest
@@ -168,7 +168,7 @@ const EnergySection = () => {
 
           <div className="nrg-sub-title" style={{ marginTop: "20px" }}>LLM Slots</div>
           <div className="nrg-section-text">
-            Tree supports multiple LLM connections so you can use different
+            TreeOS supports multiple LLM connections so you can use different
             models for different tasks. There are two levels of assignment:
           </div>
 

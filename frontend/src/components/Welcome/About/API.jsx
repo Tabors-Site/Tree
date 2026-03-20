@@ -32,7 +32,7 @@ const ApiAccessSection = () => {
           <p className="api-docs-subtitle">
             Read and write to your trees programmatically. Build integrations,
             automations, bots, and external tools on the same backend that
-            powers the Tree apps.
+            powers the TreeOS apps.
           </p>
         </div>
 
@@ -95,7 +95,7 @@ const ApiAccessSection = () => {
             <span className="section-icon">🔑</span> Overview &amp; Authentication
           </div>
           <div className="section-text">
-            The Tree API lives at <code>https://tree.tabors.site/api/v1</code>.
+            The TreeOS API lives at <code>https://treeOS.ai/api/v1</code>.
             All endpoints return JSON by default. Every write operation and most
             read operations require authentication.
             <br /><br />

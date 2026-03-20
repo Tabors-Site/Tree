@@ -3,7 +3,7 @@ import Cookies from "js-cookie";
 import "./WelcomePage.css";
 
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
-const URL = `https://tree.tabors.site`;
+const URL = `https://treeOS.ai`;
 
 const WelcomePage = () => {
 
@@ -11,8 +11,8 @@ const WelcomePage = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
   const bannerMessages = [
-    "Welcome to Tree. Click Start Chat to get started.",
-    "CLI available. Install with npm install -g treef-cli and manage your trees from the terminal.",
+    "Welcome to TreeOS. Click Start Chat to get started.",
+    "CLI available. Install with npm install -g TreeOS and manage your trees from the terminal.",
     "New: Gateway channels are live. Connect Telegram, Discord, or web push for input, output, or full chat.",
     "Trees can now dream. Set a sleep schedule and let your Tree organize itself overnight.",
     "Understanding runs detect changes incrementally — only dirty branches get reprocessed.",
@@ -55,7 +55,7 @@ const WelcomePage = () => {
     }
 
     try {
-      const res = await fetch(`https://tree.tabors.site/verify-token`, {
+      const res = await fetch(`https://treeOS.ai/verify-token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -135,8 +135,8 @@ const WelcomePage = () => {
             🌳
           </div>
 
-          <h1 data-text="Tree">Tree</h1>
-          <h2>A Context Management System</h2>
+          <h1 data-text="TreeOS">TreeOS</h1>
+          <h2>An Operating System for Context</h2>
 
         </div>
         <footer className="hero-footer">

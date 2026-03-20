@@ -9,6 +9,13 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function cookieDomain(req) {
+  const host = (req.hostname || req.headers?.host || "").replace(/:\d+$/, "");
+  if (host.endsWith("tabors.site")) return ".tabors.site";
+  if (host.endsWith("treeos.ai")) return ".treeos.ai";
+  return undefined;
+}
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function containsHtml(str) {
   return /<[a-zA-Z\/][^>]*>/.test(str);
@@ -114,7 +121,7 @@ email = email.trim().toLowerCase();
        SEND EMAIL
     -------------------------- */
 
-    const verifyUrl = `https://tree.tabors.site/api/v1/user/verify/${verificationToken}`;
+    const verifyUrl = `https://treeOS.ai/api/v1/user/verify/${verificationToken}`;
     await sendVerificationEmail(email, verifyUrl, temp.username);
 
     res.status(201).json({
@@ -179,7 +186,7 @@ const verifyEmail = async (req, res) => {
       httpOnly: false, // matches your login behavior
       secure: true,
       sameSite: "None",
-      domain: ".tabors.site",
+      domain: cookieDomain(req),
       maxAge: 604800000,
       path: "/",
     });
@@ -189,7 +196,7 @@ const verifyEmail = async (req, res) => {
 
     await tempUser.deleteOne();
     return res.redirect(
-      `https://tree.tabors.site/setup`
+      `https://treeOS.ai/setup`
     );
   } catch (err) {
     console.error("[verifyEmail]", err);
@@ -232,7 +239,7 @@ const user = await User.findOne({
       httpOnly: false,
       secure: true,
       sameSite: "None",
-      domain: ".tabors.site",
+      domain: cookieDomain(req),
       maxAge: 604800000,
       path: "/",
     });
@@ -258,7 +265,7 @@ const logout = async (req, res) => {
       httpOnly: false,
       secure: true,
       sameSite: "None",
-      domain: ".tabors.site",
+      domain: cookieDomain(req),
       path: "/",
     });
 
@@ -366,7 +373,7 @@ async function sendResetEmail(to, link) {
   });
 
   await transporter.sendMail({
-    from: `"Tree" <${process.env.EMAIL_USER}>`,
+    from: `"TreeOS" <${process.env.EMAIL_USER}>`,
     to,
     subject: "Password Reset",
     html: `
@@ -416,7 +423,7 @@ async function sendVerificationEmail(to, link, username) {
   });
 
   await transporter.sendMail({
-    from: `"Tree" <${process.env.EMAIL_USER}>`,
+    from: `"TreeOS" <${process.env.EMAIL_USER}>`,
     to,
     subject: "Complete Your Registration",
     html: `
@@ -476,7 +483,7 @@ const forgotPassword = async (req, res) => {
   user.resetPasswordExpiry = Date.now() + 1000 * 60 * 15; // 15 min
   await user.save();
 
-  const resetURL = `https://tree.tabors.site/api/v1/user/reset-password/${token}`;
+  const resetURL = `https://treeOS.ai/api/v1/user/reset-password/${token}`;
 
   await sendResetEmail(user.email, resetURL);
 

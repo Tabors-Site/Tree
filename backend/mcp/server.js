@@ -2855,7 +2855,7 @@ async function handleMcpRequest(req, res) {
       if (apiPath) {
         emitNavigate({
           userId: req.userId,
-          url: `https://tree.tabors.site${apiPath}`,
+          url: `https://treeOS.ai${apiPath}`,
           sessionId: aiCtx.sessionId,
         });
       }
@@ -3031,7 +3031,7 @@ async function handleMcpRequest(req, res) {
       if (apiPath) {
         emitNavigate({
           userId: req.userId,
-          url: `https://tree.tabors.site${apiPath}`,
+          url: `https://treeOS.ai${apiPath}`,
           sessionId: aiCtx2.sessionId,
         });
       }

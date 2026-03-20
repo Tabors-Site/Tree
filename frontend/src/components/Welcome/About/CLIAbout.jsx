@@ -20,11 +20,11 @@ const CLIAbout = () => {
 
         {/* ── HEADER ── */}
         <div className="cli-header">
-          <h2 className="cli-title">💻 treef-cli</h2>
+          <h2 className="cli-title">💻 TreeOS-cli</h2>
           <p className="cli-subtitle">
             Navigate and manage your trees like a filesystem from the terminal.
-            All commands map to the <a href="/about/api" style={{ color: "rgba(255,255,255,0.85)" }}>Tree REST API</a>.
-            Config stored in <code>~/.treef-cli/config.json</code>.
+            All commands map to the <a href="/about/api" style={{ color: "rgba(255,255,255,0.85)" }}>TreeOS REST API</a>.
+            Config stored in <code>~/.TreeOS-cli/config.json</code>.
           </p>
         </div>
 
@@ -33,7 +33,7 @@ const CLIAbout = () => {
           <div className="cli-section-title">
             <span className="cli-section-icon">📦</span> Install
           </div>
-          <div className="cli-code-block">npm install -g treef-cli</div>
+          <div className="cli-code-block">npm install -g TreeOS</div>
         </div>
 
         {/* ── SESSION ── */}
@@ -244,7 +244,7 @@ const CLIAbout = () => {
             <span className="cli-section-icon">📎</span> Links
           </div>
           <div className="cli-section-text">
-            <a href="https://tree.tabors.site" style={{ color: "rgba(255,255,255,0.85)" }}>Tree</a>
+            <a href="https://treeOS.ai" style={{ color: "rgba(255,255,255,0.85)" }}>TreeOS</a>
             {" | "}
             <a href="/about/gettingstarted" style={{ color: "rgba(255,255,255,0.85)" }}>Getting Started</a>
             {" | "}

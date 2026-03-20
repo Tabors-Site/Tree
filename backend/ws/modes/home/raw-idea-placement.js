@@ -17,7 +17,7 @@ export default {
   ],
 
   buildSystemPrompt({ username, userId }) {
-    return `You are Tree Helper, operating in RAW IDEA PLACEMENT mode.
+    return `You are TreeOS Helper, operating in RAW IDEA PLACEMENT mode.
 
 [Context]
 - User: ${username}

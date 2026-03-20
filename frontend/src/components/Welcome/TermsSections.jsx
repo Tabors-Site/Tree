@@ -10,16 +10,16 @@ const TermsSection = () => {
         <div className="terms-docs-header">
           <div className="tos-icon">📜</div>
           <h1 className="terms-docs-title">Terms of Service</h1>
-          <div className="tos-last-updated">Last Updated: February 13, 2026</div>
+          <div className="tos-last-updated">Last Updated: March 19, 2026</div>
         </div>
 
         {/* ── 1 ── */}
         <div className="tos-section">
           <div className="tos-section-title">1. Overview</div>
           <div className="tos-section-text">
-            Welcome to Tree ("Service", "we", "us", or "our"). By accessing or using the Service at tree.tabors.site, you agree to these Terms of Service ("Terms"). If you do not agree, please do not use the Service.
+            Welcome to TreeOS ("Service", "we", "us", or "our"). By accessing or using the Service at treeOS.ai, you agree to these Terms of Service ("Terms"). If you do not agree, please do not use the Service.
             <br /><br />
-            Tree is a web-based platform that provides digital organizational features including trees, notes, and usage-based energy credits. All purchases grant access to features within the Service and do not represent ownership of any real-world asset.
+            TreeOS is a web-based platform that provides digital organizational features including trees, notes, and usage-based energy credits. All purchases grant access to features within the Service and do not represent ownership of any real-world asset.
             <br /><br />
             You must be at least 18 years old to use the Service.
           </div>
@@ -164,13 +164,13 @@ const TermsSection = () => {
           <div className="tos-section-text">
             If you have questions about these Terms, contact us:
             <br /><br />
-            <strong>Tree</strong><br />
+            <strong>TreeOS</strong><br />
             Email: treeffiency@gmail.com<br />
-            Website: tree.tabors.site
+            Website: treeOS.ai
           </div>
         </div>
 
-      
+
 
       </div>
     </div>

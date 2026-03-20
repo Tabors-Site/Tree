@@ -14,7 +14,7 @@ export function errorHtml(status, title, message) {
 <meta name="theme-color" content="#736fe6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>${title} - Tree</title>
+<title>${title} - TreeOS</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { background: #736fe6; }

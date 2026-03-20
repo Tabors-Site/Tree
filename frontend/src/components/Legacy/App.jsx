@@ -41,7 +41,7 @@ const App = () => {
             return;
         }
 
-        fetch(`https://tree.tabors.site/verify-token`, {
+        fetch(`https://treeOS.ai/verify-token`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -150,7 +150,7 @@ const App = () => {
 
         const rootApi = import.meta.env.VITE_ROOT_API;
         if (rootApi) {
-            window.location.href = "https://tree.tabors.site";
+            window.location.href = "https://treeOS.ai";
         }
     };
 
@@ -298,7 +298,7 @@ const App = () => {
                     Go to tabors.site and login
                 </button>
 
-                <button onClick={() => (window.location.href = "https://tree.tabors.site")}>
+                <button onClick={() => (window.location.href = "https://treeOS.ai")}>
                     Back
                 </button>
             </div>

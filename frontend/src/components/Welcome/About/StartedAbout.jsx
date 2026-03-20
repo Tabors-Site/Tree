@@ -26,7 +26,7 @@ const StartedAbout = () => {
             <span className="sta-section-icon">🧠</span> Bring Your Own LLM
           </div>
           <div className="sta-section-text" style={{ marginBottom: 12 }}>
-            <strong>Tree does not include an AI model.</strong> You need to connect
+            <strong>TreeOS does not include an AI model.</strong> You need to connect
             your own LLM provider to use any AI features: chat, dreams,
             understanding, raw idea placement, and more. You bring the API key
             and pay your provider directly.
@@ -177,7 +177,7 @@ const StartedAbout = () => {
             <span className="sta-section-icon">🌿</span> It Grows On Its Own
           </div>
           <div className="sta-section-text">
-            This is what makes Tree different. Once you set a dream time, your
+            This is what makes TreeOS different. Once you set a dream time, your
             tree maintains itself daily. The AI cleans up messy branches,
             drains thoughts you mentioned in passing, and builds a compressed
             understanding of the whole structure.

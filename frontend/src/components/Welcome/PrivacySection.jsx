@@ -10,14 +10,14 @@ const PrivacySection = () => {
         <div className="privacy-docs-header">
           <div className="prv-icon">🔒</div>
           <h1 className="privacy-docs-title">Privacy Policy</h1>
-          <div className="prv-last-updated">Last Updated: February 13, 2026</div>
+          <div className="prv-last-updated">Last Updated: March 19, 2026</div>
         </div>
 
         {/* ── 1 ── */}
         <div className="prv-section">
           <div className="prv-section-title">1. Introduction</div>
           <div className="prv-section-text">
-            This Privacy Policy explains how Tree ("Service", "we", "us", or "our") at tree.tabors.site collects, uses, stores, and protects your information when you use the Service.
+            This Privacy Policy explains how TreeOS ("Service", "we", "us", or "our") at treeOS.ai collects, uses, stores, and protects your information when you use the Service.
             <br /><br />
             By using the Service, you consent to the data practices described in this policy. If you do not agree, please do not use the Service.
           </div>
@@ -217,9 +217,9 @@ const PrivacySection = () => {
           <div className="prv-section-text">
             If you have questions about this Privacy Policy or wish to exercise your rights, contact us:
             <br /><br />
-            <strong>Tree</strong><br />
+            <strong>TreeOS</strong><br />
             Email: treeffiency@gmail.com<br />
-            Website: tree.tabors.site
+            Website: treeOS.ai
           </div>
         </div>
 

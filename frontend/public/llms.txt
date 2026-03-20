@@ -1,8 +1,8 @@
-# Tree
+# TreeOS
 
-> Tree is an AI-powered knowledge management system where users grow trees of goals, plans, and reflections. An LLM acts as a conversational tree-builder with background maintenance. Built by Tabor Holly.
+> TreeOS is an AI-powered knowledge management system where users grow trees of goals, plans, and reflections. An LLM acts as a conversational tree-builder with background maintenance. Built by Tabor Holly.
 
-Tree gives LLMs persistent, structured memory. Any AI agent can create an account, build trees, and use them as long-term memory across conversations. Instead of losing context when a session ends, an agent stores knowledge in a tree and retrieves the relevant branches next time. The tree is the memory layer that LLMs do not have natively.
+TreeOS gives LLMs persistent, structured memory. Any AI agent can create an account, build trees, and use them as long-term memory across conversations. Instead of losing context when a session ends, an agent stores knowledge in a tree and retrieves the relevant branches next time. The tree is the memory layer that LLMs do not have natively.
 
 Trees can hold anything: knowledge bases, project plans, reflections, hierarchical agentic systems, research, task tracking, or any structured system an agent needs to persist and navigate over time.
 
@@ -10,7 +10,7 @@ Humans use Tree the same way. Instead of dumping everything into one flat conver
 
 Users and agents can have multiple trees for different projects, topics, or areas of life. Collaborators can be invited to build together.
 
-Trees dream. Each tree runs a daily background cycle called Tree Dreams that automatically cleans up, drains short-term memory, and compresses understanding. See [Tree Dreams](https://tree.tabors.site/about/dreams) for details.
+Trees dream. Each tree runs a daily background cycle called Tree Dreams that automatically cleans up, drains short-term memory, and compresses understanding. See [Tree Dreams](https://treeOS.ai/about/dreams) for details.
 
 ## How It Works
 
@@ -39,25 +39,27 @@ You can interact with trees through:
 
 ## Documentation
 
-- [About Tree](https://tree.tabors.site/about): What Tree is, why it exists, and how it works
-- [Getting Started](https://tree.tabors.site/about/gettingstarted): First tree, first node, first note - up and running in two minutes
-- [API Reference](https://tree.tabors.site/about/api): REST API documentation for reading and writing to trees programmatically
-- [Energy System](https://tree.tabors.site/about/energy): How energy works, costs per operation, and bringing your own LLM
-- [Raw Ideas](https://tree.tabors.site/about/raw-ideas): Capture thoughts and files for automatic AI placement
-- [Tree Dreams](https://tree.tabors.site/about/dreams): Daily background maintenance - cleanup, drain, and understanding
+- [About TreeOS](https://treeOS.ai/about): What TreeOS is, why it exists, and how it works
+- [Getting Started](https://treeOS.ai/about/gettingstarted): First tree, first node, first note - up and running in two minutes
+- [API Reference](https://treeOS.ai/about/api): REST API documentation for reading and writing to trees programmatically
+- [Energy System](https://treeOS.ai/about/energy): How energy works, costs per operation, and bringing your own LLM
+- [Raw Ideas](https://treeOS.ai/about/raw-ideas): Capture thoughts and files for automatic AI placement
+- [Tree Dreams](https://treeOS.ai/about/dreams): Daily background maintenance - cleanup, drain, and understanding
+- [CLI Guide](https://treeOS.ai/about/cli): Command-line interface for navigating and managing trees from the terminal
+- [Gateway](https://treeOS.ai/about/gateway): Connect trees to external services like Telegram, Discord, and web push
 
 ## Legal
 
-- [Terms of Service](https://tree.tabors.site/terms)
-- [Privacy Policy](https://tree.tabors.site/privacy)
+- [Terms of Service](https://treeOS.ai/terms)
+- [Privacy Policy](https://treeOS.ai/privacy)
 
 ## Blog
 
-- [Blog](https://tree.tabors.site/blog): Ideas, updates, and thoughts on where Tree is going
+- [Blog](https://treeOS.ai/blog): Ideas, updates, and thoughts on where Tree is going
 
 ## API Access
 
-Base URL: `https://tree.tabors.site/api/v1`
+Base URL: `https://treeOS.ai/api/v1`
 
 Authentication via `x-api-key` header. Maximum 10 active keys per user, individually revokable.
 

@@ -127,7 +127,7 @@ export function renderLoginPage(req, res) {
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <meta name="theme-color" content="#736fe6">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Tree - Login</title>
+  <title>TreeOS - Login</title>
 
   <style>
     :root {
@@ -549,7 +549,7 @@ export function renderLoginPage(req, res) {
   <div class="brand-header">
   <a href="/" style="text-decoration: none;">
     <div class="brand-logo">🌳</div>
-    <h1 class="brand-title">Tree</h1></a>
+    <h1 class="brand-title">TreeOS</h1></a>
     <div class="brand-subtitle">Organize your life, efficiently</div>
   </div>
 
@@ -606,7 +606,7 @@ export function renderLoginPage(req, res) {
   </div>
 
   <script>
-    const apiUrl = "https://tree.tabors.site";
+    const apiUrl = "https://treeOS.ai";
     const redirectAfterLogin = "${redirect}" || null;
 
     // Secondary button handlers
@@ -674,7 +674,7 @@ export function renderRegisterPage(req, res) {
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <meta name="theme-color" content="#736fe6">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Tree - Register</title>
+  <title>TreeOS - Register</title>
 
   <style>
     :root {
@@ -1184,13 +1184,13 @@ export function renderRegisterPage(req, res) {
     <a href="/" style="text-decoration: none;">
 
     <div class="brand-logo">🌳</div>
-    <h1 class="brand-title">Tree</h1></a>
+    <h1 class="brand-title">TreeOS</h1></a>
     <div class="brand-subtitle">Organize your life, efficiently</div>
   </div>
 
   <div class="register-container">
     <h2>Create Account</h2>
-    <p class="subtitle">Sign up to get started with Tree</p>
+    <p class="subtitle">Sign up to get started with TreeOS</p>
 
     <form id="registerForm">
       <div class="input-group">
@@ -1290,7 +1290,7 @@ export function renderRegisterPage(req, res) {
   </div>
 
   <script>
-    const apiUrl = "https://tree.tabors.site";
+    const apiUrl = "https://treeOS.ai";
 
     function openModal(type) {
       const id = type === 'terms' ? 'termsModal' : 'privacyModal';
@@ -1420,7 +1420,7 @@ export function renderForgotPasswordPage(req, res) {
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <meta name="theme-color" content="#736fe6">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Tree - Reset Password</title>
+  <title>TreeOS - Reset Password</title>
 
   <style>
     :root {
@@ -1792,7 +1792,7 @@ export function renderForgotPasswordPage(req, res) {
   <div class="brand-header">
     <a href="/" style="text-decoration: none;">
       <div class="brand-logo">🌳</div>
-      <h1 class="brand-title">Tree</h1>
+      <h1 class="brand-title">TreeOS</h1>
     </a>
     <div class="brand-subtitle">Organize your life, efficiently</div>
   </div>
@@ -1830,7 +1830,7 @@ export function renderForgotPasswordPage(req, res) {
   </div>
 
   <script>
-    const apiUrl = "https://tree.tabors.site";
+    const apiUrl = "https://treeOS.ai";
     const EMAIL_REGEX = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
 
     document.getElementById("forgotForm").addEventListener("submit", async (e) => {
