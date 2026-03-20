@@ -9,11 +9,30 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-import { switchMode, processMessage, setRootId, getClientForUser, resolveRootLlmForMode, clearSession } from "../conversation.js";
-import { trackChainStep, startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../aiChatTracker.js";
+import {
+  switchMode,
+  processMessage,
+  setRootId,
+  getClientForUser,
+  resolveRootLlmForMode,
+  clearSession,
+} from "../conversation.js";
+import {
+  trackChainStep,
+  startAIChat,
+  finalizeAIChat,
+  setAiContributionContext,
+  clearAiContributionContext,
+} from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
-import { buildDeepTreeSummary } from "../../core/treeFetch.js";
-import { createSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
+import { buildDeepTreeSummary } from "../../core/tree/treeFetch.js";
+import {
+  createSession,
+  endSession,
+  setSessionAbort,
+  clearSessionAbort,
+  SESSION_TYPES,
+} from "../sessionRegistry.js";
 import ShortMemory from "../../db/models/shortMemory.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
@@ -117,12 +136,19 @@ export async function drainTree(rootId) {
 
   let chainIndex = 1;
   let mainChatId = null;
-  let finalizeArgs = { content: null, stopped: true, modeKey: "drain:complete" };
+  let finalizeArgs = {
+    content: null,
+    stopped: true,
+    modeKey: "drain:complete",
+  };
 
   // ── LLM provider ────────────────────────────────────────────────────
   let llmProvider;
   try {
-    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:drain-cluster");
+    const modeConnectionId = await resolveRootLlmForMode(
+      rootId,
+      "tree:drain-cluster",
+    );
     const clientInfo = await getClientForUser(userId, "main", modeConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
@@ -146,10 +172,14 @@ export async function drainTree(rootId) {
   setAiContributionContext(visitorId, sessionId, mainChatId);
 
   // ── MCP connection ───────────────────────────────────────────────────
-  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, { expiresIn: "1h" });
+  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, {
+    expiresIn: "1h",
+  });
   await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
 
-  console.log(`🧠 Drain started: ${items.length} items for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
+  console.log(
+    `🧠 Drain started: ${items.length} items for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`,
+  );
 
   try {
     // ── Build tree summary ───────────────────────────────────────────
@@ -175,15 +205,28 @@ export async function drainTree(rootId) {
     const clusterResult = await processMessage(
       visitorId,
       `Cluster these ${items.length} deferred items for tree "${rootNode.name}".`,
-      { username, userId, rootId, signal: abort.signal, meta: { internal: true } },
+      {
+        username,
+        userId,
+        rootId,
+        signal: abort.signal,
+        meta: { internal: true },
+      },
     );
     const clusterEnd = new Date();
 
     const manifest = parseJsonSafe(clusterResult?.answer || clusterResult);
     if (!manifest?.clusters?.length) {
       console.error("❌ Drain: cluster analysis returned no clusters");
-      await requeueItems(items.map((i) => i._id), "cluster analysis failed");
-      finalizeArgs = { content: "Cluster analysis failed", stopped: false, modeKey: "drain:complete" };
+      await requeueItems(
+        items.map((i) => i._id),
+        "cluster analysis failed",
+      );
+      finalizeArgs = {
+        content: "Cluster analysis failed",
+        stopped: false,
+        modeKey: "drain:complete",
+      };
       return { sessionId };
     }
 
@@ -238,13 +281,21 @@ export async function drainTree(rootId) {
         const scoutResult = await processMessage(
           visitorId,
           `Scout placement locations for ${cluster.items.length} items about: ${cluster.sharedTheme}`,
-          { username, userId, rootId, signal: abort.signal, meta: { internal: true } },
+          {
+            username,
+            userId,
+            rootId,
+            signal: abort.signal,
+            meta: { internal: true },
+          },
         );
         const scoutEnd = new Date();
 
         const scoutData = parseJsonSafe(scoutResult?.answer || scoutResult);
         if (!scoutData?.pins?.length) {
-          console.warn(`⚠️ Scout found no pins for cluster "${cluster.sharedTheme}"`);
+          console.warn(
+            `⚠️ Scout found no pins for cluster "${cluster.sharedTheme}"`,
+          );
           await requeueItems(clusterItemIds, "scout found no locations");
           totalRequeued += clusterItemIds.length;
           continue;
@@ -278,13 +329,21 @@ export async function drainTree(rootId) {
         const planResult = await processMessage(
           visitorId,
           `Plan placement for ${cluster.items.length} items using ${scoutData.pins.length} scouted locations.`,
-          { username, userId, rootId, signal: abort.signal, meta: { internal: true } },
+          {
+            username,
+            userId,
+            rootId,
+            signal: abort.signal,
+            meta: { internal: true },
+          },
         );
         const planEnd = new Date();
 
         const plan = parseJsonSafe(planResult?.answer || planResult);
         if (!plan?.placeSteps?.length) {
-          console.warn(`⚠️ Plan returned no place steps for cluster "${cluster.sharedTheme}"`);
+          console.warn(
+            `⚠️ Plan returned no place steps for cluster "${cluster.sharedTheme}"`,
+          );
           await requeueItems(clusterItemIds, "plan returned no steps");
           totalRequeued += clusterItemIds.length;
           continue;
@@ -306,8 +365,13 @@ export async function drainTree(rootId) {
 
         // ── CONFIDENCE CHECK ───────────────────────────────────────
         if ((plan.overallConfidence ?? 1) < MIN_CONFIDENCE) {
-          console.log(`⏸️ Low confidence (${plan.overallConfidence}) for cluster "${cluster.sharedTheme}" — re-queuing`);
-          await requeueItems(clusterItemIds, `low confidence: ${plan.overallConfidence}`);
+          console.log(
+            `⏸️ Low confidence (${plan.overallConfidence}) for cluster "${cluster.sharedTheme}" — re-queuing`,
+          );
+          await requeueItems(
+            clusterItemIds,
+            `low confidence: ${plan.overallConfidence}`,
+          );
           totalRequeued += clusterItemIds.length;
           continue;
         }
@@ -331,7 +395,13 @@ export async function drainTree(rootId) {
             const buildResult = await processMessage(
               visitorId,
               `Create this branch structure under the target node: ${JSON.stringify(buildStep.structure)}. Reason: ${buildStep.reason}`,
-              { username, userId, rootId, signal: abort.signal, meta: { internal: true } },
+              {
+                username,
+                userId,
+                rootId,
+                signal: abort.signal,
+                meta: { internal: true },
+              },
             );
             const buildEnd = new Date();
 
@@ -386,7 +456,13 @@ export async function drainTree(rootId) {
               const navResult = await processMessage(
                 visitorId,
                 `Find the node named "${placeStep.targetNewNodeName}" that was just created.`,
-                { username, userId, rootId, signal: abort.signal, meta: { internal: true } },
+                {
+                  username,
+                  userId,
+                  rootId,
+                  signal: abort.signal,
+                  meta: { internal: true },
+                },
               );
               const navData = parseJsonSafe(navResult?.answer || navResult);
               if (navData?.targetNodeId) {
@@ -396,14 +472,18 @@ export async function drainTree(rootId) {
           }
 
           if (!targetNodeId) {
-            console.warn(`⚠️ Could not resolve target for item ${placeStep.itemId}, skipping`);
+            console.warn(
+              `⚠️ Could not resolve target for item ${placeStep.itemId}, skipping`,
+            );
             continue;
           }
 
           // Get current prestige for the target node
           let prestige = 0;
           try {
-            const targetNode = await Node.findById(targetNodeId).select("prestige").lean();
+            const targetNode = await Node.findById(targetNodeId)
+              .select("prestige")
+              .lean();
             prestige = targetNode?.prestige ?? 0;
           } catch {}
 
@@ -420,7 +500,13 @@ export async function drainTree(rootId) {
           const noteResult = await processMessage(
             visitorId,
             `Create a note with this content: ${placeStep.noteContent}`,
-            { username, userId, rootId, signal: abort.signal, meta: { internal: true } },
+            {
+              username,
+              userId,
+              rootId,
+              signal: abort.signal,
+              meta: { internal: true },
+            },
           );
           const noteEnd = new Date();
 
@@ -460,7 +546,9 @@ export async function drainTree(rootId) {
             });
           }
           totalPlaced += placedIds.length;
-          console.log(`✅ Placed ${placedIds.length}/${cluster.items.length} items for cluster "${cluster.sharedTheme}"`);
+          console.log(
+            `✅ Placed ${placedIds.length}/${cluster.items.length} items for cluster "${cluster.sharedTheme}"`,
+          );
         }
 
         // Re-queue any items that weren't placed
@@ -472,7 +560,10 @@ export async function drainTree(rootId) {
           totalRequeued += unplacedIds.length;
         }
       } catch (clusterErr) {
-        console.error(`❌ Cluster "${cluster.sharedTheme}" failed:`, clusterErr.message);
+        console.error(
+          `❌ Cluster "${cluster.sharedTheme}" failed:`,
+          clusterErr.message,
+        );
         await requeueItems(clusterItemIds, clusterErr.message);
         totalRequeued += clusterItemIds.length;
       }
@@ -484,10 +575,19 @@ export async function drainTree(rootId) {
       modeKey: "drain:complete",
     };
 
-    console.log(`🧠 Drain complete: ${totalPlaced} placed, ${totalRequeued} re-queued`);
+    console.log(
+      `🧠 Drain complete: ${totalPlaced} placed, ${totalRequeued} re-queued`,
+    );
   } catch (err) {
-    console.error(`❌ Drain orchestration error for tree ${rootId}:`, err.message);
-    finalizeArgs = { content: err.message, stopped: abort.signal.aborted, modeKey: "drain:complete" };
+    console.error(
+      `❌ Drain orchestration error for tree ${rootId}:`,
+      err.message,
+    );
+    finalizeArgs = {
+      content: err.message,
+      stopped: abort.signal.aborted,
+      modeKey: "drain:complete",
+    };
   } finally {
     if (mainChatId) {
       finalizeAIChat({ chatId: mainChatId, ...finalizeArgs }).catch((e) =>

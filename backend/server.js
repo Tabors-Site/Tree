@@ -2,8 +2,8 @@ import express from "express";
 import cors from "cors";
 import http from "http";
 import cookieParser from "cookie-parser";
-import registerRoutes from "./routes/routesHandler.js";
-import registerURLRoutes from "./routesURL/routeURLHandler.js";
+import registerRoutes from "./routesFrontend/routesHandler.js";
+import registerURLRoutes from "./routes/routeHandler.js";
 
 import { initWebSocketServer } from "./ws/websocket.js";
 import { startRawIdeaAutoPlaceJob } from "./jobs/rawIdeaAutoPlace.js";
@@ -102,7 +102,9 @@ server.listen(PORT, "0.0.0.0", async () => {
   const onDbReady = () => {
     console.log("[Land] MongoDB connected");
     runTreeDreamJob();
-    console.log("[Land] Background jobs started (dream, drain, cleanup, understanding)");
+    console.log(
+      "[Land] Background jobs started (dream, drain, cleanup, understanding)",
+    );
 
     // Start canopy network jobs
     startHeartbeatJob();

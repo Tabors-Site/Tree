@@ -5,15 +5,18 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { getClientForUser, userHasLlm } from "../ws/conversation.js";
-import { updateRecentRoots, getRecentRootsByUserId } from "../core/user.js";
+import {
+  updateRecentRoots,
+  getRecentRootsByUserId,
+} from "../core/tree/user.js";
 import {
   connectToMCP,
   closeMCPClient,
   mcpClients,
   MCP_SERVER_URL,
 } from "./mcp.js";
-import { useEnergy } from "../core/energy.js";
-import { getNodeName } from "../core/treeDataFetching.js";
+import { useEnergy } from "../core/tree/energy.js";
+import { getNodeName } from "../core/tree/treeDataFetching.js";
 import Node from "../db/models/node.js";
 import { orchestrateTreeRequest } from "./orchestrator/treeOrchestrator.js";
 import { enqueue } from "./requestQueue.js";
@@ -50,7 +53,7 @@ import {
   clearAiContributionContext,
 } from "./aiChatTracker.js";
 import { clearMemory } from "./orchestrator/treeOrchestrator.js";
-import { getAIChats } from "../core/aichat.js";
+import { getAIChats } from "../core/llms/aichat.js";
 import {
   registerSession,
   endSession,

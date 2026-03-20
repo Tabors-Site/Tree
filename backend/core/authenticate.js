@@ -1,6 +1,6 @@
 import Node from "../db/models/node.js";
 import User from "../db/models/user.js";
-import { resolveRootNode } from "./treeFetch.js";
+import { resolveRootNode } from "./tree/treeFetch.js";
 
 export async function resolveTreeAccess(nodeId, userId) {
   if (!nodeId) {

@@ -16,7 +16,7 @@ import {
 } from "./modes/registry.js";
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
 
-import { resolveAndValidateHost } from "../core/customLLM.js";
+import { resolveAndValidateHost } from "../core/llms/customLLM.js";
 
 dotenv.config();
 
@@ -119,7 +119,14 @@ async function resolveConnection(connectionId, cacheKey) {
 
 export async function getClientForUser(userId, slot, overrideConnectionId) {
   if (!userId)
-    return { client: null, model: null, isCustom: false, connectionId: null, noLlm: true, fetchedAt: Date.now() };
+    return {
+      client: null,
+      model: null,
+      isCustom: false,
+      connectionId: null,
+      noLlm: true,
+      fetchedAt: Date.now(),
+    };
 
   slot = slot || "main";
 
@@ -228,7 +235,9 @@ const MODE_TO_ASSIGNMENT = {
 export async function resolveRootLlmForMode(rootId, modeKey) {
   if (!rootId) return null;
   try {
-    const rootNode = await Node.findById(rootId).select("llmAssignments").lean();
+    const rootNode = await Node.findById(rootId)
+      .select("llmAssignments")
+      .lean();
     if (!rootNode?.llmAssignments) return null;
 
     const assignmentKey = MODE_TO_ASSIGNMENT[modeKey];
@@ -295,17 +304,23 @@ function getSession(visitorId) {
 
 // Sweep stale conversation sessions every 10 minutes (safety net)
 const STALE_SESSION_MS = 30 * 60 * 1000; // 30 min
-setInterval(() => {
-  const now = Date.now();
-  let swept = 0;
-  for (const [id, s] of sessions) {
-    if (now - (s._lastActive || 0) > STALE_SESSION_MS) {
-      sessions.delete(id);
-      swept++;
+setInterval(
+  () => {
+    const now = Date.now();
+    let swept = 0;
+    for (const [id, s] of sessions) {
+      if (now - (s._lastActive || 0) > STALE_SESSION_MS) {
+        sessions.delete(id);
+        swept++;
+      }
     }
-  }
-  if (swept > 0) console.log(`🧹 Swept ${swept} stale conversation session(s) (${sessions.size} remaining)`);
-}, 10 * 60 * 1000);
+    if (swept > 0)
+      console.log(
+        `🧹 Swept ${swept} stale conversation session(s) (${sessions.size} remaining)`,
+      );
+  },
+  10 * 60 * 1000,
+);
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODE SWITCHING
@@ -417,14 +432,22 @@ export async function processMessage(visitorId, message, ctx) {
     ctx.rootLlmConnectionId ||
     (rootId ? await resolveRootLlmForMode(rootId, session.modeKey) : null);
 
-  const clientEntry = await getClientForUser(ctx.userId, ctx.slot, modeConnectionId);
+  const clientEntry = await getClientForUser(
+    ctx.userId,
+    ctx.slot,
+    modeConnectionId,
+  );
   if (clientEntry.noLlm) {
     // Charge energy to discourage chatting without a connection
     try {
-      const { useEnergy } = await import("../core/energy.js");
+      const { useEnergy } = await import("../core/tree/energy.js");
       await useEnergy({ userId: ctx.userId, action: "chatError" });
     } catch (_) {}
-    return { content: "No LLM connection configured. Set one up at /setup to use AI features.", modeKey: session.modeKey };
+    return {
+      content:
+        "No LLM connection configured. Set one up at /setup to use AI features.",
+      modeKey: session.modeKey,
+    };
   }
   const {
     client: openai,
@@ -546,23 +569,46 @@ export async function processMessage(visitorId, message, ctx) {
         /```tool_code/i.test(_content);
 
       if (looksLikeToolCall) {
-        console.warn(`⚠️ Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`);
+        console.warn(
+          `⚠️ Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`,
+        );
         session.messages.pop();
-        const fallbackResponse = await openai.chat.completions.create({
-          model: MODEL,
-          messages: [
-            ...session.messages,
-            { role: "system", content: "Answer the user's question directly in plain text. Do not use XML, function call, or tool_call syntax." },
-          ],
-        }, requestOpts);
+        const fallbackResponse = await openai.chat.completions.create(
+          {
+            model: MODEL,
+            messages: [
+              ...session.messages,
+              {
+                role: "system",
+                content:
+                  "Answer the user's question directly in plain text. Do not use XML, function call, or tool_call syntax.",
+              },
+            ],
+          },
+          requestOpts,
+        );
         const fallbackChoice = fallbackResponse.choices?.[0];
         if (fallbackChoice) {
           session.messages.push(fallbackChoice.message);
           if (isInternal) {
             const raw = fallbackChoice.message.content;
-            const _llmProvider = { isCustom, model: MODEL, connectionId: resolvedConnectionId || null };
-            try { const p = JSON.parse(raw); p._llmProvider = _llmProvider; return p; }
-            catch { return { action: "error", reason: "Model cannot use tools", raw, _llmProvider }; }
+            const _llmProvider = {
+              isCustom,
+              model: MODEL,
+              connectionId: resolvedConnectionId || null,
+            };
+            try {
+              const p = JSON.parse(raw);
+              p._llmProvider = _llmProvider;
+              return p;
+            } catch {
+              return {
+                action: "error",
+                reason: "Model cannot use tools",
+                raw,
+                _llmProvider,
+              };
+            }
           }
           answer = fallbackChoice.message.content;
         }
@@ -577,7 +623,11 @@ export async function processMessage(visitorId, message, ctx) {
       // ✅ No tools left → now safe to return for internal mode
       if (isInternal) {
         const raw = assistantMessage.content;
-        const _llmProvider = { isCustom, model: MODEL, connectionId: resolvedConnectionId || null };
+        const _llmProvider = {
+          isCustom,
+          model: MODEL,
+          connectionId: resolvedConnectionId || null,
+        };
         try {
           const parsed = JSON.parse(raw);
           parsed._llmProvider = _llmProvider;

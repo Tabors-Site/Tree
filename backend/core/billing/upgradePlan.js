@@ -1,4 +1,4 @@
-import { DAILY_LIMITS } from "../energy.js";
+import { DAILY_LIMITS } from "../tree/energy.js";
 
 const PLAN_DAILY_VALUE = {
   basic: 0,
@@ -21,10 +21,8 @@ export function upgradeUserPlan(user, newPlan) {
      Convert Remaining Time → Energy
      =============================== */
 
-  if (expiresAt > now && oldPlan !== "basic" && oldPlan!=="premium") {
-    const remainingDays = Math.ceil(
-      (expiresAt - now) / (24 * 60 * 60 * 1000)
-    );
+  if (expiresAt > now && oldPlan !== "basic" && oldPlan !== "premium") {
+    const remainingDays = Math.ceil((expiresAt - now) / (24 * 60 * 60 * 1000));
 
     const energyPerDay = PLAN_DAILY_VALUE[oldPlan];
 
@@ -39,8 +37,7 @@ export function upgradeUserPlan(user, newPlan) {
 
   user.profileType = newPlan;
 
-  user.availableEnergy.amount =
-    DAILY_LIMITS[newPlan] ?? DAILY_LIMITS.basic;
+  user.availableEnergy.amount = DAILY_LIMITS[newPlan] ?? DAILY_LIMITS.basic;
 
   user.availableEnergy.lastResetAt = new Date();
 

@@ -1,25 +1,16 @@
 import express from "express";
 
 import {
-  getRootDetails,
   getTree,
   getParents,
-  getRootNodes,
   getTreeForAi,
   getAllData,
-} from "../core/treeDataFetching.js";
+} from "../core/tree/treeDataFetching.js";
 
 import authenticate from "../middleware/authenticate.js";
 
 const router = express.Router();
-
-// Endpoint to fetch root node IDs for user
-router.get("/get-root-nodes", authenticate, getRootNodes);
-
-// Endpoint to fetch root node details
-router.post("/get-root-details", getRootDetails);
-
-// Endpoint to fetch the full tree object
+//legcay need to be reordered
 router.post("/get-tree", getTree);
 
 router.post("/get-tree-ai", getTreeForAi);

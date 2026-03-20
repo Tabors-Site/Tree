@@ -23,21 +23,21 @@ if (!fs.existsSync(uploadsFolder)) {
   fs.mkdirSync(uploadsFolder);
 }
 
-import { setValueForNode, setGoalForNode } from "../core/values.js";
+import { setValueForNode, setGoalForNode } from "../core/tree/values.js";
 
 import {
   getContributionsByUser,
   getContributions,
-} from "../core/contributions.js";
+} from "../core/tree/contributions.js";
 
-import { updateSchedule } from "../core/schedules.js";
+import { updateSchedule } from "../core/tree/schedules.js";
 import {
   commitCompressionResult,
   getNextCompressionPayloadForLLM,
   createUnderstandingRun,
   listUnderstandingRuns,
-} from "../core/understanding.js";
-import { editStatus, addPrestige } from "../core/statuses.js";
+} from "../core/tree/understanding.js";
+import { editStatus, addPrestige } from "../core/tree/statuses.js";
 import {
   createNote,
   getNotes,
@@ -47,24 +47,24 @@ import {
   deleteNoteAndFile,
   transferNote,
   searchNotesByUser,
-} from "../core/notes.js";
-import { getRawIdeas, convertRawIdeaToNote } from "../core/rawIdea.js";
+} from "../core/tree/notes.js";
+import { getRawIdeas, convertRawIdeaToNote } from "../core/tree/rawIdea.js";
 import {
   createNewNode,
   createNodesRecursive,
   deleteNodeBranch,
   updateParentRelationship,
   editNodeName,
-} from "../core/treeManagement.js";
+} from "../core/tree/treeManagement.js";
 
 import {
   getRootNodesForUser,
   getActiveLeafExecutionFrontier,
   getContextForAi,
   getNavigationContext,
-} from "../core/treeFetch.js";
+} from "../core/tree/treeFetch.js";
 
-import { executeScript, updateScript } from "../core/scripts.js";
+import { executeScript, updateScript } from "../core/tree/scripts.js";
 
 import {
   McpServer,
@@ -72,7 +72,7 @@ import {
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { getTreeForAi, getNodeForAi } from "../core/treeDataFetching.js"; // import from your real backend
+import { getTreeForAi, getNodeForAi } from "../core/tree/treeDataFetching.js"; // import from your real backend
 import { resolveTreeAccess } from "../core/authenticate.js";
 import { getAiContributionContext } from "../ws/aiChatTracker.js";
 

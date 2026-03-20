@@ -9,11 +9,30 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
-import { switchMode, processMessage, setRootId, getClientForUser, resolveRootLlmForMode, clearSession } from "../conversation.js";
-import { trackChainStep, startAIChat, finalizeAIChat, setAiContributionContext, clearAiContributionContext } from "../aiChatTracker.js";
+import {
+  switchMode,
+  processMessage,
+  setRootId,
+  getClientForUser,
+  resolveRootLlmForMode,
+  clearSession,
+} from "../conversation.js";
+import {
+  trackChainStep,
+  startAIChat,
+  finalizeAIChat,
+  setAiContributionContext,
+  clearAiContributionContext,
+} from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
-import { buildDeepTreeSummary } from "../../core/treeFetch.js";
-import { createSession, endSession, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
+import { buildDeepTreeSummary } from "../../core/tree/treeFetch.js";
+import {
+  createSession,
+  endSession,
+  setSessionAbort,
+  clearSessionAbort,
+  SESSION_TYPES,
+} from "../sessionRegistry.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
 
@@ -45,9 +64,16 @@ function parseJsonSafe(text) {
 // MAIN ORCHESTRATOR
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function orchestrateReorganize({ rootId, userId, username, source = "orchestrator" }) {
+export async function orchestrateReorganize({
+  rootId,
+  userId,
+  username,
+  source = "orchestrator",
+}) {
   if (activeRuns.has(rootId)) {
-    console.log(`⏭️ Cleanup reorganize already running for tree ${rootId}, skipping`);
+    console.log(
+      `⏭️ Cleanup reorganize already running for tree ${rootId}, skipping`,
+    );
     return { success: false, error: "already running", sessionId: null };
   }
 
@@ -65,12 +91,19 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
 
   let chainIndex = 1;
   let mainChatId = null;
-  let finalizeArgs = { content: null, stopped: true, modeKey: "cleanup-reorg:complete" };
+  let finalizeArgs = {
+    content: null,
+    stopped: true,
+    modeKey: "cleanup-reorg:complete",
+  };
 
   // ── LLM provider ────────────────────────────────────────────────────
   let llmProvider;
   try {
-    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:cleanup-analyze");
+    const modeConnectionId = await resolveRootLlmForMode(
+      rootId,
+      "tree:cleanup-analyze",
+    );
     const clientInfo = await getClientForUser(userId, "main", modeConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
@@ -94,7 +127,9 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
   setAiContributionContext(visitorId, sessionId, mainChatId);
 
   // ── MCP connection ───────────────────────────────────────────────────
-  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, { expiresIn: "1h" });
+  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, {
+    expiresIn: "1h",
+  });
   await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
 
   console.log(`🧹 Cleanup reorganize started for tree ${rootId}`);
@@ -106,7 +141,10 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
     // STEP 1: ANALYZE TREE STRUCTURE
     // ════════════════════════════════════════════════════════════════
 
-    const treeSummary = await buildDeepTreeSummary(rootId, { includeEncodings: true, includeIds: true });
+    const treeSummary = await buildDeepTreeSummary(rootId, {
+      includeEncodings: true,
+      includeIds: true,
+    });
 
     switchMode(visitorId, "tree:cleanup-analyze", {
       username,
@@ -120,14 +158,24 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
     const analyzeResult = await processMessage(
       visitorId,
       "Analyze this tree for misplaced or empty nodes that should be moved or removed.",
-      { username, userId, rootId, signal: abort.signal, meta: { internal: true } },
+      {
+        username,
+        userId,
+        rootId,
+        signal: abort.signal,
+        meta: { internal: true },
+      },
     );
     const analyzeEnd = new Date();
 
     const plan = parseJsonSafe(analyzeResult?.answer || analyzeResult);
     if (!plan) {
       console.error("❌ Cleanup reorganize: analysis returned invalid JSON");
-      finalizeArgs = { content: "Analysis failed — invalid JSON", stopped: false, modeKey: "cleanup-reorg:complete" };
+      finalizeArgs = {
+        content: "Analysis failed — invalid JSON",
+        stopped: false,
+        modeKey: "cleanup-reorg:complete",
+      };
       return { success: false, error: "analysis failed", sessionId };
     }
 
@@ -150,11 +198,17 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
 
     if (moves.length === 0 && deletes.length === 0) {
       console.log("🧹 Tree is well-organized — no changes needed");
-      finalizeArgs = { content: "Tree is well-organized", stopped: false, modeKey: "cleanup-reorg:complete" };
+      finalizeArgs = {
+        content: "Tree is well-organized",
+        stopped: false,
+        modeKey: "cleanup-reorg:complete",
+      };
       return { success: true, moves: 0, deletes: 0, sessionId };
     }
 
-    console.log(`🧹 Plan: ${moves.length} move(s), ${deletes.length} delete(s)`);
+    console.log(
+      `🧹 Plan: ${moves.length} move(s), ${deletes.length} delete(s)`,
+    );
 
     // ════════════════════════════════════════════════════════════════
     // STEP 2: EXECUTE MOVES via tree:structure
@@ -183,7 +237,13 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
       const moveResult = await processMessage(
         visitorId,
         `Move node ${move.nodeId} ("${move.nodeName}") to this parent node. Reason: ${move.reason}`,
-        { username, userId, rootId, signal: abort.signal, meta: { internal: true } },
+        {
+          username,
+          userId,
+          rootId,
+          signal: abort.signal,
+          meta: { internal: true },
+        },
       );
       const moveEnd = new Date();
 
@@ -201,11 +261,16 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
         startTime: moveStart,
         endTime: moveEnd,
         llmProvider,
-        treeContext: { targetNodeId: move.newParentId, stepResult: moveData ? "success" : "failed" },
+        treeContext: {
+          targetNodeId: move.newParentId,
+          stepResult: moveData ? "success" : "failed",
+        },
       });
 
       if (moveData) moveCount++;
-      console.log(`  ↪ Moved "${move.nodeName}": ${moveData ? "success" : "failed"}`);
+      console.log(
+        `  ↪ Moved "${move.nodeName}": ${moveData ? "success" : "failed"}`,
+      );
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -217,9 +282,13 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
       if (abort.signal.aborted) break;
 
       // Verify node still exists
-      const node = await Node.findById(del.nodeId).select("_id name children").lean();
+      const node = await Node.findById(del.nodeId)
+        .select("_id name children")
+        .lean();
       if (!node) {
-        console.warn(`⚠️ Skipping delete — node ${del.nodeId} no longer exists`);
+        console.warn(
+          `⚠️ Skipping delete — node ${del.nodeId} no longer exists`,
+        );
         continue;
       }
 
@@ -235,7 +304,13 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
       const delResult = await processMessage(
         visitorId,
         `Delete node ${del.nodeId} ("${del.nodeName}"). It is empty and misplaced. Reason: ${del.reason}`,
-        { username, userId, rootId, signal: abort.signal, meta: { internal: true } },
+        {
+          username,
+          userId,
+          rootId,
+          signal: abort.signal,
+          meta: { internal: true },
+        },
       );
       const delEnd = new Date();
 
@@ -253,11 +328,16 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
         startTime: delStart,
         endTime: delEnd,
         llmProvider,
-        treeContext: { targetNodeId: del.nodeId, stepResult: delData ? "success" : "failed" },
+        treeContext: {
+          targetNodeId: del.nodeId,
+          stepResult: delData ? "success" : "failed",
+        },
       });
 
       if (delData) deleteCount++;
-      console.log(`  🗑️ Deleted "${del.nodeName}": ${delData ? "success" : "failed"}`);
+      console.log(
+        `  🗑️ Deleted "${del.nodeName}": ${delData ? "success" : "failed"}`,
+      );
     }
 
     finalizeArgs = {
@@ -266,11 +346,20 @@ export async function orchestrateReorganize({ rootId, userId, username, source =
       modeKey: "cleanup-reorg:complete",
     };
 
-    console.log(`🧹 Cleanup reorganize complete: ${moveCount} moved, ${deleteCount} deleted`);
+    console.log(
+      `🧹 Cleanup reorganize complete: ${moveCount} moved, ${deleteCount} deleted`,
+    );
     return { success: true, moves: moveCount, deletes: deleteCount, sessionId };
   } catch (err) {
-    console.error(`❌ Cleanup reorganize error for tree ${rootId}:`, err.message);
-    finalizeArgs = { content: err.message, stopped: abort.signal.aborted, modeKey: "cleanup-reorg:complete" };
+    console.error(
+      `❌ Cleanup reorganize error for tree ${rootId}:`,
+      err.message,
+    );
+    finalizeArgs = {
+      content: err.message,
+      stopped: abort.signal.aborted,
+      modeKey: "cleanup-reorg:complete",
+    };
     return { success: false, error: err.message, sessionId };
   } finally {
     if (mainChatId) {

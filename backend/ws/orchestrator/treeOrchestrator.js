@@ -16,7 +16,11 @@ import { classify, translateDestructive } from "./translator.js";
 import { trackChainStep, setAiContributionContext } from "../aiChatTracker.js";
 import { isActiveNavigator } from "../sessionRegistry.js";
 
-import { getContextForAi, getNavigationContext, buildDeepTreeSummary } from "../../core/treeFetch.js";
+import {
+  getContextForAi,
+  getNavigationContext,
+  buildDeepTreeSummary,
+} from "../../core/tree/treeFetch.js";
 import Node from "../../db/models/node.js";
 import ShortMemory from "../../db/models/shortMemory.js";
 // ─────────────────────────────────────────────────────────────────────────
@@ -209,7 +213,9 @@ function emitModeResult(socket, modeKey, result) {
   socket.emit("orchestratorStep", {
     modeKey,
     result:
-      typeof sanitized === "string" ? sanitized : JSON.stringify(sanitized, null, 2),
+      typeof sanitized === "string"
+        ? sanitized
+        : JSON.stringify(sanitized, null, 2),
     timestamp: Date.now(),
   });
 }
@@ -499,9 +505,7 @@ async function executePlanSteps({
       // ── NO TARGET — operate on current position (root or last step's target) ──
       targetNodeId = lastTargetNodeId || getCurrentNodeId(visitorId) || rootId;
       targetPath = lastTargetPath || null;
-      console.log(
-        `  📍 Using current position: ${targetPath || targetNodeId}`,
-      );
+      console.log(`  📍 Using current position: ${targetPath || targetNodeId}`);
     }
 
     // ══════════════════════════════════════════════════════
@@ -947,14 +951,19 @@ export async function orchestrateTreeRequest({
   // Resolve base llmProvider for tracking (processMessage auto-resolves per-mode)
   let llmProvider = { isCustom: false, model: null, connectionId: null };
   try {
-    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:librarian");
+    const modeConnectionId = await resolveRootLlmForMode(
+      rootId,
+      "tree:librarian",
+    );
     const clientInfo = await getClientForUser(userId, slot, modeConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
       connectionId: clientInfo.connectionId || null,
     };
-  } catch (e) { /* use default */ }
+  } catch (e) {
+    /* use default */
+  }
 
   // Ensure AI contribution context is set so MCP tool calls get aiChatId/sessionId
   if (rootChatId) {
@@ -991,7 +1000,12 @@ export async function orchestrateTreeRequest({
           : "User cancelled the operation.";
 
       if (skipRespond) {
-        return { success: true, answer: null, modeKey: "tree:orchestrator", stepSummaries: pending.stepSummaries || [] };
+        return {
+          success: true,
+          answer: null,
+          modeKey: "tree:orchestrator",
+          stepSummaries: pending.stepSummaries || [],
+        };
       }
       return await runRespond({
         visitorId,
@@ -1017,7 +1031,9 @@ export async function orchestrateTreeRequest({
   let treeSummary = null;
   if (rootId) {
     try {
-      treeSummary = await buildDeepTreeSummary(rootId, { includeEncodings: true });
+      treeSummary = await buildDeepTreeSummary(rootId, {
+        includeEncodings: true,
+      });
       console.log("📋 treeSummary for librarian:\n", treeSummary);
     } catch (err) {
       console.error("⚠️ Pre-fetch tree summary failed:", err.message);
@@ -1039,7 +1055,9 @@ export async function orchestrateTreeRequest({
   } catch (err) {
     if (signal?.aborted) return null;
     if (err.message === "NO_LLM") {
-      throw new Error("No LLM connection configured. Set one up at /setup or assign one to this tree.");
+      throw new Error(
+        "No LLM connection configured. Set one up at /setup or assign one to this tree.",
+      );
     }
     console.error("❌ Classification failed:", err.message);
     classification = {
@@ -1121,10 +1139,11 @@ export async function orchestrateTreeRequest({
     classification.placementAxes = null;
   }
 
-  const deferDecision = forceQueryOnly ? { defer: false }
+  const deferDecision = forceQueryOnly
+    ? { defer: false }
     : classification.intent === "place" && !classification.placementAxes
-    ? { defer: true, reason: "User explicitly requested deferral" }
-    : shouldDeferToMemory(classification);
+      ? { defer: true, reason: "User explicitly requested deferral" }
+      : shouldDeferToMemory(classification);
   if (deferDecision.defer) {
     console.log(`📝 Deferred to short memory: ${deferDecision.reason}`);
 
@@ -1146,7 +1165,10 @@ export async function orchestrateTreeRequest({
       chainIndex: chainIndex++,
       modeKey: "short-memory:defer",
       input: message,
-      output: { deferReason: deferDecision.reason, memoryItemId: memoryItem._id },
+      output: {
+        deferReason: deferDecision.reason,
+        memoryItemId: memoryItem._id,
+      },
       llmProvider,
     });
 
@@ -1159,7 +1181,9 @@ export async function orchestrateTreeRequest({
         userId,
         rootId,
         originalMessage: message,
-        responseHint: classification.responseHint || "Acknowledge the idea naturally. Do not mention deferral, memory, or holding.",
+        responseHint:
+          classification.responseHint ||
+          "Acknowledge the idea naturally. Do not mention deferral, memory, or holding.",
         stepSummaries: [],
         slot,
       });
@@ -1446,8 +1470,15 @@ async function runLibrarianFlow({
   // Same format as translator output → feeds directly into plan execution
 
   // Handle librarian failure — fall back to simple response
-  if (!libPlan || libPlan.action === "error" || (!libPlan.plan && !libPlan.responseHint)) {
-    console.error("❌ Librarian failed:", libPlan?.reason || libPlan?.raw || "no response");
+  if (
+    !libPlan ||
+    libPlan.action === "error" ||
+    (!libPlan.plan && !libPlan.responseHint)
+  ) {
+    console.error(
+      "❌ Librarian failed:",
+      libPlan?.reason || libPlan?.raw || "no response",
+    );
 
     modesUsed.push("tree:librarian");
     trackChainStep({
@@ -1470,7 +1501,13 @@ async function runLibrarianFlow({
 
     // Fall back to responding with what we have
     if (skipRespond) {
-      return { success: false, answer: null, modeKey: "tree:orchestrator", modesUsed, stepSummaries: [] };
+      return {
+        success: false,
+        answer: null,
+        modeKey: "tree:orchestrator",
+        modesUsed,
+        stepSummaries: [],
+      };
     }
     modesUsed.push("tree:respond");
     const response = await runRespond({
@@ -1481,7 +1518,9 @@ async function runLibrarianFlow({
       nodeContext: null,
       operationContext: null,
       originalMessage: message,
-      responseHint: classification.responseHint || "Respond naturally to the user's message.",
+      responseHint:
+        classification.responseHint ||
+        "Respond naturally to the user's message.",
       stepSummaries: [],
     });
 
@@ -1512,7 +1551,8 @@ async function runLibrarianFlow({
   });
 
   var plan = libPlan?.plan || [];
-  const responseHint = libPlan?.responseHint || classification.responseHint || "";
+  const responseHint =
+    libPlan?.responseHint || classification.responseHint || "";
 
   // Force empty plan in query-only mode — no edits regardless of librarian output
   if (forceQueryOnly && plan.length > 0) {
@@ -1528,8 +1568,11 @@ async function runLibrarianFlow({
   if (plan.length === 0) {
     if (skipRespond) {
       return {
-        success: true, answer: null, modeKey: "tree:orchestrator",
-        modesUsed, confidence: libPlan?.confidence || classification.confidence,
+        success: true,
+        answer: null,
+        modeKey: "tree:orchestrator",
+        modesUsed,
+        confidence: libPlan?.confidence || classification.confidence,
         stepSummaries: [],
       };
     }
@@ -1850,7 +1893,13 @@ async function executePendingOperation({
   // ── RESPOND ──
   if (skipRespond) {
     const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
-    return { success: !anyFailed, answer: null, modeKey: "tree:orchestrator", modesUsed, stepSummaries };
+    return {
+      success: !anyFailed,
+      answer: null,
+      modeKey: "tree:orchestrator",
+      modesUsed,
+      stepSummaries,
+    };
   }
 
   modesUsed.push("tree:respond");
@@ -1989,17 +2038,26 @@ function shouldDeferToMemory(classification) {
 
   // Relational complexity — touches multiple subtrees
   if (axes.relationalComplexity > 0.5) {
-    return { defer: true, reason: "Touches multiple subtrees — needs more context" };
+    return {
+      defer: true,
+      reason: "Touches multiple subtrees — needs more context",
+    };
   }
 
   // New domain area — no existing structure to attach to
   if (axes.domainNovelty > 0.5) {
-    return { defer: true, reason: "New area — holding until more context emerges" };
+    return {
+      defer: true,
+      reason: "New area — holding until more context emerges",
+    };
   }
 
   // No clear existing spot
   if (axes.pathConfidence < 0.6) {
-    return { defer: true, reason: "No clear home — holding for better placement" };
+    return {
+      defer: true,
+      reason: "No clear home — holding for better placement",
+    };
   }
 
   return { defer: false };

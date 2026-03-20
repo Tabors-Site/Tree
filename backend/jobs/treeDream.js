@@ -10,7 +10,7 @@ import ShortMemory from "../db/models/shortMemory.js";
 import { orchestrateReorganize } from "../ws/orchestrator/cleanupReorganizeOrchestrator.js";
 import { orchestrateExpand } from "../ws/orchestrator/cleanupExpandOrchestrator.js";
 import { drainTree } from "../ws/orchestrator/shortTermDrainOrchestrator.js";
-import { findOrCreateUnderstandingRun } from "../core/understanding.js";
+import { findOrCreateUnderstandingRun } from "../core/tree/understanding.js";
 import { orchestrateUnderstanding } from "../ws/orchestrator/understandOrchestrator.js";
 import { orchestrateDreamNotify } from "../ws/orchestrator/dreamNotifyOrchestrator.js";
 import { userHasLlm } from "../ws/conversation.js";
@@ -63,13 +63,15 @@ async function runTreeDream(rootNode) {
 
   // Skip if no LLM available (root assignment or user connection)
   const rootFull = await Node.findById(rootId).select("llmAssignments").lean();
-  if (!rootFull?.llmAssignments?.placement && !await userHasLlm(userId)) {
+  if (!rootFull?.llmAssignments?.placement && !(await userHasLlm(userId))) {
     console.log(`💤 Skipping "${rootNode.name}" — owner has no LLM connection`);
     return;
   }
 
   activeDreams.add(rootId);
-  console.log(`💤 Dream starting for "${rootNode.name}" [${rootId.slice(0, 8)}]`);
+  console.log(
+    `💤 Dream starting for "${rootNode.name}" [${rootId.slice(0, 8)}]`,
+  );
 
   const dreamSessionIds = [];
 
@@ -79,24 +81,43 @@ async function runTreeDream(rootNode) {
     // ════════════════════════════════════════════════════════════════
 
     for (let pass = 1; pass <= MAX_CLEANUP_PASSES; pass++) {
-      console.log(`💤 Cleanup pass ${pass}/${MAX_CLEANUP_PASSES} for "${rootNode.name}"`);
+      console.log(
+        `💤 Cleanup pass ${pass}/${MAX_CLEANUP_PASSES} for "${rootNode.name}"`,
+      );
 
       let totalChanges = 0;
 
       try {
-        const reorgResult = await orchestrateReorganize({ rootId, userId, username, source: "background" });
+        const reorgResult = await orchestrateReorganize({
+          rootId,
+          userId,
+          username,
+          source: "background",
+        });
         if (reorgResult?.sessionId) dreamSessionIds.push(reorgResult.sessionId);
         totalChanges += (reorgResult?.moves || 0) + (reorgResult?.deletes || 0);
       } catch (err) {
-        console.error(`❌ Dream cleanup reorganize pass ${pass} failed:`, err.message);
+        console.error(
+          `❌ Dream cleanup reorganize pass ${pass} failed:`,
+          err.message,
+        );
       }
 
       try {
-        const expandResult = await orchestrateExpand({ rootId, userId, username, source: "background" });
-        if (expandResult?.sessionId) dreamSessionIds.push(expandResult.sessionId);
+        const expandResult = await orchestrateExpand({
+          rootId,
+          userId,
+          username,
+          source: "background",
+        });
+        if (expandResult?.sessionId)
+          dreamSessionIds.push(expandResult.sessionId);
         totalChanges += expandResult?.expanded || 0;
       } catch (err) {
-        console.error(`❌ Dream cleanup expand pass ${pass} failed:`, err.message);
+        console.error(
+          `❌ Dream cleanup expand pass ${pass} failed:`,
+          err.message,
+        );
       }
 
       if (totalChanges === 0) {
@@ -104,7 +125,9 @@ async function runTreeDream(rootNode) {
         break;
       }
 
-      console.log(`💤 Cleanup pass ${pass}: ${totalChanges} change(s) — continuing`);
+      console.log(
+        `💤 Cleanup pass ${pass}: ${totalChanges} change(s) — continuing`,
+      );
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -124,7 +147,9 @@ async function runTreeDream(rootNode) {
         break;
       }
 
-      console.log(`💤 Drain pass ${pass}/${MAX_DRAIN_PASSES}: ${pendingCount} pending item(s)`);
+      console.log(
+        `💤 Drain pass ${pass}/${MAX_DRAIN_PASSES}: ${pendingCount} pending item(s)`,
+      );
 
       try {
         const drainResult = await drainTree(rootId);
@@ -142,7 +167,12 @@ async function runTreeDream(rootNode) {
     try {
       console.log(`💤 Starting understanding run for "${rootNode.name}"`);
 
-      const run = await findOrCreateUnderstandingRun(rootId, userId, NAV_PERSPECTIVE, true);
+      const run = await findOrCreateUnderstandingRun(
+        rootId,
+        userId,
+        NAV_PERSPECTIVE,
+        true,
+      );
 
       await orchestrateUnderstanding({
         rootId,
@@ -214,17 +244,24 @@ export async function runTreeDreamJob() {
 
     for (const rootNode of rootNodes) {
       // Parse dreamTime "HH:MM" → minutes since midnight
-      const [hours, minutes] = (rootNode.dreamTime || "").split(":").map(Number);
+      const [hours, minutes] = (rootNode.dreamTime || "")
+        .split(":")
+        .map(Number);
       if (isNaN(hours) || isNaN(minutes)) {
-        console.warn(`⚠️ Invalid dreamTime "${rootNode.dreamTime}" for "${rootNode.name}"`);
+        console.warn(
+          `⚠️ Invalid dreamTime "${rootNode.dreamTime}" for "${rootNode.name}"`,
+        );
         continue;
       }
       const dreamMinutes = hours * 60 + minutes;
 
       // Check if it's time to dream: current time >= dreamTime AND haven't dreamed today
-      const alreadyDreamedToday = rootNode.lastDreamAt && rootNode.lastDreamAt >= startOfDay;
+      const alreadyDreamedToday =
+        rootNode.lastDreamAt && rootNode.lastDreamAt >= startOfDay;
       if (currentMinutes >= dreamMinutes && !alreadyDreamedToday) {
-        console.log(`💤 Dream time reached for "${rootNode.name}" (${rootNode.dreamTime})`);
+        console.log(
+          `💤 Dream time reached for "${rootNode.name}" (${rootNode.dreamTime})`,
+        );
         await runTreeDream(rootNode);
       }
     }
@@ -240,7 +277,9 @@ export async function runTreeDreamJob() {
 export function startTreeDreamJob({ intervalMs = 30 * 60 * 1000 } = {}) {
   if (jobTimer) clearInterval(jobTimer);
   jobTimer = setInterval(runTreeDreamJob, intervalMs);
-  console.log(`💤 Tree dream job started (checking every ${intervalMs / 1000}s)`);
+  console.log(
+    `💤 Tree dream job started (checking every ${intervalMs / 1000}s)`,
+  );
 }
 
 export function stopTreeDreamJob() {

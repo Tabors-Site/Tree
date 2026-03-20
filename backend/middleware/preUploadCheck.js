@@ -1,5 +1,5 @@
 import User from "../db/models/user.js";
-import { calculateFileEnergy, maybeResetEnergy } from "../core/energy.js";
+import { calculateFileEnergy, maybeResetEnergy } from "../core/tree/energy.js";
 
 // per-tier file size limits in bytes
 const MAX_FILE_BYTES = {

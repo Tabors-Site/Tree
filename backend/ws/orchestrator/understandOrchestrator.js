@@ -25,12 +25,21 @@ import {
 } from "../aiChatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../mcp.js";
 import { emitNavigate, emitToUser } from "../websocket.js";
-import { createSession, endSession, setActiveNavigator, getSession, updateSessionMeta, setSessionAbort, clearSessionAbort, SESSION_TYPES } from "../sessionRegistry.js";
+import {
+  createSession,
+  endSession,
+  setActiveNavigator,
+  getSession,
+  updateSessionMeta,
+  setSessionAbort,
+  clearSessionAbort,
+  SESSION_TYPES,
+} from "../sessionRegistry.js";
 import {
   getNextCompressionPayloadForLLM,
   commitCompressionResult,
   prepareIncrementalRun,
-} from "../../core/understanding.js";
+} from "../../core/tree/understanding.js";
 import UnderstandingRun from "../../db/models/understandingRun.js";
 import UnderstandingNode from "../../db/models/understandingNode.js";
 import Node from "../../db/models/node.js";
@@ -55,7 +64,9 @@ function buildSummarizationPrompt(payload) {
   }
 
   if (payload.mode === "merge") {
-    const nonEmpty = input.childSummaries.filter((cs) => cs.summary && cs.summary.trim());
+    const nonEmpty = input.childSummaries.filter(
+      (cs) => cs.summary && cs.summary.trim(),
+    );
     if (nonEmpty.length === 0) {
       return `Node "${input.nodeName}" has ${input.childSummaries.length} empty children. Write a one-sentence summary of what this section likely covers based on its name alone.`;
     }
@@ -141,7 +152,10 @@ export async function orchestrateUnderstanding({
 
   // ── Concurrent-run guard ────────────────────────────────────────────────
   if (activeRuns.has(understandingRunId)) {
-    return { success: false, error: "This understanding run is already being processed" };
+    return {
+      success: false,
+      error: "This understanding run is already being processed",
+    };
   }
   activeRuns.add(understandingRunId);
   const runPerspective = existingRun.perspective;
@@ -152,11 +166,16 @@ export async function orchestrateUnderstanding({
     : 0;
 
   // Prepare incremental run (rebuild topology, detect dirty nodes)
-  const { dirtyCount, totalNodes } = await prepareIncrementalRun(understandingRunId, userId);
+  const { dirtyCount, totalNodes } = await prepareIncrementalRun(
+    understandingRunId,
+    userId,
+  );
   console.log(`🧠 Incremental prep: ${dirtyCount}/${totalNodes} nodes dirty`);
 
   // Set status to running
-  await UnderstandingRun.findByIdAndUpdate(understandingRunId, { status: "running" });
+  await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
+    status: "running",
+  });
 
   // Check if already complete before spinning up resources
   const firstPayload = await getNextCompressionPayloadForLLM(
@@ -221,8 +240,15 @@ export async function orchestrateUnderstanding({
   // ── Resolve base LLM for tracking (processMessage auto-resolves per-mode) ──
   let llmProvider;
   try {
-    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:understand");
-    const clientInfo = await getClientForUser(userId, "understand", modeConnectionId);
+    const modeConnectionId = await resolveRootLlmForMode(
+      rootId,
+      "tree:understand",
+    );
+    const clientInfo = await getClientForUser(
+      userId,
+      "understand",
+      modeConnectionId,
+    );
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
@@ -305,7 +331,9 @@ export async function orchestrateUnderstanding({
 
       // Handle noLlm early return from processMessage (returns { content } with no answer)
       if (result && !result.success && result.content && !result.answer) {
-        throw new Error(`No LLM available for understand slot: ${result.content}`);
+        throw new Error(
+          `No LLM available for understand slot: ${result.content}`,
+        );
       }
 
       const summary =
@@ -339,14 +367,17 @@ export async function orchestrateUnderstanding({
             understandingRunId,
             encoding: "(empty)",
             understandingNodeId: nodeId,
-            currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
+            currentLayer:
+              payload.mode === "leaf" ? 0 : payload.target.nextLayer,
             userId,
             wasAi: true,
             aiChatId: mainChatId,
             sessionId,
           });
           nodesProcessed++;
-          console.warn(`⚠️ Committed placeholder for stuck node ${nodeId}, moving on`);
+          console.warn(
+            `⚠️ Committed placeholder for stuck node ${nodeId}, moving on`,
+          );
           emptyRetries = 0;
           lastEmptyNodeId = null;
         }
@@ -370,7 +401,9 @@ export async function orchestrateUnderstanding({
       });
 
       nodesProcessed++;
-      updateSessionMeta(sessionId, { nodeId: payload.target.realNodeId || rootId });
+      updateSessionMeta(sessionId, {
+        nodeId: payload.target.realNodeId || rootId,
+      });
 
       // Navigate iframe to the node just processed
       if (isSite) {
@@ -410,9 +443,15 @@ export async function orchestrateUnderstanding({
 
     // Mark run as completed and push encoding to history
     const completedAt = new Date();
-    await UnderstandingRun.findByIdAndUpdate(understandingRunId, rootEncoding
-      ? { status: "completed", lastCompletedAt: completedAt, $push: { encodingHistory: { encoding: rootEncoding, completedAt } } }
-      : { status: "completed", lastCompletedAt: completedAt },
+    await UnderstandingRun.findByIdAndUpdate(
+      understandingRunId,
+      rootEncoding
+        ? {
+            status: "completed",
+            lastCompletedAt: completedAt,
+            $push: { encodingHistory: { encoding: rootEncoding, completedAt } },
+          }
+        : { status: "completed", lastCompletedAt: completedAt },
     );
 
     finalizeArgs = {
@@ -469,9 +508,13 @@ export async function orchestrateUnderstanding({
   } finally {
     // Reset status to completed if still marked as running (e.g. abort/crash)
     try {
-      const currentRun = await UnderstandingRun.findById(understandingRunId).select("status").lean();
+      const currentRun = await UnderstandingRun.findById(understandingRunId)
+        .select("status")
+        .lean();
       if (currentRun?.status === "running") {
-        await UnderstandingRun.findByIdAndUpdate(understandingRunId, { status: "completed" });
+        await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
+          status: "completed",
+        });
       }
     } catch (_) {}
     activeRuns.delete(understandingRunId);
