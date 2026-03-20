@@ -1,6 +1,6 @@
-import treeDataFetchingRoutes from "../routes/treeDataFetching.js";
 import usersRoutes from "../routes/users.js";
 
+//cant use app directly
 import appe from "./app.js";
 import chat from "./chat.js";
 import setup from "./setup.js";
@@ -24,7 +24,6 @@ const limiter = rateLimit({
 export default function registerRoutes(app) {
   app.use(limiter);
 
-  app.use("/", treeDataFetchingRoutes);
   app.use("/", usersRoutes);
   app.use("/", appe);
   app.use("/", chat);
