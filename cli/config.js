@@ -47,7 +47,7 @@ function currentNodeId(cfg) {
 function currentPath(cfg) {
   const remote = cfg.remoteDomain ? `/@${cfg.remoteDomain}` : "";
   if (!cfg.activeRootId) {
-    if (remote) return remote;
+    if (remote) return remote + "/";
     return cfg.atHome ? "/~" : "/";
   }
   const parts = [cfg.activeRootName, ...cfg.pathStack.map((n) => n.name)];
