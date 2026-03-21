@@ -10,10 +10,6 @@ module.exports = (program) => {
     .description("Print current path")
     .action(() => {
       const cfg = requireAuth();
-      if (!cfg.activeRootId)
-        return console.log(
-          chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"),
-        );
       console.log(chalk.cyan(currentPath(cfg)));
     });
 
@@ -24,23 +20,41 @@ module.exports = (program) => {
     .action(async ({ l }) => {
       const cfg = requireAuth();
       const api = new TreeAPI(cfg.apiKey);
+
       if (!cfg.activeRootId) {
-        // At home — list roots
+        // At Land level (/) — show system nodes + user trees
         try {
-          const data = await api.getUser(cfg.userId);
-          const roots = data.roots || data.user?.roots || [];
-          if (!roots.length) return console.log(chalk.dim("No trees yet. Run: mkroot <name>"));
+          const landData = await api.getLandRoot();
+          const children = landData.children || [];
+
+          if (!children.length) return console.log(chalk.dim("  (empty)"));
+
           if (l) {
-            printTable(roots, [
-              { key: "name", label: "Name", width: 28 },
-              { key: "_id", label: "ID", width: 28 },
-            ]);
+            printTable(
+              children.map((c) => ({
+                name: c.name,
+                type: c.isSystem ? "system" : "tree",
+                _id: c._id,
+              })),
+              [
+                { key: "name", label: "Name", width: 28 },
+                { key: "type", label: "Type", width: 10 },
+                { key: "_id", label: "ID", width: 28 },
+              ],
+            );
           } else {
-            console.log(roots.map((r) => chalk.cyan(r.name)).join(chalk.dim("  ·  ")));
+            const names = children.map((c) => {
+              if (c.isSystem) return chalk.dim(c.name);
+              return chalk.cyan(c.name);
+            });
+            console.log(names.join(chalk.dim("  ·  ")));
           }
-        } catch (e) { console.error(chalk.red(e.message)); }
+        } catch (e) {
+          console.error(chalk.red(e.message));
+        }
         return;
       }
+
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.getNode(nodeId);
@@ -79,45 +93,77 @@ module.exports = (program) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: cd <name or id>"));
       const name = parts.join(" ");
       const cfg = requireAuth();
+      const api = new TreeAPI(cfg.apiKey);
+
+      // ── At Land level (/) ──
       if (!cfg.activeRootId) {
-        // At home — treat cd as entering a root
-        const api = new TreeAPI(cfg.apiKey);
+        if (name === "/" || name === "..") {
+          return console.log(chalk.dim("Already at /"));
+        }
+
         try {
-          const data = await api.getUser(cfg.userId);
-          const roots = data.roots || data.user?.roots || [];
-          const root = findChild(roots, name);
-          if (!root) return;
-          cfg.activeRootId = root._id;
-          cfg.activeRootName = root.name;
-          cfg.pathStack = [];
-          save(cfg);
-        } catch (e) { console.error(chalk.red(e.message)); }
+          const landData = await api.getLandRoot();
+          const children = landData.children || [];
+          const target = findChild(children, name);
+          if (!target) return;
+
+          if (target.isSystem) {
+            // Enter system node — use pathStack with a system root marker
+            cfg.activeRootId = target._id;
+            cfg.activeRootName = target.name;
+            cfg.pathStack = [];
+            cfg.isSystemRoot = true;
+            save(cfg);
+          } else {
+            // Enter user tree
+            cfg.activeRootId = target._id;
+            cfg.activeRootName = target.name;
+            cfg.pathStack = [];
+            cfg.isSystemRoot = false;
+            save(cfg);
+          }
+        } catch (e) {
+          console.error(chalk.red(e.message));
+        }
         return;
       }
 
+      // ── cd .. ──
       if (name === "..") {
-        if (cfg.pathStack.length === 0)
-          return console.log(chalk.dim("Already at root."));
+        if (cfg.pathStack.length === 0) {
+          // At tree/system root — go back to Land level
+          cfg.activeRootId = null;
+          cfg.activeRootName = null;
+          cfg.isSystemRoot = false;
+          save(cfg);
+          return;
+        }
         cfg.pathStack.pop();
         save(cfg);
         return;
       }
 
+      // ── cd / ──
       if (name === "/") {
+        cfg.activeRootId = null;
+        cfg.activeRootName = null;
         cfg.pathStack = [];
+        cfg.isSystemRoot = false;
         save(cfg);
         return;
       }
 
-      // Handle / chaining: cd Health/Workouts/Pushups
+      // ── cd with / chaining: cd Health/Workouts/Pushups ──
       if (name.includes("/")) {
         const segments = name.split("/").filter(Boolean);
-        const api = new TreeAPI(cfg.apiKey);
         for (const seg of segments) {
           if (seg === "..") {
             if (cfg.pathStack.length === 0) {
-              console.log(chalk.dim("Already at root."));
-              break;
+              cfg.activeRootId = null;
+              cfg.activeRootName = null;
+              cfg.isSystemRoot = false;
+              save(cfg);
+              return;
             }
             cfg.pathStack.pop();
             save(cfg);
@@ -127,17 +173,11 @@ module.exports = (program) => {
             const nodeId = currentNodeId(cfg);
             const data = await api.getNode(nodeId);
             const children = getChildren(data);
-            const q = seg.toLowerCase();
-            const hasMatch = children.some((c) =>
-              c._id === seg || c._id.startsWith(seg) ||
-              (c.name && (c.name.toLowerCase() === q || c.name.toLowerCase().startsWith(q) || c.name.toLowerCase().includes(q)))
-            );
-            if (!hasMatch) {
+            const target = findChild(children, seg);
+            if (!target) {
               console.log(chalk.yellow(`Stopped at ${currentPath(cfg)} — no child matching "${seg}"`));
               break;
             }
-            const target = findChild(children, seg);
-            if (!target) break;
             cfg.pathStack.push({ id: target._id, name: target.name });
             save(cfg);
           } catch (e) {
@@ -148,7 +188,7 @@ module.exports = (program) => {
         return;
       }
 
-      const api = new TreeAPI(cfg.apiKey);
+      // ── Standard cd into child ──
       try {
         if (opts.recursive) {
           const rootData = await api.getRoot(cfg.activeRootId);
@@ -219,7 +259,7 @@ module.exports = (program) => {
     .action(async (opts) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first. Run: cd <name>"));
       const api = new TreeAPI(cfg.apiKey);
       try {
         const nodeId = currentNodeId(cfg);
@@ -243,7 +283,7 @@ module.exports = (program) => {
     .action(async ({ month, year }) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first. Run: cd <name>"));
       const api = new TreeAPI(cfg.apiKey);
       try {
         const opts = {};

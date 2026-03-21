@@ -1,6 +1,8 @@
 import express from "express";
 import authenticate from "../../middleware/authenticate.js";
 import User from "../../db/models/user.js";
+import Node from "../../db/models/node.js";
+import { getLandRoot } from "../../core/landRoot.js";
 import {
   getAllLandConfig,
   getLandConfigValue,
@@ -53,6 +55,38 @@ router.put("/land/config/:key", authenticate, async (req, res) => {
 
     await setLandConfigValue(req.params.key, value);
     res.json({ key: req.params.key, value, updated: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/land/root
+ * Returns the Land root node with its children (system nodes + user trees).
+ */
+router.get("/land/root", authenticate, async (req, res) => {
+  try {
+    const landRoot = await getLandRoot();
+    if (!landRoot) {
+      return res.status(404).json({ error: "Land root not found" });
+    }
+
+    const children = await Node.find({ _id: { $in: landRoot.children } })
+      .select("_id name isSystem systemRole rootOwner metadata")
+      .lean();
+
+    res.json({
+      _id: landRoot._id,
+      name: landRoot.name,
+      children: children.map((c) => ({
+        _id: c._id,
+        name: c.name,
+        isSystem: c.isSystem || false,
+        systemRole: c.systemRole || null,
+        rootOwner: c.rootOwner || null,
+        metadata: c.metadata || null,
+      })),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

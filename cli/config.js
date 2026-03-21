@@ -43,7 +43,7 @@ function currentNodeId(cfg) {
 }
 
 function currentPath(cfg) {
-  if (!cfg.activeRootName) return "~";
+  if (!cfg.activeRootId) return "/";
   const parts = [cfg.activeRootName, ...cfg.pathStack.map((n) => n.name)];
   return "/" + parts.join("/");
 }

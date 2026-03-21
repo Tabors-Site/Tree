@@ -46,6 +46,9 @@ class TreeAPI {
   }
 
   // ── Land Config ─────────────────────────────────────────────────────────
+  getLandRoot() {
+    return this.get("/land/root");
+  }
   getLandConfig() {
     return this.get("/land/config");
   }
@@ -289,7 +292,7 @@ class TreeAPI {
 
   // ── Blog ─────────────────────────────────────────────────────────────────
   async listBlogPosts() {
-    const res = await fetch(BASE + "/blog/posts", {
+    const res = await fetch(getBase() + "/blog/posts", {
       headers: { "Content-Type": "application/json" },
     });
     const json = await res.json();
@@ -297,7 +300,7 @@ class TreeAPI {
     return json;
   }
   async getBlogPost(slug) {
-    const res = await fetch(BASE + `/blog/posts/${slug}`, {
+    const res = await fetch(getBase() + `/blog/posts/${slug}`, {
       headers: { "Content-Type": "application/json" },
     });
     const json = await res.json();
@@ -306,5 +309,11 @@ class TreeAPI {
   }
 }
 
+function getBaseSite() {
+  const cfg = load();
+  const site = cfg.landUrl || "https://treeOS.ai";
+  return site.replace(/\/+$/, "");
+}
+
 module.exports = TreeAPI;
-module.exports.BASE_SITE = BASE_SITE;
+module.exports.getBaseSite = getBaseSite;

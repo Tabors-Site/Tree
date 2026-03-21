@@ -19,7 +19,7 @@ program
       const sections = [
         {
           title: "Getting Started",
-          cmds: ["start", "stop", "shell", "login", "logout", "whoami"],
+          cmds: ["connect", "login", "logout", "whoami"],
         },
         {
           title: "User Home (no tree required)",

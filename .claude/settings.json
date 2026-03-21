@@ -32,7 +32,8 @@
       "Bash(find /home/tabor/github/Tree/site/src -type f \\\\\\(-name *.jsx -o -name *.js \\\\\\))",
       "Bash(grep -n \"isSystem\" /home/tabor/github/Tree/land/ws/orchestrator/*.js)",
       "Bash(/tmp/mutation_scan.txt:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(grep -r \"invite\" /home/tabor/github/Tree/land/routes/api/*.js -l)"
     ]
   }
 }

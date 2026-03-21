@@ -27,9 +27,42 @@ async function showConfig() {
 }
 
 module.exports = (program) => {
+  // Top-level connect command — first thing a user runs
+  program
+    .command("connect <url>")
+    .description("Set the Land URL to connect to (e.g. http://localhost:3000)")
+    .action((url) => {
+      try {
+        const cfg = load();
+        cfg.landUrl = url.replace(/\/+$/, "");
+        save(cfg);
+        console.log(chalk.green(`Connected to ${cfg.landUrl}`));
+        if (!cfg.apiKey) {
+          console.log(chalk.dim("Next: treeos login --key YOUR_API_KEY"));
+        }
+      } catch (e) {
+        console.error(chalk.red("Error:"), e.message);
+      }
+    });
+
+  // Config subcommand for Land runtime settings
   const configCmd = program
-    .command("config")
-    .description("View and manage Land configuration");
+    .command("config [action]")
+    .description("View and manage Land runtime configuration")
+    .action(async (action) => {
+      if (action) {
+        // Unknown subcommand
+        console.log(chalk.yellow(`Unknown config action "${action}". Try: config show, config get, config set`));
+        return;
+      }
+      try {
+        const cfg = load();
+        console.log(chalk.dim(`Land URL: ${cfg.landUrl || "https://treeOS.ai"}\n`));
+        await showConfig();
+      } catch (e) {
+        console.error(chalk.red("Error:"), e.message);
+      }
+    });
 
   configCmd
     .command("show")
@@ -72,29 +105,4 @@ module.exports = (program) => {
         console.error(chalk.red("Error:"), e.message);
       }
     });
-
-  configCmd
-    .command("connect <url>")
-    .description("Set the Land URL to connect to")
-    .action((url) => {
-      try {
-        const cfg = load();
-        cfg.landUrl = url.replace(/\/+$/, "");
-        save(cfg);
-        console.log(chalk.green(`Connected to ${cfg.landUrl}`));
-      } catch (e) {
-        console.error(chalk.red("Error:"), e.message);
-      }
-    });
-
-  // Default action when just `treeos config` is run (no subcommand)
-  configCmd.action(async () => {
-    try {
-      const cfg = load();
-      console.log(chalk.dim(`Land URL: ${cfg.landUrl || "https://treeOS.ai"}\n`));
-      await showConfig();
-    } catch (e) {
-      console.error(chalk.red("Error:"), e.message);
-    }
-  });
 };
