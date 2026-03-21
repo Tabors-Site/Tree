@@ -5,6 +5,10 @@ import { verifyDirectoryAuth } from "../auth.js";
 
 const router = Router();
 
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * POST /directory/register
  * Register or update a land and its public trees.
@@ -94,7 +98,6 @@ router.post(
         { domain },
         {
           $set: {
-            _id: landId,
             domain,
             name: name || "",
             baseUrl,
@@ -105,7 +108,7 @@ router.post(
             lastSeenAt: new Date(),
             failedChecks: 0,
           },
-          $setOnInsert: { registeredAt: new Date() },
+          $setOnInsert: { _id: landId, registeredAt: new Date() },
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
@@ -168,7 +171,7 @@ router.get("/lands", async (req, res) => {
     }
 
     if (req.query.q) {
-      const q = req.query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const q = escapeRegex(req.query.q.trim());
       filter.$or = [
         { name: { $regex: q, $options: "i" } },
         { domain: { $regex: q, $options: "i" } },
@@ -234,11 +237,6 @@ router.get("/land/:domain", async (req, res) => {
     return res.status(500).json({ success: false, error: "Internal server error" });
   }
 });
-
-/**
- * GET /directory/search/trees
- * Search public trees across all lands.
- */
 router.get("/search/trees", async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -248,7 +246,7 @@ router.get("/search/trees", async (req, res) => {
     const filter = {};
 
     if (req.query.q) {
-      const q = req.query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const q = escapeRegex(req.query.q.trim());
       filter.$or = [
         { name: { $regex: q, $options: "i" } },
         { description: { $regex: q, $options: "i" } },

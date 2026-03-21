@@ -84,18 +84,23 @@ export function renderDashboard({ lands, trees, stats }) {
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html {
+      height: 100%;
+    }
+
     body {
       font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
+      min-height: 100%;
       padding: 20px;
       color: var(--text-primary);
       overflow-x: hidden;
+      background-attachment: fixed;
     }
 
     body::before, body::after {
       content: "";
-      position: absolute;
+      position: fixed;
       border-radius: 50%;
       opacity: 0.08;
       animation: float 20s infinite ease-in-out;
@@ -338,6 +343,25 @@ export function renderDashboard({ lands, trees, stats }) {
     }
     .footer-cta:hover { background: #0ea572; }
 
+    .home-btn {
+      display: inline-block;
+      padding: 8px 18px;
+      border-radius: 980px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s ease, color 0.2s ease;
+      animation: fadeInUp 0.4s ease-out both;
+    }
+    .home-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: var(--text-primary);
+    }
+
     @media (max-width: 640px) {
       body { padding: 12px; }
       .glass-card { padding: 16px; border-radius: 16px; }
@@ -349,6 +373,7 @@ export function renderDashboard({ lands, trees, stats }) {
 </head>
 <body>
   <div class="container">
+    <a href="https://treeos.ai" class="home-btn">&larr; Home</a>
     <div class="page-header">
       <h1>Canopy Directory</h1>
       <p>The phonebook for the TreeOS network</p>

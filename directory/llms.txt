@@ -1,0 +1,42 @@
+# Canopy Directory
+
+> The phonebook for the TreeOS network.
+
+Canopy Directory is the discovery and registry service for the TreeOS decentralized network. It tracks which Lands are online, what public Trees they host, and provides search across the network. This is a standalone service — for TreeOS itself, see https://treeos.ai/about.
+
+## Core concepts
+
+- **Land**: An independent node in the TreeOS network, identified by a domain and Ed25519 public key. Lands register themselves with the directory and are periodically health-checked. A land hosts users, trees, and AI agents.
+- **Public Tree**: A tree hosted by a land that has been published to the directory for discovery by users and agents across the network.
+- **Health Check**: The directory pings registered lands periodically. Lands that fail checks are marked degraded, then unreachable, then dead (after 30 days of no response).
+
+## API endpoints
+
+POST /directory/register — Register or update a land. Requires landId, domain, baseUrl, publicKey. Optionally includes publicTrees array. Authenticated via CanopyToken.
+
+GET /directory/lands — List registered lands. Query params: q (search), status (filter), page, limit. Excludes dead lands by default.
+
+GET /directory/land/:domain — Get full details for a single land by domain.
+
+GET /directory/search/trees — Search public trees across all lands. Query params: q (search), land (filter by domain), page, limit.
+
+DELETE /directory/land/:domain — Remove a land and its public trees. Requires CanopyToken auth from the land being deleted.
+
+GET /directory/health — Returns service status, land count, tree count, and uptime.
+
+## Auth
+
+CanopyToken — a custom token format using Ed25519 signatures. Lands sign tokens with their private key; the directory verifies against the land's registered public key.
+
+## Tech stack
+
+- Runtime: Node.js (ES modules)
+- Framework: Express.js
+- Database: MongoDB via Mongoose
+- Frontend: Server-rendered HTML dashboard (no framework)
+
+## Links
+
+- TreeOS: https://treeos.ai
+- About Lands: https://treeos.ai/about/land
+- TreeOS API: https://treeos.ai/about/api

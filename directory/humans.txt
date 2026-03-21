@@ -1,0 +1,18 @@
+/* TEAM */
+
+Owner: Tabor Holly
+Contact: taborgreat@gmail.com
+Project: Canopy Directory
+Site: https://treeos.ai
+
+/* TECHNOLOGY */
+
+Runtime: Node.js
+Framework: Express.js
+Database: MongoDB
+Language: JavaScript (ES modules)
+
+/* SITE */
+
+Standards: HTML5, CSS3
+Software: Express, Mongoose
