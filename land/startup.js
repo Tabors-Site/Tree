@@ -22,13 +22,13 @@ export function onListen() {
   console.log(`[Land] Land ID: ${land.landId}`);
   console.log(`[Land] Canopy Protocol Version: ${land.protocolVersion}`);
 
-  startRawIdeaAutoPlaceJob({ intervalMs: 15 * 60 * 1000 });
-  startTreeDreamJob({ intervalMs: 30 * 60 * 1000 });
-
   const onDbReady = async () => {
     console.log("[Land] MongoDB connected");
     await ensureLandRoot();
     await initLandConfig();
+
+    startRawIdeaAutoPlaceJob({ intervalMs: 15 * 60 * 1000 });
+    startTreeDreamJob({ intervalMs: 30 * 60 * 1000 });
     runTreeDreamJob();
     console.log(
       "[Land] Background jobs started (dream, drain, cleanup, understanding)",
