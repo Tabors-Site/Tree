@@ -150,6 +150,8 @@ module.exports = (program) => {
             console.log(chalk.green("\n  First user. You are the admin (god tier)."));
           }
           await printLoginSuccess(me, api);
+          const { startShell } = require("../index");
+          await startShell();
         } else if (data.pendingVerification) {
           console.log(chalk.green("\n  Account created. Check your email to verify."));
           console.log(chalk.dim("  After verifying, run: treeos login"));
@@ -182,6 +184,8 @@ module.exports = (program) => {
         try {
           const { me, api } = await saveLogin(cfg, opts.key);
           await printLoginSuccess(me, api);
+          const { startShell } = require("../index");
+          await startShell();
         } catch (e) {
           console.error(chalk.red("Login failed:"), e.message);
         }
@@ -207,6 +211,8 @@ module.exports = (program) => {
 
         const { me, api } = await saveLogin(cfg, apiKey);
         await printLoginSuccess(me, api);
+        const { startShell } = require("../index");
+        await startShell();
       } catch (e) {
         console.error(chalk.red("Login failed:"), e.message);
       }

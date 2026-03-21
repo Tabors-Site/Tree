@@ -163,7 +163,7 @@ function shellSplit(input) {
   return args;
 }
 
-const startShell = async () => {
+const startShell = module.exports.startShell = async () => {
     const readline = require("readline");
     const cfg = load();
 
