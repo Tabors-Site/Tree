@@ -862,7 +862,7 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
       ? localTrees
           .map(
             (t) =>
-              `<option value="${escapeHtml(t._id)}">${escapeHtml(t.name || "Untitled")}</option>`
+              `<option value="${escapeHtml(t._id)}">${escapeHtml(t.name || "Untitled")}${t.isOwner === false ? " (contributor)" : ""}</option>`
           )
           .join("")
       : `<option value="" disabled>No trees available</option>`;

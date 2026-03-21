@@ -61,7 +61,7 @@ async function processEvent(event) {
   const url = `${baseUrl}${endpoint}`;
 
   // Sign with a generic system token (no specific user)
-  const token = signCanopyToken("system", event.targetLand);
+  const token = await signCanopyToken("system", event.targetLand);
 
   try {
     const res = await fetch(url, {

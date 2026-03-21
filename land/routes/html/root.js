@@ -39,9 +39,12 @@ export function renderRootOverview({
   userId,
   token,
   deferredItems,
-  deferredHtml,
   ownerConnections,
 }) {
+  const deferredHtml = deferredItems && deferredItems.length > 0
+    ? `<ul class="deferred-list">${deferredItems.map((d) => `<li class="deferred-item"><div class="deferred-content">${escapeHtml(d.content || d.text || JSON.stringify(d.data || ""))}</div><div class="deferred-meta" style="font-size:11px;opacity:0.6;margin-top:4px;">${d.status || "pending"}${d.createdAt ? " . " + new Date(d.createdAt).toLocaleDateString() : ""}</div></li>`).join("")}</ul>`
+    : '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.5);font-size:14px;">No short-term items</div>';
+
   let rootNameColor = "rgba(255, 255, 255, 0.4)";
   if (isDeleted) {
     rootNameColor = "#b00020";
@@ -123,7 +126,7 @@ export function renderRootOverview({
   <input
     type="text"
     name="userReceiving"
-    placeholder="Username or User ID"
+    placeholder="username or user@other.land.com"
     required
   />
 
@@ -131,6 +134,9 @@ export function renderRootOverview({
     Invite
   </button>
 </form>
+<div style="font-size:11px; color:rgba(255,255,255,0.5); margin-top:4px;">
+  Use username@domain to invite someone from another land.
+</div>
 `
     : ``;
 
@@ -198,8 +204,9 @@ ${rootMeta.contributors
     return `
 <li>
 <a href="/api/v1/user/${u._id}${queryString}">
-  ${escapeHtml(u.username)}
+  ${escapeHtml(u.username)}${u.isRemote && u.homeLand ? "@" + escapeHtml(u.homeLand) : ""}
 </a>
+${u.isRemote ? '<span style="font-size:11px;opacity:0.5;color:white;">(remote)</span>' : ""}
   <div class="contributors-actions">
     ${
       isOwner

@@ -337,6 +337,6 @@ export async function getPendingInvitesForUser(userId) {
     userReceiving: userId,
     status: "pending",
   })
-    .populate("userInviting", "username")
+    .populate("userInviting", "username isRemote homeLand")
     .populate("rootId", "name");
 }

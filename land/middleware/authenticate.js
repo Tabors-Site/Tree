@@ -41,13 +41,18 @@ export default async function authenticate(req, res, next) {
         return res.status(403).json({ message: "Land " + unverified.iss + " is blocked" });
       }
 
-      const { valid, payload, error } = verifyCanopyToken(canopyToken, peer.publicKey);
+      const { valid, payload, error } = await verifyCanopyToken(canopyToken, peer.publicKey);
       if (!valid) {
         return res.status(401).json({ message: "Invalid CanopyToken: " + error });
       }
 
-      // The sub is the remote user's ID. They should exist as a ghost user (isRemote: true)
-      const ghostUser = await User.findById(payload.sub);
+      // The sub is the remote user's ID. Must be a ghost user from the claiming land.
+      // SECURITY: Verify isRemote and homeLand match to prevent UUID collision attacks.
+      const ghostUser = await User.findOne({
+        _id: payload.sub,
+        isRemote: true,
+        homeLand: unverified.iss,
+      });
       if (!ghostUser) {
         return res.status(403).json({ message: "Remote user not registered on this land" });
       }

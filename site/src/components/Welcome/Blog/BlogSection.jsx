@@ -103,7 +103,7 @@ const BlogSection = () => {
                   <h1 className="blog-article-title">{activePost.title}</h1>
                   <div className="blog-article-meta">
                     {activePost.authorName && (
-                      <span className="blog-article-author">{activePost.authorName}</span>
+                      <a className="blog-article-author" href="https://tabors.site" style={{ textDecoration: "none", color: "inherit" }}>{activePost.authorName}</a>
                     )}
                     <time className="blog-article-date">{formatDate(activePost.publishedAt)}</time>
                   </div>

@@ -48,105 +48,98 @@ export function addCanopyHeaders(req, res, next) {
  * Extracts the CanopyToken, verifies it against the peer's public key,
  * and attaches the decoded payload to req.canopy.
  */
-export function authenticateCanopy(req, res, next) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("CanopyToken ")) {
-    return res.status(401).json({
-      success: false,
-      error: "Missing CanopyToken authorization header",
-    });
-  }
-
-  const token = authHeader.slice("CanopyToken ".length);
-
-  // Decode without verification first to get the issuer
-  let unverified;
+export async function authenticateCanopy(req, res, next) {
   try {
-    const parts = token.split(".");
-    unverified = JSON.parse(Buffer.from(parts[1], "base64url").toString());
-  } catch {
-    return res.status(401).json({
-      success: false,
-      error: "Malformed CanopyToken",
-    });
-  }
+    const authHeader = req.headers.authorization;
 
-  const issuerDomain = unverified.iss;
-  if (!issuerDomain) {
-    return res.status(401).json({
-      success: false,
-      error: "CanopyToken missing issuer (iss)",
-    });
-  }
-
-  // Look up the peer
-  getPeerByDomain(issuerDomain)
-    .then((peer) => {
-      if (!peer) {
-        return res.status(403).json({
-          success: false,
-          error: `Unknown land: ${issuerDomain}. Not registered as a peer.`,
-        });
-      }
-
-      if (peer.status === "blocked") {
-        return res.status(403).json({
-          success: false,
-          error: `Land ${issuerDomain} is blocked`,
-        });
-      }
-
-      // Check per-land rate limit
-      const landKey = `land:${issuerDomain}`;
-      if (!checkRateLimit(landKey, peer.rateLimits?.requestsPerMinute || 1000)) {
-        return res.status(429).json({
-          success: false,
-          error: "Land rate limit exceeded",
-        });
-      }
-
-      // Verify the token with the peer's public key
-      const { valid, payload, error } = verifyCanopyToken(token, peer.publicKey);
-
-      if (!valid) {
-        return res.status(401).json({
-          success: false,
-          error: `Invalid CanopyToken: ${error}`,
-        });
-      }
-
-      // Check per-user rate limit
-      const userKey = `user:${issuerDomain}:${payload.sub}`;
-      if (
-        !checkRateLimit(
-          userKey,
-          peer.rateLimits?.requestsPerUserPerMinute || 60
-        )
-      ) {
-        return res.status(429).json({
-          success: false,
-          error: "Per-user rate limit exceeded",
-        });
-      }
-
-      // Attach canopy context to request
-      req.canopy = {
-        userId: payload.sub,
-        sourceLandDomain: issuerDomain,
-        sourceLandId: payload.landId,
-        peer,
-      };
-
-      next();
-    })
-    .catch((err) => {
-      console.error("[Canopy] Auth error:", err.message);
-      return res.status(500).json({
+    if (!authHeader || !authHeader.startsWith("CanopyToken ")) {
+      return res.status(401).json({
         success: false,
-        error: "Internal canopy authentication error",
+        error: "Missing CanopyToken authorization header",
       });
+    }
+
+    const token = authHeader.slice("CanopyToken ".length);
+
+    // Decode without verification first to get the issuer
+    let unverified;
+    try {
+      const parts = token.split(".");
+      unverified = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+    } catch {
+      return res.status(401).json({
+        success: false,
+        error: "Malformed CanopyToken",
+      });
+    }
+
+    const issuerDomain = unverified.iss;
+    if (!issuerDomain) {
+      return res.status(401).json({
+        success: false,
+        error: "CanopyToken missing issuer (iss)",
+      });
+    }
+
+    const peer = await getPeerByDomain(issuerDomain);
+    if (!peer) {
+      return res.status(403).json({
+        success: false,
+        error: `Unknown land: ${issuerDomain}. Not registered as a peer.`,
+      });
+    }
+
+    if (peer.status === "blocked") {
+      return res.status(403).json({
+        success: false,
+        error: `Land ${issuerDomain} is blocked`,
+      });
+    }
+
+    // Check per-land rate limit
+    const landKey = `land:${issuerDomain}`;
+    if (!checkRateLimit(landKey, peer.rateLimits?.requestsPerMinute || 1000)) {
+      return res.status(429).json({
+        success: false,
+        error: "Land rate limit exceeded",
+      });
+    }
+
+    // Verify the token with the peer's public key
+    const { valid, payload, error } = await verifyCanopyToken(token, peer.publicKey);
+
+    if (!valid) {
+      return res.status(401).json({
+        success: false,
+        error: `Invalid CanopyToken: ${error}`,
+      });
+    }
+
+    // Check per-user rate limit
+    const userKey = `user:${issuerDomain}:${payload.sub}`;
+    if (!checkRateLimit(userKey, peer.rateLimits?.requestsPerUserPerMinute || 60)) {
+      return res.status(429).json({
+        success: false,
+        error: "Per-user rate limit exceeded",
+      });
+    }
+
+    // Attach canopy context to request
+    req.canopy = {
+      userId: payload.sub,
+      sourceLandDomain: issuerDomain,
+      sourceLandId: payload.landId,
+      peer,
+    };
+
+    next();
+  } catch (err) {
+    console.error("[Canopy] Auth error:", err.message);
+    return res.status(500).json({
+      success: false,
+      error: "Internal canopy authentication error",
     });
+  }
 }
 
 /**

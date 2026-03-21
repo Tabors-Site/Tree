@@ -100,16 +100,115 @@ const LandAbout = () => {
             <span className="lnd-section-icon">🤝</span> Cross-Land Collaboration
           </div>
           <div className="lnd-section-text">
-            When someone on another Land invites you to their tree, a
-            "ghost user" is created on their Land for you. This is a
-            lightweight record that lets the existing permission system work
-            unchanged. You interact with their tree through your own Land's
-            API. Your Land proxies the request. You never need to create an
-            account on their server.
+            Inviting someone from another Land works like inviting a local user.
+            Type <code>username@domain</code> in the invite field. That's it.
+            Your Land handles the rest: peering with the remote Land if needed,
+            resolving the user, sending the invite through the Canopy protocol.
             <br /><br />
-            Your identity across the network is <code>username@domain</code>,
-            like email. Your data always stays on your Land. Remote users
-            access your trees through the API, they don't get copies.
+            When the remote user accepts, a "ghost user" is created on your
+            Land. This is a lightweight record (just their ID and <code>isRemote: true</code>)
+            that gets added to the tree's contributor list. The existing
+            permission system works unchanged. No special cases.
+            <br /><br />
+            The remote user interacts with your tree through their own Land's
+            API. Their Land proxies the request to yours with a signed token.
+            They never create an account on your server. They never see your
+            frontend. They just use their own tools, their own Land, and the
+            tree shows up in their list alongside their local trees.
+          </div>
+        </div>
+
+        {/* THE PROXY CHAIN */}
+        <div className="lnd-section">
+          <div className="lnd-section-title">
+            <span className="lnd-section-icon">🔗</span> How the Proxy Works
+          </div>
+          <div className="lnd-section-text">
+            When a user interacts with a remote tree, the request chain is:
+          </div>
+          <div className="lnd-flow">
+            <div className="lnd-flow-step">
+              <div className="lnd-flow-num">1</div>
+              <div className="lnd-flow-text">User's client sends request to their home Land (normal auth)</div>
+            </div>
+            <div className="lnd-flow-step">
+              <div className="lnd-flow-num">2</div>
+              <div className="lnd-flow-text">Home Land signs a CanopyToken on behalf of the user</div>
+            </div>
+            <div className="lnd-flow-step">
+              <div className="lnd-flow-num">3</div>
+              <div className="lnd-flow-text">Home Land forwards the request to the tree's Land</div>
+            </div>
+            <div className="lnd-flow-step">
+              <div className="lnd-flow-num">4</div>
+              <div className="lnd-flow-text">Tree's Land verifies the token, finds the ghost user, runs the route normally</div>
+            </div>
+          </div>
+          <div className="lnd-section-text" style={{ marginTop: 12 }}>
+            The user's client (browser, CLI, mobile app, script) never needs
+            to know about Canopy. It talks to one URL. The proxy is invisible.
+            This works with any client that speaks the API.
+          </div>
+        </div>
+
+        {/* GHOST USERS */}
+        <div className="lnd-section">
+          <div className="lnd-section-title">
+            <span className="lnd-section-icon">👻</span> Ghost Users
+          </div>
+          <div className="lnd-section-text">
+            A ghost user is a User record with <code>isRemote: true</code> and
+            a <code>homeLand</code> field pointing to their home domain. It has
+            the same UUID as the real user on their home Land. No password, no
+            email, no settings.
+            <br /><br />
+            Ghost users exist so the API doesn't need special cases. Every route
+            checks <code>req.userId</code> against the tree's owner and contributor
+            list. Ghost users are in that list. The permission check is identical
+            for local and remote users.
+            <br /><br />
+            If you remove a remote user from your tree's contributors, they lose
+            all access instantly. If you block their entire Land, all ghost users
+            from that Land are locked out because CanopyToken verification fails.
+          </div>
+        </div>
+
+        {/* THE API IS THE NETWORK */}
+        <div className="lnd-section">
+          <div className="lnd-section-title">
+            <span className="lnd-section-icon">🌐</span> The API is the Network
+          </div>
+          <div className="lnd-section-text">
+            The REST API under <code>/api/v1/</code> and the Canopy protocol
+            under <code>/canopy/</code> are the contract. Every Land that
+            speaks this contract is compatible. The nodes, trees, values,
+            contributions, notes, all of the context structure stays the same
+            across every Land.
+            <br /><br />
+            Everything deeper (how AI places nodes, how dreams work, how
+            orchestrators run, what frontend you build) is yours. You can
+            build completely custom AI systems, custom UIs, custom pipelines.
+            As long as the context structure and API stay consistent, it all
+            connects. This is a network for context, and the API is the glue.
+          </div>
+        </div>
+
+        {/* NETWORK GROWTH */}
+        <div className="lnd-section">
+          <div className="lnd-section-title">
+            <span className="lnd-section-icon">🌱</span> How the Network Grows
+          </div>
+          <div className="lnd-section-text">
+            Lands don't need to be pre-connected. The network grows organically
+            from collaboration. The first time a user invites someone from
+            another Land, the two Lands peer automatically (via the directory
+            or direct URL). After that, they stay connected and monitor each
+            other's health.
+            <br /><br />
+            The directory service is optional. It's a phonebook that makes
+            discovery easier. If it goes down, peered Lands keep working.
+            Eventually, Lands could discover each other peer to peer without
+            any central service at all.
           </div>
         </div>
 

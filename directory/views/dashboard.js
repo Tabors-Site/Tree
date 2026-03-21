@@ -45,6 +45,7 @@ export function renderDashboard({ lands, trees, stats }) {
               Protocol v${land.protocolVersion || "?"}
               <span class="separator"></span>
               Last seen ${timeAgo(land.lastSeenAt)}
+              ${land.siteUrl ? `<span class="separator"></span><a href="${escapeHtml(land.siteUrl)}" class="land-site-link" target="_blank" rel="noopener">Visit Site</a>` : ""}
             </div>
           </div>
         `;
@@ -228,6 +229,13 @@ export function renderDashboard({ lands, trees, stats }) {
       font-size: 12px;
       color: var(--text-muted);
     }
+    .land-site-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .land-site-link:hover { text-decoration: underline; }
+
     .separator {
       display: inline-block;
       width: 3px;
@@ -444,7 +452,8 @@ export function renderDashboard({ lands, trees, stats }) {
             '</div>' +
             '<div class="land-domain"><code>' + escapeHtml(land.domain) + '</code></div>' +
             '<div class="land-meta">Protocol v' + (land.protocolVersion || "?") +
-              '<span class="separator"></span>Last seen ' + timeAgo(land.lastSeenAt) + '</div>' +
+              '<span class="separator"></span>Last seen ' + timeAgo(land.lastSeenAt) +
+              (land.siteUrl ? '<span class="separator"></span><a href="' + escapeHtml(land.siteUrl) + '" class="land-site-link" target="_blank" rel="noopener">Visit Site</a>' : '') + '</div>' +
           '</div>';
         }).join("");
       } catch (err) {

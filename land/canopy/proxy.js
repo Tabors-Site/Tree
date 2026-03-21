@@ -30,7 +30,7 @@ export async function proxyToRemoteLand({
     throw new Error(`Land ${targetLandDomain} is currently ${peer.status}`);
   }
 
-  const token = signCanopyToken(userId, targetLandDomain);
+  const token = await signCanopyToken(userId, targetLandDomain);
 
   // Build the URL
   let url = `${getPeerBaseUrl(peer)}${path}`;
@@ -86,7 +86,7 @@ export async function reportEnergyToHomeLand({
   const peer = await getPeerByDomain(homeLandDomain);
   if (!peer || peer.status === "blocked") return false;
 
-  const token = signCanopyToken(userId, homeLandDomain);
+  const token = await signCanopyToken(userId, homeLandDomain);
 
   try {
     const baseUrl = getPeerBaseUrl(peer);

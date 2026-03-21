@@ -1410,7 +1410,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
           notifDot.classList.add("has-notifs");
           html += invites.map(function(inv, i) {
             return '<div class="invite-item" style="animation-delay:' + (i * 0.04) + 's">' +
-              '<div class="invite-item-text"><strong>' + escapeHtml(inv.from) + '</strong> invited you to <strong>' + escapeHtml(inv.treeName) + '</strong></div>' +
+              '<div class="invite-item-text"><strong>' + escapeHtml(inv.from) + '</strong> invited you to <strong>' + escapeHtml(inv.treeName) + (inv.isRemote && inv.homeLand ? ' on ' + escapeHtml(inv.homeLand) : '') + '</strong></div>' +
               '<div class="invite-item-actions">' +
                 '<button class="invite-accept" onclick="respondInvite(\\'' + inv.id + '\\', true, this)">Accept</button>' +
                 '<button class="invite-decline" onclick="respondInvite(\\'' + inv.id + '\\', false, this)">Decline</button>' +
@@ -1453,10 +1453,10 @@ router.get("/chat", authenticateLite, async (req, res) => {
             '</div>';
           });
 
-          // Invite form (owner only)
-          if (members.isOwner) {
+          // Invite form (owner or contributor)
+          if (members.isOwner || members.contributors.some(function(c) { return c._id === userId; })) {
             html += '<form class="invite-form" onsubmit="sendInvite(event)">' +
-              '<input type="text" id="inviteUsername" placeholder="Username to invite..." />' +
+              '<input type="text" id="inviteUsername" placeholder="username or user@other.land.com" />' +
               '<button type="submit">Invite</button>' +
             '</form>' +
             '<div class="invite-status" id="inviteStatus"></div>';
@@ -1644,7 +1644,13 @@ router.get("/chat/invites", authenticateLite, async (req, res) => {
     const invites = await getPendingInvitesForUser(req.userId);
     const inviteList = invites.map((inv) => ({
       id: inv._id,
-      from: inv.userInviting?.username || "Unknown",
+      from: inv.userInviting?.username
+        ? (inv.userInviting.isRemote && inv.userInviting.homeLand
+          ? inv.userInviting.username + "@" + inv.userInviting.homeLand
+          : inv.userInviting.username)
+        : "Unknown",
+      isRemote: inv.userInviting?.isRemote || false,
+      homeLand: inv.userInviting?.homeLand || null,
       treeName: inv.rootId?.name || "Unknown tree",
       rootId: inv.rootId?._id || inv.rootId,
     }));

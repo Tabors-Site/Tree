@@ -4,6 +4,7 @@ import authenticate from "../../middleware/authenticate.js";
 
 import { getAllData } from "../../core/tree/treeDataFetching.js";
 import { createInvite } from "../../core/tree/invites.js";
+import { sendRemoteInvite } from "../../core/tree/remoteInvites.js";
 import { getCalendar } from "../../core/tree/schedules.js";
 import { setTransactionPolicy } from "../../core/tree/transactions.js";
 import { getGlobalValuesTreeAndFlat } from "../../core/tree/values.js";
@@ -64,7 +65,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     // Load owner + contributors + llm assignments
     const rootMeta = await Node.findById(nodeId)
       .populate("rootOwner", "username _id profileType planExpiresAt")
-      .populate("contributors", "username _id")
+      .populate("contributors", "username _id isRemote homeLand")
       .select(
         "rootOwner contributors transactionPolicy llmAssignments dreamTime lastDreamAt",
       )
@@ -145,6 +146,25 @@ router.post("/root/:rootId/invite", authenticate, async (req, res) => {
         success: false,
         error: "userReceiving is required",
       });
+    }
+
+    // Detect cross-land invite (username@domain.tld format)
+    // Must have @ with text before and after, and a dot after the @
+    const atIndex = userReceiving.indexOf("@");
+    const afterAt = atIndex > 0 ? userReceiving.slice(atIndex + 1) : "";
+    if (atIndex > 0 && afterAt.includes(".") && afterAt.length > 2) {
+      const result = await sendRemoteInvite({
+        userInvitingId: req.userId,
+        canopyId: userReceiving,
+        rootId,
+      });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`,
+        );
+      }
+      return res.json({ success: true, remote: true, ...result });
     }
 
     await createInvite({

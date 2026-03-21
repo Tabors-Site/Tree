@@ -19,7 +19,7 @@ import {
   validateCanopyRequest,
   isCompatibleVersion,
 } from "../canopy/protocol.js";
-import { proxyToRemoteLand, reportEnergyToHomeLand } from "../canopy/proxy.js";
+import { proxyToRemoteLand } from "../canopy/proxy.js";
 import {
   queueCanopyEvent,
   getPendingEventCount,
@@ -119,11 +119,11 @@ router.get("/canopy/public-trees", async (req, res) => {
     };
 
     if (q) {
-      query["versions.0.name"] = { $regex: q, $options: "i" };
+      query.name = { $regex: q, $options: "i" };
     }
 
     const trees = await Node.find(query)
-      .select("_id versions.0.name rootOwner")
+      .select("_id name rootOwner")
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
@@ -137,7 +137,7 @@ router.get("/canopy/public-trees", async (req, res) => {
           .lean();
         return {
           rootId: tree._id,
-          name: tree.versions?.[0]?.name || "",
+          name: tree.name || "",
           ownerUsername: owner?.username || "unknown",
           landDomain: identity.domain,
         };
@@ -299,7 +299,22 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
     }
 
     // Create a ghost user record for the remote user
-    let ghostUser = await User.findById(userId);
+    // SECURITY: Check if this UUID belongs to a local user. A malicious land
+    // could send a forged UUID matching a real local user to hijack permissions.
+    const existingLocal = await User.findOne({ _id: userId, isRemote: { $ne: true } });
+    if (existingLocal) {
+      return res.status(403).json({
+        success: false,
+        error: "User ID conflicts with a local user. Invite rejected.",
+      });
+    }
+
+    // Find existing ghost user from this land, or create one
+    let ghostUser = await User.findOne({
+      _id: userId,
+      isRemote: true,
+      homeLand: req.canopy.sourceLandDomain,
+    });
     if (!ghostUser) {
       ghostUser = await User.create({
         _id: userId,
@@ -385,8 +400,8 @@ router.get("/canopy/tree/:rootId", authenticateCanopy, async (req, res) => {
 
     // Check if the tree is public or user is a contributor
     const isContributor =
-      rootNode.rootOwner === remoteUserId ||
-      rootNode.contributors.includes(remoteUserId);
+      String(rootNode.rootOwner) === String(remoteUserId) ||
+      rootNode.contributors.map(String).includes(String(remoteUserId));
     const isPublic = rootNode.visibility === "public";
 
     if (!isContributor && !isPublic) {
@@ -825,7 +840,7 @@ router.post("/canopy/admin/invite-remote", authenticate, async (req, res) => {
       invitingUsername: owner?.username || "unknown",
       receivingUsername: username,
       rootId,
-      rootName: rootNode.versions?.[0]?.name || "Untitled",
+      rootName: rootNode.name || "Untitled",
       sourceLandDomain: identity.domain,
     });
 
@@ -939,6 +954,11 @@ router.get("/canopy/admin", authenticate, async (req, res) => {
   }
 
   try {
+    const user = await User.findById(req.userId).select("profileType").lean();
+    if (!user || user.profileType !== "god") {
+      return res.status(403).json({ error: "Requires god plan" });
+    }
+
     const peers = await getAllPeers();
     const pendingEvents = await getPendingEventCount();
     const failedEvents = await getFailedEvents();
@@ -961,6 +981,11 @@ router.get("/canopy/admin/invites", authenticate, async (req, res) => {
   }
 
   try {
+    const adminUser = await User.findById(req.userId).select("profileType").lean();
+    if (!adminUser || adminUser.profileType !== "god") {
+      return res.status(403).json({ error: "Requires god plan" });
+    }
+
     // Get invites where the current user is receiving
     const invites = await Invite.find({
       userReceiving: req.userId,
@@ -969,9 +994,9 @@ router.get("/canopy/admin/invites", authenticate, async (req, res) => {
     // Enrich invites with tree names
     for (const inv of invites) {
       const root = await Node.findById(inv.rootId)
-        .select("versions")
+        .select("name")
         .lean();
-      inv.rootName = root?.versions?.[0]?.name || "Untitled";
+      inv.rootName = root?.name || "Untitled";
     }
 
     // Get remote users for display info
@@ -980,18 +1005,22 @@ router.get("/canopy/admin/invites", authenticate, async (req, res) => {
       _id: { $in: remoteUserIds },
     }).lean();
 
-    // Get the current user's owned trees for the invite form
+    // Get trees the user owns or contributes to for the invite form
     const userTrees = await Node.find({
       parent: null,
-      rootOwner: req.userId,
+      $or: [
+        { rootOwner: req.userId },
+        { contributors: req.userId },
+      ],
       "versions.0.status": "active",
     })
-      .select("_id versions.0.name")
+      .select("_id name rootOwner")
       .lean();
 
     const localTrees = userTrees.map((t) => ({
       _id: t._id,
-      name: t.versions?.[0]?.name || "Untitled",
+      name: t.name || "Untitled",
+      isOwner: t.rootOwner === req.userId,
     }));
 
     const html = renderCanopyInvites({ invites, remoteUsers, localTrees });

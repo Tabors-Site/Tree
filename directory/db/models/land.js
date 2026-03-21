@@ -14,6 +14,7 @@ const LandSchema = new mongoose.Schema({
   name: { type: String, default: "" },
   baseUrl: { type: String, required: true },
   publicKey: { type: String, required: true },
+  siteUrl: { type: String, default: null },
   protocolVersion: { type: Number, default: 1 },
   status: {
     type: String,

@@ -6518,9 +6518,9 @@ body::after {
           (i) => `
         <li class="invite-card">
           <div class="invite-text">
-            <strong>${i.userInviting.username}</strong>
+            <strong>${i.userInviting.username}${i.userInviting.isRemote && i.userInviting.homeLand ? "@" + i.userInviting.homeLand : ""}</strong>
             invited you to
-            <strong>${i.rootId.name}</strong>
+            <strong>${i.rootId.name}${i.userInviting.isRemote && i.userInviting.homeLand ? " on " + i.userInviting.homeLand : ""}</strong>
           </div>
 
           <div class="invite-actions">

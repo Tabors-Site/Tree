@@ -106,10 +106,10 @@ const WelcomePage = () => {
 
         <div className="hero-top">
           <a
-            href={import.meta.env.VITE_ROOT_FRONTEND_DOMAIN}
+            href={import.meta.env.VITE_DIRECTORY}
             className="back-to-site-btn legacy"
           >
-            Back to {new window.URL(import.meta.env.VITE_ROOT_FRONTEND_DOMAIN).hostname}
+            Directory
           </a>
 
           <div className="hero-top-right">

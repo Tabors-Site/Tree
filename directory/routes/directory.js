@@ -22,6 +22,7 @@ router.post(
         publicKey,
         protocolVersion,
         publicTrees,
+        siteUrl,
       } = req.body;
 
       if (!landId || !domain || !baseUrl || !publicKey) {
@@ -35,15 +36,18 @@ router.post(
       const land = await Land.findOneAndUpdate(
         { domain },
         {
-          _id: landId,
-          domain,
-          name: name || "",
-          baseUrl,
-          publicKey,
-          protocolVersion: protocolVersion || 1,
-          status: "active",
-          lastSeenAt: new Date(),
-          failedChecks: 0,
+          $set: {
+            _id: landId,
+            domain,
+            name: name || "",
+            baseUrl,
+            publicKey,
+            protocolVersion: protocolVersion || 1,
+            siteUrl: siteUrl || null,
+            status: "active",
+            lastSeenAt: new Date(),
+            failedChecks: 0,
+          },
           $setOnInsert: { registeredAt: new Date() },
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -115,7 +119,7 @@ router.get("/lands", async (req, res) => {
 
     const [lands, total] = await Promise.all([
       Land.find(filter)
-        .select("_id domain name protocolVersion status lastSeenAt metadata")
+        .select("_id domain name protocolVersion status lastSeenAt metadata siteUrl")
         .sort({ lastSeenAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -130,6 +134,7 @@ router.get("/lands", async (req, res) => {
       protocolVersion: l.protocolVersion,
       status: l.status,
       lastSeenAt: l.lastSeenAt,
+      siteUrl: l.siteUrl,
       metadata: l.metadata,
     }));
 

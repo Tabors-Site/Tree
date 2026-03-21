@@ -42,7 +42,7 @@ export async function registerWithDirectory() {
     const publicTrees = await getPublicTrees();
 
     // Sign a token targeting the directory
-    const token = signCanopyToken("directory-registration", "directory");
+    const token = await signCanopyToken("directory-registration", "directory");
 
     const res = await fetch(`${DIRECTORY_URL}/directory/register`, {
       method: "POST",
@@ -57,6 +57,7 @@ export async function registerWithDirectory() {
         baseUrl: info.baseUrl,
         publicKey: info.publicKey,
         protocolVersion: info.protocolVersion,
+        siteUrl: info.siteUrl,
         publicTrees,
       }),
     });

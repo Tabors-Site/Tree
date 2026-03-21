@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import jwt from "jsonwebtoken";
+import { SignJWT, jwtVerify, importPKCS8, importSPKI } from "jose";
 import { v4 as uuidv4 } from "uuid";
 
 const ALGORITHM = "Ed25519";
@@ -82,6 +82,7 @@ export function getLandInfoPayload() {
     publicKey: identity.publicKey,
     protocolVersion: identity.protocolVersion,
     baseUrl,
+    siteUrl: process.env.LAND_SITE_URL || null,
     capabilities: ["invite", "proxy", "notify", "public-trees"],
   };
 }
@@ -90,32 +91,35 @@ export function getLandInfoPayload() {
  * Sign a CanopyToken JWT for authenticating requests to a remote land.
  * Used when proxying a local user's request to a remote land.
  */
-export function signCanopyToken(userId, targetDomain) {
+export async function signCanopyToken(userId, targetDomain) {
   const identity = getLandIdentity();
+  const privateKey = await importPKCS8(identity.privateKey, "EdDSA");
 
-  const payload = {
+  const token = await new SignJWT({
     sub: userId,
     iss: identity.domain,
     aud: targetDomain,
     landId: identity.landId,
-  };
+  })
+    .setProtectedHeader({ alg: "EdDSA" })
+    .setExpirationTime(TOKEN_EXPIRY)
+    .setIssuedAt()
+    .sign(privateKey);
 
-  return jwt.sign(payload, identity.privateKey, {
-    algorithm: "EdDSA",
-    expiresIn: TOKEN_EXPIRY,
-  });
+  return token;
 }
 
 /**
  * Verify a CanopyToken JWT from a remote land.
  * Requires the remote land's public key (from LandPeer record).
  */
-export function verifyCanopyToken(token, remoteLandPublicKey) {
+export async function verifyCanopyToken(token, remoteLandPublicKey) {
   try {
-    const decoded = jwt.verify(token, remoteLandPublicKey, {
+    const publicKey = await importSPKI(remoteLandPublicKey, "EdDSA");
+    const { payload } = await jwtVerify(token, publicKey, {
       algorithms: ["EdDSA"],
     });
-    return { valid: true, payload: decoded };
+    return { valid: true, payload };
   } catch (err) {
     return { valid: false, error: err.message };
   }
