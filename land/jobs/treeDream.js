@@ -14,6 +14,7 @@ import { findOrCreateUnderstandingRun } from "../core/tree/understanding.js";
 import { orchestrateUnderstanding } from "../orchestrators/pipelines/understand.js";
 import { orchestrateDreamNotify } from "../orchestrators/pipelines/dreamNotify.js";
 import { userHasLlm } from "../ws/conversation.js";
+import { acquireLock, releaseLock } from "../orchestrators/locks.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -29,9 +30,6 @@ const NAV_PERSPECTIVE =
   "Compress the meaning upward (what this contributes to the bigger picture) while preserving clarity downward " +
   "(what direction this section points toward). Emphasize the core idea, remove detail noise.";
 
-// In-memory lock — prevents concurrent dreams for the same tree
-const activeDreams = new Set();
-
 let jobTimer = null;
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -42,7 +40,7 @@ async function runTreeDream(rootNode) {
   const rootId = rootNode._id.toString();
   const userId = rootNode.rootOwner.toString();
 
-  if (activeDreams.has(rootId)) {
+  if (!acquireLock("dream", rootId)) {
     console.log(`💤 Dream already running for "${rootNode.name}", skipping`);
     return;
   }
@@ -50,6 +48,7 @@ async function runTreeDream(rootNode) {
   // Skip empty trees (no children at all)
   if (!rootNode.children || rootNode.children.length === 0) {
     console.log(`💤 Skipping "${rootNode.name}" — no children`);
+    releaseLock("dream", rootId);
     return;
   }
 
@@ -57,6 +56,7 @@ async function runTreeDream(rootNode) {
   const user = await User.findById(userId).select("username").lean();
   if (!user) {
     console.warn(`⚠️ Dream: no user for tree ${rootId}`);
+    releaseLock("dream", rootId);
     return;
   }
   const username = user.username;
@@ -65,10 +65,10 @@ async function runTreeDream(rootNode) {
   const rootFull = await Node.findById(rootId).select("llmAssignments").lean();
   if (!rootFull?.llmAssignments?.placement && !(await userHasLlm(userId))) {
     console.log(`💤 Skipping "${rootNode.name}" — owner has no LLM connection`);
+    releaseLock("dream", rootId);
     return;
   }
 
-  activeDreams.add(rootId);
   console.log(
     `💤 Dream starting for "${rootNode.name}" [${rootId.slice(0, 8)}]`,
   );
@@ -216,7 +216,7 @@ async function runTreeDream(rootNode) {
   } catch (err) {
     console.error(`❌ Dream failed for "${rootNode.name}":`, err.message);
   } finally {
-    activeDreams.delete(rootId);
+    releaseLock("dream", rootId);
   }
 }
 

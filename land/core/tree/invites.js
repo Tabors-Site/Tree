@@ -282,10 +282,17 @@ export async function createInvite({
 }
 
 export async function respondToInvite({ inviteId, userId, acceptInvite }) {
-  const invite = await Invite.findById(inviteId);
+  // Atomic status transition prevents double-processing
+  const invite = await Invite.findOneAndUpdate(
+    { _id: inviteId, status: "pending" },
+    { $set: { status: acceptInvite ? "accepted" : "declined" } },
+    { new: true }
+  );
   if (!invite) throw new Error("Invite not found");
 
   if (invite.userReceiving.toString() !== userId.toString()) {
+    // Revert status since this user shouldn't have changed it
+    await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
     throw new Error("Invite not intended for this user");
   }
 
@@ -323,17 +330,13 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
       });
     }
 
-    invite.status = acceptInvite ? "accepted" : "declined";
-    await invite.save();
     return {
       success: true,
       message: acceptInvite ? "Remote invite accepted" : "Remote invite declined",
     };
   }
 
-  const node = await Node.findById(invite.rootId).populate(
-    "rootOwner contributors",
-  );
+  const node = await Node.findById(invite.rootId);
   if (!node) throw new Error("Node not found");
   const { energyUsed } = await useEnergy({
     userId,
@@ -342,21 +345,19 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
   const inviteAction = { receivingId: userId };
 
   if (acceptInvite) {
-    node.contributors.push(userId); // MATCH OLD
-    await node.save();
+    // Atomic dedup: $addToSet on contributors instead of push
+    await Node.findByIdAndUpdate(invite.rootId, {
+      $addToSet: { contributors: userId },
+    });
 
     await User.findByIdAndUpdate(userId, {
       $addToSet: { roots: invite.rootId },
     });
 
-    invite.status = "accepted";
     inviteAction.action = "acceptInvite";
   } else {
-    invite.status = "declined";
     inviteAction.action = "denyInvite";
   }
-
-  await invite.save();
 
   await logContribution({
     userId,

@@ -409,18 +409,24 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
       });
     }
 
-    // Find existing ghost user from this land, or create one
+    // Find or create ghost user atomically
+    // SECURITY: Quota on ghost users per remote land (prevent database flood)
+    const ghostCount = await User.countDocuments({
+      isRemote: true,
+      homeLand: req.canopy.sourceLandDomain,
+    });
+
+    const ghostUsername = username
+      ? `${username}@${req.canopy.sourceLandDomain}`
+      : `${req.canopy.sourceLandDomain}_${userId.slice(0, 8)}`;
+
     let ghostUser = await User.findOne({
       _id: userId,
       isRemote: true,
       homeLand: req.canopy.sourceLandDomain,
     });
+
     if (!ghostUser) {
-      // SECURITY: Quota on ghost users per remote land (prevent database flood)
-      const ghostCount = await User.countDocuments({
-        isRemote: true,
-        homeLand: req.canopy.sourceLandDomain,
-      });
       if (ghostCount >= 1000) {
         await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
         return res.status(429).json({
@@ -429,17 +435,23 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
         });
       }
 
-      const ghostUsername = username
-        ? `${username}@${req.canopy.sourceLandDomain}`
-        : `${req.canopy.sourceLandDomain}_${userId.slice(0, 8)}`;
-      ghostUser = await User.create({
-        _id: userId,
-        username: ghostUsername,
-        email: `${userId}@${req.canopy.sourceLandDomain}`,
-        password: `remote_${Date.now()}`,
-        isRemote: true,
-        homeLand: req.canopy.sourceLandDomain,
-      });
+      try {
+        ghostUser = await User.create({
+          _id: userId,
+          username: ghostUsername,
+          email: `${userId}@${req.canopy.sourceLandDomain}`,
+          password: `remote_${Date.now()}`,
+          isRemote: true,
+          homeLand: req.canopy.sourceLandDomain,
+        });
+      } catch (createErr) {
+        // Duplicate key: another request created it first, just fetch it
+        if (createErr.code === 11000) {
+          ghostUser = await User.findById(userId);
+        } else {
+          throw createErr;
+        }
+      }
     }
 
     // Add to contributors atomically (prevents duplicates)

@@ -2,7 +2,7 @@
 // Phase 4 of tree dream: generates summary + thought notifications from dream AI chats.
 // Two tool-less LLM calls, then saves Notification documents.
 
-import { OrchestratorRuntime, parseJsonSafe } from "../runtime.js";
+import { OrchestratorRuntime } from "../runtime.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
 import AIChat from "../../db/models/aiChat.js";
 import Node from "../../db/models/node.js";
