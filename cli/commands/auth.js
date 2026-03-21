@@ -124,7 +124,7 @@ module.exports = (program) => {
 
         let data;
         try {
-          data = await unauthPost("/user/register", {
+          data = await unauthPost("/register", {
             username,
             password,
             email: email || undefined,
@@ -134,7 +134,7 @@ module.exports = (program) => {
           if (!email && e.message && e.message.toLowerCase().includes("email is required")) {
             const retryEmail = await prompt("  This land requires email: ");
             if (!retryEmail) return console.log(chalk.yellow("Email is required on this land."));
-            data = await unauthPost("/user/register", {
+            data = await unauthPost("/register", {
               username,
               password,
               email: retryEmail,
@@ -197,7 +197,7 @@ module.exports = (program) => {
         if (!password) return console.log(chalk.yellow("Password is required."));
 
         // Authenticate
-        const loginData = await unauthPost("/user/login", { username, password });
+        const loginData = await unauthPost("/login", { username, password });
         const token = loginData.token;
         const userId = loginData.userId;
 
