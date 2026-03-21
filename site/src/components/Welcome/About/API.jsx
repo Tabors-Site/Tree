@@ -2186,15 +2186,7 @@ updateScheduleForNode(datetime | null)`}</div>
               <span className="ep-method post">POST</span>
               <span className="ep-url">/canopy/llm/proxy</span>
             </div>
-            <div className="ep-desc">Run LLM inference on behalf of a remote user. The user's LLM connection lives on their home land. The remote land sends messages, the home land runs the completion, deducts energy, and returns the result.</div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{
-  "userId": "...",
-  "model": "gpt-4o",
-  "messages": [...],
-  "tools": [...],
-  "temperature": 0.7
-}`}</div>
+            <div className="ep-desc">Internal land-to-land endpoint. When a ghost user is active on a remote land, that land's conversation system transparently proxies LLM calls back to the user's home land. The home land resolves the user's LLM connection, runs the completion, deducts energy, and returns the result.</div>
           </div>
 
           <div className="endpoint">

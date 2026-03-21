@@ -33,7 +33,7 @@ export function createCanopyLlmProxyClient({ userId, homeLand, slot }) {
           const token = await signCanopyToken(userId, homeLand);
           const baseUrl = getPeerBaseUrl(peer);
           const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 120000);
+          const timeout = setTimeout(() => controller.abort(), 19 * 60 * 1000);
 
           // Forward caller's abort signal
           if (opts?.signal) {
