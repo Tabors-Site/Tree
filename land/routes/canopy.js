@@ -511,9 +511,16 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
           homeLand: req.canopy.sourceLandDomain,
         });
       } catch (createErr) {
-        // Duplicate key: another request created it first, just fetch it
+        // Duplicate key: another request created it first
         if (createErr.code === 11000) {
-          ghostUser = await User.findById(userId);
+          ghostUser = await User.findOne({ _id: userId, isRemote: true });
+          if (!ghostUser) {
+            // Collision with local user that was created between our check and insert
+            return res.status(409).json({
+              success: false,
+              error: "User ID conflicts with a local account",
+            });
+          }
         } else {
           throw createErr;
         }
