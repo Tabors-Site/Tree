@@ -1,4 +1,4 @@
-// ws/orchestrator/treeOrchestrator.js
+// orchestrators/tree.js
 // Orchestrates tree requests: classify → librarian (place/query) or destructive flow
 // Librarian: navigates, reads, places — behind the scenes
 // Destructive: translate → navigate → confirm → execute (existing flow)
@@ -11,18 +11,18 @@ import {
   resetConversation,
   getClientForUser,
   resolveRootLlmForMode,
-} from "../conversation.js";
+} from "../ws/conversation.js";
 import { classify, translateDestructive } from "./translator.js";
-import { trackChainStep, setAiContributionContext } from "../aiChatTracker.js";
-import { isActiveNavigator } from "../sessionRegistry.js";
+import { trackChainStep, setAiContributionContext } from "../ws/aiChatTracker.js";
+import { isActiveNavigator } from "../ws/sessionRegistry.js";
 
 import {
   getContextForAi,
   getNavigationContext,
   buildDeepTreeSummary,
-} from "../../core/tree/treeFetch.js";
-import Node from "../../db/models/node.js";
-import ShortMemory from "../../db/models/shortMemory.js";
+} from "../core/tree/treeFetch.js";
+import Node from "../db/models/node.js";
+import ShortMemory from "../db/models/shortMemory.js";
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
 // ─────────────────────────────────────────────────────────────────────────

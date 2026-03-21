@@ -4,7 +4,7 @@
 
 import ShortMemory from "../db/models/shortMemory.js";
 import Node from "../db/models/node.js";
-import { drainTree } from "../ws/orchestrator/shortTermDrainOrchestrator.js";
+import { drainTree } from "../orchestrators/pipelines/shortTermDrain.js";
 import { userHasLlm } from "../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────

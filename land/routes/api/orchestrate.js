@@ -15,9 +15,9 @@ if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the se
 const JWT_SECRET = process.env.JWT_SECRET;
 
 import authenticate from "../../middleware/authenticate.js";
-import { orchestrateTreeRequest } from "../../ws/orchestrator/treeOrchestrator.js";
-import { orchestrateRawIdeaPlacement } from "../../ws/orchestrator/rawIdeaOrchestrator.js";
-import { orchestrateUnderstanding } from "../../ws/orchestrator/understandOrchestrator.js";
+import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
+import { orchestrateRawIdeaPlacement } from "../../orchestrators/pipelines/rawIdea.js";
+import { orchestrateUnderstanding } from "../../orchestrators/pipelines/understand.js";
 import {
   setRootId,
   getClientForUser,
@@ -45,14 +45,9 @@ import Node from "../../db/models/node.js";
 import RawIdea from "../../db/models/rawIdea.js";
 import { createRawIdea } from "../../core/tree/rawIdea.js";
 import { resolveTreeAccess } from "../../core/authenticate.js";
+import { nullSocket } from "../../orchestrators/helpers.js";
 
 const router = express.Router();
-
-const nullSocket = {
-  emit: () => {},
-  to: () => nullSocket,
-  broadcast: { emit: () => {} },
-};
 
 /**
  * POST /api/v1/tree/:rootId/chat

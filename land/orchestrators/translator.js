@@ -1,11 +1,11 @@
-// ws/orchestrator/translator.js
+// orchestrators/translator.js
 // Translates natural user language into tree operations using the Tree Constitution.
 // Sits between user input and the tree orchestrator.
 
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { getClientForUser, resolveRootLlmForMode } from "../conversation.js";
+import { getClientForUser, resolveRootLlmForMode } from "../ws/conversation.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

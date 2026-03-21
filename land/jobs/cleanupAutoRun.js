@@ -3,8 +3,8 @@
 
 import Node from "../db/models/node.js";
 import User from "../db/models/user.js";
-import { orchestrateReorganize } from "../ws/orchestrator/cleanupReorganizeOrchestrator.js";
-import { orchestrateExpand } from "../ws/orchestrator/cleanupExpandOrchestrator.js";
+import { orchestrateReorganize } from "../orchestrators/pipelines/cleanupReorganize.js";
+import { orchestrateExpand } from "../orchestrators/pipelines/cleanupExpand.js";
 import { userHasLlm } from "../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────

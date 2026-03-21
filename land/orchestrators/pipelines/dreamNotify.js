@@ -1,0 +1,166 @@
+// orchestrators/pipelines/dreamNotify.js
+// Phase 4 of tree dream: generates summary + thought notifications from dream AI chats.
+// Two tool-less LLM calls, then saves Notification documents.
+
+import { OrchestratorRuntime, parseJsonSafe } from "../runtime.js";
+import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
+import AIChat from "../../db/models/aiChat.js";
+import Node from "../../db/models/node.js";
+import Notification from "../../db/models/notification.js";
+
+const MSG_CAP = 1500;
+
+function capText(text) {
+  if (!text || text.length <= MSG_CAP) return text || "";
+  return text.slice(0, MSG_CAP) + "...";
+}
+
+/**
+ * Build a condensed dream log from AIChat records.
+ */
+function buildDreamLog(chats) {
+  const entries = [];
+  for (const chat of chats) {
+    const mode = chat.aiContext?.path || "unknown";
+    const result = chat.treeContext?.stepResult || "";
+    const target = chat.treeContext?.targetPath || chat.treeContext?.targetNodeName || "";
+
+    let header = `[${mode}]`;
+    if (target) header += ` on "${target}"`;
+    if (result) header += ` (${result})`;
+
+    const startMsg = capText(chat.startMessage?.content);
+    const endMsg = capText(chat.endMessage?.content);
+
+    let entry = header;
+    if (startMsg) entry += `\nInput: ${startMsg}`;
+    if (endMsg) entry += `\nOutput: ${endMsg}`;
+
+    entries.push(entry);
+  }
+  return entries.slice(0, 60).join("\n---\n");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MAIN ORCHESTRATOR
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function orchestrateDreamNotify({
+  rootId,
+  userId,
+  username,
+  treeName,
+  dreamSessionIds,
+  source = "background",
+}) {
+  const rt = new OrchestratorRuntime({
+    rootId,
+    userId,
+    username,
+    visitorId: `dream-notify:${rootId}:${Date.now()}`,
+    sessionType: SESSION_TYPES.DREAM_NOTIFY,
+    description: `Dream notifications: ${treeName}`,
+    modeKeyForLlm: "tree:dream-summary",
+    source,
+  });
+
+  const initialized = await rt.init(`Dream notifications for "${treeName}"`);
+  if (!initialized) return;
+
+  console.log(`Dream notifications starting for "${treeName}"`);
+
+  try {
+    // Fetch dream AI chats
+    const dreamChats = await AIChat.find({
+      sessionId: { $in: dreamSessionIds },
+    })
+      .sort({ sessionId: 1, chainIndex: 1 })
+      .select("aiContext treeContext startMessage endMessage")
+      .lean();
+
+    if (dreamChats.length === 0) {
+      console.log(`No AI chats found for dream sessions, skipping notifications`);
+      rt.setResult("No dream activity to summarize", "dream-notify:complete");
+      return;
+    }
+
+    const dreamLog = buildDreamLog(dreamChats);
+
+    // STEP 1: DREAM SUMMARY
+    const { parsed: summary } = await rt.runStep("tree:dream-summary", {
+      prompt: "Summarize this dream.",
+      modeCtx: { treeName, dreamLog },
+      input: "dream summary",
+    });
+
+    // STEP 2: DREAM THOUGHT
+    const { parsed: thought } = await rt.runStep("tree:dream-thought", {
+      prompt: "Generate a thought for today.",
+      modeCtx: { treeName, dreamLog },
+      input: "dream thought",
+    });
+
+    // SAVE NOTIFICATIONS
+    const rootNode = await Node.findById(rootId).select("rootOwner contributors").lean();
+    const recipients = new Set();
+    if (rootNode?.rootOwner) recipients.add(rootNode.rootOwner);
+    if (rootNode?.contributors) {
+      for (const c of rootNode.contributors) recipients.add(c);
+    }
+
+    const notifications = [];
+
+    for (const recipientId of recipients) {
+      if (summary?.title && summary?.content) {
+        notifications.push({
+          userId: recipientId,
+          rootId,
+          type: "dream-summary",
+          title: summary.title,
+          content: summary.content,
+          dreamSessionIds,
+        });
+      }
+
+      if (thought?.title && thought?.content) {
+        notifications.push({
+          userId: recipientId,
+          rootId,
+          type: "dream-thought",
+          title: thought.title,
+          content: thought.content,
+          dreamSessionIds,
+        });
+      }
+    }
+
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications);
+      console.log(`Created ${notifications.length} notification(s) for ${recipients.size} user(s)`);
+
+      // Dispatch to gateway channels (fire-and-forget)
+      const uniqueNotifs = [];
+      if (summary?.title && summary?.content) {
+        uniqueNotifs.push({ type: "dream-summary", title: summary.title, content: summary.content });
+      }
+      if (thought?.title && thought?.content) {
+        uniqueNotifs.push({ type: "dream-thought", title: thought.title, content: thought.content });
+      }
+      if (uniqueNotifs.length > 0) {
+        import("../../core/gateway/gatewayDispatch.js")
+          .then(({ dispatchNotifications }) => dispatchNotifications(rootId, uniqueNotifs))
+          .catch((err) => console.error(`Gateway dispatch error for root ${rootId}:`, err.message));
+      }
+    }
+
+    rt.setResult(
+      `Summary: ${summary?.title || "failed"} | Thought: ${thought?.title || "failed"}`,
+      "dream-notify:complete",
+    );
+  } catch (err) {
+    console.error(`Dream notification error for "${treeName}":`, err.message);
+    rt.setError(err.message, "dream-notify:complete");
+  } finally {
+    await rt.cleanup();
+  }
+}

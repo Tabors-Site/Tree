@@ -515,10 +515,10 @@ router.get("/canopy/tree/:rootId", authenticateCanopy, async (req, res) => {
       });
     }
 
-    // Get all nodes in the tree
+    // Get all nodes in the tree, excluding sensitive fields
     const nodes = await Node.find({
       $or: [{ _id: rootId }, { parent: rootId }],
-    }).lean();
+    }).select("-scripts -llmAssignments -dreamTime").lean();
 
     res.json({
       success: true,
@@ -1044,7 +1044,7 @@ router.post("/canopy/admin/invite-remote", authenticate, async (req, res) => {
     const owner = await User.findById(req.userId).select("username").lean();
 
     await queueCanopyEvent(domain, "invite_offer", {
-      inviteId: invite._id,
+      sourceInviteId: invite._id,
       invitingUserId: req.userId,
       invitingUsername: owner?.username || "unknown",
       receivingUsername: username,

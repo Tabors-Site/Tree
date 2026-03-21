@@ -20,7 +20,7 @@ import {
 import { useEnergy } from "../core/tree/energy.js";
 import { getNodeName } from "../core/tree/treeDataFetching.js";
 import Node from "../db/models/node.js";
-import { orchestrateTreeRequest } from "./orchestrator/treeOrchestrator.js";
+import { orchestrateTreeRequest } from "../orchestrators/tree.js";
 import { enqueue } from "./requestQueue.js";
 import {
   switchMode,
@@ -54,7 +54,7 @@ import {
   setAiContributionContext,
   clearAiContributionContext,
 } from "./aiChatTracker.js";
-import { clearMemory } from "./orchestrator/treeOrchestrator.js";
+import { clearMemory } from "../orchestrators/tree.js";
 import { getAIChats } from "../core/llms/aichat.js";
 import {
   registerSession,

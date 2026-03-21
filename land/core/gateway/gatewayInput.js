@@ -17,7 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 import GatewayChannel from "../../db/models/gatewayChannel.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
-import { orchestrateTreeRequest } from "../../ws/orchestrator/treeOrchestrator.js";
+import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
 import {
   setRootId,
   getClientForUser,
@@ -41,16 +41,11 @@ import {
   SESSION_TYPES,
 } from "../../ws/sessionRegistry.js";
 import { resolveTreeAccess } from "../authenticate.js";
+import { nullSocket } from "../../orchestrators/helpers.js";
 
 const BUSY_MESSAGE =
   "I'm already processing your last 2 messages. Please send again later.";
 const MAX_CONCURRENT = 2;
-
-const nullSocket = {
-  emit: () => {},
-  to: () => nullSocket,
-  broadcast: { emit: () => {} },
-};
 
 // Per-channel abort controllers: channelId -> Set<AbortController>
 // Needed because maxConcurrent=2 means multiple messages share a session,

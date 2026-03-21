@@ -5,7 +5,7 @@
 import User from "../db/models/user.js";
 import RawIdea from "../db/models/rawIdea.js";
 import AIChat from "../db/models/aiChat.js";
-import { orchestrateRawIdeaPlacement } from "../ws/orchestrator/rawIdeaOrchestrator.js";
+import { orchestrateRawIdeaPlacement } from "../orchestrators/pipelines/rawIdea.js";
 import { isUserOnline } from "../ws/websocket.js";
 import { userHasLlm } from "../ws/conversation.js";
 
