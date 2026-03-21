@@ -33,56 +33,56 @@ const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
 // Per-page metadata for SEO (title, description, og:title, og:description)
 const PAGE_META = {
   "/": {
-    title: "Tree - A Context Management System",
-    description: "Tree is a context management system for organizing, navigating, and understanding complex information.",
+    title: "TreeOS - A Context Management System",
+    description: "TreeOS is a context management system for organizing, navigating, and understanding complex information.",
   },
   "/about": {
-    title: "About - Tree",
-    description: "Learn what Tree is, how it works, and why it exists.",
+    title: "About - TreeOS",
+    description: "Learn what TreeOS is, how it works, and why it exists.",
   },
   "/about/api": {
-    title: "API Reference - Tree",
+    title: "API Reference - TreeOS",
     description: "Read and write to your trees programmatically. Build integrations, automations, and bots.",
   },
   "/about/energy": {
-    title: "Energy & Pricing - Tree",
-    description: "Understand Tree's energy system, pricing tiers, and LLM costs.",
+    title: "Energy & Pricing - TreeOS",
+    description: "Understand TreeOS's energy system, pricing tiers, and LLM costs.",
   },
   "/about/raw-ideas": {
-    title: "Raw Ideas - Tree",
-    description: "Capture unstructured thoughts and let Tree's agents place them into your knowledge trees.",
+    title: "Raw Ideas - TreeOS",
+    description: "Capture unstructured thoughts and let TreeOS agents place them into your knowledge trees.",
   },
   "/about/dreams": {
-    title: "Tree Dreams - Tree",
+    title: "Tree Dreams - TreeOS",
     description: "Daily background maintenance that cleans up, drains short-term memory, and compresses understanding.",
   },
   "/about/gettingstarted": {
-    title: "Getting Started - Tree",
-    description: "Get started with Tree and learn how to grow your first knowledge tree.",
+    title: "Getting Started - TreeOS",
+    description: "Get started with TreeOS and learn how to grow your first knowledge tree.",
   },
   "/about/cli": {
-    title: "CLI - Tree",
+    title: "CLI - TreeOS",
     description: "Navigate and manage your trees from the terminal with treef-cli.",
   },
   "/about/gateway": {
-    title: "Gateway - Tree",
+    title: "Gateway - TreeOS",
     description: "Connect your trees to Telegram, Discord, and push notifications with gateway channels.",
   },
   "/about/land": {
-    title: "Land and Canopy - Tree",
+    title: "Land and Canopy - TreeOS",
     description: "Self-host your own Land node, connect to the decentralized TreeOS network, and collaborate across servers.",
   },
   "/privacy": {
-    title: "Privacy Policy - Tree",
-    description: "How Tree collects, stores, and protects your data.",
+    title: "Privacy Policy - TreeOS",
+    description: "How TreeOS collects, stores, and protects your data.",
   },
   "/terms": {
-    title: "Terms of Service - Tree",
-    description: "Terms and conditions for using Tree.",
+    title: "Terms of Service - TreeOS",
+    description: "Terms and conditions for using TreeOS.",
   },
   "/blog": {
-    title: "Blog - Tree",
-    description: "Posts about Tree, knowledge management, and building with AI.",
+    title: "Blog - TreeOS",
+    description: "Posts about TreeOS, knowledge management, and building with AI.",
   },
 };
 
