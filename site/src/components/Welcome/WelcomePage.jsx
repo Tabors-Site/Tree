@@ -3,7 +3,7 @@ import Cookies from "js-cookie";
 import "./WelcomePage.css";
 
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
-const URL = `https://treeOS.ai`;
+const URL = import.meta.env.VITE_TREE_FRONTEND_DOMAIN;
 
 const WelcomePage = () => {
 
@@ -55,7 +55,7 @@ const WelcomePage = () => {
     }
 
     try {
-      const res = await fetch(`https://treeOS.ai/verify-token`, {
+      const res = await fetch(`${apiUrl}/verify-token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -106,10 +106,10 @@ const WelcomePage = () => {
 
         <div className="hero-top">
           <a
-            href="https://tabors.site"
+            href={import.meta.env.VITE_ROOT_FRONTEND_DOMAIN}
             className="back-to-site-btn legacy"
           >
-            Back to tabors.site
+            Back to {new window.URL(import.meta.env.VITE_ROOT_FRONTEND_DOMAIN).hostname}
           </a>
 
           <div className="hero-top-right">

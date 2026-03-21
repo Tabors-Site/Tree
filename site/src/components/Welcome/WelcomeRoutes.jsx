@@ -10,7 +10,6 @@ import CLIAbout from "./About/CLIAbout.jsx";
 import GatewayAbout from "./About/GatewayAbout.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
-import MustLogin from "./MustLogin.jsx";
 
 import PrivacySection from "./PrivacySection.jsx";
 import TermsSection from "./TermsSections.jsx";
@@ -35,7 +34,6 @@ const WelcomeRoutes = () => {
         <Route index element={<TermsSection />} />
 </Route>
 
-      <Route path="/must-login" element={<MustLogin />} />
 
       {/* Help layout */}
       <Route path="/about" element={<AboutLayout />}>

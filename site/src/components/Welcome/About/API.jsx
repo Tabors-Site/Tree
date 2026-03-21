@@ -95,7 +95,7 @@ const ApiAccessSection = () => {
             <span className="section-icon">🔑</span> Overview &amp; Authentication
           </div>
           <div className="section-text">
-            The TreeOS API lives at <code>https://treeOS.ai/api/v1</code>.
+            The TreeOS API lives at <code>{import.meta.env.VITE_TREE_FRONTEND_DOMAIN}/api/v1</code>.
             All endpoints return JSON by default. Every write operation and most
             read operations require authentication.
             <br /><br />

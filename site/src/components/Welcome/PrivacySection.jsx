@@ -17,7 +17,7 @@ const PrivacySection = () => {
         <div className="prv-section">
           <div className="prv-section-title">1. Introduction</div>
           <div className="prv-section-text">
-            This Privacy Policy explains how TreeOS ("Service", "we", "us", or "our") at treeOS.ai collects, uses, stores, and protects your information when you use the Service.
+            This Privacy Policy explains how TreeOS ("Service", "we", "us", or "our") at {new URL(import.meta.env.VITE_TREE_FRONTEND_DOMAIN).hostname} collects, uses, stores, and protects your information when you use the Service.
             <br /><br />
             By using the Service, you consent to the data practices described in this policy. If you do not agree, please do not use the Service.
           </div>
@@ -219,7 +219,7 @@ const PrivacySection = () => {
             <br /><br />
             <strong>TreeOS</strong><br />
             Email: treeffiency@gmail.com<br />
-            Website: treeOS.ai
+            Website: {new URL(import.meta.env.VITE_TREE_FRONTEND_DOMAIN).hostname}
           </div>
         </div>
 
