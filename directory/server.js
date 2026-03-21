@@ -15,6 +15,7 @@ const MONGODB_URI =
   process.env.MONGODB_URI || "mongodb://localhost:27017/canopy-directory";
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 
 // Rate limiting

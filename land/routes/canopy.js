@@ -983,6 +983,14 @@ router.post("/canopy/admin/invite-remote", authenticate, async (req, res) => {
     const username = canopyId.slice(0, atIndex);
     const domain = canopyId.slice(atIndex + 1);
 
+    // Reject self-land invites — use local invite instead
+    if (domain === getLandIdentity().domain) {
+      return res.status(400).json({
+        success: false,
+        error: "That user is on this land. Use a local invite instead of user@domain.",
+      });
+    }
+
     // Verify the tree exists and the requester owns it
     const rootNode = await Node.findById(rootId);
     if (!rootNode) {
