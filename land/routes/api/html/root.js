@@ -204,7 +204,7 @@ ${rootMeta.contributors
     return `
 <li>
 <a href="/api/v1/user/${u._id}${queryString}">
-  ${escapeHtml(u.username)}${u.isRemote && u.homeLand ? "@" + escapeHtml(u.homeLand) : ""}
+  ${escapeHtml(u.username)}
 </a>
 ${u.isRemote ? '<span style="font-size:11px;opacity:0.5;color:white;">(remote)</span>' : ""}
   <div class="contributors-actions">
