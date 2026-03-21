@@ -24,9 +24,7 @@ const WelcomeRoutes = () => {
     <Routes>
 
       {/* Welcome layout */}
-      <Route element={<WelcomePage />}>
-        <Route path="/"  />
-      </Route>
+      <Route path="/" element={<WelcomePage />} />
       <Route path="/privacy" element={<AboutLayout />} >
         <Route index element={<PrivacySection />} />
 </Route>
