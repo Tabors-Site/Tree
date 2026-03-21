@@ -368,9 +368,6 @@ class TreeAPI {
     const qs = params.toString();
     return this._canopyReq("GET", `/canopy/proxy/${encodeURIComponent(domain)}/canopy/public-trees${qs ? "?" + qs : ""}`);
   }
-  getRemoteMyTrees(domain) {
-    return this._canopyReq("GET", `/canopy/proxy/${encodeURIComponent(domain)}/canopy/my-trees`);
-  }
   proxyGet(domain, path) {
     return this._canopyReq("GET", `/canopy/proxy/${encodeURIComponent(domain)}${path}`);
   }

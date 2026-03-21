@@ -558,7 +558,7 @@ router.post(
       }
 
       const { dispatchTestNotification } =
-        await import("../core/gateway/gatewayDispatch.js");
+        await import("../../core/gateway/gatewayDispatch.js");
       var result = await dispatchTestNotification(channelId);
 
       return res.json(result);

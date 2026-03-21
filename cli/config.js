@@ -55,7 +55,7 @@ function currentPath(cfg) {
 }
 
 function currentLand(cfg) {
-  return cfg.landUrl ? cfg.landUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "") : "local";
+  return cfg.landUrl ? cfg.landUrl.replace(/^https?:\/\//, "").replace(/:\d+$/, "").replace(/\/+$/, "") : "local";
 }
 
 function isRemoteSession(cfg) {

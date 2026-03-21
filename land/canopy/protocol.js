@@ -40,18 +40,6 @@ export function validateCanopyRequest(type, body) {
       if (!body.inviteId) errors.push("missing inviteId");
       break;
 
-    case "energy_report":
-      if (!body.userId) errors.push("missing userId");
-      if (typeof body.energyUsed !== "number") errors.push("missing or invalid energyUsed");
-      if (!body.action) errors.push("missing action");
-      break;
-
-    case "account_transfer":
-      if (!body.userId) errors.push("missing userId");
-      if (!body.username) errors.push("missing username");
-      if (!body.sourceLandDomain) errors.push("missing sourceLandDomain");
-      break;
-
     case "notify":
       if (!body.targetUserId) errors.push("missing targetUserId");
       if (!body.notificationType) errors.push("missing notificationType");

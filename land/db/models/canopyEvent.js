@@ -12,8 +12,6 @@ const CanopyEventSchema = new mongoose.Schema({
       "invite_decline",
       "tree_update",
       "notification",
-      "energy_report",
-      "account_transfer",
     ],
     required: true,
   },

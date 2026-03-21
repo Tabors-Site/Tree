@@ -319,6 +319,11 @@ const user = await User.findOne({
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    // SECURITY: Remote/ghost users cannot log in with a password
+    if (user.isRemote) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });

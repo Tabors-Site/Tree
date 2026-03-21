@@ -6,7 +6,6 @@ import {
   blockPeer,
   unblockPeer,
   getAllPeers,
-  getActivePeers,
   getPeerByDomain,
   getPeerBaseUrl,
   runHeartbeat,
@@ -34,9 +33,45 @@ import Invite from "../db/models/invite.js";
 import authenticate from "../middleware/authenticate.js";
 import { renderCanopyAdmin, renderCanopyInvites, renderCanopyDirectory } from "./api/html/canopy.js";
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
-import { getLandConfigValue } from "../core/landConfig.js";
+
 
 const router = express.Router();
+
+/**
+ * Middleware: Require admin (god tier) for canopy admin endpoints.
+ * Must be used after authenticate.
+ */
+async function requireAdmin(req, res, next) {
+  try {
+    const user = await User.findById(req.userId).select("profileType").lean();
+    if (!user || user.profileType !== "god") {
+      return res.status(403).json({ success: false, error: "Requires admin (god) permissions" });
+    }
+    next();
+  } catch (err) {
+    res.status(500).json({ success: false, error: "Failed to verify admin status" });
+  }
+}
+
+// Simple IP-based rate limiter for unauthenticated endpoints
+const ipRateWindows = new Map();
+const IP_WINDOW_MS = 60 * 1000;
+function checkIpRate(ip, maxPerMinute) {
+  const now = Date.now();
+  const w = ipRateWindows.get(ip);
+  if (!w || now - w.start > IP_WINDOW_MS) {
+    ipRateWindows.set(ip, { start: now, count: 1 });
+    return true;
+  }
+  w.count += 1;
+  return w.count <= maxPerMinute;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, w] of ipRateWindows) {
+    if (now - w.start > IP_WINDOW_MS * 2) ipRateWindows.delete(k);
+  }
+}, IP_WINDOW_MS * 5);
 
 // All canopy routes get canopy response headers
 router.use("/canopy", addCanopyHeaders);
@@ -78,6 +113,11 @@ router.get("/canopy/redirect", (req, res) => {
  */
 router.get("/canopy/user/:username", async (req, res) => {
   try {
+    const ip = req.ip || req.connection?.remoteAddress || "unknown";
+    if (!checkIpRate(ip, 10)) {
+      return res.status(429).json({ success: false, error: "Rate limit exceeded" });
+    }
+
     const user = await User.findOne({
       username: req.params.username,
       isRemote: { $ne: true },
@@ -154,78 +194,17 @@ router.get("/canopy/public-trees", async (req, res) => {
 });
 
 /**
- * GET /canopy/my-trees
- * Returns trees the authenticated user owns or contributes to on this land.
- * Used by remote users (via proxy) to see their invited/contributed trees.
- */
-router.get("/canopy/my-trees", authenticateCanopy, async (req, res) => {
-  try {
-    const identity = getLandIdentity();
-
-    // Resolve the ghost user on this land from the canopy token
-    const ghostUser = await User.findOne({
-      _id: req.canopy.userId,
-      isRemote: true,
-      homeLand: req.canopy.sourceLandDomain,
-    }).select("roots").lean();
-
-    if (!ghostUser) {
-      return res.json({ success: true, trees: [] });
-    }
-
-    const localUserId = ghostUser._id;
-    const ownedIds = ghostUser.roots || [];
-
-    // Trees the user contributes to (but doesn't own)
-    const contributedTrees = await Node.find({
-      contributors: localUserId,
-      parent: null,
-      rootOwner: { $nin: [null, "SYSTEM"] },
-      _id: { $nin: ownedIds },
-    })
-      .select("_id name rootOwner")
-      .lean();
-
-    const ownedTrees = ownedIds.length
-      ? await Node.find({
-          _id: { $in: ownedIds },
-          rootOwner: { $nin: [null, "SYSTEM"] },
-          name: { $not: /^\./ },
-        })
-          .select("_id name rootOwner")
-          .lean()
-      : [];
-
-    const allTrees = [...ownedTrees, ...contributedTrees];
-
-    const results = await Promise.all(
-      allTrees.map(async (tree) => {
-        const owner = await User.findById(tree.rootOwner)
-          .select("username")
-          .lean();
-        return {
-          rootId: tree._id,
-          name: tree.name || "",
-          ownerUsername: owner?.username || "unknown",
-          landDomain: identity.domain,
-          role: ownedIds.includes(tree._id) ? "owner" : "contributor",
-        };
-      })
-    );
-
-    res.json({ success: true, trees: results });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
  * POST /canopy/peer/register
  * Called by a remote land to introduce itself.
  * This is the receiving side of peer registration.
  */
 router.post("/canopy/peer/register", async (req, res) => {
   try {
+    const ip = req.ip || req.connection?.remoteAddress || "unknown";
+    if (!checkIpRate(`register:${ip}`, 5)) {
+      return res.status(429).json({ success: false, error: "Rate limit exceeded" });
+    }
+
     const { landId, domain, publicKey, protocolVersion, name, baseUrl } = req.body;
 
     if (!landId || !domain || !publicKey) {
@@ -292,23 +271,35 @@ router.post("/canopy/peer/register", async (req, res) => {
           error: "This land is blocked",
         });
       }
-      // Only update publicKey if this is a re-registration from the same landId
+      // Only allow re-registration from the same landId
       if (peer.landId && peer.landId !== landId) {
         return res.status(403).json({
           success: false,
           error: "Domain already registered with a different land ID",
         });
       }
+
+      // SECURITY: Reject re-registration if publicKey changed.
+      // Key rotation requires admin to remove and re-peer.
+      if (peer.publicKey && peer.publicKey !== publicKey) {
+        return res.status(403).json({
+          success: false,
+          error: "Public key has changed. Admin must remove and re-peer to accept new keys.",
+        });
+      }
+
       peer.landId = landId;
-      peer.publicKey = publicKey;
       peer.protocolVersion = protocolVersion;
       peer.name = name || "";
       if (baseUrl) peer.baseUrl = baseUrl;
       peer.lastSeenAt = new Date();
       peer.lastSuccessAt = new Date();
-      peer.status = "active";
-      peer.consecutiveFailures = 0;
-      peer.firstFailureAt = null;
+      // Only reset status if dead (re-peering). Let heartbeat handle degraded/unreachable recovery.
+      if (peer.status === "dead") {
+        peer.status = "active";
+        peer.consecutiveFailures = 0;
+        peer.firstFailureAt = null;
+      }
       await peer.save();
     } else {
       peer = await LandPeer.create({
@@ -432,14 +423,12 @@ router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
  */
 router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
   try {
-    const { inviteId, userId, username } = req.body;
-
-    if (!inviteId || !userId) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing inviteId or userId",
-      });
+    const validation = validateCanopyRequest("invite_accept", req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, errors: validation.errors });
     }
+
+    const { inviteId, userId, username } = req.body;
 
     // Atomically mark invite as accepted (prevents race condition)
     const invite = await Invite.findOneAndUpdate(
@@ -506,7 +495,7 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
           _id: userId,
           username: ghostUsername,
           email: `${userId}@${req.canopy.sourceLandDomain}`,
-          password: `remote_${Date.now()}`,
+          password: "$2b$00$REMOTE_NOLOGIN_PLACEHOLDER.......................",
           isRemote: true,
           homeLand: req.canopy.sourceLandDomain,
         });
@@ -550,20 +539,26 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
  */
 router.post("/canopy/invite/decline", authenticateCanopy, async (req, res) => {
   try {
-    const { inviteId } = req.body;
-
-    if (!inviteId) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing inviteId",
-      });
+    const validation = validateCanopyRequest("invite_decline", req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, errors: validation.errors });
     }
+
+    const { inviteId } = req.body;
 
     const invite = await Invite.findById(inviteId);
     if (!invite) {
       return res.status(404).json({
         success: false,
         error: "Invite not found",
+      });
+    }
+
+    // SECURITY: Verify the declining land is the one the invite was sent to.
+    if (invite.remoteLandDomain && invite.remoteLandDomain !== req.canopy.sourceLandDomain) {
+      return res.status(403).json({
+        success: false,
+        error: "This invite was not sent to your land",
       });
     }
 
@@ -618,75 +613,6 @@ router.get("/canopy/tree/:rootId", authenticateCanopy, async (req, res) => {
       nodes,
       accessLevel: isContributor ? "contributor" : "viewer",
     });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
- * POST /canopy/energy/report
- * DEPRECATED: Use POST /canopy/llm/proxy instead, which deducts energy
- * directly when proxying LLM calls. Kept for backward compat with older lands.
- *
- * A remote land reports energy usage by one of our local users.
- * We deduct the energy from our user's balance.
- */
-router.post("/canopy/energy/report", authenticateCanopy, async (req, res) => {
-  try {
-    const validation = validateCanopyRequest("energy_report", req.body);
-    if (!validation.valid) {
-      return res.status(400).json({
-        success: false,
-        errors: validation.errors,
-      });
-    }
-
-    const { userId, energyUsed, action, reportId } = req.body;
-
-    // Cap energy per report to prevent abuse
-    const cappedEnergy = Math.min(Math.max(0, energyUsed || 0), 100);
-    if (cappedEnergy <= 0) {
-      return res.json({ success: true, message: "No energy to deduct" });
-    }
-
-    // Only accept energy reports from the land where the user was actually working.
-    // A rogue land shouldn't be able to drain energy for users on a third land.
-    const user = await User.findById(userId);
-    if (!user || user.isRemote) {
-      return res.status(404).json({
-        success: false,
-        error: "User not found on this land",
-      });
-    }
-
-    // Verify this user has a ghost record on the reporting land (they were actually there)
-    // The reporting land must be a peer we know about
-    if (!req.canopy?.sourceLandDomain) {
-      return res.status(400).json({ success: false, error: "Missing source land" });
-    }
-
-    // Atomic energy deduction (prevents race conditions and negative balances)
-    const deducted = await User.findOneAndUpdate(
-      { _id: userId, "availableEnergy.amount": { $gte: cappedEnergy } },
-      { $inc: { "availableEnergy.amount": -cappedEnergy } },
-      { new: true }
-    );
-
-    if (!deducted) {
-      // Try additional energy
-      const deductedAlt = await User.findOneAndUpdate(
-        { _id: userId, "additionalEnergy.amount": { $gte: cappedEnergy } },
-        { $inc: { "additionalEnergy.amount": -cappedEnergy } },
-        { new: true }
-      );
-
-      if (!deductedAlt) {
-        // Not enough energy, but accept the report (soft meter)
-        await User.findByIdAndUpdate(userId, { $set: { "availableEnergy.amount": 0 } });
-      }
-    }
-
-    res.json({ success: true, message: "Energy deducted" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -776,14 +702,12 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
  */
 router.post("/canopy/notify", authenticateCanopy, async (req, res) => {
   try {
-    const { targetUserId, notificationType, data } = req.body;
-
-    if (!targetUserId || !notificationType) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing targetUserId or notificationType",
-      });
+    const validation = validateCanopyRequest("notify", req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, errors: validation.errors });
     }
+
+    const { targetUserId, notificationType, data } = req.body;
 
     // Verify the target user is local
     const user = await User.findById(targetUserId);
@@ -806,71 +730,6 @@ router.post("/canopy/notify", authenticateCanopy, async (req, res) => {
   }
 });
 
-/**
- * POST /canopy/account/transfer-in
- * Receive a user account transfer from another land.
- */
-router.post(
-  "/canopy/account/transfer-in",
-  authenticateCanopy,
-  async (req, res) => {
-    try {
-      const validation = validateCanopyRequest("account_transfer", req.body);
-      if (!validation.valid) {
-        return res.status(400).json({
-          success: false,
-          errors: validation.errors,
-        });
-      }
-
-      const { userId, username, displayName } = req.body;
-      // SECURITY: Use the verified token issuer, not the body claim
-      const sourceLandDomain = req.canopy.sourceLandDomain;
-
-      // Check if user already exists locally
-      const existing = await User.findById(userId);
-      if (existing) {
-        return res.status(409).json({
-          success: false,
-          error: "User with this ID already exists on this land",
-        });
-      }
-
-      // Check if username is taken
-      const usernameTaken = await User.findOne({ username });
-      if (usernameTaken) {
-        return res.status(409).json({
-          success: false,
-          error: "Username already taken on this land",
-        });
-      }
-
-      // Create the transferred user
-      // They will need to set a password through a separate flow
-      const transferToken = `transfer_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-      const newUser = await User.create({
-        _id: userId,
-        username,
-        email: `${username}@pending-transfer.local`,
-        password: transferToken,
-        isRemote: false,
-        homeLand: null,
-        profileType: getLandConfigValue("LAND_DEFAULT_TIER") || "god",
-      });
-
-      res.json({
-        success: true,
-        message: "Account transferred",
-        userId: newUser._id,
-        setupRequired: true,
-      });
-    } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
-    }
-  }
-);
-
 // ============================================================
 // LOCAL ADMIN ENDPOINTS (require normal auth, not canopy)
 // ============================================================
@@ -879,7 +738,7 @@ router.post(
  * POST /canopy/admin/peer/add
  * Add a peer land by URL (manual peering).
  */
-router.post("/canopy/admin/peer/add", authenticate, async (req, res) => {
+router.post("/canopy/admin/peer/add", authenticate, requireAdmin, async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) {
@@ -903,6 +762,7 @@ router.post("/canopy/admin/peer/add", authenticate, async (req, res) => {
 router.delete(
   "/canopy/admin/peer/:domain",
   authenticate,
+  requireAdmin,
   async (req, res) => {
     try {
       await removePeer(req.params.domain);
@@ -920,6 +780,7 @@ router.delete(
 router.post(
   "/canopy/admin/peer/:domain/block",
   authenticate,
+  requireAdmin,
   async (req, res) => {
     try {
       const peer = await blockPeer(req.params.domain);
@@ -943,6 +804,7 @@ router.post(
 router.post(
   "/canopy/admin/peer/:domain/unblock",
   authenticate,
+  requireAdmin,
   async (req, res) => {
     try {
       const peer = await unblockPeer(req.params.domain);
@@ -963,7 +825,7 @@ router.post(
  * GET /canopy/admin/peers
  * List all peers and their status.
  */
-router.get("/canopy/admin/peers", authenticate, async (req, res) => {
+router.get("/canopy/admin/peers", authenticate, requireAdmin, async (req, res) => {
   try {
     const peers = await getAllPeers();
     const pendingEvents = await getPendingEventCount();
@@ -983,7 +845,7 @@ router.get("/canopy/admin/peers", authenticate, async (req, res) => {
  * POST /canopy/admin/heartbeat
  * Manually trigger a heartbeat check on all peers.
  */
-router.post("/canopy/admin/heartbeat", authenticate, async (req, res) => {
+router.post("/canopy/admin/heartbeat", authenticate, requireAdmin, async (req, res) => {
   try {
     const results = await runHeartbeat();
     res.json({ success: true, results });
@@ -996,7 +858,7 @@ router.post("/canopy/admin/heartbeat", authenticate, async (req, res) => {
  * GET /canopy/admin/events/failed
  * List failed canopy events for review.
  */
-router.get("/canopy/admin/events/failed", authenticate, async (req, res) => {
+router.get("/canopy/admin/events/failed", authenticate, requireAdmin, async (req, res) => {
   try {
     const events = await getFailedEvents();
     res.json({ success: true, events });
@@ -1012,6 +874,7 @@ router.get("/canopy/admin/events/failed", authenticate, async (req, res) => {
 router.post(
   "/canopy/admin/events/:eventId/retry",
   authenticate,
+  requireAdmin,
   async (req, res) => {
     try {
       const result = await retryEvent(req.params.eventId);
@@ -1033,7 +896,7 @@ router.post(
  * Invite a user from a remote land to a local tree.
  * This is what a local tree owner calls to invite someone cross-land.
  */
-router.post("/canopy/admin/invite-remote", authenticate, async (req, res) => {
+router.post("/canopy/admin/invite-remote", authenticate, requireAdmin, async (req, res) => {
   try {
     const { canopyId, rootId } = req.body;
 
@@ -1167,7 +1030,7 @@ router.post("/canopy/admin/invite-remote", authenticate, async (req, res) => {
  * GET /canopy/admin/directory/lands
  * Search the directory for lands.
  */
-router.get("/canopy/admin/directory/lands", authenticate, async (req, res) => {
+router.get("/canopy/admin/directory/lands", authenticate, requireAdmin, async (req, res) => {
   try {
     const lands = await searchLands(req.query.q || "");
     res.json({ success: true, lands });
@@ -1180,7 +1043,7 @@ router.get("/canopy/admin/directory/lands", authenticate, async (req, res) => {
  * GET /canopy/admin/directory/trees
  * Search the directory for public trees across the network.
  */
-router.get("/canopy/admin/directory/trees", authenticate, async (req, res) => {
+router.get("/canopy/admin/directory/trees", authenticate, requireAdmin, async (req, res) => {
   try {
     const trees = await searchPublicTrees(req.query.q || "");
     res.json({ success: true, trees });
@@ -1193,7 +1056,7 @@ router.get("/canopy/admin/directory/trees", authenticate, async (req, res) => {
  * POST /canopy/admin/peer/discover
  * Look up a land by domain in the directory and auto-peer with it.
  */
-router.post("/canopy/admin/peer/discover", authenticate, async (req, res) => {
+router.post("/canopy/admin/peer/discover", authenticate, requireAdmin, async (req, res) => {
   try {
     const { domain } = req.body;
     if (!domain) {

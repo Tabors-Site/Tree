@@ -197,30 +197,18 @@ module.exports = (program) => {
         const rest = name.slice(slashIdx + 1);
         if (!domain || !rest) return console.log(chalk.yellow("Usage: cd @domain/treename"));
 
-        const localApi = new TreeAPI(cfg.apiKey);
         try {
-          const [pubData, myData] = await Promise.all([
-            localApi.getRemotePublicTrees(domain, rest).catch(() => ({ trees: [] })),
-            localApi.getRemoteMyTrees(domain).catch(() => ({ trees: [] })),
-          ]);
-          const allTrees = [...(myData.trees || []), ...(pubData.trees || [])];
-          const seen = new Set();
-          const unique = allTrees.filter((t) => {
-            if (seen.has(t.rootId)) return false;
-            seen.add(t.rootId);
-            return true;
-          });
-          const target = findChild(
-            unique.map((t) => ({ _id: t.rootId, name: t.name || "" })),
-            rest,
-          );
+          const proxyApi = createProxyApi(cfg.apiKey, domain);
+          const landData = await proxyApi.getLandRoot();
+          const children = landData.children || [];
+          const target = findChild(children, rest);
           if (!target) return;
 
           cfg.remoteDomain = domain;
           cfg.activeRootId = target._id;
           cfg.activeRootName = target.name;
           cfg.pathStack = [];
-          cfg.isSystemRoot = false;
+          cfg.isSystemRoot = !!target.isSystem;
           save(cfg);
           console.log(chalk.green(`Entered ${target.name} on ${chalk.dim(`@${domain}`)}`));
         } catch (e) {

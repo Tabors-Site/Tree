@@ -85,6 +85,14 @@ const ApiAccessSection = () => {
             <div className="toc-group-label">Blog</div>
             <TocLink to="blog">📝 Blog Endpoints</TocLink>
           </div>
+
+          <div className="toc-group">
+            <div className="toc-group-label">Canopy (Federation)</div>
+            <TocLink to="canopy-public">🌍 Public Discovery</TocLink>
+            <TocLink to="canopy-protocol">🤝 Protocol Endpoints</TocLink>
+            <TocLink to="canopy-admin">🛡️ Admin Management</TocLink>
+            <TocLink to="canopy-proxy">🔀 Proxy</TocLink>
+          </div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -2058,6 +2066,303 @@ updateScheduleForNode(datetime | null)`}</div>
     "authorName": "tabor"
   }
 }`}</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* CANOPY: PUBLIC DISCOVERY                                      */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="canopy-public">
+          <div className="section-title">
+            <span className="section-icon">🌍</span> Canopy: Public Discovery
+          </div>
+          <div className="section-text">
+            Canopy is the federation protocol that connects independent TreeOS
+            lands into a network. These public endpoints require no authentication
+            and allow lands to discover each other.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/info</span>
+            </div>
+            <div className="ep-desc">Returns this land's public identity, domain, version, and capabilities. Used by other lands for discovery and heartbeat.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{
+  "domain": "treeos.ai",
+  "name": "TreeOS",
+  "version": "1.0.0",
+  "publicKey": "...",
+  "capabilities": ["peering", "llm-proxy", "invites"]
+}`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/public-trees</span>
+            </div>
+            <div className="ep-desc">List public trees on this land. Supports pagination and search.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="ep-code">{`?q=search&page=1&limit=20`}</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "trees": [
+    {
+      "rootId": "...",
+      "name": "My Tree",
+      "ownerUsername": "tabor",
+      "landDomain": "treeos.ai"
+    }
+  ],
+  "page": 1
+}`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/user/:username</span>
+            </div>
+            <div className="ep-desc">Look up a local user by username. Used by remote lands to resolve users for cross-land invites.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "userId": "...",
+  "username": "tabor"
+}`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/peer/register</span>
+            </div>
+            <div className="ep-desc">Called by a remote land to introduce itself and exchange public keys for peering.</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* CANOPY: PROTOCOL (CanopyToken auth)                           */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="canopy-protocol">
+          <div className="section-title">
+            <span className="section-icon">🤝</span> Canopy: Protocol Endpoints
+          </div>
+          <div className="section-text">
+            These endpoints are called land-to-land using CanopyToken authentication
+            (Ed25519 signed JWTs). They power the federation protocol: invites,
+            tree access, LLM proxying, and notifications.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/invite/offer</span>
+            </div>
+            <div className="ep-desc">A remote land notifies this land that one of our users has been invited to a tree.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/invite/accept</span>
+            </div>
+            <div className="ep-desc">A remote land confirms that a user accepted an invite. Creates a ghost user and adds them as a contributor.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/invite/decline</span>
+            </div>
+            <div className="ep-desc">A remote land confirms that a user declined an invite.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/tree/:rootId</span>
+            </div>
+            <div className="ep-desc">Access a tree's structure from a remote land. Returns the root node with children, filtered for the requesting user's permissions.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/llm/proxy</span>
+            </div>
+            <div className="ep-desc">Run LLM inference on behalf of a remote user. The user's LLM connection lives on their home land. The remote land sends messages, the home land runs the completion, deducts energy, and returns the result.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{
+  "userId": "...",
+  "model": "gpt-4o",
+  "messages": [...],
+  "tools": [...],
+  "temperature": 0.7
+}`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/notify</span>
+            </div>
+            <div className="ep-desc">Receive a notification from a remote land (invite updates, tree changes, etc.).</div>
+          </div>
+
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* CANOPY: ADMIN                                                 */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="canopy-admin">
+          <div className="section-title">
+            <span className="section-icon">🛡️</span> Canopy: Admin Management
+          </div>
+          <div className="section-text">
+            Admin endpoints for managing peers, monitoring events, and searching
+            the directory. Requires API key or JWT authentication with admin privileges.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/admin/peers</span>
+            </div>
+            <div className="ep-desc">List all known peer lands and their status (active, unreachable, blocked, dead).</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/admin/peer/add</span>
+            </div>
+            <div className="ep-desc">Manually register a new peer land by URL.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "url": "https://other-land.com" }`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/admin/peer/discover</span>
+            </div>
+            <div className="ep-desc">Look up a land in the Canopy Directory and auto-peer if found.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "domain": "other-land.com" }`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method delete">DELETE</span>
+              <span className="ep-url">/canopy/admin/peer/:domain</span>
+            </div>
+            <div className="ep-desc">Remove a peer land.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/admin/peer/:domain/block</span>
+            </div>
+            <div className="ep-desc">Block a peer land. Rejects all future requests from this land.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/admin/peer/:domain/unblock</span>
+            </div>
+            <div className="ep-desc">Unblock a previously blocked peer land.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/admin/heartbeat</span>
+            </div>
+            <div className="ep-desc">Manually trigger a heartbeat check on all peers. Updates status for each.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/admin/invite-remote</span>
+            </div>
+            <div className="ep-desc">Invite a user on a remote land to contribute to a local tree.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{
+  "rootId": "...",
+  "remoteDomain": "other-land.com",
+  "remoteUsername": "alice"
+}`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/admin/events/failed</span>
+            </div>
+            <div className="ep-desc">List failed canopy events (outbox) for review and retry.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/admin/events/:eventId/retry</span>
+            </div>
+            <div className="ep-desc">Retry a specific failed canopy event.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/admin/directory/lands</span>
+            </div>
+            <div className="ep-desc">Search the Canopy Directory for registered lands.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="ep-code">{`?q=search-term`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/admin/directory/trees</span>
+            </div>
+            <div className="ep-desc">Search the Canopy Directory for public trees across all registered lands.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="ep-code">{`?q=search-term`}</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* CANOPY: PROXY                                                 */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="canopy-proxy">
+          <div className="section-title">
+            <span className="section-icon">🔀</span> Canopy: Proxy
+          </div>
+          <div className="section-text">
+            The proxy forwards authenticated requests from a local user to a remote
+            land. Your home land signs a CanopyToken on your behalf, so the remote
+            land can verify your identity. All standard API endpoints work through
+            the proxy.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET / POST / PUT / DELETE</span>
+              <span className="ep-url">/canopy/proxy/:domain/*</span>
+            </div>
+            <div className="ep-desc">
+              Proxy any request to a remote land. The path after the domain is forwarded as-is.
+              For example, <code>/canopy/proxy/other.land/api/v1/node/abc</code> hits
+              <code>other.land/api/v1/node/abc</code> with your CanopyToken.
+            </div>
+            <div className="ep-note">Requires API key or JWT authentication. Your home land must be peered with the target domain.</div>
           </div>
         </div>
 

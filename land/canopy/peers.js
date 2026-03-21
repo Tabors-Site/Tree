@@ -137,13 +137,6 @@ export async function getPeerByDomain(domain) {
 }
 
 /**
- * Get all active (non-blocked, non-dead) peers.
- */
-export async function getActivePeers() {
-  return LandPeer.find({ status: { $in: ["active", "degraded"] } });
-}
-
-/**
  * Get all peers regardless of status.
  */
 export async function getAllPeers() {

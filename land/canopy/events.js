@@ -45,10 +45,8 @@ async function processEvent(event) {
     invite_offer: "/canopy/invite/offer",
     invite_accept: "/canopy/invite/accept",
     invite_decline: "/canopy/invite/decline",
-    energy_report: "/canopy/energy/report",
     notification: "/canopy/notify",
     tree_update: "/canopy/notify",
-    account_transfer: "/canopy/account/transfer-in",
   };
 
   const endpoint = endpointMap[event.type];
@@ -166,16 +164,6 @@ export function startOutboxJob() {
   }, OUTBOX_INTERVAL_MS);
 
   console.log("[Canopy] Outbox job started (every 60s)");
-}
-
-/**
- * Stop the outbox processing job.
- */
-export function stopOutboxJob() {
-  if (outboxTimer) {
-    clearInterval(outboxTimer);
-    outboxTimer = null;
-  }
 }
 
 /**
