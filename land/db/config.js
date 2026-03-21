@@ -9,7 +9,7 @@ dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 const mongooseUri = process.env.MONGODB_URI;
 
 mongoose
-  .connect(mongooseUri, {})
+  .connect(mongooseUri, { serverSelectionTimeoutMS: 5000 })
   .then(() => console.log("MongoDB connected"))
   .catch((err) => {
     console.error("MongoDB connection failed:", err.message);
