@@ -8,7 +8,8 @@ const CanopyEventSchema = new mongoose.Schema({
     type: String,
     enum: [
       "invite_offer",
-      "invite_response",
+      "invite_accept",
+      "invite_decline",
       "tree_update",
       "notification",
       "energy_report",

@@ -285,8 +285,11 @@ router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
       });
     }
 
-    const { receivingUsername, rootId, rootName, sourceLandDomain, invitingUserId, invitingUsername, sourceInviteId } =
+    const { receivingUsername, rootId, rootName, invitingUserId, invitingUsername, sourceInviteId } =
       req.body;
+
+    // Use verified domain from CanopyToken, not the body claim
+    const sourceLandDomain = req.canopy.sourceLandDomain;
 
     // Find the local user being invited
     const localUser = await User.findOne({

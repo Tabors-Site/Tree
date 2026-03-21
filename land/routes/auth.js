@@ -103,8 +103,15 @@ authApiRouter.post("/forgot-password", emailLimiter, forgotPassword);
 authApiRouter.post("/user/reset-password", resetPassword);
 authApiRouter.get("/user/verify/:token", verifyEmail);
 
-// HTML pages (mounted at / by routesHandler.js)
+// HTML pages + their POST handlers (mounted at / by routesHandler.js)
 export const authPageRouter = express.Router();
+
+// POST routes needed by the server-rendered HTML forms
+authPageRouter.post("/register", registerLimiter, register);
+authPageRouter.post("/login", loginLimiter, login);
+authPageRouter.post("/logout", authenticate, logout);
+authPageRouter.post("/forgot-password", emailLimiter, forgotPassword);
+authPageRouter.post("/user/reset-password", resetPassword);
 
 authPageRouter.get("/login", (req, res, next) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
