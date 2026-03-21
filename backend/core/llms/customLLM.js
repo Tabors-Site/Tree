@@ -41,14 +41,19 @@ function encrypt(text) {
 
 const BLOCKED_HOSTS = new Set([
   "localhost",
-  "tree.tabors.site",
-  "treeOS.ai",
   "0.0.0.0",
   "[::1]",
   "metadata.google.internal",
   "169.254.169.254",
   "metadata.internal",
 ]);
+
+// Auto-block hostnames from configured domains
+for (const key of ["TREE_FRONTEND_DOMAIN", "ROOT_FRONTEND_DOMAIN", "VITE_TREE_API_URL"]) {
+  try {
+    if (process.env[key]) BLOCKED_HOSTS.add(new URL(process.env[key]).hostname);
+  } catch (_) {}
+}
 
 const BLOCKED_IP_PATTERNS = [
   /^127\./, // loopback
