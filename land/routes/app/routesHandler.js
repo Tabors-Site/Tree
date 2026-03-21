@@ -1,4 +1,4 @@
-import usersRoutes from "../users.js";
+import { authPageRouter } from "../auth.js";
 
 //cant use app directly
 import appe from "./app.js";
@@ -24,7 +24,7 @@ const limiter = rateLimit({
 export default function registerRoutes(app) {
   app.use(limiter);
 
-  app.use("/", usersRoutes);
+  app.use("/", authPageRouter);
   app.use("/", appe);
   app.use("/", chat);
   app.use("/", setup);

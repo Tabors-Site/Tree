@@ -6,9 +6,9 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "author": "Tabor Holly",
+  "license": "AGPL-3.0",
+  "description": "TreeOS Land server",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",
     "@solana/spl-token": "^0.4.14",

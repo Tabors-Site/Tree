@@ -33,7 +33,7 @@ const CLIAbout = () => {
           <div className="cli-section-title">
             <span className="cli-section-icon">📦</span> Install
           </div>
-          <div className="cli-code-block">npm install -g TreeOS</div>
+          <div className="cli-code-block">npm install -g treeos</div>
         </div>
 
         {/* ── SESSION ── */}
@@ -41,9 +41,12 @@ const CLIAbout = () => {
           <div className="cli-section-title">
             <span className="cli-section-icon">🖥️</span> Session
           </div>
+          <CmdRow cmd="connect <url>" desc="Set the land URL to connect to" />
+          <CmdRow cmd="register" desc="Create an account on the connected land" />
+          <CmdRow cmd="login" desc="Log in with username and password" />
+          <CmdRow cmd="login --key <key>" desc="Authenticate with an API key" />
           <CmdRow cmd="start / shell" desc="Launch interactive shell" />
           <CmdRow cmd="stop / exit" desc="Exit the shell" />
-          <CmdRow cmd="login --key <key>" desc="Authenticate with your API key" />
           <CmdRow cmd="logout" desc="Clear stored credentials" />
           <CmdRow cmd="whoami" desc="Show login, plan, energy, and active tree" />
         </div>

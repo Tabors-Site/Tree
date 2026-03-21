@@ -154,15 +154,49 @@ const register = async (req, res) => {
     }
 
     /* -------------------------
-       SUBSEQUENT USERS: REQUIRE EMAIL VERIFICATION
+       SUBSEQUENT USERS
     -------------------------- */
 
-    if (!email) {
+    const requireEmail = getLandConfigValue("REQUIRE_EMAIL") !== "false";
+
+    if (requireEmail && !email) {
       return res.status(400).json({
         message: "Email is required for registration",
       });
     }
 
+    // Email not required by land config: create user directly
+    if (!requireEmail && !email) {
+      const user = new User({
+        username,
+        password,
+        email: null,
+      });
+
+      try {
+        await user.save();
+      } catch (err) {
+        if (err.code === 11000) {
+          return res.status(400).json({ message: "Username already taken" });
+        }
+        throw err;
+      }
+
+      const token = jwt.sign(
+        { userId: user._id, username: user.username },
+        JWT_SECRET,
+        { expiresIn: "365d" },
+      );
+
+      return res.status(201).json({
+        token,
+        userId: user._id,
+        username: user.username,
+        profileType: user.profileType,
+      });
+    }
+
+    // Email provided: verification flow
     await TempUser.deleteMany({
       $or: [
         { email },

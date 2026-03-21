@@ -15,6 +15,7 @@ const DEFAULTS = {
   PORT: "3000",
   MONGODB_URI: "mongodb://localhost:27017/tree",
   LAND_DEFAULT_TIER: "god",
+  REQUIRE_EMAIL: "true",
   ENABLE_FRONTEND_HTML: "true",
   DIRECTORY_URL: "https://dir.treeos.ai",
 };
@@ -56,6 +57,7 @@ CUSTOM_LLM_API_SECRET_KEY=${values.CUSTOM_LLM_API_SECRET_KEY}
 # Seeded into .config node on first boot, then managed there
 LAND_NAME=${values.LAND_NAME}
 LAND_DEFAULT_TIER=${values.LAND_DEFAULT_TIER}
+REQUIRE_EMAIL=${values.REQUIRE_EMAIL}
 ENABLE_FRONTEND_HTML=${values.ENABLE_FRONTEND_HTML}
 DIRECTORY_URL=${values.DIRECTORY_URL}
 
@@ -89,6 +91,7 @@ async function interactiveSetup(existingEnv = {}) {
     existingEnv.CUSTOM_LLM_API_SECRET_KEY ||
     crypto.randomBytes(32).toString("hex");
   values.LAND_DEFAULT_TIER = await ask("Default user tier", "LAND_DEFAULT_TIER");
+  values.REQUIRE_EMAIL = await ask("Require email for registration? (true/false)", "REQUIRE_EMAIL");
   values.ENABLE_FRONTEND_HTML =
     existingEnv.ENABLE_FRONTEND_HTML || DEFAULTS.ENABLE_FRONTEND_HTML;
   values.DIRECTORY_URL = await ask("Directory URL (empty for standalone)", "DIRECTORY_URL");

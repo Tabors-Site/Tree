@@ -656,7 +656,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
 
     // Run the LLM call
     const completion = await clientEntry.client.chat.completions.create({
-      model: clientEntry.model,
+      model: model || clientEntry.model,
       messages,
       tools: tools || undefined,
       tool_choice: tools ? (tool_choice || "auto") : undefined,

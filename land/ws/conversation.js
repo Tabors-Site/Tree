@@ -205,7 +205,7 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
       });
       var proxyEntry = {
         client: proxyClient,
-        model: "proxy",
+        model: null,
         isCustom: true,
         connectionId: null,
         isCanopyProxy: true,

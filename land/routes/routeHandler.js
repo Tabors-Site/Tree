@@ -2,7 +2,7 @@ import me from "./api/me.js";
 import note from "./api/notes.js";
 import node from "./api/node.js";
 import root from "./api/root.js";
-import users from "./users.js";
+import { authApiRouter } from "./auth.js";
 import user from "./api/user.js";
 
 import contributions from "./api/contributions.js";
@@ -60,7 +60,7 @@ export default function registerURLRoutes(app) {
   app.post("/mcp", authenticateMCP, handleMcpRequest);
 
   app.use("/api/v1", me);
-  app.use("/api/v1", users);
+  app.use("/api/v1", authApiRouter);
   app.use("/api/v1", user);
 
   app.use("/api/v1", root);

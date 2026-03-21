@@ -19,8 +19,6 @@ import {
   renderForgotPasswordPage,
 } from "../core/login.js";
 
-const router = express.Router();
-
 import rateLimit from "express-rate-limit";
 
 const registerLimiter = rateLimit({
@@ -34,9 +32,8 @@ const registerLimiter = rateLimit({
   },
 });
 
-// Limit login attempts
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 10,
   handler: (req, res) => {
     res.status(429).json({
@@ -47,7 +44,6 @@ const loginLimiter = rateLimit({
   },
 });
 
-// Limit email-based actions
 const emailLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 3,
@@ -59,20 +55,21 @@ const emailLimiter = rateLimit({
   },
 });
 
-router.post("/register", registerLimiter, register);
+// API routes (mounted at /api/v1 by routeHandler.js)
+export const authApiRouter = express.Router();
 
-router.post("/login", loginLimiter, login);
+authApiRouter.post("/register", registerLimiter, register);
+authApiRouter.post("/login", loginLimiter, login);
+authApiRouter.post("/logout", authenticate, logout);
 
-router.post("/logout", authenticate, logout);
-
-router.post(
+authApiRouter.post(
   "/setHTMLShareToken",
   authenticate,
   loginLimiter,
   setHtmlShareToken,
 );
 
-router.post(
+authApiRouter.post(
   "/verify-token",
   authenticate,
   getHtmlShareToken,
@@ -102,21 +99,22 @@ router.post(
   },
 );
 
-router.post("/forgot-password", emailLimiter, forgotPassword);
-router.post("/user/reset-password", resetPassword);
-router.get("/user/verify/:token", verifyEmail);
+authApiRouter.post("/forgot-password", emailLimiter, forgotPassword);
+authApiRouter.post("/user/reset-password", resetPassword);
+authApiRouter.get("/user/verify/:token", verifyEmail);
 
-router.get("/login", (req, res, next) => {
+// HTML pages (mounted at / by routesHandler.js)
+export const authPageRouter = express.Router();
+
+authPageRouter.get("/login", (req, res, next) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
   renderLoginPage(req, res, next);
 });
-router.get("/register", (req, res, next) => {
+authPageRouter.get("/register", (req, res, next) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
   renderRegisterPage(req, res, next);
 });
-router.get("/forgot-password", (req, res, next) => {
+authPageRouter.get("/forgot-password", (req, res, next) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
   renderForgotPasswordPage(req, res, next);
 });
-
-export default router;

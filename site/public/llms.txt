@@ -23,19 +23,45 @@ You can interact with trees through:
 - **Understand Tree**: AI-powered compression that builds a shadow tree of summaries from different perspectives, working bottom-up through layers
 - **REST API**: Programmatic access to all tree operations for building integrations, bots, and automations
 
+## Self-Hosting and Federation
+
+TreeOS is open source (AGPL-3.0). Anyone can run their own Land server. Each Land is a fully independent node in the network with its own database, AI models, users, and rules.
+
+A **Land** is a TreeOS server instance. Lands connect through the **Canopy protocol**, a REST-based federation layer. Think of it like email: your Land is your server, you can communicate with anyone on any other server, but your data stays on yours.
+
+The Canopy protocol handles:
+- **Peering**: Lands exchange Ed25519 public keys and authenticate requests with signed tokens (CanopyTokens)
+- **Cross-land invites**: Invite users on other lands to collaborate on your trees
+- **Ghost users**: When a remote user joins your tree, a lightweight record is created so existing permission checks work unchanged
+- **Proxy**: Users interact with remote trees through their home land. The federation layer is invisible to clients.
+- **Public tree discovery**: Lands publish public trees. A Directory Service acts as an optional phonebook for the network.
+- **Health monitoring**: Lands track peer status (active, degraded, unreachable, dead) via periodic heartbeats
+
+The **CLI** (`npm install -g treeos`) connects to any Land. Users can browse public trees across the network, receive invites from other lands, and contribute remotely.
+
+Getting started self-hosting:
+```
+git clone <repo> && cd Tree
+npm run install:all
+npm start
+```
+
+First run launches a setup wizard. First user registered gets admin access instantly.
+
 ## Key Features
 
 - Hierarchical node trees with parent/child structure, versioning (prestige), values, and status tracking
 - WebSocket-based conversational AI that navigates and modifies trees via natural language
 - Per-tree LLM assignment system with 6 configurable slots (placement, understanding, respond, notes, cleanup, drain)
-- Energy system for AI operations (100 daily base, scales with subscription tier)
+- Energy system for AI operations (scales with tier, self-hosted defaults to unlimited)
 - Understanding system that creates shadow trees with bottom-up layer compression
 - Raw idea capture with automatic AI placement into the best tree/node
 - Short-term memory drain that clusters, scouts, plans, and places items into trees
+- Federated network via Canopy protocol with Ed25519 signed authentication
+- Cross-land collaboration, invites, and public tree discovery
 - Node scripts (sandboxed JavaScript via vm2)
-- Solana wallet integration with Jupiter token swaps
-- Full REST API for programmatic access
-- Bring your own LLM - connect custom OpenAI-compatible endpoints (Ollama, OpenRouter, etc.)
+- Full REST API and CLI for programmatic access
+- Bring your own LLM. connect any OpenAI-compatible endpoint (Ollama, OpenRouter, etc.)
 
 ## Documentation
 

@@ -1,7 +1,7 @@
 {
   "name": "treeos",
   "version": "1.0.1",
-  "description": "CLI for Tree — navigate and manage your nodes like a filesystem",
+  "description": "CLI for TreeOS. Navigate trees, chat with AI, manage your land.",
   "main": "index.js",
   "bin": {
     "treeos": "./index.js"
@@ -10,12 +10,14 @@
     "start": "node index.js"
   },
   "keywords": [
-    "tree",
+    "treeos",
     "cli",
-    "nodes"
+    "knowledge",
+    "ai",
+    "trees"
   ],
-  "author": "TreeOS",
-  "license": "ISC",
+  "author": "Tabor Holly",
+  "license": "AGPL-3.0",
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^11.0.0",

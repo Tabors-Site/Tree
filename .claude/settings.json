@@ -41,7 +41,8 @@
       "Bash(grep -r \"csrf\\\\|CSRF\" /home/tabor/github/Tree/land --include=*.js)",
       "Bash(grep -r \"visibility\\\\|public\\\\|private\" /home/tabor/github/Tree/cli/commands/*.js)",
       "Bash(for f:*)",
-      "Bash(do sed:*)"
+      "Bash(do sed:*)",
+      "Bash(ls /home/tabor/github/Tree/*.md)"
     ]
   }
 }

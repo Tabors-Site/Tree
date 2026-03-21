@@ -120,13 +120,29 @@ module.exports = (program) => {
         const confirm = await readPassword("  Confirm password: ");
         if (password !== confirm) return console.log(chalk.red("Passwords do not match."));
 
-        const email = await prompt("  Email (enter to skip on first user, required otherwise): ");
+        const email = await prompt("  Email (optional): ");
 
-        const data = await unauthPost("/user/register", {
-          username,
-          password,
-          email: email || undefined,
-        });
+        let data;
+        try {
+          data = await unauthPost("/user/register", {
+            username,
+            password,
+            email: email || undefined,
+          });
+        } catch (e) {
+          // Server requires email but user skipped it
+          if (!email && e.message && e.message.toLowerCase().includes("email is required")) {
+            const retryEmail = await prompt("  This land requires email: ");
+            if (!retryEmail) return console.log(chalk.yellow("Email is required on this land."));
+            data = await unauthPost("/user/register", {
+              username,
+              password,
+              email: retryEmail,
+            });
+          } else {
+            throw e;
+          }
+        }
 
         if (data.apiKey) {
           const { me, api } = await saveLogin(cfg, data.apiKey);
