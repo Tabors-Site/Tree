@@ -1,0 +1,329 @@
+# TreeOS
+
+Terminal client for [Tree](https://treeOS.ai) — a context management system for organizing AI, data, and ideas into living structure. Navigate your trees like a filesystem.
+
+## Install
+
+```bash
+npm install -g treeos
+```
+
+## Quick Start
+
+```bash
+treeos login --key YOUR_API_KEY    # get your key from treeOS.ai
+treeos start                       # launch the interactive shell
+```
+
+```
+roots                        # list your trees
+root Life Plan               # enter a tree
+ls                           # list children
+mkdir Health, Work, Projects # create nodes
+cd Health                    # navigate deeper
+
+chat make me a weekly workout plan
+tree                         # see the structure it built
+cd Workouts                  # go into a node it created
+place did 20 pushups today   # AI logs it in the right spot
+note stretch before next session
+
+root work                    # back to tree root
+cd Q2 Goals -r               # find it anywhere in the tree
+values --global              # see values across the whole branch
+
+idea i should track my sleep # AI places it in the right tree
+home                         # back to user home
+exit                         # leave the shell
+```
+
+---
+
+## Commands
+
+### Session
+
+| Command             | Description                               |
+| ------------------- | ----------------------------------------- |
+| `start` / `shell`   | Launch interactive shell                  |
+| `stop` / `exit`     | Exit the shell                            |
+| `login --key <key>` | Authenticate with your API key            |
+| `logout`            | Clear stored credentials                  |
+| `whoami`            | Show login, plan, energy, and active tree |
+
+### User Home
+
+Your home screen before entering a tree. `ls` and `cd` also work from here to list and enter trees.
+
+| Command                      | Description                                    |
+| ---------------------------- | ---------------------------------------------- |
+| `roots`                      | List all your trees                            |
+| `use <name>` / `root <name>` | Enter a tree by name or ID                     |
+| `mkroot <name>`              | Create a new tree                              |
+| `retire/leave [name] -f`     | Leave a shared tree or delete if sole owner    |
+| `home`                       | Leave current tree, return home                |
+| `invites`                    | List pending invites from other users          |
+| `tags` / `mail`              | Notes where you've been @tagged                |
+| `notes`                      | Your user-level notes. `-l` limit, `-q` search |
+| `chats`                      | All AI chats across your trees. `-l` limit     |
+| `contributions`              | Your recent contributions                      |
+| `share-token [token]`        | Show or set your share token                   |
+| `share idea <id>`            | Public link to a raw idea                      |
+
+### Raw Ideas
+
+Capture ideas from anywhere. AI figures out where they belong.
+
+| Command                       | Description                                                                                         |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| `ideas`                       | List ideas. `-p` pending, `-r` processing, `-s` stuck, `-d` done, `-a` all, `-q` search, `-l` limit |
+| `cat idea <id or #>`          | View full content of a raw idea                                                                     |
+| `idea <message>`              | AI places your idea in the right tree and navigates you there                                       |
+| `idea-store <message>`        | Save an idea for later without processing                                                           |
+| `idea-place <id or message>`  | AI-place an idea (fire-and-forget)                                                                  |
+| `idea-auto [on/off]`          | Toggle auto-placement every 15 min (Standard plan+)                                                 |
+| `idea-transfer <id> <nodeId>` | Manually move an idea to a specific node                                                            |
+| `rm-idea <id> -f`             | Delete a raw idea                                                                                   |
+
+---
+
+### Navigation
+
+Move through your tree the way you'd move through a filesystem.
+
+| Command        | Description                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `pwd`          | Print current path                                                                           |
+| `ls` / `ls -l` | List children. Long format shows IDs and status                                              |
+| `cd <name>`    | Navigate into a child. Supports `..`, `/`, `-r` (search whole tree), path chaining (`A/B/C`) |
+| `tree`         | Render subtree. `-a` active, `-c` completed, `-t` trimmed                                    |
+
+Nodes have three statuses: **active** (green), **completed** (gray), **trimmed** (dim).
+
+### Node Management
+
+Build and reshape your tree structure.
+
+| Command               | Description                                                         |
+| --------------------- | ------------------------------------------------------------------- |
+| `mkdir <name>`        | Create child node(s). Comma-separate for multiple: `mkdir foo, bar` |
+| `rm <name> -f`        | Delete a node (soft delete)                                         |
+| `rename <name> <new>` | Rename a child node                                                 |
+| `mv <name> <destId>`  | Move a node to a new parent                                         |
+| `complete`            | Set current node and all children to completed                      |
+| `activate`            | Set current node and all children to active                         |
+| `trim`                | Set current node and all children to trimmed                        |
+| `prestige`            | Create a new version of the current node                            |
+
+### Notes & Values
+
+Every note adds context the AI can work with. Values track anything quantitative.
+
+| Command              | Description                                                                       |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `note <content>`     | Post a note on the current node                                                   |
+| `notes`              | List notes on the current node. `-l` limit, `-q` search                           |
+| `cat note <id or #>` | View full content of a note                                                       |
+| `rm-note <id> -f`    | Delete a note                                                                     |
+| `book`               | Print the full book of notes from current node down                               |
+| `contributions`      | List contributions on the current node                                            |
+| `values`             | List values on the current node. `-g` global totals, `-t` per-node tree breakdown |
+| `value <key> <val>`  | Set a value                                                                       |
+| `goal <key> <goal>`  | Set a goal                                                                        |
+
+### Scheduling
+
+Date: `MM/DD/YYYY`. Time: `HH:MM` or `HH:MMam/pm`. Reeffect: hours. Use `clear` to remove.
+
+| Command                             | Description                                                       |
+| ----------------------------------- | ----------------------------------------------------------------- |
+| `schedule <date> [time] [reeffect]` | Set schedule (e.g. `1/11/2025 3`, `1/11/2025 11:45pm 5`, `clear`) |
+| `calendar`                          | Show scheduled dates. `-m` month (1-12 or name), `-y` year        |
+| `dream-time <HH:MM>`                | Set nightly dream time (or `clear`)                               |
+
+### Collaboration
+
+Work on trees with other people.
+
+| Command              | Description                       |
+| -------------------- | --------------------------------- |
+| `team`               | Show owner and contributors       |
+| `invite <username>`  | Invite a user to the current tree |
+| `invite accept <id>` | Accept a pending invite           |
+| `invite deny <id>`   | Decline a pending invite          |
+| `kick <username>`    | Remove a contributor              |
+| `owner <username>`   | Transfer tree ownership           |
+
+### Links & Sharing
+
+Clickable terminal hyperlinks. `link` uses your share token; `share` generates public links.
+
+**In a tree:**
+
+| Command           | Description                           |
+| ----------------- | ------------------------------------- |
+| `link`            | Link to current node                  |
+| `link root`       | Link to tree root                     |
+| `link book`       | Link to book view                     |
+| `link gateway`    | Link to gateway channels              |
+| `link note <id>`  | Link to a specific note               |
+| `share note <id>` | Public link to a note                 |
+| `share book`      | Public book share link (TOC included) |
+
+**From home:**
+
+| Command          | Description                 |
+| ---------------- | --------------------------- |
+| `link`           | Link to your profile        |
+| `link ideas`     | Link to your raw ideas      |
+| `link idea <id>` | Link to a specific raw idea |
+
+### AI
+
+AI has full context of the branch you're in.
+
+| Command           | Description                                    |
+| ----------------- | ---------------------------------------------- |
+| `chat <message>`  | Chat with AI about the current branch          |
+| `place <message>` | AI writes content into the branch              |
+| `query <message>` | Ask AI about the branch (read-only, no writes) |
+| `chats`           | Chat history for current node. `-l` limit      |
+| `chats tree`      | All chat history across the whole tree         |
+
+### Understanding Runs
+
+Compress a branch into a structured encoding the AI can reference.
+
+| Command                     | Description                                        |
+| --------------------------- | -------------------------------------------------- |
+| `understand [perspective]`  | Start an understanding run. Returns final encoding |
+| `understandings`            | List runs                                          |
+| `understand-status <runId>` | Check progress                                     |
+| `understand-stop <runId>`   | Stop a run                                         |
+
+### Blog
+
+No login required.
+
+| Command                 | Description                        |
+| ----------------------- | ---------------------------------- |
+| `blogs`                 | List published posts               |
+| `blog <slug or number>` | Read a post by slug or list number |
+
+---
+
+## Name Matching
+
+All commands accept names or IDs. No quotes needed for multi-word names. Matching order:
+
+1. Exact ID or ID prefix
+2. Exact name (case-insensitive)
+3. Name starts with query
+4. Name contains query
+
+Multiple matches prompt you to disambiguate by ID.
+
+## Examples
+
+### Let AI build your structure
+
+```
+root Startup
+chat I need to plan a product launch for March —
+     landing page, email sequence, social, and a demo video
+
+tree                             # see what it built
+cd Launch/Landing Page
+note hero section should lead with the compression angle
+```
+
+Don't pre-build the tree. Describe what you need and let AI create the hierarchy, then navigate into it and start adding detail.
+
+### Fire off ideas throughout the day
+
+```
+idea we should batch API calls to reduce token waste
+idea the onboarding flow feels too long
+idea what if nodes could have expiration dates
+ideas                            # see what's pending
+ideas -d                         # check what landed
+```
+
+Ideas don't need a tree selected. AI matches each one to the right tree and places it. Check back later to see where things ended up.
+
+### Track values across a whole tree
+
+```
+root Fitness
+cd Workouts/Pushups
+value reps 20
+cd /Workouts/Running
+value miles 3.1
+cd /
+values -g                        # totals across every branch
+values -t                        # per-node breakdown
+goal miles 100
+```
+
+Values roll up. Set them deep in the tree, read them from anywhere.
+
+### Compress a branch before a decision
+
+```
+root Product
+cd Roadmap
+understand what are the open questions and blockers
+```
+
+An understanding run reads every node and note under the branch and returns a compressed encoding. Useful before planning sessions or when a branch gets deep.
+
+### Collaborate on a shared tree
+
+```
+root Team Wiki
+invite alex
+team                             # see contributors
+notes -q "auth"                  # find what others added
+tags                             # see where you've been @mentioned
+```
+
+### Morning routine from the terminal
+
+```
+treeos start
+root Life
+calendar                         # what's scheduled today
+cd -r Workouts                   # jump straight there
+place ran 5k, felt good
+cd /
+dream-time 9:30pm               # AI cleans up tonight
+```
+
+Set a dream time and the AI will reorganize, compress, and maintain your tree overnight.
+
+### Share your work
+
+```
+cd Projects/Blog Post
+book                             # preview the full book of notes
+share book                       # get a public link
+link gateway                     # open the gateway view
+```
+
+---
+
+## How It Works
+
+All commands map to the [Tree REST API](https://treeOS.ai/about/api). Config stored in `~/.treeos/config.json`.
+
+## Links
+
+- [Tree](https://treeOS.ai)
+- [Getting Started](https://treeOS.ai/about/gettingstarted)
+- [Raw Ideas](https://treeOS.ai/about/raw-ideas)
+- [Energy System](https://treeOS.ai/about/energy)
+- [Dreams](https://treeOS.ai/about/dreams)
+- [Gateway](https://treeOS.ai/about/gateway)
+- [API Reference](https://treeOS.ai/about/api)
+- [CLI Guide](https://treeOS.ai/about/cli)
+- [Blog](https://treeOS.ai/blog)
