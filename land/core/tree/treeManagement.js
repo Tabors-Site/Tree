@@ -52,6 +52,9 @@ export async function createNewNode(
   if (name.startsWith(".")) {
     throw new Error("Node names cannot start with a dot");
   }
+  if (name.startsWith("@")) {
+    throw new Error("Node names cannot start with @");
+  }
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
   const { energyUsed } = await useEnergy({
@@ -418,6 +421,9 @@ export async function editNodeName({
   }
   if (newName.startsWith(".")) {
     throw new Error("Node names cannot start with a dot");
+  }
+  if (newName.startsWith("@")) {
+    throw new Error("Node names cannot start with @");
   }
   const node = await Node.findById(nodeId);
   if (!node) {
