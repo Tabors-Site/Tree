@@ -124,6 +124,14 @@ export async function authenticateCanopy(req, res, next) {
       });
     }
 
+    // Verify the verified issuer matches the unverified one we used for peer lookup
+    if (payload.iss && payload.iss !== issuerDomain) {
+      return res.status(401).json({
+        success: false,
+        error: "CanopyToken issuer mismatch after verification",
+      });
+    }
+
     // Check per-user rate limit
     const userKey = `user:${issuerDomain}:${payload.sub}`;
     if (!checkRateLimit(userKey, peer.rateLimits?.requestsPerUserPerMinute || 60)) {

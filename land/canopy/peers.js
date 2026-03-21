@@ -204,6 +204,9 @@ export async function pingPeer(peer) {
     peer.protocolVersion = info.protocolVersion || peer.protocolVersion;
     // SECURITY: Never update publicKey from heartbeat. Keys are only set during
     // initial peering. To rotate keys, the peer must re-peer.
+    if (info.publicKey && info.publicKey !== peer.publicKey) {
+      console.warn(`[Canopy] ALERT: Peer ${peer.domain} is serving a different public key. Possible compromise or key rotation. Re-peer to accept the new key.`);
+    }
 
     // Update uptime history for today
     let todayEntry = peer.uptimeHistory.find(

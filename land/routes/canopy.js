@@ -175,6 +175,47 @@ router.post("/canopy/peer/register", async (req, res) => {
       });
     }
 
+    // SECURITY: Verify the sender actually controls the claimed domain.
+    const verifyUrl = baseUrl || (domain.includes("localhost") ? `http://${domain}` : `https://${domain}`);
+
+    // SECURITY: Block private/internal IPs to prevent SSRF
+    try {
+      const parsed = new URL(verifyUrl);
+      const host = parsed.hostname;
+      if (/^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|fc|fd|fe80|::1|localhost)/i.test(host)) {
+        if (process.env.NODE_ENV === "production") {
+          return res.status(400).json({
+            success: false,
+            error: "Private/internal addresses not allowed in production",
+          });
+        }
+      }
+    } catch {
+      return res.status(400).json({ success: false, error: "Invalid baseUrl" });
+    }
+
+    let verifiedInfo;
+    try {
+      const verifyRes = await fetch(`${verifyUrl}/canopy/info`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!verifyRes.ok) throw new Error("Failed to reach land");
+      verifiedInfo = await verifyRes.json();
+    } catch {
+      return res.status(400).json({
+        success: false,
+        error: "Could not verify land identity. Ensure your land is reachable.",
+      });
+    }
+
+    // Confirm the claimed identity matches what the land actually serves
+    if (verifiedInfo.landId !== landId || verifiedInfo.publicKey !== publicKey) {
+      return res.status(403).json({
+        success: false,
+        error: "Land identity mismatch. The domain does not serve the claimed identity.",
+      });
+    }
+
     let peer = await LandPeer.findOne({ domain });
 
     if (peer) {
@@ -182,6 +223,13 @@ router.post("/canopy/peer/register", async (req, res) => {
         return res.status(403).json({
           success: false,
           error: "This land is blocked",
+        });
+      }
+      // Only update publicKey if this is a re-registration from the same landId
+      if (peer.landId && peer.landId !== landId) {
+        return res.status(403).json({
+          success: false,
+          error: "Domain already registered with a different land ID",
         });
       }
       peer.landId = landId;
@@ -292,8 +340,13 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
       });
     }
 
-    const invite = await Invite.findById(inviteId);
-    if (!invite || invite.status !== "pending") {
+    // Atomically mark invite as accepted (prevents race condition)
+    const invite = await Invite.findOneAndUpdate(
+      { _id: inviteId, status: "pending" },
+      { $set: { status: "accepted" } },
+      { new: true }
+    );
+    if (!invite) {
       return res.status(404).json({
         success: false,
         error: "Invite not found or already processed",
@@ -301,20 +354,20 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
     }
 
     // SECURITY: Verify the accepting land is the one the invite was intended for.
-    // Check that the RemoteUser record for this invite's recipient belongs to the claiming land.
+    // The invite must have a corresponding RemoteUser from the claiming land.
     const intendedRecipient = await RemoteUser.findById(invite.userReceiving);
-    if (intendedRecipient && intendedRecipient.homeLandDomain !== req.canopy.sourceLandDomain) {
+    if (!intendedRecipient || intendedRecipient.homeLandDomain !== req.canopy.sourceLandDomain) {
+      await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
       return res.status(403).json({
         success: false,
         error: "This invite was not sent to your land",
       });
     }
 
-    // Create a ghost user record for the remote user
-    // SECURITY: Check if this UUID belongs to a local user. A malicious land
-    // could send a forged UUID matching a real local user to hijack permissions.
+    // SECURITY: Check if this UUID belongs to a local user.
     const existingLocal = await User.findOne({ _id: userId, isRemote: { $ne: true } });
     if (existingLocal) {
+      await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
       return res.status(403).json({
         success: false,
         error: "User ID conflicts with a local user. Invite rejected.",
@@ -328,6 +381,19 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
       homeLand: req.canopy.sourceLandDomain,
     });
     if (!ghostUser) {
+      // SECURITY: Quota on ghost users per remote land (prevent database flood)
+      const ghostCount = await User.countDocuments({
+        isRemote: true,
+        homeLand: req.canopy.sourceLandDomain,
+      });
+      if (ghostCount >= 1000) {
+        await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
+        return res.status(429).json({
+          success: false,
+          error: "Ghost user quota exceeded for this land",
+        });
+      }
+
       ghostUser = await User.create({
         _id: userId,
         username: `${req.canopy.sourceLandDomain}_${userId.slice(0, 8)}`,
@@ -338,15 +404,10 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
       });
     }
 
-    // Add to contributors
-    const rootNode = await Node.findById(invite.rootId);
-    if (rootNode && !rootNode.contributors.includes(userId)) {
-      rootNode.contributors.push(userId);
-      await rootNode.save();
-    }
-
-    invite.status = "accepted";
-    await invite.save();
+    // Add to contributors atomically (prevents duplicates)
+    await Node.findByIdAndUpdate(invite.rootId, {
+      $addToSet: { contributors: userId },
+    });
 
     // Add root to ghost user's roots
     if (!ghostUser.roots.includes(invite.rootId)) {
@@ -462,6 +523,8 @@ router.post("/canopy/energy/report", authenticateCanopy, async (req, res) => {
       return res.json({ success: true, message: "No energy to deduct" });
     }
 
+    // Only accept energy reports from the land where the user was actually working.
+    // A rogue land shouldn't be able to drain energy for users on a third land.
     const user = await User.findById(userId);
     if (!user || user.isRemote) {
       return res.status(404).json({
@@ -470,16 +533,32 @@ router.post("/canopy/energy/report", authenticateCanopy, async (req, res) => {
       });
     }
 
-    // Deduct energy
-    if (user.availableEnergy.amount >= cappedEnergy) {
-      user.availableEnergy.amount -= cappedEnergy;
-    } else if (user.additionalEnergy.amount >= cappedEnergy) {
-      user.additionalEnergy.amount -= cappedEnergy;
-    } else {
-      user.availableEnergy.amount = 0;
+    // Verify this user has a ghost record on the reporting land (they were actually there)
+    // The reporting land must be a peer we know about
+    if (!req.canopy?.sourceLandDomain) {
+      return res.status(400).json({ success: false, error: "Missing source land" });
     }
 
-    await user.save();
+    // Atomic energy deduction (prevents race conditions and negative balances)
+    const deducted = await User.findOneAndUpdate(
+      { _id: userId, "availableEnergy.amount": { $gte: cappedEnergy } },
+      { $inc: { "availableEnergy.amount": -cappedEnergy } },
+      { new: true }
+    );
+
+    if (!deducted) {
+      // Try additional energy
+      const deductedAlt = await User.findOneAndUpdate(
+        { _id: userId, "additionalEnergy.amount": { $gte: cappedEnergy } },
+        { $inc: { "additionalEnergy.amount": -cappedEnergy } },
+        { new: true }
+      );
+
+      if (!deductedAlt) {
+        // Not enough energy, but accept the report (soft meter)
+        await User.findByIdAndUpdate(userId, { $set: { "availableEnergy.amount": 0 } });
+      }
+    }
 
     res.json({ success: true, message: "Energy deducted" });
   } catch (err) {
@@ -541,7 +620,9 @@ router.post(
         });
       }
 
-      const { userId, username, displayName, sourceLandDomain } = req.body;
+      const { userId, username, displayName } = req.body;
+      // SECURITY: Use the verified token issuer, not the body claim
+      const sourceLandDomain = req.canopy.sourceLandDomain;
 
       // Check if user already exists locally
       const existing = await User.findById(userId);

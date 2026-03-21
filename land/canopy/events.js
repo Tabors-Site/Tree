@@ -121,6 +121,8 @@ export async function processOutbox() {
   if (events.length === 0) return { processed: 0, sent: 0, failed: 0 };
 
   const results = { processed: 0, sent: 0, failed: 0 };
+  const destCounts = new Map(); // Per-destination rate limit (max 10 per cycle)
+  const DEST_LIMIT_PER_CYCLE = 10;
 
   for (const event of events) {
     // Exponential backoff: wait 1min, 2min, 4min, 8min, 16min between retries
@@ -128,6 +130,11 @@ export async function processOutbox() {
       const backoffMs = Math.min(60000 * Math.pow(2, event.retryCount - 1), 16 * 60000);
       if (Date.now() - event.lastAttemptAt.getTime() < backoffMs) continue;
     }
+
+    // Per-destination rate limit to prevent flooding any single land
+    const destCount = destCounts.get(event.targetLand) || 0;
+    if (destCount >= DEST_LIMIT_PER_CYCLE) continue;
+    destCounts.set(event.targetLand, destCount + 1);
 
     results.processed++;
     const sent = await processEvent(event);

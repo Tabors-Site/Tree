@@ -52,12 +52,17 @@ export default async function authenticate(req, res, next) {
         return res.status(401).json({ message: "CanopyToken audience mismatch" });
       }
 
+      // Verify the verified issuer matches what we used for peer lookup
+      if (payload.iss && payload.iss !== unverified.iss) {
+        return res.status(401).json({ message: "CanopyToken issuer mismatch" });
+      }
+
       // The sub is the remote user's ID. Must be a ghost user from the claiming land.
       // SECURITY: Verify isRemote and homeLand match to prevent UUID collision attacks.
       const ghostUser = await User.findOne({
         _id: payload.sub,
         isRemote: true,
-        homeLand: unverified.iss,
+        homeLand: payload.iss,
       });
       if (!ghostUser) {
         return res.status(403).json({ message: "Remote user not registered on this land" });

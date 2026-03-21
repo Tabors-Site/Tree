@@ -32,6 +32,63 @@ router.post(
         });
       }
 
+      // SECURITY: The claimed domain must match the token issuer.
+      // Prevents a rogue land from registering someone else's domain.
+      if (domain !== req.canopyAuth.payload.iss) {
+        return res.status(403).json({
+          success: false,
+          error: "Domain does not match token issuer. You can only register your own domain.",
+        });
+      }
+
+      // SECURITY: Validate aud claim if present
+      if (req.canopyAuth.payload.aud && req.canopyAuth.payload.aud !== "directory") {
+        return res.status(401).json({
+          success: false,
+          error: "Token audience must be 'directory'",
+        });
+      }
+
+      // SECURITY: Block private IPs in baseUrl (both new and existing registrations)
+      try {
+        const parsed = new URL(baseUrl);
+        if (/^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|localhost)/i.test(parsed.hostname)) {
+          return res.status(400).json({
+            success: false,
+            error: "baseUrl cannot use private or localhost addresses",
+          });
+        }
+      } catch {
+        return res.status(400).json({ success: false, error: "Invalid baseUrl" });
+      }
+
+      // SECURITY: Validate siteUrl if provided (prevent javascript: and other dangerous protocols)
+      if (siteUrl) {
+        try {
+          const parsedSite = new URL(siteUrl);
+          if (!["http:", "https:"].includes(parsedSite.protocol)) {
+            return res.status(400).json({
+              success: false,
+              error: "siteUrl must use http or https protocol",
+            });
+          }
+        } catch {
+          return res.status(400).json({ success: false, error: "Invalid siteUrl" });
+        }
+      }
+
+      // SECURITY: Check directory capacity for new registrations
+      const existingLand = await Land.findOne({ domain });
+      if (!existingLand) {
+        const totalLands = await Land.countDocuments();
+        if (totalLands >= 50000) {
+          return res.status(503).json({
+            success: false,
+            error: "Directory capacity reached",
+          });
+        }
+      }
+
       // Upsert the land record
       const land = await Land.findOneAndUpdate(
         { domain },
@@ -53,12 +110,13 @@ router.post(
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      // Replace all public trees for this land
+      // Replace all public trees for this land (capped at 500)
       if (Array.isArray(publicTrees)) {
         await PublicTree.deleteMany({ landId: land._id });
 
-        if (publicTrees.length > 0) {
-          const treeDocs = publicTrees.map((t) => ({
+        const cappedTrees = publicTrees.slice(0, 500);
+        if (cappedTrees.length > 0) {
+          const treeDocs = cappedTrees.map((t) => ({
             rootId: t.rootId,
             landId: land._id,
             landDomain: domain,
@@ -151,13 +209,26 @@ router.get("/lands", async (req, res) => {
  */
 router.get("/land/:domain", async (req, res) => {
   try {
-    const land = await Land.findOne({ domain: req.params.domain }).lean();
+    const land = await Land.findOne({ domain: req.params.domain })
+      .select("_id domain name baseUrl publicKey protocolVersion siteUrl")
+      .lean();
 
     if (!land) {
       return res.status(404).json({ success: false, error: "Land not found" });
     }
 
-    return res.json({ success: true, land });
+    return res.json({
+      success: true,
+      land: {
+        landId: land._id,
+        domain: land.domain,
+        name: land.name,
+        baseUrl: land.baseUrl,
+        publicKey: land.publicKey,
+        protocolVersion: land.protocolVersion,
+        siteUrl: land.siteUrl,
+      },
+    });
   } catch (err) {
     console.error("[Directory] Get land error:", err.message);
     return res.status(500).json({ success: false, error: "Internal server error" });

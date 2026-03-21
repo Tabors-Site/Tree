@@ -1,5 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
+import rateLimit from "express-rate-limit";
 import directoryRoutes from "./routes/directory.js";
 import { startHealthCheckJob } from "./jobs/healthCheck.js";
 import { renderDashboard } from "./views/dashboard.js";
@@ -12,6 +13,28 @@ const MONGODB_URI =
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
+
+// Rate limiting
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // 10 registrations per hour per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: "Too many registration attempts. Try again later." },
+});
+
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // 60 searches per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: "Too many requests. Slow down." },
+});
+
+app.use("/directory/register", registrationLimiter);
+app.use("/directory/lands", searchLimiter);
+app.use("/directory/land", searchLimiter);
+app.use("/directory/search", searchLimiter);
 
 // Dashboard page at root
 app.get("/", async (req, res) => {
