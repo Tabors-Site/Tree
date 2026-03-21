@@ -22,6 +22,7 @@ const STATIC_ROUTES = [
   "/about/gettingstarted",
   "/about/cli",
   "/about/gateway",
+  "/about/land",
   "/privacy",
   "/terms",
   "/blog",
@@ -66,6 +67,10 @@ const PAGE_META = {
   "/about/gateway": {
     title: "Gateway - Tree",
     description: "Connect your trees to Telegram, Discord, and push notifications with gateway channels.",
+  },
+  "/about/land": {
+    title: "Land and Canopy - Tree",
+    description: "Self-host your own Land node, connect to the decentralized TreeOS network, and collaborate across servers.",
   },
   "/privacy": {
     title: "Privacy Policy - Tree",

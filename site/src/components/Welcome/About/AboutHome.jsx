@@ -53,6 +53,13 @@ const AboutHome = () => {
       active: true,
     },
     {
+      emoji: "🌍",
+      title: "Land and Canopy",
+      desc: "Self-host your own Land, connect to the network, and collaborate across servers.",
+      to: "/about/land",
+      active: true,
+    },
+    {
       emoji: "📝",
       title: "Blog",
       desc: "Ideas, updates, and thoughts on where TreeOS is going.",

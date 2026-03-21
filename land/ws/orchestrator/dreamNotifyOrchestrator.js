@@ -274,7 +274,7 @@ export async function orchestrateDreamNotify({
         uniqueNotifs.push({ type: "dream-thought", title: thought.title, content: thought.content });
       }
       if (uniqueNotifs.length > 0) {
-        import("../../core/gatewayDispatch.js")
+        import("../../core/gateway/gatewayDispatch.js")
           .then(({ dispatchNotifications }) => dispatchNotifications(rootId, uniqueNotifs))
           .catch((err) => console.error(`Gateway dispatch error for root ${rootId}:`, err.message));
       }
