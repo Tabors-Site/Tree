@@ -2,6 +2,7 @@ import GatewayChannel from "../../db/models/gatewayChannel.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
 import crypto from "crypto";
+import { getLandUrl } from "../../canopy/identity.js";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -447,7 +448,7 @@ async function registerInputChannel(channel) {
   if (channel.type === "telegram") {
     var secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
     var secretToken = crypto.randomBytes(32).toString("hex");
-    var webhookUrl = `${process.env.BASE_URL || process.env.TREE_FRONTEND_DOMAIN || "https://treeOS.ai"}/api/v1/gateway/telegram/${channel._id}`;
+    var webhookUrl = `${process.env.BASE_URL || getLandUrl()}/api/v1/gateway/telegram/${channel._id}`;
 
     var res = await fetch(
       `https://api.telegram.org/bot${secrets.botToken}/setWebhook`,

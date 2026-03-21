@@ -44,8 +44,13 @@ function currentNodeId(cfg) {
 
 function currentPath(cfg) {
   if (!cfg.activeRootId) return "/";
+  const prefix = cfg.remoteDomain ? `@${cfg.remoteDomain}` : "";
   const parts = [cfg.activeRootName, ...cfg.pathStack.map((n) => n.name)];
-  return "/" + parts.join("/");
+  return "/" + prefix + (prefix ? "/" : "") + parts.join("/");
 }
 
-module.exports = { load, save, requireAuth, currentNodeId, currentPath };
+function isRemoteSession(cfg) {
+  return !!cfg.remoteDomain;
+}
+
+module.exports = { load, save, requireAuth, currentNodeId, currentPath, isRemoteSession };

@@ -1,6 +1,6 @@
 const chalk = require("chalk");
-const TreeAPI = require("../api");
 const { save, requireAuth, currentNodeId } = require("../config");
+const { getApi } = require("../helpers");
 const { printChats } = require("../display");
 
 module.exports = (program) => {
@@ -10,7 +10,7 @@ module.exports = (program) => {
     .option("-l, --limit [n]", "Limit results")
     .action(async (scope, { limit }) => {
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         let data;
         if (!cfg.activeRootId) {
@@ -40,7 +40,7 @@ module.exports = (program) => {
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
       console.log(chalk.dim("Thinking…"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.chat(nodeId, message);
@@ -62,7 +62,7 @@ module.exports = (program) => {
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
       console.log(chalk.dim("Placing…"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.place(nodeId, message);
@@ -84,7 +84,7 @@ module.exports = (program) => {
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
       console.log(chalk.dim("Thinking…"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.query(nodeId, message);
@@ -108,7 +108,7 @@ module.exports = (program) => {
     .option("-l, --limit [n]", "Limit results")
     .action(async ({ pending, processing, stuck, done, all, query, limit }) => {
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const flaggedStatuses = [
           pending && "pending",
@@ -154,7 +154,7 @@ module.exports = (program) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: idea-store <message>"));
       const content = parts.join(" ");
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const data = await api.createRawIdea(cfg.userId, content);
         const id = data.rawIdea?._id || data._id || "";
@@ -173,7 +173,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!force)
         return console.log(chalk.yellow(`Delete raw idea ${rawIdeaId}? Pass -f to confirm.`));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         await api.deleteRawIdea(cfg.userId, rawIdeaId);
         console.log(chalk.green("✓ Raw idea deleted"));
@@ -190,7 +190,7 @@ module.exports = (program) => {
       const input = parts.join(" ");
       const cfg = requireAuth();
       console.log(chalk.dim("Placing…"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const isId = /^[0-9a-f-]{36}$/i.test(input);
         const data = isId
@@ -211,7 +211,7 @@ module.exports = (program) => {
       const input = parts.join(" ");
       const cfg = requireAuth();
       console.log(chalk.dim("Thinking…"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const isId = /^[0-9a-f-]{36}$/i.test(input);
         const data = isId
@@ -247,7 +247,7 @@ module.exports = (program) => {
     .action(async (rawIdeaId, nodeId) => {
       if (!rawIdeaId || !nodeId) return console.log(chalk.yellow("Usage: idea-transfer <rawIdeaId> <nodeId>"));
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         await api.transferRawIdea(cfg.userId, rawIdeaId, nodeId);
         console.log(chalk.green(`✓ Transferred raw idea to node ${nodeId}`));
@@ -261,7 +261,7 @@ module.exports = (program) => {
     .description("Toggle auto-placement of pending raw ideas every 15 min (on/off). Requires Standard plan+")
     .action(async (toggle) => {
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         if (!toggle) {
           const data = await api.getUser(cfg.userId);
@@ -286,7 +286,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         console.log(chalk.dim("Creating understanding run…"));
@@ -324,7 +324,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.listUnderstandings(nodeId);
@@ -356,7 +356,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const data = await api.getUnderstandingRun(currentNodeId(cfg), runId);
         const run = data.run || data;
@@ -380,7 +380,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         await api.stopUnderstanding(currentNodeId(cfg), runId);
         console.log(chalk.green("✓ Understanding run stopped"));

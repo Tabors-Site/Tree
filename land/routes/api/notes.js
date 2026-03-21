@@ -35,6 +35,7 @@ import {
   normalizeStatusFilters,
   renderBookNode,
 } from "../html/notes.js";
+import { getLandUrl } from "../../canopy/identity.js";
 
 const router = express.Router();
 
@@ -553,7 +554,7 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
 
     const back = hasToken
       ? `/api/v1/node/${nodeId}/${version}/notes${qs}`
-      : (process.env.TREE_FRONTEND_DOMAIN || "https://treeOS.ai");
+      : getLandUrl();
     const backText = hasToken ? "← Back to Notes" : "← Back to Home";
     const nodeUrl = `/api/v1/node/${nodeId}${qs}`;
     const editorUrl = `/api/v1/node/${nodeId}/${version}/notes/${noteId}/editor${qs}`;

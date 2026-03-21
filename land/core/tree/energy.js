@@ -81,6 +81,7 @@ const BASE_ACTION_COSTS = {
 
   // 2 energy — failed/missing LLM penalty
   chatError: 2,
+  proxyLlm: 2,
 
   // 3 energy — node creation (3-5 KB stored)
   create: 3,

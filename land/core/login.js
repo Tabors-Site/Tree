@@ -1,4 +1,5 @@
-const BASE_URL = process.env.TREE_FRONTEND_DOMAIN;
+import { getLandUrl } from "../canopy/identity.js";
+const BASE_URL = getLandUrl();
 import AuthCode from "../db/models/authCode.js";
 import User from "../db/models/user.js";
 import crypto from "crypto";
@@ -493,7 +494,7 @@ export function renderLoginPage(req, res) {
   </div>
 
   <script>
-    const apiUrl = "${process.env.TREE_FRONTEND_DOMAIN || "https://treeOS.ai"}";
+    const apiUrl = "${getLandUrl()}";
     const redirectAfterLogin = "${redirect}" || null;
 
     // Secondary button handlers
@@ -1177,7 +1178,7 @@ export function renderRegisterPage(req, res) {
   </div>
 
   <script>
-    const apiUrl = "${process.env.TREE_FRONTEND_DOMAIN || "https://treeOS.ai"}";
+    const apiUrl = "${getLandUrl()}";
 
     function openModal(type) {
       const id = type === 'terms' ? 'termsModal' : 'privacyModal';
@@ -1717,7 +1718,7 @@ export function renderForgotPasswordPage(req, res) {
   </div>
 
   <script>
-    const apiUrl = "${process.env.TREE_FRONTEND_DOMAIN || "https://treeOS.ai"}";
+    const apiUrl = "${getLandUrl()}";
     const EMAIL_REGEX = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
 
     document.getElementById("forgotForm").addEventListener("submit", async (e) => {

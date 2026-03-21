@@ -8,6 +8,37 @@ const ALGORITHM = "Ed25519";
 const TOKEN_EXPIRY = "5m";
 
 let landIdentity = null;
+let cachedLandUrl = null;
+
+/**
+ * Strip protocol, port, and trailing slashes from a domain string.
+ * "https://treeos.ai/" -> "treeos.ai", "localhost:3000" -> "localhost"
+ */
+function cleanDomain(raw) {
+  let d = raw.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  d = d.replace(/:\d+$/, "");
+  return d;
+}
+
+/**
+ * Get the full base URL for this land (e.g. "http://localhost:3000" or "https://treeos.ai").
+ * Derived from LAND_DOMAIN + PORT. Falls back to TREE_FRONTEND_DOMAIN for backward compat.
+ */
+export function getLandUrl() {
+  if (cachedLandUrl) return cachedLandUrl;
+  // Backward compat: if TREE_FRONTEND_DOMAIN is set explicitly, use it
+  if (process.env.TREE_FRONTEND_DOMAIN) {
+    cachedLandUrl = process.env.TREE_FRONTEND_DOMAIN.replace(/\/+$/, "");
+    return cachedLandUrl;
+  }
+  const domain = cleanDomain(process.env.LAND_DOMAIN || "localhost");
+  const port = process.env.PORT || 80;
+  const isLocal = domain === "localhost" || domain.startsWith("localhost") || domain.startsWith("127.") || domain.startsWith("192.168.") || domain.startsWith("10.");
+  const protocol = isLocal ? "http" : "https";
+  const portSuffix = (port != 80 && port != 443) ? `:${port}` : "";
+  cachedLandUrl = `${protocol}://${domain}${portSuffix}`;
+  return cachedLandUrl;
+}
 
 /**
  * Get or create the land identity (keypair + metadata).
@@ -17,7 +48,7 @@ let landIdentity = null;
 export function getLandIdentity() {
   if (landIdentity) return landIdentity;
 
-  const domain = process.env.LAND_DOMAIN || "localhost";
+  const domain = cleanDomain(process.env.LAND_DOMAIN || "localhost");
   const name = process.env.LAND_NAME || "My Land";
   const keyDir = process.env.LAND_KEY_DIR || path.join(process.cwd(), ".land");
   const privateKeyPath = path.join(keyDir, "land.key");
@@ -71,9 +102,7 @@ export function getLandIdentity() {
  */
 export function getLandInfoPayload() {
   const identity = getLandIdentity();
-  const port = process.env.PORT || 80;
-  const protocol = identity.domain === "localhost" || identity.domain.startsWith("localhost:") ? "http" : "https";
-  const baseUrl = process.env.LAND_BASE_URL || `${protocol}://${identity.domain}${port !== 80 && port !== 443 && !identity.domain.includes(":") ? ":" + port : ""}`;
+  const baseUrl = process.env.LAND_BASE_URL || getLandUrl();
 
   return {
     landId: identity.landId,
@@ -83,7 +112,7 @@ export function getLandInfoPayload() {
     protocolVersion: identity.protocolVersion,
     baseUrl,
     siteUrl: process.env.LAND_SITE_URL || null,
-    capabilities: ["invite", "proxy", "notify", "public-trees"],
+    capabilities: ["invite", "proxy", "notify", "public-trees", "llm-proxy"],
   };
 }
 

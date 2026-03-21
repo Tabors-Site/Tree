@@ -57,6 +57,11 @@ export function validateCanopyRequest(type, body) {
       if (!body.notificationType) errors.push("missing notificationType");
       break;
 
+    case "llm_proxy":
+      if (!Array.isArray(body.messages)) errors.push("missing or invalid messages array");
+      if (Array.isArray(body.messages) && body.messages.length > 100) errors.push("messages array too large (max 100)");
+      break;
+
     default:
       break;
   }

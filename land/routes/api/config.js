@@ -62,7 +62,11 @@ router.put("/land/config/:key", authenticate, async (req, res) => {
 
 /**
  * GET /api/v1/land/root
- * Returns the Land root node with its children (system nodes + user trees).
+ * Returns the Land root node with children visible to the requesting user:
+ *   - System nodes (.identity, .config, .peers)
+ *   - Trees the user owns
+ *   - Trees the user contributes to
+ *   - Public trees on this land
  */
 router.get("/land/root", authenticate, async (req, res) => {
   try {
@@ -71,19 +75,33 @@ router.get("/land/root", authenticate, async (req, res) => {
       return res.status(404).json({ error: "Land root not found" });
     }
 
+    const userId = req.userId;
+
+    // Fetch all Land root children with the fields we need to filter
     const children = await Node.find({ _id: { $in: landRoot.children } })
-      .select("_id name isSystem systemRole rootOwner metadata")
+      .select("_id name isSystem systemRole rootOwner contributors visibility metadata")
       .lean();
+
+    // Filter: system nodes + owned + contributing + public
+    const visible = children.filter((c) => {
+      if (c.isSystem) return true;
+      if (c.rootOwner && String(c.rootOwner) === String(userId)) return true;
+      if (c.contributors && c.contributors.map(String).includes(String(userId))) return true;
+      if (c.visibility === "public") return true;
+      return false;
+    });
 
     res.json({
       _id: landRoot._id,
       name: landRoot.name,
-      children: children.map((c) => ({
+      children: visible.map((c) => ({
         _id: c._id,
         name: c.name,
         isSystem: c.isSystem || false,
         systemRole: c.systemRole || null,
         rootOwner: c.rootOwner || null,
+        isOwned: c.rootOwner && String(c.rootOwner) === String(userId),
+        isPublic: c.visibility === "public" || false,
         metadata: c.metadata || null,
       })),
     });

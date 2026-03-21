@@ -1,8 +1,25 @@
 const chalk = require("chalk");
 const TreeAPI = require("../api");
+const { createProxyApi } = require("../api");
 const { load, save, requireAuth, currentNodeId, currentPath } = require("../config");
 const { getChildren, flattenTree, findChild } = require("../helpers");
 const { printNode, printTable } = require("../display");
+
+/** Return an API that auto-proxies when inside a remote tree */
+function getApi(cfg) {
+  return cfg.remoteDomain
+    ? createProxyApi(cfg.apiKey, cfg.remoteDomain)
+    : new TreeAPI(cfg.apiKey);
+}
+
+/** Clear remote session state */
+function clearRemote(cfg) {
+  cfg.activeRootId = null;
+  cfg.activeRootName = null;
+  cfg.pathStack = [];
+  cfg.isSystemRoot = false;
+  cfg.remoteDomain = null;
+}
 
 module.exports = (program) => {
   program
@@ -19,7 +36,7 @@ module.exports = (program) => {
     .option("-l", "Long format with IDs and status")
     .action(async ({ l }) => {
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
 
       if (!cfg.activeRootId) {
         // At Land level (/) — show system nodes + user trees
@@ -33,7 +50,7 @@ module.exports = (program) => {
             printTable(
               children.map((c) => ({
                 name: c.name,
-                type: c.isSystem ? "system" : "tree",
+                type: c.isSystem ? "system" : (c.isOwned ? "owned" : c.isPublic ? "public" : "shared"),
                 _id: c._id,
               })),
               [
@@ -45,6 +62,8 @@ module.exports = (program) => {
           } else {
             const names = children.map((c) => {
               if (c.isSystem) return chalk.dim(c.name);
+              if (c.isOwned) return chalk.cyan(c.name);
+              if (c.isPublic) return chalk.white(c.name);
               return chalk.cyan(c.name);
             });
             console.log(names.join(chalk.dim("  ·  ")));
@@ -87,13 +106,65 @@ module.exports = (program) => {
 
   program
     .command("cd [nameOrId...]")
-    .description('Navigate by name or ID. Supports "..", "/", -r (whole tree), and path chaining (Health/Workouts)')
+    .description('Navigate by name, ID, or @domain/tree. Supports "..", "/", -r, and path chaining')
     .option("-r, --recursive", "Search entire tree, not just direct children")
     .action(async (parts, opts) => {
-      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: cd <name or id>"));
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: cd <name or id> | cd @domain/tree"));
       const name = parts.join(" ");
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+
+      // ── cd @domain/treename — enter a remote tree ──
+      if (name.startsWith("@") && name.includes("/")) {
+        const slashIdx = name.indexOf("/");
+        const domain = name.slice(1, slashIdx);
+        const rest = name.slice(slashIdx + 1);
+        if (!domain || !rest) return console.log(chalk.yellow("Usage: cd @domain/treename"));
+
+        const api = new TreeAPI(cfg.apiKey);
+        try {
+          // Look up public trees on the remote land, use name matching
+          const data = await api.getRemotePublicTrees(domain, rest);
+          const trees = data.trees || [];
+          const target = findChild(
+            trees.map((t) => ({ _id: t.rootId, name: t.name || "" })),
+            rest,
+          );
+          if (!target) return;
+
+          cfg.remoteDomain = domain;
+          cfg.activeRootId = target._id;
+          cfg.activeRootName = target.name;
+          cfg.pathStack = [];
+          cfg.isSystemRoot = false;
+          save(cfg);
+          console.log(chalk.green(`✓ Entered ${target.name} on ${chalk.dim(`@${domain}`)}`));
+        } catch (e) {
+          console.error(chalk.red(e.message));
+        }
+        return;
+      }
+
+      // ── cd @domain — list trees on a remote land ──
+      if (name.startsWith("@") && !name.includes("/")) {
+        const domain = name.slice(1);
+        if (!domain) return console.log(chalk.yellow("Usage: cd @domain/treename"));
+        const api = new TreeAPI(cfg.apiKey);
+        try {
+          const data = await api.getRemotePublicTrees(domain);
+          const trees = data.trees || [];
+          if (!trees.length) return console.log(chalk.dim(`  (no public trees on ${domain})`));
+          console.log(chalk.bold(`Public trees on ${domain}:\n`));
+          trees.forEach((t, i) => {
+            console.log(`  ${chalk.cyan(i + 1 + ".")} ${t.name || t.rootId}  ${chalk.dim(t.ownerUsername || "")}`);
+          });
+          console.log(chalk.dim(`\n  Navigate: cd @${domain}/<treename>`));
+        } catch (e) {
+          console.error(chalk.red(e.message));
+        }
+        return;
+      }
+
+      const api = getApi(cfg);
 
       // ── At Land level (/) ──
       if (!cfg.activeRootId) {
@@ -108,14 +179,12 @@ module.exports = (program) => {
           if (!target) return;
 
           if (target.isSystem) {
-            // Enter system node — use pathStack with a system root marker
             cfg.activeRootId = target._id;
             cfg.activeRootName = target.name;
             cfg.pathStack = [];
             cfg.isSystemRoot = true;
             save(cfg);
           } else {
-            // Enter user tree
             cfg.activeRootId = target._id;
             cfg.activeRootName = target.name;
             cfg.pathStack = [];
@@ -131,10 +200,8 @@ module.exports = (program) => {
       // ── cd .. ──
       if (name === "..") {
         if (cfg.pathStack.length === 0) {
-          // At tree/system root — go back to Land level
-          cfg.activeRootId = null;
-          cfg.activeRootName = null;
-          cfg.isSystemRoot = false;
+          // At tree root — go back to Land level (or exit remote)
+          clearRemote(cfg);
           save(cfg);
           return;
         }
@@ -145,10 +212,7 @@ module.exports = (program) => {
 
       // ── cd / ──
       if (name === "/") {
-        cfg.activeRootId = null;
-        cfg.activeRootName = null;
-        cfg.pathStack = [];
-        cfg.isSystemRoot = false;
+        clearRemote(cfg);
         save(cfg);
         return;
       }
@@ -159,9 +223,7 @@ module.exports = (program) => {
         for (const seg of segments) {
           if (seg === "..") {
             if (cfg.pathStack.length === 0) {
-              cfg.activeRootId = null;
-              cfg.activeRootName = null;
-              cfg.isSystemRoot = false;
+              clearRemote(cfg);
               save(cfg);
               return;
             }
@@ -260,7 +322,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("Enter a tree first. Run: cd <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const filter = {};
@@ -284,7 +346,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("Enter a tree first. Run: cd <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const opts = {};
         if (month != null) {
@@ -323,7 +385,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         if (input === "clear") {
           await api.setDreamTime(cfg.activeRootId, null);

@@ -3,7 +3,7 @@ import Cookies from "js-cookie";
 import "./WelcomePage.css";
 
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
-const URL = import.meta.env.VITE_TREE_FRONTEND_DOMAIN;
+const URL = import.meta.env.VITE_LAND_URL;
 
 const WelcomePage = () => {
 

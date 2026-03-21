@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import User from "../../db/models/user.js";
 import { validatePurchase } from "../../core/billing/validatePurchase.js";
+import { getLandUrl } from "../../canopy/identity.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -81,7 +82,7 @@ if (plan && energyAmount > 0) {
     =============================== */
 
     const successUrl =
-`${process.env.TREE_FRONTEND_DOMAIN}/app`;
+`${getLandUrl()}/app`;
 
     const cancelUrl = successUrl;
 

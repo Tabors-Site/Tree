@@ -33,7 +33,10 @@
       "Bash(grep -n \"isSystem\" /home/tabor/github/Tree/land/ws/orchestrator/*.js)",
       "Bash(/tmp/mutation_scan.txt:*)",
       "Read(//tmp/**)",
-      "Bash(grep -r \"invite\" /home/tabor/github/Tree/land/routes/api/*.js -l)"
+      "Bash(grep -r \"invite\" /home/tabor/github/Tree/land/routes/api/*.js -l)",
+      "Bash(node -e \":*)",
+      "Bash(node index.js --help)",
+      "Bash(node -e \"require\\(''''./cli/index.js''''\\)\")"
     ]
   }
 }

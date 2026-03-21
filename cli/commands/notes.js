@@ -1,6 +1,6 @@
 const chalk = require("chalk");
-const TreeAPI = require("../api");
 const { requireAuth, currentNodeId } = require("../config");
+const { getApi } = require("../helpers");
 const { printNotes, printContributions, printBook } = require("../display");
 
 module.exports = (program) => {
@@ -13,7 +13,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.createNote(nodeId, "latest", content);
@@ -32,7 +32,7 @@ module.exports = (program) => {
     .option("-q, --query [query]", "Search notes")
     .action(async ({ limit, query }) => {
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         let notes;
         if (!cfg.activeRootId) {
@@ -55,7 +55,7 @@ module.exports = (program) => {
     .description("List notes where you've been @tagged by other users")
     .action(async () => {
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const data = await api.listUserTags(cfg.userId);
         const tags = data.notes || data || [];
@@ -80,7 +80,7 @@ module.exports = (program) => {
         return console.log(
           chalk.yellow(`Delete note ${noteId}? Pass -f to confirm.`),
         );
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         await api.deleteNote(nodeId, "latest", noteId);
@@ -97,7 +97,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const data = await api.getBook(currentNodeId(cfg));
         const book = data.book || data || {};
@@ -112,7 +112,7 @@ module.exports = (program) => {
     .description("List contributions (user at home, node in a tree)")
     .action(async () => {
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         if (!cfg.activeRootId) {
           const data = await api.listUserContributions(cfg.userId, { limit: 50 });
@@ -138,7 +138,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         if (isGlobal || isTree) {
           const data = await api.getRootValues(cfg.activeRootId);
@@ -194,7 +194,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const parsed = isNaN(value) ? value : Number(value);
@@ -213,7 +213,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const parsed = isNaN(goal) ? goal : Number(goal);
@@ -232,7 +232,7 @@ module.exports = (program) => {
         return console.log(chalk.yellow("Usage: cat note <id or #>, cat idea <id or #>"));
       const input = parts.join(" ");
       const cfg = requireAuth();
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         if (type === "idea") {
           const num = parseInt(input, 10);

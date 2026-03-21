@@ -1,6 +1,6 @@
 # TreeOS
 
-Terminal client for [Tree](https://treeOS.ai) — a context management system for organizing AI, data, and ideas into living structure. Navigate your trees like a filesystem.
+Terminal client for [Tree](https://treeOS.ai). A context management system for organizing AI, data, and ideas into living structure. Navigate your trees like a filesystem. Connect to any Land, browse the canopy network, and work across federated trees from one terminal.
 
 ## Install
 
@@ -11,8 +11,9 @@ npm install -g treeos
 ## Quick Start
 
 ```bash
-treeos login --key YOUR_API_KEY    # get your key from treeOS.ai
-treeos start                       # launch the interactive shell
+treeos connect http://localhost:3000   # point at your Land (or skip for treeOS.ai)
+treeos login --key YOUR_API_KEY        # get your key from your Land
+treeos start                           # launch the interactive shell
 ```
 
 ```
@@ -28,9 +29,9 @@ cd Workouts                  # go into a node it created
 place did 20 pushups today   # AI logs it in the right spot
 note stretch before next session
 
-root work                    # back to tree root
-cd Q2 Goals -r               # find it anywhere in the tree
-values --global              # see values across the whole branch
+cd /                         # go to Land root
+ls                           # see system nodes, your trees, public trees
+cd ..                        # back up one level
 
 idea i should track my sleep # AI places it in the right tree
 home                         # back to user home
@@ -43,17 +44,30 @@ exit                         # leave the shell
 
 ### Session
 
-| Command             | Description                               |
-| ------------------- | ----------------------------------------- |
-| `start` / `shell`   | Launch interactive shell                  |
-| `stop` / `exit`     | Exit the shell                            |
-| `login --key <key>` | Authenticate with your API key            |
-| `logout`            | Clear stored credentials                  |
-| `whoami`            | Show login, plan, energy, and active tree |
+| Command              | Description                                           |
+| -------------------- | ----------------------------------------------------- |
+| `connect <url>`      | Set Land URL (e.g. `http://localhost:3000`)            |
+| `start` / `shell`    | Launch interactive shell                               |
+| `stop` / `exit`      | Exit the shell                                         |
+| `login --key <key>`  | Authenticate with your API key                         |
+| `logout`             | Clear stored credentials                               |
+| `whoami`             | Show login, plan, energy, and active tree              |
+
+### Land Root
+
+At `/` you see the Land. System nodes (`.identity`, `.config`, `.peers`) appear alongside your own trees, shared trees, and public trees on this Land.
+
+| Command        | Description                                                                    |
+| -------------- | ------------------------------------------------------------------------------ |
+| `cd /`         | Go to Land root from anywhere                                                  |
+| `ls` / `ls -l` | List system nodes + your trees + shared trees + public trees. Long format shows type (owned/shared/public/system) |
+| `cd <name>`    | Enter a tree or system node                                                    |
+| `config`       | View Land runtime configuration                                                |
+| `config set <key> <val>` | Set a config value (admin only)                                      |
 
 ### User Home
 
-Your home screen before entering a tree. `ls` and `cd` also work from here to list and enter trees.
+Your home screen before entering a tree.
 
 | Command                      | Description                                    |
 | ---------------------------- | ---------------------------------------------- |
@@ -89,16 +103,20 @@ Capture ideas from anywhere. AI figures out where they belong.
 
 ### Navigation
 
-Move through your tree the way you'd move through a filesystem.
+Move through your tree the way you'd move through a filesystem. Works in local and remote trees.
 
-| Command        | Description                                                                                  |
-| -------------- | -------------------------------------------------------------------------------------------- |
-| `pwd`          | Print current path                                                                           |
-| `ls` / `ls -l` | List children. Long format shows IDs and status                                              |
-| `cd <name>`    | Navigate into a child. Supports `..`, `/`, `-r` (search whole tree), path chaining (`A/B/C`) |
-| `tree`         | Render subtree. `-a` active, `-c` completed, `-t` trimmed                                    |
+| Command             | Description                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| `pwd`               | Print current path (includes `@domain` prefix when in a remote tree)                         |
+| `ls` / `ls -l`      | List children. Long format shows IDs and status                                              |
+| `cd <name>`         | Navigate into a child. Supports `..`, `/`, `-r` (search whole tree), path chaining (`A/B/C`) |
+| `cd @domain/tree`   | Enter a public tree on a remote land via the canopy proxy                                    |
+| `cd @domain`        | List public trees on a remote land                                                           |
+| `tree`              | Render subtree. `-a` active, `-c` completed, `-t` trimmed                                    |
 
 Nodes have three statuses: **active** (green), **completed** (gray), **trimmed** (dim).
+
+When inside a remote tree (prompt shows `@domain` in the path), all commands (`ls`, `mkdir`, `note`, `chat`, etc.) automatically route through the canopy proxy to the remote land.
 
 ### Node Management
 
@@ -143,16 +161,17 @@ Date: `MM/DD/YYYY`. Time: `HH:MM` or `HH:MMam/pm`. Reeffect: hours. Use `clear` 
 
 ### Collaboration
 
-Work on trees with other people.
+Work on trees with other people. Use `user@domain` to invite users on other lands.
 
-| Command              | Description                       |
-| -------------------- | --------------------------------- |
-| `team`               | Show owner and contributors       |
-| `invite <username>`  | Invite a user to the current tree |
-| `invite accept <id>` | Accept a pending invite           |
-| `invite deny <id>`   | Decline a pending invite          |
-| `kick <username>`    | Remove a contributor              |
-| `owner <username>`   | Transfer tree ownership           |
+| Command                     | Description                                            |
+| --------------------------- | ------------------------------------------------------ |
+| `team`                      | Show owner and contributors. Remote users show @domain |
+| `invite <username>`         | Invite a local user to the current tree                |
+| `invite <user@domain>`      | Invite a user from a remote land                       |
+| `invite accept <id>`        | Accept a pending invite                                |
+| `invite deny <id>`          | Decline a pending invite                               |
+| `kick <username>`           | Remove a contributor                                   |
+| `owner <username>`          | Transfer tree ownership                                |
 
 ### Links & Sharing
 
@@ -180,7 +199,7 @@ Clickable terminal hyperlinks. `link` uses your share token; `share` generates p
 
 ### AI
 
-AI has full context of the branch you're in.
+AI has full context of the branch you're in. Works in remote trees too (LLM calls proxy through the canopy to the user's home land).
 
 | Command           | Description                                    |
 | ----------------- | ---------------------------------------------- |
@@ -201,6 +220,27 @@ Compress a branch into a structured encoding the AI can reference.
 | `understand-status <runId>` | Check progress                                     |
 | `understand-stop <runId>`   | Stop a run                                         |
 
+### Canopy (federation)
+
+Connect to peer lands, discover trees across the network, and navigate into remote trees.
+
+| Command                    | Description                                         |
+| -------------------------- | --------------------------------------------------- |
+| `peers`                    | List known peer lands                               |
+| `peer add <url>`           | Peer with a land by URL                             |
+| `peer remove <domain>`     | Remove a peer                                       |
+| `peer block <domain>`      | Block a peer land                                   |
+| `peer unblock <domain>`    | Unblock a peer land                                 |
+| `peer discover <domain>`   | Look up a land in the directory and auto-peer       |
+| `peer ping`                | Heartbeat check all peers                           |
+| `search [query]`           | Search the directory for public trees               |
+| `search -l [query]`        | Search for lands instead of trees                   |
+| `browse <domain> [query]`  | List public trees on a specific peer land            |
+| `cd @domain/treename`      | Enter a remote tree (all commands proxy through)     |
+| `cd @domain`               | List public trees on a remote land                   |
+
+Once inside a remote tree, your shell prompt shows the `@domain` prefix and all commands (navigation, notes, AI, etc.) route transparently through the canopy proxy.
+
 ### Blog
 
 No login required.
@@ -209,6 +249,17 @@ No login required.
 | ----------------------- | ---------------------------------- |
 | `blogs`                 | List published posts               |
 | `blog <slug or number>` | Read a post by slug or list number |
+
+### Land Config
+
+View and manage runtime configuration for the Land. Settings stored in the `.config` system node.
+
+| Command                   | Description                        |
+| ------------------------- | ---------------------------------- |
+| `config`                  | Show Land URL and all config       |
+| `config show`             | Show all config values             |
+| `config get <key>`        | Get a single config value          |
+| `config set <key> <val>`  | Set a config value (admin only)    |
 
 ---
 
@@ -282,10 +333,26 @@ An understanding run reads every node and note under the branch and returns a co
 ```
 root Team Wiki
 invite alex
-team                             # see contributors
+invite sara@other-land.com       # invite from another land
+team                             # see contributors (remote users show @domain)
 notes -q "auth"                  # find what others added
 tags                             # see where you've been @mentioned
 ```
+
+### Explore the canopy network
+
+```
+peers                            # see connected lands
+peer add https://friend.land     # connect to a new land
+search machine learning          # find public trees across the network
+browse friend.land               # see what's public on a specific land
+cd @friend.land/Research         # enter a remote tree
+ls                               # browse it like your own
+note interesting approach here   # leave a note (if you have access)
+cd /                             # back to your Land
+```
+
+When you `cd @domain/treename`, the CLI proxies all operations through the canopy. The remote land handles auth and access. Your prompt shows where you are.
 
 ### Morning routine from the terminal
 
@@ -310,11 +377,21 @@ share book                       # get a public link
 link gateway                     # open the gateway view
 ```
 
+### Connect to your own Land
+
+```bash
+treeos connect http://localhost:3000   # self-hosted Land
+treeos login --key YOUR_KEY
+treeos start
+```
+
+If you skip `connect`, the CLI defaults to `https://treeOS.ai`.
+
 ---
 
 ## How It Works
 
-All commands map to the [Tree REST API](https://treeOS.ai/about/api). Config stored in `~/.treeos/config.json`.
+All commands map to the [Tree REST API](https://treeOS.ai/about/api). Remote tree operations route through the [Canopy protocol](https://treeOS.ai/about) via `/canopy/proxy/:domain/*`. Config stored in `~/.treeos/config.json`.
 
 ## Links
 

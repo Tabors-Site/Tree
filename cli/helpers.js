@@ -136,4 +136,13 @@ function termLink(url, label) {
   return `\u001B]8;;${url}\u001B\\${label}\u001B]8;;\u001B\\`;
 }
 
-module.exports = { getChildren, flattenTree, findChild, parseDate, termLink };
+/** Get an API instance that auto-proxies when inside a remote tree */
+function getApi(cfg) {
+  const TreeAPI = require("./api");
+  const { createProxyApi } = require("./api");
+  return cfg.remoteDomain
+    ? createProxyApi(cfg.apiKey, cfg.remoteDomain)
+    : new TreeAPI(cfg.apiKey);
+}
+
+module.exports = { getChildren, flattenTree, findChild, parseDate, termLink, getApi };

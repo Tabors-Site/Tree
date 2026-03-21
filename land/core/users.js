@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { getLandConfigValue } from "./landConfig.js";
+import { getLandUrl } from "../canopy/identity.js";
 
 const __users_dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__users_dirname, "../..", ".env") });
@@ -18,8 +19,9 @@ function escapeRegex(str) {
 
 function cookieDomain(req) {
   const host = (req.hostname || req.headers?.host || "").replace(/:\d+$/, "");
-  const rootHost = process.env.ROOT_FRONTEND_DOMAIN ? new URL(process.env.ROOT_FRONTEND_DOMAIN).hostname : "";
-  const treeHost = process.env.TREE_FRONTEND_DOMAIN ? new URL(process.env.TREE_FRONTEND_DOMAIN).hostname : "";
+  const creatorUrl = process.env.CREATOR_DOMAIN || process.env.ROOT_FRONTEND_DOMAIN;
+  const rootHost = creatorUrl ? new URL(creatorUrl).hostname : "";
+  const treeHost = getLandUrl() ? new URL(getLandUrl()).hostname : "";
    if (treeHost && host.endsWith(treeHost)) return "." + treeHost;
 
   if (rootHost && host.endsWith(rootHost)) return "." + rootHost;
@@ -131,7 +133,7 @@ email = email.trim().toLowerCase();
        SEND EMAIL
     -------------------------- */
 
-    const verifyUrl = `${process.env.TREE_FRONTEND_DOMAIN}/api/v1/user/verify/${verificationToken}`;
+    const verifyUrl = `${getLandUrl()}/api/v1/user/verify/${verificationToken}`;
     await sendVerificationEmail(email, verifyUrl, temp.username);
 
     res.status(201).json({
@@ -207,7 +209,7 @@ const verifyEmail = async (req, res) => {
 
     await tempUser.deleteOne();
     return res.redirect(
-      `${process.env.TREE_FRONTEND_DOMAIN}/setup`
+      `${getLandUrl()}/setup`
     );
   } catch (err) {
     console.error("[verifyEmail]", err);
@@ -494,7 +496,7 @@ const forgotPassword = async (req, res) => {
   user.resetPasswordExpiry = Date.now() + 1000 * 60 * 15; // 15 min
   await user.save();
 
-  const resetURL = `${process.env.TREE_FRONTEND_DOMAIN}/api/v1/user/reset-password/${token}`;
+  const resetURL = `${getLandUrl()}/api/v1/user/reset-password/${token}`;
 
   await sendResetEmail(user.email, resetURL);
 

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getLandUrl } from "../../../canopy/identity.js";
 
 import { setValueForNode, setGoalForNode } from "../values.js";
 
@@ -11,8 +12,8 @@ async function getApi(url) {
     "localhost",
     "10.",
     "192.168.",
-    "." + (process.env.ROOT_FRONTEND_DOMAIN ? new URL(process.env.ROOT_FRONTEND_DOMAIN).hostname : "tabors.site"),
-    "." + (process.env.TREE_FRONTEND_DOMAIN ? new URL(process.env.TREE_FRONTEND_DOMAIN).hostname : "treeos.ai"),
+    "." + ((process.env.CREATOR_DOMAIN || process.env.ROOT_FRONTEND_DOMAIN) ? new URL(process.env.CREATOR_DOMAIN || process.env.ROOT_FRONTEND_DOMAIN).hostname : "tabors.site"),
+    "." + (getLandUrl() ? new URL(getLandUrl()).hostname : "treeos.ai"),
   ];
   const host = new URL(url).hostname;
 

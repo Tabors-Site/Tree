@@ -503,6 +503,9 @@ router.get("/canopy/tree/:rootId", authenticateCanopy, async (req, res) => {
 
 /**
  * POST /canopy/energy/report
+ * DEPRECATED: Use POST /canopy/llm/proxy instead, which deducts energy
+ * directly when proxying LLM calls. Kept for backward compat with older lands.
+ *
  * A remote land reports energy usage by one of our local users.
  * We deduct the energy from our user's balance.
  */
@@ -564,6 +567,83 @@ router.post("/canopy/energy/report", authenticateCanopy, async (req, res) => {
     res.json({ success: true, message: "Energy deducted" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /canopy/llm/proxy
+ * Run LLM inference on behalf of a remote user.
+ * The user's LLM connection lives on this (home) land. The remote land
+ * sends the messages/tools, we resolve the connection, run the call,
+ * deduct energy, and return the completion.
+ */
+router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
+  try {
+    const validation = validateCanopyRequest("llm_proxy", req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, errors: validation.errors });
+    }
+
+    const { messages, model, tools, tool_choice, slot } = req.body;
+
+    // Resolve the local (non-remote) user
+    const user = await User.findOne({
+      _id: req.canopy.userId,
+      isRemote: { $ne: true },
+    }).select("_id").lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "user_not_found",
+        message: "User not found on this land",
+      });
+    }
+
+    // Resolve LLM connection
+    const { getClientForUser } = await import("../ws/conversation.js");
+    const clientEntry = await getClientForUser(user._id.toString(), slot || "main");
+
+    if (clientEntry.noLlm) {
+      return res.status(422).json({
+        success: false,
+        error: "no_llm",
+        message: "No LLM connection configured on home land",
+      });
+    }
+
+    // Deduct energy before running the LLM call
+    const { useEnergy } = await import("../core/tree/energy.js");
+    try {
+      await useEnergy({ userId: user._id.toString(), action: "proxyLlm" });
+    } catch (energyErr) {
+      return res.status(422).json({
+        success: false,
+        error: "insufficient_energy",
+        message: energyErr.message,
+      });
+    }
+
+    // Run the LLM call
+    const completion = await clientEntry.client.chat.completions.create({
+      model: clientEntry.model,
+      messages,
+      tools: tools || undefined,
+      tool_choice: tools ? (tool_choice || "auto") : undefined,
+    });
+
+    res.json({
+      success: true,
+      completion,
+      model: clientEntry.model,
+    });
+  } catch (err) {
+    console.error("[Canopy] LLM proxy error:", err.message);
+    res.status(502).json({
+      success: false,
+      error: "llm_error",
+      message: err.message,
+    });
   }
 });
 

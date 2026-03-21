@@ -13,6 +13,7 @@ import { notFoundPage } from "./middleware/notFoundPage.js";
 import securityHeaders from "./middleware/securityHeaders.js";
 import { stripeWebhook } from "./routes/billing/webhook.js";
 import { onListen } from "./startup.js";
+import { getLandUrl } from "./canopy/identity.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
@@ -21,7 +22,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: [process.env.TREE_FRONTEND_DOMAIN],
+    origin: [getLandUrl()],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,

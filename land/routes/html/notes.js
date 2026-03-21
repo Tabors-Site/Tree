@@ -3,6 +3,7 @@
 /* --------------------------------------------------------- */
 
 import mime from "mime-types";
+import { getLandUrl } from "../../canopy/identity.js";
 
 function escapeHtml(str) {
   return str
@@ -2554,7 +2555,7 @@ export function renderSharedBookPage({
   <meta property="og:description" content="Book view of ${escapeHtml(title)} on TreeOS." />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="TreeOS" />
-  <meta property="og:image" content="${process.env.TREE_FRONTEND_DOMAIN}/tree.png" />
+  <meta property="og:image" content="${getLandUrl()}/tree.png" />
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -4577,7 +4578,7 @@ export function renderTextNote({
   <meta property="og:description" content="${escapeHtml((note.content || "").slice(0, 160))}" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="TreeOS" />
-  <meta property="og:image" content="${process.env.TREE_FRONTEND_DOMAIN}/tree.png" />
+  <meta property="og:image" content="${getLandUrl()}/tree.png" />
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;

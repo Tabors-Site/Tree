@@ -66,6 +66,7 @@ import {
 import getNodeName from "./helpers/getNameById.js";
 
 import { processPurchase } from "../../core/billing/processPurchase.js";
+import { getLandUrl } from "../../canopy/identity.js";
 
 import {
   renderUserProfile,
@@ -1072,7 +1073,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     const hasToken = !!token;
     const back = hasToken
       ? `/api/v1/user/${userId}/raw-ideas${tokenQS}`
-      : (process.env.TREE_FRONTEND_DOMAIN || "https://treeOS.ai");
+      : getLandUrl();
     const backText = hasToken ? "← Back to Raw Ideas" : "← Back to Home";
     const userLink =
       rawIdea.userId && rawIdea.userId !== "empty"

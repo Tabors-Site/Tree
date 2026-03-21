@@ -13,6 +13,7 @@ import {
   respondToInvite,
 } from "../core/tree/invites.js";
 import { notFoundPage } from "../middleware/notFoundPage.js";
+import { getLandUrl } from "../canopy/identity.js";
 
 const router = express.Router();
 
@@ -85,15 +86,15 @@ router.get("/chat", authenticateLite, async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#736fe6" />
   <link rel="icon" href="/tree.png" />
-  <link rel="canonical" href="${process.env.TREE_FRONTEND_DOMAIN}/chat" />
+  <link rel="canonical" href="${getLandUrl()}/chat" />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
   <meta property="og:title" content="Chat - TreeOS" />
   <meta property="og:description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
-  <meta property="og:url" content="${process.env.TREE_FRONTEND_DOMAIN}/chat" />
+  <meta property="og:url" content="${getLandUrl()}/chat" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="TreeOS" />
-  <meta property="og:image" content="${process.env.TREE_FRONTEND_DOMAIN}/tree.png" />
+  <meta property="og:image" content="${getLandUrl()}/tree.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">

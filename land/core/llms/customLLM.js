@@ -3,6 +3,7 @@ import CustomLlmConnection from "../../db/models/customLlmConnection.js";
 import Node from "../../db/models/node.js";
 import { clearUserClientCache } from "../../ws/conversation.js";
 import crypto from "crypto";
+import { getLandUrl } from "../../canopy/identity.js";
 import dns from "dns/promises";
 import dotenv from "dotenv";
 import path from "path";
@@ -49,9 +50,10 @@ const BLOCKED_HOSTS = new Set([
 ]);
 
 // Auto-block hostnames from configured domains
-for (const key of ["TREE_FRONTEND_DOMAIN", "ROOT_FRONTEND_DOMAIN", "VITE_TREE_API_URL"]) {
+// Block this land's own domain and creator domain
+for (const url of [getLandUrl(), process.env.CREATOR_DOMAIN, process.env.ROOT_FRONTEND_DOMAIN, process.env.VITE_TREE_API_URL]) {
   try {
-    if (process.env[key]) BLOCKED_HOSTS.add(new URL(process.env[key]).hostname);
+    if (url) BLOCKED_HOSTS.add(new URL(url).hostname);
   } catch (_) {}
 }
 

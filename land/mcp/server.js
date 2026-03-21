@@ -13,6 +13,8 @@ import fs from "fs";
 
 import { fileURLToPath } from "url";
 
+import { getLandUrl } from "../canopy/identity.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -3110,7 +3112,7 @@ async function handleMcpRequest(req, res) {
       if (apiPath) {
         emitNavigate({
           userId: req.userId,
-          url: `${process.env.TREE_FRONTEND_DOMAIN}${apiPath}`,
+          url: `${getLandUrl()}${apiPath}`,
           sessionId: aiCtx.sessionId,
         });
       }
@@ -3286,7 +3288,7 @@ async function handleMcpRequest(req, res) {
       if (apiPath) {
         emitNavigate({
           userId: req.userId,
-          url: `${process.env.TREE_FRONTEND_DOMAIN}${apiPath}`,
+          url: `${getLandUrl()}${apiPath}`,
           sessionId: aiCtx2.sessionId,
         });
       }

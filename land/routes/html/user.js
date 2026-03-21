@@ -4,6 +4,7 @@
 
 import path from "path";
 import mime from "mime-types";
+import { getLandUrl } from "../../canopy/identity.js";
 
 function escapeHtml(str) {
   return String(str || "")
@@ -5078,7 +5079,7 @@ export function renderRawIdeaText({ userId, rawIdea, back, backText, userLink, h
   <meta property="og:description" content="${escapeHtml((rawIdea.content || "").slice(0, 160))}" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="TreeOS" />
-  <meta property="og:image" content="${process.env.TREE_FRONTEND_DOMAIN}/tree.png" />
+  <meta property="og:image" content="${getLandUrl()}/tree.png" />
   <style>
     :root {
       --glass-water-rgb: 115, 111, 230;
@@ -8665,7 +8666,7 @@ input:focus {
           ← Back to Profile
         </a>
         <a class="back-link" target="_top" href="/">
-          ← Back to ${process.env.TREE_FRONTEND_DOMAIN ? new URL(process.env.TREE_FRONTEND_DOMAIN).hostname : "treeOS.ai"}
+          ← Back to ${new URL(getLandUrl()).hostname}
         </a>
       </div>
     </div>

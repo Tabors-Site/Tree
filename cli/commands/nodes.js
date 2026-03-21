@@ -1,7 +1,6 @@
 const chalk = require("chalk");
-const TreeAPI = require("../api");
 const { requireAuth, currentNodeId } = require("../config");
-const { getChildren, findChild, parseDate } = require("../helpers");
+const { getChildren, findChild, parseDate, getApi } = require("../helpers");
 
 module.exports = (program) => {
   program
@@ -14,7 +13,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         for (const name of names) {
@@ -36,7 +35,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.getNode(nodeId);
@@ -68,7 +67,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.getNode(nodeId);
@@ -91,7 +90,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.getNode(nodeId);
@@ -114,7 +113,7 @@ module.exports = (program) => {
         const cfg = requireAuth();
         if (!cfg.activeRootId)
           return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-        const api = new TreeAPI(cfg.apiKey);
+        const api = getApi(cfg);
         try {
           const nodeId = currentNodeId(cfg);
           await api.setStatus(nodeId, "latest", stat);
@@ -134,7 +133,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         if (raw === "clear") {
@@ -167,7 +166,7 @@ module.exports = (program) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      const api = new TreeAPI(cfg.apiKey);
+      const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.prestige(nodeId);

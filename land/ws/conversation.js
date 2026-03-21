@@ -17,6 +17,7 @@ import {
   CARRY_MESSAGES,
 } from "./modes/registry.js";
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
+import { getLandUrl } from "../canopy/identity.js";
 
 import { resolveAndValidateHost } from "../core/llms/customLLM.js";
 
@@ -58,6 +59,7 @@ function decrypt(encryptedText) {
 // Cache: userId → { client, model, fetchedAt }
 const userClientCache = new Map();
 const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const PROXY_CACHE_TTL = 60 * 1000; // 1 min for canopy proxy clients
 
 /**
  * Returns { client, model, isCustom } for a user.
@@ -101,7 +103,7 @@ async function resolveConnection(connectionId, cacheKey) {
       maxRetries: 3,
       timeout: 60_000,
       defaultHeaders: {
-        "HTTP-Referer": process.env.TREE_FRONTEND_DOMAIN || "https://treeOS.ai",
+        "HTTP-Referer": getLandUrl(),
         "X-OpenRouter-Title": "TreeOS",
         "X-OpenRouter-Categories": "personal-agent,general-chat",
       },
@@ -166,7 +168,8 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
   // 2. Normal slot-based resolution from user.llmAssignments
   var cacheKey = userId + ":" + slot;
   var cached = userClientCache.get(cacheKey);
-  if (cached && Date.now() - cached.fetchedAt < CLIENT_CACHE_TTL) {
+  var ttl = cached?.isCanopyProxy ? PROXY_CACHE_TTL : CLIENT_CACHE_TTL;
+  if (cached && Date.now() - cached.fetchedAt < ttl) {
     return cached;
   }
 
@@ -188,6 +191,31 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
     console.error(
       "Failed to load custom LLM for user " + userId + ": " + err.message,
     );
+  }
+
+  // Check if this is a remote user whose LLM lives on their home land
+  try {
+    var remoteCheck = await User.findById(userId).select("isRemote homeLand").lean();
+    if (remoteCheck?.isRemote && remoteCheck.homeLand) {
+      var { createCanopyLlmProxyClient } = await import("../canopy/llmProxy.js");
+      var proxyClient = createCanopyLlmProxyClient({
+        userId,
+        homeLand: remoteCheck.homeLand,
+        slot,
+      });
+      var proxyEntry = {
+        client: proxyClient,
+        model: "proxy",
+        isCustom: true,
+        connectionId: null,
+        isCanopyProxy: true,
+        fetchedAt: Date.now(),
+      };
+      userClientCache.set(cacheKey, proxyEntry);
+      return proxyEntry;
+    }
+  } catch (err) {
+    console.error("Failed to create canopy LLM proxy for user " + userId + ": " + err.message);
   }
 
   var noLlmEntry = {

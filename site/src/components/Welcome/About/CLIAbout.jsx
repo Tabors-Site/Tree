@@ -244,7 +244,7 @@ const CLIAbout = () => {
             <span className="cli-section-icon">📎</span> Links
           </div>
           <div className="cli-section-text">
-            <a href={import.meta.env.VITE_TREE_FRONTEND_DOMAIN} style={{ color: "rgba(255,255,255,0.85)" }}>TreeOS</a>
+            <a href={import.meta.env.VITE_LAND_URL} style={{ color: "rgba(255,255,255,0.85)" }}>TreeOS</a>
             {" | "}
             <a href="/about/gettingstarted" style={{ color: "rgba(255,255,255,0.85)" }}>Getting Started</a>
             {" | "}

@@ -50,6 +50,10 @@ program
           cmds: ["understand", "understandings", "understand-status", "understand-stop"],
         },
         {
+          title: "Canopy (federation)",
+          cmds: ["peers", "peer", "search", "browse"],
+        },
+        {
           title: "Blog",
           cmds: ["blogs", "blog"],
         },
@@ -128,6 +132,7 @@ require("./commands/sharing")(program);
 require("./commands/ai")(program);
 require("./commands/blog")(program);
 require("./commands/config")(program);
+require("./commands/canopy")(program);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHELL (interactive REPL)

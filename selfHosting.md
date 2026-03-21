@@ -245,8 +245,7 @@ The `/api/v1/` endpoints and their request/response shapes. Remote users interac
 
 | Variable | What It Does | Default |
 |----------|-------------|---------|
-| `TREE_FRONTEND_DOMAIN` | Frontend URL (CORS whitelist) | none |
-| `ROOT_FRONTEND_DOMAIN` | Root app frontend URL | none |
+| `CREATOR_DOMAIN` | Creator's website URL (CSP headers) | none |
 | `ENABLE_FRONTEND_HTML` | Toggle server rendered HTML pages | `true` |
 
 ### LLM

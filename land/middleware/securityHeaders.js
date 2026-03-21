@@ -1,9 +1,13 @@
+import { getLandUrl } from "../canopy/identity.js";
+
 export default function securityHeaders(req, res, next) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  const creatorDomain = process.env.CREATOR_DOMAIN || process.env.ROOT_FRONTEND_DOMAIN;
+  const creatorHost = creatorDomain ? new URL(creatorDomain).hostname : "tabors.site";
   res.setHeader(
     "Content-Security-Policy",
-    `frame-ancestors 'self' ${process.env.TREE_FRONTEND_DOMAIN || "https://treeOS.ai"} https://*.${process.env.ROOT_FRONTEND_DOMAIN ? new URL(process.env.ROOT_FRONTEND_DOMAIN).hostname : "tabors.site"}`,
+    `frame-ancestors 'self' ${getLandUrl()} https://*.${creatorHost}`,
   );
   res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");

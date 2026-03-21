@@ -23,7 +23,41 @@ class TreeAPI {
     if (body) opts.body = JSON.stringify(body);
 
     const res = await fetch(getBase() + path, opts);
-    const json = await res.json();
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(`Server returned non-JSON response (HTTP ${res.status}). Is the Land running the latest version?`);
+    }
+
+    if (!res.ok) {
+      const msg = json.error || json.message || `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return json;
+  }
+
+  async _canopyReq(method, path, body) {
+    const cfg = load();
+    const site = (cfg.landUrl || "https://treeOS.ai").replace(/\/+$/, "");
+    const opts = {
+      method,
+      headers: {
+        "x-api-key": this.apiKey,
+        "Content-Type": "application/json",
+      },
+    };
+    if (body) opts.body = JSON.stringify(body);
+
+    const res = await fetch(site + path, opts);
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(`Server returned non-JSON response (HTTP ${res.status}). Is the Land running the latest version?`);
+    }
 
     if (!res.ok) {
       const msg = json.error || json.message || `HTTP ${res.status}`;
@@ -291,21 +325,54 @@ class TreeAPI {
   }
 
   // ── Blog ─────────────────────────────────────────────────────────────────
-  async listBlogPosts() {
-    const res = await fetch(getBase() + "/blog/posts", {
-      headers: { "Content-Type": "application/json" },
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-    return json;
+  listBlogPosts() {
+    return this._req("GET", "/blog/posts");
   }
-  async getBlogPost(slug) {
-    const res = await fetch(getBase() + `/blog/posts/${slug}`, {
-      headers: { "Content-Type": "application/json" },
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-    return json;
+  getBlogPost(slug) {
+    return this._req("GET", `/blog/posts/${slug}`);
+  }
+
+  // ── Canopy (federation) ─────────────────────────────────────────────────
+  listPeers() {
+    return this._canopyReq("GET", "/canopy/admin/peers");
+  }
+  addPeer(url) {
+    return this._canopyReq("POST", "/canopy/admin/peer/add", { url });
+  }
+  removePeer(domain) {
+    return this._canopyReq("DELETE", `/canopy/admin/peer/${encodeURIComponent(domain)}`);
+  }
+  blockPeer(domain) {
+    return this._canopyReq("POST", `/canopy/admin/peer/${encodeURIComponent(domain)}/block`);
+  }
+  unblockPeer(domain) {
+    return this._canopyReq("POST", `/canopy/admin/peer/${encodeURIComponent(domain)}/unblock`);
+  }
+  discoverPeer(domain) {
+    return this._canopyReq("POST", "/canopy/admin/peer/discover", { domain });
+  }
+  heartbeat() {
+    return this._canopyReq("POST", "/canopy/admin/heartbeat");
+  }
+  searchLands(q) {
+    const qs = q ? `?q=${encodeURIComponent(q)}` : "";
+    return this._canopyReq("GET", `/canopy/admin/directory/lands${qs}`);
+  }
+  searchTrees(q) {
+    const qs = q ? `?q=${encodeURIComponent(q)}` : "";
+    return this._canopyReq("GET", `/canopy/admin/directory/trees${qs}`);
+  }
+  getRemotePublicTrees(domain, q) {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    const qs = params.toString();
+    return this._canopyReq("GET", `/canopy/proxy/${encodeURIComponent(domain)}/canopy/public-trees${qs ? "?" + qs : ""}`);
+  }
+  proxyGet(domain, path) {
+    return this._canopyReq("GET", `/canopy/proxy/${encodeURIComponent(domain)}${path}`);
+  }
+  proxyPost(domain, path, body) {
+    return this._canopyReq("POST", `/canopy/proxy/${encodeURIComponent(domain)}${path}`, body);
   }
 }
 
@@ -315,5 +382,22 @@ function getBaseSite() {
   return site.replace(/\/+$/, "");
 }
 
+/**
+ * Create a proxy-aware API wrapper. When remoteDomain is set,
+ * all /api/v1 requests route through /canopy/proxy/:domain/api/v1/...
+ */
+function createProxyApi(apiKey, remoteDomain) {
+  if (!remoteDomain) return new TreeAPI(apiKey);
+  const api = new TreeAPI(apiKey);
+  api._req = function (method, path, body) {
+    // Route through canopy proxy
+    return api._canopyReq(method, `/canopy/proxy/${encodeURIComponent(remoteDomain)}/api/v1${path}`, body);
+  };
+  api._isProxy = true;
+  api._remoteDomain = remoteDomain;
+  return api;
+}
+
 module.exports = TreeAPI;
 module.exports.getBaseSite = getBaseSite;
+module.exports.createProxyApi = createProxyApi;

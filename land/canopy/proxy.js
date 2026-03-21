@@ -82,6 +82,10 @@ export async function proxyToRemoteLand({
 }
 
 /**
+ * DEPRECATED: Use the LLM proxy flow instead (POST /canopy/llm/proxy),
+ * which deducts energy directly on the home land during inference.
+ * Kept for backward compat with older lands.
+ *
  * Report energy usage to a remote user's home land.
  * Fire and forget. If it fails, the CanopyEvent outbox will retry.
  */
