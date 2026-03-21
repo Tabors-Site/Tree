@@ -50,6 +50,31 @@ module.exports = (program) => {
       const api = getApi(cfg);
 
       if (!cfg.activeRootId) {
+        if (cfg.remoteDomain) {
+          // At remote land root — show public trees on that land
+          try {
+            const localApi = new TreeAPI(cfg.apiKey);
+            const data = await localApi.getRemotePublicTrees(cfg.remoteDomain);
+            const trees = data.trees || [];
+            if (!trees.length) return console.log(chalk.dim(`  (no public trees on ${cfg.remoteDomain})`));
+            if (l) {
+              printTable(
+                trees.map((t) => ({ name: t.name || t.rootId, owner: t.ownerUsername || "", _id: t.rootId })),
+                [
+                  { key: "name", label: "Name", width: 24 },
+                  { key: "owner", label: "Owner", width: 16 },
+                  { key: "_id", label: "ID", width: 28 },
+                ],
+              );
+            } else {
+              console.log(trees.map((t) => chalk.cyan(t.name || t.rootId)).join(chalk.dim("  ·  ")));
+            }
+            console.log(chalk.dim(`\n  cd <treename> to enter  ·  home to go back`));
+          } catch (e) {
+            console.error(chalk.red(e.message));
+          }
+          return;
+        }
         if (cfg.atHome) {
           // At /~ — show user's own roots (local + remote)
           try {
@@ -224,12 +249,40 @@ module.exports = (program) => {
       // ── At top level (/ or /~), no tree selected ──
       if (!cfg.activeRootId) {
         if (name === "..") {
-          if (cfg.atHome) {
+          if (cfg.remoteDomain) {
+            // At remote land root -> go back home
+            cfg.remoteDomain = null;
+            goHome(cfg);
+            save(cfg);
+          } else if (cfg.atHome) {
             // /~ -> / (go up to land)
             goLand(cfg);
             save(cfg);
           } else {
             console.log(chalk.dim("Already at /"));
+          }
+          return;
+        }
+
+        if (cfg.remoteDomain) {
+          // At remote land root — cd into a tree by name
+          try {
+            const localApi = new TreeAPI(cfg.apiKey);
+            const data = await localApi.getRemotePublicTrees(cfg.remoteDomain, name);
+            const trees = data.trees || [];
+            const target = findChild(
+              trees.map((t) => ({ _id: t.rootId, name: t.name || "" })),
+              name,
+            );
+            if (!target) return;
+            cfg.activeRootId = target._id;
+            cfg.activeRootName = target.name;
+            cfg.pathStack = [];
+            cfg.isSystemRoot = false;
+            save(cfg);
+            console.log(chalk.green(`Entered ${target.name} on ${chalk.dim(`@${cfg.remoteDomain}`)}`));
+          } catch (e) {
+            console.error(chalk.red(e.message));
           }
           return;
         }

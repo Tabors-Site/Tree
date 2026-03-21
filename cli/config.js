@@ -45,13 +45,16 @@ function currentNodeId(cfg) {
 }
 
 function currentPath(cfg) {
-  if (!cfg.activeRootId) return cfg.atHome ? "/~" : "/";
+  const remote = cfg.remoteDomain ? `/@${cfg.remoteDomain}` : "";
+  if (!cfg.activeRootId) {
+    if (remote) return remote;
+    return cfg.atHome ? "/~" : "/";
+  }
   const parts = [cfg.activeRootName, ...cfg.pathStack.map((n) => n.name)];
-  return "/" + parts.join("/");
+  return remote + "/" + parts.join("/");
 }
 
 function currentLand(cfg) {
-  if (cfg.remoteDomain) return cfg.remoteDomain;
   return cfg.landUrl ? cfg.landUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "") : "local";
 }
 
