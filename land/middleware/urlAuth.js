@@ -1,7 +1,13 @@
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import User from "../db/models/user.js";
 import { resolveHtmlShareAccess } from "../core/authenticate.js";
 import { errorHtml } from "./notFoundPage.js";
+import { verifyCanopyToken, getLandIdentity } from "../canopy/identity.js";
+import { getPeerByDomain, registerPeer } from "../canopy/peers.js";
+import { lookupLandByDomain } from "../canopy/directory.js";
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function wantsHtml(req) {
   return "html" in req.query || (req.headers.accept || "").includes("text/html");
@@ -13,13 +19,95 @@ function errorPage(res, status, title, message) {
 
 export default async function urlAuth(req, res, next) {
   try {
+    const authHeader = req.headers.authorization;
+
     /* ===========================
-        1️⃣ API KEY AUTH (bypass share token)
+        0️⃣ CANOPY TOKEN AUTH (remote land users)
+    ============================ */
+    if (authHeader?.startsWith("CanopyToken ")) {
+      const canopyToken = authHeader.slice("CanopyToken ".length);
+
+      let unverified;
+      try {
+        const parts = canopyToken.split(".");
+        unverified = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+      } catch {
+        return res.status(401).json({ message: "Malformed CanopyToken" });
+      }
+
+      let peer = await getPeerByDomain(unverified.iss);
+      if (!peer) {
+        try {
+          const directoryLand = await lookupLandByDomain(unverified.iss);
+          if (directoryLand?.baseUrl) {
+            const infoRes = await fetch(
+              `${directoryLand.baseUrl.replace(/\/+$/, "")}/canopy/info`,
+              { signal: AbortSignal.timeout(5000) }
+            );
+            if (infoRes.ok) {
+              const info = await infoRes.json();
+              if (info.domain === unverified.iss) {
+                peer = await registerPeer(directoryLand.baseUrl);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      if (!peer) return res.status(403).json({ message: "Unknown land: " + unverified.iss });
+      if (peer.status === "blocked") return res.status(403).json({ message: "Land blocked" });
+
+      const { valid, payload } = await verifyCanopyToken(canopyToken, peer.publicKey);
+      if (!valid) return res.status(401).json({ message: "Invalid CanopyToken" });
+
+      const myDomain = getLandIdentity().domain;
+      if (payload.aud && payload.aud !== myDomain) {
+        return res.status(401).json({ message: "CanopyToken audience mismatch" });
+      }
+
+      const ghostUser = await User.findOne({
+        _id: payload.sub,
+        isRemote: true,
+        homeLand: payload.iss,
+      });
+      if (!ghostUser) return res.status(403).json({ message: "Remote user not registered on this land" });
+
+      req.userId = ghostUser._id;
+      req.username = ghostUser.username;
+      req.authType = "canopy";
+      req.isHtmlShare = false;
+      return next();
+    }
+
+    /* ===========================
+        1️⃣ JWT AUTH
+    ============================ */
+    let jwtToken = null;
+    if (authHeader?.startsWith("Bearer ")) {
+      jwtToken = authHeader.slice(7).trim();
+    }
+    if (!jwtToken && req.cookies?.token) {
+      jwtToken = req.cookies.token;
+    }
+    if (jwtToken && JWT_SECRET) {
+      try {
+        const decoded = jwt.verify(jwtToken, JWT_SECRET);
+        req.userId = decoded.userId;
+        req.username = decoded.username;
+        req.authType = "jwt";
+        req.isHtmlShare = false;
+        return next();
+      } catch (_) {
+        // JWT invalid, fall through to other auth methods
+      }
+    }
+
+    /* ===========================
+        2️⃣ API KEY AUTH
     ============================ */
     const apiKey =
       req.headers["x-api-key"] ||
-      (req.headers.authorization?.startsWith("ApiKey ")
-        ? req.headers.authorization.slice(7).trim()
+      (authHeader?.startsWith("ApiKey ")
+        ? authHeader.slice(7).trim()
         : null);
 
     if (apiKey) {
@@ -54,12 +142,11 @@ export default async function urlAuth(req, res, next) {
     }
 
     /* ===========================
-        2️⃣ SHARE TOKEN AUTH (existing flow)
+        3️⃣ SHARE TOKEN AUTH (existing flow)
     ============================ */
     const shareToken =
       req.query.token ||
-      req.params.token ||
-      req.headers["authorization"]?.split(" ")[1];
+      req.params.token;
 
     if (!shareToken) {
       if (wantsHtml(req)) {
