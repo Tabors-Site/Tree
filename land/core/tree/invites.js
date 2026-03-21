@@ -292,19 +292,30 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
   // Remote invite: tree lives on another land, no local node to modify
   if (invite.remoteLandDomain) {
     if (acceptInvite) {
-      await User.findByIdAndUpdate(userId, {
-        $addToSet: {
-          remoteRoots: {
-            rootId: invite.rootId,
-            rootName: invite.remoteRootName || "Untitled",
-            landDomain: invite.remoteLandDomain,
-          },
+      // Avoid duplicates: only add if rootId + landDomain combo doesn't exist
+      await User.updateOne(
+        {
+          _id: userId,
+          "remoteRoots": {
+            $not: { $elemMatch: { rootId: invite.rootId, landDomain: invite.remoteLandDomain } }
+          }
         },
-      });
+        {
+          $push: {
+            remoteRoots: {
+              rootId: invite.rootId,
+              rootName: invite.remoteRootName || "Untitled",
+              landDomain: invite.remoteLandDomain,
+            },
+          },
+        }
+      );
 
+      const acceptingUser = await User.findById(userId).select("username").lean();
       await queueCanopyEvent(invite.remoteLandDomain, "invite_accept", {
         inviteId: invite.remoteInviteId || invite._id,
         userId,
+        username: acceptingUser?.username || null,
       });
     } else {
       await queueCanopyEvent(invite.remoteLandDomain, "invite_decline", {

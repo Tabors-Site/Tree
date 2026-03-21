@@ -366,7 +366,7 @@ router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
  */
 router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
   try {
-    const { inviteId, userId } = req.body;
+    const { inviteId, userId, username } = req.body;
 
     if (!inviteId || !userId) {
       return res.status(400).json({
@@ -429,9 +429,12 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
         });
       }
 
+      const ghostUsername = username
+        ? `${username}@${req.canopy.sourceLandDomain}`
+        : `${req.canopy.sourceLandDomain}_${userId.slice(0, 8)}`;
       ghostUser = await User.create({
         _id: userId,
-        username: `${req.canopy.sourceLandDomain}_${userId.slice(0, 8)}`,
+        username: ghostUsername,
         email: `${userId}@${req.canopy.sourceLandDomain}`,
         password: `remote_${Date.now()}`,
         isRemote: true,
