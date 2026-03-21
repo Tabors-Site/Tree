@@ -12,12 +12,18 @@ AI-powered knowledge management system where users grow trees of goals, plans, a
 ## Project Structure
 
 ```
-backend/
+land/
 ├── core/           # Shared business logic — imported by both mcp/ and routesURL/
-├── db/models/      # 15 Mongoose models (Node, User, AIChat, UnderstandingRun/Node, Contribution, ShortMemory, RawIdea, Note, Book, CustomLlmConnection, etc.)
+├── db/models/      # 18 Mongoose models (Node, User, AIChat, UnderstandingRun/Node, Contribution, ShortMemory, RawIdea, Note, Book, CustomLlmConnection, LandPeer, RemoteUser, CanopyEvent, etc.)
 ├── jobs/           # Scheduled: treeDream, shortTermDrain, cleanupAutoRun, understandingAutoRun, rawIdeaAutoPlace
 ├── mcp/            # MCP server (in-process) — AI tool calls go through here, tracks energy + contributions
+├── routes/         # Route handlers, HTML renders, canopy protocol, billing
+│   ├── api/        # REST JSON endpoints (user, root, node, notes, understanding, contributions, values, transactions)
+│   ├── html/       # Server-rendered HTML pages (gated behind ENABLE_FRONTEND_HTML)
+│   ├── canopy.js   # Canopy protocol endpoints (peering, invites, proxy, admin)
+│   └── users.js    # Auth routes (login, register, forgot-password)
 ├── routesURL/      # REST endpoints (user, root, node, notes, understanding, chat, tree, contributions, values)
+├── canopy/         # Land identity, peering, proxy, event outbox, middleware, protocol
 ├── ws/             # WebSocket system
 │   ├── conversation.js    # LLM client mgmt, mode routing, per-mode LLM resolution
 │   ├── sessionRegistry.js # Central session lifecycle (types: websocket_chat, api, orchestration, scheduled)
@@ -27,10 +33,16 @@ backend/
 │   └── tools.js           # Tool definitions (file ops, tree ops, note ops, scripts, understanding)
 └── server.js
 
-frontend/src/
+site/src/
 ├── main.jsx, App.jsx
 └── components/     # UI with Cytoscape tree visualization
-frontend/legacy/    # OLD CODE — ignore, do not reference or modify
+site/legacy/        # OLD CODE — ignore, do not reference or modify
+
+directory/          # Canopy Directory Service (separate standalone service)
+├── server.js       # Express server for land discovery
+├── db/models/      # Land registry and public tree index
+├── routes/         # Registration, lookup, search endpoints
+└── jobs/           # Health check pings for registered lands
 ```
 
 ## Architecture Pattern

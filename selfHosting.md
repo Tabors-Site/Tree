@@ -27,46 +27,49 @@ Everything a developer needs to know to run, customize, and connect their own Tr
 treeos-land/
   .env                  # single config file for the whole project
   package.json          # root scripts
-  backend/              # the Land server (this is the app)
-  frontend/             # optional static site (landing page, about page)
+  land/                 # the Land server (this is the app)
+  site/                 # optional static site (landing page, about page)
+  directory/            # Canopy Directory Service (separate standalone service)
 ```
 
-**The backend is the entire application.** `npm start` runs the backend and you have a fully working Land. The backend serves the TreeOS UI as server rendered HTML, handles the REST API, runs WebSocket connections, executes AI tool calls, and manages background jobs.
+**The land folder is the entire application.** `npm start` runs the land server and you have a fully working Land. It serves the TreeOS UI as server rendered HTML, handles the REST API, runs WebSocket connections, executes AI tool calls, and manages background jobs.
 
-**The frontend is optional.** It is a React + Vite static site for landing pages and about pages only. You do not need to build or deploy it. Your Land works completely without it.
+**The site folder is optional.** It is a React + Vite static site for landing pages and about pages only. You do not need to build or deploy it. Your Land works completely without it.
 
-### Backend Layout
+### Land Layout
 
 ```
-backend/
+land/
   server.js               # entry point
   routes/
     api/                   # REST JSON endpoints (nodes, notes, users, values, etc.)
-    html/                  # TreeOS app UI (server rendered pages)
-    billing/               # Stripe purchase and webhook
+    html/                  # TreeOS app UI (server rendered pages, gated behind ENABLE_FRONTEND_HTML)
     canopy.js              # Canopy protocol endpoints
-  routesFrontend/          # landing pages, setup flow, onboarding (server rendered)
+    users.js               # Auth routes (login, register, forgot password)
+    setup.js               # Onboarding flow
+    billing/               # Stripe purchase and webhook
+  routesURL/               # Legacy route handlers (being migrated to routes/)
   ws/                      # WebSocket server (real time chat and tree interaction)
   mcp/                     # MCP server (AI tool execution)
   jobs/                    # background jobs (dreams, drain, understanding, cleanup)
-  canopy/                  # land identity, peering, event outbox
+  canopy/                  # land identity, peering, proxy, event outbox
   core/                    # shared business logic
   db/                      # Mongoose models and config
   middleware/              # auth, rate limiting
 ```
 
-The app UI lives in `routes/html/` (chat, nodes, notes, contributions, transactions, understanding, values, user, root). The landing and setup pages live in `routesFrontend/`. Both are server rendered. There is no separate frontend build step needed.
+The app UI lives in `routes/html/` (chat, canopy admin, nodes, notes, contributions, transactions, understanding, values, user, root). The setup and onboarding pages live in `routes/setup.js`. Both are server rendered. There is no separate build step needed.
 
 ### Root Scripts
 
 | Command | What It Does |
 |---------|-------------|
-| `npm start` | Runs the backend. This is your Land. |
-| `npm run build` | Builds the optional frontend (landing pages only) |
-| `npm run dev:frontend` | Runs the Vite dev server for the optional frontend |
-| `npm run install:all` | Installs dependencies in both backend and frontend |
+| `npm start` | Runs the land server. This is your Land. |
+| `npm run build` | Builds the optional site (landing pages only) |
+| `npm run dev:site` | Runs the Vite dev server for the optional site |
+| `npm run install:all` | Installs dependencies in both land and site |
 
-All environment variables live in a single `.env` file at the project root. Both backend and frontend read from this file.
+All environment variables live in a single `.env` file at the project root. Both land and site read from this file.
 
 ---
 
@@ -113,7 +116,7 @@ These are yours to modify however you want. They do not affect canopy compatibil
 - All server rendered pages in `routes/html/` and `routesFrontend/`
 - Page templates, styling, layout
 - Toggle HTML renders on/off with `ENABLE_FRONTEND_HTML`
-- The optional `frontend/` React site (landing/about pages)
+- The optional `site/` React site (landing/about pages)
 - Build your own client entirely (just speak the same API)
 
 ---
@@ -204,10 +207,10 @@ These endpoints must return the expected response shapes. The request/response s
 
 | Variable | What It Does | Default |
 |----------|-------------|---------|
-| `VITE_TREE_API_URL` | API endpoint the frontend calls (include /api/v1) | none |
-| `VITE_ROOT_API` | Root app API endpoint for the frontend | none |
+| `VITE_TREE_API_URL` | API endpoint the site calls (include /api/v1) | none |
+| `VITE_ROOT_API` | Root app API endpoint for the site | none |
 
-These VITE_ vars only matter if you build the optional `frontend/` React site.
+These VITE_ vars only matter if you build the optional `site/` React site.
 
 ### LLM
 
@@ -282,7 +285,7 @@ App code can diverge freely between lands. Only the ~10 canopy endpoints need to
 
 ## 6. WebSocket System
 
-The WebSocket server handles real-time interaction between clients and the backend.
+The WebSocket server handles real-time interaction between clients and the land server.
 
 **Connection flow:**
 1. Client connects to WebSocket server

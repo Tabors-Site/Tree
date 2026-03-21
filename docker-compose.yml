@@ -1,7 +1,7 @@
 services:
   tree:
     build:
-      context: ./backend
+      context: ./land
       dockerfile: Dockerfile
     env_file:
       - .env
@@ -15,9 +15,9 @@ services:
       - mongo
     restart: unless-stopped
 
-  frontend:
+  site:
     build:
-      context: ./frontend
+      context: ./site
       dockerfile: Dockerfile
     ports:
       - "${FRONTEND_PORT:-3000}:80"

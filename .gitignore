@@ -3,10 +3,10 @@ node_modules/
 dist/
 *.log
 
-backend/node_modules
-backend/uploads
-backend/.land/
-backend/.env
+land/node_modules
+land/uploads
+land/.land/
+land/.env
 
-frontend/node_modules
-frontend/dist/
+site/node_modules
+site/dist/

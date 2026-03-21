@@ -3,9 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "start": "cd backend && node server.js",
-    "build": "cd frontend && npm run build",
-    "dev:frontend": "cd frontend && npm run dev",
-    "install:all": "cd backend && npm install && cd ../frontend && npm install"
+    "start": "cd land && node server.js",
+    "build": "cd site && npm run build",
+    "dev:site": "cd site && npm run dev",
+    "install:all": "cd land && npm install && cd ../site && npm install"
   }
 }

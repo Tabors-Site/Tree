@@ -42,7 +42,7 @@ That's it. Your land is running. Point it at a MongoDB instance and you have the
 
 ## What You Get
 
-- The full TreeOS application served directly from the backend (no separate frontend build needed)
+- The full TreeOS application served directly from the land server (no separate build needed)
 - AI powered tree management with your own LLM connections (defaults to local Ollama)
 - Background jobs: tree dreaming, raw idea placement, short term memory drain, understanding runs
 - WebSocket real time chat and tree interaction
@@ -55,29 +55,34 @@ That's it. Your land is running. Point it at a MongoDB instance and you have the
 treeos-land/
   .env                  # single config file for the whole project
   package.json          # root scripts (npm start, npm run build, etc.)
-  backend/              # the Land server (this is the app)
-  frontend/             # optional static site (landing page, about page)
+  land/                 # the Land server (this is the app)
+  site/                 # optional static site (landing page, about page)
+  directory/            # Canopy Directory Service (separate standalone service)
 ```
 
-**The backend is the app.** It serves the full TreeOS UI as server rendered HTML, handles the REST API, runs WebSocket connections, executes AI tool calls, and manages background jobs. Everything you need to run a Land is in `backend/`.
+**The land folder is the app.** It serves the full TreeOS UI as server rendered HTML, handles the REST API, runs WebSocket connections, executes AI tool calls, and manages background jobs. Everything you need to run a Land is in `land/`.
 
-**The frontend is optional.** It is a React + Vite static site for landing pages and about pages. You do not need to build or deploy it. Your Land works completely without it. If you want a marketing site or custom landing page, you can build it with `npm run build`, but it has nothing to do with the core TreeOS functionality.
+**The site folder is optional.** It is a React + Vite static site for landing pages and about pages. You do not need to build or deploy it. Your Land works completely without it. If you want a marketing site or custom landing page, you can build it with `npm run build`, but it has nothing to do with the core TreeOS functionality.
 
-### Backend Layout
+**The directory folder is a separate service.** It is the Canopy Directory, a standalone phonebook that lands register with for peer discovery. You only need to run this if you are hosting the central directory for the network.
+
+### Land Layout
 
 ```
-backend/
+land/
   server.js               # entry point
   routes/
     api/                   # REST JSON endpoints (nodes, notes, users, values, etc.)
-    html/                  # TreeOS app UI (server rendered pages)
-    billing/               # Stripe purchase and webhook
+    html/                  # TreeOS app UI (server rendered pages, gated behind ENABLE_FRONTEND_HTML)
     canopy.js              # Canopy protocol endpoints
-  routesFrontend/          # landing pages, setup flow, onboarding (server rendered)
+    users.js               # Auth routes (login, register, forgot password)
+    setup.js               # Onboarding flow
+    billing/               # Stripe purchase and webhook
+  routesURL/               # Legacy route handlers (being migrated to routes/)
   ws/                      # WebSocket server (real time chat and tree interaction)
   mcp/                     # MCP server (AI tool execution)
   jobs/                    # background jobs (dreams, drain, understanding, cleanup)
-  canopy/                  # land identity, peering, event outbox
+  canopy/                  # land identity, peering, proxy, event outbox
   core/                    # shared business logic
   db/                      # Mongoose models and config
   middleware/              # auth, rate limiting
@@ -87,10 +92,10 @@ backend/
 
 | Command | What It Does |
 |---------|-------------|
-| `npm start` | Runs the backend (`node server.js`) |
-| `npm run build` | Builds the optional frontend (`vite build`) |
-| `npm run dev:frontend` | Runs the Vite dev server for the frontend |
-| `npm run install:all` | Installs dependencies in both backend and frontend |
+| `npm start` | Runs the land server (`node server.js`) |
+| `npm run build` | Builds the optional site (`vite build`) |
+| `npm run dev:site` | Runs the Vite dev server for the site |
+| `npm run install:all` | Installs dependencies in both land and site |
 
 ## Configuration
 
@@ -222,7 +227,7 @@ Your trees are unaffected when a peer goes down. Remote trees on that peer are t
 
 ## Building a Custom Client
 
-The TreeOS app UI is server rendered from the backend. But your Land's API is standard REST + WebSocket, so you can build any client you want on top of it. The canopy protocol is also REST, so custom backend implementations can participate in the network as long as they implement the protocol endpoints.
+The TreeOS app UI is server rendered from the land server. But your Land's API is standard REST + WebSocket, so you can build any client you want on top of it. The canopy protocol is also REST, so custom land implementations can participate in the network as long as they implement the protocol endpoints.
 
 ## Data Sovereignty
 
