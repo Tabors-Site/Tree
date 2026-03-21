@@ -12,7 +12,8 @@ dotenv.config({ path: path.resolve(__dirname, "../../..", ".env") });
 
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
+const JWT_SECRET = process.env.JWT_SECRET;
 
 import { switchMode, processMessage, setRootId, getClientForUser, resolveRootLlmForMode, clearSession } from "../conversation.js";
 import { trackChainStep, startAIChat, finalizeAIChat, clearAiContributionContext } from "../aiChatTracker.js";

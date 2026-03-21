@@ -12,7 +12,8 @@ import { getLandUrl } from "../canopy/identity.js";
 const __users_dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__users_dirname, "../..", ".env") });
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
+const JWT_SECRET = process.env.JWT_SECRET;
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

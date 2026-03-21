@@ -101,30 +101,7 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId }) {
     { upsert: true }
   );
 
-  // Send the invite offer to the remote land
-  const offerRes = await fetch(`${baseUrl}/canopy/invite/offer`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `CanopyToken ${token}`,
-    },
-    body: JSON.stringify({
-      receivingUsername: remoteUserData.username,
-      rootId,
-      rootName: rootNode.name || "Untitled",
-      sourceLandDomain: identity.domain,
-      invitingUserId: userInvitingId,
-      invitingUsername: invitingUser.username,
-    }),
-    signal: AbortSignal.timeout(15000),
-  });
-
-  const offerData = await offerRes.json();
-  if (!offerRes.ok || !offerData.success) {
-    throw new Error(offerData.error || "Remote land rejected the invite");
-  }
-
-  // Create a local invite record tracking this remote invite
+  // Create a local invite first so we can send its ID to the remote land
   const invite = await Invite.create({
     userInviting: userInvitingId,
     userReceiving: remoteUserData.userId,
@@ -132,8 +109,46 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId }) {
     status: "pending",
     isToBeOwner: false,
     isUninviting: false,
-    remoteInviteId: offerData.inviteId || null,
   });
+
+  // Send the invite offer to the remote land (includes our invite ID)
+  let offerData;
+  try {
+    const offerRes = await fetch(`${baseUrl}/canopy/invite/offer`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `CanopyToken ${token}`,
+      },
+      body: JSON.stringify({
+        receivingUsername: remoteUserData.username,
+        rootId,
+        rootName: rootNode.name || "Untitled",
+        sourceLandDomain: identity.domain,
+        invitingUserId: userInvitingId,
+        invitingUsername: invitingUser.username,
+        sourceInviteId: invite._id,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    offerData = await offerRes.json();
+    if (!offerRes.ok || !offerData.success) {
+      // Clean up our local invite since the remote land rejected
+      await Invite.findByIdAndDelete(invite._id);
+      throw new Error(offerData.error || "Remote land rejected the invite");
+    }
+  } catch (err) {
+    // Clean up on network failure too
+    if (!offerData) await Invite.findByIdAndDelete(invite._id);
+    throw err;
+  }
+
+  // Store the remote land's invite ID for cross-reference
+  if (offerData.inviteId) {
+    invite.remoteInviteId = offerData.inviteId;
+    await invite.save();
+  }
 
   return {
     inviteId: invite._id,

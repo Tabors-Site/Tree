@@ -3,9 +3,10 @@ import User from "../../db/models/user.js";
 import { validatePurchase } from "../../core/billing/validatePurchase.js";
 import { getLandUrl } from "../../canopy/identity.js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 export async function createPurchaseSession(req, res) {
+  if (!stripe) return res.status(503).json({ error: "Stripe is not configured" });
   try {
     const { userId, plan, energyAmount } = req.body;
 

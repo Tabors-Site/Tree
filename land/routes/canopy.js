@@ -285,7 +285,7 @@ router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
       });
     }
 
-    const { receivingUsername, rootId, rootName, sourceLandDomain, invitingUserId, invitingUsername } =
+    const { receivingUsername, rootId, rootName, sourceLandDomain, invitingUserId, invitingUsername, sourceInviteId } =
       req.body;
 
     // Find the local user being invited
@@ -339,6 +339,7 @@ router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
       rootId,
       remoteLandDomain: sourceLandDomain,
       remoteRootName: rootName || "Untitled",
+      remoteInviteId: sourceInviteId || null,
       status: "pending",
     });
 

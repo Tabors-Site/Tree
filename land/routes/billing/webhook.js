@@ -2,9 +2,10 @@ import Stripe from "stripe";
 import { processPurchase } from "../../core/billing/processPurchase.js";
 import { logContribution } from "../../db/utils.js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 export async function stripeWebhook(req, res) {
+  if (!stripe) return res.status(503).json({ error: "Stripe is not configured" });
   const sig = req.headers["stripe-signature"];
 
   let event;

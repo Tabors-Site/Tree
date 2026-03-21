@@ -43,7 +43,8 @@ async function processEvent(event) {
   // Map event type to canopy endpoint
   const endpointMap = {
     invite_offer: "/canopy/invite/offer",
-    invite_response: "/canopy/invite/accept",
+    invite_accept: "/canopy/invite/accept",
+    invite_decline: "/canopy/invite/decline",
     energy_report: "/canopy/energy/report",
     notification: "/canopy/notify",
     tree_update: "/canopy/notify",

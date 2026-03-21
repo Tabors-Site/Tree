@@ -39,7 +39,9 @@
       "Bash(node -e \"require\\(''''./cli/index.js''''\\)\")",
       "Bash(find /home/tabor/github/Tree -name *.test.js -o -name *.spec.js)",
       "Bash(grep -r \"csrf\\\\|CSRF\" /home/tabor/github/Tree/land --include=*.js)",
-      "Bash(grep -r \"visibility\\\\|public\\\\|private\" /home/tabor/github/Tree/cli/commands/*.js)"
+      "Bash(grep -r \"visibility\\\\|public\\\\|private\" /home/tabor/github/Tree/cli/commands/*.js)",
+      "Bash(for f:*)",
+      "Bash(do sed:*)"
     ]
   }
 }

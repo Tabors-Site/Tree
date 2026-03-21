@@ -31,13 +31,13 @@ export function validateCanopyRequest(type, body) {
       if (!body.sourceLandDomain) errors.push("missing sourceLandDomain");
       break;
 
-    case "invite_response":
+    case "invite_accept":
       if (!body.inviteId) errors.push("missing inviteId");
       if (!body.userId) errors.push("missing userId");
-      if (!body.action) errors.push("missing action");
-      if (body.action && !["accept", "decline"].includes(body.action)) {
-        errors.push("action must be accept or decline");
-      }
+      break;
+
+    case "invite_decline":
+      if (!body.inviteId) errors.push("missing inviteId");
       break;
 
     case "energy_report":

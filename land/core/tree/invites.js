@@ -302,16 +302,13 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
         },
       });
 
-      await queueCanopyEvent(invite.remoteLandDomain, "invite_response", {
+      await queueCanopyEvent(invite.remoteLandDomain, "invite_accept", {
         inviteId: invite.remoteInviteId || invite._id,
         userId,
-        action: "accept",
       });
     } else {
-      await queueCanopyEvent(invite.remoteLandDomain, "invite_response", {
+      await queueCanopyEvent(invite.remoteLandDomain, "invite_decline", {
         inviteId: invite.remoteInviteId || invite._id,
-        userId,
-        action: "decline",
       });
     }
 

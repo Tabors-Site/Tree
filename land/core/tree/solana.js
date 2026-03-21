@@ -22,11 +22,17 @@ const SOL_MINT = "So11111111111111111111111111111111111111112";
 /*  Config                                                            */
 /* ------------------------------------------------------------------ */
 
-const connection = new Connection(process.env.SOLANA_RPC_URL, "confirmed");
+const SOLANA_ENABLED = !!(process.env.SOLANA_RPC_URL && process.env.NODE_WALLET_MASTER_KEY);
 
-const MASTER_KEY = Buffer.from(process.env.NODE_WALLET_MASTER_KEY, "hex");
-if (MASTER_KEY.length !== 32) {
+const connection = SOLANA_ENABLED ? new Connection(process.env.SOLANA_RPC_URL, "confirmed") : null;
+
+const MASTER_KEY = SOLANA_ENABLED ? Buffer.from(process.env.NODE_WALLET_MASTER_KEY, "hex") : null;
+if (MASTER_KEY && MASTER_KEY.length !== 32) {
   throw new Error("NODE_WALLET_MASTER_KEY must be 32 bytes (hex)");
+}
+
+function requireSolana() {
+  if (!SOLANA_ENABLED) throw new Error("Solana is not configured (missing SOLANA_RPC_URL or NODE_WALLET_MASTER_KEY)");
 }
 
 /* ------------------------------------------------------------------ */
@@ -71,6 +77,7 @@ function decryptSecretKey(enc) {
 /* ------------------------------------------------------------------ */
 
 export async function ensureVersionWallet(nodeId, versionIndex) {
+  requireSolana();
   const node = await Node.findById(nodeId);
   if (!node) throw new Error("Node not found");
 
@@ -122,6 +129,7 @@ async function getVersionKeypair(node, versionIndex) {
 /* ------------------------------------------------------------------ */
 
 export async function syncVersionSOLBalance(node, versionIndex) {
+  requireSolana();
   const version = node?.versions?.[versionIndex];
 
   if (!version?.wallet?.publicKey) {
@@ -143,6 +151,7 @@ export async function syncVersionSOLBalance(node, versionIndex) {
 /* ------------------------------------------------------------------ */
 
 export async function getVersionWalletInfo(nodeId, versionIndex) {
+  requireSolana();
   if (!Number.isInteger(versionIndex) || versionIndex < 0) {
     throw new Error("Invalid version index");
   }
@@ -233,6 +242,7 @@ export async function sendSOLFromVersion({
   toNodeId,
   lamports,
 }) {
+  requireSolana();
   if (!Number.isInteger(versionIndex) || versionIndex < 0) {
     throw new Error("Invalid version index");
   }
@@ -340,6 +350,7 @@ export async function sendSPLTokenFromVersion({
   toAddress,
   amount,
 }) {
+  requireSolana();
   if (!Number.isInteger(versionIndex) || versionIndex < 0) {
     throw new Error("Invalid version index");
   }
@@ -398,6 +409,7 @@ async function fetchHoldings(address) {
 }
 
 export async function syncVersionTokenHoldings(node, versionIndex) {
+  requireSolana();
   const version = node?.versions?.[versionIndex];
   if (!version?.wallet?.publicKey) return null;
 
@@ -545,9 +557,10 @@ export async function swapFromVersion({
   versionIndex,
   inputMint,
   outputMint,
-  amountUi, // 👈 UI units (SOL or token)
+  amountUi,
   slippageBps,
 }) {
+  requireSolana();
   await ensureVersionWallet(nodeId, versionIndex);
 
   if (inputMint === SOL_MINT && outputMint === SOL_MINT) {
