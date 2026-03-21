@@ -1,5 +1,5 @@
 import express from "express";
-import { getLandInfoPayload, getLandIdentity } from "../canopy/identity.js";
+import { getLandInfoPayload, getLandIdentity, signCanopyToken } from "../canopy/identity.js";
 import {
   registerPeer,
   removePeer,
@@ -111,13 +111,8 @@ router.get("/canopy/redirect", (req, res) => {
  * Resolve a local user by username.
  * Used by remote lands to look up users for cross-land invites.
  */
-router.get("/canopy/user/:username", async (req, res) => {
+router.get("/canopy/user/:username", authenticateCanopy, async (req, res) => {
   try {
-    const ip = req.ip || req.connection?.remoteAddress || "unknown";
-    if (!checkIpRate(ip, 10)) {
-      return res.status(429).json({ success: false, error: "Rate limit exceeded" });
-    }
-
     const user = await User.findOne({
       username: req.params.username,
       isRemote: { $ne: true },
@@ -572,53 +567,6 @@ router.post("/canopy/invite/decline", authenticateCanopy, async (req, res) => {
 });
 
 /**
- * GET /canopy/tree/:rootId
- * A remote user accesses a tree on this land.
- * Authed with CanopyToken. Checks contributor permissions.
- */
-router.get("/canopy/tree/:rootId", authenticateCanopy, async (req, res) => {
-  try {
-    const { rootId } = req.params;
-    const remoteUserId = req.canopy.userId;
-
-    const rootNode = await Node.findById(rootId);
-    if (!rootNode) {
-      return res.status(404).json({
-        success: false,
-        error: "Tree not found",
-      });
-    }
-
-    // Check if the tree is public or user is a contributor
-    const isContributor =
-      String(rootNode.rootOwner) === String(remoteUserId) ||
-      rootNode.contributors.map(String).includes(String(remoteUserId));
-    const isPublic = rootNode.visibility === "public";
-
-    if (!isContributor && !isPublic) {
-      return res.status(403).json({
-        success: false,
-        error: "Not authorized to access this tree",
-      });
-    }
-
-    // Get all nodes in the tree, excluding sensitive fields
-    const nodes = await Node.find({
-      $or: [{ _id: rootId }, { parent: rootId }],
-    }).select("-scripts -llmAssignments -dreamTime").lean();
-
-    res.json({
-      success: true,
-      rootId,
-      nodes,
-      accessLevel: isContributor ? "contributor" : "viewer",
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/**
  * POST /canopy/llm/proxy
  * Run LLM inference on behalf of a remote user.
  * The user's LLM connection lives on this (home) land. The remote land
@@ -892,11 +840,11 @@ router.post(
 );
 
 /**
- * POST /canopy/admin/invite-remote
+ * POST /canopy/invite-remote
  * Invite a user from a remote land to a local tree.
  * This is what a local tree owner calls to invite someone cross-land.
  */
-router.post("/canopy/admin/invite-remote", authenticate, requireAdmin, async (req, res) => {
+router.post("/canopy/invite-remote", authenticate, async (req, res) => {
   try {
     const { canopyId, rootId } = req.body;
 
@@ -967,9 +915,13 @@ router.post("/canopy/admin/invite-remote", authenticate, requireAdmin, async (re
 
     // Resolve the user on the remote land
     const peerBaseUrl = getPeerBaseUrl(peer);
+    const lookupToken = await signCanopyToken(req.userId, domain);
     const resolveRes = await fetch(
       `${peerBaseUrl}/canopy/user/${encodeURIComponent(username)}`,
-      { signal: AbortSignal.timeout(10000) }
+      {
+        headers: { Authorization: `CanopyToken ${lookupToken}` },
+        signal: AbortSignal.timeout(10000),
+      }
     );
 
     if (!resolveRes.ok) {
@@ -1120,17 +1072,12 @@ router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
  * GET /canopy/admin
  * Server-rendered admin dashboard for Canopy federation.
  */
-router.get("/canopy/admin", authenticate, async (req, res) => {
+router.get("/canopy/admin", authenticate, requireAdmin, async (req, res) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") {
     return res.status(404).json({ error: "Server-rendered HTML is disabled." });
   }
 
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ error: "Requires god plan" });
-    }
-
     const peers = await getAllPeers();
     const pendingEvents = await getPendingEventCount();
     const failedEvents = await getFailedEvents();
@@ -1147,17 +1094,12 @@ router.get("/canopy/admin", authenticate, async (req, res) => {
  * GET /canopy/admin/invites
  * Server-rendered invites page for cross-land collaboration.
  */
-router.get("/canopy/admin/invites", authenticate, async (req, res) => {
+router.get("/canopy/admin/invites", authenticate, requireAdmin, async (req, res) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") {
     return res.status(404).json({ error: "Server-rendered HTML is disabled." });
   }
 
   try {
-    const adminUser = await User.findById(req.userId).select("profileType").lean();
-    if (!adminUser || adminUser.profileType !== "god") {
-      return res.status(403).json({ error: "Requires god plan" });
-    }
-
     // Get invites where the current user is receiving
     const invites = await Invite.find({
       userReceiving: req.userId,
@@ -1206,7 +1148,7 @@ router.get("/canopy/admin/invites", authenticate, async (req, res) => {
  * GET /canopy/admin/directory
  * Server-rendered directory search page.
  */
-router.get("/canopy/admin/directory", authenticate, async (req, res) => {
+router.get("/canopy/admin/directory", authenticate, requireAdmin, async (req, res) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") {
     return res.status(404).json({ error: "Server-rendered HTML is disabled." });
   }

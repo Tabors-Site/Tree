@@ -938,7 +938,7 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
         if (!canopyId) { showToast("Please enter a canopy ID", "error"); return; }
         if (!rootId) { showToast("Please select a tree", "error"); return; }
 
-        var data = await canopyFetch("/canopy/admin/invite-remote", {
+        var data = await canopyFetch("/canopy/invite-remote", {
           method: "POST",
           body: JSON.stringify({ canopyId: canopyId, rootId: rootId })
         });

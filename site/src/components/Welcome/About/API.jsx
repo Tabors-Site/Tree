@@ -2126,7 +2126,7 @@ updateScheduleForNode(datetime | null)`}</div>
               <span className="ep-method get">GET</span>
               <span className="ep-url">/canopy/user/:username</span>
             </div>
-            <div className="ep-desc">Look up a local user by username. Used by remote lands to resolve users for cross-land invites.</div>
+            <div className="ep-desc">Look up a local user by username. Used by remote lands to resolve users for cross-land invites. Requires CanopyToken authentication.</div>
             <div className="ep-label">Response</div>
             <div className="ep-code">{`{
   "success": true,
@@ -2183,14 +2183,6 @@ updateScheduleForNode(datetime | null)`}</div>
 
           <div className="endpoint">
             <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/canopy/tree/:rootId</span>
-            </div>
-            <div className="ep-desc">Access a tree's structure from a remote land. Returns the root node with children, filtered for the requesting user's permissions.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
               <span className="ep-method post">POST</span>
               <span className="ep-url">/canopy/llm/proxy</span>
             </div>
@@ -2211,6 +2203,19 @@ updateScheduleForNode(datetime | null)`}</div>
               <span className="ep-url">/canopy/notify</span>
             </div>
             <div className="ep-desc">Receive a notification from a remote land (invite updates, tree changes, etc.).</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/canopy/invite-remote</span>
+            </div>
+            <div className="ep-desc">Invite a user on a remote land to contribute to a local tree. Requires authentication. The requester must own the tree.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{
+  "canopyId": "alice@other-land.com",
+  "rootId": "..."
+}`}</div>
           </div>
 
         </div>
@@ -2285,20 +2290,6 @@ updateScheduleForNode(datetime | null)`}</div>
               <span className="ep-url">/canopy/admin/heartbeat</span>
             </div>
             <div className="ep-desc">Manually trigger a heartbeat check on all peers. Updates status for each.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/canopy/admin/invite-remote</span>
-            </div>
-            <div className="ep-desc">Invite a user on a remote land to contribute to a local tree.</div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{
-  "rootId": "...",
-  "remoteDomain": "other-land.com",
-  "remoteUsername": "alice"
-}`}</div>
           </div>
 
           <div className="endpoint">

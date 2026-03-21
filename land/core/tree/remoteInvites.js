@@ -74,7 +74,10 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId }) {
   try {
     const lookupRes = await fetch(
       `${baseUrl}/canopy/user/${encodeURIComponent(username)}`,
-      { signal: AbortSignal.timeout(10000) }
+      {
+        headers: { Authorization: `CanopyToken ${token}` },
+        signal: AbortSignal.timeout(10000),
+      }
     );
     if (!lookupRes.ok) {
       throw new Error(`User "${username}" not found on ${domain}`);
