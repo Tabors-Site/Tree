@@ -45,15 +45,18 @@ function currentNodeId(cfg) {
 }
 
 function currentPath(cfg) {
-  const base = cfg.atHome ? "/~" : "/";
-  if (!cfg.activeRootId) return base;
-  const prefix = cfg.remoteDomain ? `@${cfg.remoteDomain}` : "";
+  if (!cfg.activeRootId) return cfg.atHome ? "/~" : "/";
   const parts = [cfg.activeRootName, ...cfg.pathStack.map((n) => n.name)];
-  return base + (base === "/~" ? "/" : "") + prefix + (prefix ? "/" : "") + parts.join("/");
+  return "/" + parts.join("/");
+}
+
+function currentLand(cfg) {
+  if (cfg.remoteDomain) return cfg.remoteDomain;
+  return cfg.landUrl ? cfg.landUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "") : "local";
 }
 
 function isRemoteSession(cfg) {
   return !!cfg.remoteDomain;
 }
 
-module.exports = { load, save, requireAuth, currentNodeId, currentPath, isRemoteSession };
+module.exports = { load, save, requireAuth, currentNodeId, currentPath, currentLand, isRemoteSession };

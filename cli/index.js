@@ -3,7 +3,7 @@
 const { Command } = require("commander");
 const chalk = require("chalk");
 const { version } = require("./package.json");
-const { load, currentPath } = require("./config");
+const { load, currentPath, currentLand } = require("./config");
 
 const program = new Command();
 
@@ -203,7 +203,7 @@ const startShell = module.exports.startShell = async () => {
     const prompt = () => {
       const cfg = load(); // re-read so prompt reflects cd/use changes
       const user = cfg.username || cfg.userId || "?";
-      const land = cfg.landUrl ? cfg.landUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "") : "local";
+      const land = currentLand(cfg);
       const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + chalk.dim(currentPath(cfg)) + chalk.bold.cyan(" › ");
       rl.setPrompt(p);
       rl.prompt();

@@ -294,11 +294,10 @@ module.exports = (program) => {
       // ── cd .. ──
       if (name === "..") {
         if (cfg.pathStack.length === 0) {
-          // At tree root — go back to where we came from (/ or /~)
+          // At tree root — go back to land level (keep remoteDomain if on a remote land)
           cfg.activeRootId = null;
           cfg.activeRootName = null;
           cfg.isSystemRoot = false;
-          cfg.remoteDomain = null;
           save(cfg);
           return;
         }
