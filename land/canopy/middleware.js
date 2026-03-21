@@ -1,5 +1,6 @@
 import { verifyCanopyToken, getLandIdentity } from "./identity.js";
-import { getPeerByDomain } from "./peers.js";
+import { getPeerByDomain, registerPeer } from "./peers.js";
+import { lookupLandByDomain } from "./directory.js";
 import { canopyResponseHeaders } from "./protocol.js";
 
 /**
@@ -81,12 +82,36 @@ export async function authenticateCanopy(req, res, next) {
       });
     }
 
-    const peer = await getPeerByDomain(issuerDomain);
+    let peer = await getPeerByDomain(issuerDomain);
     if (!peer) {
-      return res.status(403).json({
-        success: false,
-        error: `Unknown land: ${issuerDomain}. Not registered as a peer.`,
-      });
+      // Rate limit auto-discovery to prevent spam lookups
+      const discoverKey = `discover:${issuerDomain}`;
+      if (checkRateLimit(discoverKey, 3)) {
+        try {
+          const directoryLand = await lookupLandByDomain(issuerDomain);
+          if (directoryLand?.baseUrl) {
+            // Verify the directory domain matches the token issuer
+            // to prevent a directory entry from impersonating another domain
+            const infoRes = await fetch(
+              `${directoryLand.baseUrl.replace(/\/+$/, "")}/canopy/info`,
+              { signal: AbortSignal.timeout(5000) }
+            );
+            if (infoRes.ok) {
+              const info = await infoRes.json();
+              if (info.domain === issuerDomain) {
+                peer = await registerPeer(directoryLand.baseUrl);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!peer) {
+        return res.status(403).json({
+          success: false,
+          error: `Unknown land: ${issuerDomain}. Not registered as a peer and not in the directory.`,
+        });
+      }
     }
 
     if (peer.status === "blocked") {
