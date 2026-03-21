@@ -37,7 +37,7 @@ function parseEnv(content) {
 function buildEnvFile(values) {
   const domain = values.LAND_DOMAIN;
   const port = values.PORT;
-  const isLocal = domain === "localhost" || domain.startsWith("localhost") || domain.startsWith("127.") || domain.startsWith("192.168.") || domain.startsWith("10.");
+  const isLocal = domain === "localhost" || domain.startsWith("localhost") || domain.startsWith("127.") || domain.startsWith("192.168.") || domain.startsWith("10.") || domain.endsWith(".lan") || domain.endsWith(".local") || !domain.includes(".");
   const protocol = isLocal ? "http" : "https";
   const portSuffix = (port !== "80" && port !== "443") ? `:${port}` : "";
   const landUrl = `${protocol}://${domain}${portSuffix}`;
@@ -81,7 +81,7 @@ async function interactiveSetup(existingEnv = {}) {
   };
 
   const values = {};
-  values.LAND_DOMAIN = await ask("Domain", "LAND_DOMAIN");
+  values.LAND_DOMAIN = (await ask("Domain", "LAND_DOMAIN")).replace(/^https?:\/\//, "").replace(/:\d+$/, "").replace(/\/+$/, "");
   values.LAND_NAME = await ask("Land name", "LAND_NAME");
   values.PORT = await ask("Port", "PORT");
   values.MONGODB_URI = await ask("MongoDB URI", "MONGODB_URI");

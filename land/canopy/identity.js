@@ -33,7 +33,7 @@ export function getLandUrl() {
   }
   const domain = cleanDomain(process.env.LAND_DOMAIN || "localhost");
   const port = process.env.PORT || 80;
-  const isLocal = domain === "localhost" || domain.startsWith("localhost") || domain.startsWith("127.") || domain.startsWith("192.168.") || domain.startsWith("10.");
+  const isLocal = domain === "localhost" || domain.startsWith("localhost") || domain.startsWith("127.") || domain.startsWith("192.168.") || domain.startsWith("10.") || domain.endsWith(".lan") || domain.endsWith(".local") || !domain.includes(".");
   const protocol = isLocal ? "http" : "https";
   // Only append port for local domains. Public domains are behind reverse proxies.
   const portSuffix = isLocal && port != 80 && port != 443 ? `:${port}` : "";
