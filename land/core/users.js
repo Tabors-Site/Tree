@@ -184,6 +184,7 @@ const verifyEmail = async (req, res) => {
       username: tempUser.username,
       email: tempUser.email,
       password: tempUser.password, // already hashed
+      profileType: process.env.LAND_DEFAULT_TIER || "basic",
     });
     const authToken = jwt.sign(
       { userId: user._id, username: user.username },
