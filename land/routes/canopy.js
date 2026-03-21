@@ -154,6 +154,72 @@ router.get("/canopy/public-trees", async (req, res) => {
 });
 
 /**
+ * GET /canopy/my-trees
+ * Returns trees the authenticated user owns or contributes to on this land.
+ * Used by remote users (via proxy) to see their invited/contributed trees.
+ */
+router.get("/canopy/my-trees", authenticateCanopy, async (req, res) => {
+  try {
+    const identity = getLandIdentity();
+
+    // Resolve the ghost user on this land from the canopy token
+    const ghostUser = await User.findOne({
+      _id: req.canopy.userId,
+      isRemote: true,
+      homeLand: req.canopy.sourceLandDomain,
+    }).select("roots").lean();
+
+    if (!ghostUser) {
+      return res.json({ success: true, trees: [] });
+    }
+
+    const localUserId = ghostUser._id;
+    const ownedIds = ghostUser.roots || [];
+
+    // Trees the user contributes to (but doesn't own)
+    const contributedTrees = await Node.find({
+      contributors: localUserId,
+      parent: null,
+      rootOwner: { $nin: [null, "SYSTEM"] },
+      _id: { $nin: ownedIds },
+    })
+      .select("_id name rootOwner")
+      .lean();
+
+    const ownedTrees = ownedIds.length
+      ? await Node.find({
+          _id: { $in: ownedIds },
+          rootOwner: { $nin: [null, "SYSTEM"] },
+          name: { $not: /^\./ },
+        })
+          .select("_id name rootOwner")
+          .lean()
+      : [];
+
+    const allTrees = [...ownedTrees, ...contributedTrees];
+
+    const results = await Promise.all(
+      allTrees.map(async (tree) => {
+        const owner = await User.findById(tree.rootOwner)
+          .select("username")
+          .lean();
+        return {
+          rootId: tree._id,
+          name: tree.name || "",
+          ownerUsername: owner?.username || "unknown",
+          landDomain: identity.domain,
+          role: ownedIds.includes(tree._id) ? "owner" : "contributor",
+        };
+      })
+    );
+
+    res.json({ success: true, trees: results });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /canopy/peer/register
  * Called by a remote land to introduce itself.
  * This is the receiving side of peer registration.

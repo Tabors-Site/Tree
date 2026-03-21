@@ -1,13 +1,10 @@
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import User from "../db/models/user.js";
 import { resolveHtmlShareAccess } from "../core/authenticate.js";
 import { errorHtml } from "./notFoundPage.js";
 import { verifyCanopyToken, getLandIdentity } from "../canopy/identity.js";
 import { getPeerByDomain, registerPeer } from "../canopy/peers.js";
 import { lookupLandByDomain } from "../canopy/directory.js";
-
-const JWT_SECRET = process.env.JWT_SECRET;
 
 function wantsHtml(req) {
   return "html" in req.query || (req.headers.accept || "").includes("text/html");
@@ -79,30 +76,7 @@ export default async function urlAuth(req, res, next) {
     }
 
     /* ===========================
-        1️⃣ JWT AUTH
-    ============================ */
-    let jwtToken = null;
-    if (authHeader?.startsWith("Bearer ")) {
-      jwtToken = authHeader.slice(7).trim();
-    }
-    if (!jwtToken && req.cookies?.token) {
-      jwtToken = req.cookies.token;
-    }
-    if (jwtToken && JWT_SECRET) {
-      try {
-        const decoded = jwt.verify(jwtToken, JWT_SECRET);
-        req.userId = decoded.userId;
-        req.username = decoded.username;
-        req.authType = "jwt";
-        req.isHtmlShare = false;
-        return next();
-      } catch (_) {
-        // JWT invalid, fall through to other auth methods
-      }
-    }
-
-    /* ===========================
-        2️⃣ API KEY AUTH
+        1️⃣ API KEY AUTH
     ============================ */
     const apiKey =
       req.headers["x-api-key"] ||

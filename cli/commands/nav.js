@@ -51,23 +51,52 @@ module.exports = (program) => {
 
       if (!cfg.activeRootId) {
         if (cfg.remoteDomain) {
-          // At remote land root — show public trees on that land
+          // At remote land root — show public trees + trees user contributes to
           try {
             const localApi = new TreeAPI(cfg.apiKey);
-            const data = await localApi.getRemotePublicTrees(cfg.remoteDomain);
-            const trees = data.trees || [];
-            if (!trees.length) return console.log(chalk.dim(`  (no public trees on ${cfg.remoteDomain})`));
+            const [pubData, myData] = await Promise.all([
+              localApi.getRemotePublicTrees(cfg.remoteDomain).catch(() => ({ trees: [] })),
+              localApi.getRemoteMyTrees(cfg.remoteDomain).catch(() => ({ trees: [] })),
+            ]);
+            const publicTrees = pubData.trees || [];
+            const myTrees = myData.trees || [];
+
+            // Merge, dedup by rootId, mark source
+            const seen = new Set();
+            const trees = [];
+            for (const t of myTrees) {
+              seen.add(t.rootId);
+              trees.push({ ...t, isMine: true });
+            }
+            for (const t of publicTrees) {
+              if (!seen.has(t.rootId)) {
+                trees.push({ ...t, isMine: false });
+              }
+            }
+
+            if (!trees.length) return console.log(chalk.dim(`  (no trees on ${cfg.remoteDomain})`));
             if (l) {
               printTable(
-                trees.map((t) => ({ name: t.name || t.rootId, owner: t.ownerUsername || "", _id: t.rootId })),
+                trees.map((t) => ({
+                  name: t.name || t.rootId,
+                  owner: t.ownerUsername || "",
+                  role: t.role || (t.isMine ? "contributor" : "public"),
+                  _id: t.rootId,
+                })),
                 [
                   { key: "name", label: "Name", width: 24 },
                   { key: "owner", label: "Owner", width: 16 },
+                  { key: "role", label: "Role", width: 12 },
                   { key: "_id", label: "ID", width: 28 },
                 ],
               );
             } else {
-              console.log(trees.map((t) => chalk.cyan(t.name || t.rootId)).join(chalk.dim("  ·  ")));
+              const names = trees.map((t) => {
+                const name = t.name || t.rootId;
+                if (t.isMine) return chalk.green(name);
+                return chalk.cyan(name);
+              });
+              console.log(names.join(chalk.dim("  ·  ")));
             }
             console.log(chalk.dim(`\n  cd <treename> to enter  ·  home to go back`));
           } catch (e) {
@@ -186,13 +215,21 @@ module.exports = (program) => {
         const rest = name.slice(slashIdx + 1);
         if (!domain || !rest) return console.log(chalk.yellow("Usage: cd @domain/treename"));
 
-        const api = new TreeAPI(cfg.apiKey);
+        const localApi = new TreeAPI(cfg.apiKey);
         try {
-          // Look up public trees on the remote land, use name matching
-          const data = await api.getRemotePublicTrees(domain, rest);
-          const trees = data.trees || [];
+          const [pubData, myData] = await Promise.all([
+            localApi.getRemotePublicTrees(domain, rest).catch(() => ({ trees: [] })),
+            localApi.getRemoteMyTrees(domain).catch(() => ({ trees: [] })),
+          ]);
+          const allTrees = [...(myData.trees || []), ...(pubData.trees || [])];
+          const seen = new Set();
+          const unique = allTrees.filter((t) => {
+            if (seen.has(t.rootId)) return false;
+            seen.add(t.rootId);
+            return true;
+          });
           const target = findChild(
-            trees.map((t) => ({ _id: t.rootId, name: t.name || "" })),
+            unique.map((t) => ({ _id: t.rootId, name: t.name || "" })),
             rest,
           );
           if (!target) return;
@@ -203,30 +240,24 @@ module.exports = (program) => {
           cfg.pathStack = [];
           cfg.isSystemRoot = false;
           save(cfg);
-          console.log(chalk.green(`✓ Entered ${target.name} on ${chalk.dim(`@${domain}`)}`));
+          console.log(chalk.green(`Entered ${target.name} on ${chalk.dim(`@${domain}`)}`));
         } catch (e) {
           console.error(chalk.red(e.message));
         }
         return;
       }
 
-      // ── cd @domain — list trees on a remote land ──
+      // ── cd @domain — enter remote land root ──
       if (name.startsWith("@") && !name.includes("/")) {
         const domain = name.slice(1);
         if (!domain) return console.log(chalk.yellow("Usage: cd @domain/treename"));
-        const api = new TreeAPI(cfg.apiKey);
-        try {
-          const data = await api.getRemotePublicTrees(domain);
-          const trees = data.trees || [];
-          if (!trees.length) return console.log(chalk.dim(`  (no public trees on ${domain})`));
-          console.log(chalk.bold(`Public trees on ${domain}:\n`));
-          trees.forEach((t, i) => {
-            console.log(`  ${chalk.cyan(i + 1 + ".")} ${t.name || t.rootId}  ${chalk.dim(t.ownerUsername || "")}`);
-          });
-          console.log(chalk.dim(`\n  Navigate: cd @${domain}/<treename>`));
-        } catch (e) {
-          console.error(chalk.red(e.message));
-        }
+        cfg.remoteDomain = domain;
+        cfg.activeRootId = null;
+        cfg.activeRootName = null;
+        cfg.pathStack = [];
+        cfg.isSystemRoot = false;
+        save(cfg);
+        console.log(chalk.green(`Entered @${domain}. Run ls to see trees.`));
         return;
       }
 
@@ -250,9 +281,8 @@ module.exports = (program) => {
       if (!cfg.activeRootId) {
         if (name === "..") {
           if (cfg.remoteDomain) {
-            // At remote land root -> go back home
-            cfg.remoteDomain = null;
-            goHome(cfg);
+            // At remote land root -> go back to local land root /
+            goLand(cfg);
             save(cfg);
           } else if (cfg.atHome) {
             // /~ -> / (go up to land)
@@ -265,13 +295,26 @@ module.exports = (program) => {
         }
 
         if (cfg.remoteDomain) {
-          // At remote land root — cd into a tree by name
+          // At remote land root — cd into a tree by name (search public + contributed)
           try {
             const localApi = new TreeAPI(cfg.apiKey);
-            const data = await localApi.getRemotePublicTrees(cfg.remoteDomain, name);
-            const trees = data.trees || [];
+            const [pubData, myData] = await Promise.all([
+              localApi.getRemotePublicTrees(cfg.remoteDomain, name).catch(() => ({ trees: [] })),
+              localApi.getRemoteMyTrees(cfg.remoteDomain).catch(() => ({ trees: [] })),
+            ]);
+            const allTrees = [
+              ...(myData.trees || []),
+              ...(pubData.trees || []),
+            ];
+            // Dedup by rootId
+            const seen = new Set();
+            const unique = allTrees.filter((t) => {
+              if (seen.has(t.rootId)) return false;
+              seen.add(t.rootId);
+              return true;
+            });
             const target = findChild(
-              trees.map((t) => ({ _id: t.rootId, name: t.name || "" })),
+              unique.map((t) => ({ _id: t.rootId, name: t.name || "" })),
               name,
             );
             if (!target) return;
