@@ -17,7 +17,7 @@ import {
   renderValues,
   renderSolanaNoWallet,
   renderSolanaWallet,
-} from "../html/values.js";
+} from "./html/values.js";
 
 const router = express.Router();
 

@@ -3,7 +3,7 @@
 /* --------------------------------------------------------- */
 
 import mime from "mime-types";
-import { getLandUrl } from "../../canopy/identity.js";
+import { getLandUrl } from "../../../canopy/identity.js";
 
 function escapeHtml(str) {
   return str

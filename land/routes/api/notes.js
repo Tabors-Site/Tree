@@ -34,7 +34,7 @@ import {
   parseBool,
   normalizeStatusFilters,
   renderBookNode,
-} from "../html/notes.js";
+} from "./html/notes.js";
 import { getLandUrl } from "../../canopy/identity.js";
 
 const router = express.Router();

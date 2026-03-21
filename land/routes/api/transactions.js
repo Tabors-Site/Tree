@@ -13,7 +13,7 @@ import getNodeName from "./helpers/getNameById.js";
 import {
   renderTransactionsList,
   renderTransactionDetail,
-} from "../html/transactions.js";
+} from "./html/transactions.js";
 
 const router = express.Router();
 const allowedParams = ["token", "html"];

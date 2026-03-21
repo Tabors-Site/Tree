@@ -32,7 +32,7 @@ import LandPeer from "../db/models/landPeer.js";
 import Node from "../db/models/node.js";
 import Invite from "../db/models/invite.js";
 import authenticate from "../middleware/authenticate.js";
-import { renderCanopyAdmin, renderCanopyInvites, renderCanopyDirectory } from "./html/canopy.js";
+import { renderCanopyAdmin, renderCanopyInvites, renderCanopyDirectory } from "./api/html/canopy.js";
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
 import { getLandConfigValue } from "../core/landConfig.js";
 

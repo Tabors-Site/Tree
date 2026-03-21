@@ -1,4 +1,4 @@
-import usersRoutes from "../routes/users.js";
+import usersRoutes from "../users.js";
 
 //cant use app directly
 import appe from "./app.js";

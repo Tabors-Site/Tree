@@ -20,7 +20,7 @@ import {
   renderCalendar,
   renderGateway,
   renderValuesPage,
-} from "../html/root.js";
+} from "./html/root.js";
 
 const router = express.Router();
 

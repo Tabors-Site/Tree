@@ -1,15 +1,15 @@
 // routes/app.js
 import express from "express";
-import User from "../db/models/user.js";
-import CustomLlmConnection from "../db/models/customLlmConnection.js";
-import authenticateLite from "../middleware/authenticateLite.js";
-import { notFoundPage } from "../middleware/notFoundPage.js";
+import User from "../../db/models/user.js";
+import CustomLlmConnection from "../../db/models/customLlmConnection.js";
+import authenticateLite from "../../middleware/authenticateLite.js";
+import { notFoundPage } from "../../middleware/notFoundPage.js";
 import {
   dashboardCSS,
   dashboardHTML,
   dashboardJS,
 } from "./sessionManagerPartial.js";
-import { getLandUrl } from "../canopy/identity.js";
+import { getLandUrl } from "../../canopy/identity.js";
 
 const router = express.Router();
 

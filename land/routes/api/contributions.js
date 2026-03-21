@@ -3,7 +3,7 @@ import urlAuth from "../../middleware/urlAuth.js";
 import { getContributions } from "../../core/tree/contributions.js";
 import getNodeName from "./helpers/getNameById.js";
 import { resolveVersion } from "../../core/tree/treeFetch.js";
-import { renderContributions } from "../html/contributions.js";
+import { renderContributions } from "./html/contributions.js";
 
 const router = express.Router();
 

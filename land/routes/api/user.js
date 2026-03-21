@@ -89,7 +89,7 @@ import {
   renderEnergy,
   renderChats,
   renderNotifications,
-} from "../html/user.js";
+} from "./html/user.js";
 
 const uploadsFolder = path.join(process.cwd(), "uploads");
 

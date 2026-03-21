@@ -20,7 +20,7 @@ import {
   renderRunNodeView,
   buildRunNodeInputsHtml,
   buildRunCards,
-} from "../html/understanding.js";
+} from "./html/understanding.js";
 
 function buildQueryString(req) {
   const allowedParams = ["token", "html"];

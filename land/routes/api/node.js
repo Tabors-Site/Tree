@@ -27,7 +27,7 @@ import {
   renderVersionDetail,
   renderScriptDetail,
   renderScriptHelp,
-} from "../html/node.js";
+} from "./html/node.js";
 
 const router = express.Router();
 

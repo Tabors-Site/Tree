@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import registerRoutes from "./routesFrontend/routesHandler.js";
+import registerRoutes from "./routes/app/routesHandler.js";
 import registerURLRoutes from "./routes/routeHandler.js";
 import { initWebSocketServer } from "./ws/websocket.js";
 import { notFoundPage } from "./middleware/notFoundPage.js";

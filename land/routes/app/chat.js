@@ -3,17 +3,17 @@
 // No iframe, no tree view — just pick a tree and talk.
 
 import express from "express";
-import User from "../db/models/user.js";
-import Node from "../db/models/node.js";
-import CustomLlmConnection from "../db/models/customLlmConnection.js";
-import authenticateLite from "../middleware/authenticateLite.js";
-import { getNotifications } from "../core/tree/notifications.js";
+import User from "../../db/models/user.js";
+import Node from "../../db/models/node.js";
+import CustomLlmConnection from "../../db/models/customLlmConnection.js";
+import authenticateLite from "../../middleware/authenticateLite.js";
+import { getNotifications } from "../../core/tree/notifications.js";
 import {
   getPendingInvitesForUser,
   respondToInvite,
-} from "../core/tree/invites.js";
-import { notFoundPage } from "../middleware/notFoundPage.js";
-import { getLandUrl } from "../canopy/identity.js";
+} from "../../core/tree/invites.js";
+import { notFoundPage } from "../../middleware/notFoundPage.js";
+import { getLandUrl } from "../../canopy/identity.js";
 
 const router = express.Router();
 

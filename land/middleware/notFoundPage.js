@@ -1,4 +1,4 @@
-import { errorHtml } from "../routes/html/notFound.js";
+import { errorHtml } from "../routes/api/html/notFound.js";
 
 export { errorHtml };
 

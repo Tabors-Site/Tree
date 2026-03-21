@@ -3,21 +3,17 @@
 // Skips steps already completed, redirects to /chat when done.
 
 import express from "express";
-import authenticateLite from "../middleware/authenticateLite.js";
-import User from "../db/models/user.js";
-import CustomLlmConnection from "../db/models/customLlmConnection.js";
-import { renderSetup } from "../routesFrontend/html/setup.js";
+import authenticateLite from "../../middleware/authenticateLite.js";
+import User from "../../db/models/user.js";
+import CustomLlmConnection from "../../db/models/customLlmConnection.js";
+import { renderSetup } from "./html/setup.js";
 
 const router = express.Router();
 
 router.get("/setup", authenticateLite, async (req, res) => {
   try {
     if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res
-        .status(404)
-        .json({
-          error: "Server-rendered HTML is disabled. Use the SPA frontend.",
-        });
+      return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
     }
 
     if (!req.userId) {
@@ -31,10 +27,8 @@ router.get("/setup", authenticateLite, async (req, res) => {
       return res.redirect("/login?redirect=/setup");
     }
 
-    const connCount = await CustomLlmConnection.countDocuments({
-      userId: req.userId,
-    });
-    const hasMainLlm = !!user.llmAssignments?.main;
+    const connCount = await CustomLlmConnection.countDocuments({ userId: req.userId });
+    const hasMainLlm = !!(user.llmAssignments?.main);
     const needsLlm = !hasMainLlm && connCount === 0;
     const needsTree = !user.roots || user.roots.length === 0;
 

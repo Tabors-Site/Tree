@@ -2,7 +2,7 @@
 /* HTML renderer for chat page                     */
 /* ─────────────────────────────────────────────── */
 
-import { getLandUrl } from "../../canopy/identity.js";
+import { getLandUrl } from "../../../canopy/identity.js";
 
 function escapeHtml(str) {
   return str
