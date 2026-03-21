@@ -13,6 +13,11 @@ const InviteSchema = new mongoose.Schema({
     default: "pending",
   },
   rootId: { type: String, ref: "Node", required: true },
+
+  // Set when this invite is from a remote land (cross-land invitation)
+  remoteLandDomain: { type: String, default: null },
+  remoteRootName: { type: String, default: null },
+  remoteInviteId: { type: String, default: null },
 });
 
 const Invite = mongoose.model("Invite", InviteSchema);

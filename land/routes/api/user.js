@@ -156,6 +156,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         userId: user._id,
         username: user.username,
         roots,
+        remoteRoots: user.remoteRoots || [],
         profileType,
         energy,
       });

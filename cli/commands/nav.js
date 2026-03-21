@@ -12,13 +12,24 @@ function getApi(cfg) {
     : new TreeAPI(cfg.apiKey);
 }
 
-/** Clear remote session state */
-function clearRemote(cfg) {
+/** Clear session and go to land level (/) */
+function goLand(cfg) {
   cfg.activeRootId = null;
   cfg.activeRootName = null;
   cfg.pathStack = [];
   cfg.isSystemRoot = false;
   cfg.remoteDomain = null;
+  cfg.atHome = false;
+}
+
+/** Clear session and go to user home (/~) */
+function goHome(cfg) {
+  cfg.activeRootId = null;
+  cfg.activeRootName = null;
+  cfg.pathStack = [];
+  cfg.isSystemRoot = false;
+  cfg.remoteDomain = null;
+  cfg.atHome = true;
 }
 
 module.exports = (program) => {
@@ -32,44 +43,74 @@ module.exports = (program) => {
 
   program
     .command("ls")
-    .description("List children of the node you are in")
+    .description("List contents (/ = land, /~ = your trees, inside tree = children)")
     .option("-l", "Long format with IDs and status")
     .action(async ({ l }) => {
       const cfg = requireAuth();
       const api = getApi(cfg);
 
       if (!cfg.activeRootId) {
-        // At Land level (/) — show system nodes + user trees
-        try {
-          const landData = await api.getLandRoot();
-          const children = landData.children || [];
+        if (cfg.atHome) {
+          // At /~ — show user's own roots (local + remote)
+          try {
+            const data = await api.getUser(cfg.userId);
+            const roots = data.roots || data.user?.roots || [];
+            const remoteRoots = data.remoteRoots || [];
 
-          if (!children.length) return console.log(chalk.dim("  (empty)"));
+            if (!roots.length && !remoteRoots.length) return console.log(chalk.dim("  (no trees yet. Run: mkroot <name>)"));
 
-          if (l) {
-            printTable(
-              children.map((c) => ({
-                name: c.name,
-                type: c.isSystem ? "system" : (c.isOwned ? "owned" : c.isPublic ? "public" : "shared"),
-                _id: c._id,
-              })),
-              [
-                { key: "name", label: "Name", width: 28 },
-                { key: "type", label: "Type", width: 10 },
+            if (l) {
+              const rows = [
+                ...roots.map((r) => ({ name: r.name, land: "local", _id: r._id })),
+                ...remoteRoots.map((r) => ({ name: r.rootName, land: `@${r.landDomain}`, _id: r.rootId })),
+              ];
+              printTable(rows, [
+                { key: "name", label: "Name", width: 24 },
+                { key: "land", label: "Land", width: 20 },
                 { key: "_id", label: "ID", width: 28 },
-              ],
-            );
-          } else {
-            const names = children.map((c) => {
-              if (c.isSystem) return chalk.dim(c.name);
-              if (c.isOwned) return chalk.cyan(c.name);
-              if (c.isPublic) return chalk.white(c.name);
-              return chalk.cyan(c.name);
-            });
-            console.log(names.join(chalk.dim("  ·  ")));
+              ]);
+            } else {
+              const localNames = roots.map((r) => chalk.cyan(r.name));
+              const remoteNames = remoteRoots.map((r) => chalk.cyan(r.rootName) + chalk.dim(` @${r.landDomain}`));
+              const all = [...localNames, ...remoteNames];
+              console.log(all.join(chalk.dim("  ·  ")));
+            }
+          } catch (e) {
+            console.error(chalk.red(e.message));
           }
-        } catch (e) {
-          console.error(chalk.red(e.message));
+        } else {
+          // At / — show land roots (public + your private + system)
+          try {
+            const landData = await api.getLandRoot();
+            const children = landData.children || [];
+
+            if (!children.length) return console.log(chalk.dim("  (empty)"));
+
+            if (l) {
+              printTable(
+                children.map((c) => ({
+                  name: c.name,
+                  type: c.isSystem ? "system" : (c.isOwned ? "owned" : c.isPublic ? "public" : "shared"),
+                  _id: c._id,
+                })),
+                [
+                  { key: "name", label: "Name", width: 28 },
+                  { key: "type", label: "Type", width: 10 },
+                  { key: "_id", label: "ID", width: 28 },
+                ],
+              );
+            } else {
+              const names = children.map((c) => {
+                if (c.isSystem) return chalk.dim(c.name);
+                if (c.isOwned) return chalk.cyan(c.name);
+                if (c.isPublic) return chalk.white(c.name);
+                return chalk.cyan(c.name);
+              });
+              console.log(names.join(chalk.dim("  ·  ")));
+            }
+          } catch (e) {
+            console.error(chalk.red(e.message));
+          }
         }
         return;
       }
@@ -106,7 +147,7 @@ module.exports = (program) => {
 
   program
     .command("cd [nameOrId...]")
-    .description('Navigate by name, ID, or @domain/tree. Supports "..", "/", -r, and path chaining')
+    .description('Navigate by name, ID, ~, /, @domain/tree. Supports "..", -r, and path chaining')
     .option("-r, --recursive", "Search entire tree, not just direct children")
     .action(async (parts, opts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: cd <name or id> | cd @domain/tree"));
@@ -166,33 +207,86 @@ module.exports = (program) => {
 
       const api = getApi(cfg);
 
-      // ── At Land level (/) ──
+      // ── cd ~ — go to user home ──
+      if (name === "~") {
+        goHome(cfg);
+        save(cfg);
+        return;
+      }
+
+      // ── cd / — go to land level ──
+      if (name === "/") {
+        goLand(cfg);
+        save(cfg);
+        return;
+      }
+
+      // ── At top level (/ or /~), no tree selected ──
       if (!cfg.activeRootId) {
-        if (name === "/" || name === "..") {
-          return console.log(chalk.dim("Already at /"));
-        }
-
-        try {
-          const landData = await api.getLandRoot();
-          const children = landData.children || [];
-          const target = findChild(children, name);
-          if (!target) return;
-
-          if (target.isSystem) {
-            cfg.activeRootId = target._id;
-            cfg.activeRootName = target.name;
-            cfg.pathStack = [];
-            cfg.isSystemRoot = true;
+        if (name === "..") {
+          if (cfg.atHome) {
+            // /~ -> / (go up to land)
+            goLand(cfg);
             save(cfg);
           } else {
+            console.log(chalk.dim("Already at /"));
+          }
+          return;
+        }
+
+        if (cfg.atHome) {
+          // At /~ — cd into one of your roots (local or remote) by name
+          try {
+            const data = await api.getUser(cfg.userId);
+            const roots = data.roots || data.user?.roots || [];
+            const remoteRoots = data.remoteRoots || [];
+
+            // Try local roots first
+            const localTarget = findChild(roots, name);
+            if (localTarget) {
+              cfg.activeRootId = localTarget._id;
+              cfg.activeRootName = localTarget.name;
+              cfg.pathStack = [];
+              cfg.isSystemRoot = false;
+              save(cfg);
+              return;
+            }
+
+            // Try remote roots
+            const remoteTarget = findChild(
+              remoteRoots.map((r) => ({ _id: r.rootId, name: r.rootName, landDomain: r.landDomain })),
+              name,
+            );
+            if (remoteTarget) {
+              cfg.remoteDomain = remoteTarget.landDomain;
+              cfg.activeRootId = remoteTarget._id;
+              cfg.activeRootName = remoteTarget.name;
+              cfg.pathStack = [];
+              cfg.isSystemRoot = false;
+              save(cfg);
+              console.log(chalk.green(`Entered ${remoteTarget.name} on ${chalk.dim(`@${remoteTarget.landDomain}`)}`));
+              return;
+            }
+
+            console.log(chalk.yellow(`No tree matching "${name}"`));
+          } catch (e) {
+            console.error(chalk.red(e.message));
+          }
+        } else {
+          // At / — cd into land root children
+          try {
+            const landData = await api.getLandRoot();
+            const children = landData.children || [];
+            const target = findChild(children, name);
+            if (!target) return;
             cfg.activeRootId = target._id;
             cfg.activeRootName = target.name;
             cfg.pathStack = [];
-            cfg.isSystemRoot = false;
+            cfg.isSystemRoot = !!target.isSystem;
             save(cfg);
+          } catch (e) {
+            console.error(chalk.red(e.message));
           }
-        } catch (e) {
-          console.error(chalk.red(e.message));
         }
         return;
       }
@@ -200,8 +294,11 @@ module.exports = (program) => {
       // ── cd .. ──
       if (name === "..") {
         if (cfg.pathStack.length === 0) {
-          // At tree root — go back to Land level (or exit remote)
-          clearRemote(cfg);
+          // At tree root — go back to where we came from (/ or /~)
+          cfg.activeRootId = null;
+          cfg.activeRootName = null;
+          cfg.isSystemRoot = false;
+          cfg.remoteDomain = null;
           save(cfg);
           return;
         }
@@ -210,9 +307,24 @@ module.exports = (program) => {
         return;
       }
 
-      // ── cd / ──
-      if (name === "/") {
-        clearRemote(cfg);
+      // ── cd ~/TreeName — shortcut to home then into tree ──
+      if (name.startsWith("~/")) {
+        goHome(cfg);
+        const rest = name.slice(2);
+        if (rest) {
+          try {
+            const data = await api.getUser(cfg.userId);
+            const roots = data.roots || data.user?.roots || [];
+            const target = findChild(roots, rest);
+            if (!target) { save(cfg); return; }
+            cfg.activeRootId = target._id;
+            cfg.activeRootName = target.name;
+            cfg.pathStack = [];
+            cfg.isSystemRoot = false;
+          } catch (e) {
+            console.error(chalk.red(e.message));
+          }
+        }
         save(cfg);
         return;
       }
@@ -223,7 +335,10 @@ module.exports = (program) => {
         for (const seg of segments) {
           if (seg === "..") {
             if (cfg.pathStack.length === 0) {
-              clearRemote(cfg);
+              cfg.activeRootId = null;
+              cfg.activeRootName = null;
+              cfg.isSystemRoot = false;
+              cfg.remoteDomain = null;
               save(cfg);
               return;
             }

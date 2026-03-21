@@ -3,6 +3,7 @@ import User from "../../db/models/user.js";
 import Invite from "../../db/models/invite.js";
 import { logContribution } from "../../db/utils.js";
 import { useEnergy } from "./energy.js";
+import { queueCanopyEvent } from "../../canopy/events.js";
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -286,6 +287,40 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
 
   if (invite.userReceiving.toString() !== userId.toString()) {
     throw new Error("Invite not intended for this user");
+  }
+
+  // Remote invite: tree lives on another land, no local node to modify
+  if (invite.remoteLandDomain) {
+    if (acceptInvite) {
+      await User.findByIdAndUpdate(userId, {
+        $addToSet: {
+          remoteRoots: {
+            rootId: invite.rootId,
+            rootName: invite.remoteRootName || "Untitled",
+            landDomain: invite.remoteLandDomain,
+          },
+        },
+      });
+
+      await queueCanopyEvent(invite.remoteLandDomain, "invite_response", {
+        inviteId: invite.remoteInviteId || invite._id,
+        userId,
+        action: "accept",
+      });
+    } else {
+      await queueCanopyEvent(invite.remoteLandDomain, "invite_response", {
+        inviteId: invite.remoteInviteId || invite._id,
+        userId,
+        action: "decline",
+      });
+    }
+
+    invite.status = acceptInvite ? "accepted" : "declined";
+    await invite.save();
+    return {
+      success: true,
+      message: acceptInvite ? "Remote invite accepted" : "Remote invite declined",
+    };
   }
 
   const node = await Node.findById(invite.rootId).populate(

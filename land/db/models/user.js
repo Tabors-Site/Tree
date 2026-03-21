@@ -42,6 +42,16 @@ const ApiKeySchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
+const RemoteRootSchema = new mongoose.Schema(
+  {
+    rootId: { type: String, required: true },
+    rootName: { type: String, required: true, trim: true },
+    landDomain: { type: String, required: true },
+    lastVisitedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const EnergySchema = new mongoose.Schema(
   {
     amount: {
@@ -74,6 +84,10 @@ const UserSchema = new mongoose.Schema({
 
   recentRoots: {
     type: [RecentRootSchema],
+    default: [],
+  },
+  remoteRoots: {
+    type: [RemoteRootSchema],
     default: [],
   },
   profileType: {

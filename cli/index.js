@@ -22,12 +22,12 @@ program
           cmds: ["connect", "register", "login", "logout", "whoami"],
         },
         {
-          title: "User Home (no tree required)",
-          cmds: ["roots", "use", "root", "mkroot", "retire", "home", "invites", "tags", "ideas", "idea", "idea-store", "rm-idea", "idea-place", "idea-auto", "idea-transfer", "contributions", "share-token", "share", "link"],
+          title: "Navigation",
+          cmds: ["pwd", "ls", "cd", "home", "tree", "calendar", "dream-time"],
         },
         {
-          title: "Navigation (inside a tree)",
-          cmds: ["pwd", "ls", "cd", "tree", "calendar", "dream-time"],
+          title: "Trees",
+          cmds: ["roots", "use", "root", "mkroot", "retire", "invites", "tags", "ideas", "idea", "idea-store", "rm-idea", "idea-place", "idea-auto", "idea-transfer", "contributions", "share-token", "share", "link"],
         },
         {
           title: "Node Management",
@@ -203,7 +203,8 @@ const startShell = async () => {
     const prompt = () => {
       const cfg = load(); // re-read so prompt reflects cd/use changes
       const user = cfg.username || cfg.userId || "?";
-      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(currentPath(cfg)) + chalk.bold.cyan(" › ");
+      const land = cfg.landUrl ? cfg.landUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "") : "local";
+      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + chalk.dim(currentPath(cfg)) + chalk.bold.cyan(" › ");
       rl.setPrompt(p);
       rl.prompt();
     };

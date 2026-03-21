@@ -13,6 +13,8 @@ const DEFAULT_CONFIG = {
   activeRootName: null,
   // Stack of { id, name } objects — index 0 is root node
   pathStack: [],
+  // true when at /~ (user home), false when at / (land level)
+  atHome: false,
 };
 
 function load() {
@@ -43,10 +45,11 @@ function currentNodeId(cfg) {
 }
 
 function currentPath(cfg) {
-  if (!cfg.activeRootId) return "/";
+  const base = cfg.atHome ? "/~" : "/";
+  if (!cfg.activeRootId) return base;
   const prefix = cfg.remoteDomain ? `@${cfg.remoteDomain}` : "";
   const parts = [cfg.activeRootName, ...cfg.pathStack.map((n) => n.name)];
-  return "/" + prefix + (prefix ? "/" : "") + parts.join("/");
+  return base + (base === "/~" ? "/" : "") + prefix + (prefix ? "/" : "") + parts.join("/");
 }
 
 function isRemoteSession(cfg) {

@@ -132,6 +132,7 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId }) {
     status: "pending",
     isToBeOwner: false,
     isUninviting: false,
+    remoteInviteId: offerData.inviteId || null,
   });
 
   return {

@@ -134,13 +134,16 @@ module.exports = (program) => {
 
   program
     .command("home")
-    .description("Leave the current tree and go back to user home")
+    .description("Go to /~ (your trees across all lands)")
     .action(() => {
       const cfg = requireAuth();
       cfg.activeRootId = null;
       cfg.activeRootName = null;
       cfg.pathStack = [];
+      cfg.isSystemRoot = false;
+      cfg.remoteDomain = null;
+      cfg.atHome = true;
       save(cfg);
-      console.log(chalk.green("✓ Back at home (no tree selected)"));
+      console.log(chalk.green("~ home"));
     });
 };

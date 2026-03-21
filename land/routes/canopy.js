@@ -314,8 +314,37 @@ router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
       { upsert: true, new: true }
     );
 
+    // Check for duplicate pending invite
+    const existingInvite = await Invite.findOne({
+      userReceiving: localUser._id,
+      rootId,
+      remoteLandDomain: sourceLandDomain,
+      status: "pending",
+    });
+
+    if (existingInvite) {
+      return res.json({
+        success: true,
+        inviteId: existingInvite._id,
+        message: "Invite already pending",
+        userId: localUser._id,
+        username: localUser.username,
+      });
+    }
+
+    // Create a local invite so the user can see and respond
+    const invite = await Invite.create({
+      userInviting: invitingUserId,
+      userReceiving: localUser._id,
+      rootId,
+      remoteLandDomain: sourceLandDomain,
+      remoteRootName: rootName || "Untitled",
+      status: "pending",
+    });
+
     res.json({
       success: true,
+      inviteId: invite._id,
       message: "Invite offer received",
       userId: localUser._id,
       username: localUser.username,

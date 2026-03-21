@@ -93,10 +93,11 @@ module.exports = (program) => {
         if (!invites.length) return console.log(chalk.dim("  (no pending invites)"));
         invites.forEach((inv, i) => {
           const from = inv.userInviting?.username || inv.userInviting?._id || "";
-          const tree = inv.rootId?.name || inv.rootId || "";
+          const tree = inv.rootId?.name || inv.remoteRootName || inv.rootId || "";
+          const land = inv.remoteLandDomain ? ` ${chalk.dim(`@${inv.remoteLandDomain}`)}` : "";
           const id = inv._id || "";
           console.log(
-            `  ${chalk.cyan(i + 1 + ".")} ${chalk.bold(tree)}  ${chalk.dim("from")} ${from}  ${chalk.dim(id)}`,
+            `  ${chalk.cyan(i + 1 + ".")} ${chalk.bold(tree)}${land}  ${chalk.dim("from")} ${from}  ${chalk.dim(id)}`,
           );
         });
         console.log(chalk.dim("\n  Accept: invite accept <id>  ·  Decline: invite deny <id>"));
