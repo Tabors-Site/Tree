@@ -340,6 +340,7 @@ router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
       remoteLandDomain: sourceLandDomain,
       remoteRootName: rootName || "Untitled",
       remoteInviteId: sourceInviteId || null,
+      remoteInvitingUsername: invitingUsername || null,
       status: "pending",
     });
 

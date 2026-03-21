@@ -57,12 +57,21 @@ module.exports = (program) => {
       const cfg = requireAuth();
       const first = parts[0];
 
-      // invite accept <id> / invite deny <id> (always local)
+      // invite accept <id|number> / invite deny <id|number>
       if ((first === "accept" || first === "deny") && parts[1]) {
         const api = new TreeAPI(cfg.apiKey);
         try {
+          let inviteId = parts[1];
+          // If user passed a number, resolve it from the invite list
+          if (/^\d+$/.test(inviteId)) {
+            const data = await api.listInvites(cfg.userId);
+            const invites = data.invites || data || [];
+            const idx = parseInt(inviteId, 10) - 1;
+            if (idx < 0 || idx >= invites.length) return console.log(chalk.yellow("Invalid invite number."));
+            inviteId = invites[idx]._id;
+          }
           const isAccept = first === "accept";
-          await api.respondInvite(cfg.userId, parts[1], isAccept);
+          await api.respondInvite(cfg.userId, inviteId, isAccept);
           console.log(chalk.green(`✓ Invite ${isAccept ? "accepted" : "declined"}`));
         } catch (e) { console.error(chalk.red(e.message)); }
         return;
@@ -92,12 +101,11 @@ module.exports = (program) => {
         const invites = data.invites || data || [];
         if (!invites.length) return console.log(chalk.dim("  (no pending invites)"));
         invites.forEach((inv, i) => {
-          const from = inv.userInviting?.username || inv.userInviting?._id || "";
+          const from = inv.userInviting?.username || inv.remoteInvitingUsername || inv.userInviting || "";
           const tree = inv.rootId?.name || inv.remoteRootName || inv.rootId || "";
           const land = inv.remoteLandDomain ? ` ${chalk.dim(`@${inv.remoteLandDomain}`)}` : "";
-          const id = inv._id || "";
           console.log(
-            `  ${chalk.cyan(i + 1 + ".")} ${chalk.bold(tree)}${land}  ${chalk.dim("from")} ${from}  ${chalk.dim(id)}`,
+            `  ${chalk.cyan(i + 1 + ".")} ${chalk.bold(tree)}${land}  ${chalk.dim("from")} ${from}`,
           );
         });
         console.log(chalk.dim("\n  Accept: invite accept <id>  ·  Decline: invite deny <id>"));

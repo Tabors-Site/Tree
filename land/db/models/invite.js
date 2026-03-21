@@ -18,6 +18,7 @@ const InviteSchema = new mongoose.Schema({
   remoteLandDomain: { type: String, default: null },
   remoteRootName: { type: String, default: null },
   remoteInviteId: { type: String, default: null },
+  remoteInvitingUsername: { type: String, default: null },
 });
 
 const Invite = mongoose.model("Invite", InviteSchema);
