@@ -35,7 +35,8 @@ export function getLandUrl() {
   const port = process.env.PORT || 80;
   const isLocal = domain === "localhost" || domain.startsWith("localhost") || domain.startsWith("127.") || domain.startsWith("192.168.") || domain.startsWith("10.");
   const protocol = isLocal ? "http" : "https";
-  const portSuffix = (port != 80 && port != 443) ? `:${port}` : "";
+  // Only append port for local domains. Public domains are behind reverse proxies.
+  const portSuffix = isLocal && port != 80 && port != 443 ? `:${port}` : "";
   cachedLandUrl = `${protocol}://${domain}${portSuffix}`;
   return cachedLandUrl;
 }

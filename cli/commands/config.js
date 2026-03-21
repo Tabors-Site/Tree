@@ -38,7 +38,7 @@ module.exports = (program) => {
         save(cfg);
         console.log(chalk.green(`Connected to ${cfg.landUrl}`));
         if (!cfg.apiKey) {
-          console.log(chalk.dim("Next: treeos login --key YOUR_API_KEY"));
+          console.log(chalk.dim("Next: treeos register or treeos login"));
         }
       } catch (e) {
         console.error(chalk.red("Error:"), e.message);

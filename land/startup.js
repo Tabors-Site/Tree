@@ -1,5 +1,5 @@
 import mongoose from "./db/config.js";
-import { getLandIdentity } from "./canopy/identity.js";
+import { getLandIdentity, getLandUrl } from "./canopy/identity.js";
 import { ensureLandRoot } from "./core/landRoot.js";
 import { initLandConfig } from "./core/landConfig.js";
 import { startRawIdeaAutoPlaceJob } from "./jobs/rawIdeaAutoPlace.js";
@@ -14,7 +14,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export function onListen(PORT) {
+export function onListen() {
   const land = getLandIdentity();
   console.log("[Land] Initializing Tree Land Node...");
   console.log(`[Land] Domain: ${land.domain}`);
@@ -30,7 +30,9 @@ export function onListen(PORT) {
     await ensureLandRoot();
     await initLandConfig();
     runTreeDreamJob();
-    console.log("[Land] Background jobs started (dream, drain, cleanup, understanding)");
+    console.log(
+      "[Land] Background jobs started (dream, drain, cleanup, understanding)",
+    );
 
     startHeartbeatJob();
     startOutboxJob();
@@ -41,11 +43,11 @@ export function onListen(PORT) {
       .then(({ startupScan }) => {
         startupScan();
         console.log("[Land] Gateway scan complete");
-        printReady(PORT);
+        printReady();
       })
       .catch((err) => {
         console.error("[Land] Discord bot startup scan failed:", err.message);
-        printReady(PORT);
+        printReady();
       });
   };
 
@@ -57,11 +59,8 @@ export function onListen(PORT) {
 
 let siteProcess = null;
 
-function printReady(PORT) {
-  const land = getLandIdentity();
-  const protocol = land.domain === "localhost" || land.domain.startsWith("localhost") ? "http" : "https";
-  const portSuffix = (PORT !== 80 && PORT !== 443 && PORT !== "80" && PORT !== "443") ? `:${PORT}` : "";
-  const apiUrl = `${protocol}://${land.domain}${portSuffix}`;
+function printReady() {
+  const apiUrl = getLandUrl();
 
   console.log("");
   console.log("[Land] Land node online.");
@@ -82,7 +81,7 @@ function printReady(PORT) {
   console.log("");
   console.log("[Land] Quick start:");
   console.log(`  treeos connect ${apiUrl}`);
-  console.log("  treeos login --key YOUR_API_KEY");
+  console.log("  treeos register");
   console.log("  treeos start");
   console.log("");
 }
@@ -105,7 +104,8 @@ function startSiteDev(siteDir) {
   });
   siteProcess.on("close", (code) => {
     siteProcess = null;
-    if (code && code !== 0) console.log(`[Site] Dev server exited (code ${code})`);
+    if (code && code !== 0)
+      console.log(`[Site] Dev server exited (code ${code})`);
   });
 
   console.log("[Site] Vite dev server starting on port 5174...");

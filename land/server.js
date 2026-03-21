@@ -46,4 +46,4 @@ const server = http.createServer(app);
 export const wsServer = initWebSocketServer(server);
 
 const PORT = process.env.PORT || 80;
-server.listen(PORT, "0.0.0.0", () => onListen(PORT));
+server.listen(PORT, "0.0.0.0", () => onListen());

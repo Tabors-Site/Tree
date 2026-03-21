@@ -57,19 +57,19 @@ const register = async (req, res) => {
     let { username, password, email } = req.body;
 
     /* -------------------------
-       ORIGINAL VALIDATIONS
+       VALIDATIONS
     -------------------------- */
 
-    if (!username || !password || !email) {
+    if (!username || !password) {
       return res.status(400).json({
-        message: "Username, email, and password are required",
+        message: "Username and password are required",
       });
     }
     if (!/^[a-zA-Z0-9_\-]{1,32}$/.test(username)) {
-  return res.status(400).json({
-    message: "Username may only contain letters, numbers, hyphens, and underscores (1–32 chars)",
-  });
-}
+      return res.status(400).json({
+        message: "Username may only contain letters, numbers, hyphens, and underscores (1-32 chars)",
+      });
+    }
     if (password.length < 8) {
       return res.status(400).json({
         message: "Password must be at least 8 characters long",
@@ -77,47 +77,97 @@ const register = async (req, res) => {
     }
     username = username.trim();
 
-    if (!isValidEmail(email)) {
-  return res.status(400).json({
-    message: "Please enter a valid email address",
-  });
-}
-email = email.trim().toLowerCase();
-
-    
+    if (email) {
+      if (!isValidEmail(email)) {
+        return res.status(400).json({
+          message: "Please enter a valid email address",
+        });
+      }
+      email = email.trim().toLowerCase();
+    }
 
     /* -------------------------
-       CHECK REAL USERS (EXACT MATCH)
+       CHECK DUPLICATES
     -------------------------- */
 
     const existingUser = await User.findOne({
       username: { $regex: `^${escapeRegex(username)}$`, $options: "i" },
     });
-
     if (existingUser) {
       return res.status(400).json({ message: "Username already taken" });
     }
 
-    const existingEmail = await User.findOne({ email });
-    if (existingEmail) {
-      return res.status(400).json({ message: "Email already registered" });
+    if (email) {
+      const existingEmail = await User.findOne({ email });
+      if (existingEmail) {
+        return res.status(400).json({ message: "Email already registered" });
+      }
     }
 
     /* -------------------------
-       CLEAN OLD TEMP USERS
+       FIRST USER: CREATE DIRECTLY AS ADMIN
     -------------------------- */
 
-      // ✅ FIXED — escaped regex in cleanup query too
+    // Atomic check: try to create the user as first. If another request
+    // raced us, the duplicate username check above (or this countDocuments)
+    // will catch it. We re-check count right before creation.
+    const userCount = await User.countDocuments();
+    const isFirstUser = userCount === 0;
+
+    if (isFirstUser) {
+      const user = new User({
+        username,
+        password,
+        email: email || null,
+        profileType: "god",
+      });
+
+      try {
+        await user.save();
+      } catch (err) {
+        // Race condition: another first-user registered between count and save
+        if (err.code === 11000) {
+          return res.status(400).json({ message: "Username already taken" });
+        }
+        throw err;
+      }
+
+      const { rawKey, keyHash } = await generateApiKey();
+      user.apiKeys.push({ keyHash, name: "treeos-cli" });
+      await user.save();
+
+      const token = jwt.sign(
+        { userId: user._id, username: user.username },
+        JWT_SECRET,
+        { expiresIn: "365d" },
+      );
+
+      return res.status(201).json({
+        firstUser: true,
+        token,
+        apiKey: rawKey,
+        userId: user._id,
+        username: user.username,
+        profileType: user.profileType,
+      });
+    }
+
+    /* -------------------------
+       SUBSEQUENT USERS: REQUIRE EMAIL VERIFICATION
+    -------------------------- */
+
+    if (!email) {
+      return res.status(400).json({
+        message: "Email is required for registration",
+      });
+    }
+
     await TempUser.deleteMany({
       $or: [
         { email },
         { username: { $regex: `^${escapeRegex(username)}$`, $options: "i" } },
       ],
     });
-
-    /* -------------------------
-       CREATE TEMP USER
-    -------------------------- */
 
     const verificationToken = crypto.randomBytes(32).toString("hex");
 
@@ -129,14 +179,11 @@ email = email.trim().toLowerCase();
       expiresAt: Date.now() + 1000 * 60 * 60 * 12, // 12 hours
     });
 
-    /* -------------------------
-       SEND EMAIL
-    -------------------------- */
-
     const verifyUrl = `${getLandUrl()}/api/v1/user/verify/${verificationToken}`;
     await sendVerificationEmail(email, verifyUrl, temp.username);
 
     res.status(201).json({
+      pendingVerification: true,
       message: "Check your email to complete registration",
     });
   } catch (error) {

@@ -4,6 +4,18 @@ const { getBaseSite } = require("../api");
 const { load, save, requireAuth, currentNodeId } = require("../config");
 const { termLink } = require("../helpers");
 
+/** Check if the connected Land has frontend HTML enabled */
+async function checkFrontendEnabled(api) {
+  try {
+    const data = await api.getLandConfigValue("ENABLE_FRONTEND_HTML");
+    const val = data.value;
+    return val === true || val === "true";
+  } catch {
+    // Config endpoint may not exist on older lands, assume enabled
+    return true;
+  }
+}
+
 module.exports = (program) => {
   program
     .command("share-token [token]")
@@ -34,6 +46,11 @@ module.exports = (program) => {
         return console.log(chalk.yellow("Usage: share idea <id> | share note <id>"));
       }
       const cfg = requireAuth();
+      const checkApi = new TreeAPI(cfg.apiKey);
+      const enabled = await checkFrontendEnabled(checkApi);
+      if (!enabled) {
+        return console.log(chalk.yellow("This Land does not have frontend HTML enabled. Ask the admin to set ENABLE_FRONTEND_HTML=true"));
+      }
 
       if (type === "idea") {
         if (!id) return console.log(chalk.yellow("Usage: share idea <rawIdeaId>"));
@@ -77,8 +94,15 @@ module.exports = (program) => {
   program
     .command("link [type] [id]")
     .description("Open a clickable link to your current location in the Tree web app")
-    .action((type, id) => {
+    .action(async (type, id) => {
       const cfg = load();
+      if (cfg.apiKey) {
+        const api = new TreeAPI(cfg.apiKey);
+        const enabled = await checkFrontendEnabled(api);
+        if (!enabled) {
+          return console.log(chalk.yellow("This Land does not have frontend HTML enabled. Ask the admin to set ENABLE_FRONTEND_HTML=true"));
+        }
+      }
       const qs = cfg.shareToken ? `?token=${cfg.shareToken}&html` : "?html";
 
       if (!cfg.userId) {

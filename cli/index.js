@@ -19,7 +19,7 @@ program
       const sections = [
         {
           title: "Getting Started",
-          cmds: ["connect", "login", "logout", "whoami"],
+          cmds: ["connect", "register", "login", "logout", "whoami"],
         },
         {
           title: "User Home (no tree required)",
@@ -170,7 +170,7 @@ const startShell = async () => {
     if (!cfg.apiKey) {
       console.log(
         chalk.yellow(
-          "Not logged in. Run: treeos login --key YOUR_KEY",
+          "Not logged in. Run: treeos login or treeos register",
         ),
       );
       return;

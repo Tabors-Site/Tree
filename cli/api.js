@@ -398,6 +398,59 @@ function createProxyApi(apiKey, remoteDomain) {
   return api;
 }
 
+/** Unauthenticated POST (for register/login) */
+async function unauthPost(path, body) {
+  const res = await fetch(getBase() + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch {
+    throw new Error(`Server returned non-JSON response (HTTP ${res.status}). Is the Land running the latest version?`);
+  }
+  if (!res.ok) throw new Error(json.error || json.message || `HTTP ${res.status}`);
+  return json;
+}
+
+/** POST with JWT Bearer token (for creating API key after login) */
+async function jwtPost(token, path, body) {
+  const res = await fetch(getBase() + path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch {
+    throw new Error(`Server returned non-JSON response (HTTP ${res.status}).`);
+  }
+  if (!res.ok) throw new Error(json.error || json.message || `HTTP ${res.status}`);
+  return json;
+}
+
+/** GET with JWT Bearer token (for /me after login) */
+async function jwtGet(token, path) {
+  const res = await fetch(getBase() + path, {
+    method: "GET",
+    headers: { "Authorization": "Bearer " + token },
+  });
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch {
+    throw new Error(`Server returned non-JSON response (HTTP ${res.status}).`);
+  }
+  if (!res.ok) throw new Error(json.error || json.message || `HTTP ${res.status}`);
+  return json;
+}
+
 module.exports = TreeAPI;
 module.exports.getBaseSite = getBaseSite;
 module.exports.createProxyApi = createProxyApi;
+module.exports.unauthPost = unauthPost;
+module.exports.jwtPost = jwtPost;
+module.exports.jwtGet = jwtGet;

@@ -32,7 +32,7 @@ function save(config) {
 function requireAuth() {
   const cfg = load();
   if (!cfg.apiKey || !cfg.userId) {
-    throw new Error("Not logged in. Run: treeos login --key YOUR_API_KEY");
+    throw new Error("Not logged in. Run: treeos login or treeos register");
   }
   return cfg;
 }

@@ -36,7 +36,9 @@
       "Bash(grep -r \"invite\" /home/tabor/github/Tree/land/routes/api/*.js -l)",
       "Bash(node -e \":*)",
       "Bash(node index.js --help)",
-      "Bash(node -e \"require\\(''''./cli/index.js''''\\)\")"
+      "Bash(node -e \"require\\(''''./cli/index.js''''\\)\")",
+      "Bash(find /home/tabor/github/Tree -name *.test.js -o -name *.spec.js)",
+      "Bash(grep -r \"csrf\\\\|CSRF\" /home/tabor/github/Tree/land --include=*.js)"
     ]
   }
 }
