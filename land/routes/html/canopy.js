@@ -640,8 +640,7 @@ export function renderCanopyAdmin({ land, peers, pendingEvents, failedEvents }) 
       </div>
 
       <div class="nav-links">
-        <a href="/canopy/admin" class="active">Dashboard</a>
-        <a href="/canopy/admin/invites">Invites</a>
+        ${navLinks("/canopy/admin")}
       </div>
 
       <!-- Identity Card -->
@@ -806,6 +805,24 @@ export function renderCanopyAdmin({ land, peers, pendingEvents, failedEvents }) 
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// NAV HELPER
+// ─────────────────────────────────────────────────────────────────────────
+
+function navLinks(activePage) {
+  const pages = [
+    { href: "/canopy/admin", label: "Dashboard" },
+    { href: "/canopy/admin/invites", label: "Invites" },
+    { href: "/canopy/admin/directory", label: "Directory" },
+  ];
+  return pages
+    .map(
+      (p) =>
+        `<a href="${p.href}" class="${p.href === activePage ? "active" : ""}">${p.label}</a>`
+    )
+    .join("\n");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // 2. renderCanopyInvites
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -872,8 +889,7 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
       </div>
 
       <div class="nav-links">
-        <a href="/canopy/admin">Dashboard</a>
-        <a href="/canopy/admin/invites" class="active">Invites</a>
+        ${navLinks("/canopy/admin/invites")}
       </div>
 
       <!-- Incoming Invites -->
@@ -932,6 +948,189 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
           setTimeout(function () { location.reload(); }, 800);
         }
       }
+    </script>
+  </body>
+  </html>
+  `;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 3. renderCanopyDirectory
+// ─────────────────────────────────────────────────────────────────────────
+
+export function renderCanopyDirectory({ hasDirectory }) {
+  const noDirectoryMessage = !hasDirectory
+    ? '<div class="glass-card" style="animation-delay: 0.1s;">' +
+      '<div class="empty-state">' +
+      '<p>No directory service configured.</p>' +
+      '<p style="margin-top: 8px; font-size: 13px;">Set the <code>DIRECTORY_URL</code> environment variable to connect to a directory and discover other lands.</p>' +
+      '</div></div>'
+    : "";
+
+  const searchSection = hasDirectory
+    ? '<div class="glass-card" style="animation-delay: 0.1s;">' +
+      '<div class="tab-bar">' +
+      '<button class="active" id="tab-lands" onclick="switchTab(\'lands\')">Lands</button>' +
+      '<button id="tab-trees" onclick="switchTab(\'trees\')">Public Trees</button>' +
+      '</div>' +
+      '<div class="form-row">' +
+      '<input type="text" id="search-query" placeholder="Search lands or trees..." onkeydown="if(event.key===\'Enter\')doSearch()" />' +
+      '<button class="accent-btn" onclick="doSearch()">Search</button>' +
+      '</div>' +
+      '<div id="search-results" class="search-results">' +
+      '<div class="empty-state">Enter a search term or leave blank to browse all.</div>' +
+      '</div></div>'
+    : "";
+
+  const extraStyles = `
+    .search-results { margin-top: 16px; }
+    .result-card {
+      padding: 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.06);
+      margin-bottom: 10px; display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 10px;
+    }
+    .result-info { flex: 1; min-width: 200px; }
+    .result-info .result-name { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+    .result-info .result-detail { font-size: 13px; color: var(--text-secondary); }
+    .result-info .result-detail code {
+      font-family: "JetBrains Mono", monospace; font-size: 12px;
+      padding: 2px 6px; background: rgba(255, 255, 255, 0.1); border-radius: 4px;
+    }
+    .tab-bar {
+      display: flex; gap: 0; margin-bottom: 16px; border-radius: 12px;
+      overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .tab-bar button {
+      flex: 1; border-radius: 0; border: none; padding: 12px 16px;
+      background: rgba(var(--glass-water-rgb), 0.15); box-shadow: none; font-size: 14px;
+    }
+    .tab-bar button:hover { background: rgba(var(--glass-water-rgb), 0.25); transform: none; }
+    .tab-bar button.active { background: var(--accent); }
+    .loading { text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px; }
+  `;
+
+  const directoryScript = `
+      var currentTab = "lands";
+
+      function switchTab(tab) {
+        currentTab = tab;
+        document.getElementById("tab-lands").className = tab === "lands" ? "active" : "";
+        document.getElementById("tab-trees").className = tab === "trees" ? "active" : "";
+        document.getElementById("search-results").innerHTML =
+          '<div class="empty-state">Enter a search term or leave blank to browse all.</div>';
+      }
+
+      async function doSearch() {
+        var query = document.getElementById("search-query").value.trim();
+        var resultsDiv = document.getElementById("search-results");
+        resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+
+        var endpoint = currentTab === "lands"
+          ? "/canopy/admin/directory/lands"
+          : "/canopy/admin/directory/trees";
+
+        var data = await canopyFetch(endpoint + "?q=" + encodeURIComponent(query));
+
+        if (!data) {
+          resultsDiv.innerHTML = '<div class="empty-state">Search failed.</div>';
+          return;
+        }
+
+        if (currentTab === "lands") {
+          renderLandResults(data.lands || []);
+        } else {
+          renderTreeResults(data.trees || []);
+        }
+      }
+
+      function renderLandResults(lands) {
+        var div = document.getElementById("search-results");
+        if (lands.length === 0) {
+          div.innerHTML = '<div class="empty-state">No lands found.</div>';
+          return;
+        }
+
+        div.innerHTML = lands.map(function (land) {
+          return '<div class="result-card">' +
+            '<div class="result-info">' +
+              '<div class="result-name">' + escapeHtml(land.name || "Unnamed Land") + '</div>' +
+              '<div class="result-detail"><code>' + escapeHtml(land.domain || "") + '</code></div>' +
+              '<div class="result-detail">Protocol v' + (land.protocolVersion || "?") +
+                ' . ' + (land.status || "unknown") + '</div>' +
+            '</div>' +
+            '<button class="small-btn accent-btn" onclick="discoverPeer(\\'' + escapeHtml(land.domain) + '\\')">Add as Peer</button>' +
+          '</div>';
+        }).join("");
+      }
+
+      function renderTreeResults(trees) {
+        var div = document.getElementById("search-results");
+        if (trees.length === 0) {
+          div.innerHTML = '<div class="empty-state">No public trees found.</div>';
+          return;
+        }
+
+        div.innerHTML = trees.map(function (tree) {
+          return '<div class="result-card">' +
+            '<div class="result-info">' +
+              '<div class="result-name">' + escapeHtml(tree.name || "Untitled") + '</div>' +
+              '<div class="result-detail">by ' + escapeHtml(tree.ownerUsername || "unknown") +
+                ' on <code>' + escapeHtml(tree.landDomain || "") + '</code></div>' +
+            '</div>' +
+          '</div>';
+        }).join("");
+      }
+
+      async function discoverPeer(domain) {
+        var data = await canopyFetch("/canopy/admin/peer/discover", {
+          method: "POST",
+          body: JSON.stringify({ domain: domain })
+        });
+        if (data) {
+          showToast("Peered with " + domain, "success");
+        }
+      }
+
+      function escapeHtml(str) {
+        if (!str) return "";
+        var div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+      }
+  `;
+
+  return `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#667eea">
+    <title>Canopy Directory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>${sharedStyles}${extraStyles}</style>
+  </head>
+  <body>
+    <div id="toast-container" class="toast-container"></div>
+
+    <div class="container">
+      <div class="page-header">
+        <h1>Directory</h1>
+        <p>Discover lands and public trees across the network</p>
+      </div>
+
+      <div class="nav-links">
+        ${navLinks("/canopy/admin/directory")}
+      </div>
+
+      ${noDirectoryMessage}
+      ${searchSection}
+    </div>
+
+    <script>
+      ${sharedScripts}
+      ${hasDirectory ? directoryScript : ""}
     </script>
   </body>
   </html>

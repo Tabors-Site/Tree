@@ -32,7 +32,8 @@ import LandPeer from "../db/models/landPeer.js";
 import Node from "../db/models/node.js";
 import Invite from "../db/models/invite.js";
 import authenticate from "../middleware/authenticate.js";
-import { renderCanopyAdmin, renderCanopyInvites } from "./html/canopy.js";
+import { renderCanopyAdmin, renderCanopyInvites, renderCanopyDirectory } from "./html/canopy.js";
+import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
 
 const router = express.Router();
 
@@ -755,13 +756,26 @@ router.post("/canopy/admin/invite-remote", authenticate, async (req, res) => {
       });
     }
 
-    // Look up the peer
-    const peer = await getPeerByDomain(domain);
+    // Look up the peer, auto-discover via directory if needed
+    let peer = await getPeerByDomain(domain);
     if (!peer) {
-      return res.status(404).json({
-        success: false,
-        error: `Land ${domain} is not a registered peer. Add it first.`,
-      });
+      // Try directory lookup and auto-peer
+      const directoryLand = await lookupLandByDomain(domain);
+      if (directoryLand && directoryLand.baseUrl) {
+        try {
+          peer = await registerPeer(directoryLand.baseUrl);
+        } catch (peerErr) {
+          return res.status(404).json({
+            success: false,
+            error: `Found land ${domain} in directory but could not connect: ${peerErr.message}`,
+          });
+        }
+      } else {
+        return res.status(404).json({
+          success: false,
+          error: `Land ${domain} not found. Not a peer and not in the directory.`,
+        });
+      }
     }
 
     // Resolve the user on the remote land
@@ -822,6 +836,92 @@ router.post("/canopy/admin/invite-remote", authenticate, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /canopy/admin/directory/lands
+ * Search the directory for lands.
+ */
+router.get("/canopy/admin/directory/lands", authenticate, async (req, res) => {
+  try {
+    const lands = await searchLands(req.query.q || "");
+    res.json({ success: true, lands });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /canopy/admin/directory/trees
+ * Search the directory for public trees across the network.
+ */
+router.get("/canopy/admin/directory/trees", authenticate, async (req, res) => {
+  try {
+    const trees = await searchPublicTrees(req.query.q || "");
+    res.json({ success: true, trees });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /canopy/admin/peer/discover
+ * Look up a land by domain in the directory and auto-peer with it.
+ */
+router.post("/canopy/admin/peer/discover", authenticate, async (req, res) => {
+  try {
+    const { domain } = req.body;
+    if (!domain) {
+      return res.status(400).json({ success: false, error: "Missing domain" });
+    }
+
+    const directoryLand = await lookupLandByDomain(domain);
+    if (!directoryLand || !directoryLand.baseUrl) {
+      return res.status(404).json({
+        success: false,
+        error: `Land ${domain} not found in directory`,
+      });
+    }
+
+    const peer = await registerPeer(directoryLand.baseUrl);
+    res.json({ success: true, peer });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================
+// PROXY: Forward local user API calls to remote lands
+// ============================================================
+
+/**
+ * ALL /canopy/proxy/:domain/*
+ * Proxy any API request to a remote land on behalf of the logged-in user.
+ * The frontend calls this when interacting with a tree that lives elsewhere.
+ *
+ * Example: POST /canopy/proxy/other.land.com/api/v1/node/create
+ * becomes: POST https://other.land.com/api/v1/node/create
+ * with a CanopyToken header signed by this land.
+ */
+router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
+  try {
+    const { domain } = req.params;
+    // Extract the path after /canopy/proxy/:domain/
+    const forwardPath = "/" + req.params[0];
+
+    const result = await proxyToRemoteLand({
+      userId: req.userId,
+      targetLandDomain: domain,
+      method: req.method,
+      path: forwardPath,
+      body: req.body,
+      query: req.query,
+    });
+
+    res.status(result.status).json(result.data);
+  } catch (err) {
+    res.status(502).json({ success: false, error: err.message });
   }
 });
 
@@ -895,6 +995,24 @@ router.get("/canopy/admin/invites", authenticate, async (req, res) => {
     }));
 
     const html = renderCanopyInvites({ invites, remoteUsers, localTrees });
+    res.send(html);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /canopy/admin/directory
+ * Server-rendered directory search page.
+ */
+router.get("/canopy/admin/directory", authenticate, async (req, res) => {
+  if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
+  }
+
+  try {
+    const hasDirectory = !!process.env.DIRECTORY_URL;
+    const html = renderCanopyDirectory({ hasDirectory });
     res.send(html);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

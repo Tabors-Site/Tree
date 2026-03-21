@@ -5,6 +5,8 @@ import { fileURLToPath } from "url";
 import bcrypt from "bcrypt";
 import User from "../db/models/user.js";
 import { resolveTreeAccess } from "../core/authenticate.js";
+import { verifyCanopyToken } from "../canopy/identity.js";
+import { getPeerByDomain } from "../canopy/peers.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,11 +18,58 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 export default async function authenticate(req, res, next) {
   try {
     /* ===========================
-        1️⃣ JWT AUTH (preferred)
+        0. CANOPY TOKEN AUTH (remote land users)
+    ============================ */
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("CanopyToken ")) {
+      const canopyToken = authHeader.slice("CanopyToken ".length);
+
+      // Decode to get issuer
+      let unverified;
+      try {
+        const parts = canopyToken.split(".");
+        unverified = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+      } catch {
+        return res.status(401).json({ message: "Malformed CanopyToken" });
+      }
+
+      const peer = await getPeerByDomain(unverified.iss);
+      if (!peer) {
+        return res.status(403).json({ message: "Unknown land: " + unverified.iss });
+      }
+      if (peer.status === "blocked") {
+        return res.status(403).json({ message: "Land " + unverified.iss + " is blocked" });
+      }
+
+      const { valid, payload, error } = verifyCanopyToken(canopyToken, peer.publicKey);
+      if (!valid) {
+        return res.status(401).json({ message: "Invalid CanopyToken: " + error });
+      }
+
+      // The sub is the remote user's ID. They should exist as a ghost user (isRemote: true)
+      const ghostUser = await User.findById(payload.sub);
+      if (!ghostUser) {
+        return res.status(403).json({ message: "Remote user not registered on this land" });
+      }
+
+      req.userId = ghostUser._id;
+      req.username = ghostUser.username;
+      req.authType = "canopy";
+      req.canopy = {
+        sourceLandDomain: unverified.iss,
+        sourceLandId: payload.landId,
+        peer,
+      };
+
+      await attachTreeAccess(req);
+      return next();
+    }
+
+    /* ===========================
+        1. JWT AUTH (preferred)
     ============================ */
     let token = null;
 
-    const authHeader = req.headers.authorization;
     if (authHeader?.startsWith("Bearer ")) {
       token = authHeader.slice(7).trim();
     }
@@ -42,8 +91,8 @@ export default async function authenticate(req, res, next) {
 
     const apiKey =
       req.headers["x-api-key"] ||
-      (req.headers.authorization?.startsWith("ApiKey ")
-        ? req.headers.authorization.slice(7).trim()
+      (authHeader?.startsWith("ApiKey ")
+        ? authHeader.slice(7).trim()
         : null) ||
       req.body?.apiKey;
 

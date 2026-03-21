@@ -3,6 +3,12 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __users_dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__users_dirname, "../..", ".env") });
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 function escapeRegex(str) {

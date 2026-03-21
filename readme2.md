@@ -1,198 +1,258 @@
-# TreeOS Land Node
+# TreeOS: Decentralized Knowledge Network
 
-A self-hosted node in the TreeOS distributed network. Each Land is a standalone server that hosts trees for its local users, runs its own AI and background jobs, and can connect to other Lands through the Canopy protocol.
+TreeOS is a decentralized context management system. Users grow trees of goals, plans, and reflections. AI acts as a conversational tree builder with background maintenance. Each server instance is called a Land. Lands connect through the Canopy protocol to form a distributed network where anyone can host their own node, run their own AI, and collaborate across the network.
 
-## What is a Land?
-
-A Land is a single instance of the TreeOS application. Your own server with your own database, your own users, and your own trees. Lands can operate completely independently, or they can connect to the wider TreeOS network to enable cross-land collaboration.
-
-Think of it like email. Your Land is your mail server. You can send and receive with anyone on any other server, but your data lives on yours.
+The API and data shape are the contract that holds the network together. Everything behind the scenes (AI models, orchestrators, frontends, background jobs, rules) is customizable per land. As long as the context structure and API stay consistent, all lands in the network are compatible.
 
 ## Naming
 
 ```
-Tree        A single knowledge structure
-Land        The server where trees grow (one deployment, one database)
-Canopy      The protocol connecting lands together
+Tree        A single knowledge structure (nodes, values, notes, contributions, etc)
+Land        The server where trees grow (one deployment, one database, one identity)
+Canopy      The REST protocol connecting lands together
+Directory   A phonebook service for land discovery (optional, hosted separately)
 
 Coming Soon:
-Forest      A curated group of trees from any land (user concept)
+Forest      A curated group of trees from any land
 Mycelium    The underground network linking trees within or across lands
 ```
+
+## How It Works
+
+Think of it like email. Your Land is your mail server. You can send and receive with anyone on any other server, but your data lives on yours. No central authority owns the network.
+
+Each Land:
+- Hosts trees for its local users
+- Runs its own AI models and background jobs
+- Controls its own rules, energy limits, and billing
+- Can connect to other Lands to enable cross-land collaboration
+- Works fully standalone without connecting to anything
+
+The API is the glue. Every Land speaks the same REST API shape and the same Canopy protocol. A CLI client, a React frontend, a mobile app, or a custom script can all interact with any Land because the API contract is the same everywhere.
 
 ## Quick Start
 
 ```bash
 # Clone the repo
-git clone <repo-url> treeos-land
-cd treeos-land
+git clone <repo-url> treeos
+cd treeos
 
 # Configure your land
 cp .env.example .env
-# Edit .env: set LAND_DOMAIN to your domain (or leave as localhost for local use)
+# Edit .env: set LAND_DOMAIN, MONGODB_URI, JWT_SECRET
 
-# Install dependencies
-npm run install:all
-
-# Start your land
-npm start
+# Install and start
+cd land && npm install && node server.js
 ```
 
-That's it. Your land is running. Point it at a MongoDB instance and you have the full TreeOS application.
-
-## What You Get
-
-- The full TreeOS application served directly from the land server (no separate build needed)
-- AI powered tree management with your own LLM connections (defaults to local Ollama)
-- Background jobs: tree dreaming, raw idea placement, short term memory drain, understanding runs
-- WebSocket real time chat and tree interaction
-- Gateway integrations (Discord, Telegram)
-- No artificial energy limits on self-hosted lands
+Your Land generates an Ed25519 keypair on first boot (stored in `.land/`), connects to MongoDB, and starts serving. Visit `/canopy/admin` to see your land identity.
 
 ## Project Structure
 
 ```
-treeos-land/
-  .env                  # single config file for the whole project
-  package.json          # root scripts (npm start, npm run build, etc.)
-  land/                 # the Land server (this is the app)
-  site/                 # optional static site (landing page, about page)
-  directory/            # Canopy Directory Service (separate standalone service)
+treeos/
+  .env                    # single config file
+  land/                   # the Land server (this is the app)
+  site/                   # optional static site (landing pages, about pages)
 ```
 
-**The land folder is the app.** It serves the full TreeOS UI as server rendered HTML, handles the REST API, runs WebSocket connections, executes AI tool calls, and manages background jobs. Everything you need to run a Land is in `land/`.
+**land/ is the entire application.** It serves the full TreeOS app (server rendered HTML or JSON API), handles WebSocket connections, runs AI tool calls, executes background jobs, and speaks the Canopy protocol.
 
-**The site folder is optional.** It is a React + Vite static site for landing pages and about pages. You do not need to build or deploy it. Your Land works completely without it. If you want a marketing site or custom landing page, you can build it with `npm run build`, but it has nothing to do with the core TreeOS functionality.
+**site/ is optional.** A React + Vite static site for marketing pages. Your Land works completely without it.
 
-**The directory folder is a separate service.** It is the Canopy Directory, a standalone phonebook that lands register with for peer discovery. You only need to run this if you are hosting the central directory for the network.
+The Directory Service is a separate repository hosted independently. It is a lightweight phonebook that Lands register with for discovery. If you are not hosting the directory, you do not need it.
 
 ### Land Layout
 
 ```
 land/
-  server.js               # entry point
+  server.js                 # entry point
+  canopy/                   # federation layer
+    identity.js             # Ed25519 keypair generation, CanopyToken signing
+    peers.js                # peer registration, health checks, heartbeat
+    proxy.js                # forward API calls to remote lands
+    events.js               # outbox for async event delivery
+    middleware.js            # CanopyToken auth, rate limiting
+    protocol.js             # protocol version checking
+    directory.js            # directory service registration and lookup
   routes/
-    api/                   # REST JSON endpoints (nodes, notes, users, values, etc.)
-    html/                  # TreeOS app UI (server rendered pages, gated behind ENABLE_FRONTEND_HTML)
-    canopy.js              # Canopy protocol endpoints
-    users.js               # Auth routes (login, register, forgot password)
-    setup.js               # Onboarding flow
-    billing/               # Stripe purchase and webhook
-  routesURL/               # Legacy route handlers (being migrated to routes/)
-  ws/                      # WebSocket server (real time chat and tree interaction)
-  mcp/                     # MCP server (AI tool execution)
-  jobs/                    # background jobs (dreams, drain, understanding, cleanup)
-  canopy/                  # land identity, peering, proxy, event outbox
-  core/                    # shared business logic
-  db/                      # Mongoose models and config
-  middleware/              # auth, rate limiting
+    api/                    # REST JSON endpoints (/api/v1/...)
+      me.js                 # current user profile and settings
+      user.js               # user lookup
+      root.js               # tree (root node) operations
+      node.js               # node CRUD
+      notes.js              # note CRUD
+      contributions.js      # audit trail
+      transactions.js       # value transfers
+      values.js             # node values and goals
+      understanding.js      # knowledge compression runs
+      blog.js               # blog posts
+      orchestrate.js        # manual orchestration triggers
+      gatewayWebhooks.js    # external service webhooks
+    html/                   # server rendered UI (gated behind ENABLE_FRONTEND_HTML)
+      canopy.js             # canopy admin, invites, directory search pages
+      chat.js, node.js, root.js, notes.js, user.js, etc.
+    canopy.js               # all canopy protocol endpoints
+    users.js                # auth routes (login, register, forgot password)
+    setup.js                # first time onboarding
+    billing/                # Stripe integration
+  routesFrontend/           # HTML app pages (app, chat, setup)
+  ws/                       # WebSocket server
+    conversation.js         # LLM client management, mode routing
+    sessionRegistry.js      # session lifecycle
+    modes/                  # HOME, TREE (18 sub-modes), RAW_IDEA
+    orchestrator/           # background AI pipelines
+    tools.js                # MCP tool definitions
+  mcp/                      # MCP server (AI tool execution)
+  jobs/                     # scheduled jobs (dream, drain, cleanup, understanding)
+  core/                     # shared business logic
+  db/models/                # 18+ Mongoose models
+  middleware/               # auth, rate limiting, error handling
 ```
 
-### Root Scripts
+## The API Contract
 
-| Command | What It Does |
-|---------|-------------|
-| `npm start` | Runs the land server (`node server.js`) |
-| `npm run build` | Builds the optional site (`vite build`) |
-| `npm run dev:site` | Runs the Vite dev server for the site |
-| `npm run install:all` | Installs dependencies in both land and site |
+The REST API under `/api/v1/` is the contract that makes the network work. Every Land implements the same endpoints with the same request/response shapes. This means:
 
-## Configuration
+- Any client (web, CLI, mobile, script) works with any Land
+- Remote users interact with trees through the same API as local users
+- Custom frontends and tools are fully supported
+- Lands can run completely different code internally
 
-All environment variables live in a single `.env` file at the project root.
+**Core API endpoints:**
 
-### Required
+| Path | Purpose |
+|------|---------|
+| `GET /api/v1/me` | Current user profile |
+| `POST /api/v1/node/create` | Create a node |
+| `POST /api/v1/node/:id/edit` | Edit a node |
+| `DELETE /api/v1/node/:id` | Delete a node |
+| `GET /api/v1/root/:id` | Get tree data |
+| `POST /api/v1/note/create` | Create a note |
+| `GET /api/v1/contributions/:nodeId` | Audit trail |
+| `POST /api/v1/understanding/run` | Run knowledge compression |
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `LAND_DOMAIN` | Your land's public domain | `localhost` |
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
+The WebSocket API (`/socket.io/`) handles real time chat and tree interaction.
 
-### Optional
+## Canopy Protocol: How Lands Connect
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `LAND_NAME` | Display name for your land | `My Land` |
-| `DIRECTORY_URL` | Directory service for peer discovery (coming soon) | (none, manual peering) |
-| `LAND_DEFAULT_TIER` | Default energy tier for new users | `god` |
-| `PORT` | Server port | `3000` |
+The Canopy protocol is a set of REST endpoints under `/canopy/` that every Land implements. It handles identity, peering, invitations, and cross-land API access.
 
-See `.env.example` for the full list.
+### Land Identity
 
-## Canopy Protocol
+On first boot, your Land generates:
+- An **Ed25519 keypair** (stored in `.land/land.key` and `.land/land.key.pub`)
+- A **Land ID** (UUID, stored in `.land/land.id`)
 
-Your Land can connect to other Lands in the TreeOS network. The Canopy protocol is how lands communicate. It is a REST API contract, a set of HTTP endpoints that every land implements to participate in the network.
+This identity is permanent. Never delete your `.land/` directory. If you change domains, use the redirect mechanism (`LAND_REDIRECT_TO` env var) so peers auto update.
 
-Connection is opt in. Your Land works fully standalone without it.
+### Peering
 
-### How It Works
+Two Lands connect by exchanging their public keys:
 
-- Each Land has a unique identity (domain + Ed25519 cryptographic keypair, generated on first boot)
-- Lands communicate via signed HTTP requests
-- Users are identified as `username@landdomain` across the network
-- Trees always live on the Land where they were created (the owner's Land is authoritative)
-- Remote users access trees through their home Land, which proxies requests to the tree's Land
-- Each Land runs its own AI, its own background jobs, and manages its own users' energy
+1. Land A calls `POST /canopy/admin/peer/add` with Land B's URL
+2. Land A fetches Land B's `/canopy/info` (gets public key, domain, protocol version)
+3. Land A sends its own info to Land B via `POST /canopy/peer/register`
+4. Both Lands now have each other's public key. They can authenticate requests.
 
-### Connecting to the Network
+If a Directory Service is configured, Lands can also discover each other automatically. When you invite a user on an unknown domain, your Land checks the directory, finds the target land, and auto-peers.
 
-1. Set `LAND_DOMAIN` to your public domain in `.env`
-2. Add a peer land directly:
+### CanopyToken Authentication
+
+All authenticated cross-land requests use a CanopyToken: a short lived (5 minute) JWT signed with the sending Land's Ed25519 private key.
 
 ```
-POST /canopy/admin/peer/add
-{ "url": "https://other-land.example.com" }
+Authorization: CanopyToken <signed-jwt>
 ```
 
-3. Both lands exchange public keys and can now communicate
-4. Users on either land can invite each other to collaborate on trees
+The JWT payload contains:
+- `sub`: the user's ID on the sending Land
+- `iss`: the sending Land's domain
+- `aud`: the target Land's domain
+- `landId`: the sending Land's ID
 
-### Cross-Land Collaboration
+The receiving Land verifies the signature against the sender's public key (from peering). This proves the request actually came from that Land and that the user ID is legitimate.
 
-When a user on another Land invites you to their tree:
+### Ghost Users
 
-1. You see the invite on your Land
-2. You accept it
-3. The tree appears in your tree list alongside your local trees
-4. All interaction goes through your Land's API (proxied to the tree's Land behind the scenes)
-5. You don't need to know or care which Land the tree lives on
+When a remote user is invited to a tree on your Land, your Land creates a **ghost user** record for them. This is a User document with `isRemote: true` and `homeLand` set to their home domain.
 
-### Security
+Ghost users:
+- Have a UUID (the same one from their home Land)
+- Are added to the tree's `contributors` array, just like local users
+- Can only access trees they've been explicitly invited to
+- Cannot log in, change settings, or do anything outside their contributor role
+- Show up as `username@domain` in the UI
 
-- All inter-land requests are signed with Ed25519 keypairs
-- The tree's Land is always the authority (controls permissions, validates access)
-- A remote Land can only prove its users' identity, not grant itself permissions
-- Protocol versioning ensures compatible Lands communicate correctly
-- Per-land and per-user rate limiting on all canopy endpoints
-- Lands can block peers and remove remote contributors at any time
+Ghost users are how the existing API works unchanged for remote users. Every route checks `req.userId` against `rootOwner` or `contributors`. Ghost users are in that array, so the existing permission checks just work. No special cases needed.
 
-## Canopy API Reference
+If someone causes problems, the tree owner removes them from contributors. If an entire Land is causing problems, the admin blocks that peer.
 
-The canopy protocol endpoints. Any implementation that speaks this protocol can participate in the network.
+### Cross-Land API Proxy
 
-### Public Endpoints (no auth)
+When a local user interacts with a tree on a remote Land, the request goes through a proxy:
+
+```
+User's Frontend -> Home Land -> Tree's Land -> response back
+```
+
+The Home Land:
+1. Authenticates the user normally (JWT cookie or API key)
+2. Signs a CanopyToken for the user
+3. Forwards the request to `POST /canopy/proxy/:domain/api/v1/node/create`
+4. The proxy sends it to `https://other.land/api/v1/node/create` with the CanopyToken
+
+The Tree's Land:
+1. Sees the CanopyToken in the Authorization header
+2. Verifies it against the sending Land's public key
+3. Looks up the ghost user by the `sub` claim
+4. Sets `req.userId` to the ghost user's ID
+5. Runs the exact same route handler as for local users
+
+The user's frontend never needs to know about Canopy. It just calls its home Land's API. The proxy is invisible.
+
+### Energy Across Lands
+
+When a remote user acts on your tree, your Land reports the energy cost back to their home Land via `POST /canopy/energy/report`. Their home Land deducts it from their balance.
+
+Energy is a soft meter. If the home Land doesn't deduct, worst case is extra activity on your tree. The tree owner can always revoke access.
+
+### Health Monitoring
+
+Lands monitor their peers via periodic heartbeats (`GET /canopy/info` every 5 minutes). Status progression:
+
+- **active**: responding normally
+- **degraded**: missed 2+ heartbeats (restart, deploy, network blip)
+- **unreachable**: down for hours
+- **dead**: unreachable for 30+ days
+
+Your trees are unaffected when a peer goes down. Remote trees on that peer become temporarily inaccessible until it returns.
+
+### Canopy Endpoints
+
+**Public (no auth):**
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /canopy/info` | Land metadata, public key, protocol version |
+| `GET /canopy/info` | Land identity, public key, protocol version, capabilities |
 | `GET /canopy/redirect` | Domain redirect info (if land moved) |
 | `GET /canopy/user/:username` | Resolve a local user by username |
 | `GET /canopy/public-trees` | List public trees on this land |
 | `POST /canopy/peer/register` | Register as a peer (mutual introduction) |
 
-### Authenticated Endpoints (require CanopyToken)
+**Authenticated (require CanopyToken):**
 
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /canopy/invite/offer` | Notify about a cross-land invitation |
 | `POST /canopy/invite/accept` | Confirm invite acceptance |
 | `POST /canopy/invite/decline` | Confirm invite decline |
-| `GET /canopy/tree/:rootId` | Access a tree as a remote contributor |
+| `GET /canopy/tree/:rootId` | Read a tree as a remote contributor |
 | `POST /canopy/energy/report` | Report energy usage to user's home land |
 | `POST /canopy/notify` | Push notification to remote user's land |
 | `POST /canopy/account/transfer-in` | Receive an account transfer |
 
-### Admin Endpoints (require local user auth)
+**Admin (require local user auth):**
 
 | Endpoint | Purpose |
 |----------|---------|
@@ -201,36 +261,125 @@ The canopy protocol endpoints. Any implementation that speaks this protocol can 
 | `POST /canopy/admin/peer/:domain/block` | Block a peer |
 | `POST /canopy/admin/peer/:domain/unblock` | Unblock a peer |
 | `GET /canopy/admin/peers` | List all peers and status |
-| `POST /canopy/admin/heartbeat` | Manually trigger heartbeat check |
-| `POST /canopy/admin/invite-remote` | Invite a user from another land |
+| `POST /canopy/admin/heartbeat` | Manually trigger heartbeat |
+| `POST /canopy/admin/invite-remote` | Invite user by canopy ID (username@domain) |
 | `GET /canopy/admin/events/failed` | View failed outbox events |
 | `POST /canopy/admin/events/:eventId/retry` | Retry a failed event |
+| `ALL /canopy/proxy/:domain/*` | Forward API call to remote land |
+| `GET /canopy/admin/directory/lands` | Search directory for lands |
+| `GET /canopy/admin/directory/trees` | Search directory for public trees |
+| `POST /canopy/admin/peer/discover` | Auto-peer via directory lookup |
 
-All requests between lands use this header format:
+**Admin HTML pages (gated behind ENABLE_FRONTEND_HTML):**
 
-```
-Authorization: CanopyToken <signed-jwt>
-```
+| Page | Purpose |
+|------|---------|
+| `GET /canopy/admin` | Dashboard: land identity, peers, events |
+| `GET /canopy/admin/invites` | Incoming invites, send invite form |
+| `GET /canopy/admin/directory` | Search the directory for lands and public trees |
 
-The JWT is signed with the sending Land's Ed25519 private key and verified by the receiving Land using the sender's public key (exchanged during peering).
+## Directory Service
 
-## Health and Monitoring
+The Directory Service is a separate, standalone application that acts as a phonebook for the network. Lands register with it so other Lands can find them.
 
-Lands monitor their peers via periodic heartbeats (`GET /canopy/info` every 5 minutes). Status progression:
+**What it does:**
+- Stores land registrations (domain, name, public key, public tree metadata)
+- Allows searching for lands by name or domain
+- Allows searching for public trees across all registered lands
+- Pings registered lands periodically to track health
 
-- **active** . responding normally
-- **degraded** . missed a few heartbeats (restart, deploy)
-- **unreachable** . down for hours
-- **dead** . unreachable for 30+ days, delisted from directory
+**What it does NOT do:**
+- Route messages (Lands talk directly after peering)
+- Store user data (user lookup goes land to land)
+- Authenticate users (each Land handles its own auth)
+- Act as a gateway (the directory is not in the request path)
 
-Your trees are unaffected when a peer goes down. Remote trees on that peer are temporarily inaccessible until it comes back.
+**The directory is optional.** Lands work fully without it. You can peer manually by typing in URLs. The directory just makes discovery easier.
 
-## Building a Custom Client
+**If the directory goes down,** peered Lands keep working. Only new discovery is affected.
 
-The TreeOS app UI is server rendered from the land server. But your Land's API is standard REST + WebSocket, so you can build any client you want on top of it. The canopy protocol is also REST, so custom land implementations can participate in the network as long as they implement the protocol endpoints.
+To connect to a directory, set `DIRECTORY_URL` in your `.env`. Your Land will auto-register on startup and re-register every hour.
+
+## What You Can Customize
+
+Everything behind the API is yours. Lands in the network can run completely different code internally as long as they speak the same API and Canopy protocol.
+
+**Fully customizable per land:**
+- AI models and LLM configuration (any OpenAI-compatible endpoint)
+- Background job behavior (orchestrators, dream pipelines, cleanup strategies)
+- Frontend and UI (build your own, use the server rendered HTML, or go headless)
+- Energy limits and pricing
+- Billing (Stripe integration or disable entirely)
+- Gateway integrations (Discord, Telegram, etc.)
+- Mode system and AI prompts
+- Authentication extras (SSO, OAuth, etc. on top of the core auth)
+
+**Must stay the same for network compatibility:**
+- Canopy endpoint paths and response shapes
+- CanopyToken JWT structure (Ed25519 signed, sub/iss/aud/landId payload)
+- API endpoint paths and response shapes under `/api/v1/`
+- Data model essentials (User.username, User.isRemote, Node.rootOwner, Node.contributors, Node.visibility, UUID primary keys)
+- Protocol version number (only increment when the protocol changes)
+
+## Security
+
+- All cross-land requests are signed with Ed25519 keypairs (unforgeable identity)
+- The tree's Land is always authoritative (controls permissions, validates access)
+- A remote Land can only prove its users' identity, not grant itself permissions
+- Ghost users can only access trees they were explicitly invited to
+- Per-land and per-user rate limiting on all canopy endpoints
+- Lands can block peers and remove remote contributors at any time
+- Protocol versioning prevents incompatible Lands from communicating
+- CanopyTokens expire after 5 minutes (prevents replay attacks)
+
+## Configuration
+
+All environment variables live in `.env` at the project root.
+
+### Required
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
+| `JWT_SECRET` | Signs user auth tokens. Change this. | `your_secret_key` |
+
+### Land Identity
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LAND_DOMAIN` | Your land's public domain | `localhost` |
+| `LAND_NAME` | Display name for your land | `My Land` |
+| `LAND_KEY_DIR` | Where to store the keypair | `.land` |
+| `PORT` | Server port | `3000` |
+
+### Network (optional)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DIRECTORY_URL` | Directory service for peer discovery | (none) |
+| `LAND_REDIRECT_TO` | Domain redirect for land migrations | (none) |
+| `LAND_DEFAULT_TIER` | Default energy tier for new users | `god` |
+| `ENABLE_FRONTEND_HTML` | Toggle server rendered HTML pages | `true` |
+
+### LLM
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AI_MODEL` | Fallback LLM model name | `qwen3.5:27b` |
+| `CUSTOM_LLM_API_SECRET_KEY` | Encrypts stored LLM API keys (32+ chars) | (none) |
+
+LLM endpoints are configured per user through `CustomLlmConnection` records, not env vars. Users add their own connections via the app.
+
+See `.env.example` for the complete list including email, Stripe, push notifications, and Solana configuration.
 
 ## Data Sovereignty
 
-Your trees, your data. Everything stays on your Land unless you explicitly invite someone from another Land. Even then, the tree data stays on your Land. Remote users access it through the API, they don't get a copy.
+Your trees, your data. Everything stays on your Land unless you explicitly invite someone from another Land. Even then, the tree data stays on your Land. Remote users access it through the API. They do not get a copy.
 
-If you want to move your trees to a different Land, the export/import feature lets you migrate your data. Your UUID stays the same across the network, so your contributions and history remain linked.
+Your Land ID (UUID) and keypair are permanent. If you move domains, the redirect mechanism preserves your identity. Your contributions and history remain linked across the network.
+
+## Building a Custom Client
+
+Your Land's API is standard REST + WebSocket. You can build any client on top of it. The Canopy protocol is also REST. Custom Land implementations can participate in the network as long as they implement the protocol endpoints and speak the same data shape.
+
+The API is the network. Everything else is up to you.

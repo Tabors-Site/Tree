@@ -1,4 +1,4 @@
-# Self Hosting Guide
+# Self Hosting Developer Guide
 
 Everything a developer needs to know to run, customize, and connect their own TreeOS Land node.
 
@@ -9,162 +9,208 @@ Everything a developer needs to know to run, customize, and connect their own Tr
 3. What Must Stay the Same
 4. Environment Variables
 5. Canopy Protocol Versioning
-6. WebSocket System
-7. LLM Configuration
-8. Background Jobs
-9. Energy System
-10. MCP Tools
-11. Gateway Integrations
-12. Billing and Payments
-13. Authentication
-14. Database Models
+6. Ghost Users and Remote Access
+7. The Proxy Layer
+8. WebSocket System
+9. LLM Configuration
+10. Background Jobs
+11. Energy System
+12. MCP Tools
+13. Gateway Integrations
+14. Billing and Payments
+15. Authentication
+16. Database Models
 
 ---
 
 ## 1. Project Structure
 
 ```
-treeos-land/
-  .env                  # single config file for the whole project
-  package.json          # root scripts
-  land/                 # the Land server (this is the app)
-  site/                 # optional static site (landing page, about page)
-  directory/            # Canopy Directory Service (separate standalone service)
+treeos/
+  .env                    # single config file for the whole project
+  land/                   # the Land server (this is the app)
+  site/                   # optional static site (landing pages, about pages)
 ```
 
-**The land folder is the entire application.** `npm start` runs the land server and you have a fully working Land. It serves the TreeOS UI as server rendered HTML, handles the REST API, runs WebSocket connections, executes AI tool calls, and manages background jobs.
+**land/ is the entire application.** `cd land && node server.js` runs the Land server and you have a fully working Land. It serves the TreeOS UI as server rendered HTML, handles the REST API, runs WebSocket connections, executes AI tool calls, and manages background jobs.
 
-**The site folder is optional.** It is a React + Vite static site for landing pages and about pages only. You do not need to build or deploy it. Your Land works completely without it.
+**site/ is optional.** It is a React + Vite static site for marketing pages only. You do not need to build or deploy it. Your Land works completely without it.
+
+**The Directory Service is a separate repository.** It is hosted independently. You only need it if you are running the central phonebook for the network. Regular Land operators do not need it.
 
 ### Land Layout
 
 ```
 land/
-  server.js               # entry point
+  server.js                 # entry point
+  .land/                    # generated on first boot (keypair + land ID, never delete)
+  canopy/                   # federation layer
+    identity.js             # Ed25519 keypair, CanopyToken signing/verification
+    peers.js                # peer registration, health checks, heartbeat job
+    proxy.js                # forward API calls to remote lands
+    events.js               # outbox for async event delivery with retry
+    middleware.js            # CanopyToken auth, per-land/per-user rate limiting
+    protocol.js             # protocol version checking
+    directory.js            # directory service registration and lookup
   routes/
-    api/                   # REST JSON endpoints (nodes, notes, users, values, etc.)
-    html/                  # TreeOS app UI (server rendered pages, gated behind ENABLE_FRONTEND_HTML)
-    canopy.js              # Canopy protocol endpoints
-    users.js               # Auth routes (login, register, forgot password)
-    setup.js               # Onboarding flow
-    billing/               # Stripe purchase and webhook
-  routesURL/               # Legacy route handlers (being migrated to routes/)
-  ws/                      # WebSocket server (real time chat and tree interaction)
-  mcp/                     # MCP server (AI tool execution)
-  jobs/                    # background jobs (dreams, drain, understanding, cleanup)
-  canopy/                  # land identity, peering, proxy, event outbox
-  core/                    # shared business logic
-  db/                      # Mongoose models and config
-  middleware/              # auth, rate limiting
+    routeHandler.js         # mounts all API routes under /api/v1
+    api/                    # REST JSON endpoints
+      me.js                 # GET /api/v1/me (current user)
+      user.js               # GET /api/v1/user/:id
+      root.js               # tree (root node) operations
+      node.js               # node CRUD
+      notes.js              # note CRUD
+      contributions.js      # audit trail
+      transactions.js       # value transfers
+      values.js             # node values and goals
+      understanding.js      # knowledge compression
+      blog.js               # blog posts
+      orchestrate.js        # manual orchestration triggers
+      gatewayWebhooks.js    # external service webhooks
+    html/                   # server rendered UI pages (gated behind ENABLE_FRONTEND_HTML)
+      canopy.js             # canopy admin dashboard, invites, directory search
+      chat.js               # chat page HTML
+      node.js, root.js, notes.js, contributions.js, etc.
+      notFound.js           # 404 page
+    canopy.js               # all canopy protocol endpoints
+    users.js                # auth routes (login, register, forgot password)
+    setup.js                # first time onboarding
+    billing/                # Stripe integration
+  routesFrontend/           # HTML app pages
+    routesHandler.js        # mounts app pages at root paths
+    app.js                  # GET /app (dashboard shell)
+    chat.js                 # GET /chat (chat interface)
+    setup.js                # GET /setup (onboarding)
+  ws/                       # WebSocket server
+    conversation.js         # LLM client management, mode routing
+    sessionRegistry.js      # session lifecycle (websocket_chat, api, orchestration, scheduled)
+    aiChatTracker.js        # logs every LLM call
+    modes/                  # HOME, TREE (18 sub-modes), RAW_IDEA
+    orchestrator/           # background AI pipelines (dream, drain, understand, cleanup)
+    tools.js                # tool definitions for the LLM
+  mcp/                      # MCP server (in-process AI tool execution)
+  jobs/                     # scheduled jobs
+    treeDream.js            # dream pipeline (cleanup, drain, understanding)
+    rawIdeaAutoPlace.js     # auto-place pending raw ideas
+  core/                     # shared business logic (imported by both routes/ and mcp/)
+  db/
+    config.js               # MongoDB connection
+    models/                 # 18+ Mongoose models (all use UUID v4 primary keys)
+  middleware/
+    authenticate.js         # JWT, API key, and CanopyToken auth
+    authenticateLite.js     # lightweight auth (no tree access resolution)
+    authenticateMCP.js      # MCP endpoint auth
+    notFoundPage.js         # 404 handler
 ```
 
-The app UI lives in `routes/html/` (chat, canopy admin, nodes, notes, contributions, transactions, understanding, values, user, root). The setup and onboarding pages live in `routes/setup.js`. Both are server rendered. There is no separate build step needed.
+### Route Mounting
+
+API routes are mounted at `/api/v1/` in `routes/routeHandler.js`. Frontend HTML pages are mounted at root paths (`/app`, `/chat`, `/setup`, `/login`, etc.) in `routesFrontend/routesHandler.js`. Canopy routes are mounted at `/canopy/` (not versioned with the API).
 
 ### Root Scripts
 
 | Command | What It Does |
 |---------|-------------|
-| `npm start` | Runs the land server. This is your Land. |
-| `npm run build` | Builds the optional site (landing pages only) |
-| `npm run dev:site` | Runs the Vite dev server for the optional site |
+| `npm start` | Runs the land server |
+| `npm run build` | Builds the optional site (Vite) |
 | `npm run install:all` | Installs dependencies in both land and site |
-
-All environment variables live in a single `.env` file at the project root. Both land and site read from this file.
 
 ---
 
 ## 2. What You Can Change (Freely)
 
-These are yours to modify however you want. They do not affect canopy compatibility.
+These do not affect canopy compatibility. Customize however you want.
 
 **Deployment:**
 - Domain, port, SSL setup
-- Docker configuration or bare metal
-- MongoDB hosting (local, Atlas, self-managed)
-- Reverse proxy setup (nginx, caddy, etc.)
+- Docker or bare metal
+- MongoDB hosting (local, Atlas, any provider)
+- Reverse proxy (nginx, caddy, traefik, or none)
 
 **LLM:**
 - Default model (any OpenAI-compatible endpoint)
 - Per-user and per-root LLM assignments
-- Ollama, commercial providers, custom endpoints, all work
+- Ollama, commercial APIs, custom endpoints
 - Model context limits and tool iteration caps
+
+**AI Behavior:**
+- System prompts for each mode
+- Orchestrator pipelines (dream, cleanup, drain, understanding)
+- Tool availability per mode
+- How the AI classifies intent and routes actions
 
 **Energy:**
 - Daily limits per tier (basic, standard, premium, god)
 - Action costs (create, edit, note, etc.)
 - File size scaling thresholds
-- Text length scaling (chars per energy point)
+- Text length scaling
 
 **Background Jobs:**
-- Interval timing (dream every 30 min, raw idea every 15 min, etc.)
+- Interval timing
 - Cleanup pass limits, drain pass limits
-- Dream scheduling per root (dreamTime field)
+- Dream scheduling per root
 - Understanding run perspectives and prompts
 
 **Gateway:**
 - Add new integration types beyond Discord/Telegram/WebApp
 - Notification types and formatting
 - Webhook payload structure
-- Rate limiting per channel
 
 **Billing:**
 - Pricing amounts and plan durations
 - Disable entirely by leaving Stripe env vars empty
-- Self-hosted lands default to "god" tier (unlimited energy)
+- Self-hosted lands default to "god" tier
 
-**App UI and Landing Pages:**
+**UI:**
 - All server rendered pages in `routes/html/` and `routesFrontend/`
 - Page templates, styling, layout
 - Toggle HTML renders on/off with `ENABLE_FRONTEND_HTML`
-- The optional `site/` React site (landing/about pages)
-- Build your own client entirely (just speak the same API)
+- Build your own frontend entirely (just speak the same API)
 
 ---
 
-## 3. What Must Stay the Same (Canopy Contract)
+## 3. What Must Stay the Same (Network Contract)
 
-If you want your land to participate in the canopy network, these parts are locked. Changing them will break federation with other lands.
+If you want your Land to participate in the canopy network, these parts are locked.
 
-**Canopy Endpoints (the protocol contract):**
+**Canopy Endpoints (the protocol):**
 ```
-GET  /canopy/info                  . land metadata + public key + protocol version
-GET  /canopy/redirect              . domain redirect for land migrations
-GET  /canopy/user/:username        . resolve local user by username
-GET  /canopy/public-trees          . list public trees (paginated)
-POST /canopy/peer/register         . mutual peer introduction
-POST /canopy/invite/offer          . cross-land invite notification
-POST /canopy/invite/accept         . invite acceptance confirmation
-POST /canopy/invite/decline        . invite decline confirmation
-GET  /canopy/tree/:rootId          . remote tree access
-POST /canopy/energy/report         . energy usage reporting
-POST /canopy/notify                . push notification to remote user
-POST /canopy/account/transfer-in   . receive account transfer
+GET  /canopy/info                  # land metadata + public key + protocol version
+GET  /canopy/redirect              # domain redirect for land migrations
+GET  /canopy/user/:username        # resolve local user by username
+GET  /canopy/public-trees          # list public trees
+POST /canopy/peer/register         # mutual peer introduction
+POST /canopy/invite/offer          # cross-land invite notification
+POST /canopy/invite/accept         # invite acceptance
+POST /canopy/invite/decline        # invite decline
+GET  /canopy/tree/:rootId          # remote tree access
+POST /canopy/energy/report         # energy usage reporting
+POST /canopy/notify                # push notification to remote user
+POST /canopy/account/transfer-in   # receive account transfer
 ```
 
-These endpoints must return the expected response shapes. The request/response schemas are the contract between lands.
+**API Endpoints (the data contract):**
+The `/api/v1/` endpoints and their request/response shapes. Remote users interact with trees through the same API as local users. If you change the API shape, remote users from other lands will break.
 
-**Authentication between lands:**
-- CanopyToken JWT signed with Ed25519 private key
-- JWT payload must include: sub (userId), iss (sender domain), aud (target domain), landId
-- Verification using the sender's public key from peering
+**CanopyToken format:**
+- Ed25519 signed JWT
+- Payload: sub (userId), iss (sender domain), aud (target domain), landId
+- 5 minute expiry
 
-**Land identity:**
-- Ed25519 keypair generated on first boot, stored in .land/ directory
-- Land ID (UUID) persists forever. Changing it breaks your federation identity.
-- Domain published via /canopy/info. If you change domains, use the redirect mechanism.
+**Land Identity:**
+- Ed25519 keypair in `.land/` directory
+- Land ID (UUID) persists forever
+- Domain published via `/canopy/info`
 
 **Data model essentials:**
-- User._id must be UUID v4 (globally unique across all lands)
-- User.username must be unique per land (used in canopy IDs: username@domain)
-- User.isRemote and User.homeLand fields must exist for ghost user records
-- Node.rootOwner and Node.contributors must control tree access
-- Node.visibility must support "private" and "public"
-- Contribution audit trail must log every action with userId, action type, energyUsed
+- User._id must be UUID v4
+- User.username must be unique per land
+- User.isRemote and User.homeLand must exist for ghost users
+- Node.rootOwner and Node.contributors control tree access
+- Node.visibility supports "private" and "public"
+- Contribution logs every action with userId, action type, energyUsed
 
-**Protocol version:**
-- Current version: 1
-- Lands check protocolVersion on every canopy request
-- Incompatible versions are rejected with a clear error
+**Protocol version:** Currently 1. Only increment when canopy endpoints change.
 
 ---
 
@@ -182,7 +228,7 @@ These endpoints must return the expected response shapes. The request/response s
 
 | Variable | What It Does | Default |
 |----------|-------------|---------|
-| `LAND_DOMAIN` | Public domain of this land node | `localhost` |
+| `LAND_DOMAIN` | Public domain of this land | `localhost` |
 | `LAND_NAME` | Display name shown to other lands | `My Land` |
 | `LAND_KEY_DIR` | Where to store the Ed25519 keypair | `.land` |
 | `PORT` | Server port | `3000` |
@@ -191,8 +237,8 @@ These endpoints must return the expected response shapes. The request/response s
 
 | Variable | What It Does | Default |
 |----------|-------------|---------|
-| `DIRECTORY_URL` | Directory service for automatic peer discovery (coming soon). Leave empty for manual peering. | none |
-| `LAND_REDIRECT_TO` | If you moved domains, set old domain to serve this redirect. | none |
+| `DIRECTORY_URL` | Directory service URL for peer discovery | none |
+| `LAND_REDIRECT_TO` | Old domain serves redirect to this new domain | none |
 | `LAND_DEFAULT_TIER` | Default profile tier for new users | `god` |
 
 ### Domains and CORS
@@ -201,343 +247,298 @@ These endpoints must return the expected response shapes. The request/response s
 |----------|-------------|---------|
 | `TREE_FRONTEND_DOMAIN` | Frontend URL (CORS whitelist) | none |
 | `ROOT_FRONTEND_DOMAIN` | Root app frontend URL | none |
-| `ENABLE_FRONTEND_HTML` | Toggle inline HTML page renders on/off | `true` |
-
-### Optional Frontend (landing page only)
-
-| Variable | What It Does | Default |
-|----------|-------------|---------|
-| `VITE_TREE_API_URL` | API endpoint the site calls (include /api/v1) | none |
-| `VITE_ROOT_API` | Root app API endpoint for the site | none |
-
-These VITE_ vars only matter if you build the optional `site/` React site.
+| `ENABLE_FRONTEND_HTML` | Toggle server rendered HTML pages | `true` |
 
 ### LLM
 
 | Variable | What It Does | Default |
 |----------|-------------|---------|
-| `AI_MODEL` | Default LLM model name (fallback when no custom connection is configured) | `qwen3.5:27b` |
+| `AI_MODEL` | Default LLM model name | `qwen3.5:27b` |
 
-LLM endpoints are configured per user through `CustomLlmConnection` records in the database, not through env vars. Users add their own connections (any OpenAI-compatible endpoint) via the app. `AI_MODEL` is only the fallback model name.
+LLM endpoints are configured per user through `CustomLlmConnection` records in the database. Users add connections via the app. `AI_MODEL` is only the fallback.
 
-### Email (optional)
-
-| Variable | What It Does |
-|----------|-------------|
-| `EMAIL_USER` | SMTP username for password reset emails |
-| `EMAIL_PASS` | SMTP password |
-
-### Stripe (optional)
+### Optional Services
 
 | Variable | What It Does |
 |----------|-------------|
-| `STRIPE_SECRET_KEY` | Stripe API key. Leave empty to disable billing. |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
+| `EMAIL_USER` / `EMAIL_PASS` | SMTP for password reset emails |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe billing. Leave empty to disable. |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_EMAIL` | Web Push notifications |
 
-### Push Notifications (optional)
-
-| Variable | What It Does |
-|----------|-------------|
-| `VAPID_PUBLIC_KEY` | Web Push public key |
-| `VAPID_PRIVATE_KEY` | Web Push private key |
-| `VAPID_EMAIL` | Admin email for VAPID |
-
-### Solana (optional)
-
-| Variable | What It Does |
-|----------|-------------|
-| `NODE_WALLET_MASTER_KEY` | Solana wallet master key (hex) |
-| `SOLANA_RPC_URL` | Solana RPC endpoint |
-| `JUP_API_KEY` | Jupiter API key for token swaps |
+See `.env.example` for the complete list.
 
 ---
 
 ## 5. Canopy Protocol Versioning
 
-The canopy protocol has a version number. Every request between lands includes this version. This is how different lands running different code versions can still communicate (or gracefully reject each other).
-
 **Current protocol version: 1**
 
-**How it works:**
-- `GET /canopy/info` returns `protocolVersion: 1`
-- When Land A peers with Land B, both check version compatibility
-- If versions are incompatible, peering is rejected with a clear error
-- Compatible versions can communicate. Incompatible versions cannot.
+Every canopy request includes the protocol version. Lands check compatibility before communicating.
 
 **What increments the version:**
 - Changes to canopy endpoint request/response shapes
 - Changes to CanopyToken JWT payload structure
-- Changes to authentication flow
+- Changes to the authentication flow between lands
 
 **What does NOT increment the version:**
-- Changes to your app UI or landing pages
+- Changes to your app UI
 - Changes to energy costs or tier limits
-- Changes to LLM configuration
+- Changes to LLM configuration or AI behavior
 - Changes to background job timing
 - Changes to business logic inside your land
 - Adding new non-canopy API endpoints
 
-**The rule:** If your change only affects things inside your land, the protocol version stays the same. If your change affects what other lands send or receive, the protocol version must increment.
-
-App code can diverge freely between lands. Only the ~10 canopy endpoints need to match. This is how email works. Gmail and Outlook have completely different code but speak the same SMTP protocol.
+**The rule:** If your change only affects things inside your land, the protocol version stays the same. If your change affects what other lands send or receive, the version must increment.
 
 ---
 
-## 6. WebSocket System
+## 6. Ghost Users and Remote Access
 
-The WebSocket server handles real-time interaction between clients and the land server.
+When a remote user is invited to a tree on your Land, your Land creates a **ghost user**. This is a normal User document with two extra fields:
+
+```
+isRemote: true
+homeLand: "other.land.com"
+```
+
+Ghost users:
+- Have the same UUID as the user on their home Land
+- Are added to the tree's `contributors` array like any local user
+- Can only access trees they were explicitly invited to
+- Cannot log in, cannot change settings, cannot see other users or trees
+- Appear as `username@domain` in the UI and contribution logs
+
+**Why ghost users work:** Every API route checks `req.userId` against the tree's `rootOwner` or `contributors` array. Ghost users are in that array. No special cases needed. The entire existing permission system works unchanged.
+
+**Creating a ghost user:** This happens automatically when a remote Land confirms an invite acceptance via `POST /canopy/invite/accept`. The tree's Land creates the ghost user and adds them to the tree's contributors.
+
+**Removing a remote user:** Remove them from the tree's contributors array. The ghost user record stays (for audit trail in contributions) but they lose all access.
+
+**Blocking a Land:** Use `POST /canopy/admin/peer/:domain/block`. All requests from that Land are rejected. All ghost users from that Land lose access because the CanopyToken verification fails.
+
+---
+
+## 7. The Proxy Layer
+
+When a local user interacts with a tree on a remote Land, the request goes through a proxy on the home Land:
+
+```
+Frontend -> Home Land (/canopy/proxy/:domain/...) -> Remote Land (/api/v1/...) -> response
+```
+
+**Home Land side:**
+1. User authenticates normally (JWT cookie or API key)
+2. `ALL /canopy/proxy/:domain/*` catches the request
+3. Home Land signs a CanopyToken with the user's ID
+4. Home Land forwards the request to the remote Land with the CanopyToken
+
+**Remote Land side:**
+1. `authenticate.js` middleware sees the `CanopyToken` in the Authorization header
+2. Verifies the signature against the sending Land's public key (from peering)
+3. Looks up the ghost user by the `sub` claim in the token
+4. Sets `req.userId` to the ghost user's ID
+5. The route handler runs exactly as it would for a local user
+
+**The frontend never knows about Canopy.** It calls its home Land's API. The proxy is invisible. This works for any client: browser, CLI, mobile app, MCP tool, scripts.
+
+**Three auth methods in authenticate.js (checked in order):**
+1. CanopyToken (remote land users)
+2. JWT Bearer token or cookie (local browser users)
+3. API Key (programmatic access)
+
+---
+
+## 8. WebSocket System
+
+The WebSocket server handles real time interaction between clients and the Land.
 
 **Connection flow:**
-1. Client connects to WebSocket server
+1. Client connects via Socket.IO
 2. Client sends `register` event with auth token
 3. Server validates, creates session
-4. Client can now send `chat`, `switchMode`, `nodeNavigated`, etc.
+4. Client can send `chat`, `switchMode`, `nodeNavigated`, etc.
 
 **Key events:**
-- `chat` . main message handler, routes through mode system
-- `switchMode` . change between HOME, TREE, RAW_IDEA modes
-- `register` . authenticate WebSocket connection
-- `nodeNavigated`, `nodeSelected`, `nodeCreated`, `nodeDeleted` . tree state updates
-- `setActiveRoot` . switch which tree the user is interacting with
-- `cancelRequest` . cancel an in-progress LLM call
+- `chat`: main message handler, routes through mode system
+- `switchMode`: change between HOME, TREE, RAW_IDEA modes
+- `register`: authenticate WebSocket connection
+- `nodeNavigated`, `nodeSelected`, `nodeCreated`, `nodeDeleted`: tree state updates
+- `setActiveRoot`: switch active tree
+- `cancelRequest`: cancel in-progress LLM call
 
 **Mode system:**
-- HOME mode: general chat, default landing
+- HOME mode: general chat
 - TREE mode: 18 sub-modes (navigate, structure, edit, respond, librarian, understand, notes, cleanup, drain, dream, etc.)
 - RAW_IDEA mode: unstructured input processing
 
-**Customizable:**
-- Mode-specific system prompts (what the AI says/does in each mode)
-- Tool availability per mode (which MCP tools the AI can use)
-- Session idle timeout (default 15 min)
-- Domain whitelist for CORS
-
-**Do not modify:**
-- WebSocket event names (the app UI depends on these)
-- Session registry lifecycle (types: websocket_chat, api, orchestration, scheduled)
-- Active navigator enforcement (one user drives tree changes at a time per root)
-- AIChat tracking (every LLM call logged with sessionId + chainIndex)
+**Customizable:** Mode-specific prompts, tool availability per mode, session timeout, domain whitelist
+**Do not modify:** Event names (clients depend on these), session registry lifecycle, AIChat tracking
 
 ---
 
-## 7. LLM Configuration
+## 9. LLM Configuration
 
-Tree uses OpenAI-compatible APIs for all LLM calls. You can point it at anything.
+TreeOS uses OpenAI-compatible APIs for all LLM calls. Point it at anything.
 
 **Resolution order (most specific wins):**
 1. Root node's mode-specific assignment (e.g., root.llmAssignments.respond)
 2. Root node's placement fallback (root.llmAssignments.placement)
 3. User's default LLM (user.llmAssignments.main)
-4. Global default (AI_MODEL env var, defaults to qwen3.5:27b)
+4. Global default (AI_MODEL env var)
 
 **6 assignable slots per root:**
-- `placement` . where new nodes go (fallback for all modes)
-- `understanding` . compression and encoding runs
-- `respond` . conversational responses to the user
-- `notes` . note generation and editing
-- `cleanup` . branch expansion and reorganization
-- `drain` . short-term memory clustering and placement
+- `placement`: where new nodes go (fallback for all modes)
+- `understanding`: compression and encoding runs
+- `respond`: conversational responses
+- `notes`: note generation and editing
+- `cleanup`: branch expansion and reorganization
+- `drain`: short-term memory clustering and placement
 
-**Custom LLM connections:**
-- Users can add custom LLM connections (any OpenAI-compatible endpoint)
-- API keys are encrypted with AES-256-CBC using CUSTOM_LLM_API_SECRET_KEY
-- SSRF protection blocks private IP ranges (127.*, 10.*, 192.168.*, etc.)
-
-**Customizable:** Model names, endpoints, per-user and per-root assignments, context limits
-**Do not modify:** Resolution order, encryption scheme, mode-to-assignment mapping
+**Custom connections:** Users add their own LLM connections (any OpenAI-compatible endpoint). API keys are encrypted with AES-256-CBC.
 
 ---
 
-## 8. Background Jobs
+## 10. Background Jobs
 
-Jobs run in-process on intervals. Each land runs its own jobs for its own trees.
+Jobs run in-process on intervals. Each Land runs its own jobs for its own trees.
 
-**Tree Dream (every 30 min default):**
-- Checks each root node's `dreamTime` (HH:MM format)
-- If due, runs the pipeline: cleanup (expand + reorganize) > drain (short-term memory) > understanding
-- In-memory lock prevents concurrent dreams on the same tree
-- Configurable: interval, max passes per phase, minimum tree size
+**Tree Dream (30 min default):**
+- Checks each root's `dreamTime` (HH:MM format)
+- Runs: cleanup (expand + reorganize) > drain (short-term memory) > understanding
+- In-memory lock prevents concurrent dreams per tree
 
-**Raw Idea Auto-Place (every 15 min default):**
-- Picks up pending raw ideas and places them into the best matching tree/node
-- Configurable: interval
+**Raw Idea Auto-Place (15 min default):**
+- Places pending raw ideas into best matching tree/node
 
-**Canopy Heartbeat (every 5 min):**
-- Pings all known peer lands via GET /canopy/info
-- Updates peer status: active, degraded, unreachable, dead
-- Configurable: interval, failure thresholds
+**Canopy Heartbeat (5 min):**
+- Pings all known peer lands via `GET /canopy/info`
+- Updates peer status: active > degraded > unreachable > dead
 
-**Canopy Outbox (every 60 sec):**
+**Canopy Outbox (60 sec):**
 - Processes pending canopy events (invites, energy reports, notifications)
 - Retries failed deliveries up to 5 times
-- Configurable: interval, max retries
 
-**Customizable:** All intervals, thresholds, pass limits
-**Do not modify:** Job registration in server.js, contribution logging for AI actions, session lifecycle types
+**Directory Registration (60 min, if DIRECTORY_URL set):**
+- Re-registers with the directory, refreshes public tree list
 
 ---
 
-## 9. Energy System
+## 11. Energy System
 
-Energy is a usage meter that limits how much a user can do per day.
+Energy is a usage meter. Daily limits by tier:
 
-**Daily limits by tier:**
 ```
 basic:    350
 standard: 1,500
 premium:  8,000
-god:      10,000,000,000 (effectively unlimited)
+god:      10,000,000,000 (unlimited)
 ```
 
-Self-hosted lands default to "god" tier (LAND_DEFAULT_TIER=god).
+Self-hosted lands default to "god" tier.
 
-**Action costs:**
-- Create node: 3
-- Edit (status, value, name, parent, schedule, goal): 1
-- Add prestige, execute script, transaction: 2
-- Note, raw idea, edit script: 1-5 (scales with text length, 1000 chars per energy)
-- Understanding: 2 per node processed
-- File upload: scales with size (1.5/MB up to 100MB, then increases)
-
-**Daily reset:** 24-hour rolling window per user.
-
-**Cross-land energy:** When a remote user acts on your tree, your land reports the cost back to their home land. Their home land deducts it. Energy is a soft meter. If a home land doesn't deduct, worst case is extra activity. The tree owner can revoke access.
+**Cross-land energy:** When a remote user acts on your tree, your Land reports the cost to their home Land. Their home Land deducts it. Energy is a soft meter, not a security gate.
 
 **Customizable:** All limits, all costs, all scaling factors
-**Do not modify:** The calculateEnergyCost function signature, daily reset logic, action enum (must match contribution actions)
+**Do not modify:** calculateEnergyCost function signature, daily reset logic
 
 ---
 
-## 10. MCP Tools
+## 12. MCP Tools
 
-The MCP (Model Context Protocol) server runs in-process and exposes tools that the LLM can call during conversations.
+The MCP server runs in-process. Tools the LLM can call:
 
-**Tool categories:**
-- READ: get-tree, get-node, get-node-notes, get-node-contributions, get-raw-ideas, search-notes
-- WRITE: create-node, edit-node, delete-node, create-note, delete-note, edit-note, transfer-note
+- READ: get-tree, get-node, get-node-notes, get-node-contributions, search-notes
+- WRITE: create-node, edit-node, delete-node, create-note, edit-note, delete-note
 - TRANSACTION: create-transaction, view-transactions, settle-transactions
 - SCRIPT: execute-script, edit-script (vm2 sandboxed)
 - VALUES: set-value, set-goal, edit-status, add-prestige
 - UNDERSTANDING: run-incremental-understanding, get-understanding-runs
-- CONTEXT: get-tree-context, inject-context
 
-**Mode availability:** Each TREE sub-mode defines which tools the LLM can access. For example, the "respond" mode has read tools but not create/delete. The "structure" mode has create/edit/delete but not transactions.
-
-**Customizable:** Tool implementations, descriptions, parameter schemas, cost calculations
-**Do not modify:** Tool availability per mode (defined in modes/registry.js), energy cost tracking per invocation, contribution logging per tool call
+Each TREE sub-mode defines which tools the LLM can access. The "respond" mode has read tools. The "structure" mode has create/edit/delete. Etc.
 
 ---
 
-## 11. Gateway Integrations
+## 13. Gateway Integrations
 
 Gateways connect external services (Discord, Telegram, web apps) to trees.
 
-**Supported types:** telegram, discord, webapp
-
-**Channel configuration:**
 - Direction: input, input-output, output
-- Mode: read (place incoming messages), write (query the tree), read-write (full chat)
+- Mode: read (place incoming), write (query), read-write (full chat)
 - Max 10 channels per root
-- Notification types: dream-summary, dream-thought
-
-**Secrets:** All gateway credentials (bot tokens, webhook URLs, OAuth keys) are encrypted with CUSTOM_LLM_API_SECRET_KEY.
-
-**Customizable:** Add new integration types, modify webhook formats, add notification types
-**Do not modify:** Encryption scheme, GatewayChannel model structure, mode validation (read/write/read-write)
+- Credentials encrypted with CUSTOM_LLM_API_SECRET_KEY
 
 ---
 
-## 12. Billing and Payments
+## 14. Billing and Payments
 
 Stripe integration for plan upgrades and energy purchases.
 
-**To disable:** Leave STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET empty. Billing routes become no-ops. Users still get accounts with the default tier.
+**To disable:** Leave STRIPE_SECRET_KEY empty. Billing becomes a no-op. Users get accounts with the default tier.
 
-**If enabled:**
-- Standard: $20/month
-- Premium: $100/month
-- Energy packs: $0.01 per energy point
-- Webhook handles checkout.session.completed events
-- Idempotent processing via stripeEventId on Contribution records
-
-**Customizable:** Pricing, plan names, plan durations, disable entirely
-**Do not modify:** Webhook event handling pattern, contribution logging with idempotency, profileType enum (basic/standard/premium/god)
+**If enabled:** Standard ($20/mo), Premium ($100/mo), energy packs ($0.01/point).
 
 ---
 
-## 13. Authentication
+## 15. Authentication
 
-Three auth methods:
+Three auth methods, checked in order by `authenticate.js`:
 
-**JWT (primary):**
+**1. CanopyToken (remote land users):**
+- Ed25519 signed JWT from a peer Land
+- Verifies against peer's stored public key
+- Sets req.userId to the ghost user's ID
+- Sets req.authType = "canopy"
+
+**2. JWT (local browser users):**
 - Signed with JWT_SECRET
-- Sent as Bearer token in Authorization header or as cookie
-- Used by the app UI for all API calls
+- Sent as Bearer token or cookie
+- Sets req.authType = "jwt"
 
-**API Key:**
-- Users generate API keys from their account
-- Sent via X-API-Key header, Authorization: ApiKey header, or body.apiKey
-- Key hash stored in user record (not the raw key)
+**3. API Key (programmatic access):**
+- Users generate keys from their account
+- Bcrypt hashed, stored in user record
+- Sent via X-API-Key header or Authorization: ApiKey header
+- Sets req.authType = "apiKey"
 
-**CanopyToken (cross-land):**
-- Ed25519 signed JWT for inter-land requests
-- Contains: sub (userId), iss (sender domain), aud (target domain), landId
-- Verified against the sender's public key from LandPeer record
-- 5 minute expiry
-
-**Tree access resolution:**
-- Walk the node's parent chain to find the root
-- Check if user is rootOwner or in contributors array
-- Both grant full read/write access
-
-**Customizable:** JWT expiry, API key generation, additional middleware
-**Do not modify:** Tree access resolution (rootOwner + contributors), CanopyToken format, JWT_SECRET env var name
+**Tree access resolution:** Walk the node's parent chain to find the root. Check if user is rootOwner or in contributors. Both grant full access. This works identically for local users and ghost users.
 
 ---
 
-## 14. Database Models
+## 16. Database Models
 
-18 Mongoose models. All use UUID v4 for primary keys. All refs are string IDs.
+18+ Mongoose models. All use UUID v4 primary keys.
 
-**Core models (structure matters for federation):**
-- **Node** . tree hierarchy (parent, children, versions, rootOwner, contributors, visibility, llmAssignments)
-- **User** . accounts (username, email, profileType, energy, isRemote, homeLand)
-- **Contribution** . audit trail (userId, nodeId, action, energyUsed, wasAi, wasRemote, homeLand)
+**Core (structure matters for federation):**
+- **Node**: tree hierarchy (parent, children, versions, rootOwner, contributors, visibility, llmAssignments)
+- **User**: accounts (username, email, profileType, energy, apiKeys, isRemote, homeLand)
+- **Contribution**: audit trail (userId, nodeId, action, energyUsed, wasAi, wasRemote, homeLand)
 
-**AI models:**
-- **AIChat** . every LLM call (sessionId, chainIndex, messages, toolCalls, llmProvider)
-- **UnderstandingRun** . knowledge compression runs (rootNodeId, perspective, nodeMap, topology)
-- **UnderstandingNode** . compression results (realNodeId, perspectiveStates)
+**AI:**
+- **AIChat**: every LLM call (sessionId, chainIndex, messages, toolCalls, llmProvider)
+- **UnderstandingRun**: knowledge compression runs
+- **UnderstandingNode**: compression results
 
-**Feature models:**
-- **Note** . node annotations
-- **RawIdea** . unprocessed input queue
-- **ShortMemory** . short-term memory items
-- **Transaction** . value transfers between nodes
-- **Invite** . collaboration invites
-- **CustomLlmConnection** . stored LLM credentials (encrypted)
-- **GatewayChannel** . external integrations
-- **Notification** . user alerts
-- **Book** . tree exports
+**Features:**
+- **Note**, **RawIdea**, **ShortMemory**, **Transaction**, **Invite**
+- **CustomLlmConnection**, **GatewayChannel**, **Notification**, **Book**
 
-**Canopy models:**
-- **LandPeer** . registered peer lands (domain, publicKey, status, uptimeHistory, rateLimits)
-- **RemoteUser** . cached info about users on other lands
-- **CanopyEvent** . outbox for async event delivery
+**Canopy:**
+- **LandPeer**: peer lands (domain, publicKey, status, uptimeHistory, rateLimits)
+- **RemoteUser**: cached info about users on other lands
+- **CanopyEvent**: outbox for async event delivery
 
-**You can add new models freely.** You can add fields to existing models. Do not remove or rename fields that are part of the canopy contract (User.username, User.isRemote, User.homeLand, Node.rootOwner, Node.contributors, Node.visibility, Contribution.wasRemote, Contribution.homeLand).
+You can add new models freely. You can add fields to existing models. Do not remove or rename fields that are part of the network contract.
 
 ---
 
 ## Quick Reference: What Breaks Federation
 
-If you modify any of these, your land will not be able to communicate with other lands:
-
 1. Canopy endpoint paths or response shapes
-2. CanopyToken JWT structure or signing algorithm
-3. Ed25519 keypair (once generated, never replace it)
-4. User._id format (must be UUID v4)
-5. User.username uniqueness (used in canopy IDs)
-6. Protocol version number (only increment when the protocol itself changes)
+2. API endpoint paths or response shapes under /api/v1/
+3. CanopyToken JWT structure or signing algorithm
+4. Ed25519 keypair (once generated, never replace it)
+5. User._id format (must be UUID v4)
+6. User.username uniqueness (used in canopy IDs: username@domain)
+7. Protocol version number (only increment when the protocol changes)
 
 Everything else is yours.

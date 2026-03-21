@@ -13,6 +13,7 @@ import mongoose from "./db/config.js"; // Initialize DB connection
 import { getLandIdentity } from "./canopy/identity.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
 import { startOutboxJob } from "./canopy/events.js";
+import { startDirectoryRegistration } from "./canopy/directory.js";
 
 import dotenv from "dotenv";
 import path from "path";
@@ -112,6 +113,7 @@ server.listen(PORT, "0.0.0.0", async () => {
     // Start canopy network jobs
     startHeartbeatJob();
     startOutboxJob();
+    startDirectoryRegistration();
     console.log("[Land] Canopy API ready");
 
     // Connect Discord bots for gateway input channels

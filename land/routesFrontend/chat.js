@@ -1283,7 +1283,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       notifList.innerHTML = '<div class="notif-loading">Loading...</div>';
       dreamsLoaded = false;
       try {
-        var dreamUrl = "/api/v1/chat/notifications" + (activeRootId ? "?rootId=" + activeRootId : "");
+        var dreamUrl = "/chat/notifications" + (activeRootId ? "?rootId=" + activeRootId : "");
         var res = await fetch(dreamUrl, { credentials: "include" });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed");
@@ -1395,7 +1395,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       invitesList.innerHTML = '<div class="notif-loading">Loading...</div>';
       invitesLoaded = false;
       try {
-        var invUrl = "/api/v1/chat/invites" + (activeRootId ? "?rootId=" + activeRootId : "");
+        var invUrl = "/chat/invites" + (activeRootId ? "?rootId=" + activeRootId : "");
         var res = await fetch(invUrl, { credentials: "include" });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed");
@@ -1480,7 +1480,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       item.style.opacity = "0.5";
       item.style.pointerEvents = "none";
       try {
-        var res = await fetch("/api/v1/chat/invites/" + inviteId, {
+        var res = await fetch("/chat/invites/" + inviteId, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -1574,7 +1574,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     }
 
     // Check for notifications + invites on load
-    fetch("/api/v1/chat/notifications", { credentials: "include" })
+    fetch("/chat/notifications", { credentials: "include" })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.notifications && d.notifications.length > 0) {
@@ -1584,7 +1584,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       })
       .catch(function() {});
 
-    fetch("/api/v1/chat/invites", { credentials: "include" })
+    fetch("/chat/invites", { credentials: "include" })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.invites && d.invites.length > 0) {
