@@ -92,11 +92,30 @@ export async function removePeer(domain) {
  * Block a peer land. Blocked peers are rejected on all canopy endpoints.
  */
 export async function blockPeer(domain) {
-  return LandPeer.findOneAndUpdate(
+  const peer = await LandPeer.findOneAndUpdate(
     { domain },
     { status: "blocked" },
     { new: true }
   );
+
+  if (peer) {
+    // Remove all ghost users from this land from all tree contributor arrays
+    const { default: User } = await import("../db/models/user.js");
+    const { default: Node } = await import("../db/models/node.js");
+
+    const ghostUsers = await User.find({ isRemote: true, homeLand: domain }).select("_id").lean();
+    const ghostIds = ghostUsers.map((g) => g._id);
+
+    if (ghostIds.length > 0) {
+      await Node.updateMany(
+        { contributors: { $in: ghostIds } },
+        { $pullAll: { contributors: ghostIds } }
+      );
+      console.log(`[Canopy] Blocked ${domain}: removed ${ghostIds.length} ghost users from all trees`);
+    }
+  }
+
+  return peer;
 }
 
 /**
@@ -154,10 +173,27 @@ export async function pingPeer(peer) {
 
     const info = await res.json();
 
-    // Check for domain redirect
-    if (info.redirect && info.newDomain) {
-      console.log(`[Canopy] Peer ${peer.domain} redirecting to ${info.newDomain}`);
-      peer.domain = info.newDomain;
+    // Check for domain redirect. Verify the new domain before trusting it.
+    if (info.redirect && info.newDomain && info.newDomain !== peer.domain) {
+      try {
+        const verifyRes = await fetch(
+          `${info.newDomain.startsWith("http") ? info.newDomain : "https://" + info.newDomain}/canopy/info`,
+          { signal: AbortSignal.timeout(10000) }
+        );
+        if (verifyRes.ok) {
+          const newInfo = await verifyRes.json();
+          // Only accept redirect if the new domain has the same landId and publicKey
+          if (newInfo.landId === peer.landId && newInfo.publicKey === peer.publicKey) {
+            console.log(`[Canopy] Peer ${peer.domain} verified redirect to ${info.newDomain}`);
+            peer.domain = info.newDomain;
+            peer.baseUrl = newInfo.baseUrl || peer.baseUrl;
+          } else {
+            console.warn(`[Canopy] Peer ${peer.domain} redirect to ${info.newDomain} REJECTED: identity mismatch`);
+          }
+        }
+      } catch {
+        console.warn(`[Canopy] Could not verify redirect for ${peer.domain} to ${info.newDomain}`);
+      }
     }
 
     peer.lastSeenAt = new Date();
@@ -166,7 +202,8 @@ export async function pingPeer(peer) {
     peer.firstFailureAt = null;
     peer.status = "active";
     peer.protocolVersion = info.protocolVersion || peer.protocolVersion;
-    peer.publicKey = info.publicKey || peer.publicKey;
+    // SECURITY: Never update publicKey from heartbeat. Keys are only set during
+    // initial peering. To rotate keys, the peer must re-peer.
 
     // Update uptime history for today
     let todayEntry = peer.uptimeHistory.find(

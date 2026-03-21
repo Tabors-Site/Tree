@@ -56,6 +56,15 @@ export async function proxyToRemoteLand({
     const res = await fetch(url, fetchOptions);
     const data = await res.json();
 
+    // Don't pass through 500 errors verbatim (could leak internal details)
+    if (res.status >= 500) {
+      return {
+        status: 502,
+        data: { success: false, error: "Remote land returned an internal error" },
+        headers: {},
+      };
+    }
+
     return {
       status: res.status,
       data,

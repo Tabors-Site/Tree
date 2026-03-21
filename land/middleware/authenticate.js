@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import bcrypt from "bcrypt";
 import User from "../db/models/user.js";
 import { resolveTreeAccess } from "../core/authenticate.js";
-import { verifyCanopyToken } from "../canopy/identity.js";
+import { verifyCanopyToken, getLandIdentity } from "../canopy/identity.js";
 import { getPeerByDomain } from "../canopy/peers.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -44,6 +44,12 @@ export default async function authenticate(req, res, next) {
       const { valid, payload, error } = await verifyCanopyToken(canopyToken, peer.publicKey);
       if (!valid) {
         return res.status(401).json({ message: "Invalid CanopyToken: " + error });
+      }
+
+      // Verify token was intended for this land (prevent replay across lands)
+      const myDomain = getLandIdentity().domain;
+      if (payload.aud && payload.aud !== myDomain) {
+        return res.status(401).json({ message: "CanopyToken audience mismatch" });
       }
 
       // The sub is the remote user's ID. Must be a ghost user from the claiming land.

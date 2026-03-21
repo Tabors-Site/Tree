@@ -120,9 +120,16 @@ export async function processOutbox() {
 
   if (events.length === 0) return { processed: 0, sent: 0, failed: 0 };
 
-  const results = { processed: events.length, sent: 0, failed: 0 };
+  const results = { processed: 0, sent: 0, failed: 0 };
 
   for (const event of events) {
+    // Exponential backoff: wait 1min, 2min, 4min, 8min, 16min between retries
+    if (event.retryCount > 0 && event.lastAttemptAt) {
+      const backoffMs = Math.min(60000 * Math.pow(2, event.retryCount - 1), 16 * 60000);
+      if (Date.now() - event.lastAttemptAt.getTime() < backoffMs) continue;
+    }
+
+    results.processed++;
     const sent = await processEvent(event);
     if (sent) results.sent++;
     else results.failed++;

@@ -109,8 +109,9 @@ router.get("/canopy/user/:username", async (req, res) => {
  */
 router.get("/canopy/public-trees", async (req, res) => {
   try {
-    const { q, page = 1, limit = 20 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { q, page = 1 } = req.query;
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (Math.max(1, parseInt(page)) - 1) * limit;
 
     const query = {
       parent: null,
@@ -119,7 +120,8 @@ router.get("/canopy/public-trees", async (req, res) => {
     };
 
     if (q) {
-      query.name = { $regex: q, $options: "i" };
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.name = { $regex: escaped, $options: "i" };
     }
 
     const trees = await Node.find(query)
@@ -291,10 +293,20 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
     }
 
     const invite = await Invite.findById(inviteId);
-    if (!invite) {
+    if (!invite || invite.status !== "pending") {
       return res.status(404).json({
         success: false,
-        error: "Invite not found",
+        error: "Invite not found or already processed",
+      });
+    }
+
+    // SECURITY: Verify the accepting land is the one the invite was intended for.
+    // Check that the RemoteUser record for this invite's recipient belongs to the claiming land.
+    const intendedRecipient = await RemoteUser.findById(invite.userReceiving);
+    if (intendedRecipient && intendedRecipient.homeLandDomain !== req.canopy.sourceLandDomain) {
+      return res.status(403).json({
+        success: false,
+        error: "This invite was not sent to your land",
       });
     }
 
@@ -442,7 +454,13 @@ router.post("/canopy/energy/report", authenticateCanopy, async (req, res) => {
       });
     }
 
-    const { userId, energyUsed, action } = req.body;
+    const { userId, energyUsed, action, reportId } = req.body;
+
+    // Cap energy per report to prevent abuse
+    const cappedEnergy = Math.min(Math.max(0, energyUsed || 0), 100);
+    if (cappedEnergy <= 0) {
+      return res.json({ success: true, message: "No energy to deduct" });
+    }
 
     const user = await User.findById(userId);
     if (!user || user.isRemote) {
@@ -453,12 +471,11 @@ router.post("/canopy/energy/report", authenticateCanopy, async (req, res) => {
     }
 
     // Deduct energy
-    if (user.availableEnergy.amount >= energyUsed) {
-      user.availableEnergy.amount -= energyUsed;
-    } else if (user.additionalEnergy.amount >= energyUsed) {
-      user.additionalEnergy.amount -= energyUsed;
+    if (user.availableEnergy.amount >= cappedEnergy) {
+      user.availableEnergy.amount -= cappedEnergy;
+    } else if (user.additionalEnergy.amount >= cappedEnergy) {
+      user.additionalEnergy.amount -= cappedEnergy;
     } else {
-      // Not enough energy, but we still accept the report
       user.availableEnergy.amount = 0;
     }
 

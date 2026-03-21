@@ -1,4 +1,4 @@
-import { verifyCanopyToken } from "./identity.js";
+import { verifyCanopyToken, getLandIdentity } from "./identity.js";
 import { getPeerByDomain } from "./peers.js";
 import { canopyResponseHeaders } from "./protocol.js";
 
@@ -112,6 +112,15 @@ export async function authenticateCanopy(req, res, next) {
       return res.status(401).json({
         success: false,
         error: `Invalid CanopyToken: ${error}`,
+      });
+    }
+
+    // Verify token was intended for this land
+    const myDomain = getLandIdentity().domain;
+    if (payload.aud && payload.aud !== myDomain) {
+      return res.status(401).json({
+        success: false,
+        error: "CanopyToken audience mismatch",
       });
     }
 

@@ -110,7 +110,7 @@ router.get("/lands", async (req, res) => {
     }
 
     if (req.query.q) {
-      const q = req.query.q.trim();
+      const q = req.query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       filter.$or = [
         { name: { $regex: q, $options: "i" } },
         { domain: { $regex: q, $options: "i" } },
@@ -177,7 +177,7 @@ router.get("/search/trees", async (req, res) => {
     const filter = {};
 
     if (req.query.q) {
-      const q = req.query.q.trim();
+      const q = req.query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       filter.$or = [
         { name: { $regex: q, $options: "i" } },
         { description: { $regex: q, $options: "i" } },
