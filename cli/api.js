@@ -1,7 +1,11 @@
 const fetch = require("node-fetch");
+const { load } = require("./config");
 
-const BASE_SITE = "https://treeOS.ai";
-const BASE = BASE_SITE + "/api/v1";
+function getBase() {
+  const cfg = load();
+  const site = cfg.landUrl || "https://treeOS.ai";
+  return site.replace(/\/+$/, "") + "/api/v1";
+}
 
 class TreeAPI {
   constructor(apiKey) {
@@ -18,7 +22,7 @@ class TreeAPI {
     };
     if (body) opts.body = JSON.stringify(body);
 
-    const res = await fetch(BASE + path, opts);
+    const res = await fetch(getBase() + path, opts);
     const json = await res.json();
 
     if (!res.ok) {
@@ -39,6 +43,17 @@ class TreeAPI {
   }
   del(path) {
     return this._req("DELETE", path);
+  }
+
+  // ── Land Config ─────────────────────────────────────────────────────────
+  getLandConfig() {
+    return this.get("/land/config");
+  }
+  getLandConfigValue(key) {
+    return this.get(`/land/config/${encodeURIComponent(key)}`);
+  }
+  setLandConfig(key, value) {
+    return this.put(`/land/config/${encodeURIComponent(key)}`, { value });
   }
 
   // ── User ─────────────────────────────────────────────────────────────────

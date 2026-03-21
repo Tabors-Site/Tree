@@ -13,7 +13,7 @@ async function getPublicTrees() {
   try {
     const publicNodes = await Node.find({
       visibility: "public",
-      parent: null,
+      rootOwner: { $nin: [null, "SYSTEM"] },
     })
       .select("_id name description rootOwner")
       .populate("rootOwner", "username")

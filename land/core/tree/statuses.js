@@ -17,6 +17,7 @@ async function editStatus({
 }) {
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
+  if (node.isSystem) throw new Error("Cannot modify system nodes");
 
   const targetVersion = node.versions.find((v) => v.prestige === version);
   if (!targetVersion) throw new Error("Version not found");
@@ -134,9 +135,9 @@ async function addPrestige({
   aiChatId = null,
   sessionId = null,
 }) {
-  console.log(nodeId);
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
+  if (node.isSystem) throw new Error("Cannot modify system nodes");
 
   const { energyUsed } = await useEnergy({
     userId,

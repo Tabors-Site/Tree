@@ -89,7 +89,7 @@ export async function runUnderstandingAutoJob() {
 
   try {
     // Find all root nodes (trees)
-    const rootNodes = await Node.find({ rootOwner: { $ne: null } })
+    const rootNodes = await Node.find({ rootOwner: { $nin: [null, "SYSTEM"] } })
       .select("_id name rootOwner children llmAssignments")
       .lean();
 

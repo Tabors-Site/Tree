@@ -34,6 +34,7 @@ import Invite from "../db/models/invite.js";
 import authenticate from "../middleware/authenticate.js";
 import { renderCanopyAdmin, renderCanopyInvites, renderCanopyDirectory } from "./html/canopy.js";
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
+import { getLandConfigValue } from "../core/landConfig.js";
 
 const router = express.Router();
 
@@ -114,7 +115,7 @@ router.get("/canopy/public-trees", async (req, res) => {
     const skip = (Math.max(1, parseInt(page)) - 1) * limit;
 
     const query = {
-      parent: null,
+      rootOwner: { $nin: [null, "SYSTEM"] },
       "versions.0.status": "active",
       visibility: "public",
     };
@@ -653,7 +654,7 @@ router.post(
         password: transferToken,
         isRemote: false,
         homeLand: null,
-        profileType: process.env.LAND_DEFAULT_TIER || "god",
+        profileType: getLandConfigValue("LAND_DEFAULT_TIER") || "god",
       });
 
       res.json({
@@ -1105,7 +1106,7 @@ router.get("/canopy/admin/invites", authenticate, async (req, res) => {
 
     // Get trees the user owns or contributes to for the invite form
     const userTrees = await Node.find({
-      parent: null,
+      rootOwner: { $nin: [null, "SYSTEM"] },
       $or: [
         { rootOwner: req.userId },
         { contributors: req.userId },

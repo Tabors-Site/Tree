@@ -109,6 +109,9 @@ async function createNote({
     throw new Error("Missing required fields");
   }
 
+  const targetNode = await Node.findById(nodeId).select("isSystem").lean();
+  if (targetNode?.isSystem) throw new Error("Cannot modify system nodes");
+
   let filePath = null;
   if (contentType === "file") {
     if (!file) throw new Error("File is required for file content type");

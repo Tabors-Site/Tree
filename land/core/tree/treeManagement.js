@@ -5,6 +5,7 @@ import { createNote } from "./notes.js";
 import { resolveTreeAccess } from "../authenticate.js";
 import { isDescendant } from "./treeFetch.js";
 import { useEnergy } from "./energy.js";
+import { getLandRootId } from "../landRoot.js";
 
 function containsHtml(str) {
   return /<[a-zA-Z\/][^>]*>/.test(str);
@@ -48,6 +49,9 @@ export async function createNewNode(
   if (containsHtml(name)) {
     throw new Error("Node name cannot contain HTML tags");
   }
+  if (name.startsWith(".")) {
+    throw new Error("Node names cannot start with a dot");
+  }
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
   const { energyUsed } = await useEnergy({
@@ -73,7 +77,7 @@ export async function createNewNode(
       },
     ],
     children: [],
-    parent: parentNodeID || null,
+    parent: isRoot ? getLandRootId() : (parentNodeID || null),
     rootOwner: isRoot ? user._id : null,
     contributors: [],
   });
@@ -83,9 +87,17 @@ export async function createNewNode(
   if (isRoot) {
     user.roots.addToSet(newNode._id);
     await user.save();
+    // Add to Land root's children
+    const landRootId = getLandRootId();
+    if (landRootId) {
+      await Node.findByIdAndUpdate(landRootId, {
+        $addToSet: { children: newNode._id },
+      });
+    }
   } else if (parentNodeID) {
     const parentNode = await Node.findById(parentNodeID);
     if (!parentNode) throw new Error("Parent node not found");
+    if (parentNode.isSystem) throw new Error("Cannot create nodes under system nodes");
 
     parentNode.children.addToSet(newNode._id);
     await parentNode.save();
@@ -215,10 +227,10 @@ export async function deleteNodeBranch(
   const nodeToDelete = await Node.findById(nodeId);
   if (!nodeToDelete) throw new Error("Node not found");
   const access = await resolveTreeAccess(nodeId, userId);
-  if (!access.isOwner || (!access.isRoot && nodeToDelete.parent === null)) {
+  if (!access.isOwner || (!access.isRoot && !!nodeToDelete.rootOwner)) {
     throw new Error("Invalid delete attempt. Must be owner and not root.");
   }
-  if (nodeToDelete.parent === null) {
+  if (nodeToDelete.rootOwner && nodeToDelete.rootOwner !== "SYSTEM") {
     throw new Error("Root nodes can only be retired on root view");
   }
   if (nodeToDelete.parent === "deleted") {
@@ -285,7 +297,7 @@ export async function updateParentRelationship(
 ) {
   const nodeChild = await Node.findById(nodeChildId);
   if (!nodeChild) throw new Error("Child node not found");
-  if (nodeChild.parent == null) throw new Error("Cannot change root's parent");
+  if (nodeChild.rootOwner && nodeChild.rootOwner !== "SYSTEM") throw new Error("Cannot change root's parent");
   if (nodeChild.parent.toString() === nodeNewParentId.toString()) {
     throw new Error("Node already has this parent");
   }
@@ -295,6 +307,7 @@ export async function updateParentRelationship(
   const nodeNewParent = await Node.findById(nodeNewParentId);
 
   if (!nodeNewParent) throw new Error("New parent node not found");
+  if (nodeNewParent.isSystem) throw new Error("Cannot move into a system node");
   if (await isDescendant(nodeChildId, nodeNewParentId)) {
     throw new Error("Cannot move a node into its own descendant");
   }
@@ -403,10 +416,14 @@ export async function editNodeName({
   if (containsHtml(newName)) {
     throw new Error("Node name cannot contain HTML tags");
   }
+  if (newName.startsWith(".")) {
+    throw new Error("Node names cannot start with a dot");
+  }
   const node = await Node.findById(nodeId);
   if (!node) {
     throw new Error("Node not found");
   }
+  if (node.isSystem) throw new Error("Cannot modify system nodes");
   const { energyUsed } = await useEnergy({
     userId,
     action: "editNameNode",
@@ -452,6 +469,10 @@ export async function reviveNodeBranch({
 
   if (targetParent.parent === "deleted") {
     throw new Error("Cannot revive into a deleted branch");
+  }
+
+  if (targetParent.isSystem) {
+    throw new Error("Cannot revive into a system node");
   }
 
   const deletedAccess = await resolveTreeAccess(deletedNodeId, userId);
@@ -533,13 +554,21 @@ export async function reviveNodeBranchAsRoot({
     action: "branchLifecycle",
   });
 
-  deletedNode.parent = null;
+  deletedNode.parent = getLandRootId();
   deletedNode.rootOwner = userId;
   await deletedNode.save();
 
   await User.findByIdAndUpdate(userId, {
     $addToSet: { roots: deletedNodeId },
   });
+
+  // Add to Land root's children
+  const landRootId = getLandRootId();
+  if (landRootId) {
+    await Node.findByIdAndUpdate(landRootId, {
+      $addToSet: { children: deletedNodeId },
+    });
+  }
 
   await logContribution({
     userId,

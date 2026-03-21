@@ -32,7 +32,7 @@ export async function runCleanupAutoJob() {
     console.log("🧹 Cleanup auto-run starting...");
 
     // Find all root nodes
-    const rootNodes = await Node.find({ rootOwner: { $ne: null } })
+    const rootNodes = await Node.find({ rootOwner: { $nin: [null, "SYSTEM"] } })
       .select("_id name rootOwner children")
       .lean();
 

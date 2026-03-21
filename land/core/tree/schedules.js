@@ -32,6 +32,7 @@ async function updateSchedule({
     error.status = 404;
     throw error;
   }
+  if (node.isSystem) throw new Error("Cannot modify system nodes");
 
   if (versionIndex < 0 || versionIndex >= node.versions.length) {
     const error = new Error("Invalid version index.");

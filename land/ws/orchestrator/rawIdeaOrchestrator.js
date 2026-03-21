@@ -409,10 +409,11 @@ export async function orchestrateRawIdeaPlacement({
     const targetNodePath = [];
     let cursor = targetNode;
     while (cursor) {
+      if (cursor.systemRole) break;
       targetNodePath.unshift({ _id: cursor._id, name: cursor.name });
       if (!cursor.parent || cursor.parent === "deleted") break;
       cursor = await Node.findById(cursor.parent)
-        .select("_id name parent")
+        .select("_id name parent systemRole")
         .lean();
     }
 

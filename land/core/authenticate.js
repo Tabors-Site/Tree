@@ -27,7 +27,7 @@ export async function resolveTreeAccess(nodeId, userId) {
     };
   }
 
-  while (!node.rootOwner) {
+  while (!node.rootOwner || node.rootOwner === "SYSTEM") {
     if (!node.parent) {
       return {
         ok: false,
@@ -37,7 +37,7 @@ export async function resolveTreeAccess(nodeId, userId) {
     }
 
     node = await Node.findById(node.parent)
-      .select("parent rootOwner contributors")
+      .select("parent rootOwner contributors systemRole")
       .lean()
       .exec();
 
@@ -46,6 +46,14 @@ export async function resolveTreeAccess(nodeId, userId) {
         ok: false,
         error: "BROKEN_TREE",
         message: "Broken tree: parent node missing",
+      };
+    }
+
+    if (node.systemRole) {
+      return {
+        ok: false,
+        error: "INVALID_TREE",
+        message: "Invalid tree: reached system node boundary",
       };
     }
   }

@@ -1,5 +1,7 @@
 import mongoose from "./db/config.js";
 import { getLandIdentity } from "./canopy/identity.js";
+import { ensureLandRoot } from "./core/landRoot.js";
+import { initLandConfig } from "./core/landConfig.js";
 import { startRawIdeaAutoPlaceJob } from "./jobs/rawIdeaAutoPlace.js";
 import { startTreeDreamJob, runTreeDreamJob } from "./jobs/treeDream.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
@@ -17,8 +19,10 @@ export function onListen(PORT) {
   startRawIdeaAutoPlaceJob({ intervalMs: 15 * 60 * 1000 });
   startTreeDreamJob({ intervalMs: 30 * 60 * 1000 });
 
-  const onDbReady = () => {
+  const onDbReady = async () => {
     console.log("[Land] MongoDB connected");
+    await ensureLandRoot();
+    await initLandConfig();
     runTreeDreamJob();
     console.log("[Land] Background jobs started (dream, drain, cleanup, understanding)");
 

@@ -74,6 +74,15 @@ const NodeSchema = new mongoose.Schema({
   // Tree Dream — daily maintenance cycle (only meaningful on root nodes)
   dreamTime: { type: String, default: null }, // "HH:MM" format, e.g. "03:00"
   lastDreamAt: { type: Date, default: null },
+
+  // Land system nodes (Land root, .identity, .config, .peers)
+  isSystem: { type: Boolean, default: false },
+  systemRole: {
+    type: String,
+    enum: [null, "land-root", "identity", "config", "peers"],
+    default: null,
+  },
+  metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
 });
 
 NodeSchema.methods.addContributor = function (userId, removerId) {
@@ -127,6 +136,9 @@ NodeSchema.methods.isAllowedToModify = async function (userId) {
 }; */
 
 NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
+  if (this.isSystem) {
+    throw new Error("System nodes cannot be deleted");
+  }
   const Node = mongoose.model("Node");
 
   try {

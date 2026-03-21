@@ -15,7 +15,24 @@
       "Bash(node --check /tmp/user_check2.mjs)",
       "Bash(cp /home/tabor/github/Tree/land/routesURL/user.js.new /tmp/user_final.mjs)",
       "Bash(node --check /tmp/user_final.mjs)",
-      "Bash(node --check /home/tabor/github/Tree/land/routesURL/user.js)"
+      "Bash(node --check /home/tabor/github/Tree/land/routesURL/user.js)",
+      "Bash(find /home/tabor/github/Tree/land/routesURL -type f -name *.js)",
+      "Bash(find /home/tabor/github/Tree/land/core -type f -name *.js)",
+      "Bash(grep -r \"create.*root\\\\|createNewNode\" /home/tabor/github/Tree/land/site --include=*.jsx --include=*.js)",
+      "Bash(grep -r \"getLandIdentity\\\\|getLandInfoPayload\" /home/tabor/github/Tree --include=*.js)",
+      "Bash(ls /home/tabor/github/Tree/land/db/models/*.js)",
+      "Bash(grep -h \"^router\\\\.\\\\\\(get\\\\|post\\\\|put\\\\|delete\\\\|patch\\\\\\)\" /home/tabor/github/Tree/land/routes/api/*.js)",
+      "Bash(sed 's/\\(.*$//')",
+      "Read(//home/tabor/github/Tree/**)",
+      "Bash(sed 's/\"\"\"\".*$//')",
+      "Bash(cat /home/tabor/github/Tree/land/routes/api/*.js)",
+      "Bash(sed 's/,.*$//')",
+      "Bash(perl -ne 'if \\(/<div className=\"\"\"\"ep-method-url\"\"\"\">/...<\\\\/div>/\\) { print }' /home/tabor/github/Tree/site/src/components/Welcome/About/API.jsx)",
+      "Bash(bash /tmp/describe_endpoints.sh)",
+      "Bash(find /home/tabor/github/Tree/site/src -type f \\\\\\(-name *.jsx -o -name *.js \\\\\\))",
+      "Bash(grep -n \"isSystem\" /home/tabor/github/Tree/land/ws/orchestrator/*.js)",
+      "Bash(/tmp/mutation_scan.txt:*)",
+      "Read(//tmp/**)"
     ]
   }
 }

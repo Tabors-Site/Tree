@@ -71,10 +71,10 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       )
       .lean()
       .exec();
-    const rootNode = await Node.findById(nodeId).select("parent").lean();
+    const rootNode = await Node.findById(nodeId).select("parent rootOwner").lean();
     const isDeleted = rootNode.parent === "deleted";
 
-    const isRoot = rootNode.parent === null;
+    const isRoot = !!rootNode.rootOwner;
     let rootNameColor = "rgba(255, 255, 255, 0.4)"; // subtle white edge
 
     if (isDeleted) {

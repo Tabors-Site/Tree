@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "start": "cd land && node server.js",
+    "start": "cd land && node boot.js",
     "build": "cd site && npm run build",
     "dev:site": "cd site && npm run dev",
     "install:all": "cd land && npm install && cd ../site && npm install"

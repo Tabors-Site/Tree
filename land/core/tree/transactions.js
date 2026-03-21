@@ -90,7 +90,7 @@ export async function setTransactionPolicy({ rootNodeId, policy, userId }) {
     throw new Error("Root not found");
   }
 
-  if (root.parent !== null) {
+  if (!root.rootOwner) {
     throw new Error("Not a root node");
   }
 

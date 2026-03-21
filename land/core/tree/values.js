@@ -80,6 +80,7 @@ async function setValueForNode({
 
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
+  if (node.isSystem) throw new Error("Cannot modify system nodes");
 
   const currentVersion = node.versions?.[versionIndex];
   if (!currentVersion) {
@@ -142,6 +143,7 @@ async function setGoalForNode({
 
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
+  if (node.isSystem) throw new Error("Cannot modify system nodes");
 
   const currentVersion = node.versions?.[versionIndex];
 

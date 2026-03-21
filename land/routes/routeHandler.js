@@ -13,6 +13,7 @@ import understanding from "./api/understanding.js";
 import orchestrate from "./api/orchestrate.js";
 import blog from "./api/blog.js";
 import gatewayWebhooks from "./api/gatewayWebhooks.js";
+import landConfig from "./api/config.js";
 import canopy from "./canopy.js";
 
 import { handleMcpRequest } from "../mcp/server.js";
@@ -71,6 +72,7 @@ export default function registerURLRoutes(app) {
   app.use("/api/v1", node);
   app.use("/api/v1", orchestrate);
   app.use("/api/v1", gatewayWebhooks);
+  app.use("/api/v1", landConfig);
 
   // Canopy protocol stays at /canopy (not versioned with API)
   app.use("/", canopy);

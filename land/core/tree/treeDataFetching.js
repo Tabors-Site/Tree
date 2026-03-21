@@ -269,9 +269,9 @@ async function getParents(req, res) {
 
   try {
     const getParentsRecursive = async (nodeId, parents = []) => {
-      const currentNode = await Node.findById(nodeId).lean().exec(); // lean + exec
+      const currentNode = await Node.findById(nodeId).lean().exec();
 
-      if (!currentNode) {
+      if (!currentNode || currentNode.systemRole) {
         return parents;
       }
 
@@ -430,11 +430,11 @@ async function getAllData(req, res) {
 
     while (currentId) {
       const parentNode = await Node.findById(currentId)
-        .select("_id name parent")
+        .select("_id name parent systemRole")
         .lean()
         .exec();
 
-      if (!parentNode) break;
+      if (!parentNode || parentNode.systemRole) break;
 
       ancestors.push(parentNode);
       currentId = parentNode.parent;

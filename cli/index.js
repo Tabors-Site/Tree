@@ -53,6 +53,10 @@ program
           title: "Blog",
           cmds: ["blogs", "blog"],
         },
+        {
+          title: "Land Config",
+          cmds: ["config"],
+        },
       ];
 
       const cmdMap = {};
@@ -123,6 +127,7 @@ require("./commands/collab")(program);
 require("./commands/sharing")(program);
 require("./commands/ai")(program);
 require("./commands/blog")(program);
+require("./commands/config")(program);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHELL (interactive REPL)

@@ -20,15 +20,15 @@ export async function buildPathString(nodeId) {
 
   while (cursor && depth < maxDepth) {
     const node = await Node.findById(cursor)
-      .select("_id name parent")
+      .select("_id name parent systemRole")
       .lean()
       .exec();
 
-    if (!node) break;
+    if (!node || node.systemRole) break;
 
     segments.unshift(node.name);
 
-    if (!node.parent) break; // no parent = root, stop
+    if (!node.parent) break;
     cursor = node.parent;
     depth++;
   }
@@ -80,18 +80,22 @@ export async function resolveRootNode(nodeId) {
     throw new Error("Node not found");
   }
 
-  while (!node.rootOwner) {
+  while (!node.rootOwner || node.rootOwner === "SYSTEM") {
     if (!node.parent) {
       throw new Error("Invalid tree: no rootOwner found");
     }
 
     node = await Node.findById(node.parent)
-      .select("parent rootOwner contributors")
+      .select("parent rootOwner contributors systemRole")
       .lean()
       .exec();
 
     if (!node) {
       throw new Error("Broken tree");
+    }
+
+    if (node.systemRole) {
+      throw new Error("Invalid tree: reached system node boundary");
     }
   }
 
@@ -367,7 +371,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
 
   // ---- Load current node ----
   const current = await Node.findById(nodeId)
-    .select("_id name parent children")
+    .select("_id name parent children rootOwner systemRole")
     .lean()
     .exec();
 
@@ -375,7 +379,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
     throw new Error("Node not found");
   }
 
-  const isRoot = !current.parent;
+  const isRoot = !!current.rootOwner && current.rootOwner !== "SYSTEM";
 
   // ---- Find the tree root (needed for scoped search) ----
   let root;
@@ -385,11 +389,12 @@ export async function getNavigationContext(nodeId, { search } = {}) {
     let cursor = current;
     while (cursor.parent) {
       const next = await Node.findById(cursor.parent)
-        .select("_id name parent")
+        .select("_id name parent rootOwner systemRole")
         .lean()
         .exec();
-      if (!next) break;
+      if (!next || next.systemRole) break;
       cursor = next;
+      if (cursor.rootOwner && cursor.rootOwner !== "SYSTEM") break;
     }
     root = { id: cursor._id.toString(), name: cursor.name };
   }
@@ -435,10 +440,12 @@ export async function getNavigationContext(nodeId, { search } = {}) {
   let siblings = [];
 
   if (current.parent && current.parent !== "deleted") {
-    parent = await Node.findById(current.parent)
-      .select("_id name children")
+    const parentCandidate = await Node.findById(current.parent)
+      .select("_id name children systemRole")
       .lean()
       .exec();
+    // Don't expose system nodes as parents in navigation
+    parent = parentCandidate?.systemRole ? null : parentCandidate;
 
     if (parent?.children?.length) {
       const siblingIds = parent.children.filter(
@@ -610,7 +617,7 @@ export async function getContextForAi(nodeId, options = {}) {
   const context = {
     id: node._id.toString(),
     name: node.name,
-    isRoot: !node.parent,
+    isRoot: !!node.rootOwner && node.rootOwner !== "SYSTEM",
     prestige: currentPrestige,
     totalVersions: node.versions?.length || 0,
   };
@@ -688,15 +695,17 @@ export async function getContextForAi(nodeId, options = {}) {
   // ---- Parent ----
   if (node.parent) {
     const parentNode = await Node.findById(node.parent)
-      .select("_id name")
+      .select("_id name systemRole")
       .lean()
       .exec();
 
-    if (parentNode) {
+    if (parentNode && !parentNode.systemRole) {
       context.parent = {
         id: parentNode._id.toString(),
         name: parentNode.name,
       };
+    } else {
+      context.parent = null; // parent is system node or missing, treat as root
     }
   } else {
     context.parent = null; // root node
@@ -739,7 +748,10 @@ export async function getContextForAi(nodeId, options = {}) {
         (id) => id.toString() !== node._id.toString(),
       );
 
-      const siblingNodes = await Node.find({ _id: { $in: siblingIds } })
+      const siblingNodes = await Node.find({
+        _id: { $in: siblingIds },
+        isSystem: { $ne: true },
+      })
         .select("_id name")
         .lean()
         .exec();
