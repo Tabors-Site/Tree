@@ -147,6 +147,9 @@ require("./commands/config")(program);
 require("./commands/canopy")(program);
 require("./commands/extensions")(program);
 
+// Dynamic commands from connected land's protocol (must be last)
+require("./commands/dynamic")(program);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SHELL (interactive REPL)
 // ─────────────────────────────────────────────────────────────────────────────

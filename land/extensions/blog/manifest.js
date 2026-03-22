@@ -17,5 +17,9 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
+    cli: [
+      { command: "blogs", description: "List blog posts", method: "GET", endpoint: "/blog/posts" },
+      { command: "blog <slug>", description: "Read a blog post", method: "GET", endpoint: "/blog/posts/:slug" },
+    ],
   },
 };

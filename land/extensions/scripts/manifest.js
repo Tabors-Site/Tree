@@ -21,5 +21,10 @@ export default {
       script: { cost: 2 },
     },
     sessionTypes: {},
+    cli: [
+      { command: "scripts", description: "List scripts on current node", method: "GET", endpoint: "/node/:nodeId/scripts/help" },
+      { command: "script <id>", description: "View a script", method: "GET", endpoint: "/node/:nodeId/script/:id" },
+      { command: "run <id>", description: "Execute a script", method: "POST", endpoint: "/node/:nodeId/script/:id/execute" },
+    ],
   },
 };

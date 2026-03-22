@@ -1,7 +1,10 @@
 const chalk = require("chalk");
 const TreeAPI = require("../api");
+const { load, hasExtension } = require("../config");
 
 module.exports = (program) => {
+  const cfg = load();
+  if (!hasExtension(cfg, "blog")) return;
   program
     .command("blogs")
     .description("List creator blog posts — updates and news about Tree")

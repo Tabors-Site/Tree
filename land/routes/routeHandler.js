@@ -21,7 +21,7 @@ import authenticateMCP from "../middleware/authenticateMCP.js";
 import rateLimit from "express-rate-limit";
 import { notFoundPage } from "../middleware/notFoundPage.js";
 
-import { loadExtensions, getLoadedExtensionNames } from "../extensions/loader.js";
+import { loadExtensions, getLoadedExtensionNames, getLoadedManifests } from "../extensions/loader.js";
 import { getLandConfigValue } from "../core/landConfig.js";
 
 const BLOCKED_IDS = ["deleted", "empty", "null", "system"];
@@ -83,6 +83,15 @@ export default async function registerURLRoutes(app) {
   const protocolHandler = (req, res) => {
     const allExtensions = getLoadedExtensionNames();
 
+    // Collect CLI declarations from loaded extension manifests
+    const manifests = getLoadedManifests();
+    const cli = {};
+    for (const m of manifests) {
+      if (m.provides?.cli?.length) {
+        cli[m.name] = m.provides.cli;
+      }
+    }
+
     res.json({
       name: "TreeOS",
       version: "1.0",
@@ -93,6 +102,7 @@ export default async function registerURLRoutes(app) {
       ],
       nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
       extensions: allExtensions,
+      cli,
     });
   };
   app.get("/protocol", protocolHandler);

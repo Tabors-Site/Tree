@@ -69,4 +69,8 @@ function hasExtension(cfg, name) {
   return all.includes(name);
 }
 
-module.exports = { load, save, requireAuth, currentNodeId, currentPath, currentLand, isRemoteSession, hasExtension };
+function getProtocolCli(cfg) {
+  return cfg?.landProtocol?.cli || {};
+}
+
+module.exports = { load, save, requireAuth, currentNodeId, currentPath, currentLand, isRemoteSession, hasExtension, getProtocolCli };

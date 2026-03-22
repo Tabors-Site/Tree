@@ -20,5 +20,9 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
+    cli: [
+      { command: "wallet", description: "Show wallet info for current node", method: "GET", endpoint: "/node/:nodeId/:version/values/solana" },
+      { command: "wallet create", description: "Create wallet for current node", method: "POST", endpoint: "/node/:nodeId/:version/values/solana" },
+    ],
   },
 };
