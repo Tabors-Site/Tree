@@ -579,7 +579,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
   <div class="container">
     <div class="chat-header">
       <div class="chat-title">
-        <a href="/" style="text-decoration:none;display:flex;align-items:center;gap:12px;color:inherit;">
+        <a href="/app" style="text-decoration:none;display:flex;align-items:center;gap:12px;color:inherit;">
         <span class="tree-icon">🌳</span>
         <h1>Tree</h1>
         </a>

@@ -1391,7 +1391,7 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
     <!-- Chat Panel -->
     <div class="chat-panel glass-panel" id="chatPanel">
       <div class="chat-header">
-        <a href="/" class="tree-home-link">
+        <a href="/app" class="tree-home-link">
           <div class="chat-title">
             <span class="tree-icon">🌳</span>
             <h1>Tree</h1>
@@ -1523,7 +1523,7 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       <div class="drag-handle"></div>
       <div class="mobile-sheet-title-row">
         <div class="mobile-sheet-title">
-          <a href="/" class="mobile-tree-icon-wrapper" title="Back to TreeOS">
+          <a href="/app" class="mobile-tree-icon-wrapper" title="Back to TreeOS">
             <div class="mobile-status-indicator connecting" id="mobileStatusIndicator"></div>
             <span class="tree-icon">🌳</span>
           </a>

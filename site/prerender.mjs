@@ -26,7 +26,6 @@ const STATIC_ROUTES = [
   "/about/node-types",
   "/about/extensions",
   "/landing",
-  "/app",
   "/privacy",
   "/terms",
   "/blog",
@@ -39,10 +38,6 @@ const PAGE_META = {
   "/": {
     title: "TreeOS . An Operating System for Context",
     description: "Persistent, structured memory that AI can navigate. Self-hosted, modular, federated. Build living trees of knowledge.",
-  },
-  "/app": {
-    title: "TreeOS",
-    description: "Start chatting with your trees or access your dashboard.",
   },
   "/about": {
     title: "About - TreeOS",
