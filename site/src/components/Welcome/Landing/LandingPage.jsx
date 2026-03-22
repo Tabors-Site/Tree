@@ -13,7 +13,7 @@ const LandingPage = () => {
 
       {/* ── BANNER ── */}
       <div className="lp-banner">
-        TreeOS is launching in the next few days. Star the repo to get notified.
+        TreeOS is launching in the next few days.
       </div>
 
       {/* ── HERO ── */}
