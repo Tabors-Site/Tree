@@ -1,7 +1,7 @@
 const chalk = require("chalk");
 const TreeAPI = require("../api");
 const { createProxyApi } = require("../api");
-const { load, save, requireAuth, currentNodeId, currentPath, currentLand } = require("../config");
+const { load, save, requireAuth, currentNodeId, currentPath, currentLand, hasExtension } = require("../config");
 const { getChildren, flattenTree, findChild } = require("../helpers");
 const { printNode, printTable } = require("../display");
 
@@ -33,6 +33,8 @@ function goHome(cfg) {
 }
 
 module.exports = (program) => {
+  const cfg = load();
+
   program
     .command("land")
     .description("Go to land root (/)")
@@ -543,6 +545,8 @@ module.exports = (program) => {
       }
     });
 
+  // ── Schedules (extension: schedules) ──
+  if (hasExtension(cfg, "schedules")) {
   program
     .command("calendar")
     .description("Show scheduled dates across the tree. -m month (1-12 or name), -y year")
@@ -581,7 +585,10 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+  } // end schedules extension
 
+  // ── Dreams (extension: dreams) ──
+  if (hasExtension(cfg, "dreams")) {
   program
     .command("dream-time [time...]")
     .description("Set nightly dream scheduling time (e.g. 9:30pm, 21:30, or 'clear')")
@@ -618,4 +625,5 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+  } // end dreams extension
 };

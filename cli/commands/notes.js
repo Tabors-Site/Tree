@@ -1,9 +1,11 @@
 const chalk = require("chalk");
-const { requireAuth, currentNodeId } = require("../config");
+const { load, requireAuth, currentNodeId, hasExtension } = require("../config");
 const { getApi } = require("../helpers");
 const { printNotes, printContributions, printBook } = require("../display");
 
 module.exports = (program) => {
+  const cfg = load();
+
   program
     .command("note [content...]")
     .description("Post a note on the node you are in")
@@ -93,6 +95,8 @@ module.exports = (program) => {
       }
     });
 
+  // ── Book (extension: book) ──
+  if (hasExtension(cfg, "book")) {
   program
     .command("book")
     .description("Print the full book of notes from the node you are in")
@@ -109,6 +113,7 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+  } // end book extension
 
   program
     .command("contributions")

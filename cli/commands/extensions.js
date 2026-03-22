@@ -22,6 +22,22 @@ async function refreshProtocolCache() {
   } catch {}
 }
 
+function printSearchResults(data, query) {
+  if (!data.extensions || data.extensions.length === 0) {
+    console.log(chalk.dim(query ? `No extensions found for "${query}"` : "Registry is empty."));
+    return;
+  }
+  console.log(chalk.bold(`Registry (${data.total} extensions)\n`));
+  for (const ext of data.extensions) {
+    const tags = ext.tags?.length ? chalk.dim(` [${ext.tags.join(", ")}]`) : "";
+    const dl = ext.downloads ? chalk.dim(` ${ext.downloads} downloads`) : "";
+    console.log(`  ${chalk.cyan(ext.name)} ${chalk.dim("v" + ext.version)}${tags}${dl}`);
+    console.log(`  ${chalk.dim(ext.description || "")}`);
+    if (ext.authorDomain) console.log(`  ${chalk.dim("by " + ext.authorDomain)}`);
+    console.log();
+  }
+}
+
 module.exports = (program) => {
   const ext = program
     .command("ext")
@@ -132,28 +148,29 @@ module.exports = (program) => {
 
   ext
     .command("search [query...]")
-    .description("Search the extension registry")
+    .description("Search the extension registry (no login required)")
     .action(async (parts) => {
       const query = parts ? parts.join(" ") : "";
       try {
-        const api = getApi();
-        const data = await api.searchRegistry(query);
-
-        if (!data.extensions || data.extensions.length === 0) {
-          console.log(chalk.dim(query ? `No extensions found for "${query}"` : "Registry is empty."));
-          return;
+        // Search doesn't require auth, hits directory directly
+        const cfg = load();
+        let dirUrl;
+        if (cfg.apiKey) {
+          try {
+            const api = getApi();
+            const data = await api.searchRegistry(query);
+            return printSearchResults(data, query);
+          } catch {}
         }
-
-        console.log(chalk.bold(`Registry (${data.total} extensions)\n`));
-
-        for (const ext of data.extensions) {
-          const tags = ext.tags?.length ? chalk.dim(` [${ext.tags.join(", ")}]`) : "";
-          const dl = ext.downloads ? chalk.dim(` ${ext.downloads} downloads`) : "";
-          console.log(`  ${chalk.cyan(ext.name)} ${chalk.dim("v" + ext.version)}${tags}${dl}`);
-          console.log(`  ${chalk.dim(ext.description || "")}`);
-          if (ext.authorDomain) console.log(`  ${chalk.dim("by " + ext.authorDomain)}`);
-          console.log();
-        }
+        // Fallback: hit directory directly
+        dirUrl = "https://dir.treeos.ai";
+        const qs = query ? `?q=${encodeURIComponent(query)}` : "";
+        const res = await fetch(`${dirUrl}/extensions${qs}`, {
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!res.ok) throw new Error(`Registry unavailable (${res.status})`);
+        const data = await res.json();
+        printSearchResults(data, query);
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
       }

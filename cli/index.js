@@ -94,6 +94,7 @@ program
       out += `    CLI                https://treeOS.ai/about/cli\n`;
       out += `    Gateway            https://treeOS.ai/about/gateway\n`;
       out += `    API Reference      https://treeOS.ai/about/api\n`;
+      out += `    Extensions          https://treeOS.ai/about/extensions\n`;
       out += `    Blog               https://treeOS.ai/blog\n\n`;
 
       const fmtUsage = (c) => {

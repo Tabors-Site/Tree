@@ -1,7 +1,7 @@
 const chalk = require("chalk");
 const TreeAPI = require("../api");
 const { getBaseSite } = require("../api");
-const { load, save, requireAuth, currentNodeId } = require("../config");
+const { load, save, requireAuth, currentNodeId, hasExtension } = require("../config");
 const { termLink } = require("../helpers");
 
 /** Check if the connected Land has frontend HTML enabled */
@@ -17,6 +17,8 @@ async function checkFrontendEnabled(api) {
 }
 
 module.exports = (program) => {
+  const cfg = load();
+
   program
     .command("share-token [token]")
     .description("Show or set your share token. share-token <token> to update")
@@ -150,6 +152,8 @@ module.exports = (program) => {
       console.log(termLink(url, url));
     });
 
+  // ── Visibility (extension: visibility) ──
+  if (hasExtension(cfg, "visibility")) {
   program
     .command("visibility [level]")
     .description("Show or set tree visibility. visibility public | visibility private")
@@ -192,4 +196,5 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+  } // end visibility extension
 };

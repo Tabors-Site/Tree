@@ -1,5 +1,5 @@
 const chalk = require("chalk");
-const { requireAuth, currentNodeId } = require("../config");
+const { load, requireAuth, currentNodeId, hasExtension } = require("../config");
 const { getChildren, findChild, parseDate, getApi } = require("../helpers");
 
 function resolveType(opts) {
@@ -25,6 +25,8 @@ function addTypeFlags(cmd) {
 }
 
 module.exports = (program) => {
+  const cfg = load();
+
   addTypeFlags(
   program
     .command("mkdir [name...]")
@@ -205,6 +207,8 @@ module.exports = (program) => {
       }
     });
 
+  // ── Deleted/Revive (extension: deleted-revive) ──
+  if (hasExtension(cfg, "deleted-revive")) {
   program
     .command("deleted")
     .description("List your deleted branches")
@@ -244,6 +248,7 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+  } // end deleted-revive extension
 
   for (const [cmd, stat] of [["complete", "completed"], ["activate", "active"], ["trim", "trimmed"]]) {
     program
@@ -264,6 +269,8 @@ module.exports = (program) => {
       });
   }
 
+  // ── Schedule (extension: schedules) ──
+  if (hasExtension(cfg, "schedules")) {
   program
     .command("schedule [args...]")
     .description("Set schedule on the current node (e.g. 1/11/2025 3, 1/11/2025 11:45pm 5, or 'clear')")
@@ -298,7 +305,10 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+  } // end schedules extension
 
+  // ── Prestige (extension: prestige) ──
+  if (hasExtension(cfg, "prestige")) {
   program
     .command("prestige")
     .description("Prestige the node you are in (create a new version)")
@@ -316,4 +326,5 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+  } // end prestige extension
 };

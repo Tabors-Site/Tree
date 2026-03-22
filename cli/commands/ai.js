@@ -1,9 +1,10 @@
 const chalk = require("chalk");
-const { save, requireAuth, currentNodeId } = require("../config");
+const { save, load, requireAuth, currentNodeId, hasExtension } = require("../config");
 const { getApi } = require("../helpers");
 const { printChats } = require("../display");
 
 module.exports = (program) => {
+  const cfg = load();
   program
     .command("chats [scope]")
     .description("List AI chats. In home: your chats. In tree: node chats. 'chats tree' = whole tree. -l limit")
@@ -95,6 +96,9 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+
+  // ── Raw Ideas (extension: raw-ideas) ──
+  if (hasExtension(cfg, "raw-ideas")) {
 
   program
     .command("ideas")
@@ -277,6 +281,11 @@ module.exports = (program) => {
       }
     });
 
+  } // end raw-ideas extension
+
+  // ── Understanding (extension: understanding) ──
+  if (hasExtension(cfg, "understanding")) {
+
   program
     .command("understand [perspective...]")
     .description("Start an understanding run from the node you are in. -i incremental (only new/changed nodes)")
@@ -388,4 +397,6 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+
+  } // end understanding extension
 };
