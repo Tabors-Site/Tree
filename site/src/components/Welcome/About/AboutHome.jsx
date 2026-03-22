@@ -96,30 +96,71 @@ const AboutHome = () => {
           <div className="ah-logo">🌳</div>
           <h1>TreeOS</h1>
           <p className="ah-tagline">
-            A living structure for everything you're building, thinking, and tracking.
+            An operating system for context.
           </p>
         </div>
 
         {/* ── INTRO ── */}
         <div className="ah-section">
-          <div className="ah-section-title">
-            What is TreeOS?
-          </div>
           <div className="ah-section-text">
-            TreeOS is persistent, structured memory for the AI. Instead of
-            dumping everything into one flat conversation that gets forgotten,
-            a tree organizes knowledge into branches so the AI only pulls in
-            what it needs for each interaction. No wasted tokens, no lost context.
-            <br /><br />
-            It works like a real brain. Information lives in a hierarchy, gets
-            compressed and summarized over time, and the AI navigates to the
-            relevant parts when you talk to it. Both you and the AI can read
-            from and write to the tree, so the context evolves as work progresses.
-            <br /><br />
-            You can have as many trees as you want, each one for a different
-            project, topic, or area of your life. Invite collaborators to build
-            together, use it solo to stay organized, or design systems that
-            others can follow. TreeOS works however you need it to.
+            TreeOS is a self-hosted, modular, federated system for building
+            persistent knowledge structures. Lands host trees. Trees hold nodes.
+            Nodes carry notes, values, and types. AI interacts through three
+            strict modes. Extensions add capabilities. Lands connect into a network.
+            The whole thing runs from a terminal.
+          </div>
+        </div>
+
+        {/* ── ARCHITECTURE ── */}
+        <div className="ah-section">
+          <div className="ah-section-title">Architecture</div>
+          <div className="ah-section-text">
+            Four layers. Each one is independent and documented separately.
+          </div>
+        </div>
+
+        <div className="ah-arch-grid">
+          <div className="ah-arch-item">
+            <div className="ah-arch-label">Land</div>
+            <div className="ah-arch-desc">
+              The server. A land stores trees, runs AI, serves the API, and manages users.
+              Every land is self-hosted and fully independent. You own your data, your models,
+              your rules. Lands connect to each other through federation but work fine standalone.
+            </div>
+            <a href="/about/land" className="ah-arch-link">Land and Canopy docs</a>
+          </div>
+
+          <div className="ah-arch-item">
+            <div className="ah-arch-label">Tree</div>
+            <div className="ah-arch-desc">
+              The data structure. A tree is a hierarchy of nodes, each with notes, trackable values,
+              and a semantic type (goal, plan, task, knowledge, resource, identity). Navigate with
+              <code>cd</code> and <code>ls</code>. AI interacts through three strict modes:
+              chat (read+write), place (write), query (read only).
+            </div>
+            <a href="/about/node-types" className="ah-arch-link">Node types docs</a>
+          </div>
+
+          <div className="ah-arch-item">
+            <div className="ah-arch-label">Canopy</div>
+            <div className="ah-arch-desc">
+              The federation protocol. Lands peer with each other using signed requests.
+              Users on one land can browse public trees on another, receive invites,
+              and contribute remotely. The directory service at dir.treeos.ai handles
+              discovery, public tree indexing, and the extension registry.
+            </div>
+            <a href="/about/land" className="ah-arch-link">Federation docs</a>
+          </div>
+
+          <div className="ah-arch-item">
+            <div className="ah-arch-label">Extensions</div>
+            <div className="ah-arch-desc">
+              The module system. The core protocol handles nodes, notes, values, types,
+              and AI modes. Everything else is a package: understanding, scripts, energy,
+              billing, dreams, Solana wallets. Install what you need. Disable what you
+              don't. Build your own and publish to the registry.
+            </div>
+            <a href="/about/extensions" className="ah-arch-link">Extension docs</a>
           </div>
         </div>
 
@@ -130,9 +171,11 @@ const AboutHome = () => {
           <div className="ah-section-text">
             This is a personal project by Tabor Holly.
             <br /><br />
-            It's my attempt at building what I believe large language model technology will need going forward: persistent memory, a navigable and fluid GUI driven by text input, and a unified structure where instructions, knowledge, and history all live together — readable by both humans and LLMs.
+            It's my attempt at building what I believe large language model technology
+            will need going forward: persistent memory, a navigable structure driven by
+            text input, and a unified system where instructions, knowledge, and history
+            all live together, readable by both humans and LLMs.
           </div>
-
         </div>
         {/* ── EXPLORE ── */}
         <div className="ah-section">

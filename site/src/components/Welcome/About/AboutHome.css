@@ -143,6 +143,51 @@
   line-height: 1.55;
 }
 
+/* ── ARCHITECTURE GRID ── */
+.ah-arch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 32px;
+}
+
+.ah-arch-item {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.ah-arch-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.ah-arch-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.7;
+  margin-bottom: 10px;
+}
+
+.ah-arch-desc code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.ah-arch-link {
+  font-size: 12px;
+  color: rgba(160, 200, 255, 0.7);
+  text-decoration: none;
+}
+.ah-arch-link:hover {
+  color: rgba(160, 200, 255, 1);
+}
+
 /* ── NAV GRID ── */
 .ah-nav-grid {
   display: grid;
@@ -262,6 +307,7 @@
   .ah-tagline { font-size: 16px; }
   .ah-concepts { grid-template-columns: 1fr; }
   .ah-nav-grid { grid-template-columns: 1fr 1fr; }
+  .ah-arch-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 480px) {
@@ -269,4 +315,5 @@
   .about-home h1 { font-size: 34px; }
   .ah-section { padding: 20px 14px; }
   .ah-nav-grid { grid-template-columns: 1fr; }
+  .ah-arch-grid { grid-template-columns: 1fr; }
 }
