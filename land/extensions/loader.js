@@ -9,6 +9,37 @@ import { buildCoreServices, NOOP_ENERGY } from "../core/services.js";
 import { setExtensionToolResolver } from "../ws/modes/registry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DISABLED_FILE = path.join(__dirname, ".disabled");
+
+// ---------------------------------------------------------------------------
+// Disabled extensions file (synced to disk so loader can read before DB)
+// ---------------------------------------------------------------------------
+
+/**
+ * Read disabled extensions from local file (synchronous, used at boot).
+ */
+function readDisabledFile() {
+  try {
+    if (!fs.existsSync(DISABLED_FILE)) return [];
+    const content = fs.readFileSync(DISABLED_FILE, "utf8").trim();
+    if (!content) return [];
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Write disabled extensions to local file.
+ * Called by the config endpoint when disabling/enabling.
+ */
+export function syncDisabledFile(list) {
+  try {
+    fs.writeFileSync(DISABLED_FILE, JSON.stringify(list), "utf8");
+  } catch (err) {
+    console.warn("[Extensions] Failed to write disabled file:", err.message);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // State
@@ -31,6 +62,9 @@ function getDisabledExtensions(configFn) {
   const fromEnv = (process.env.DISABLED_EXTENSIONS || "")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 
+  // Read from local file (persisted by disable/enable endpoints)
+  const fromFile = readDisabledFile();
+
   let fromConfig = [];
   if (typeof configFn === "function") {
     try {
@@ -40,7 +74,7 @@ function getDisabledExtensions(configFn) {
     }
   }
 
-  return new Set([...fromEnv, ...fromConfig]);
+  return new Set([...fromEnv, ...fromFile, ...fromConfig]);
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +148,59 @@ function applyOptionalStubs(manifest, core) {
       core[svc] = {};
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Scoped core (permission boundary)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a scoped core services bundle that only includes what the manifest
+ * declares in needs + optional. Extensions cannot access services they
+ * didn't declare.
+ */
+function buildScopedCore(manifest, fullCore) {
+  const allowed = new Set();
+
+  // Collect all declared services (required + optional)
+  for (const svc of manifest.needs?.services || []) allowed.add(svc);
+  for (const svc of manifest.optional?.services || []) allowed.add(svc);
+
+  // Collect declared models
+  const allowedModels = new Set(manifest.needs?.models || []);
+  for (const m of manifest.optional?.models || []) allowedModels.add(m);
+
+  // Collect declared middleware
+  const allowedMiddleware = new Set(manifest.needs?.middleware || []);
+  for (const m of manifest.optional?.middleware || []) allowedMiddleware.add(m);
+
+  // Build scoped object
+  const scoped = {};
+
+  // Services: only inject declared ones
+  for (const key of AVAILABLE_SERVICES) {
+    if (allowed.has(key) && fullCore[key]) {
+      scoped[key] = fullCore[key];
+    }
+  }
+
+  // Models: only inject declared ones (plus any registered by other extensions)
+  scoped.models = {};
+  for (const name of allowedModels) {
+    if (fullCore.models[name]) {
+      scoped.models[name] = fullCore.models[name];
+    }
+  }
+
+  // Middleware: only inject declared ones
+  scoped.middleware = {};
+  for (const name of allowedMiddleware) {
+    if (fullCore.middleware[name]) {
+      scoped.middleware[name] = fullCore.middleware[name];
+    }
+  }
+
+  return scoped;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,8 +315,11 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         continue;
       }
 
+      // Build scoped core: only inject what the manifest declares
+      const scopedCore = buildScopedCore(manifest, coreServices);
+
       // Initialize
-      const instance = await extModule.init(coreServices);
+      const instance = await extModule.init(scopedCore);
 
       // Wire routes
       if (instance.router) {
@@ -424,6 +514,128 @@ export function setCoreService(serviceName, serviceImpl) {
   if (coreServices) {
     coreServices[serviceName] = serviceImpl;
   }
+}
+
+/**
+ * Uninstall an extension by removing its directory.
+ * Data in the database is untouched.
+ *
+ * @param {string} name - extension name
+ * @returns {{ found: boolean }}
+ */
+export async function uninstallExtension(name) {
+  // Safety: only allow valid directory names
+  if (!/^[a-z0-9-]+$/i.test(name)) {
+    throw new Error("Invalid extension name");
+  }
+
+  const extDir = path.join(__dirname, name);
+
+  if (!fs.existsSync(extDir) || !fs.existsSync(path.join(extDir, "manifest.js"))) {
+    return { found: false };
+  }
+
+  // Remove the directory recursively
+  fs.rmSync(extDir, { recursive: true, force: true });
+
+  // Also remove from disabled list if present
+  const disabled = readDisabledFile();
+  const updated = disabled.filter((n) => n !== name);
+  if (updated.length !== disabled.length) {
+    syncDisabledFile(updated);
+  }
+
+  // Remove from loaded map if currently loaded
+  loaded.delete(name);
+
+  console.log(`[Extensions] Uninstalled: ${name}`);
+  return { found: true };
+}
+
+/**
+ * Install extension files from registry data.
+ * Creates the extension directory and writes all files.
+ *
+ * @param {string} name - extension name
+ * @param {Array<{path: string, content: string}>} files - file contents
+ * @returns {{ filesWritten: number }}
+ */
+export async function installExtensionFiles(name, files) {
+  if (!/^[a-z0-9-]+$/i.test(name)) {
+    throw new Error("Invalid extension name");
+  }
+
+  const extDir = path.join(__dirname, name);
+
+  // Create directory
+  if (!fs.existsSync(extDir)) {
+    fs.mkdirSync(extDir, { recursive: true });
+  }
+
+  let filesWritten = 0;
+  for (const file of files) {
+    // Safety: prevent path traversal
+    const normalized = path.normalize(file.path);
+    if (normalized.startsWith("..") || path.isAbsolute(normalized)) {
+      throw new Error(`Invalid file path: ${file.path}`);
+    }
+
+    const filePath = path.join(extDir, normalized);
+    const fileDir = path.dirname(filePath);
+
+    // Create subdirectories if needed
+    if (!fs.existsSync(fileDir)) {
+      fs.mkdirSync(fileDir, { recursive: true });
+    }
+
+    fs.writeFileSync(filePath, file.content, "utf8");
+    filesWritten++;
+  }
+
+  console.log(`[Extensions] Installed: ${name} (${filesWritten} files)`);
+  return { filesWritten };
+}
+
+/**
+ * Read all files from a local extension directory for publishing.
+ *
+ * @param {string} name - extension name
+ * @returns {{ manifest: object|null, files: Array<{path: string, content: string}> }}
+ */
+export async function readExtensionFiles(name) {
+  if (!/^[a-z0-9-]+$/i.test(name)) {
+    throw new Error("Invalid extension name");
+  }
+
+  const extDir = path.join(__dirname, name);
+  const manifestPath = path.join(extDir, "manifest.js");
+
+  if (!fs.existsSync(manifestPath)) {
+    return { manifest: null, files: [] };
+  }
+
+  // Load manifest
+  const { default: manifest } = await import(manifestPath);
+
+  // Read all .js files recursively
+  const files = [];
+  function readDir(dir, base = "") {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === "node_modules") continue;
+      const relativePath = base ? `${base}/${entry.name}` : entry.name;
+
+      if (entry.isDirectory()) {
+        readDir(path.join(dir, entry.name), relativePath);
+      } else if (entry.name.endsWith(".js") || entry.name.endsWith(".json") || entry.name.endsWith(".md")) {
+        const content = fs.readFileSync(path.join(dir, entry.name), "utf8");
+        files.push({ path: relativePath, content });
+      }
+    }
+  }
+
+  readDir(extDir);
+  return { manifest, files };
 }
 
 /**

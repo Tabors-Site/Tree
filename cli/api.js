@@ -109,6 +109,66 @@ class TreeAPI {
   enableExtension(name) {
     return this.post(`/land/extensions/${encodeURIComponent(name)}/enable`);
   }
+  uninstallExtension(name) {
+    return this.post(`/land/extensions/${encodeURIComponent(name)}/uninstall`);
+  }
+  // Install: fetch from registry, send files to land
+  async installExtension(name, version) {
+    const dirUrl = await this._getDirectoryUrl();
+    const versionPath = version ? `/${version}` : "/latest";
+    const res = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}${version ? `/${version}` : ""}`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      throw new Error(err.error || `Failed to fetch extension: ${res.status}`);
+    }
+    const data = await res.json();
+    // If no version specified, get latest
+    const ext = version ? data : data.latest;
+    if (!ext) throw new Error("Extension not found");
+    // Fetch full version with files
+    if (!ext.files) {
+      const fullRes = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}/${ext.version}`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!fullRes.ok) throw new Error("Failed to fetch extension files");
+      const fullData = await fullRes.json();
+      ext.files = fullData.files;
+      ext.manifest = fullData.manifest;
+    }
+    // Send to land for installation
+    return this.post("/land/extensions/install", {
+      name: ext.name || name,
+      version: ext.version,
+      manifest: ext.manifest,
+      files: ext.files,
+    });
+  }
+  // Search registry
+  async searchRegistry(query) {
+    const dirUrl = await this._getDirectoryUrl();
+    const qs = query ? `?q=${encodeURIComponent(query)}` : "";
+    const res = await fetch(`${dirUrl}/extensions${qs}`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error(`Registry search failed: ${res.status}`);
+    return res.json();
+  }
+  // Publish to registry (via land proxy)
+  publishExtension(name) {
+    return this.post(`/land/extensions/${encodeURIComponent(name)}/publish`);
+  }
+  async _getDirectoryUrl() {
+    // Ask the land for its directory URL
+    const config = await this.get("/land/config/DIRECTORY_URL").catch(() => null);
+    if (config?.value) {
+      let url = config.value;
+      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+      return url.replace(/\/+$/, "");
+    }
+    return "https://dir.treeos.ai";
+  }
 
   // ── User ─────────────────────────────────────────────────────────────────
   me() {

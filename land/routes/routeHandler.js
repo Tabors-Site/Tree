@@ -82,10 +82,15 @@ export default async function registerURLRoutes(app) {
   const protocolHandler = (req, res) => {
     const allExtensions = getLoadedExtensionNames();
 
-    // Collect CLI declarations from loaded extension manifests
+    // Filter out disabled extensions (may still be loaded in memory until restart)
+    const disabled = new Set(getLandConfigValue("disabledExtensions") || []);
+    const activeExtensions = allExtensions.filter((name) => !disabled.has(name));
+
+    // Collect CLI declarations from active extension manifests
     const manifests = getLoadedManifests();
     const cli = {};
     for (const m of manifests) {
+      if (disabled.has(m.name)) continue;
       if (m.provides?.cli?.length) {
         cli[m.name] = m.provides.cli;
       }
@@ -100,7 +105,7 @@ export default async function registerURLRoutes(app) {
         "transactions", "contributions",
       ],
       nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
-      extensions: allExtensions,
+      extensions: activeExtensions,
       cli,
     });
   };

@@ -4,6 +4,7 @@ import express from "express";
 import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 import directoryRoutes from "./routes/directory.js";
+import extensionRoutes from "./routes/extensions.js";
 import { startHealthCheckJob } from "./jobs/healthCheck.js";
 import { renderDashboard } from "./views/dashboard.js";
 import Land from "./db/models/land.js";
@@ -83,6 +84,7 @@ app.get("/", async (req, res) => {
 });
 
 app.use("/directory", directoryRoutes);
+app.use("/extensions", extensionRoutes);
 
 async function start() {
   try {

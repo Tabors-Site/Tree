@@ -1,10 +1,25 @@
 const chalk = require("chalk");
+const fetch = require("node-fetch");
 const TreeAPI = require("../api");
-const { requireAuth } = require("../config");
+const { requireAuth, load, save } = require("../config");
 
 function getApi() {
   const cfg = requireAuth();
   return new TreeAPI(cfg.apiKey);
+}
+
+async function refreshProtocolCache() {
+  try {
+    const cfg = load();
+    if (!cfg.landUrl) return;
+    let url = cfg.landUrl;
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    const res = await fetch(`${url}/api/v1/protocol`);
+    if (res.ok) {
+      cfg.landProtocol = await res.json();
+      save(cfg);
+    }
+  } catch {}
 }
 
 module.exports = (program) => {
@@ -48,8 +63,13 @@ module.exports = (program) => {
           console.log();
         }
 
-        if (data.disabled.length > 0) {
-          console.log(chalk.yellow("Disabled:"), data.disabled.join(", "));
+        if (data.disabled && data.disabled.length > 0) {
+          console.log(chalk.bold("Disabled:\n"));
+          for (const d of data.disabled) {
+            const name = typeof d === "string" ? d : d.name;
+            console.log(`  ${chalk.dim(name)} ${chalk.red("(disabled)")}`);
+          }
+          console.log();
         }
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
@@ -119,6 +139,7 @@ module.exports = (program) => {
         if (data.disabledExtensions?.length) {
           console.log(chalk.dim("Currently disabled:"), data.disabledExtensions.join(", "));
         }
+        await refreshProtocolCache();
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
       }
@@ -133,8 +154,95 @@ module.exports = (program) => {
         const data = await api.enableExtension(name);
         console.log(chalk.green(`Enabled: ${name}`));
         console.log(chalk.dim("Restart the land for this to take effect."));
+        await refreshProtocolCache();
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
       }
+    });
+
+  ext
+    .command("search [query]")
+    .description("Search the extension registry")
+    .action(async (query) => {
+      try {
+        const api = getApi();
+        const data = await api.searchRegistry(query || "");
+
+        if (!data.extensions || data.extensions.length === 0) {
+          console.log(chalk.dim(query ? `No extensions found for "${query}"` : "Registry is empty."));
+          return;
+        }
+
+        console.log(chalk.bold(`Registry (${data.total} extensions)\n`));
+
+        for (const ext of data.extensions) {
+          const tags = ext.tags?.length ? chalk.dim(` [${ext.tags.join(", ")}]`) : "";
+          const dl = ext.downloads ? chalk.dim(` ${ext.downloads} downloads`) : "";
+          console.log(`  ${chalk.cyan(ext.name)} ${chalk.dim("v" + ext.version)}${tags}${dl}`);
+          console.log(`  ${chalk.dim(ext.description || "")}`);
+          if (ext.authorDomain) console.log(`  ${chalk.dim("by " + ext.authorDomain)}`);
+          console.log();
+        }
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("install <name> [version]")
+    .description("Install an extension from the registry")
+    .action(async (name, version) => {
+      try {
+        const api = getApi();
+        console.log(chalk.dim(`Fetching ${name}${version ? "@" + version : ""} from registry...`));
+        const data = await api.installExtension(name, version);
+        console.log(chalk.green(`Installed: ${name} v${data.version || "?"}`));
+        console.log(chalk.dim(`${data.filesWritten} files written.`));
+        console.log(chalk.dim("Restart the land to load it."));
+        await refreshProtocolCache();
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("publish <name>")
+    .description("Publish a local extension to the registry")
+    .action(async (name) => {
+      try {
+        const api = getApi();
+        console.log(chalk.dim(`Publishing ${name} to registry...`));
+        const data = await api.publishExtension(name);
+        console.log(chalk.green(`Published: ${data.name} v${data.version}`));
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("uninstall <name>")
+    .description("Remove an extension (data in database is kept)")
+    .action(async (name) => {
+      const readline = require("readline");
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+      rl.question(chalk.yellow(`Remove extension "${name}"? This deletes the code but keeps your data. (y/N) `), async (answer) => {
+        rl.close();
+        if (answer.toLowerCase() !== "y") {
+          console.log(chalk.dim("Cancelled."));
+          return;
+        }
+
+        try {
+          const api = getApi();
+          const data = await api.uninstallExtension(name);
+          console.log(chalk.green(`Uninstalled: ${name}`));
+          console.log(chalk.dim("Extension directory removed. Database data is untouched."));
+          console.log(chalk.dim("Restart the land to apply."));
+          await refreshProtocolCache();
+        } catch (err) {
+          console.error(chalk.red("Error:"), err.message);
+        }
+      });
     });
 };

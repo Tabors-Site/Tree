@@ -77,14 +77,14 @@ router.put("/land/config/:key", authenticate, async (req, res) => {
 router.get("/land/extensions", authenticate, async (req, res) => {
   try {
     const manifests = getLoadedManifests();
-    const disabled = (process.env.DISABLED_EXTENSIONS || "")
-      .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const disabled = getLandConfigValue("disabledExtensions") || [];
 
     res.json({
       loaded: manifests.map((m) => ({
         name: m.name,
         version: m.version,
         description: m.description,
+        status: "active",
         needs: m.needs || {},
         optional: m.optional || {},
         provides: {
@@ -96,7 +96,7 @@ router.get("/land/extensions", authenticate, async (req, res) => {
           sessionTypes: Object.keys(m.provides?.sessionTypes || {}),
         },
       })),
-      disabled,
+      disabled: disabled.map((name) => ({ name, status: "disabled" })),
       count: manifests.length,
     });
   } catch (err) {
@@ -140,6 +140,10 @@ router.post("/land/extensions/:name/disable", authenticate, async (req, res) => 
       await setLandConfigValue("disabledExtensions", current);
     }
 
+    // Also write to local file so loader can read at boot (before DB connects)
+    const { syncDisabledFile } = await import("../../extensions/loader.js");
+    syncDisabledFile(current);
+
     res.json({
       disabled: true,
       name,
@@ -168,6 +172,9 @@ router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
     const updated = current.filter((n) => n !== name);
     await setLandConfigValue("disabledExtensions", updated);
 
+    const { syncDisabledFile } = await import("../../extensions/loader.js");
+    syncDisabledFile(updated);
+
     res.json({
       enabled: true,
       name,
@@ -175,6 +182,147 @@ router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
       disabledExtensions: updated,
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/land/extensions/:name/uninstall
+ * Remove an extension directory. Data in DB is untouched.
+ * Requires restart to take effect.
+ */
+router.post("/land/extensions/:name/uninstall", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("profileType").lean();
+    if (!user || user.profileType !== "god") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { name } = req.params;
+
+    // Safety: only allow alphanumeric and hyphens in extension names
+    if (!/^[a-z0-9-]+$/i.test(name)) {
+      return res.status(400).json({ error: "Invalid extension name" });
+    }
+
+    const { uninstallExtension } = await import("../../extensions/loader.js");
+    const result = await uninstallExtension(name);
+
+    if (!result.found) {
+      return res.status(404).json({ error: `Extension "${name}" not found` });
+    }
+
+    res.json({
+      uninstalled: true,
+      name,
+      note: "Extension directory removed. Data in database is untouched. Restart to apply.",
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/land/extensions/install
+ * Install an extension from registry data. Writes files to extensions directory.
+ * Body: { name, version, manifest, files: [{ path, content }] }
+ */
+router.post("/land/extensions/install", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("profileType").lean();
+    if (!user || user.profileType !== "god") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { name, version, manifest, files } = req.body;
+
+    if (!name || !files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: "name and files are required" });
+    }
+
+    // Safety: only allow alphanumeric and hyphens
+    if (!/^[a-z0-9-]+$/i.test(name)) {
+      return res.status(400).json({ error: "Invalid extension name" });
+    }
+
+    const { installExtensionFiles } = await import("../../extensions/loader.js");
+    const result = await installExtensionFiles(name, files);
+
+    res.json({
+      installed: true,
+      name,
+      version: version || manifest?.version || "unknown",
+      filesWritten: result.filesWritten,
+      note: "Restart the land to load the extension.",
+    });
+  } catch (err) {
+    console.error("Extension install error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/land/extensions/:name/publish
+ * Publish a local extension to the registry.
+ * Reads the extension files and sends them to the directory service.
+ */
+router.post("/land/extensions/:name/publish", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("profileType").lean();
+    if (!user || user.profileType !== "god") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { name } = req.params;
+    if (!/^[a-z0-9-]+$/i.test(name)) {
+      return res.status(400).json({ error: "Invalid extension name" });
+    }
+
+    const { readExtensionFiles } = await import("../../extensions/loader.js");
+    const { manifest, files } = await readExtensionFiles(name);
+
+    if (!manifest) {
+      return res.status(404).json({ error: `Extension "${name}" not found locally` });
+    }
+
+    // Send to directory service
+    const directoryUrl = getLandConfigValue("DIRECTORY_URL");
+    if (!directoryUrl) {
+      return res.status(400).json({ error: "No DIRECTORY_URL configured" });
+    }
+
+    const { getLandIdentity } = await import("../../canopy/identity.js");
+    const identity = getLandIdentity();
+
+    const dirRes = await fetch(`${directoryUrl}/extensions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-land-id": identity.landId,
+        "x-land-domain": identity.domain,
+      },
+      body: JSON.stringify({
+        manifest,
+        files,
+        tags: req.body.tags || [],
+        readme: req.body.readme || "",
+        repoUrl: req.body.repoUrl || null,
+      }),
+    });
+
+    const dirData = await dirRes.json();
+    if (!dirRes.ok) {
+      return res.status(dirRes.status).json({ error: dirData.error || "Registry publish failed" });
+    }
+
+    res.json({
+      published: true,
+      name: manifest.name,
+      version: manifest.version,
+      registry: dirData,
+    });
+  } catch (err) {
+    console.error("Extension publish error:", err);
     res.status(500).json({ error: err.message });
   }
 });
