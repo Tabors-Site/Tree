@@ -92,7 +92,7 @@ const WelcomePage = () => {
     }
   };
 
-  const handleOpenApp = () => handleOpen(`${URL}/app`);
+  const handleOpenApp = () => handleOpen(`${URL}/dashboard`);
   const handleOpenChat = () => handleOpen(`${URL}/chat`);
 
   return (
