@@ -17,6 +17,104 @@
   box-sizing: border-box;
 }
 
+/* ── GLOBAL TEXT SIZE + CONTRAST OVERRIDES ── */
+/* Applied to all about pages through the layout wrapper */
+
+/* Section titles: bigger, full white */
+.about-layout h2,
+.about-layout .section-title,
+.about-layout .nt-section-title,
+.about-layout .cli-section-title,
+.about-layout .ext-section-title,
+.about-layout .ah-section-title {
+  font-size: 22px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Section headings inside cards */
+.about-layout h3 {
+  font-size: 18px;
+  color: #fff;
+}
+
+.about-layout h4 {
+  font-size: 16px;
+  color: rgba(255,255,255,0.95);
+}
+
+/* Body text: bigger, brighter */
+.about-layout p,
+.about-layout .section-text,
+.about-layout .nt-section-text,
+.about-layout .cli-section-text,
+.about-layout .ext-section-text,
+.about-layout .ah-section-text,
+.about-layout .ep-desc,
+.about-layout .cli-cmd-desc {
+  font-size: 15px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.7;
+}
+
+/* Subtitles */
+.about-layout .nt-subtitle,
+.about-layout .ext-subtitle,
+.about-layout .ah-tagline {
+  font-size: 16px;
+  color: rgba(255,255,255,0.7);
+}
+
+/* CLI command names */
+.about-layout .cli-cmd-name {
+  font-size: 14px;
+  color: rgba(160, 200, 255, 0.95);
+}
+
+/* Code inline */
+.about-layout code {
+  font-size: 13px;
+  background: rgba(0,0,0,0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: rgba(255,255,255,0.9);
+}
+
+/* Code blocks */
+.about-layout .ep-code,
+.about-layout .cli-code-block,
+.about-layout .ext-code-block {
+  font-size: 13px;
+  background: rgba(0,0,0,0.3);
+  color: rgba(255,255,255,0.9);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Endpoint method badges */
+.about-layout .ep-method {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Endpoint URLs */
+.about-layout .ep-url {
+  font-size: 14px;
+  color: rgba(255,255,255,0.9);
+}
+
+/* Notes/hints */
+.about-layout .cli-note,
+.about-layout .ep-note {
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+}
+
+/* Card backgrounds: darker for contrast */
+.about-layout .section,
+.about-layout .endpoint {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
 /* ── TOP BACK NAV (inside each card) ── */
 .al-page-back {
   margin-bottom: 20px;
@@ -73,4 +171,8 @@
 
 @media (max-width: 640px) {
   .about-layout { padding: 16px; }
+  .about-layout h2,
+  .about-layout .section-title { font-size: 20px; }
+  .about-layout p,
+  .about-layout .section-text { font-size: 14px; }
 }
