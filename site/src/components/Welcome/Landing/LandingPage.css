@@ -59,27 +59,27 @@
 }
 
 .lp-title {
-  font-size: 72px;
+  font-size: 88px;
   font-weight: 800;
-  letter-spacing: -2px;
+  letter-spacing: -3px;
   color: #fff;
-  margin: 0 0 8px;
+  margin: 0 0 12px;
 }
 
 .lp-subtitle {
-  font-size: 20px;
+  font-size: 26px;
   color: rgba(255, 255, 255, 0.5);
   font-weight: 500;
-  margin: 0 0 16px;
+  margin: 0 0 20px;
   letter-spacing: -0.3px;
 }
 
 .lp-tagline {
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.4);
-  max-width: 480px;
-  margin: 0 auto 32px;
-  line-height: 1.6;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.45);
+  max-width: 540px;
+  margin: 0 auto 40px;
+  line-height: 1.7;
 }
 
 .lp-hero-ctas {
@@ -90,9 +90,9 @@
 
 /* ── BUTTONS ── */
 .lp-btn {
-  padding: 12px 28px;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 16px 36px;
+  border-radius: 10px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   border: none;
@@ -121,7 +121,7 @@
 
 /* ── SECTIONS ── */
 .lp-section {
-  padding: 96px 0;
+  padding: 120px 0;
 }
 
 .lp-section-alt {
@@ -129,20 +129,20 @@
 }
 
 .lp-section-title {
-  font-size: 32px;
+  font-size: 42px;
   font-weight: 700;
   color: #fff;
-  letter-spacing: -0.5px;
-  margin: 0 0 12px;
+  letter-spacing: -1px;
+  margin: 0 0 16px;
   text-align: center;
 }
 
 .lp-section-sub {
-  font-size: 15px;
+  font-size: 18px;
   color: rgba(255, 255, 255, 0.45);
   text-align: center;
-  max-width: 600px;
-  margin: 0 auto 48px;
+  max-width: 640px;
+  margin: 0 auto 56px;
   line-height: 1.7;
 }
 
@@ -156,8 +156,8 @@
 .lp-card {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 28px;
+  border-radius: 14px;
+  padding: 36px;
   transition: border-color 0.2s;
 }
 .lp-card:hover {
@@ -170,16 +170,16 @@
 }
 
 .lp-card h3 {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 700;
   color: #fff;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
 }
 
 .lp-card p {
-  font-size: 13px;
+  font-size: 16px;
   color: rgba(255, 255, 255, 0.5);
-  line-height: 1.6;
+  line-height: 1.7;
   margin: 0;
 }
 
@@ -233,22 +233,22 @@
 }
 
 .lp-step-content h4 {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
   color: #fff;
-  margin: 0 0 6px;
+  margin: 0 0 8px;
 }
 
 .lp-step-content p {
-  font-size: 13px;
+  font-size: 16px;
   color: rgba(255, 255, 255, 0.45);
-  line-height: 1.6;
-  margin: 0 0 8px;
+  line-height: 1.7;
+  margin: 0 0 10px;
 }
 
 .lp-step-content code {
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-  font-size: 12px;
+  font-size: 14px;
   color: rgba(160, 200, 255, 0.7);
   background: rgba(255, 255, 255, 0.04);
   padding: 4px 10px;
@@ -331,13 +331,13 @@
 
 .lp-ext-name {
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-  font-size: 12px;
+  font-size: 14px;
   color: rgba(160, 200, 255, 0.8);
   white-space: nowrap;
 }
 
 .lp-ext-desc {
-  font-size: 11px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.35);
   text-align: right;
 }
@@ -370,17 +370,17 @@
 }
 
 .lp-split-card h3 {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 700;
   color: #fff;
-  margin: 0 0 10px;
+  margin: 0 0 12px;
 }
 
 .lp-split-card p {
-  font-size: 13px;
+  font-size: 16px;
   color: rgba(255, 255, 255, 0.45);
-  line-height: 1.6;
-  margin: 0 0 16px;
+  line-height: 1.7;
+  margin: 0 0 20px;
 }
 
 .lp-split-link {
@@ -429,10 +429,10 @@
 }
 
 .lp-term-body {
-  padding: 16px 20px;
+  padding: 20px 24px;
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-  font-size: 13px;
-  line-height: 1.8;
+  font-size: 15px;
+  line-height: 1.9;
 }
 
 .lp-term-line {
@@ -491,7 +491,7 @@
 
 .lp-footer-col a {
   display: block;
-  font-size: 13px;
+  font-size: 15px;
   color: rgba(255, 255, 255, 0.5);
   text-decoration: none;
   padding: 3px 0;
@@ -517,9 +517,14 @@
 @media (max-width: 768px) {
   .lp-container { padding: 0 20px; }
   .lp-section { padding: 64px 0; }
-  .lp-title { font-size: 48px; }
-  .lp-subtitle { font-size: 16px; }
-  .lp-section-title { font-size: 24px; }
+  .lp-title { font-size: 56px; }
+  .lp-subtitle { font-size: 20px; }
+  .lp-section { padding: 80px 0; }
+  .lp-section-title { font-size: 32px; }
+  .lp-section-sub { font-size: 16px; }
+  .lp-card p { font-size: 14px; }
+  .lp-step-content p { font-size: 14px; }
+  .lp-term-body { font-size: 13px; }
   .lp-cards-3 { grid-template-columns: 1fr; }
   .lp-cards-4 { grid-template-columns: 1fr; }
   .lp-split { grid-template-columns: 1fr; }
@@ -530,9 +535,10 @@
 }
 
 @media (max-width: 480px) {
-  .lp-title { font-size: 36px; }
+  .lp-title { font-size: 42px; }
   .lp-tree-icon { font-size: 56px; }
-  .lp-section { padding: 48px 0; }
+  .lp-section { padding: 60px 0; }
+  .lp-section-title { font-size: 28px; }
   .lp-footer-grid { grid-template-columns: 1fr; }
-  .lp-term-body { font-size: 11px; }
+  .lp-term-body { font-size: 12px; }
 }
