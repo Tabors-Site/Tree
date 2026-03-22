@@ -580,7 +580,33 @@ export async function processMessage(visitorId, message, ctx) {
     // Pass abort signal to OpenAI if available
     const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
 
-    response = await openai.chat.completions.create(requestParams, requestOpts);
+    try {
+      response = await openai.chat.completions.create(requestParams, requestOpts);
+    } catch (apiErr) {
+      // Handle models that invent tool names (e.g. "json") instead of using defined tools
+      if (apiErr.code === "tool_use_failed" && apiErr.error?.failed_generation) {
+        let extracted = null;
+        try {
+          const gen = JSON.parse(apiErr.error.failed_generation);
+          extracted = gen.arguments?.responseHint || gen.arguments?.response || gen.arguments?.content || gen.arguments?.summary || JSON.stringify(gen.arguments);
+        } catch {
+          // Try extracting any readable text from the failed generation
+          const raw = apiErr.error.failed_generation;
+          const hintMatch = raw.match(/"responseHint"\s*:\s*"([\s\S]*?)(?:"\s*[,}])/);
+          if (hintMatch) extracted = hintMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+        }
+
+        if (extracted) {
+          console.warn(`⚠️ Model invented tool "${apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?"}". Extracted response from failed_generation.`);
+          session.messages.push({ role: "assistant", content: extracted });
+          response = { choices: [{ message: { content: extracted }, finish_reason: "stop" }] };
+        } else {
+          throw apiErr;
+        }
+      } else {
+        throw apiErr;
+      }
+    }
 
     const choice = response.choices?.[0];
     if (!choice) break;
