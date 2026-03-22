@@ -31,6 +31,9 @@ const LandingPage = () => {
             <button className="lp-btn lp-btn-primary" onClick={scrollToInstall}>Get Started</button>
             <a className="lp-btn lp-btn-secondary" href="/about">Learn More</a>
           </div>
+          <a className="lp-hero-example" href="/app">
+            Example App <span>built on the protocol</span>
+          </a>
         </div>
       </section>
 

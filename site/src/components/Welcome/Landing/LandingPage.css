@@ -99,6 +99,22 @@
   justify-content: center;
 }
 
+.lp-hero-example {
+  display: block;
+  margin-top: 24px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.lp-hero-example:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+.lp-hero-example span {
+  color: rgba(255, 255, 255, 0.25);
+  margin-left: 6px;
+}
+
 /* ── BUTTONS ── */
 .lp-btn {
   padding: 16px 36px;
