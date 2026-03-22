@@ -130,12 +130,13 @@ const WelcomePage = () => {
 
 
         <div className="hero-center">
+          <a href="/" style={{ textDecoration: "none", color: "inherit" }}>
+            <div className="hero-logo" aria-hidden>
+              🌳
+            </div>
 
-          <div className="hero-logo" aria-hidden>
-            🌳
-          </div>
-
-          <h1 data-text="TreeOS">TreeOS</h1>
+            <h1 data-text="TreeOS">TreeOS</h1>
+          </a>
           <h2>An Operating System for Context</h2>
 
         </div>
