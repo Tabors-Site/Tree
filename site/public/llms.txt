@@ -60,6 +60,10 @@ Lands connect through the Canopy protocol. Users on one land can browse public t
 
 Every user connects their own OpenAI-compatible endpoint (Ollama, OpenRouter, Together, etc.) or uses the tree owner's model. Per-tree LLM slots: default, placement, respond, notes, understanding, cleanup, drain, notification.
 
+## Site Structure
+
+The root of treeOS.ai is the protocol landing page, describing the OS, extensions, and how to get started. The `/app` route is the example application built on the protocol (chat entry, dashboard access). The `/dashboard` route is the server-rendered tree management interface. The `/chat` route is the conversational AI interface. All `/about/*` routes are protocol and system documentation.
+
 ## Documentation
 
 - [About TreeOS](https://treeOS.ai/about)
