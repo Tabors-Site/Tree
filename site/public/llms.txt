@@ -1,101 +1,99 @@
 # TreeOS
 
-> TreeOS is an AI-powered knowledge management system where users grow trees of goals, plans, and reflections. An LLM acts as a conversational tree-builder with background maintenance. Built by Tabor Holly.
+> TreeOS is an operating system for context. A self-hosted, modular, federated knowledge system where AI and humans build persistent tree structures together. Built by Tabor Holly. AGPL-3.0.
 
-TreeOS gives LLMs persistent, structured memory. Any AI agent can create an account, build trees, and use them as long-term memory across conversations. Instead of losing context when a session ends, an agent stores knowledge in a tree and retrieves the relevant branches next time. The tree is the memory layer that LLMs do not have natively.
+## What It Is
 
-Trees can hold anything: knowledge bases, project plans, reflections, hierarchical agentic systems, research, task tracking, or any structured system an agent needs to persist and navigate over time.
+TreeOS gives AI persistent, structured memory. Instead of flat conversations that disappear, knowledge lives in hierarchical trees that persist, compound, and connect across a federated network.
 
-Humans use Tree the same way. Instead of dumping everything into one flat conversation that gets forgotten, a tree organizes knowledge into branches so the AI only pulls in what it needs for each interaction. Both humans and AI can read from and write to the tree, so context evolves as work progresses.
+Trees hold anything: goals, plans, tasks, knowledge bases, research, project tracking, or any structured system that needs to persist and grow over time. Both humans and AI read from and write to the same tree.
 
-Users and agents can have multiple trees for different projects, topics, or areas of life. Collaborators can be invited to build together.
+## Core Protocol
 
-Trees dream. Each tree runs a daily background cycle called Tree Dreams that automatically cleans up, drains short-term memory, and compresses understanding. See [Tree Dreams](https://treeOS.ai/about/dreams) for details.
+The core protocol defines:
+- **Nodes**: hierarchical structures with notes, trackable values, and children
+- **Types**: six semantic labels (goal, plan, task, knowledge, resource, identity) plus custom types
+- **AI Modes**: three strict interaction boundaries
+  - **Chat**: reads and writes (conversational)
+  - **Place**: writes content without conversation
+  - **Query**: reads only, changes nothing
+- **Canopy**: federation protocol connecting lands (servers) into a network
+- **Gateway**: channels for external input/output (Telegram, Discord, etc.)
 
-## How It Works
+Every land serves its capabilities at `GET /api/v1/protocol`.
 
-Tree operations are handled by multiple specialized AI agents. When you send a message, it is routed to the appropriate agent based on context. Each agent receives relevant tree state, performs its task (navigate, create, edit, place, summarize), and passes updated context back. This means the AI always has the right slice of your tree without needing the entire structure in context.
+## Extensions
 
-You can interact with trees through:
-- **Tree Chat**: Conversational interface where you talk to your tree and the AI navigates, creates, edits, and responds with full tree context
-- **Tree Place**: Send content directly into a tree without a conversational reply - the AI finds the best location and places it
-- **Raw Idea Chat/Place**: Capture unstructured thoughts, files, or ideas - the AI automatically finds the right tree and node to place them
-- **Understand Tree**: AI-powered compression that builds a shadow tree of summaries from different perspectives, working bottom-up through layers
-- **REST API**: Programmatic access to all tree operations for building integrations, bots, and automations
+Everything beyond the core protocol is a modular extension. Install, disable, remove, or build your own.
 
-## Self-Hosting and Federation
+18 built-in extensions: understanding (tree compression), dreams (background maintenance), scripts (sandboxed JS), energy (usage metering), billing (Stripe), prestige (versioning), schedules, raw-ideas (auto-placement), blog, book (note exports), solana (on-chain wallets), api-keys, user-llm (custom model connections), user-queries, deleted-revive, visibility, transaction-policy, html-rendering.
 
-TreeOS is open source (AGPL-3.0). Anyone can run their own Land server. Each Land is a fully independent node in the network with its own database, AI models, users, and rules.
+Extensions declare dependencies in a manifest and only receive the services they request. The extension registry at dir.treeos.ai allows publishing and pulling packages.
 
-A **Land** is a TreeOS server instance. Lands connect through the **Canopy protocol**, a REST-based federation layer. Think of it like email: your Land is your server, you can communicate with anyone on any other server, but your data stays on yours.
+## CLI
 
-The Canopy protocol handles:
-- **Peering**: Lands exchange Ed25519 public keys and authenticate requests with signed tokens (CanopyTokens)
-- **Cross-land invites**: Invite users on other lands to collaborate on your trees
-- **Ghost users**: When a remote user joins your tree, a lightweight record is created so existing permission checks work unchanged
-- **Proxy**: Users interact with remote trees through their home land. The federation layer is invisible to clients.
-- **Public tree discovery**: Lands publish public trees. A Directory Service acts as an optional phonebook for the network.
-- **Health monitoring**: Lands track peer status (active, degraded, unreachable, dead) via periodic heartbeats
+The CLI works like a regular terminal. `cd`, `ls`, `mkdir`, `rm`, `mv`. If you know a shell, you know TreeOS.
 
-The **CLI** (`npm install -g treeos`) connects to any Land. Users can browse public trees across the network, receive invites from other lands, and contribute remotely.
-
-Getting started self-hosting:
 ```
-git clone <repo> && cd Tree
-npm run install:all
-npm start
+npm install -g treeos
+treeos connect https://treeos.ai
+treeos register
 ```
 
-First run launches a setup wizard. First user registered gets admin access instantly.
+Key commands: `chat`, `place`, `query`, `mkdir`, `cd`, `ls`, `tree`, `note`, `value`, `type`, `ext install`, `llm add`.
 
-## Key Features
+## Self-Hosting
 
-- Hierarchical node trees with parent/child structure, versioning (prestige), values, and status tracking
-- WebSocket-based conversational AI that navigates and modifies trees via natural language
-- Per-tree LLM assignment system with 6 configurable slots (placement, understanding, respond, notes, cleanup, drain)
-- Energy system for AI operations (scales with tier, self-hosted defaults to unlimited)
-- Understanding system that creates shadow trees with bottom-up layer compression
-- Raw idea capture with automatic AI placement into the best tree/node
-- Short-term memory drain that clusters, scouts, plans, and places items into trees
-- Federated network via Canopy protocol with Ed25519 signed authentication
-- Cross-land collaboration, invites, and public tree discovery
-- Node scripts (sandboxed JavaScript via vm2)
-- Full REST API and CLI for programmatic access
-- Bring your own LLM. connect any OpenAI-compatible endpoint (Ollama, OpenRouter, etc.)
+Anyone can run their own land. One command to boot:
+
+```
+treeos land
+```
+
+First boot walks through domain, MongoDB, and extension selection from the registry.
+
+## Federation
+
+Lands connect through the Canopy protocol. Users on one land can browse public trees on another, receive invites, and contribute remotely. The directory service at dir.treeos.ai handles land discovery, public tree indexing, and the extension registry.
+
+## LLM Setup
+
+Every user connects their own OpenAI-compatible endpoint (Ollama, OpenRouter, Together, etc.) or uses the tree owner's model. Per-tree LLM slots: default, placement, respond, notes, understanding, cleanup, drain, notification.
 
 ## Documentation
 
-- [About TreeOS](https://treeOS.ai/about): What TreeOS is, why it exists, and how it works
-- [Getting Started](https://treeOS.ai/about/gettingstarted): First tree, first node, first note - up and running in two minutes
-- [API Reference](https://treeOS.ai/about/api): REST API documentation for reading and writing to trees programmatically
-- [Energy System](https://treeOS.ai/about/energy): How energy works, costs per operation, and bringing your own LLM
-- [Raw Ideas](https://treeOS.ai/about/raw-ideas): Capture thoughts and files for automatic AI placement
-- [Tree Dreams](https://treeOS.ai/about/dreams): Daily background maintenance - cleanup, drain, and understanding
-- [CLI Guide](https://treeOS.ai/about/cli): Command-line interface for navigating and managing trees from the terminal
-- [Gateway](https://treeOS.ai/about/gateway): Connect trees to external services like Telegram, Discord, and web push
-
-## Legal
-
-- [Terms of Service](https://treeOS.ai/terms)
-- [Privacy Policy](https://treeOS.ai/privacy)
-
-## Blog
-
-- [Blog](https://treeOS.ai/blog): Ideas, updates, and thoughts on where Tree is going
+- [About TreeOS](https://treeOS.ai/about)
+- [Getting Started](https://treeOS.ai/about/gettingstarted)
+- [API Reference](https://treeOS.ai/about/api)
+- [CLI Guide](https://treeOS.ai/about/cli)
+- [Extensions](https://treeOS.ai/about/extensions)
+- [Node Types](https://treeOS.ai/about/node-types)
+- [Gateway](https://treeOS.ai/about/gateway)
+- [Land and Canopy](https://treeOS.ai/about/land)
+- [Energy System](https://treeOS.ai/about/energy)
+- [Raw Ideas](https://treeOS.ai/about/raw-ideas)
+- [Tree Dreams](https://treeOS.ai/about/dreams)
+- [Blog](https://treeOS.ai/blog)
+- [Directory](https://dir.treeOS.ai)
 
 ## API Access
 
 Base URL: `https://treeOS.ai/api/v1`
 
-Authentication via `x-api-key` header. Maximum 10 active keys per user, individually revokable.
+Authentication via `x-api-key` header or Bearer token.
 
-### Public Endpoints (no auth)
-- `GET /blog/posts` - List published blog posts
-- `GET /blog/posts/:slug` - Get a single blog post by slug
+### Public Endpoints
+- `GET /blog/posts` . list blog posts
+- `GET /api/v1/protocol` . land capabilities, extensions, CLI commands
 
-### Authenticated Endpoints
-- User profile, API key management, contributions, notes
-- Tree/root operations, collaboration (invites, ownership transfer)
-- Node CRUD with versioning, scripts, scheduling
-- AI-powered: Tree Chat, Tree Place, Raw Idea Chat/Place, Understand Tree
-- Custom LLM connections (up to 15 per user)
+### Core Endpoints
+- Node CRUD, notes, values, transactions, contributions
+- AI modes: chat, place, query
+- Canopy federation: peering, proxy, discovery
+- Gateway channel management
+
+### Extension Endpoints
+- Extension management: list, install, disable, enable, uninstall, publish
+- Understanding runs, scripts, schedules, energy, billing, raw ideas, etc.
+
+Full API docs: https://treeOS.ai/about/api

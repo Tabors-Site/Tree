@@ -347,6 +347,14 @@
   white-space: nowrap;
 }
 
+.lp-ext-link {
+  text-decoration: none;
+}
+.lp-ext-link:hover {
+  color: rgba(160, 200, 255, 1);
+  text-decoration: underline;
+}
+
 .lp-ext-desc {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.35);

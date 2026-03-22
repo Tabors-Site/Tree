@@ -181,8 +181,8 @@ const LandingPage = () => {
           <div className="lp-ext-groups">
             <ExtGroup title="AI and Knowledge" items={[
               { name: "understanding", desc: "Bottom-up tree compression" },
-              { name: "dreams", desc: "Daily background maintenance" },
-              { name: "raw-ideas", desc: "Capture and auto-place" },
+              { name: "dreams", desc: "Daily background maintenance", href: "/about/dreams" },
+              { name: "raw-ideas", desc: "Capture and auto-place", href: "/about/raw-ideas" },
             ]} />
             <ExtGroup title="Developer" items={[
               { name: "scripts", desc: "Sandboxed JS on nodes" },
@@ -191,7 +191,7 @@ const LandingPage = () => {
               { name: "schedules", desc: "Dates and calendar" },
             ]} />
             <ExtGroup title="Finance" items={[
-              { name: "energy", desc: "Usage metering" },
+              { name: "energy", desc: "Usage metering", href: "/about/energy" },
               { name: "billing", desc: "Stripe subscriptions" },
               { name: "solana", desc: "On-chain wallets" },
             ]} />
@@ -350,7 +350,11 @@ const ExtGroup = ({ title, items }) => (
     <h4 className="lp-ext-group-title">{title}</h4>
     {items.map((item) => (
       <div key={item.name} className="lp-ext-item">
-        <span className="lp-ext-name">{item.name}</span>
+        {item.href ? (
+          <a href={item.href} className="lp-ext-name lp-ext-link">{item.name}</a>
+        ) : (
+          <span className="lp-ext-name">{item.name}</span>
+        )}
         <span className="lp-ext-desc">{item.desc}</span>
       </div>
     ))}
