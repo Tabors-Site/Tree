@@ -17,5 +17,8 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
+    cli: [
+      { command: "energy", description: "Show your energy balance and reset time", method: "GET", endpoint: "/user/:userId/energy" },
+    ],
   },
 };

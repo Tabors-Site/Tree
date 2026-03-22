@@ -19,5 +19,8 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
+    cli: [
+      { command: "llms", description: "List your custom LLM connections", method: "GET", endpoint: "/user/:userId/custom-llm" },
+    ],
   },
 };
