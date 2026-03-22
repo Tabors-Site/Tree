@@ -150,6 +150,48 @@ module.exports = (program) => {
             console.log(chalk.green("\n  First user. You are the admin (god tier)."));
           }
           await printLoginSuccess(me, api);
+
+          // LLM connection (required for AI interaction)
+          console.log(chalk.bold("\n  Connect Your LLM\n"));
+          console.log(chalk.dim("  TreeOS needs an LLM to power chat, placement, and understanding."));
+          console.log(chalk.dim("  Connect any OpenAI-compatible endpoint (Ollama, OpenRouter, Together, etc.)\n"));
+
+          let llmConnected = false;
+          while (!llmConnected) {
+            try {
+              const llmName = await prompt("  Connection name (e.g. my-ollama): ");
+              if (!llmName) {
+                const skip = await prompt("  Skip? You'll use the land's default model. (y/N): ");
+                if (skip.toLowerCase() === "y") {
+                  console.log(chalk.dim("  Using land default. Run 'llm add' anytime to connect your own."));
+                  break;
+                }
+                continue;
+              }
+
+              const llmUrl = await prompt("  Base URL (e.g. http://localhost:11434/v1): ");
+              if (!llmUrl) continue;
+
+              const llmModel = await prompt("  Model (e.g. qwen3:32b): ");
+              if (!llmModel) continue;
+
+              const llmKey = await prompt("  API Key (press enter for none): ");
+
+              await api.addLlmConnection(me.userId, {
+                name: llmName,
+                baseUrl: llmUrl,
+                model: llmModel,
+                apiKey: llmKey || "none",
+              });
+              console.log(chalk.green(`\n  Connected: ${llmName}`));
+              console.log(chalk.dim("  Set as your default model. Manage with 'llm' command.\n"));
+              llmConnected = true;
+            } catch (e) {
+              console.log(chalk.red(`  Error: ${e.message}`));
+              console.log(chalk.dim("  Try again or type empty name to skip.\n"));
+            }
+          }
+
           const { startShell } = require("../index");
           await startShell();
         } else if (data.pendingVerification) {
