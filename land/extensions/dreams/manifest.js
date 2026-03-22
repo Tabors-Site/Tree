@@ -6,6 +6,7 @@ export default {
   needs: {
     services: ["llm", "session", "aiChat", "orchestrator"],
     models: ["Node", "Contribution"],
+    extensions: ["understanding"],
   },
 
   optional: {

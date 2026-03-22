@@ -4,6 +4,7 @@ import { ensureLandRoot } from "./core/landRoot.js";
 import { initLandConfig } from "./core/landConfig.js";
 import { startRawIdeaAutoPlaceJob } from "./jobs/rawIdeaAutoPlace.js";
 import { startTreeDreamJob, runTreeDreamJob } from "./jobs/treeDream.js";
+import { startExtensionJobs } from "./extensions/loader.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
 import { startOutboxJob } from "./canopy/events.js";
 import { startDirectoryRegistration } from "./canopy/directory.js";
@@ -30,8 +31,9 @@ export function onListen() {
     startRawIdeaAutoPlaceJob({ intervalMs: 15 * 60 * 1000 });
     startTreeDreamJob({ intervalMs: 30 * 60 * 1000 });
     runTreeDreamJob();
+    startExtensionJobs();
     console.log(
-      "[Land] Background jobs started (dream, drain, cleanup, understanding)",
+      "[Land] Background jobs started (dream, drain, cleanup, understanding, extensions)",
     );
 
     startHeartbeatJob();

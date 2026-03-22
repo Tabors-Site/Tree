@@ -116,11 +116,31 @@ export function getDefaultMode(bigMode) {
 
 /**
  * Resolve the OpenAI-compatible tools array for a mode.
+ * Includes any additional tools injected by loaded extensions.
  */
 export function getToolsForMode(modeKey) {
   const mode = ALL_MODES[modeKey];
   if (!mode) return [];
-  return resolveTools(mode.toolNames);
+
+  // Merge base tools with extension-injected tools
+  let toolNames = [...mode.toolNames];
+  const extTools = _getExtToolsFn(modeKey);
+  if (extTools.length > 0) {
+    toolNames = [...new Set([...toolNames, ...extTools])];
+  }
+
+  return resolveTools(toolNames);
+}
+
+// Extension tool injection hook. Set by the loader after initialization.
+let _getExtToolsFn = () => [];
+
+/**
+ * Called by extension loader to register the tool injection function.
+ * This avoids circular imports between registry and loader.
+ */
+export function setExtensionToolResolver(fn) {
+  _getExtToolsFn = fn;
 }
 
 /**

@@ -1,11 +1,12 @@
 // extensions/loader.js
 // Scans extension manifests, validates dependencies, initializes extensions,
-// and wires routes/tools/jobs into the host land.
+// and wires routes/tools/jobs/models into the host land.
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { buildCoreServices, NOOP_ENERGY } from "../core/services.js";
+import { setExtensionToolResolver } from "../ws/modes/registry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -15,6 +16,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const loaded = new Map();       // name -> { manifest, instance }
 let coreServices = null;        // the assembled core bundle
+const modeToolExtensions = [];  // [{ modeKey, toolNames }] from extensions
+const registeredJobs = [];      // [{ name, start, stop }] from extensions
+
+// ---------------------------------------------------------------------------
+// Configuration: enable/disable extensions
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse DISABLED_EXTENSIONS env var (comma-separated list).
+ * Extensions in this list will be skipped during loading.
+ */
+function getDisabledExtensions() {
+  const raw = process.env.DISABLED_EXTENSIONS || "";
+  return new Set(
+    raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -61,6 +79,15 @@ function validateNeeds(manifest, core) {
     }
   }
 
+  // Check inter-extension dependencies
+  if (manifest.needs?.extensions) {
+    for (const ext of manifest.needs.extensions) {
+      if (!loaded.has(ext)) {
+        missing.push(`extension:${ext}`);
+      }
+    }
+  }
+
   return missing;
 }
 
@@ -72,10 +99,8 @@ function applyOptionalStubs(manifest, core) {
 
   for (const svc of manifest.optional.services) {
     if (svc === "energy" && core.energy === NOOP_ENERGY) {
-      // Already a no-op, extension will get the stub
       continue;
     }
-    // For other optional services, if they don't exist on core, stub them
     if (!core[svc]) {
       core[svc] = {};
     }
@@ -83,19 +108,50 @@ function applyOptionalStubs(manifest, core) {
 }
 
 // ---------------------------------------------------------------------------
-// Dependency ordering
+// Dependency ordering (proper topological sort)
 // ---------------------------------------------------------------------------
 
 function topologicalSort(manifests) {
-  // Simple sort: extensions with fewer needs load first
-  // For full dep resolution between extensions, we'd need a proper topo sort
-  // but for now, extensions only depend on core services, not each other
-  const sorted = [...manifests];
-  sorted.sort((a, b) => {
-    const aDeps = (a.needs?.services?.length || 0) + (a.needs?.models?.length || 0);
-    const bDeps = (b.needs?.services?.length || 0) + (b.needs?.models?.length || 0);
+  const byName = new Map();
+  for (const m of manifests) byName.set(m.manifest.name, m);
+
+  const visited = new Set();
+  const sorted = [];
+
+  function visit(item) {
+    const name = item.manifest.name;
+    if (visited.has(name)) return;
+    visited.add(name);
+
+    // Visit extension dependencies first
+    if (item.manifest.needs?.extensions) {
+      for (const dep of item.manifest.needs.extensions) {
+        if (byName.has(dep)) visit(byName.get(dep));
+      }
+    }
+
+    // Visit optional extension dependencies if they exist
+    if (item.manifest.optional?.extensions) {
+      for (const dep of item.manifest.optional.extensions) {
+        if (byName.has(dep)) visit(byName.get(dep));
+      }
+    }
+
+    sorted.push(item);
+  }
+
+  // Visit in order of dependency count (least deps first as tiebreaker)
+  const ordered = [...manifests].sort((a, b) => {
+    const aDeps = (a.manifest.needs?.services?.length || 0) +
+                  (a.manifest.needs?.models?.length || 0) +
+                  (a.manifest.needs?.extensions?.length || 0);
+    const bDeps = (b.manifest.needs?.services?.length || 0) +
+                  (b.manifest.needs?.models?.length || 0) +
+                  (b.manifest.needs?.extensions?.length || 0);
     return aDeps - bDeps;
   });
+
+  for (const item of ordered) visit(item);
   return sorted;
 }
 
@@ -105,10 +161,6 @@ function topologicalSort(manifests) {
 
 /**
  * Scan for extension manifests and load them.
- *
- * Manifest discovery:
- *   1. land/extensions/<name>/manifest.js  (directory-based)
- *   2. land/extensions/<name>.manifest.js  (flat file)
  *
  * @param {object} app         - Express app
  * @param {object} mcpServer   - MCP server instance (optional)
@@ -131,8 +183,18 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     return loaded;
   }
 
-  // Sort by dependency count (simple ordering)
-  const sorted = topologicalSort(manifests);
+  // Check disabled list
+  const disabled = getDisabledExtensions();
+  const enabled = manifests.filter(({ manifest }) => {
+    if (disabled.has(manifest.name)) {
+      console.log(`[Extensions] Disabled: ${manifest.name} (DISABLED_EXTENSIONS)`);
+      return false;
+    }
+    return true;
+  });
+
+  // Sort by dependencies (proper topological sort)
+  const sorted = topologicalSort(enabled);
 
   // Load each extension
   for (const { manifest, dir, entryPath } of sorted) {
@@ -162,7 +224,6 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Wire routes
       if (instance.router) {
         app.use("/api/v1", instance.router);
-        console.log(`[Extensions] ${manifest.name}: routes wired`);
       }
 
       // Wire MCP tools
@@ -176,7 +237,22 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
             tool.handler
           );
         }
-        console.log(`[Extensions] ${manifest.name}: ${instance.tools.length} MCP tools registered`);
+      }
+
+      // Register models from manifest (add to core.models so other extensions can use them)
+      if (manifest.provides?.models) {
+        for (const [modelName, modelPath] of Object.entries(manifest.provides.models)) {
+          if (!coreServices.models[modelName]) {
+            try {
+              const resolved = path.resolve(dir, modelPath);
+              const mod = await import(resolved);
+              coreServices.models[modelName] = mod.default || mod;
+              AVAILABLE_MODELS.add(modelName);
+            } catch (err) {
+              console.warn(`[Extensions] ${manifest.name}: failed to load model ${modelName}:`, err.message);
+            }
+          }
+        }
       }
 
       // Register energy actions from manifest
@@ -199,15 +275,38 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         }
       }
 
+      // Register mode tool injections (extensions can add tools to existing modes)
+      if (instance.modeTools) {
+        for (const injection of instance.modeTools) {
+          modeToolExtensions.push(injection);
+        }
+      }
+
+      // Register jobs (extensions can provide startable/stoppable jobs)
+      if (instance.jobs) {
+        for (const job of instance.jobs) {
+          registeredJobs.push({ extensionName: manifest.name, ...job });
+        }
+      }
+
       // Store
       loaded.set(manifest.name, { manifest, instance });
-      console.log(`[Extensions] Loaded: ${manifest.name} v${manifest.version}`);
+
+      // Build log line
+      const parts = [manifest.name, `v${manifest.version}`];
+      if (instance.router) parts.push("routes");
+      if (instance.tools?.length) parts.push(`${instance.tools.length} tools`);
+      if (instance.jobs?.length) parts.push(`${instance.jobs.length} jobs`);
+      if (instance.modeTools?.length) parts.push(`${instance.modeTools.length} mode injections`);
+      console.log(`[Extensions] Loaded: ${parts.join(" | ")}`);
 
     } catch (err) {
       console.error(`[Extensions] Failed to load "${manifest.name}":`, err.message);
-      // Don't crash the land, just skip this extension
     }
   }
+
+  // Wire the mode tool injection resolver now that all extensions are loaded
+  setExtensionToolResolver(getExtensionToolsForMode);
 
   return loaded;
 }
@@ -226,7 +325,6 @@ async function discoverManifests() {
   for (const entry of entries) {
     try {
       if (entry.isDirectory()) {
-        // land/extensions/<name>/manifest.js
         const manifestPath = path.join(__dirname, entry.name, "manifest.js");
         const indexPath = path.join(__dirname, entry.name, "index.js");
 
@@ -239,8 +337,6 @@ async function discoverManifests() {
           });
         }
       } else if (entry.name.endsWith(".manifest.js")) {
-        // land/extensions/<name>.manifest.js
-        // Entry point is <name>.js in same directory
         const name = entry.name.replace(".manifest.js", "");
         const entryPath = path.join(__dirname, `${name}.js`);
 
@@ -270,10 +366,6 @@ async function discoverManifests() {
 
 /**
  * Get a loaded extension by name.
- * Use this for cross-extension calls (e.g., dream calling understanding).
- *
- * @param {string} name - extension name
- * @returns {object|null} the extension's instance (what init() returned), or null
  */
 export function getExtension(name) {
   return loaded.get(name)?.instance ?? null;
@@ -281,9 +373,6 @@ export function getExtension(name) {
 
 /**
  * Get a loaded extension's manifest by name.
- *
- * @param {string} name - extension name
- * @returns {object|null} the manifest, or null
  */
 export function getExtensionManifest(name) {
   return loaded.get(name)?.manifest ?? null;
@@ -291,7 +380,6 @@ export function getExtensionManifest(name) {
 
 /**
  * Get all loaded extension names.
- * @returns {string[]}
  */
 export function getLoadedExtensionNames() {
   return [...loaded.keys()];
@@ -299,7 +387,6 @@ export function getLoadedExtensionNames() {
 
 /**
  * Get all loaded manifests (for /protocol endpoint).
- * @returns {object[]}
  */
 export function getLoadedManifests() {
   return [...loaded.values()].map(({ manifest }) => manifest);
@@ -307,8 +394,6 @@ export function getLoadedManifests() {
 
 /**
  * Check if an extension is loaded.
- * @param {string} name
- * @returns {boolean}
  */
 export function hasExtension(name) {
   return loaded.has(name);
@@ -316,7 +401,6 @@ export function hasExtension(name) {
 
 /**
  * Get the core services bundle (for late-binding or testing).
- * @returns {object}
  */
 export function getCoreServices() {
   return coreServices;
@@ -325,12 +409,67 @@ export function getCoreServices() {
 /**
  * Replace a core service at runtime (e.g., when energy extension loads
  * and wants to replace the no-op stub with the real implementation).
- *
- * @param {string} serviceName
- * @param {object} serviceImpl
  */
 export function setCoreService(serviceName, serviceImpl) {
   if (coreServices) {
     coreServices[serviceName] = serviceImpl;
+  }
+}
+
+/**
+ * Get additional tools injected by extensions for a specific mode.
+ * Called by the mode registry when resolving tools.
+ *
+ * @param {string} modeKey - e.g. "tree:librarian"
+ * @returns {string[]} additional tool names to append
+ */
+export function getExtensionToolsForMode(modeKey) {
+  const tools = [];
+  for (const injection of modeToolExtensions) {
+    if (injection.modeKey === modeKey) {
+      tools.push(...injection.toolNames);
+    }
+  }
+  return tools;
+}
+
+/**
+ * Get all registered extension jobs.
+ * Call startExtensionJobs() after DB is connected.
+ *
+ * @returns {{ name, start, stop, extensionName }[]}
+ */
+export function getRegisteredJobs() {
+  return registeredJobs;
+}
+
+/**
+ * Start all extension jobs. Called from startup.js after DB connect.
+ */
+export function startExtensionJobs() {
+  for (const job of registeredJobs) {
+    try {
+      if (typeof job.start === "function") {
+        job.start();
+        console.log(`[Extensions] Job started: ${job.name} (${job.extensionName})`);
+      }
+    } catch (err) {
+      console.error(`[Extensions] Job failed to start: ${job.name}:`, err.message);
+    }
+  }
+}
+
+/**
+ * Stop all extension jobs. Called on shutdown.
+ */
+export function stopExtensionJobs() {
+  for (const job of registeredJobs) {
+    try {
+      if (typeof job.stop === "function") {
+        job.stop();
+      }
+    } catch (err) {
+      console.error(`[Extensions] Job failed to stop: ${job.name}:`, err.message);
+    }
   }
 }
