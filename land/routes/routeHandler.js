@@ -14,7 +14,7 @@ import gatewayWebhooks from "./api/gatewayWebhooks.js";
 import landConfig from "./api/config.js";
 import canopy from "./canopy.js";
 
-import { handleMcpRequest } from "../mcp/server.js";
+import { handleMcpRequest, mcpServerInstance } from "../mcp/server.js";
 import authenticateMCP from "../middleware/authenticateMCP.js";
 
 import rateLimit from "express-rate-limit";
@@ -56,7 +56,7 @@ export default async function registerURLRoutes(app) {
   app.use(apiLimiter);
 
   // Load extensions (manifests discovered, deps validated, routes wired)
-  await loadExtensions(app, null, { getConfigValue: getLandConfigValue });
+  await loadExtensions(app, mcpServerInstance, { getConfigValue: getLandConfigValue });
 
   app.post("/mcp", authenticateMCP, handleMcpRequest);
 
