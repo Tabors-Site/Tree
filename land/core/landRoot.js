@@ -192,11 +192,14 @@ export async function syncExtensionsToTree(manifests) {
 
     const values = new Map();
     values.set("loaded", 1);
-    values.set("version", manifest.version || "0.0.0");
     if (manifest.provides?.routes) values.set("routes", 1);
     if (manifest.provides?.tools) values.set("tools", 1);
     if (manifest.provides?.jobs) values.set("jobs", 1);
     if (manifest.provides?.cli?.length) values.set("cli_commands", manifest.provides.cli.length);
+
+    // Version is a string, can't go in values (numbers only). Store in metadata.
+    const metadata = { version: manifest.version || "0.0.0" };
+    if (manifest.description) metadata.description = manifest.description;
 
     if (existingByName.has(manifest.name)) {
       // Update existing
@@ -206,6 +209,7 @@ export async function syncExtensionsToTree(manifests) {
           type: "resource",
           "versions.0.values": Object.fromEntries(values),
           "versions.0.status": "active",
+          metadata,
         },
       });
     } else {
@@ -217,6 +221,7 @@ export async function syncExtensionsToTree(manifests) {
         type: "resource",
         children: [],
         contributors: [],
+        metadata,
         versions: [
           {
             prestige: 0,

@@ -6,7 +6,7 @@ import {
   updateScript,
   executeScript,
   getScript,
-} from "../../core/tree/scripts.js";
+} from "./core.js";
 import {
   renderScriptDetail,
   renderScriptHelp,

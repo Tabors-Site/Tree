@@ -1,6 +1,6 @@
 import express from "express";
 import authenticate from "../../middleware/authenticate.js";
-import { updateSchedule } from "../../core/tree/schedules.js";
+import { updateSchedule } from "./core.js";
 import Node from "../../db/models/node.js";
 
 const router = express.Router();

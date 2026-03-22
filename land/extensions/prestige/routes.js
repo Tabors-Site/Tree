@@ -1,6 +1,6 @@
 import express from "express";
 import authenticate from "../../middleware/authenticate.js";
-import { addPrestige } from "../../core/tree/statuses.js";
+import { addPrestige } from "./core.js";
 import Node from "../../db/models/node.js";
 
 const router = express.Router();

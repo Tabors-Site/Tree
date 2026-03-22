@@ -10,7 +10,10 @@ function getApi() {
 module.exports = (program) => {
   const ext = program
     .command("ext")
-    .description("Manage land extensions");
+    .description("Manage land extensions")
+    .action(() => {
+      ext.outputHelp();
+    });
 
   ext
     .command("list")

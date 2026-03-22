@@ -9,7 +9,6 @@ import contributions from "./api/contributions.js";
 import transactions from "./api/transactions.js";
 import values from "./api/values.js";
 
-import understanding from "./api/understanding.js";
 import orchestrate from "./api/orchestrate.js";
 import gatewayWebhooks from "./api/gatewayWebhooks.js";
 import landConfig from "./api/config.js";
@@ -66,7 +65,7 @@ export default async function registerURLRoutes(app) {
   app.use("/api/v1", user);
 
   app.use("/api/v1", root);
-  app.use("/api/v1", understanding);
+  // understanding routes loaded via extension system
   app.use("/api/v1", note);
   app.use("/api/v1", contributions);
   app.use("/api/v1", transactions);

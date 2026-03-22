@@ -3,7 +3,8 @@ const { load } = require("./config");
 
 function getBase() {
   const cfg = load();
-  const site = cfg.landUrl || "https://treeOS.ai";
+  let site = cfg.landUrl || "https://treeOS.ai";
+  if (!/^https?:\/\//i.test(site)) site = "https://" + site;
   return site.replace(/\/+$/, "") + "/api/v1";
 }
 
@@ -40,7 +41,9 @@ class TreeAPI {
 
   async _canopyReq(method, path, body) {
     const cfg = load();
-    const site = (cfg.landUrl || "https://treeOS.ai").replace(/\/+$/, "");
+    let site = cfg.landUrl || "https://treeOS.ai";
+    if (!/^https?:\/\//i.test(site)) site = "https://" + site;
+    site = site.replace(/\/+$/, "");
     const opts = {
       method,
       headers: {

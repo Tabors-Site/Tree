@@ -1,0 +1,105 @@
+import express from "express";
+import urlAuth from "../../middleware/urlAuth.js";
+import authenticate from "../../middleware/authenticate.js";
+import {
+  getDeletedBranchesForUser,
+} from "../../core/tree/treeFetch.js";
+import {
+  reviveNodeBranch,
+  reviveNodeBranchAsRoot,
+} from "../../core/tree/treeManagement.js";
+import User from "../../db/models/user.js";
+
+export default function createRouter(core) {
+  const router = express.Router();
+
+  // GET /user/:userId/deleted
+  router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+      const deleted = await getDeletedBranchesForUser(userId);
+
+      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+        return res.json({ userId, deleted });
+      }
+
+      const user = await User.findById(userId).lean();
+      const token = req.query.token ?? "";
+
+      let renderDeletedBranches;
+      try {
+        renderDeletedBranches = (await import("../../routes/api/html/user.js")).renderDeletedBranches;
+      } catch {
+        return res.json({ userId, deleted });
+      }
+
+      return res.send(renderDeletedBranches({ userId, user, deleted, token }));
+    } catch (err) {
+      console.error("Error in /user/:userId/deleted:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /user/:userId/deleted/:nodeId/revive
+  router.post("/user/:userId/deleted/:nodeId/revive", authenticate, async (req, res) => {
+    try {
+      const { userId, nodeId } = req.params;
+      const { targetParentId } = req.body;
+
+      if (req.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      if (!targetParentId) {
+        return res.status(400).json({ error: "targetParentId is required" });
+      }
+
+      const result = await reviveNodeBranch({
+        deletedNodeId: nodeId,
+        targetParentId,
+        userId: req.userId,
+      });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/v1/root/${nodeId}?token=${req.query.token ?? ""}&html`,
+        );
+      }
+
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      console.error("revive branch error:", err);
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
+  // POST /user/:userId/deleted/:nodeId/reviveAsRoot
+  router.post("/user/:userId/deleted/:nodeId/reviveAsRoot", authenticate, async (req, res) => {
+    try {
+      const { userId, nodeId } = req.params;
+
+      if (req.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const result = await reviveNodeBranchAsRoot({
+        deletedNodeId: nodeId,
+        userId: req.userId,
+      });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/v1/root/${nodeId}?token=${req.query.token ?? ""}&html`,
+        );
+      }
+
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      console.error("revive root error:", err);
+      return res.status(400).json({ error: err.message });
+    }
+  });
+
+  return router;
+}

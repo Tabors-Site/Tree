@@ -17,7 +17,7 @@ import {
   convertRawIdeaToNote as coreConvertRawIdeaToNote,
   toggleAutoPlace as coreToggleAutoPlace,
   AUTO_PLACE_ELIGIBLE,
-} from "../../core/tree/rawIdea.js";
+} from "./core.js";
 import {
   renderRawIdeasList,
   renderRawIdeaText,

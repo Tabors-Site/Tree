@@ -1,7 +1,7 @@
 export default {
   name: "user-queries",
   version: "1.0.0",
-  description: "Saved user queries and public query page for tree interrogation",
+  description: "User-level data access: notes, tags, contributions, chats, notifications",
 
   needs: {
     models: ["User", "Node"],
@@ -11,7 +11,7 @@ export default {
 
   provides: {
     models: {},
-    routes: false,
+    routes: "./routes.js",
     tools: false,
     jobs: false,
     orchestrator: false,

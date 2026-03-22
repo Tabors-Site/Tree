@@ -11,7 +11,7 @@ export default {
 
   provides: {
     models: {},
-    routes: false,
+    routes: "./routes.js",
     tools: false,
     jobs: false,
     orchestrator: false,

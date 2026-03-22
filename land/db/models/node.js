@@ -80,7 +80,7 @@ const NodeSchema = new mongoose.Schema({
   isSystem: { type: Boolean, default: false },
   systemRole: {
     type: String,
-    enum: [null, "land-root", "identity", "config", "peers"],
+    enum: [null, "land-root", "identity", "config", "peers", "extensions"],
     default: null,
   },
   metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },

@@ -16,7 +16,7 @@ export default {
     models: {
       RawIdea: "../../db/models/rawIdea.js",
     },
-    routes: false,
+    routes: "./routes.js",
     tools: false,
     jobs: "../../jobs/rawIdeaAutoPlace.js",
     orchestrator: "../../orchestrators/pipelines/rawIdea.js",
