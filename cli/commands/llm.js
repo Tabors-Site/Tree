@@ -48,9 +48,12 @@ module.exports = (program) => {
         console.log("  " + chalk.cyan("llm add") + chalk.dim("                 Add a new LLM connection (interactive)"));
         console.log("  " + chalk.cyan("llm remove <id>") + chalk.dim("         Remove a connection"));
         console.log("  " + chalk.cyan("llm assign <slot> <id>") + chalk.dim("  Assign connection to user slot (main, rawIdea)"));
-        console.log("  " + chalk.cyan("llm tree-assign <slot> <id>") + chalk.dim("  Assign to tree slot (placement, respond, notes, cleanup, drain, understanding)"));
+        console.log("  " + chalk.cyan("llm tree-assign <slot> <id>") + chalk.dim("  Assign to tree slot"));
         console.log("  " + chalk.cyan("llm clear <slot>") + chalk.dim("        Clear a user slot assignment"));
         console.log("  " + chalk.cyan("llm tree-clear <slot>") + chalk.dim("   Clear a tree slot assignment"));
+        console.log();
+        console.log(chalk.bold("  User slots:") + chalk.dim("  main, rawIdea"));
+        console.log(chalk.bold("  Tree slots:") + chalk.dim("  default, placement, respond, notes, understanding, cleanup, drain, notification"));
         return;
       }
 
