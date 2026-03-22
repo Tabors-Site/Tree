@@ -11,6 +11,7 @@ import GatewayAbout from "./About/GatewayAbout.jsx";
 import LandAbout from "./About/LandAbout.jsx";
 import NodeTypesAbout from "./About/NodeTypesAbout.jsx";
 import ExtensionsAbout from "./About/ExtensionsAbout.jsx";
+import LandingPage from "./Landing/LandingPage.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 
@@ -55,6 +56,7 @@ const WelcomeRoutes = () => {
       <Route path="/blog" element={<BlogSection />} />
       <Route path="/blog/:slug" element={<BlogSection />} />
 
+      <Route path="/landing" element={<LandingPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
