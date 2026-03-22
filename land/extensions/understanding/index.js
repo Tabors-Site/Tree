@@ -4,7 +4,7 @@ import router from "./routes.js";
 import tools from "./tools.js";
 
 export async function init(core) {
-  const understanding = await import("../../core/tree/understanding.js");
+  const understanding = await import("./core.js");
   const orchestrator = await import("./pipeline.js");
 
   return {

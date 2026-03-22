@@ -477,7 +477,7 @@ export async function processMessage(visitorId, message, ctx) {
   if (clientEntry.noLlm) {
     // Charge energy to discourage chatting without a connection
     try {
-      const { useEnergy } = await import("../core/tree/energy.js");
+      const { useEnergy } = await import("../extensions/energy/core.js");
       await useEnergy({ userId: ctx.userId, action: "chatError" });
     } catch (_) {}
     return {

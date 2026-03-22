@@ -4,7 +4,7 @@ import authenticate from "../../middleware/authenticate.js";
 import {
   createUnderstandingRun,
   findOrCreateUnderstandingRun,
-} from "../../core/tree/understanding.js";
+} from "./core.js";
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
 import Contribution from "../../db/models/contribution.js";

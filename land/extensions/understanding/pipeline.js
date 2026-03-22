@@ -44,7 +44,7 @@ import {
   getNextCompressionPayloadForLLM,
   commitCompressionResult,
   prepareIncrementalRun,
-} from "../../core/tree/understanding.js";
+} from "./core.js";
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
 import Node from "../../db/models/node.js";

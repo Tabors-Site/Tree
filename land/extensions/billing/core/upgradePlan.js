@@ -1,4 +1,4 @@
-import { DAILY_LIMITS } from "../../../core/tree/energy.js";
+import { DAILY_LIMITS } from "../../energy/core.js";
 
 const PLAN_DAILY_VALUE = {
   basic: 0,

@@ -5,7 +5,7 @@ import { setValueForNode, setGoalForNode } from "../../../core/tree/values.js";
 
 import { editStatus } from "../../../core/tree/statuses.js";
 import { addPrestige } from "../../prestige/core.js";
-import { updateSchedule } from "../../../core/tree/schedules.js";
+import { updateSchedule } from "../../schedules/core.js";
 
 async function getApi(url) {
   const blockedHosts = [

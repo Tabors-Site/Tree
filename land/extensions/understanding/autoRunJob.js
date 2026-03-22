@@ -4,7 +4,7 @@
 
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
-import { findOrCreateUnderstandingRun } from "../../core/tree/understanding.js";
+import { findOrCreateUnderstandingRun } from "./core.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
 import { userHasLlm } from "../../ws/conversation.js";
 

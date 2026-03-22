@@ -30,7 +30,9 @@ import {
   getContributions,
 } from "../core/tree/contributions.js";
 
-import { updateSchedule } from "../core/tree/schedules.js";
+// Schedules: dynamic import, stub if extension not installed
+let updateSchedule = async () => { throw new Error("Schedules extension not installed"); };
+try { ({ updateSchedule } = await import("../extensions/schedules/core.js")); } catch {}
 import { editStatus } from "../core/tree/statuses.js";
 import {
   createNote,

@@ -9,7 +9,9 @@ import Contribution from "../../db/models/contribution.js";
 import { logContribution } from "../../db/utils.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
-import { useEnergy } from "./energy.js";
+// Energy: dynamic import, no-op if extension not installed
+let useEnergy = async () => ({ energyUsed: 0 });
+try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

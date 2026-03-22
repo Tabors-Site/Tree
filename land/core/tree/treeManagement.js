@@ -4,7 +4,9 @@ import User from "../../db/models/user.js";
 import { createNote } from "./notes.js";
 import { resolveTreeAccess } from "../authenticate.js";
 import { isDescendant } from "./treeFetch.js";
-import { useEnergy } from "./energy.js";
+// Energy: dynamic import, no-op if extension not installed
+let useEnergy = async () => ({ energyUsed: 0 });
+try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
 import { getLandRootId } from "../landRoot.js";
 
 function containsHtml(str) {

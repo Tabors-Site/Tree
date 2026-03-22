@@ -362,7 +362,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Register energy actions from manifest
       if (manifest.provides?.energyActions && coreServices.energy !== NOOP_ENERGY) {
-        const { registerAction } = await import("../core/tree/energy.js");
+        const { registerAction } = await import("./energy/core.js");
         for (const [action, config] of Object.entries(manifest.provides.energyActions)) {
           if (typeof config === "object" && config.costFn) {
             registerAction(action, config.costFn);

@@ -10,7 +10,7 @@ import ShortMemory from "./model.js";
 import { orchestrateReorganize } from "./cleanupReorganize.js";
 import { orchestrateExpand } from "./cleanupExpand.js";
 import { drainTree } from "./shortTermDrain.js";
-import { findOrCreateUnderstandingRun } from "../../core/tree/understanding.js";
+import { findOrCreateUnderstandingRun } from "../understanding/core.js";
 import { orchestrateUnderstanding } from "../understanding/pipeline.js";
 import { orchestrateDreamNotify } from "./dreamNotify.js";
 import { userHasLlm } from "../../ws/conversation.js";

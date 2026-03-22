@@ -5,7 +5,9 @@ import authenticate from "../../middleware/authenticate.js";
 import { getAllData, getTreeStructure } from "../../core/tree/treeDataFetching.js";
 import { createInvite } from "../../core/tree/invites.js";
 import { sendRemoteInvite } from "../../core/tree/remoteInvites.js";
-import { getCalendar } from "../../core/tree/schedules.js";
+// Schedules: dynamic import, stub if extension not installed
+let getCalendar = async () => ({ nodes: [] });
+try { ({ getCalendar } = await import("../../extensions/schedules/core.js")); } catch {}
 import { getGlobalValuesTreeAndFlat } from "../../core/tree/values.js";
 
 import Node from "../../db/models/node.js";

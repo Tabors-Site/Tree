@@ -4,7 +4,7 @@ import Contribution from "../../db/models/contribution.js";
 import Transaction from "./model.js";
 import { logContribution } from "../../db/utils.js";
 import { resolveTreeAccess } from "../../core/authenticate.js";
-import { useEnergy } from "../../core/tree/energy.js";
+import { useEnergy } from "../energy/core.js";
 import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
 
 function getPolicy(node) {

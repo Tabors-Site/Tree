@@ -3,7 +3,9 @@ import {
   findNodeById,
   handleSchedule,
 } from "../../db/utils.js";
-import { useEnergy } from "./energy.js";
+// Energy: dynamic import, no-op if extension not installed
+let useEnergy = async () => ({ energyUsed: 0 });
+try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
 
 async function editStatus({
   nodeId,

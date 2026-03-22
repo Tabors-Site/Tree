@@ -4,7 +4,9 @@ import authenticate from "../../middleware/authenticate.js";
 
 import User from "../../db/models/user.js";
 
-import { maybeResetEnergy } from "../../core/tree/energy.js";
+// Energy: dynamic import, no-op if extension not installed
+let maybeResetEnergy = () => false;
+try { ({ maybeResetEnergy } = await import("../../extensions/energy/core.js")); } catch {}
 
 import { createNewNode } from "../../core/tree/treeManagement.js";
 

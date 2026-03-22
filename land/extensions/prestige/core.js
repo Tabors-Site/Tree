@@ -3,7 +3,7 @@ import {
   findNodeById,
   handleSchedule,
 } from "../../db/utils.js";
-import { useEnergy } from "../../core/tree/energy.js";
+import { useEnergy } from "../energy/core.js";
 
 async function addPrestige({
   nodeId,

@@ -628,7 +628,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
     }
 
     // Deduct energy before running the LLM call
-    const { useEnergy } = await import("../core/tree/energy.js");
+    const { useEnergy } = await import("../extensions/energy/core.js");
     try {
       await useEnergy({ userId: user._id.toString(), action: "proxyLlm" });
     } catch (energyErr) {

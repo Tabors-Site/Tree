@@ -5,7 +5,7 @@ import Node from "../../db/models/node.js";
 import Note from "../../db/models/notes.js";
 import User from "../../db/models/user.js";
 import { logContribution } from "../../db/utils.js";
-import { useEnergy } from "../../core/tree/energy.js";
+import { useEnergy } from "../energy/core.js";
 
 import { fileURLToPath } from "url";
 

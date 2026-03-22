@@ -1,5 +1,8 @@
 import User from "../db/models/user.js";
-import { calculateFileEnergy, maybeResetEnergy } from "../core/tree/energy.js";
+// Energy: dynamic import, no-op if extension not installed
+let calculateFileEnergy = () => 0;
+let maybeResetEnergy = () => false;
+try { ({ calculateFileEnergy, maybeResetEnergy } = await import("../extensions/energy/core.js")); } catch {}
 
 // per-tier file size limits in bytes
 const MAX_FILE_BYTES = {

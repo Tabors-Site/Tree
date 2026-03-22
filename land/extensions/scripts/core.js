@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import Node from "../../db/models/node.js";
 import { logContribution } from "../../db/utils.js";
 import Contribution from "../../db/models/contribution.js";
-import { useEnergy } from "../../core/tree/energy.js";
+import { useEnergy } from "../energy/core.js";
 import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
 
 import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";

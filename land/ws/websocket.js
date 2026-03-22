@@ -17,7 +17,9 @@ import {
   mcpClients,
   MCP_SERVER_URL,
 } from "./mcp.js";
-import { useEnergy } from "../core/tree/energy.js";
+// Energy: dynamic import, no-op if extension not installed
+let useEnergy = async () => ({ energyUsed: 0 });
+try { ({ useEnergy } = await import("../extensions/energy/core.js")); } catch {}
 import { getNodeName } from "../core/tree/treeDataFetching.js";
 import Node from "../db/models/node.js";
 import { orchestrateTreeRequest } from "../orchestrators/tree.js";
