@@ -15,10 +15,11 @@ const ExtensionsAbout = () => {
         <div className="ext-header">
           <h2 className="ext-title">Extensions</h2>
           <p className="ext-subtitle">
-            TreeOS is modular. Every feature beyond the core protocol is an
-            extension that can be installed, disabled, or removed independently.
-            Extensions are like packages for your tree. The core protocol handles
-            nodes, notes, values, types, and AI modes. Everything else is optional.
+            TreeOS is modular and extensible. The core protocol defines
+            nodes, notes, values, types, and AI interaction modes. These
+            are the foundation, but they're designed to be built on.
+            Everything beyond the core is an extension that can be installed,
+            disabled, removed, or replaced independently.
           </p>
         </div>
 

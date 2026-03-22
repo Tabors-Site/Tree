@@ -111,11 +111,28 @@ router.get("/land/extensions", authenticate, async (req, res) => {
 router.get("/land/extensions/:name", authenticate, async (req, res) => {
   try {
     const { name } = req.params;
-    if (!hasExtension(name)) {
-      return res.status(404).json({ error: `Extension "${name}" is not loaded` });
+    const disabled = getLandConfigValue("disabledExtensions") || [];
+
+    // Check loaded extensions first
+    if (hasExtension(name)) {
+      const manifest = getExtensionManifest(name);
+      return res.json({ name, manifest, status: "active" });
     }
-    const manifest = getExtensionManifest(name);
-    res.json({ name, manifest });
+
+    // Check if it's disabled (exists on disk but not loaded)
+    if (disabled.includes(name)) {
+      // Try to read manifest from disk
+      const { readExtensionFiles } = await import("../../extensions/loader.js");
+      try {
+        const { manifest } = await readExtensionFiles(name);
+        if (manifest) {
+          return res.json({ name, manifest, status: "disabled" });
+        }
+      } catch {}
+      return res.json({ name, manifest: { name, version: "?" }, status: "disabled" });
+    }
+
+    return res.status(404).json({ error: `Extension "${name}" not found` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

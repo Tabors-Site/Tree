@@ -77,21 +77,24 @@ module.exports = (program) => {
     });
 
   ext
-    .command("info <name>")
+    .command("info [name...]")
     .description("Show details for an extension")
-    .action(async (name) => {
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext info <name>. Run 'ext list' to see loaded extensions."));
+      const name = parts.join("-");
       try {
         const api = getApi();
         const data = await api.getExtension(name);
 
         if (!data.manifest) {
-          console.log(chalk.red(`Extension "${name}" not found.`));
+          console.log(chalk.red(`Extension "${name}" not found. Run 'ext list' to see available extensions.`));
           return;
         }
 
         const m = data.manifest;
-        console.log(chalk.bold(m.name), chalk.dim("v" + m.version));
-        console.log(m.description);
+        const statusLabel = data.status === "disabled" ? chalk.red(" (disabled)") : chalk.green(" (active)");
+        console.log(chalk.bold(m.name), chalk.dim("v" + m.version) + statusLabel);
+        if (m.description) console.log(m.description);
         console.log();
 
         if (m.needs) {
@@ -128,45 +131,13 @@ module.exports = (program) => {
     });
 
   ext
-    .command("disable <name>")
-    .description("Disable an extension (takes effect on restart)")
-    .action(async (name) => {
-      try {
-        const api = getApi();
-        const data = await api.disableExtension(name);
-        console.log(chalk.yellow(`Disabled: ${name}`));
-        console.log(chalk.dim("Restart the land for this to take effect."));
-        if (data.disabledExtensions?.length) {
-          console.log(chalk.dim("Currently disabled:"), data.disabledExtensions.join(", "));
-        }
-        await refreshProtocolCache();
-      } catch (err) {
-        console.error(chalk.red("Error:"), err.message);
-      }
-    });
-
-  ext
-    .command("enable <name>")
-    .description("Re-enable a disabled extension (takes effect on restart)")
-    .action(async (name) => {
-      try {
-        const api = getApi();
-        const data = await api.enableExtension(name);
-        console.log(chalk.green(`Enabled: ${name}`));
-        console.log(chalk.dim("Restart the land for this to take effect."));
-        await refreshProtocolCache();
-      } catch (err) {
-        console.error(chalk.red("Error:"), err.message);
-      }
-    });
-
-  ext
-    .command("search [query]")
+    .command("search [query...]")
     .description("Search the extension registry")
-    .action(async (query) => {
+    .action(async (parts) => {
+      const query = parts ? parts.join(" ") : "";
       try {
         const api = getApi();
-        const data = await api.searchRegistry(query || "");
+        const data = await api.searchRegistry(query);
 
         if (!data.extensions || data.extensions.length === 0) {
           console.log(chalk.dim(query ? `No extensions found for "${query}"` : "Registry is empty."));
@@ -189,9 +160,12 @@ module.exports = (program) => {
     });
 
   ext
-    .command("install <name> [version]")
+    .command("install [name...]")
     .description("Install an extension from the registry")
-    .action(async (name, version) => {
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext install <name> [version]. Run 'ext search' to find extensions."));
+      const name = parts[0];
+      const version = parts[1] || null;
       try {
         const api = getApi();
         console.log(chalk.dim(`Fetching ${name}${version ? "@" + version : ""} from registry...`));
@@ -206,9 +180,11 @@ module.exports = (program) => {
     });
 
   ext
-    .command("publish <name>")
+    .command("publish [name...]")
     .description("Publish a local extension to the registry")
-    .action(async (name) => {
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext publish <name>. Run 'ext list' to see local extensions."));
+      const name = parts.join("-");
       try {
         const api = getApi();
         console.log(chalk.dim(`Publishing ${name} to registry...`));
@@ -220,9 +196,48 @@ module.exports = (program) => {
     });
 
   ext
-    .command("uninstall <name>")
+    .command("disable [name...]")
+    .description("Disable an extension (takes effect on restart)")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext disable <name>. Run 'ext list' to see loaded extensions."));
+      const name = parts.join("-");
+      try {
+        const api = getApi();
+        const data = await api.disableExtension(name);
+        console.log(chalk.yellow(`Disabled: ${name}`));
+        console.log(chalk.dim("Restart the land for this to take effect."));
+        if (data.disabledExtensions?.length) {
+          console.log(chalk.dim("Currently disabled:"), data.disabledExtensions.join(", "));
+        }
+        await refreshProtocolCache();
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("enable [name...]")
+    .description("Re-enable a disabled extension (takes effect on restart)")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext enable <name>. Run 'ext list' to see disabled extensions."));
+      const name = parts.join("-");
+      try {
+        const api = getApi();
+        const data = await api.enableExtension(name);
+        console.log(chalk.green(`Enabled: ${name}`));
+        console.log(chalk.dim("Restart the land for this to take effect."));
+        await refreshProtocolCache();
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("uninstall [name...]")
     .description("Remove an extension (data in database is kept)")
-    .action(async (name) => {
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext uninstall <name>. This removes code but keeps database data."));
+      const name = parts.join("-");
       const readline = require("readline");
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
