@@ -105,9 +105,10 @@ const AboutHome = () => {
           <div className="ah-section-text">
             TreeOS is a self-hosted, modular, federated system for building
             persistent knowledge structures. Lands host trees. Trees hold nodes.
-            Nodes carry notes, values, and types. AI interacts through three
-            strict modes. Extensions add capabilities. Lands connect into a network.
-            The whole thing runs from a terminal.
+            Each node carries notes, trackable values, and one of six semantic types
+            (goal, plan, task, knowledge, resource, identity). Extensions store
+            their data in node metadata. AI interacts through three strict modes.
+            Lands connect into a network. The whole thing runs from a terminal.
           </div>
         </div>
 

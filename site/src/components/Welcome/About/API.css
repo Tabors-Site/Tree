@@ -132,6 +132,8 @@
   color: rgba(255,255,255,0.85);
   overflow-x: auto; white-space: pre;
   border: 1px solid rgba(255,255,255,0.08);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .api-docs .ep-note {
