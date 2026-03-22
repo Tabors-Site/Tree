@@ -4,9 +4,14 @@
 
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices, NOOP_ENERGY } from "../core/services.js";
 import { setExtensionToolResolver } from "../ws/modes/registry.js";
+
+/** Convert a file path to a URL string for dynamic import (Windows compat) */
+function toImportURL(filePath) {
+  return pathToFileURL(filePath).href;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DISABLED_FILE = path.join(__dirname, ".disabled");
@@ -309,7 +314,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       applyOptionalStubs(manifest, coreServices);
 
       // Load the extension's init function
-      const extModule = await import(entryPath);
+      const extModule = await import(toImportURL(entryPath));
       if (typeof extModule.init !== "function") {
         console.warn(`[Extensions] Skipping "${manifest.name}": no init() export`);
         continue;
@@ -345,7 +350,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           if (!coreServices.models[modelName]) {
             try {
               const resolved = path.resolve(dir, modelPath);
-              const mod = await import(resolved);
+              const mod = await import(toImportURL(resolved));
               coreServices.models[modelName] = mod.default || mod;
               AVAILABLE_MODELS.add(modelName);
             } catch (err) {
@@ -429,7 +434,7 @@ async function discoverManifests() {
         const indexPath = path.join(__dirname, entry.name, "index.js");
 
         if (fs.existsSync(manifestPath) && fs.existsSync(indexPath)) {
-          const { default: manifest } = await import(manifestPath);
+          const { default: manifest } = await import(toImportURL(manifestPath));
           results.push({
             manifest,
             dir: path.join(__dirname, entry.name),
@@ -615,7 +620,7 @@ export async function readExtensionFiles(name) {
   }
 
   // Load manifest
-  const { default: manifest } = await import(manifestPath);
+  const { default: manifest } = await import(toImportURL(manifestPath));
 
   // Read all .js files recursively
   const files = [];
@@ -714,7 +719,7 @@ export async function runExtensionMigrations() {
     try {
       const entry = loaded.get(name);
       const resolved = path.resolve(entry ? path.dirname(entry.manifest.name || "") : __dirname, name, migrationsPath);
-      const migrationsModule = await import(resolved);
+      const migrationsModule = await import(toImportURL(resolved));
       const migrations = migrationsModule.default || migrationsModule.migrations || [];
 
       // Run pending migrations in order
