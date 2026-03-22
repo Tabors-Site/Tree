@@ -50,6 +50,7 @@ export async function registerPeer(peerUrl) {
     peer.protocolVersion = info.protocolVersion;
     peer.name = info.name || "";
     peer.baseUrl = url;
+    peer.extensions = info.extensions || [];
     peer.lastSeenAt = new Date();
     peer.lastSuccessAt = new Date();
     peer.status = "active";
@@ -64,6 +65,7 @@ export async function registerPeer(peerUrl) {
       publicKey: info.publicKey,
       protocolVersion: info.protocolVersion,
       name: info.name || "",
+      extensions: info.extensions || [],
       status: "active",
     });
   }
@@ -202,6 +204,7 @@ export async function pingPeer(peer) {
     peer.firstFailureAt = null;
     peer.status = "active";
     peer.protocolVersion = info.protocolVersion || peer.protocolVersion;
+    peer.extensions = info.extensions || peer.extensions;
     // SECURITY: Never update publicKey from heartbeat. Keys are only set during
     // initial peering. To rotate keys, the peer must re-peer.
     if (info.publicKey && info.publicKey !== peer.publicKey) {

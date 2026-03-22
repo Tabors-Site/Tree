@@ -290,6 +290,7 @@ router.post("/canopy/peer/register", async (req, res) => {
       peer.landId = landId;
       peer.protocolVersion = protocolVersion;
       peer.name = name || "";
+      peer.extensions = req.body.extensions || [];
       if (baseUrl) peer.baseUrl = baseUrl;
       peer.lastSeenAt = new Date();
       peer.lastSuccessAt = new Date();
@@ -308,6 +309,7 @@ router.post("/canopy/peer/register", async (req, res) => {
         publicKey,
         protocolVersion,
         name: name || "",
+        extensions: req.body.extensions || [],
         status: "active",
       });
     }

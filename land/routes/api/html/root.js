@@ -52,7 +52,8 @@ export function renderRootOverview({
     rootNameColor = "#b00020";
   }
 
-  const transactionPolicy = rootMeta?.transactionPolicy ?? "OWNER_ONLY";
+  const _txMeta = rootMeta?.metadata?.transactions || (rootMeta?.metadata instanceof Map ? rootMeta?.metadata?.get("transactions") : null) || {};
+  const transactionPolicy = _txMeta.policy || "OWNER_ONLY";
 
   const renderParents = (chain) => {
     if (!chain || chain.length === 0) return "";

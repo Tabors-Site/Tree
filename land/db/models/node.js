@@ -20,35 +20,8 @@ const NodeSchema = new mongoose.Schema({
       reeffectTime: { type: Number, default: 0 },
       goals: { type: Map, of: Number, default: {} },
 
-      wallet: {
-        publicKey: { type: String, default: null },
-        encryptedPrivateKey: {
-          iv: String,
-          tag: String,
-          data: String,
-        },
-        createdAt: { type: Date, default: null },
-      },
     },
   ],
-  scripts: {
-    type: [
-      {
-        _id: {
-          type: String,
-          default: uuidv4,
-        },
-        name: { type: String, required: true },
-        script: { type: String },
-      },
-    ],
-    default: [],
-  },
-  transactionPolicy: {
-    type: String,
-    enum: ["OWNER_ONLY", "ANYONE", "MAJORITY", "ALL"],
-    default: "OWNER_ONLY",
-  },
   llmAssignments: {
     default: { type: String, default: null }, // tree-wide fallback. connectionId, or "none" to disable LLM
     placement: { type: String, ref: "CustomLlmConnection", default: null },

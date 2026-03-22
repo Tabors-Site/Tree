@@ -1,10 +1,25 @@
 import { VM } from "vm2";
+import { v4 as uuidv4 } from "uuid";
 import Node from "../../db/models/node.js";
 import { logContribution } from "../../db/utils.js";
 import Contribution from "../../db/models/contribution.js";
 import { useEnergy } from "../../core/tree/energy.js";
+import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
 
 import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";
+
+function getScripts(node) {
+  const meta = getExtMeta(node, "scripts");
+  return Array.isArray(meta.list) ? meta.list : [];
+}
+
+function setScripts(node, list) {
+  setExtMeta(node, "scripts", { list });
+}
+
+function findScript(scripts, scriptId) {
+  return scripts.find(s => s._id === scriptId) || null;
+}
 function containsHtml(str) {
   return /<[a-zA-Z\/][^>]*>/.test(str);
 }
@@ -81,13 +96,14 @@ export async function updateScript({
   }
   if (node.isSystem) throw new Error("Cannot modify system nodes");
 
+  const scripts = getScripts(node);
   let targetScript;
 
   // ---------------------------------------------------------
   // Update existing script
   // ---------------------------------------------------------
   if (scriptId) {
-    targetScript = node.scripts.id(scriptId);
+    targetScript = findScript(scripts, scriptId);
     if (!targetScript) {
       throw new Error("Script not found by that ID");
     }
@@ -105,17 +121,19 @@ export async function updateScript({
   // Create new script (empty allowed)
   // ---------------------------------------------------------
   else {
-    targetScript = node.scripts.create({
+    targetScript = {
+      _id: uuidv4(),
       name,
-      script: finalScript, // may be ""
-    });
+      script: finalScript,
+    };
 
-    node.scripts.push(targetScript);
+    scripts.push(targetScript);
   }
 
   // ---------------------------------------------------------
   // Persist
   // ---------------------------------------------------------
+  setScripts(node, scripts);
   await node.save();
 
   // ---------------------------------------------------------
@@ -164,7 +182,8 @@ export async function executeScript({
   }
   if (node.isSystem) throw new Error("Cannot modify system nodes");
 
-  const scriptObj = node.scripts.id(scriptId);
+  const scripts = getScripts(node);
+  const scriptObj = findScript(scripts, scriptId);
   if (!scriptObj) {
     throw new Error("Script not found");
   }
@@ -258,7 +277,8 @@ export async function getScript({ nodeId, scriptId }) {
   const node = await Node.findById(nodeId);
   if (!node) throw new Error("Node not found");
 
-  const scriptObj = node.scripts.id(scriptId);
+  const scripts = getScripts(node);
+  const scriptObj = findScript(scripts, scriptId);
   if (!scriptObj) throw new Error("Script not found");
 
   const contributions = await Contribution.find({

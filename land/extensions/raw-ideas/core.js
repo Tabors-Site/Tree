@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs";
-import RawIdea from "../../db/models/rawIdea.js";
+import RawIdea from "./model.js";
 import Node from "../../db/models/node.js";
 import Note from "../../db/models/notes.js";
 import User from "../../db/models/user.js";

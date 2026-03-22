@@ -1069,6 +1069,7 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 /* ================================================================== */
 
 export function renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPublicAccess }) {
+  const _nodeScripts = (node.metadata instanceof Map ? node.metadata?.get("scripts") : node.metadata?.scripts)?.list || [];
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -1947,8 +1948,8 @@ html, body {
       </form>
       <ul class="scripts-list">
         ${
-          node.scripts && node.scripts.length
-            ? node.scripts
+          _nodeScripts.length
+            ? _nodeScripts
                 .map(
                   (s) => `
             <a href="/api/v1/node/${node._id}/script/${s._id}${qs}">

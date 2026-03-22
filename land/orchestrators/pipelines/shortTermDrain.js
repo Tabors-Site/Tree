@@ -6,7 +6,7 @@ import { OrchestratorRuntime } from "../runtime.js";
 import { acquireLock, releaseLock } from "../locks.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
 import { buildDeepTreeSummary } from "../../core/tree/treeFetch.js";
-import ShortMemory from "../../db/models/shortMemory.js";
+import ShortMemory from "../../extensions/dreams/model.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
 

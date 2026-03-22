@@ -3,7 +3,7 @@
 // and fires the raw-idea orchestrator as if they had clicked the Auto-place button.
 
 import User from "../db/models/user.js";
-import RawIdea from "../db/models/rawIdea.js";
+import RawIdea from "../extensions/raw-ideas/model.js";
 import AIChat from "../db/models/aiChat.js";
 import { orchestrateRawIdeaPlacement } from "../orchestrators/pipelines/rawIdea.js";
 import { isUserOnline } from "../ws/websocket.js";

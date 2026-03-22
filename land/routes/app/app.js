@@ -17,7 +17,7 @@ const router = express.Router();
  * GET /app
  * Authenticated iframe shell with integrated chat
  */
-router.get("/app", authenticateLite, async (req, res) => {
+router.get("/dashboard", authenticateLite, async (req, res) => {
   try {
     if (process.env.ENABLE_FRONTEND_HTML !== "true") {
       return res.status(404).json({
@@ -1843,7 +1843,7 @@ socket.on("navigate", ({ url, replace }) => {
     });
 var _initParams = new URLSearchParams(window.location.search);
 let activeRootId = _initParams.get("rootId") || null;
-if (activeRootId) window.history.replaceState({}, "", "/app");
+if (activeRootId) window.history.replaceState({}, "", "/dashboard");
 
    function getCurrentRootId() {
   if (activeRootId) return activeRootId;

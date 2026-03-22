@@ -4,7 +4,7 @@ import { fileTypeFromBuffer } from "file-type";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
 
-import UnderstandingRun from "../db/models/understandingRun.js";
+import UnderstandingRun from "../extensions/understanding/understandingRun.js";
 
 import { emitNavigate } from "../ws/websocket.js";
 

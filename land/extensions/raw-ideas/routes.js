@@ -7,7 +7,7 @@ import urlAuth from "../../middleware/urlAuth.js";
 import preUploadCheck from "../../middleware/preUploadCheck.js";
 import { notFoundPage } from "../../middleware/notFoundPage.js";
 import { getLandUrl } from "../../canopy/identity.js";
-import RawIdea from "../../db/models/rawIdea.js";
+import RawIdea from "./model.js";
 import User from "../../db/models/user.js";
 import {
   createRawIdea as coreCreateRawIdea,

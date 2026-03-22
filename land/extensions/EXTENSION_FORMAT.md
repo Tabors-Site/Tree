@@ -185,6 +185,47 @@ export async function init(core) {
 
 Jobs are auto-started after DB connect via `startExtensionJobs()`.
 
+## Per-Node Data Storage (metadata)
+
+Extensions MUST store per-node data in `node.metadata` under their extension name.
+Do NOT add fields to the core Node schema. Use the metadata helpers:
+
+```js
+import { getExtMeta, setExtMeta, mergeExtMeta } from "../../core/tree/extensionMetadata.js";
+
+// Read
+const data = getExtMeta(node, "my-extension");  // returns {} if empty
+
+// Write (full replace)
+setExtMeta(node, "my-extension", { wallets: {}, config: {} });
+
+// Partial update (shallow merge)
+mergeExtMeta(node, "my-extension", { lastSync: new Date() });
+
+// Always save after writing
+await node.save();
+```
+
+Convention:
+- Namespace key MUST match your manifest `name`
+- Data is `Mixed` type, so use plain objects and arrays (no Mongoose subdocument features)
+- The helpers handle `markModified("metadata")` automatically
+- Reading metadata from core code (e.g. treeDataFetching) should use:
+  `(node.metadata instanceof Map ? node.metadata.get("name") : node.metadata?.name)`
+
+### Core code fallback pattern
+
+If core code optionally calls extension functionality, use a try/catch import with stubs:
+
+```js
+let mod;
+try { mod = await import("../../extensions/my-ext/core.js"); }
+catch { mod = { myFn: async () => { throw new Error("Extension not installed"); } }; }
+export const { myFn } = mod;
+```
+
+This lets core gracefully degrade when an extension is disabled.
+
 ## Inter-Extension Communication
 
 Use `getExtension(name)` from the loader:

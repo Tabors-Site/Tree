@@ -1,5 +1,5 @@
-import UnderstandingRun from "../../db/models/understandingRun.js";
-import UnderstandingNode from "../../db/models/understandingNode.js";
+import UnderstandingRun from "./understandingRun.js";
+import UnderstandingNode from "./understandingNode.js";
 import Node from "../../db/models/node.js";
 import Contribution from "../../db/models/contribution.js";
 import { getNotes } from "../../core/tree/notes.js";

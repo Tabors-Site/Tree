@@ -14,7 +14,9 @@ export default {
   },
 
   provides: {
-    models: {},
+    models: {
+      ShortMemory: "./model.js",
+    },
     routes: false,
     tools: false,
     jobs: "../../jobs/treeDream.js",

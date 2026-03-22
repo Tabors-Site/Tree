@@ -1,5 +1,5 @@
 import express from "express";
-import Book from "../../db/models/book.js";
+import Book from "./model.js";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
 import { notFoundPage } from "../../middleware/notFoundPage.js";

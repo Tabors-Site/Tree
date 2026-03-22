@@ -11,7 +11,7 @@ import {
   buildDeepTreeSummary,
 } from "../../core/tree/treeFetch.js";
 import { logContribution } from "../../db/utils.js";
-import RawIdea from "../../db/models/rawIdea.js";
+import RawIdea from "../../extensions/raw-ideas/model.js";
 import Node from "../../db/models/node.js";
 
 import { nullSocket } from "../helpers.js";

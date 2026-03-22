@@ -662,7 +662,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
           <span class="notif-btn-icon">☰</span>
           <span class="notif-btn-label">Menu</span>
         </button>
-        <a href="/app" class="advanced-btn" id="advancedLink">Advanced</a>
+        <a href="/dashboard" class="advanced-btn" id="advancedLink">Advanced</a>
       </div>
     </div>
     <div class="back-row" id="backRow">
@@ -1080,7 +1080,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       }
 
       activeRootId = null;
-      advancedLink.href = "/app";
+      advancedLink.href = "/dashboard";
       treePicker.style.display = "";
       chatArea.classList.remove("active");
       rootName.classList.remove("visible");

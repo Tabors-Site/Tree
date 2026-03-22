@@ -267,9 +267,9 @@ export async function buildDeepTreeSummary(
   if (includeEncodings) {
     try {
       const { default: UnderstandingRun } =
-        await import("../../db/models/understandingRun.js");
+        await import("../../extensions/understanding/understandingRun.js");
       const { default: UnderstandingNode } =
-        await import("../../db/models/understandingNode.js");
+        await import("../../extensions/understanding/understandingNode.js");
 
       const latestRun = await UnderstandingRun.findOne({
         rootNodeId: rootId,
@@ -775,8 +775,9 @@ export async function getContextForAi(nodeId, options = {}) {
   }
 
   // ---- Scripts ----
-  if (includeScripts && node.scripts?.length > 0) {
-    context.scripts = node.scripts.map((s) => ({
+  const scriptsMeta = (node.metadata instanceof Map ? node.metadata.get("scripts") : node.metadata?.scripts)?.list || [];
+  if (includeScripts && scriptsMeta.length > 0) {
+    context.scripts = scriptsMeta.map((s) => ({
       id: s._id,
       name: s.name,
     }));

@@ -1,6 +1,6 @@
 export default {
   name: "scripts",
-  version: "1.0.0",
+  version: "1.1.0",
   description: "VM2 sandboxed scripts per node with scheduling and safe functions",
 
   needs: {
@@ -21,6 +21,8 @@ export default {
       script: { cost: 2 },
     },
     sessionTypes: {},
+    schemaVersion: 1,
+    migrations: "./migrations.js",
     cli: [
       { command: "scripts", description: "List scripts on current node", method: "GET", endpoint: "/node/:nodeId/scripts/help" },
       { command: "script <id>", description: "View a script", method: "GET", endpoint: "/node/:nodeId/script/:id" },

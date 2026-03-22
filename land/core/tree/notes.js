@@ -3,7 +3,7 @@ import fs from "fs";
 import Note from "../../db/models/notes.js";
 import User from "../../db/models/user.js";
 import Node from "../../db/models/node.js";
-import Book from "../../db/models/book.js";
+import Book from "../../extensions/book/model.js";
 
 import crypto from "crypto";
 

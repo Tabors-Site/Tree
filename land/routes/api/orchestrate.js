@@ -42,7 +42,7 @@ import {
 } from "../../ws/sessionRegistry.js";
 import User from "../../db/models/user.js";
 import Node from "../../db/models/node.js";
-import RawIdea from "../../db/models/rawIdea.js";
+import RawIdea from "../../extensions/raw-ideas/model.js";
 import { createRawIdea } from "../../core/tree/rawIdea.js";
 import { resolveTreeAccess } from "../../core/authenticate.js";
 import { nullSocket } from "../../orchestrators/helpers.js";

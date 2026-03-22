@@ -413,6 +413,12 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // Wire the mode tool injection resolver now that all extensions are loaded
   setExtensionToolResolver(getExtensionToolsForMode);
 
+  // Register extension names provider for canopy /info endpoint
+  try {
+    const { setExtensionNamesProvider } = await import("../canopy/identity.js");
+    setExtensionNamesProvider(getLoadedExtensionNames);
+  } catch {}
+
   return loaded;
 }
 

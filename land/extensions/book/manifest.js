@@ -11,7 +11,7 @@ export default {
 
   provides: {
     models: {
-      Book: "../../db/models/book.js",
+      Book: "./model.js",
     },
     routes: "./routes.js",
     tools: false,

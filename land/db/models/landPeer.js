@@ -46,6 +46,7 @@ const LandPeerSchema = new mongoose.Schema({
       requestsPerUserPerMinute: 60,
     }),
   },
+  extensions: { type: [String], default: [] },
   registeredAt: { type: Date, default: Date.now },
 });
 

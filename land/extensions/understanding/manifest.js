@@ -16,8 +16,8 @@ export default {
 
   provides: {
     models: {
-      UnderstandingRun: "../../db/models/understandingRun.js",
-      UnderstandingNode: "../../db/models/understandingNode.js",
+      UnderstandingRun: "./understandingRun.js",
+      UnderstandingNode: "./understandingNode.js",
     },
     routes: "../../routes/api/understanding.js",
     tools: false,  // tools still registered in mcp/server.js for now

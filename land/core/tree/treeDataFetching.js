@@ -179,7 +179,7 @@ async function getNodeForAi(nodeId) {
       children,
 
       versions: node.versions || [],
-      scripts: node.scripts || [],
+      scripts: (node.metadata instanceof Map ? node.metadata.get("scripts") : node.metadata?.scripts)?.list || [],
     };
 
     if (node.type) {
@@ -356,16 +356,21 @@ async function getRootNodes(req, res) {
 function stripWalletSecrets(node) {
   if (!node || !Array.isArray(node.versions)) return node;
 
+  // Wallet data lives in metadata.solana.wallets now
+  const solMeta = node.metadata instanceof Map
+    ? node.metadata?.get("solana")
+    : node.metadata?.solana;
+  const wallets = solMeta?.wallets || {};
+
   return {
     ...node,
-    versions: node.versions.map((v) => ({
-      ...v,
-      wallet: v.wallet
-        ? {
-            publicKey: v.wallet.publicKey ?? null,
-          }
-        : null,
-    })),
+    versions: node.versions.map((v, i) => {
+      const wallet = wallets[i];
+      return {
+        ...v,
+        wallet: wallet?.publicKey ? { publicKey: wallet.publicKey } : null,
+      };
+    }),
   };
 }
 
@@ -556,17 +561,18 @@ async function getTreeStructure(rootId, filters = {}) {
   if (filters.trimmed === true) allowedStatuses.push("trimmed");
   if (filters.completed !== false) allowedStatuses.push("completed");
 
-  const filterAndFlatten = (node) => {
+  const filterAndFlatten = (node, isRoot = false) => {
     const currentVersion = node.versions?.find(
       (v) => v.prestige === node.prestige,
     );
     const status = currentVersion?.status || "active";
 
     const children = (node.children || [])
-      .map(filterAndFlatten)
+      .map((c) => filterAndFlatten(c, false))
       .filter(Boolean);
 
-    if (!allowedStatuses.includes(status) && children.length === 0) {
+    // Always return the root node so callers have a name/id reference
+    if (!isRoot && !allowedStatuses.includes(status) && children.length === 0) {
       return null;
     }
 
@@ -581,7 +587,7 @@ async function getTreeStructure(rootId, filters = {}) {
     };
   };
 
-  return filterAndFlatten(rootNode);
+  return filterAndFlatten(rootNode, true);
 }
 
 export {

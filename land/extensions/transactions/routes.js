@@ -8,12 +8,12 @@ import {
   applyApproval,
   denyTransaction,
   getTransactionWithContributions,
-} from "../../core/tree/transactions.js";
-import getNodeName from "./helpers/getNameById.js";
+} from "./core.js";
+import getNodeName from "../../routes/api/helpers/getNameById.js";
 import {
   renderTransactionsList,
   renderTransactionDetail,
-} from "./html/transactions.js";
+} from "./html.js";
 
 import { resolveVersion } from "../../core/tree/treeFetch.js";
 

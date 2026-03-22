@@ -13,7 +13,23 @@ import {
 } from "@solana/spl-token";
 import crypto from "crypto";
 import Node from "../../db/models/node.js";
-import { useEnergy } from "./energy.js";
+import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+
+/* ------------------------------------------------------------------ */
+/*  Wallet metadata helpers                                            */
+/* ------------------------------------------------------------------ */
+
+function getWallet(node, versionIndex) {
+  const meta = getExtMeta(node, "solana");
+  return meta.wallets?.[versionIndex] || null;
+}
+
+function setWallet(node, versionIndex, walletData) {
+  const meta = getExtMeta(node, "solana");
+  if (!meta.wallets) meta.wallets = {};
+  meta.wallets[versionIndex] = walletData;
+  setExtMeta(node, "solana", meta);
+}
 
 const JUP_BASE = "https://api.jup.ag/ultra/v1";
 const SOL_MINT = "So11111111111111111111111111111111111111112";
@@ -84,27 +100,24 @@ export async function ensureVersionWallet(nodeId, versionIndex) {
   const version = node.versions[versionIndex];
   if (!version) throw new Error("Version not found");
 
-  if (version.wallet?.publicKey) {
-    return {
-      publicKey: version.wallet.publicKey,
-      created: false,
-    };
+  const existing = getWallet(node, versionIndex);
+  if (existing?.publicKey) {
+    return { publicKey: existing.publicKey, created: false };
   }
 
   const keypair = Keypair.generate();
   const encryptedPrivateKey = encryptSecretKey(keypair.secretKey);
 
-  version.wallet = {
+  setWallet(node, versionIndex, {
     publicKey: keypair.publicKey.toBase58(),
     encryptedPrivateKey,
     createdAt: new Date(),
-  };
+  });
 
-  node.markModified("versions");
   await node.save();
 
   return {
-    publicKey: version.wallet.publicKey,
+    publicKey: keypair.publicKey.toBase58(),
     created: true,
   };
 }
@@ -114,13 +127,13 @@ export async function ensureVersionWallet(nodeId, versionIndex) {
 /* ------------------------------------------------------------------ */
 
 async function getVersionKeypair(node, versionIndex) {
-  const version = node?.versions?.[versionIndex];
+  const wallet = getWallet(node, versionIndex);
 
-  if (!version?.wallet?.encryptedPrivateKey) {
+  if (!wallet?.encryptedPrivateKey) {
     throw new Error("Version wallet does not exist");
   }
 
-  const secretKey = decryptSecretKey(version.wallet.encryptedPrivateKey);
+  const secretKey = decryptSecretKey(wallet.encryptedPrivateKey);
   return Keypair.fromSecretKey(secretKey);
 }
 
@@ -130,13 +143,14 @@ async function getVersionKeypair(node, versionIndex) {
 
 export async function syncVersionSOLBalance(node, versionIndex) {
   requireSolana();
+  const wallet = getWallet(node, versionIndex);
   const version = node?.versions?.[versionIndex];
 
-  if (!version?.wallet?.publicKey) {
+  if (!wallet?.publicKey) {
     return null;
   }
 
-  const pubkey = new PublicKey(version.wallet.publicKey);
+  const pubkey = new PublicKey(wallet.publicKey);
   const lamports = await connection.getBalance(pubkey);
 
   version.values.set("_auto__sol", lamports);
@@ -157,16 +171,16 @@ export async function getVersionWalletInfo(nodeId, versionIndex) {
   }
 
   const node = await Node.findById(nodeId);
+  const wallet = getWallet(node, versionIndex);
   const version = node?.versions?.[versionIndex];
 
-  if (!version?.wallet?.publicKey) {
+  if (!wallet?.publicKey) {
     return { exists: false };
   }
 
   const tokens = [];
 
   for (const [key, value] of version.values.entries()) {
-    // token balance key: _auto__sol_<mint>
     if (
       key.startsWith("_auto__sol_") &&
       !key.endsWith("_usd") &&
@@ -187,7 +201,7 @@ export async function getVersionWalletInfo(nodeId, versionIndex) {
 
   return {
     exists: true,
-    publicKey: version.wallet.publicKey,
+    publicKey: wallet.publicKey,
     solBalance: version.values.get("_auto__sol") ?? 0,
     tokens,
   };
@@ -219,7 +233,8 @@ async function resolveDestinationPublicKey({ toAddress, toNodeId }) {
 
     // Reload to get the wallet
     const updated = await Node.findById(toNodeId);
-    const walletPubkey = updated?.versions?.[versionIndex]?.wallet?.publicKey;
+    const destWallet = getWallet(updated, versionIndex);
+    const walletPubkey = destWallet?.publicKey;
 
     if (!walletPubkey) {
       throw new Error("Failed to resolve destination wallet");
@@ -410,10 +425,11 @@ async function fetchHoldings(address) {
 
 export async function syncVersionTokenHoldings(node, versionIndex) {
   requireSolana();
+  const wallet = getWallet(node, versionIndex);
   const version = node?.versions?.[versionIndex];
-  if (!version?.wallet?.publicKey) return null;
+  if (!wallet?.publicKey) return null;
 
-  const pubkey = version.wallet.publicKey;
+  const pubkey = wallet.publicKey;
   const holdings = await fetchHoldings(pubkey);
 
   const seenMints = [];

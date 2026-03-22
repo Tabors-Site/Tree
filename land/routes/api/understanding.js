@@ -5,8 +5,8 @@ import {
   createUnderstandingRun,
   findOrCreateUnderstandingRun,
 } from "../../core/tree/understanding.js";
-import UnderstandingRun from "../../db/models/understandingRun.js";
-import UnderstandingNode from "../../db/models/understandingNode.js";
+import UnderstandingRun from "../../extensions/understanding/understandingRun.js";
+import UnderstandingNode from "../../extensions/understanding/understandingNode.js";
 import Contribution from "../../db/models/contribution.js";
 import { getNotes } from "../../core/tree/notes.js";
 const router = express.Router();

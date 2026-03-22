@@ -1,7 +1,7 @@
 export default {
   name: "visibility",
   version: "1.0.0",
-  description: "Public/private tree visibility, share tokens, public query access",
+  description: "Public/private tree visibility, share tokens, public query access, cross-land LLM proxy",
 
   needs: {
     models: ["Node", "User"],

@@ -22,7 +22,7 @@ import {
   buildDeepTreeSummary,
 } from "../core/tree/treeFetch.js";
 import Node from "../db/models/node.js";
-import ShortMemory from "../db/models/shortMemory.js";
+import ShortMemory from "../extensions/dreams/model.js";
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
 // ─────────────────────────────────────────────────────────────────────────

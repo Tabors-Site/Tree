@@ -101,6 +101,14 @@ export function getLandIdentity() {
  * Get the public info payload for GET /canopy/info.
  * Does not include the private key.
  */
+// Lazy reference to avoid circular import at module load time.
+// The loader populates this after extensions are loaded.
+let _getExtNames = null;
+
+export function setExtensionNamesProvider(fn) {
+  _getExtNames = fn;
+}
+
 export function getLandInfoPayload() {
   const identity = getLandIdentity();
   const baseUrl = process.env.LAND_BASE_URL || getLandUrl();
@@ -114,6 +122,7 @@ export function getLandInfoPayload() {
     baseUrl,
     siteUrl: process.env.LAND_SITE_URL || null,
     capabilities: ["invite", "proxy", "notify", "public-trees", "llm-proxy"],
+    extensions: _getExtNames ? _getExtNames() : [],
   };
 }
 

@@ -10,7 +10,8 @@ import { setTransactionPolicy } from "../../core/tree/transactions.js";
 import { getGlobalValuesTreeAndFlat } from "../../core/tree/values.js";
 
 import Node from "../../db/models/node.js";
-import ShortMemory from "../../db/models/shortMemory.js";
+import { hasExtension } from "../../extensions/loader.js";
+import ShortMemory from "../../extensions/dreams/model.js";
 import { getConnectionsForUser, ROOT_LLM_SLOTS } from "../../core/llms/customLLM.js";
 import { getNodeAIChats } from "../../core/llms/aichat.js";
 import { buildPathString } from "../../core/tree/treeFetch.js";
@@ -63,7 +64,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       .populate("rootOwner", "username _id profileType planExpiresAt")
       .populate("contributors", "username _id isRemote homeLand")
       .select(
-        "rootOwner contributors transactionPolicy llmAssignments dreamTime lastDreamAt visibility",
+        "rootOwner contributors metadata llmAssignments dreamTime lastDreamAt visibility",
       )
       .lean()
       .exec();
@@ -91,6 +92,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
         ...allData,
         rootOwner: rootMeta?.rootOwner || null,
         contributors: rootMeta?.contributors || [],
+        dreamsEnabled: hasExtension("dreams"),
       };
 
       // Strip sensitive data for public visitors
@@ -709,6 +711,10 @@ router.post(
 
 router.post("/root/:rootId/dream-time", authenticate, async (req, res) => {
   try {
+    if (!hasExtension("dreams")) {
+      return res.status(400).json({ error: "Dreams extension is not enabled on this land" });
+    }
+
     const { rootId } = req.params;
     const { dreamTime } = req.body;
 

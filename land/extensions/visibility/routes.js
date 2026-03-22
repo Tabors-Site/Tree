@@ -57,7 +57,7 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
 
     if ("html" in req.query) {
       if (!hadShareTokenBefore) {
-        return res.redirect("/app");
+        return res.redirect("/dashboard");
       }
       return res.redirect(
         `/api/v1/user/${userId}?token=${u.htmlShareToken ?? ""}&html`,

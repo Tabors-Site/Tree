@@ -598,7 +598,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
           <span class="notif-btn-icon">☰</span>
           <span class="notif-btn-label">Menu</span>
         </button>
-        <a href="/app" class="advanced-btn" id="advancedLink">Advanced</a>
+        <a href="/dashboard" class="advanced-btn" id="advancedLink">Advanced</a>
       </div>
     </div>
     <div class="back-row" id="backRow">
@@ -1012,7 +1012,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
       }
 
       activeRootId = null;
-      advancedLink.href = "/app";
+      advancedLink.href = "/dashboard";
       treePicker.style.display = "";
       chatArea.classList.remove("active");
       rootName.classList.remove("visible");

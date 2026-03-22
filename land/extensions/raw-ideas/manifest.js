@@ -14,7 +14,7 @@ export default {
 
   provides: {
     models: {
-      RawIdea: "../../db/models/rawIdea.js",
+      RawIdea: "./model.js",
     },
     routes: "./routes.js",
     tools: false,

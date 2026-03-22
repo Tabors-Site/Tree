@@ -1,5 +1,5 @@
-import UnderstandingRun from "../../db/models/understandingRun.js";
-import UnderstandingNode from "../../db/models/understandingNode.js";
+import UnderstandingRun from "./understandingRun.js";
+import UnderstandingNode from "./understandingNode.js";
 import router from "../../routes/api/understanding.js";
 
 export async function init(core) {
