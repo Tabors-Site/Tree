@@ -1,5 +1,4 @@
-// routesURL/tree.js
-// All LLM orchestration routes — tree chat/place, raw idea chat/place, understanding.
+// LLM orchestration routes: tree chat/place/query, raw idea chat/place, understanding.
 
 import express from "express";
 import jwt from "jsonwebtoken";
@@ -49,97 +48,59 @@ import { resolveTreeAccess } from "../../core/authenticate.js";
 import { nullSocket } from "../../orchestrators/helpers.js";
 
 const router = express.Router();
+const TIMEOUT_MS = 19 * 60 * 1000;
 
-// Rate limit public queries: 10 per 15 min per IP
-const publicQueryLimits = new Map();
-const PQ_WINDOW_MS = 15 * 60 * 1000;
-const PQ_MAX = 10;
-
-function checkPublicQueryLimit(ip) {
-  const now = Date.now();
-  const entry = publicQueryLimits.get(ip);
-  if (!entry || now - entry.start > PQ_WINDOW_MS) {
-    publicQueryLimits.set(ip, { start: now, count: 1 });
-    return true;
-  }
-  entry.count += 1;
-  return entry.count <= PQ_MAX;
-}
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of publicQueryLimits) {
-    if (now - entry.start > PQ_WINDOW_MS * 2) publicQueryLimits.delete(ip);
-  }
-}, PQ_WINDOW_MS);
+// ─────────────────────────────────────────────────────────────────────────
+// Shared orchestration runner
+// ─────────────────────────────────────────────────────────────────────────
 
 /**
- * POST /api/v1/tree/:rootId/chat
- * Send a message to a tree and get a natural language response.
+ * Handles all the plumbing for a tree orchestration request:
+ * session lifecycle, MCP connect, JWT, timeout, AIChat tracking,
+ * request queuing, and cleanup.
  *
- * Body: { message: string }
- * Response: { success: boolean, answer: string }
+ * @param {object} opts
+ * @param {string} opts.mode        - "chat" | "place" | "query"
+ * @param {string} opts.rootId
+ * @param {string} opts.message
+ * @param {string} opts.userId
+ * @param {string} opts.username
+ * @param {string} opts.sessionType - SESSION_TYPES value
+ * @param {object} opts.orchestrateFlags - { skipRespond, forceQueryOnly }
+ * @param {object} [opts.clientOverride] - override LLM client (canopy proxy)
+ * @param {boolean} [opts.isPublicQuery]
+ * @param {Express.Response} res
  */
-router.post("/root/:rootId/chat", authenticate, async (req, res) => {
-  const { rootId } = req.params;
-  const { message } = req.body;
+async function runTreeOrchestration(opts, res) {
+  const {
+    mode,
+    rootId,
+    message,
+    userId,
+    username,
+    sessionType,
+    orchestrateFlags = {},
+    clientOverride = null,
+    isPublicQuery = false,
+  } = opts;
 
-  console.log(
-    `🌳 Tree chat: rootId=${rootId} user=${req.username} message="${message?.slice(0, 80)}"`,
-  );
-
-  if (
-    !message ||
-    typeof message !== "string" ||
-    !message.trim() ||
-    message.length > 5000
-  ) {
-    return res.status(400).json({
-      success: false,
-      answer: "Message is required and must be under 5000 characters.",
-    });
-  }
-
-  // Check tree access
-  const access = await resolveTreeAccess(rootId, req.userId);
-  if (!access.isOwner && !access.isContributor) {
-    return res
-      .status(403)
-      .json({ success: false, answer: "Not authorized to access this tree." });
-  }
-
-  // Check LLM access
-  const rootCheck = await Node.findById(rootId)
-    .select("rootOwner llmAssignments")
-    .lean();
-  const hasUserLlm = await userHasLlm(req.userId);
-  const hasRootLlm = !!(rootCheck?.llmAssignments?.default && rootCheck.llmAssignments.default !== "none");
-  if (!hasUserLlm && !hasRootLlm) {
-    return res.status(403).json({
-      success: false,
-      answer: "No LLM connection. Visit /setup to set one up.",
-    });
-  }
-
-  const visitorId = `tree-chat:${req.userId}:${Date.now()}`;
+  const visitorId = `tree-${mode}:${userId}:${Date.now()}`;
   const { sessionId } = createSession({
-    userId: req.userId,
-    type: SESSION_TYPES.API_TREE_CHAT,
-    scopeKey: `${req.userId}:${rootId}`,
-    description: `API tree chat on root ${rootId}`,
-    meta: { rootId, visitorId },
+    userId,
+    type: sessionType,
+    scopeKey: `${userId}:${rootId}`,
+    description: `API tree ${mode} on root ${rootId}${isPublicQuery ? " (public)" : ""}`,
+    meta: { rootId, visitorId, isPublicQuery },
   });
   const abort = new AbortController();
   setSessionAbort(sessionId, abort);
 
-  // 19-minute timeout — return gracefully before nginx kills the connection
-  const TIMEOUT_MS = 19 * 60 * 1000;
   let timedOut = false;
+  let aiChat = null;
+
   const timer = setTimeout(() => {
     timedOut = true;
-    console.error(
-      `⏱️ Tree chat timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`,
-    );
+    console.error(`Tree ${mode} timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
     closeMCPClient(visitorId);
     clearAiContributionContext(visitorId);
     if (aiChat) {
@@ -150,23 +111,23 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
       }).catch(() => {});
     }
     if (!res.headersSent) {
-      res.status(504).json({
-        success: false,
-        answer: "Request timed out. The tree took too long to respond.",
-      });
+      const status = 504;
+      const body = mode === "place"
+        ? { success: false, error: "Request timed out." }
+        : { success: false, answer: "Request timed out. The tree took too long to respond." };
+      res.status(status).json(body);
     }
   }, TIMEOUT_MS);
 
-  // ── AIChat tracking (same pattern as websocket.js) ──
-  let aiChat = null;
+  // AIChat tracking
   try {
-    const clientInfo = await getClientForUser(req.userId);
+    const clientInfo = clientOverride || await getClientForUser(userId);
     aiChat = await startAIChat({
-      userId: req.userId,
+      userId,
       sessionId,
       message: message.slice(0, 5000),
-      source: "api",
-      modeKey: "tree:chat",
+      source: isPublicQuery ? "public-query" : "api",
+      modeKey: `tree:${mode}`,
       llmProvider: {
         isCustom: clientInfo.isCustom,
         model: clientInfo.model,
@@ -176,60 +137,64 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
     });
     if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
   } catch (err) {
-    console.error("⚠️ Failed to create AIChat:", err.message);
+    console.error("Failed to create AIChat:", err.message);
   }
 
-  // Serialize requests per user+tree so concurrent messages don't race
+  // Enqueue to serialize per user+tree
   await enqueue(sessionId, async () => {
     try {
-      console.log(`🔑 Tree chat: connecting MCP for ${visitorId}`);
       const internalJwt = jwt.sign(
-        { userId: req.userId.toString(), username: req.username, visitorId },
+        { userId: userId.toString(), username, visitorId },
         JWT_SECRET,
         { expiresIn: "1h" },
       );
       await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
-      console.log(`✅ Tree chat: MCP connected, starting orchestration`);
-
       setRootId(visitorId, rootId);
 
       const result = await orchestrateTreeRequest({
         visitorId,
         message: message.trim(),
         socket: nullSocket,
-        username: req.username,
-        userId: req.userId,
+        username,
+        userId,
         signal: abort.signal,
         sessionId,
         rootId,
         rootChatId: aiChat?._id || null,
-        sourceType: "tree-chat",
+        sourceType: `tree-${mode}`,
+        ...orchestrateFlags,
       });
 
       clearTimeout(timer);
       if (timedOut) return;
 
-      console.log(
-        `✅ Tree chat: orchestration complete, success=${result?.success}`,
-      );
-
-      // ── Finalize AIChat (success or no-fit) ──
+      // Finalize AIChat
       if (aiChat) {
-        const answer = result?.answer || result?.reason || null;
+        const summary = mode === "place"
+          ? (result?.stepSummaries?.length ? `Placed: ${result.stepSummaries.length} step(s)` : null)
+          : (result?.answer || result?.reason || null);
         finalizeAIChat({
           chatId: aiChat._id,
-          content: answer,
+          content: summary,
           stopped: false,
           modeKey: result?.modeKey || "tree:orchestrator",
-        }).catch((err) =>
-          console.error("⚠️ AIChat finalize failed:", err.message),
-        );
+        }).catch((err) => console.error("AIChat finalize failed:", err.message));
       }
 
+      // Format response based on mode
       if (!result || !result.success) {
+        const body = mode === "place"
+          ? { success: false, error: result?.reason || "Could not place content.", stepSummaries: result?.stepSummaries || [] }
+          : { success: false, answer: result?.answer || "Could not process your message." };
+        return res.json(body);
+      }
+
+      if (mode === "place") {
         return res.json({
-          success: false,
-          answer: result?.answer || "Could not process your message.",
+          success: true,
+          stepSummaries: result.stepSummaries || [],
+          targetNodeId: result.lastTargetNodeId || null,
+          targetPath: result.lastTargetPath || null,
         });
       }
 
@@ -240,26 +205,30 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
     } catch (err) {
       clearTimeout(timer);
       if (timedOut) return;
-      console.error("❌ Tree chat error:", err.message);
+      console.error(`Tree ${mode} error:`, err.message);
 
-      // ── Finalize AIChat (error) ──
       if (aiChat) {
         finalizeAIChat({
           chatId: aiChat._id,
           content: abort.signal.aborted ? null : `Error: ${err.message}`,
           stopped: abort.signal.aborted,
-        }).catch((e) =>
-          console.error("⚠️ AIChat error finalize failed:", e.message),
-        );
+        }).catch((e) => console.error("AIChat error finalize failed:", e.message));
       }
 
       if (!res.headersSent) {
         if (err.message?.includes("No LLM connection")) {
-          return res.status(403).json({ success: false, error: err.message, answer: err.message });
+          const msg = isPublicQuery
+            ? "This tree has no AI configured for public queries."
+            : err.message;
+          const body = mode === "place"
+            ? { success: false, error: msg }
+            : { success: false, error: msg, answer: msg };
+          return res.status(403).json(body);
         }
-        return res
-          .status(500)
-          .json({ success: false, answer: "Something went wrong." });
+        const body = mode === "place"
+          ? { success: false, error: "Something went wrong." }
+          : { success: false, answer: "Something went wrong." };
+        return res.status(500).json(body);
       }
     } finally {
       clearTimeout(timer);
@@ -270,225 +239,111 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
       clearSession(visitorId);
     }
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Shared validation helpers
+// ─────────────────────────────────────────────────────────────────────────
+
+function validateMessage(message, res) {
+  if (
+    !message ||
+    typeof message !== "string" ||
+    !message.trim() ||
+    message.length > 5000
+  ) {
+    res.status(400).json({
+      success: false,
+      error: "Message is required and must be under 5000 characters.",
+      answer: "Message is required and must be under 5000 characters.",
+    });
+    return false;
+  }
+  return true;
+}
+
+async function checkTreeAccess(rootId, userId, res) {
+  const access = await resolveTreeAccess(rootId, userId);
+  if (!access.isOwner && !access.isContributor) {
+    res.status(403).json({ success: false, error: "Not authorized to access this tree.", answer: "Not authorized to access this tree." });
+    return null;
+  }
+  return access;
+}
+
+async function checkLlmAccess(rootId, userId, res) {
+  const rootCheck = await Node.findById(rootId)
+    .select("rootOwner llmAssignments")
+    .lean();
+  const hasUserLlm = await userHasLlm(userId);
+  const hasRootLlm = !!(rootCheck?.llmAssignments?.default && rootCheck.llmAssignments.default !== "none");
+  if (!hasUserLlm && !hasRootLlm) {
+    res.status(403).json({
+      success: false,
+      error: "No LLM connection. Visit /setup to set one up.",
+      answer: "No LLM connection. Visit /setup to set one up.",
+    });
+    return null;
+  }
+  return rootCheck;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// POST /root/:rootId/chat
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post("/root/:rootId/chat", authenticate, async (req, res) => {
+  const { rootId } = req.params;
+  const { message } = req.body;
+
+  if (!validateMessage(message, res)) return;
+  if (!(await checkTreeAccess(rootId, req.userId, res))) return;
+  if (!(await checkLlmAccess(rootId, req.userId, res))) return;
+
+  await runTreeOrchestration({
+    mode: "chat",
+    rootId,
+    message: message.trim(),
+    userId: req.userId,
+    username: req.username,
+    sessionType: SESSION_TYPES.API_TREE_CHAT,
+  }, res);
 });
 
-/**
- * POST /api/v1/tree/:rootId/place
- * Place content onto a tree without generating a response.
- *
- * Body: { message: string }
- * Response: { success, stepSummaries, targetNodeId, targetPath }
- */
+// ─────────────────────────────────────────────────────────────────────────
+// POST /root/:rootId/place
+// ─────────────────────────────────────────────────────────────────────────
+
 router.post("/root/:rootId/place", authenticate, async (req, res) => {
   const { rootId } = req.params;
   const { message } = req.body;
 
-  console.log(
-    `📌 Tree place: rootId=${rootId} user=${req.username} message="${message?.slice(0, 80)}"`,
-  );
+  if (!validateMessage(message, res)) return;
+  if (!(await checkTreeAccess(rootId, req.userId, res))) return;
+  if (!(await checkLlmAccess(rootId, req.userId, res))) return;
 
-  if (
-    !message ||
-    typeof message !== "string" ||
-    !message.trim() ||
-    message.length > 5000
-  ) {
-    return res.status(400).json({
-      success: false,
-      error: "Message is required and must be under 5000 characters.",
-    });
-  }
-
-  // Check tree access
-  const placeAccess = await resolveTreeAccess(rootId, req.userId);
-  if (!placeAccess.isOwner && !placeAccess.isContributor) {
-    return res
-      .status(403)
-      .json({ success: false, error: "Not authorized to access this tree." });
-  }
-
-  // Check LLM access
-  const placeRootCheck = await Node.findById(rootId)
-    .select("rootOwner llmAssignments")
-    .lean();
-  const placeHasUserLlm = await userHasLlm(req.userId);
-  const placeHasRootLlm = !!(placeRootCheck?.llmAssignments?.default && placeRootCheck.llmAssignments.default !== "none");
-  if (!placeHasUserLlm && !placeHasRootLlm) {
-    return res.status(403).json({
-      success: false,
-      error: "No LLM connection. Visit /setup to set one up.",
-    });
-  }
-
-  const visitorId = `tree-place:${req.userId}:${Date.now()}`;
-  const { sessionId } = createSession({
+  await runTreeOrchestration({
+    mode: "place",
+    rootId,
+    message: message.trim(),
     userId: req.userId,
-    type: SESSION_TYPES.API_TREE_PLACE,
-    scopeKey: `${req.userId}:${rootId}`,
-    description: `API tree place on root ${rootId}`,
-    meta: { rootId, visitorId },
-  });
-  const abort = new AbortController();
-  setSessionAbort(sessionId, abort);
-
-  const TIMEOUT_MS = 19 * 60 * 1000;
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    console.error(
-      `⏱️ Tree place timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`,
-    );
-    closeMCPClient(visitorId);
-    clearAiContributionContext(visitorId);
-    if (aiChat) {
-      finalizeAIChat({
-        chatId: aiChat._id,
-        content: "Error: Request timed out",
-        stopped: false,
-      }).catch(() => {});
-    }
-    if (!res.headersSent) {
-      res.status(504).json({ success: false, error: "Request timed out." });
-    }
-  }, TIMEOUT_MS);
-
-  let aiChat = null;
-  try {
-    const clientInfo = await getClientForUser(req.userId);
-    aiChat = await startAIChat({
-      userId: req.userId,
-      sessionId,
-      message: message.slice(0, 5000),
-      source: "api",
-      modeKey: "tree:place",
-      llmProvider: {
-        isCustom: clientInfo.isCustom,
-        model: clientInfo.model,
-        connectionId: clientInfo.connectionId || null,
-      },
-      treeContext: { targetNodeId: rootId },
-    });
-    if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
-  } catch (err) {
-    console.error("⚠️ Failed to create AIChat:", err.message);
-  }
-
-  // Serialize requests per user+tree so concurrent messages don't race
-  await enqueue(sessionId, async () => {
-    try {
-      const internalJwt = jwt.sign(
-        { userId: req.userId.toString(), username: req.username, visitorId },
-        JWT_SECRET,
-        { expiresIn: "1h" },
-      );
-      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
-      setRootId(visitorId, rootId);
-
-      const result = await orchestrateTreeRequest({
-        visitorId,
-        message: message.trim(),
-        socket: nullSocket,
-        username: req.username,
-        userId: req.userId,
-        signal: abort.signal,
-        sessionId,
-        rootId,
-        skipRespond: true,
-        rootChatId: aiChat?._id || null,
-        sourceType: "tree-place",
-      });
-
-      clearTimeout(timer);
-      if (timedOut) return;
-
-      if (aiChat) {
-        const summary = result?.stepSummaries?.length
-          ? `Placed: ${result.stepSummaries.length} step(s)`
-          : null;
-        finalizeAIChat({
-          chatId: aiChat._id,
-          content: summary || result?.reason || null,
-          stopped: false,
-          modeKey: result?.modeKey || "tree:orchestrator",
-        }).catch((err) =>
-          console.error("⚠️ AIChat finalize failed:", err.message),
-        );
-      }
-
-      if (!result || !result.success) {
-        return res.json({
-          success: false,
-          error: result?.reason || "Could not place content.",
-          stepSummaries: result?.stepSummaries || [],
-        });
-      }
-
-      return res.json({
-        success: true,
-        stepSummaries: result.stepSummaries || [],
-        targetNodeId: result.lastTargetNodeId || null,
-        targetPath: result.lastTargetPath || null,
-      });
-    } catch (err) {
-      clearTimeout(timer);
-      if (timedOut) return;
-      console.error("❌ Tree place error:", err.message);
-
-      if (aiChat) {
-        finalizeAIChat({
-          chatId: aiChat._id,
-          content: abort.signal.aborted ? null : `Error: ${err.message}`,
-          stopped: abort.signal.aborted,
-        }).catch((e) =>
-          console.error("⚠️ AIChat error finalize failed:", e.message),
-        );
-      }
-
-      if (!res.headersSent) {
-        return res
-          .status(500)
-          .json({ success: false, error: "Something went wrong." });
-      }
-    } finally {
-      clearTimeout(timer);
-      clearAiContributionContext(visitorId);
-      clearSessionAbort(sessionId);
-      endSession(sessionId);
-      if (!timedOut) closeMCPClient(visitorId);
-      clearSession(visitorId);
-    }
-  });
+    username: req.username,
+    sessionType: SESSION_TYPES.API_TREE_PLACE,
+    orchestrateFlags: { skipRespond: true },
+  }, res);
 });
 
-/**
- * POST /api/v1/tree/:rootId/query
- * Query the tree (read-only). Responds with information but makes no edits.
- *
- * Body: { message: string }
- * Response: { success, answer }
- */
-router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
+// ─────────────────────────────────────────────────────────────────────────
+// POST /root/:rootId/query (authenticated or public)
+// GET  /root/:rootId/query (public, same handler)
+// ─────────────────────────────────────────────────────────────────────────
+
+async function handleQuery(req, res) {
   const { rootId } = req.params;
-  const { message } = req.body;
+  const message = req.body?.message || req.query?.message || req.query?.q;
   const isPublicAccess = !!req.isPublicAccess;
 
-  console.log(
-    `🔍 Tree query: rootId=${rootId} user=${isPublicAccess ? "public" : req.username} message="${message?.slice(0, 80)}"`,
-  );
-
-  if (
-    !message ||
-    typeof message !== "string" ||
-    !message.trim() ||
-    message.length > 5000
-  ) {
-    return res.status(400).json({
-      success: false,
-      answer: "Message is required and must be under 5000 characters.",
-    });
-  }
-
-  // Rate limit public queries (moved below auth block to cover all public query paths)
+  if (!validateMessage(message, res)) return;
 
   const rootCheck = await Node.findById(rootId)
     .select("rootOwner llmAssignments visibility")
@@ -498,241 +353,116 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
     return res.status(404).json({ success: false, answer: "Tree not found." });
   }
 
-  // Determine who pays for LLM and which user context to use
+  // Resolve who pays for LLM and access
   let effectiveUserId = req.userId;
   let effectiveUsername = req.username;
   let isPublicQuery = false;
-  let canopyProxyClient = null; // set if using visitor's home land LLM
+  let clientOverride = null;
 
   const treeHasLlm = rootCheck.llmAssignments?.default !== "none";
 
   if (isPublicAccess) {
-    // Public access: tree must be public
     if (rootCheck.visibility !== "public") {
       return res.status(403).json({ success: false, answer: "This tree is not public." });
     }
-
-    if (treeHasLlm) {
-      // Owner's LLM, owner pays
-      effectiveUserId = rootCheck.rootOwner;
-      const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
-      effectiveUsername = owner?.username || "system";
-    } else {
-      // Anonymous, no owner LLM
-      return res.status(403).json({
-        success: false,
-        answer: "This tree has no AI configured for public queries.",
-      });
+    if (!treeHasLlm) {
+      return res.status(403).json({ success: false, answer: "This tree has no AI configured for public queries." });
     }
+    effectiveUserId = rootCheck.rootOwner;
+    const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
+    effectiveUsername = owner?.username || "system";
     isPublicQuery = true;
   } else {
-    // Authenticated user: check tree access
     const queryAccess = await resolveTreeAccess(rootId, req.userId);
     if (!queryAccess.isOwner && !queryAccess.isContributor) {
-      // Not owner/contributor, but tree might be public
       if (rootCheck.visibility === "public") {
-        // Allow query. Use owner's LLM if available.
         if (treeHasLlm) {
           effectiveUserId = rootCheck.rootOwner;
           const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
           effectiveUsername = owner?.username || "system";
         } else if (req.canopy?.sourceLandDomain) {
-          // Remote canopy user, no tree LLM. Fall back to their home land's LLM.
-          canopyProxyClient = createCanopyLlmProxyClient({
-            userId: req.userId,
-            homeLand: req.canopy.sourceLandDomain,
-            slot: "main",
-          });
+          clientOverride = {
+            client: createCanopyLlmProxyClient({
+              userId: req.userId,
+              homeLand: req.canopy.sourceLandDomain,
+              slot: "main",
+            }),
+            isCustom: true,
+            model: "proxy",
+            connectionId: null,
+          };
           effectiveUserId = rootCheck.rootOwner;
-          const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
           effectiveUsername = `visitor@${req.canopy.sourceLandDomain}`;
         }
         isPublicQuery = true;
       } else {
-        return res
-          .status(403)
-          .json({ success: false, answer: "Not authorized to access this tree." });
+        return res.status(403).json({ success: false, answer: "Not authorized to access this tree." });
       }
     }
   }
 
-  // Rate limit all public tree queries (anonymous by IP, authenticated by userId)
+  // Rate limit public queries
   if (isPublicQuery) {
     const rateLimitKey = req.userId ? `user:${req.userId}` : (req.ip || "unknown");
     if (!checkPublicQueryLimit(rateLimitKey)) {
-      return res.status(429).json({
-        success: false,
-        answer: "Too many queries. Please try again later.",
-      });
+      return res.status(429).json({ success: false, answer: "Too many queries. Please try again later." });
     }
   }
 
-  // Verify LLM access (skip for canopy proxy, they handle their own)
-  if (!canopyProxyClient) {
+  // Verify LLM access (skip for canopy proxy)
+  if (!clientOverride) {
     const hasUserLlm = await userHasLlm(effectiveUserId);
     if (!hasUserLlm && !treeHasLlm) {
-      return res.status(403).json({
-        success: false,
-        answer: isPublicAccess
-          ? "This tree has no AI configured for public queries."
-          : "No LLM connection configured. Set one up at /setup or assign one to this tree.",
-      });
+      const msg = isPublicAccess
+        ? "This tree has no AI configured for public queries."
+        : "No LLM connection configured. Set one up at /setup or assign one to this tree.";
+      return res.status(403).json({ success: false, answer: msg });
     }
   }
 
-  const visitorId = `tree-query:${effectiveUserId}:${Date.now()}`;
-  const { sessionId } = createSession({
+  await runTreeOrchestration({
+    mode: "query",
+    rootId,
+    message: (message || "").trim(),
     userId: effectiveUserId,
-    type: SESSION_TYPES.API_TREE_QUERY,
-    scopeKey: `${effectiveUserId}:${rootId}`,
-    description: `API tree query on root ${rootId}${isPublicQuery ? " (public)" : ""}`,
-    meta: { rootId, visitorId, isPublicQuery },
-  });
-  const abort = new AbortController();
-  setSessionAbort(sessionId, abort);
+    username: effectiveUsername,
+    sessionType: SESSION_TYPES.API_TREE_QUERY,
+    orchestrateFlags: { forceQueryOnly: true },
+    clientOverride,
+    isPublicQuery,
+  }, res);
+}
 
-  const TIMEOUT_MS = 19 * 60 * 1000;
-  let timedOut = false;
-  let aiChat = null;
+// Rate limit public queries: 10 per 15 min per IP
+const publicQueryLimits = new Map();
+const PQ_WINDOW_MS = 15 * 60 * 1000;
+const PQ_MAX = 10;
 
-  const timer = setTimeout(() => {
-    timedOut = true;
-    console.error(
-      `⏱️ Tree query timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`,
-    );
-    closeMCPClient(visitorId);
-    clearAiContributionContext(visitorId);
-    if (aiChat) {
-      finalizeAIChat({
-        chatId: aiChat._id,
-        content: "Error: Request timed out",
-        stopped: false,
-      }).catch(() => {});
-    }
-    if (!res.headersSent) {
-      res.status(504).json({
-        success: false,
-        answer: "Request timed out. The tree took too long to respond.",
-      });
-    }
-  }, TIMEOUT_MS);
-
-  try {
-    const clientInfo = canopyProxyClient
-      ? { client: canopyProxyClient, isCustom: true, model: "proxy", connectionId: null }
-      : await getClientForUser(effectiveUserId);
-    aiChat = await startAIChat({
-      userId: effectiveUserId,
-      sessionId,
-      message: message.slice(0, 5000),
-      source: isPublicQuery ? "public-query" : "api",
-      modeKey: "tree:query",
-      llmProvider: {
-        isCustom: clientInfo.isCustom,
-        model: clientInfo.model,
-        connectionId: clientInfo.connectionId || null,
-      },
-      treeContext: { targetNodeId: rootId },
-    });
-    if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
-  } catch (err) {
-    console.error("⚠️ Failed to create AIChat:", err.message);
+function checkPublicQueryLimit(key) {
+  const now = Date.now();
+  const entry = publicQueryLimits.get(key);
+  if (!entry || now - entry.start > PQ_WINDOW_MS) {
+    publicQueryLimits.set(key, { start: now, count: 1 });
+    return true;
   }
+  entry.count += 1;
+  return entry.count <= PQ_MAX;
+}
 
-  await enqueue(sessionId, async () => {
-    try {
-      const internalJwt = jwt.sign(
-        { userId: effectiveUserId.toString(), username: effectiveUsername, visitorId },
-        JWT_SECRET,
-        { expiresIn: "1h" },
-      );
-      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of publicQueryLimits) {
+    if (now - entry.start > PQ_WINDOW_MS * 2) publicQueryLimits.delete(key);
+  }
+}, PQ_WINDOW_MS);
 
-      setRootId(visitorId, rootId);
+router.post("/root/:rootId/query", authenticateOrPublic, handleQuery);
+router.get("/root/:rootId/query", authenticateOrPublic, handleQuery);
 
-      const result = await orchestrateTreeRequest({
-        visitorId,
-        message: message.trim(),
-        socket: nullSocket,
-        username: effectiveUsername,
-        userId: effectiveUserId,
-        signal: abort.signal,
-        sessionId,
-        rootId,
-        forceQueryOnly: true,
-        rootChatId: aiChat?._id || null,
-        sourceType: "tree-query",
-      });
+// ─────────────────────────────────────────────────────────────────────────
+// Raw Idea: combined create + place (fire-and-forget)
+// ─────────────────────────────────────────────────────────────────────────
 
-      clearTimeout(timer);
-      if (timedOut) return;
-
-      if (aiChat) {
-        const answer = result?.answer || result?.reason || null;
-        finalizeAIChat({
-          chatId: aiChat._id,
-          content: answer,
-          stopped: false,
-          modeKey: result?.modeKey || "tree:orchestrator",
-        }).catch((err) =>
-          console.error("⚠️ AIChat finalize failed:", err.message),
-        );
-      }
-
-      if (!result || !result.success) {
-        return res.json({
-          success: false,
-          answer: result?.answer || "Could not process your message.",
-        });
-      }
-
-      return res.json({
-        success: true,
-        answer: result.answer,
-      });
-    } catch (err) {
-      clearTimeout(timer);
-      if (timedOut) return;
-      console.error("❌ Tree query error:", err.message);
-
-      if (aiChat) {
-        finalizeAIChat({
-          chatId: aiChat._id,
-          content: abort.signal.aborted ? null : `Error: ${err.message}`,
-          stopped: abort.signal.aborted,
-        }).catch((e) =>
-          console.error("⚠️ AIChat error finalize failed:", e.message),
-        );
-      }
-
-      if (!res.headersSent) {
-        // Surface LLM config errors cleanly instead of generic 500
-        if (err.message?.includes("No LLM connection")) {
-          const msg = isPublicQuery
-            ? "This tree has no AI configured for public queries."
-            : err.message;
-          return res.status(403).json({
-            success: false,
-            error: msg,
-            answer: msg,
-          });
-        }
-        return res
-          .status(500)
-          .json({ success: false, answer: "Something went wrong." });
-      }
-    } finally {
-      clearTimeout(timer);
-      clearAiContributionContext(visitorId);
-      clearSessionAbort(sessionId);
-      endSession(sessionId);
-      if (!timedOut) closeMCPClient(visitorId);
-      clearSession(visitorId);
-    }
-  });
-});
-
-// ── Raw Idea: combined create + place (fire-and-forget) ─────────────────────
 router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
@@ -741,15 +471,11 @@ router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
 
     const content = req.body?.content;
     if (!content || typeof content !== "string" || !content.trim()) {
-      return res
-        .status(400)
-        .json({ error: "content (text string) is required" });
+      return res.status(400).json({ error: "content (text string) is required" });
     }
 
     if (!(await userHasLlm(req.userId))) {
-      return res
-        .status(403)
-        .json({ error: "No LLM connection. Visit /setup to set one up." });
+      return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
     }
 
     const alreadyProcessing = await RawIdea.findOne({
@@ -758,8 +484,7 @@ router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
     });
     if (alreadyProcessing) {
       return res.status(409).json({
-        error:
-          "Another idea is already being placed -- please wait for it to finish.",
+        error: "Another idea is already being placed. Please wait for it to finish.",
       });
     }
 
@@ -791,7 +516,10 @@ router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
   }
 });
 
-// ── Raw Idea: combined create + chat (synchronous, returns response) ────────
+// ─────────────────────────────────────────────────────────────────────────
+// Raw Idea: combined create + chat (synchronous, returns response)
+// ─────────────────────────────────────────────────────────────────────────
+
 router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
@@ -800,15 +528,11 @@ router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
 
     const content = req.body?.content;
     if (!content || typeof content !== "string" || !content.trim()) {
-      return res
-        .status(400)
-        .json({ error: "content (text string) is required" });
+      return res.status(400).json({ error: "content (text string) is required" });
     }
 
     if (!(await userHasLlm(req.userId))) {
-      return res
-        .status(403)
-        .json({ error: "No LLM connection. Visit /setup to set one up." });
+      return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
     }
 
     const alreadyProcessing = await RawIdea.findOne({
@@ -817,8 +541,7 @@ router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
     });
     if (alreadyProcessing) {
       return res.status(409).json({
-        error:
-          "Another idea is already being placed -- please wait for it to finish.",
+        error: "Another idea is already being placed. Please wait for it to finish.",
       });
     }
 
@@ -830,7 +553,6 @@ router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
 
     const user = await User.findById(req.userId).select("username").lean();
 
-    const TIMEOUT_MS = 19 * 60 * 1000;
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -875,7 +597,10 @@ router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
   }
 });
 
-// ── Raw Idea: auto-place (fire-and-forget) ──────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// Raw Idea: auto-place existing (fire-and-forget)
+// ─────────────────────────────────────────────────────────────────────────
+
 router.post(
   "/user/:userId/raw-ideas/:rawIdeaId/place",
   authenticate,
@@ -895,37 +620,29 @@ router.post(
         return res.status(403).json({ error: "Not authorized" });
       }
       if (rawIdea.contentType === "file") {
-        return res
-          .status(422)
-          .json({ error: "File ideas cannot be auto-placed" });
+        return res.status(422).json({ error: "File ideas cannot be auto-placed" });
       }
       if (rawIdea.status && rawIdea.status !== "pending") {
         return res.status(409).json({ error: `Already ${rawIdea.status}` });
       }
 
-      // Check user has LLM for raw idea placement
       if (!(await userHasLlm(req.userId))) {
-        return res
-          .status(403)
-          .json({ error: "No LLM connection. Visit /setup to set one up." });
+        return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
       }
 
-      // Block concurrent placements — only one at a time per user
       const alreadyProcessing = await RawIdea.findOne({
         userId: req.userId.toString(),
         status: "processing",
       });
       if (alreadyProcessing) {
         return res.status(409).json({
-          error:
-            "Another idea is already being placed — please wait for it to finish.",
+          error: "Another idea is already being placed. Please wait for it to finish.",
         });
       }
 
       const user = await User.findById(req.userId).select("username").lean();
-
-      // Fire and forget — orchestrator runs in background
       const source = req.body?.source === "user" ? "user" : "api";
+
       orchestrateRawIdeaPlacement({
         rawIdeaId,
         userId: req.userId,
@@ -943,7 +660,10 @@ router.post(
   },
 );
 
-// ── Raw Idea: auto-chat (synchronous, returns response) ─────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// Raw Idea: auto-chat existing (synchronous, returns response)
+// ─────────────────────────────────────────────────────────────────────────
+
 router.post(
   "/user/:userId/raw-ideas/:rawIdeaId/chat",
   authenticate,
@@ -963,37 +683,28 @@ router.post(
         return res.status(403).json({ error: "Not authorized" });
       }
       if (rawIdea.contentType === "file") {
-        return res
-          .status(422)
-          .json({ error: "File ideas cannot be auto-placed" });
+        return res.status(422).json({ error: "File ideas cannot be auto-placed" });
       }
       if (rawIdea.status && rawIdea.status !== "pending") {
         return res.status(409).json({ error: `Already ${rawIdea.status}` });
       }
 
-      // Check user has LLM for raw idea chat
       if (!(await userHasLlm(req.userId))) {
-        return res
-          .status(403)
-          .json({ error: "No LLM connection. Visit /setup to set one up." });
+        return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
       }
 
-      // Block concurrent placements — only one at a time per user
       const alreadyProcessing = await RawIdea.findOne({
         userId: req.userId.toString(),
         status: "processing",
       });
       if (alreadyProcessing) {
         return res.status(409).json({
-          error:
-            "Another idea is already being placed — please wait for it to finish.",
+          error: "Another idea is already being placed. Please wait for it to finish.",
         });
       }
 
       const user = await User.findById(req.userId).select("username").lean();
 
-      // 19-minute timeout — return gracefully before nginx kills the connection
-      const TIMEOUT_MS = 19 * 60 * 1000;
       let timedOut = false;
       const timer = setTimeout(() => {
         timedOut = true;
@@ -1038,7 +749,10 @@ router.post(
   },
 );
 
-// ── Understanding: orchestrate ──────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// Understanding: orchestrate
+// ─────────────────────────────────────────────────────────────────────────
+
 router.post(
   "/root/:nodeId/understandings/run/:runId/orchestrate",
   authenticate,
@@ -1047,7 +761,6 @@ router.post(
     const userId = req.userId;
     const username = req.username;
     const fromSite = req.body?.source === "user";
-    const source = fromSite ? "user" : "api";
 
     const rootNode = await Node.findById(nodeId)
       .select("llmAssignments")
@@ -1066,7 +779,6 @@ router.post(
         userId,
         username,
         runId,
-        source,
         fromSite,
       });
 
@@ -1084,7 +796,10 @@ router.post(
   },
 );
 
-// ── Understanding: stop active run ──────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// Understanding: stop active run
+// ─────────────────────────────────────────────────────────────────────────
+
 router.post(
   "/root/:nodeId/understandings/run/:runId/stop",
   authenticate,

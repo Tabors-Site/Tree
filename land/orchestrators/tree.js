@@ -975,6 +975,28 @@ export async function orchestrateTreeRequest({
   let chainIndex = 1; // 0 = user message (created in websocket.js)
 
   // ────────────────────────────────────────────────────────
+  // QUERY FAST PATH — skip classifier, go straight to context gather + respond
+  // ────────────────────────────────────────────────────────
+
+  if (forceQueryOnly) {
+    return await runQueryFlow({
+      visitorId,
+      message,
+      socket,
+      signal,
+      username,
+      userId,
+      rootId,
+      sessionId,
+      modesUsed,
+      chainIndex,
+      llmProvider,
+      rootChatId,
+      slot,
+    });
+  }
+
+  // ────────────────────────────────────────────────────────
   // CHECK FOR PENDING CONFIRMATION
   // ────────────────────────────────────────────────────────
 
@@ -1071,15 +1093,6 @@ export async function orchestrateTreeRequest({
 
   if (signal?.aborted) return null;
 
-  // ────────────────────────────────────────────────────────
-  // FORCE QUERY ONLY — override intent for read-only mode
-  // ────────────────────────────────────────────────────────
-
-  if (forceQueryOnly && classification.intent !== "no_fit") {
-    classification.intent = "query";
-    console.log("🔒 Forced query-only mode (no tree edits)");
-  }
-
   const confidence = classification.confidence ?? 0.5;
 
   console.log(
@@ -1139,9 +1152,7 @@ export async function orchestrateTreeRequest({
     classification.placementAxes = null;
   }
 
-  const deferDecision = forceQueryOnly
-    ? { defer: false }
-    : classification.intent === "place" && !classification.placementAxes
+  const deferDecision = classification.intent === "place" && !classification.placementAxes
       ? { defer: true, reason: "User explicitly requested deferral" }
       : shouldDeferToMemory(classification);
   if (deferDecision.defer) {
@@ -1227,7 +1238,6 @@ export async function orchestrateTreeRequest({
       modesUsed,
       chainIndex,
       skipRespond,
-      forceQueryOnly,
       llmProvider,
       rootChatId,
     });
@@ -1414,7 +1424,137 @@ export async function orchestrateTreeRequest({
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// LIBRARIAN FLOW (place or query — the main path)
+// QUERY FLOW — dedicated read-only path
+// Skips classifier entirely. Librarian gathers context, respond generates answer.
+// Two LLM calls instead of three. No plan generation, no discard.
+// ─────────────────────────────────────────────────────────────────────────
+
+async function runQueryFlow({
+  visitorId,
+  message,
+  socket,
+  signal,
+  username,
+  userId,
+  rootId,
+  sessionId,
+  modesUsed,
+  chainIndex,
+  llmProvider,
+  rootChatId,
+  slot,
+}) {
+  const meta = { username, userId, rootId, slot };
+
+  // Fetch tree summary for the librarian
+  let treeSummary = null;
+  if (rootId) {
+    try {
+      treeSummary = await buildDeepTreeSummary(rootId, {
+        includeEncodings: true,
+      });
+    } catch (err) {
+      console.error("Query: tree summary failed:", err.message);
+    }
+  }
+
+  if (signal?.aborted) return null;
+
+  // ── LIBRARIAN: navigate and gather context (no plan needed) ──
+  emitStatus(socket, "navigate", "Reading tree...");
+
+  switchMode(visitorId, "tree:librarian", {
+    ...meta,
+    treeSummary: treeSummary || "",
+    intent: "query",
+    clearHistory: true,
+    conversationMemory: formatMemoryContext(visitorId),
+  });
+
+  const libStart = new Date();
+  const libResult = await processMessage(visitorId, message, {
+    ...meta,
+    signal,
+    meta: { internal: true },
+  });
+  const libEnd = new Date();
+
+  if (signal?.aborted) return null;
+  emitModeResult(socket, "tree:librarian", libResult);
+
+  modesUsed.push("tree:librarian");
+  trackChainStep({
+    userId,
+    sessionId,
+    rootChatId,
+    chainIndex: chainIndex++,
+    modeKey: "tree:librarian",
+    input: message,
+    output: libResult,
+    startTime: libStart,
+    endTime: libEnd,
+    llmProvider: libResult?._llmProvider || llmProvider,
+    treeContext: {
+      targetNodeId: rootId,
+      directive: "query context gathering",
+      stepResult: libResult ? "success" : "failed",
+    },
+  });
+
+  // ── RESPOND: generate answer from gathered context ──
+  const responseHint = libResult?.responseHint || "Respond naturally based on what you found in the tree.";
+
+  modesUsed.push("tree:respond");
+  const respondStart = new Date();
+
+  const response = await runRespond({
+    visitorId,
+    socket,
+    signal,
+    ...meta,
+    nodeContext: null,
+    operationContext: null,
+    originalMessage: message,
+    responseHint,
+    librarianContext: libResult,
+    stepSummaries: [],
+  });
+
+  const respondEnd = new Date();
+  trackChainStep({
+    userId,
+    sessionId,
+    rootChatId,
+    chainIndex: chainIndex++,
+    modeKey: "tree:respond",
+    input: responseHint,
+    output: response?.answer || null,
+    startTime: respondStart,
+    endTime: respondEnd,
+    llmProvider: response?.llmProvider || llmProvider,
+    treeContext: {
+      targetNodeId: rootId,
+      directive: responseHint,
+      stepResult: "success",
+    },
+  });
+
+  if (response) {
+    response.modesUsed = modesUsed;
+    response.confidence = libResult?.confidence || 0.8;
+    response.modeKey = "tree:query";
+  }
+
+  // Save to conversation memory
+  if (response?.answer) {
+    pushMemory(visitorId, message, response.answer);
+  }
+
+  return response;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LIBRARIAN FLOW (place or chat — the main path for write operations)
 // Librarian navigates tree with navigate-tree tool, returns a plan,
 // then executePlanSteps runs the plan through existing modes.
 // ─────────────────────────────────────────────────────────────────────────
@@ -1433,7 +1573,6 @@ async function runLibrarianFlow({
   modesUsed,
   chainIndex,
   skipRespond = false,
-  forceQueryOnly = false,
   llmProvider,
   rootChatId,
 }) {
@@ -1553,12 +1692,6 @@ async function runLibrarianFlow({
   var plan = libPlan?.plan || [];
   const responseHint =
     libPlan?.responseHint || classification.responseHint || "";
-
-  // Force empty plan in query-only mode — no edits regardless of librarian output
-  if (forceQueryOnly && plan.length > 0) {
-    console.log(`🔒 Query-only: discarding ${plan.length} librarian step(s)`);
-    plan = [];
-  }
 
   console.log(
     `📚 Librarian: ${plan.length} step(s) | "${libPlan?.summary || "no summary"}"`,

@@ -24,59 +24,51 @@ export default {
   }) {
     const isLibrarianFlow = !!librarianContext;
 
-    return `
-You are ${username}'s assistant. No tools — respond using only the context below.
-${conversationMemory ? `\nPrior conversation:\n${conversationMemory}` : ""}
-${isLibrarianFlow ? `
-The system already read/updated the tree. Respond naturally — like a friend who knows their tree.
-` : `
-Present results from the system naturally to the user.
-`}${
-  librarianContext
-    ? `
-CONTEXT: ${typeof librarianContext === "string" ? librarianContext : JSON.stringify(librarianContext)}
-`
-    : ""
-}${
-  stepSummaries
-    ? `
-WHAT HAPPENED: ${stepSummaries}
-`
-    : ""
-}${
-      nodeContext
-        ? `
-NODE: ${nodeContext}
-`
-        : ""
-    }${
-      operationContext && !isLibrarianFlow
-        ? `
-OPERATION: ${operationContext}
-`
-        : ""
-    }${
-      responseHint
-        ? `
-GUIDANCE: ${responseHint}
-`
-        : ""
-    }${
-      confirmNeeded
-        ? `
-⚠️ CONFIRMATION NEEDED — present what will happen and ask if you SHOULD proceed. Do NOT say you will do it.
-`
-        : ""
+    // Build context sections
+    const sections = [];
+
+    if (conversationMemory) {
+      sections.push(`PRIOR CONVERSATION:\n${conversationMemory}`);
     }
+
+    if (librarianContext) {
+      const ctx = typeof librarianContext === "string"
+        ? librarianContext
+        : (librarianContext.responseHint || librarianContext.summary || JSON.stringify(librarianContext));
+      sections.push(`TREE CONTEXT:\n${ctx}`);
+    }
+
+    if (stepSummaries) {
+      sections.push(`WHAT HAPPENED:\n${stepSummaries}`);
+    }
+
+    if (nodeContext) {
+      sections.push(`NODE:\n${nodeContext}`);
+    }
+
+    if (operationContext && !isLibrarianFlow) {
+      sections.push(`OPERATION:\n${operationContext}`);
+    }
+
+    if (responseHint) {
+      sections.push(`GUIDANCE:\n${responseHint}`);
+    }
+
+    if (confirmNeeded) {
+      sections.push(`CONFIRMATION NEEDED: Present what will happen and ask if the user wants to proceed. Do NOT say you will do it.`);
+    }
+
+    return `You are ${username}'s tree assistant. Respond using only the context below. No tools.
+
+${sections.join("\n\n")}
+
 STYLE:
-${isLibrarianFlow ? `- Talk like a context-aware friend, never mention nodes/branches/notes/tools/tree operations
-- Place: brief natural confirmation ("Got it, noted that for your trip planning." NOT "I created a note on the Flights node.")
-- Query: share what's relevant conversationally
-- Structure: mention organization naturally ("Set up a section for that." NOT "I created nodes X > Y > Z.")` : `- Be concise, summarize, never show node IDs
-- Show structure with simple indentation
-- Short question gets short answer`}
-- Use the user's language, match their energy
-- Never output raw JSON or expose internal IDs
+- Talk naturally. Never mention nodes, branches, notes, tools, or tree internals.
+- For placements: brief confirmation. "Got it, noted that." NOT "I created a note on the Flights node."
+- For queries: share what you found conversationally. Include specifics from the context.
+- For structure: mention organization naturally. "Set up a section for that." NOT "I created nodes X > Y > Z."
+- Match the user's energy. Brief input gets brief response.
+- Never output JSON or expose internal IDs.
 `.trim();
   },
 };

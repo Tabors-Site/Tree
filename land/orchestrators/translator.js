@@ -35,7 +35,7 @@ const TRANSLATOR_SYSTEM_PROMPT = `
 ${CONSTITUTION}
 
 ────────────────────────────────────────────────────────
-YOUR TASK
+YOUR TASK: PLAN DESTRUCTIVE OPERATIONS
 ────────────────────────────────────────────────────────
 
 You receive a thought, idea, or request. Your job is to decide:
@@ -340,14 +340,8 @@ RULES
 // ─────────────────────────────────────────────────────────────────────────
 
 const CLASSIFIER_SYSTEM_PROMPT = `
-${CONSTITUTION}
-
-────────────────────────────────────────────────────────
-YOUR TASK
-────────────────────────────────────────────────────────
-
-You receive a thought, idea, or request along with the current tree state.
-Your ONLY job is to classify what kind of action this requires.
+You classify user messages into one of five intents for a tree knowledge system.
+You receive the message, the tree's current structure, and recent conversation.
 
 Return ONLY this JSON. No markdown. No explanation.
 
@@ -356,102 +350,40 @@ Return ONLY this JSON. No markdown. No explanation.
   "confidence": number,
   "responseHint": string,
   "summary": string,
-  "placementAxes": {
-    "pathConfidence": number,
-    "domainNovelty": number,
-    "relationalComplexity": number
-  } | null
+  "placementAxes": { "pathConfidence": number, "domainNovelty": number, "relationalComplexity": number } | null
 }
 
-INTENT DEFINITIONS:
+INTENTS:
 
-"place" — The user has a thought, idea, fact, or piece of information that
-  should be stored on the tree. This includes:
-  - Notes, observations, preferences ("flights are cheaper in March")
-  - New things to track ("add a workout routine")
-  - Information to file ("fix bug where user can't respond")
-  - Building new structure ("add a section for travel tips")
-  The librarian will handle finding the right place and storing it.
+place . User has information to store: notes, ideas, new structure, edits to values/goals/names.
+  "flights are cheaper in March", "add a workout routine", "budget is $3500"
 
-"query" — The user is asking a question or wants to understand something.
-  No tree modifications needed. Examples:
-  - "what should I do next?"
-  - "hey, what's going on with this?"
-  - "how's the budget looking?"
-  - Greetings, thanks, conversational messages
-  The librarian will read the tree and gather context to answer.
+query . User is asking a question or just talking. No tree changes.
+  "what should I do next?", "how's the budget?", "hey", "thanks"
 
-"destructive" — The user wants to DELETE, MOVE, MERGE, REORGANIZE, or
-  make STATUS CHANGES. These are dangerous operations that need the
-  full planning pipeline with confirmation. Examples:
-  - "delete the old workout branch"
-  - "merge these two nodes"
-  - "remove what doesn't belong"
-  - "move Backend under Projects"
-  - "mark everything as complete"
+destructive . User wants to delete, move, merge, reorganize, or cascade status changes.
+  "delete the old workout branch", "move Backend under Projects", "mark everything complete"
 
-"defer" — The user explicitly wants to hold this idea for later rather than
-  place it now. They're saying "save this", "defer this", "hold this",
-  "remember this for later", "park this", etc. The content still belongs
-  on the tree, but the user wants it held in short-term memory.
-  Set placementAxes to null for defer.
+defer . User explicitly says to hold the idea for later: "save this", "park this", "defer"
 
-"no_fit" — The idea has NO meaningful connection to this tree's domain.
-  A dentist appointment doesn't belong in a Japan Trip tree.
-  Only use for genuinely unrelated content.
+no_fit . The idea has ZERO connection to this tree's domain.
+  A dentist appointment on a Japan Trip tree. A recipe on a Fitness tree.
 
-CONFIDENCE:
-  1.0 = obviously belongs (e.g., "add pushups" on Fitness tree)
-  0.7 = reasonable fit
-  0.3 = stretch, vaguely related
-  0.0 = no_fit
+CONFIDENCE: 1.0 = obvious fit. 0.7 = reasonable. 0.3 = stretch. 0.0 = no_fit.
 
-RESPONSE HINT:
-  Guidance for how the response should feel. Match the user's energy.
-  Brief input → brief hint. Big request → richer hint.
-
-SUMMARY:
-  One-line description for logs.
-
-PLACEMENT AXES (required when intent is "place", null otherwise):
-
-When intent is "place", you MUST also return placementAxes to help the system
-decide whether to place immediately or hold the idea for more context.
-
-  pathConfidence (0.0–1.0): Can this resolve to a SPECIFIC EXISTING node?
-    0.9 = exact match exists ("add pushups" when a Pushups node is already there).
-    0.5 = a related branch exists but the exact spot is unclear.
-    0.2 = no obvious home — would need new structure to place this well.
-    1.0 = user explicitly says "create/build/plan X" — explicit structural
-    intent with a clear directive, always place immediately.
-    IMPORTANT: Do NOT give high pathConfidence just because you could
-    create a new branch. High pathConfidence means the spot ALREADY EXISTS.
-
-  domainNovelty (0.0–1.0): Is this a genuinely new top-level area for this tree?
-    0.9 = brand new domain not represented anywhere. 0.1 = fits existing branches.
-
-  relationalComplexity (0.0–1.0): Does this touch or imply a link between two+
-    existing subtrees? 0.8 = "my diet affects my workout output" bridges
-    diet + workout branches. 0.1 = clearly about a single branch.
-
-When intent is NOT "place" (including "defer"), set placementAxes to null.
+PLACEMENT AXES (only when intent is "place", null otherwise):
+  pathConfidence: Can this map to an EXISTING node? 0.9 = exact match exists. 0.5 = related branch. 0.2 = would need new structure. 1.0 = user explicitly says "create/build X".
+  domainNovelty: Is this a new top-level area? 0.9 = brand new. 0.1 = fits existing branches.
+  relationalComplexity: Does this bridge multiple existing branches? 0.8 = yes. 0.1 = single branch.
 
 RULES:
-1. ALWAYS return valid JSON. Nothing else.
-2. When in doubt between "place" and "query", lean toward "place"
-   if the message contains any information worth storing.
-3. "destructive" is for deletions, moves, merges, status cascades,
-   and bulk changes. Edits to values/goals/names are "place".
-4. no_fit means ZERO connection to this tree. A stretch is still "place"
-   with low confidence, not no_fit.
-5. Conversational messages ("hi", "thanks", "what's up") are "query".
-6. Explicit structural intent ("I want to create a workout plan",
-   "build me a project tracker") is always "place" with pathConfidence=1.0.
-   The user is handing you the structure directly — never defer this.
-7. Casual thoughts, observations, and fragments ("thinking about starting
-   health stuff", "ate a steak today") should get LOW pathConfidence
-   unless there's a clear existing node to attach them to. These are
-   better held in short-term memory until the tree has enough structure.
+- Lean toward "place" if the message contains ANY storable information.
+- Edits to values/goals/names are "place", not "destructive".
+- no_fit means genuinely unrelated. A stretch is "place" with low confidence.
+- "create/build/plan X" is always "place" with pathConfidence=1.0, never defer.
+- Casual fragments ("thinking about health stuff") get LOW pathConfidence.
+- responseHint guides tone for the response. Match the user's energy.
+- summary is one line for logs.
 `.trim();
 
 /**
