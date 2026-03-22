@@ -1,12 +1,14 @@
 # TreeOS
 
-Self-hosted knowledge system. Grow trees of goals, plans, and reflections. An AI acts as your tree-builder through conversation. Connect multiple lands into a federated network.
+Self-hosted knowledge system. Grow trees of goals, plans, and reflections. An AI acts as your tree-builder through conversation. Connect multiple lands into a federated network. Install extensions from the registry to add capabilities.
 
 ## What it is
 
 - **Land** is the server. It stores your trees, runs the AI, and exposes an API.
 - **CLI** (`treeos`) is how you interact with it. Navigate trees, chat with AI, manage your land.
+- **Extensions** are modular packages. Understanding, scripts, billing, Solana wallets. Install what you need.
 - **Site** (optional) is a web frontend for browser access.
+- **Directory** is the registry. Lands discover each other and share extensions.
 
 ## Quick start
 
@@ -15,64 +17,134 @@ You need Node.js 18+ and MongoDB running.
 ```
 git clone <repo-url> && cd Tree
 npm run install:all
+npm land
 ```
 
-**Terminal 1: Start the land**
+First run walks you through setup: domain, port, MongoDB, directory URL. Then it pulls the extension registry and lets you choose which to install. After that, your land boots.
+
+Every run after that goes straight to boot.
+
+## Connect with the CLI
 
 ```
-npm start
-```
-
-First run launches a setup wizard. It asks for domain, port, MongoDB URI, and generates secrets automatically. No manual `.env` editing needed.
-
-**Terminal 2: Connect with the CLI**
-
-```
-cd cli && npm link
+npm install -g treeos
 treeos connect http://localhost:3000
 treeos register
 ```
 
-First user gets admin (god tier) instantly, no email required. Subsequent users go through email verification (configurable per land).
+Registration walks you through:
+1. Username, password, email
+2. Connect your LLM (or skip to use tree owner's models)
+3. Plant your first tree (name and type)
+
+Then you're in the shell.
 
 ## After setup
 
 ```
-treeos mkroot "My First Tree"     # Create a tree
-treeos use "My First Tree"        # Select it
-treeos start                      # Open AI conversation
+treeos chat "help me plan my week"     # Talk to the AI
+treeos mkdir "Workouts"                # Create a branch
+treeos cd Workouts                     # Navigate into it
+treeos place "chest press 4x10"        # Place content
+treeos query "what's my schedule?"     # Ask the tree
 ```
-
-The AI builds your tree through natural conversation. Ask it to plan, organize, reflect, or break down any topic.
 
 ## Project layout
 
 ```
-land/           Server (Node.js + Express + MongoDB + Socket.IO)
-  core/           Shared business logic
-  db/models/      Mongoose models
+land/
+  core/           Core protocol logic (nodes, notes, values, types, auth)
+  db/models/      Core Mongoose models (13 models)
+  extensions/     Modular packages (18 built-in)
+    blog/           manifest.js, index.js, routes.js, model.js
+    understanding/  manifest.js, index.js, routes.js, core.js, models/
+    scripts/        manifest.js, index.js, routes.js, core.js
+    energy/         manifest.js, index.js, routes.js, core.js
+    ...
   routes/
-    api/            REST endpoints
-    app/            Optional server-rendered pages
+    api/            REST endpoints (core protocol)
     billing/        Stripe integration
     auth.js         Login, register, password reset
     canopy.js       Federation protocol
   ws/             WebSocket system (AI conversation, modes, tools)
   mcp/            MCP server (AI tool execution)
   canopy/         Land identity, peering, proxy
-  jobs/           Scheduled tasks (dream, drain, cleanup, understanding)
+  boot.js         Setup wizard + server boot
 
 cli/            CLI client
-  commands/       All CLI commands (nav, auth, user, config, sharing, canopy)
+  commands/       All CLI commands (nav, auth, ai, ext, llm, etc.)
 
 site/           React + Vite frontend (optional)
 
-directory/      Canopy Directory Service (standalone, for land discovery)
+directory/      Canopy Directory Service (land discovery + extension registry)
+```
+
+## Extensions
+
+TreeOS is modular. The core protocol handles nodes, notes, values, types, and AI modes. Everything else is an extension.
+
+```
+treeos ext list                    # See what's loaded
+treeos ext search                  # Browse the registry
+treeos ext install understanding   # Pull from registry
+treeos ext disable solana          # Skip on next boot
+treeos ext enable solana           # Load again on next boot
+treeos ext uninstall blog          # Remove (data stays in DB)
+treeos ext publish my-extension    # Share with the network
+```
+
+### Built-in extensions
+
+| Extension | What it does |
+|-----------|-------------|
+| understanding | Bottom-up tree compression with LLM summarization |
+| scripts | Sandboxed JavaScript on nodes with value/goal mutation |
+| prestige | Node versioning system |
+| schedules | Date scheduling and calendar views |
+| energy | Daily energy budget with tier-based limits |
+| billing | Stripe subscription tiers |
+| raw-ideas | Unstructured capture with auto-placement |
+| dreams | Daily background maintenance (cleanup, drain, understand) |
+| blog | Land-level blog |
+| book | Export tree notes as shareable documents |
+| solana | On-chain wallets and token operations |
+| api-keys | User API keys for programmatic access |
+| user-llm | Custom LLM connections and per-user model routing |
+| user-queries | Notes, tags, contributions, chats, notifications |
+| deleted-revive | Soft delete with branch recovery |
+| visibility | Public/private tree toggle |
+| transaction-policy | Per-tree trade approval rules |
+| html-rendering | Server-rendered pages via ?html |
+
+### Building an extension
+
+An extension is a directory with a manifest and entry point:
+
+```
+my-extension/
+  manifest.js    # declares needs, provides, version
+  index.js       # exports init(core) function
+  routes.js      # optional Express router
+  core.js        # optional business logic
+  model.js       # optional Mongoose schema
+```
+
+Extensions declare what they need and only receive those services:
+
+```js
+// manifest.js
+export default {
+  name: "my-extension",
+  version: "1.0.0",
+  needs: { models: ["Node"] },
+  optional: { services: ["energy"] },
+  provides: { routes: "./routes.js" },
+};
 ```
 
 ## Node Types
 
-Nodes have an optional `type` field. Six core types provide a shared vocabulary:
+Six core types provide a shared vocabulary:
 
 | Type | Meaning |
 |------|---------|
@@ -81,51 +153,47 @@ Nodes have an optional `type` field. Six core types provide a shared vocabulary:
 | `task` | A discrete piece of work |
 | `knowledge` | Stored information or understanding |
 | `resource` | A tool, skill, capability, or reference |
-| `identity` | Who or what this tree represents, its values, its constraints |
+| `identity` | Who or what this tree represents |
 
-Type is a free-form string. Custom types are valid. `null` means untyped (default). Types carry no hardcoded behavior. How agents treat typed nodes is defined by the tree itself through its own instruction nodes (notes on resource/identity nodes). The type is the signal, the notes are the payload.
+Type is a free-form string. Custom types are valid. `null` means untyped. Types carry no hardcoded behavior. The tree programs its own agents through instruction nodes.
+
+## LLM Management
+
+Every user connects their own LLM (or uses tree owner's models):
 
 ```
-treeos type "goal"           # Set type on current node
-POST /api/v1/node/:id/editType   { "type": "goal" }
+treeos llm add                         # Interactive setup
+treeos llms                            # List connections
+treeos llm assign main <id>            # Set default model
+treeos llm tree-assign respond <id>    # Set model for chat on this tree
+treeos llm tree-assign placement <id>  # Set model for tree-building
 ```
+
+Tree slots: default, placement, respond, notes, understanding, cleanup, drain, notification.
 
 ## Configuration
 
-Boot-critical settings live in `.env` (generated by the setup wizard):
+Boot settings live in `.env` (generated by setup wizard):
+`LAND_DOMAIN`, `PORT`, `MONGODB_URI`, `JWT_SECRET`
 
-- `LAND_DOMAIN` . your domain (bare, no protocol)
-- `PORT` . server port
-- `MONGODB_URI` . MongoDB connection string
-- `JWT_SECRET` . auto-generated, do not share
+Runtime settings stored in the `.config` system node:
+`LAND_NAME`, `LAND_DEFAULT_TIER`, `REQUIRE_EMAIL`, `ENABLE_FRONTEND_HTML`, `DIRECTORY_URL`
 
-Runtime settings are stored in the `.config` system node after first boot. Manage them with `treeos config` or the admin API. These include:
-
-- `LAND_NAME` . display name for your land
-- `LAND_DEFAULT_TIER` . tier assigned to new users (basic/standard/premium/god)
-- `REQUIRE_EMAIL` . whether registration requires email verification (true/false)
-- `ENABLE_FRONTEND_HTML` . enable the optional server-rendered web UI
-- `DIRECTORY_URL` . canopy directory for land discovery
+Manage with `treeos config` or the admin API.
 
 ## Federation (Canopy)
 
-Lands can peer with each other. Users on one land can browse public trees on another, receive invites, and contribute remotely.
+Lands peer with each other. Users on one land can browse public trees on another, receive invites, and contribute remotely.
 
 ```
-treeos peers add my-friend.com        # Peer with another land
-treeos browse my-friend.com           # See their public trees
-treeos search "fitness"               # Search the directory network
+treeos peers add my-friend.com
+treeos browse my-friend.com
+treeos search "fitness"
 ```
 
-## LLM setup
+## Protocol
 
-TreeOS works with any OpenAI-compatible API (Ollama, vLLM, OpenRouter, etc.). Configure your LLM connection:
-
-```
-treeos config llm                     # Set up LLM endpoint
-```
-
-Or add a custom connection through the API/CLI. Per-tree LLM assignments let you use different models for different tasks (placement, understanding, response, cleanup).
+The core protocol is documented in [PROTOCOL.md](PROTOCOL.md). Extensions are documented in [EXTENSIONS.md](EXTENSIONS.md). Every land serves its capabilities at `GET /api/v1/protocol`.
 
 ## License
 
