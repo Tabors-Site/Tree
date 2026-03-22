@@ -14,6 +14,17 @@
   padding: 0 32px;
 }
 
+/* ── BANNER ── */
+.lp-banner {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+  padding: 12px 20px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.2px;
+}
+
 /* ── HERO ── */
 .lp-hero {
   min-height: 100vh;

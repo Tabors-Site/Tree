@@ -11,6 +11,11 @@ const LandingPage = () => {
   return (
     <div className="lp">
 
+      {/* ── BANNER ── */}
+      <div className="lp-banner">
+        TreeOS is launching in the next few days. Star the repo to get notified.
+      </div>
+
       {/* ── HERO ── */}
       <section className="lp-hero">
         <div className="lp-hero-inner">
