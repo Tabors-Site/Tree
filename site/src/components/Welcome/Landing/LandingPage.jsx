@@ -42,7 +42,7 @@ const LandingPage = () => {
             <div className="lp-card">
               <h3>Trees</h3>
               <p>
-                Nodes with notes, values, goals, and children. Navigate
+                Nodes with notes, trackable values, and children. Navigate
                 with <code>cd</code> and <code>ls</code>. Build with <code>mkdir</code>.
                 Not flat files. Not chat logs. Structure that persists.
               </p>
@@ -108,7 +108,7 @@ const LandingPage = () => {
               <strong>Build</strong> mkdir, rm, mv, rename, type
             </div>
             <div className="lp-cli-feat">
-              <strong>Content</strong> note, notes, values, goals
+              <strong>Content</strong> note, notes, value, goal
             </div>
             <div className="lp-cli-feat">
               <strong>AI</strong> chat, place, query
