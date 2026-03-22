@@ -67,6 +67,13 @@ const AboutHome = () => {
       active: true,
     },
     {
+      emoji: "🧩",
+      title: "Extensions",
+      desc: "Modular packages for your land. Install, disable, publish, and build your own.",
+      to: "/about/extensions",
+      active: true,
+    },
+    {
       emoji: "📝",
       title: "Blog",
       desc: "Ideas, updates, and thoughts on where TreeOS is going.",

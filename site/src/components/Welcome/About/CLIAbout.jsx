@@ -217,6 +217,24 @@ const CLIAbout = () => {
           <CmdRow cmd="understand-stop <runId>" desc="Stop a run" />
         </div>
 
+        {/* ── EXTENSIONS ── */}
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">🧩</span> Extensions
+          </div>
+          <div className="cli-section-text" style={{ marginBottom: 14 }}>
+            Manage land extensions. Install from the registry, disable, enable, or remove.
+          </div>
+          <CmdRow cmd="ext list" desc="List all loaded extensions with status" />
+          <CmdRow cmd="ext info <name>" desc="Show manifest details for an extension" />
+          <CmdRow cmd="ext search [query]" desc="Search the extension registry" />
+          <CmdRow cmd="ext install <name> [version]" desc="Install an extension from the registry" />
+          <CmdRow cmd="ext publish <name>" desc="Publish a local extension to the registry" />
+          <CmdRow cmd="ext disable <name>" desc="Disable an extension (takes effect on restart)" />
+          <CmdRow cmd="ext enable <name>" desc="Re-enable a disabled extension" />
+          <CmdRow cmd="ext uninstall <name>" desc="Remove extension directory (data kept in database)" />
+        </div>
+
         {/* ── BLOG ── */}
         <div className="cli-section">
           <div className="cli-section-title">
@@ -269,6 +287,8 @@ const CLIAbout = () => {
             <a href="/about/api" style={{ color: "rgba(255,255,255,0.85)" }}>API</a>
             {" | "}
             <a href="/about/cli" style={{ color: "rgba(255,255,255,0.85)" }}>CLI Guide</a>
+            {" | "}
+            <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.85)" }}>Extensions</a>
             {" | "}
             <a href="/blog" style={{ color: "rgba(255,255,255,0.85)" }}>Blog</a>
           </div>

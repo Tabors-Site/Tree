@@ -82,6 +82,11 @@ const ApiAccessSection = () => {
           </div>
 
           <div className="toc-group">
+            <div className="toc-group-label">Extensions</div>
+            <TocLink to="extensions">🧩 Extension Management</TocLink>
+          </div>
+
+          <div className="toc-group">
             <div className="toc-group-label">Blog</div>
             <TocLink to="blog">📝 Blog Endpoints</TocLink>
           </div>
@@ -2067,6 +2072,75 @@ updateScheduleForNode(datetime | null)`}</div>
   "slippageBps": 50
 }`}</div>
             <div className="ep-note">If type is SOL, amount is in lamports. If type is token, amount is the UI amount (human-readable).</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* EXTENSIONS                                                    */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="extensions">
+          <div className="section-title">
+            <span className="section-icon">🧩</span> Extension Management
+          </div>
+          <div className="section-text">
+            Manage modular extensions on your land. All endpoints require admin (god plan) authentication.
+            See the <a href="/about/extensions">Extensions guide</a> for full documentation.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/extensions</span>
+            </div>
+            <div className="ep-desc">List all loaded extensions with manifest info and disabled list.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/extensions/:name</span>
+            </div>
+            <div className="ep-desc">Get full manifest details for a specific extension.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/land/extensions/install</span>
+            </div>
+            <div className="ep-desc">Install extension from registry data. Body: {"{ name, version, manifest, files }"}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/land/extensions/:name/publish</span>
+            </div>
+            <div className="ep-desc">Publish a local extension to the Canopy Directory registry.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/land/extensions/:name/disable</span>
+            </div>
+            <div className="ep-desc">Disable an extension. Takes effect on restart. Files stay on disk.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/land/extensions/:name/enable</span>
+            </div>
+            <div className="ep-desc">Re-enable a disabled extension. Takes effect on restart.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/land/extensions/:name/uninstall</span>
+            </div>
+            <div className="ep-desc">Remove extension directory. Database data is kept. Takes effect on restart.</div>
           </div>
         </div>
 

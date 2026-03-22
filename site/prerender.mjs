@@ -24,6 +24,7 @@ const STATIC_ROUTES = [
   "/about/gateway",
   "/about/land",
   "/about/node-types",
+  "/about/extensions",
   "/privacy",
   "/terms",
   "/blog",
@@ -76,6 +77,10 @@ const PAGE_META = {
   "/about/node-types": {
     title: "Node Types - TreeOS",
     description: "Semantic labels for nodes. Six core types, custom types, and how trees program their own agents.",
+  },
+  "/about/extensions": {
+    title: "Extensions - TreeOS",
+    description: "Modular packages for TreeOS. Install, disable, publish, and build extensions for your land.",
   },
   "/privacy": {
     title: "Privacy Policy - TreeOS",
