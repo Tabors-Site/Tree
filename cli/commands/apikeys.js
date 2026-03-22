@@ -42,9 +42,10 @@ module.exports = (program) => {
         try {
           const data = await api.createApiKey(cfg.userId, name);
           console.log(chalk.green(`Created: ${name}`));
-          if (data.key) {
+          const key = data.apiKey || data.key;
+          if (key) {
             console.log(chalk.bold("\nYour API key (shown once, save it now):"));
-            console.log(`  ${chalk.cyan(data.key)}\n`);
+            console.log(`  ${chalk.cyan(key)}\n`);
           }
         } catch (e) {
           console.error(chalk.red(e.message));
