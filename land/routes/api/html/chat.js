@@ -975,7 +975,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
     // ── Tree selection ────────────────────────────────────────────────
     function selectTree(rootId, name) {
       activeRootId = rootId;
-      advancedLink.href = "/app?rootId=" + rootId;
+      advancedLink.href = "/dashboard?rootId=" + rootId;
       treePicker.style.display = "none";
       chatArea.classList.add("active");
       rootName.textContent = name;
