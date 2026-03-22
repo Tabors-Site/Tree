@@ -25,7 +25,6 @@ const STATIC_ROUTES = [
   "/about/land",
   "/about/node-types",
   "/about/extensions",
-  "/landing",
   "/privacy",
   "/terms",
   "/blog",
@@ -82,10 +81,6 @@ const PAGE_META = {
   "/about/extensions": {
     title: "Extensions - TreeOS",
     description: "Modular packages for TreeOS. Install, disable, publish, and build extensions for your land.",
-  },
-  "/landing": {
-    title: "TreeOS . An Operating System for Context",
-    description: "Build living trees of knowledge. Self-hosted, modular, federated. Your AI navigates, organizes, and grows them.",
   },
   "/privacy": {
     title: "Privacy Policy - TreeOS",
