@@ -510,7 +510,7 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
   let isPublicQuery = false;
   let canopyProxyClient = null; // set if using visitor's home land LLM
 
-  const treeHasLlm = !!(rootCheck.llmAssignments?.default && rootCheck.llmAssignments.default !== "none");
+  const treeHasLlm = rootCheck.llmAssignments?.default !== "none";
 
   if (isPublicAccess) {
     // Public access: tree must be public

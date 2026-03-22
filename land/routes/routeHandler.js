@@ -84,9 +84,8 @@ export default function registerURLRoutes(app) {
       version: "1.0",
       capabilities: [
         "chat", "place", "query",
-        "canopy", "transactions", "contributions", "types",
-        "llm-assignments", "raw-ideas", "gateway",
-        "dreams", "understanding",
+        "canopy", "types", "gateway", "llm-assignments",
+        "transactions", "contributions",
       ],
       nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
       extensions: [
@@ -95,6 +94,9 @@ export default function registerURLRoutes(app) {
         "scripts",
         "prestige",
         "schedules",
+        "dreams",
+        "understanding",
+        "raw-ideas",
         "book",
         "blog",
         "api-keys",

@@ -172,10 +172,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
 
     const isPublicAccess = !!req.isPublicAccess;
     const isAuthenticated = !!req.userId;
-    const queryAvailable = !!(
-      (root.llmAssignments?.default && root.llmAssignments.default !== "none") ||
-      isAuthenticated
-    );
+    const queryAvailable = root.llmAssignments?.default !== "none" || isAuthenticated;
 
     return res.send(
       renderQueryPage({

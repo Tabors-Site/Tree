@@ -309,7 +309,7 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // Code blocks: ` + `` + `(\w*)?\n(content)` + `` + `
+    // Code blocks (triple backtick fenced)
     var codeBlockRe = new RegExp(BT + BT + BT + "(\\\\w*)?\\\\n([\\\\s\\\\S]*?)" + BT + BT + BT, "g");
     html = html.replace(codeBlockRe, function(m, lang, code) {
       return "<pre><code>" + code.trim() + "</code></pre>";
