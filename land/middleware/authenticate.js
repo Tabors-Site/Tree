@@ -110,25 +110,29 @@ export default async function authenticate(req, res, next) {
       req.headers["x-api-key"] ||
       (authHeader?.startsWith("ApiKey ")
         ? authHeader.slice(7).trim()
-        : null) ||
-      req.body?.apiKey;
+        : null);
 
     if (!apiKey) {
       return res.status(401).json({
         message: "Missing credentials",
       });
     }
-    // Find users with active keys only
-    const users = await User.find({ "apiKeys.revoked": false });
 
-    for (const user of users) {
+    // Use key prefix for indexed lookup instead of scanning all users
+    const prefix = apiKey.slice(0, 8);
+    const candidates = await User.find({
+      "apiKeys.keyPrefix": prefix,
+      "apiKeys.revoked": false,
+    });
+
+    for (const user of candidates) {
       for (const key of user.apiKeys) {
         if (key.revoked) continue;
+        if (key.keyPrefix && key.keyPrefix !== prefix) continue;
 
         const match = await bcrypt.compare(apiKey, key.keyHash);
         if (!match) continue;
 
-        // 🔓 API key authenticated
         req.userId = user._id;
         req.username = user.username;
         req.authType = "apiKey";

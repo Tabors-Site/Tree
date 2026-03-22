@@ -33,6 +33,7 @@ const ApiKeySchema = new mongoose.Schema(
   {
     _id: { type: String, default: uuidv4 },
     keyHash: { type: String, required: true },
+    keyPrefix: { type: String, index: true },
     name: { type: String, default: "API Key" },
     lastUsedAt: { type: Date, default: null },
     revoked: { type: Boolean, default: false },

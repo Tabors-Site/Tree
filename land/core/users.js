@@ -619,8 +619,9 @@ if (!password || typeof password !== "string" || password.length < 8) {
 export async function generateApiKey() {
   const rawKey = crypto.randomBytes(32).toString("hex"); // 64 chars
   const keyHash = await bcrypt.hash(rawKey, 10);
+  const keyPrefix = rawKey.slice(0, 8);
 
-  return { rawKey, keyHash };
+  return { rawKey, keyHash, keyPrefix };
 }
 
 export async function compareApiKey(rawKey, keyHash) {
@@ -660,10 +661,11 @@ if (containsHtml(safeName)) {
       user.apiKeys.forEach((k) => (k.revoked = true));
     }
 
-    const { rawKey, keyHash } = await generateApiKey();
+    const { rawKey, keyHash, keyPrefix } = await generateApiKey();
 
     user.apiKeys.push({
       keyHash,
+      keyPrefix,
       name: safeName,
     });
 
