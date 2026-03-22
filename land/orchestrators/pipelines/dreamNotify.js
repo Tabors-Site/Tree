@@ -6,7 +6,7 @@ import { OrchestratorRuntime } from "../runtime.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
 import AIChat from "../../db/models/aiChat.js";
 import Node from "../../db/models/node.js";
-import Notification from "../../db/models/notification.js";
+import Notification from "../../extensions/dreams/notification.model.js";
 
 const MSG_CAP = 1500;
 

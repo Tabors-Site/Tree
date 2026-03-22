@@ -1,7 +1,7 @@
 // core/notifications.js
 // Shared notification queries used by routesURL and chat.
 
-import Notification from "../../db/models/notification.js";
+import Notification from "../../extensions/dreams/notification.model.js";
 
 /**
  * Get notifications for a user, optionally filtered by rootId.
