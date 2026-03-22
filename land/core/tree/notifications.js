@@ -1,7 +1,8 @@
 // core/notifications.js
 // Shared notification queries used by routesURL and chat.
 
-import Notification from "../../extensions/dreams/notification.model.js";
+import mongoose from "mongoose";
+const Notification = mongoose.models.Notification || { find: () => ({ sort: () => ({ limit: () => ({ lean: () => [] }) }) }), countDocuments: () => 0, updateMany: () => ({}) };
 
 /**
  * Get notifications for a user, optionally filtered by rootId.

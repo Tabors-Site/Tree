@@ -13,6 +13,8 @@ const router = express.Router();
 
 import Node from "../../db/models/node.js";
 import { userHasLlm } from "../../ws/conversation.js";
+import { orchestrateUnderstanding } from "./pipeline.js";
+import { getSessionsForUser, endSession, SESSION_TYPES } from "../../ws/sessionRegistry.js";
 import {
   renderUnderstandingRun,
   renderUnderstandingNode,
@@ -602,5 +604,43 @@ router.get(
     }
   },
 );
+
+// ─────────────────────────────────────────────────────────────────────────
+// Orchestration endpoints (moved from routes/api/orchestrate.js)
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post("/root/:nodeId/understandings/run/:runId/orchestrate", authenticate, async (req, res) => {
+  const { nodeId, runId } = req.params;
+  const userId = req.userId;
+  const username = req.username;
+  const fromSite = req.body?.source === "user";
+
+  const rootNode = await Node.findById(nodeId).select("llmAssignments").lean();
+  const hasRootLlm = !!(rootNode?.llmAssignments?.default && rootNode.llmAssignments.default !== "none");
+  if (!hasRootLlm && !(await userHasLlm(userId))) {
+    return res.status(403).json({ success: false, error: "No LLM connection. Visit /setup to set one up." });
+  }
+
+  try {
+    const result = await orchestrateUnderstanding({ rootId: nodeId, userId, username, runId, fromSite });
+    if ("html" in req.query && result.success) {
+      return res.redirect(`/api/v1/root/${nodeId}/understandings/run/${runId}?token=${req.query.token ?? ""}&html`);
+    }
+    return res.json(result);
+  } catch (err) {
+    console.error("Understanding orchestration error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post("/root/:nodeId/understandings/run/:runId/stop", authenticate, async (req, res) => {
+  const { runId } = req.params;
+  const userId = req.userId;
+  const sessions = getSessionsForUser(userId);
+  const match = sessions.find((s) => s.type === SESSION_TYPES.UNDERSTANDING_ORCHESTRATE && s.meta?.runId === runId);
+  if (!match) return res.json({ success: false, error: "No active session found for this run" });
+  endSession(match.sessionId);
+  return res.json({ success: true });
+});
 
 export default router;

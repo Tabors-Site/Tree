@@ -11,7 +11,12 @@ import registerURLRoutes from "./routes/routeHandler.js";
 import { initWebSocketServer } from "./ws/websocket.js";
 import { notFoundPage } from "./middleware/notFoundPage.js";
 import securityHeaders from "./middleware/securityHeaders.js";
-import { stripeWebhook } from "./extensions/billing/webhook.js";
+// Billing webhook loaded dynamically (extension-owned)
+let stripeWebhook = (req, res) => res.status(503).json({ error: "Billing extension not loaded" });
+try {
+  const mod = await import("./extensions/billing/webhook.js");
+  stripeWebhook = mod.stripeWebhook;
+} catch {}
 import { onListen } from "./startup.js";
 import { getLandUrl } from "./canopy/identity.js";
 

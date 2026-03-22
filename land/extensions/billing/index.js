@@ -1,6 +1,6 @@
 import express from "express";
 import authenticate from "../../middleware/authenticate.js";
-import { createPurchaseSession } from "../../routes/billing/purchase.js";
+import { createPurchaseSession } from "./purchase.js";
 
 export async function init(core) {
   const router = express.Router();

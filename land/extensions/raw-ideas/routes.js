@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
@@ -7,6 +8,8 @@ import urlAuth from "../../middleware/urlAuth.js";
 import preUploadCheck from "../../middleware/preUploadCheck.js";
 import { notFoundPage } from "../../middleware/notFoundPage.js";
 import { getLandUrl } from "../../canopy/identity.js";
+import { userHasLlm } from "../../ws/conversation.js";
+import { orchestrateRawIdeaPlacement } from "./pipeline.js";
 import RawIdea from "./model.js";
 import User from "../../db/models/user.js";
 import {
@@ -302,6 +305,122 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     res.status(400).json({ error: "Unknown raw idea type" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Orchestration endpoints (moved from routes/api/orchestrate.js)
+// ─────────────────────────────────────────────────────────────────────────
+
+const TIMEOUT_MS = 19 * 60 * 1000;
+
+router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
+  try {
+    if (req.userId.toString() !== req.params.userId.toString()) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+    const content = req.body?.content;
+    if (!content || typeof content !== "string" || !content.trim()) {
+      return res.status(400).json({ error: "content (text string) is required" });
+    }
+    if (!(await userHasLlm(req.userId))) {
+      return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+    }
+    const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
+    if (alreadyProcessing) {
+      return res.status(409).json({ error: "Another idea is already being placed. Please wait for it to finish." });
+    }
+    const result = await coreCreateRawIdea({ contentType: "text", content: content.trim(), userId: req.userId });
+    const user = await User.findById(req.userId).select("username").lean();
+    const source = req.body?.source === "user" ? "user" : "api";
+    orchestrateRawIdeaPlacement({
+      rawIdeaId: result.rawIdea._id, userId: req.userId, username: user?.username || "unknown", source,
+    }).catch((err) => console.error("Raw-idea orchestration failed:", err.message));
+    return res.status(202).json({ message: "Orchestration started", rawIdeaId: result.rawIdea._id });
+  } catch (err) {
+    console.error("raw-idea create+place error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
+  try {
+    if (req.userId.toString() !== req.params.userId.toString()) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+    const content = req.body?.content;
+    if (!content || typeof content !== "string" || !content.trim()) {
+      return res.status(400).json({ error: "content (text string) is required" });
+    }
+    if (!(await userHasLlm(req.userId))) {
+      return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+    }
+    const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
+    if (alreadyProcessing) {
+      return res.status(409).json({ error: "Another idea is already being placed. Please wait for it to finish." });
+    }
+    const result = await coreCreateRawIdea({ contentType: "text", content: content.trim(), userId: req.userId });
+    const user = await User.findById(req.userId).select("username").lean();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) res.status(504).json({ success: false, error: "Request timed out." }); }, TIMEOUT_MS);
+    const source = req.body?.source === "user" ? "user" : "api";
+    const orchResult = await orchestrateRawIdeaPlacement({ rawIdeaId: result.rawIdea._id, userId: req.userId, username: user?.username || "unknown", withResponse: true, source });
+    clearTimeout(timer);
+    if (timedOut) return;
+    if (!orchResult || !orchResult.success) return res.json({ success: false, error: orchResult?.reason || "Could not process the idea." });
+    return res.json({ success: true, answer: orchResult.answer, rootId: orchResult.rootId, rootName: orchResult.rootName, targetNodeId: orchResult.targetNodeId, rawIdeaId: result.rawIdea._id });
+  } catch (err) {
+    console.error("raw-idea create+chat error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/user/:userId/raw-ideas/:rawIdeaId/place", authenticate, async (req, res) => {
+  try {
+    const { rawIdeaId } = req.params;
+    if (req.userId.toString() !== req.params.userId.toString()) return res.status(403).json({ error: "Not authorized" });
+    const rawIdea = await RawIdea.findById(rawIdeaId);
+    if (!rawIdea || rawIdea.userId === "deleted") return res.status(404).json({ error: "Raw idea not found" });
+    if (rawIdea.userId.toString() !== req.userId.toString()) return res.status(403).json({ error: "Not authorized" });
+    if (rawIdea.contentType === "file") return res.status(422).json({ error: "File ideas cannot be auto-placed" });
+    if (rawIdea.status && rawIdea.status !== "pending") return res.status(409).json({ error: `Already ${rawIdea.status}` });
+    if (!(await userHasLlm(req.userId))) return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+    const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
+    if (alreadyProcessing) return res.status(409).json({ error: "Another idea is already being placed. Please wait for it to finish." });
+    const user = await User.findById(req.userId).select("username").lean();
+    const source = req.body?.source === "user" ? "user" : "api";
+    orchestrateRawIdeaPlacement({ rawIdeaId, userId: req.userId, username: user?.username || "unknown", source }).catch((err) => console.error("Raw-idea orchestration failed:", err.message));
+    return res.status(202).json({ message: "Orchestration started" });
+  } catch (err) {
+    console.error("raw-idea orchestrate error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/user/:userId/raw-ideas/:rawIdeaId/chat", authenticate, async (req, res) => {
+  try {
+    const { rawIdeaId } = req.params;
+    if (req.userId.toString() !== req.params.userId.toString()) return res.status(403).json({ error: "Not authorized" });
+    const rawIdea = await RawIdea.findById(rawIdeaId);
+    if (!rawIdea || rawIdea.userId === "deleted") return res.status(404).json({ error: "Raw idea not found" });
+    if (rawIdea.userId.toString() !== req.userId.toString()) return res.status(403).json({ error: "Not authorized" });
+    if (rawIdea.contentType === "file") return res.status(422).json({ error: "File ideas cannot be auto-placed" });
+    if (rawIdea.status && rawIdea.status !== "pending") return res.status(409).json({ error: `Already ${rawIdea.status}` });
+    if (!(await userHasLlm(req.userId))) return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+    const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
+    if (alreadyProcessing) return res.status(409).json({ error: "Another idea is already being placed. Please wait for it to finish." });
+    const user = await User.findById(req.userId).select("username").lean();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) res.status(504).json({ success: false, error: "Request timed out." }); }, TIMEOUT_MS);
+    const source = req.body?.source === "user" ? "user" : "api";
+    const result = await orchestrateRawIdeaPlacement({ rawIdeaId, userId: req.userId, username: user?.username || "unknown", withResponse: true, source });
+    clearTimeout(timer);
+    if (timedOut) return;
+    if (!result || !result.success) return res.json({ success: false, error: result?.reason || "Could not process the idea." });
+    return res.json({ success: true, answer: result.answer, rootId: result.rootId, rootName: result.rootName, targetNodeId: result.targetNodeId });
+  } catch (err) {
+    console.error("raw-idea chat error:", err);
+    return res.status(500).json({ error: err.message });
   }
 });
 

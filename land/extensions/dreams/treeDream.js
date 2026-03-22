@@ -12,9 +12,9 @@ import { orchestrateExpand } from "../../orchestrators/pipelines/cleanupExpand.j
 import { drainTree } from "./shortTermDrain.js";
 import { findOrCreateUnderstandingRun } from "../../core/tree/understanding.js";
 import { orchestrateUnderstanding } from "../understanding/pipeline.js";
-import { orchestrateDreamNotify } from "../../orchestrators/pipelines/dreamNotify.js";
-import { userHasLlm } from "../ws/conversation.js";
-import { acquireLock, releaseLock } from "../orchestrators/locks.js";
+import { orchestrateDreamNotify } from "./dreamNotify.js";
+import { userHasLlm } from "../../ws/conversation.js";
+import { acquireLock, releaseLock } from "../../orchestrators/locks.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG

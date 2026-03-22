@@ -2,7 +2,7 @@ import {
   startTreeDreamJob,
   stopTreeDreamJob,
   runTreeDreamJob,
-} from "../../jobs/treeDream.js";
+} from "./treeDream.js";
 
 export async function init(core) {
   return {
