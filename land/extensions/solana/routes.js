@@ -8,7 +8,7 @@ import {
   getVersionWalletInfo,
   sendSOLFromVersion,
   swapFromVersion,
-} from "../../core/tree/solana.js";
+} from "./core.js";
 import {
   renderSolanaNoWallet,
   renderSolanaWallet,
