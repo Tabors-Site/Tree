@@ -58,6 +58,7 @@ import {
   updateParentRelationship,
   editNodeName,
 } from "../core/tree/treeManagement.js";
+import { editNodeType } from "../core/tree/nodeTypes.js";
 
 import {
   getRootNodesForUser,
@@ -349,6 +350,7 @@ function getMcpServer() {
     - Update values, goals, status, notes = edit-node-version-values, edit-node-version-goals, edit-node-or-branch-status,  create-node-version-note
     - Add prestige/version = add-node-prestige
     - Change a nods name = edit-node-name
+    - Set/clear node type = edit-node-type
     - Suggest nodes or improvements
     -(useful tool if you need to undo stuff) = get-node-contributions
 
@@ -1682,6 +1684,14 @@ RULES
         .optional()
         .describe("Optional note for the root node."),
 
+      type: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Optional semantic type. Core types: goal, plan, task, knowledge, resource, identity. Custom types are valid.",
+        ),
+
       userId: z.string().describe("Injected by server. Ignore."),
       aiChatId: z
         .string()
@@ -1700,7 +1710,7 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ name, note, userId, aiChatId, sessionId }) => {
+    async ({ name, note, type, userId, aiChatId, sessionId }) => {
       try {
         const rootNode = await createNewNode(
           name,
@@ -1716,6 +1726,7 @@ RULES
           true,
           aiChatId,
           sessionId,
+          type ?? null,
         );
 
         return {
@@ -1768,6 +1779,13 @@ RULES
         .nullable()
         .optional()
         .describe("Optional note for new node made on creation."),
+      type: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Optional semantic type. Core types: goal, plan, task, knowledge, resource, identity. Custom types are valid.",
+        ),
       children: z
         .array(NodeSchema)
         .nullable()
@@ -1949,6 +1967,68 @@ RULES
               text: `❌ Failed to rename node: ${err.message}`,
             },
           ],
+        };
+      }
+    },
+  );
+
+  server.tool(
+    "edit-node-type",
+    "Set or clear a node's semantic type.",
+    {
+      nodeId: z.string().describe("The ID of the node to update."),
+      newType: z
+        .string()
+        .nullable()
+        .describe(
+          "Type label or null to clear. Core types: goal, plan, task, knowledge, resource, identity. Custom types are valid.",
+        ),
+      userId: z.string().describe("Injected by server. Ignore."),
+      aiChatId: z
+        .string()
+        .nullable()
+        .optional()
+        .describe("Injected by server. Ignore."),
+      sessionId: z
+        .string()
+        .nullable()
+        .optional()
+        .describe("Injected by server. Ignore."),
+    },
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    async ({ nodeId, newType, userId, aiChatId, sessionId }) => {
+      try {
+        const { oldType, newType: updatedType } = await editNodeType({
+          nodeId,
+          newType,
+          userId,
+          wasAi: true,
+          aiChatId,
+          sessionId,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Node ${nodeId} type changed from "${oldType}" to "${updatedType}".`,
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to update node type: ${err.message}`,
+            },
+          ],
+          isError: true,
         };
       }
     },
@@ -3447,6 +3527,7 @@ function mapToolCallToApiUrl(toolName, args) {
     case "update-node-script":
     case "execute-node-script":
     case "edit-node-name":
+    case "edit-node-type":
       return withToken(`/api/v1/node/${nodeId}?html`);
 
     /* ---------------- BATCH ---------------- */

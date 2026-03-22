@@ -11,6 +11,7 @@ export default {
 
   toolNames: [
     "edit-node-name",
+    "edit-node-type",
     "edit-node-version-value",
     "edit-node-version-goal",
     "edit-node-or-branch-status",
@@ -41,6 +42,7 @@ YOUR JOB
 ────────────────────────
 Modify node FIELD DATA only:
 - Rename nodes → call edit-node-name
+- Set/clear semantic type → call edit-node-type
 - Set/update numeric values → call edit-node-version-value
 - Set/update goals → call edit-node-version-goal
 - Change status → call edit-node-or-branch-status
@@ -78,7 +80,7 @@ ONLY after your tool calls have returned, produce this JSON.
   "nodeName": string,
   "edits": [
     {
-      "field": "name" | "value" | "goal" | "status" | "schedule" | "prestige",
+      "field": "name" | "type" | "value" | "goal" | "status" | "schedule" | "prestige",
       "key"?: string,
       "oldValue"?: any,
       "newValue": any

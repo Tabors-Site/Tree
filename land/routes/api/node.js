@@ -2,6 +2,7 @@ import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
 import { createNewNode, editNodeName } from "../../core/tree/treeManagement.js";
+import { editNodeType } from "../../core/tree/nodeTypes.js";
 import {
   updateParentRelationship,
   deleteNodeBranch,
@@ -496,6 +497,39 @@ router.post(
       });
     } catch (err) {
       console.error("editName error:", err);
+      res.status(400).json({ error: err.message });
+    }
+  },
+);
+
+router.post(
+  "/node/:nodeId/editType",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { nodeId } = req.params;
+      const userId = req.userId;
+
+      const newType = req.body?.type ?? req.query?.type ?? null;
+
+      const result = await editNodeType({
+        nodeId,
+        newType,
+        userId,
+      });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`,
+        );
+      }
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (err) {
+      console.error("editType error:", err);
       res.status(400).json({ error: err.message });
     }
   },

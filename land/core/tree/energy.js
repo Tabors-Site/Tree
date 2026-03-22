@@ -68,6 +68,7 @@ const BASE_ACTION_COSTS = {
   editSchedule: 1,
   editGoal: 1,
   editNameNode: 1,
+  editType: 1,
   updateParent: 1,
   updateChildNode: 1,
   branchLifecycle: 1,

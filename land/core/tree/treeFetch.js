@@ -622,6 +622,10 @@ export async function getContextForAi(nodeId, options = {}) {
     totalVersions: node.versions?.length || 0,
   };
 
+  if (node.type) {
+    context.type = node.type;
+  }
+
   // ---- Current version data ----
   if (currentVersion) {
     context.version = {

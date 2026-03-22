@@ -255,6 +255,30 @@ User: "I should start learning some basic Japanese phrases"
     "confidence": 0.6
   }
 
+Example 8 — STRUCTURED DUMP (decompose, don't paste):
+
+User: "Weekly Workout Plan: Monday: Chest & Triceps – Bench press 4x10, Incline dumbbell press 3x12, Tricep dips 3x15. Tuesday: Back & Biceps – Pull-ups 4x8, Bent-over rows 3x10. Wednesday: Rest or Light Cardio – 30 min walk."
+→ {
+    "plan": [
+      {
+        "intent": "structure",
+        "targetHint": null,
+        "directive": "Create branch with type 'plan' named 'Weekly' with children: 'Monday' (type: task, children: 'Bench' with values sets=4 reps=10, 'Incline DB Press' values sets=3 reps=12, 'Dips' values sets=3 reps=15), 'Tuesday' (type: task, children: 'Pull-ups' values sets=4 reps=8, 'Rows' values sets=3 reps=10), 'Wednesday' (type: task) with note 'Rest or light cardio, 30 min walk or cycling'.",
+        "needsNavigation": false,
+        "isDestructive": false
+      }
+    ],
+    "responseHint": "Confirm the weekly plan is set up with each day and exercise as its own trackable node. Quick and natural.",
+    "summary": "Decompose weekly workout into structured tree with days and exercises",
+    "confidence": 0.95
+  }
+
+Why full decomposition? The input has clear hierarchy: week > days > exercises.
+Each exercise has trackable state (sets, reps). Pasting this as one note or
+one long node name wastes the tree. Decompose into structure with short names.
+"Bench" not "Bench Press 4x10" (the values carry the numbers). "Monday" not
+"Monday: Chest & Triceps" (children show what's in it).
+
 ────────────────────────────────────────────────────────
 RULES
 ────────────────────────────────────────────────────────
@@ -266,6 +290,9 @@ RULES
    the thought genuinely introduces trackable state.
 3. Apply the Node Identity Test. If it has measurable, changing state →
    node. If it's a thought about something → note. When unsure, it's a note.
+   BUT: if the input contains lists, schedules, or multi-part plans with
+   internal hierarchy, DECOMPOSE into structure with types. Don't paste
+   structured content as a flat note.
 4. STRUCTURE IS EXPENSIVE. Every new node changes the tree's shape
    permanently. A new top-level branch is a major decision. Prefer:
    note on existing > edit existing > child of existing > new branch.

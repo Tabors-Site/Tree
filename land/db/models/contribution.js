@@ -49,6 +49,7 @@ const ContributionSchema = new mongoose.Schema({
       "executeScript",
       "updateChildNode",
       "editNameNode",
+      "editType",
       "rawIdea",
       "branchLifecycle",
       "understanding",
@@ -200,6 +201,14 @@ const ContributionSchema = new mongoose.Schema({
     type: {
       oldName: { type: String, default: null },
       newName: { type: String, default: null },
+      _id: false,
+    },
+  },
+
+  editType: {
+    type: {
+      oldType: { type: String, default: null },
+      newType: { type: String, default: null },
       _id: false,
     },
   },

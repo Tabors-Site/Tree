@@ -91,6 +91,13 @@ FIELDS:
 - confidence: 0.0 to 1.0.
 
 ────────────────────────
+NODE TYPES
+────────────────────────
+Nodes have an optional type field. Core types: goal, plan, task, knowledge, resource, identity.
+Custom types are valid. null means untyped (default). Type describes what the node represents.
+When creating nodes, you may assign a type in the structure step if the intent is clear.
+
+────────────────────────
 PLACEMENT RULES
 ────────────────────────
 - ALWAYS navigate and read context before planning. Never guess placement.

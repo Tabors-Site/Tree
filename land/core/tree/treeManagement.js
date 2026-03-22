@@ -38,6 +38,7 @@ export async function createNewNode(
   wasAi = false,
   aiChatId = null,
   sessionId = null,
+  type = null,
 ) {
   if (!name || typeof name !== "string" || !name.trim()) {
     throw new Error("Node name is required");
@@ -67,6 +68,7 @@ export async function createNewNode(
 
   const newNode = new Node({
     name,
+    type,
     prestige: 0,
     versions: [
       {
@@ -176,7 +178,7 @@ async function createNodesRecursiveInternal(
   aiChatId = null,
   sessionId = null,
 ) {
-  const { name, schedule, values, goals, reeffectTime, effectTime, note } =
+  const { name, schedule, values, goals, reeffectTime, effectTime, note, type } =
     nodeData;
 
   const children = Array.isArray(nodeData.children) ? nodeData.children : [];
@@ -197,6 +199,7 @@ async function createNodesRecursiveInternal(
     wasAi,
     aiChatId,
     sessionId,
+    type || null,
   );
 
   let totalCreated = 1;

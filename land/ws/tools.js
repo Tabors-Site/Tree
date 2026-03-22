@@ -425,6 +425,11 @@ const TOOL_DEFS = {
           },
           goals: { type: "object", description: "Key-value pairs for goals" },
           note: { type: "string", description: "Optional initial note" },
+          type: {
+            type: "string",
+            description:
+              "Optional semantic type. Core types: goal, plan, task, knowledge, resource, identity. Custom types valid.",
+          },
         },
         required: ["name", "parentNodeID", "userId"],
       },
@@ -446,6 +451,11 @@ const TOOL_DEFS = {
           note: {
             type: "string",
             description: "Optional initial note for the root node.",
+          },
+          type: {
+            type: "string",
+            description:
+              "Optional semantic type. Core types: goal, plan, task, knowledge, resource, identity.",
           },
           userId: {
             type: "string",
@@ -475,6 +485,11 @@ const TOOL_DEFS = {
               values: { type: "object" },
               goals: { type: "object" },
               note: { type: "string" },
+              type: {
+                type: "string",
+                description:
+                  "Optional semantic type. Core types: goal, plan, task, knowledge, resource, identity.",
+              },
               children: { type: "array" },
             },
             required: ["name"],
@@ -588,6 +603,27 @@ const TOOL_DEFS = {
           userId: { type: "string" },
         },
         required: ["nodeId", "newName", "userId"],
+      },
+    },
+  },
+
+  "edit-node-type": {
+    type: "function",
+    function: {
+      name: "edit-node-type",
+      description:
+        "Set or clear a node's semantic type. Core types: goal, plan, task, knowledge, resource, identity. Custom types valid. Use null to clear.",
+      parameters: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          newType: {
+            type: ["string", "null"],
+            description: "Type label or null to clear.",
+          },
+          userId: { type: "string" },
+        },
+        required: ["nodeId", "newType", "userId"],
       },
     },
   },

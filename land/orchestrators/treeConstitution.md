@@ -44,6 +44,25 @@ When new structure IS needed, build it deliberately:
 - A branch with one child is usually wrong. Either the child IS the
   parent, or siblings are missing.
 
+### Naming: Compress, Don't Repeat
+
+Node names should be short. The hierarchy provides context, so names
+should add new information, not echo what's already above them.
+
+Bad: `My Workout Plan / Chest Workouts / Morning Chest Routine`
+Good: `Workouts / Chest / Morning`
+
+Rules:
+- Never repeat the parent's name in the child. "Chest" under "Workouts"
+  is already "Workouts > Chest". Don't say "Chest Workouts".
+- Never restate the type. A node typed "plan" named "My Workout Plan"
+  says "plan" twice. Just call it "Workouts".
+- Drop filler words: "My", "The", "A", "For", "Of The".
+- Keep names short enough that a path reads cleanly:
+  `Fitness/Push/Morning` not `Physical Fitness Goals/Push Day Exercises/Morning Training Session`
+- The full path IS the name. Each node only needs the part its parent
+  doesn't already say.
+
 ### 3. Keep Things Organized as the Tree Grows
 
 A tree with 5 branches is easy. A tree with 50 needs discipline.
@@ -88,6 +107,25 @@ each one against the domain. Propose a concrete plan:
 Don't punt to "please clarify." Don't say "I need more details."
 The tree summary is your details. The root name is your criteria.
 Make the judgment call — the user can always say no.
+
+### 6. Decompose Structure, Don't Dump Text
+
+When input contains lists, schedules, multi-part plans, or anything with
+internal hierarchy, DECOMPOSE it into tree structure. Do not paste a wall
+of text as a single note or node name.
+
+Signs that input should decompose into structure:
+- Multiple items with their own quantities, schedules, or states
+- Lists with sub-items (days with exercises, phases with tasks)
+- Plans with sequential steps that each have trackable state
+- Any content where you could draw a tree from it
+
+"Weekly workout: Monday chest 4x10 bench, Tuesday back 4x8 pullups..."
+is NOT one note. It's a branch with days as children, exercises under
+each day, and values on each exercise.
+
+The tree is the structure. Notes are for thoughts about nodes, not for
+storing structured data as flat text.
 
 ## Core Concepts
 

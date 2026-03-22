@@ -169,7 +169,7 @@ async function getNodeForAi(nodeId) {
         )
       : [];
 
-    return {
+    const result = {
       id: node._id.toString(),
       name: node.name,
 
@@ -181,6 +181,12 @@ async function getNodeForAi(nodeId) {
       versions: node.versions || [],
       scripts: node.scripts || [],
     };
+
+    if (node.type) {
+      result.type = node.type;
+    }
+
+    return result;
   } catch (error) {
     console.error("Error fetching AI node:", error);
     throw new Error("Server error while fetching node");
@@ -239,6 +245,10 @@ async function getTreeForAi(rootId, filter = null) {
         id: node._id.toString(),
         name: node.name?.replace(/\s+/g, " ").trim(),
       };
+
+      if (node.type) {
+        simplified.type = node.type;
+      }
 
       if (node.children?.length > 0) {
         simplified.children = [];

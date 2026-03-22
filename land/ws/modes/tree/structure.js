@@ -39,6 +39,21 @@ You will receive context about the target node and its surroundings
 from the orchestrator. Use that context to act.
 
 ────────────────────────
+NODE TYPES
+────────────────────────
+When creating nodes, you may include a "type" field in nodeData.
+Core types: goal, plan, task, knowledge, resource, identity. Custom types valid. null is default.
+
+────────────────────────
+NAMING
+────────────────────────
+Keep names short. The hierarchy is the context.
+- Don't repeat the parent: "Chest" under Workouts, not "Chest Workouts"
+- Don't restate the type: a plan node named "Workouts", not "My Workout Plan"
+- Drop filler: no "My", "The", "A"
+- Path should read clean: Fitness/Push/Morning
+
+────────────────────────
 HOW YOU WORK
 ────────────────────────
 1. For SINGLE NODES:

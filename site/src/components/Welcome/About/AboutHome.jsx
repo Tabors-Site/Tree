@@ -46,6 +46,13 @@ const AboutHome = () => {
       active: true,
     },
     {
+      emoji: "🏷️",
+      title: "Node Types",
+      desc: "Semantic labels for nodes. Six core types, custom types, and how trees program their own agents.",
+      to: "/about/node-types",
+      active: true,
+    },
+    {
       emoji: "📡",
       title: "Gateway",
       desc: "Connect your trees to Telegram, Discord, and push notifications. Output channels, input modes, and more.",

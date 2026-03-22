@@ -9,6 +9,7 @@ import StartedAbout from "./About/StartedAbout.jsx";
 import CLIAbout from "./About/CLIAbout.jsx";
 import GatewayAbout from "./About/GatewayAbout.jsx";
 import LandAbout from "./About/LandAbout.jsx";
+import NodeTypesAbout from "./About/NodeTypesAbout.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 
@@ -45,6 +46,7 @@ const WelcomeRoutes = () => {
         <Route path="cli" element={<CLIAbout />} />
         <Route path="gateway" element={<GatewayAbout />} />
         <Route path="land" element={<LandAbout />} />
+        <Route path="node-types" element={<NodeTypesAbout />} />
 
       </Route>
 
