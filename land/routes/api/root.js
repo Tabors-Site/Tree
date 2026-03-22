@@ -11,7 +11,7 @@ import { getGlobalValuesTreeAndFlat } from "../../core/tree/values.js";
 
 import Node from "../../db/models/node.js";
 import ShortMemory from "../../db/models/shortMemory.js";
-import { getConnectionsForUser } from "../../core/llms/customLLM.js";
+import { getConnectionsForUser, ROOT_LLM_SLOTS } from "../../core/llms/customLLM.js";
 import { getNodeAIChats } from "../../core/llms/aichat.js";
 import { buildPathString } from "../../core/tree/treeFetch.js";
 
@@ -22,6 +22,7 @@ import {
   renderValuesPage,
 } from "./html/root.js";
 import { renderQueryPage } from "./html/query.js";
+import { registerWithDirectory } from "../../canopy/directory.js";
 
 const router = express.Router();
 
@@ -164,15 +165,24 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
     }
 
     const root = await Node.findById(rootId)
-      .select("name rootOwner visibility llmAssignments")
+      .select("name rootOwner visibility llmAssignments contributors")
       .populate("rootOwner", "username")
       .lean();
 
     if (!root) return res.status(404).json({ error: "Tree not found" });
 
+    // Only show query page for public trees, or to the owner/contributors
     const isPublicAccess = !!req.isPublicAccess;
     const isAuthenticated = !!req.userId;
-    const queryAvailable = root.llmAssignments?.default !== "none" || isAuthenticated;
+    const isOwner = isAuthenticated && String(root.rootOwner?._id) === String(req.userId);
+    const isContributor = isAuthenticated && (root.contributors || []).map(String).includes(String(req.userId));
+
+    if (root.visibility !== "public" && !isOwner && !isContributor) {
+      return res.status(403).json({ error: "This tree is not public." });
+    }
+
+    const treeHasLlm = !!(root.llmAssignments?.default && root.llmAssignments.default !== "none");
+    const queryAvailable = treeHasLlm || (isOwner || isContributor);
 
     return res.send(
       renderQueryPage({
@@ -253,6 +263,11 @@ router.post("/root/:rootId/visibility", authenticate, async (req, res) => {
     }
 
     await Node.findByIdAndUpdate(rootId, { $set: { visibility } });
+
+    // Immediately re-sync with directory so public/private change is reflected
+    registerWithDirectory().catch((err) =>
+      console.error("[Land] Directory re-sync after visibility change failed:", err)
+    );
 
     return res.json({ success: true, visibility });
   } catch (err) {
@@ -427,19 +442,9 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     const { rootId } = req.params;
     const { slot, connectionId } = req.body;
 
-    const validSlots = [
-      "default",
-      "placement",
-      "understanding",
-      "respond",
-      "notes",
-      "cleanup",
-      "drain",
-      "notification",
-    ];
-    if (!validSlots.includes(slot)) {
+    if (!ROOT_LLM_SLOTS.includes(slot)) {
       return res.status(400).json({
-        error: `Invalid slot. Must be one of: ${validSlots.join(", ")}`,
+        error: `Invalid slot. Must be one of: ${ROOT_LLM_SLOTS.join(", ")}`,
       });
     }
 

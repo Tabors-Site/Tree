@@ -62,4 +62,11 @@ function isRemoteSession(cfg) {
   return !!cfg.remoteDomain;
 }
 
-module.exports = { load, save, requireAuth, currentNodeId, currentPath, currentLand, isRemoteSession };
+function hasExtension(cfg, name) {
+  const protocol = cfg.landProtocol;
+  if (!protocol) return true; // no protocol info cached, assume available
+  const all = [...(protocol.capabilities || []), ...(protocol.extensions || [])];
+  return all.includes(name);
+}
+
+module.exports = { load, save, requireAuth, currentNodeId, currentPath, currentLand, isRemoteSession, hasExtension };

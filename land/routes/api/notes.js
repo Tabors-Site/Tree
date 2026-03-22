@@ -49,6 +49,16 @@ router.param("version", async (req, res, next, val) => {
   }
 });
 
+// Middleware for versionless routes: auto-resolve to latest prestige
+async function useLatest(req, res, next) {
+  try {
+    req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
+    next();
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+}
+
 const uploadsFolder = path.join(process.cwd(), "uploads");
 
 if (!fs.existsSync(uploadsFolder)) {
@@ -686,6 +696,41 @@ router.post(
 );
 
 // NEW NOTE EDITOR
+
+// ─────────────────────────────────────────────────────────────────────────
+// Versionless aliases (protocol-compliant, auto-resolve to latest prestige)
+// These forward to the versioned route handlers by injecting the version.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get("/node/:nodeId/notes", urlAuth, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/notes`;
+  router.handle(req, res, next);
+});
+
+router.post("/node/:nodeId/notes", authenticate, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/notes`;
+  router.handle(req, res, next);
+});
+
+router.get("/node/:nodeId/notes/:noteId", useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/notes/${req.params.noteId}`;
+  router.handle(req, res, next);
+});
+
+router.put("/node/:nodeId/notes/:noteId", authenticate, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/notes/${req.params.noteId}`;
+  router.handle(req, res, next);
+});
+
+router.delete("/node/:nodeId/notes/:noteId", authenticate, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/notes/${req.params.noteId}`;
+  router.handle(req, res, next);
+});
+
+router.post("/node/:nodeId/notes/:noteId/transfer", authenticate, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/notes/${req.params.noteId}/transfer`;
+  router.handle(req, res, next);
+});
 
 router.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {

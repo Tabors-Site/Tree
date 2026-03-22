@@ -76,4 +76,15 @@ router.get(
   },
 );
 
+// Versionless alias (protocol-compliant)
+router.get("/node/:nodeId/contributions", urlAuth, async (req, res, next) => {
+  try {
+    req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
+    req.url = `/node/${req.params.nodeId}/${req.params.version}/contributions`;
+    router.handle(req, res, next);
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+});
+
 export default router;

@@ -123,7 +123,7 @@ module.exports = (program) => {
         const target = findChild(children, oldName);
         if (!target) return;
 
-        await api.renameNode(target._id, "latest", newName);
+        await api.renameNode(target._id, newName);
         console.log(chalk.green(`✓ Renamed "${oldName}" → "${newName}"`));
       } catch (e) {
         console.error(chalk.red(e.message));
@@ -256,7 +256,7 @@ module.exports = (program) => {
         const api = getApi(cfg);
         try {
           const nodeId = currentNodeId(cfg);
-          await api.setStatus(nodeId, "latest", stat);
+          await api.setStatus(nodeId, stat);
           console.log(chalk.green(`✓ ${stat} (recursive)`));
         } catch (e) {
           console.error(chalk.red(e.message));
@@ -277,7 +277,7 @@ module.exports = (program) => {
       try {
         const nodeId = currentNodeId(cfg);
         if (raw === "clear") {
-          await api.setSchedule(nodeId, "latest", null, 0);
+          await api.setSchedule(nodeId, null, 0);
           return console.log(chalk.green("✓ Schedule cleared"));
         }
 
@@ -289,7 +289,7 @@ module.exports = (program) => {
         }
 
         const schedule = parseDate(dateParts.join(" "));
-        await api.setSchedule(nodeId, "latest", schedule, reeffect);
+        await api.setSchedule(nodeId, schedule, reeffect);
         console.log(
           chalk.green(`✓ Scheduled for ${new Date(schedule).toLocaleString()}`) +
             (reeffect ? chalk.dim(` (reeffect: ${reeffect}h)`) : ""),

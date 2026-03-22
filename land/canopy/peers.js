@@ -1,6 +1,7 @@
 import LandPeer from "../db/models/landPeer.js";
 import { getLandIdentity, getLandInfoPayload } from "./identity.js";
 import { isCompatibleVersion } from "./protocol.js";
+import { isPrivateHost } from "./security.js";
 
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const DEGRADED_THRESHOLD = 2;
@@ -169,8 +170,14 @@ export async function pingPeer(peer) {
     // Check for domain redirect. Verify the new domain before trusting it.
     if (info.redirect && info.newDomain && info.newDomain !== peer.domain) {
       try {
+        const newUrl = info.newDomain.startsWith("http") ? info.newDomain : "https://" + info.newDomain;
+        const redirectHost = new URL(newUrl).hostname;
+        if (isPrivateHost(redirectHost)) {
+          console.warn(`[Canopy] Peer ${peer.domain} redirect to private address ${info.newDomain} REJECTED`);
+          throw new Error("private address");
+        }
         const verifyRes = await fetch(
-          `${info.newDomain.startsWith("http") ? info.newDomain : "https://" + info.newDomain}/canopy/info`,
+          `${newUrl}/canopy/info`,
           { signal: AbortSignal.timeout(10000) }
         );
         if (verifyRes.ok) {

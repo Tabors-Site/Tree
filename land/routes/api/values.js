@@ -31,6 +31,15 @@ router.param("version", async (req, res, next, val) => {
   }
 });
 
+async function useLatest(req, res, next) {
+  try {
+    req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
+    next();
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+}
+
 const allowedParams = ["token", "html"];
 
 // SET VALUE
@@ -406,5 +415,21 @@ router.post(
     }
   },
 );
+
+// Versionless aliases (protocol-compliant)
+router.get("/node/:nodeId/values", urlAuth, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/values`;
+  router.handle(req, res, next);
+});
+
+router.post("/node/:nodeId/value", authenticate, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/value`;
+  router.handle(req, res, next);
+});
+
+router.post("/node/:nodeId/goal", authenticate, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/goal`;
+  router.handle(req, res, next);
+});
 
 export default router;

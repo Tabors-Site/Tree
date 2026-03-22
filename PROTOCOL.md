@@ -10,7 +10,7 @@ The key words MUST, SHOULD, and MAY follow RFC 2119 conventions.
 
 A **land** is a server that hosts trees. A **tree** is a hierarchical structure of nodes. A **node** holds content (notes), optional numeric state (values/goals), and a semantic type. Users and AI agents interact with trees through three defined modes.
 
-Lands are self-hosted. They MAY operate standalone or connect to other lands through the Canopy federation protocol. Every land MUST serve its capabilities at `GET /protocol`.
+Lands are self-hosted. They MAY operate standalone or connect to other lands through the Canopy federation protocol. Every land MUST serve its capabilities at `GET /api/v1/protocol`.
 
 ## Authentication
 
@@ -19,9 +19,9 @@ Lands MUST support bearer token authentication via the `Authorization: Bearer <t
 Lands MUST provide:
 
 ```
-POST /register    Body: { username, password }
-POST /login       Body: { username, password }    Response: { token, userId }
-GET  /me          Response: { userId, username }
+POST /api/v1/register    Body: { username, password }
+POST /api/v1/login       Body: { username, password }    Response: { token, userId }
+GET  /api/v1/me          Response: { userId, username }
 ```
 
 Lands MAY support additional auth (email verification, OAuth, API keys) as extensions.
@@ -213,7 +213,7 @@ Lands MUST support per-tree LLM routing. Each tree can assign different models t
 |--------|------|------|-------------|
 | POST | /api/v1/root/:rootId/llm-assign | Write | Assign LLM to slot. Body: `{ slot, connectionId }` |
 
-Slots define which model handles which stage. Lands SHOULD support at minimum a default slot and a placement slot.
+Slots define which model handles which stage. Lands SHOULD support at minimum a default slot.
 
 ## Gateway
 
@@ -248,7 +248,7 @@ Lands MAY register with a directory service for network-wide discovery. The dire
 Every land MUST serve:
 
 ```
-GET /protocol
+GET /api/v1/protocol
 Response: {
   "version": "1.0",
   "capabilities": [

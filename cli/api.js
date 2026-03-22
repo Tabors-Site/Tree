@@ -187,8 +187,8 @@ class TreeAPI {
     if (type) body.type = type;
     return this.post(`/node/${nodeId}/createChild`, body);
   }
-  renameNode(nodeId, ver, name) {
-    return this.post(`/node/${nodeId}/${ver}/editName`, { name });
+  renameNode(nodeId, name) {
+    return this.post(`/node/${nodeId}/editName`, { name });
   }
   moveNode(nodeId, newParentId) {
     return this.post(`/node/${nodeId}/updateParent`, { newParentId });
@@ -205,46 +205,46 @@ class TreeAPI {
   reviveAsRoot(userId, nodeId) {
     return this.post(`/user/${userId}/deleted/${nodeId}/reviveAsRoot`);
   }
-  setStatus(nodeId, ver, status) {
-    return this.post(`/node/${nodeId}/${ver}/editStatus`, {
+  setStatus(nodeId, status) {
+    return this.post(`/node/${nodeId}/editStatus`, {
       status,
       isInherited: true,
     });
   }
-  prestige(nodeId, ver = "latest") {
-    return this.post(`/node/${nodeId}/${ver}/prestige`, {});
+  prestige(nodeId) {
+    return this.post(`/node/${nodeId}/prestige`, {});
   }
-  setSchedule(nodeId, ver, newSchedule, reeffectTime) {
+  setSchedule(nodeId, newSchedule, reeffectTime) {
     const body = { newSchedule };
     if (reeffectTime != null) body.reeffectTime = reeffectTime;
-    return this.post(`/node/${nodeId}/${ver}/editSchedule`, body);
+    return this.post(`/node/${nodeId}/editSchedule`, body);
   }
 
   // ── Notes ─────────────────────────────────────────────────────────────────
-  listNotes(nodeId, ver = "latest", opts = {}) {
+  listNotes(nodeId, opts = {}) {
     const params = new URLSearchParams();
     if (opts.limit) params.set("limit", opts.limit);
     if (opts.q) params.set("q", opts.q);
     const qs = params.toString();
-    return this.get(`/node/${nodeId}/${ver}/notes${qs ? "?" + qs : ""}`);
+    const base = opts.version != null ? `/node/${nodeId}/${opts.version}/notes` : `/node/${nodeId}/notes`;
+    return this.get(`${base}${qs ? "?" + qs : ""}`);
   }
   // ── Contributions ───────────────────────────────────────────────────────
-  listNodeContributions(nodeId, ver = "latest", opts = {}) {
+  listNodeContributions(nodeId, opts = {}) {
     const params = new URLSearchParams();
     if (opts.limit) params.set("limit", opts.limit);
     const qs = params.toString();
-    return this.get(
-      `/node/${nodeId}/${ver}/contributions${qs ? "?" + qs : ""}`,
-    );
+    const base = opts.version != null ? `/node/${nodeId}/${opts.version}/contributions` : `/node/${nodeId}/contributions`;
+    return this.get(`${base}${qs ? "?" + qs : ""}`);
   }
-  createNote(nodeId, ver, content) {
-    return this.post(`/node/${nodeId}/${ver}/notes`, { content });
+  createNote(nodeId, content) {
+    return this.post(`/node/${nodeId}/notes`, { content });
   }
-  editNote(nodeId, ver, noteId, content) {
-    return this.put(`/node/${nodeId}/${ver}/notes/${noteId}`, { content });
+  editNote(nodeId, noteId, content) {
+    return this.put(`/node/${nodeId}/notes/${noteId}`, { content });
   }
-  deleteNote(nodeId, ver, noteId) {
-    return this.del(`/node/${nodeId}/${ver}/notes/${noteId}`);
+  deleteNote(nodeId, noteId) {
+    return this.del(`/node/${nodeId}/notes/${noteId}`);
   }
   getBook(rootId) {
     return this.get(`/root/${rootId}/book`);
@@ -254,17 +254,18 @@ class TreeAPI {
   }
 
   // ── Values ────────────────────────────────────────────────────────────────
-  getValues(nodeId, ver = "latest") {
-    return this.get(`/node/${nodeId}/${ver}/values`);
+  getValues(nodeId, version) {
+    const base = version != null ? `/node/${nodeId}/${version}/values` : `/node/${nodeId}/values`;
+    return this.get(base);
   }
   getRootValues(rootId) {
     return this.get(`/root/${rootId}/values`);
   }
-  setValue(nodeId, ver, key, value) {
-    return this.post(`/node/${nodeId}/${ver}/value`, { key, value });
+  setValue(nodeId, key, value) {
+    return this.post(`/node/${nodeId}/value`, { key, value });
   }
-  setGoal(nodeId, ver, key, goal) {
-    return this.post(`/node/${nodeId}/${ver}/goal`, { key, goal });
+  setGoal(nodeId, key, goal) {
+    return this.post(`/node/${nodeId}/goal`, { key, goal });
   }
 
   // ── AI ────────────────────────────────────────────────────────────────────

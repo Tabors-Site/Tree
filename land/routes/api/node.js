@@ -42,6 +42,16 @@ router.param("version", async (req, res, next, val) => {
   }
 });
 
+// Middleware for versionless routes: auto-resolve to latest prestige
+async function useLatest(req, res, next) {
+  try {
+    req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
+    next();
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+}
+
 import getNodeName from "./helpers/getNameById.js";
 
 // Allowed query params for HTML mode
@@ -125,87 +135,81 @@ router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-router.post(
-  "/node/:nodeId/:version/editStatus",
-  authenticate,
-  async (req, res) => {
-    try {
-      const { nodeId, version } = req.params;
-      const userId = req.userId;
+const editStatusHandler = async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const userId = req.userId;
 
-      const status = req.body?.status || req.query?.status;
-      const ALLOWED_STATUSES = ["active", "completed", "trimmed"];
+    const status = req.body?.status || req.query?.status;
+    const ALLOWED_STATUSES = ["active", "completed", "trimmed"];
 
-      if (!ALLOWED_STATUSES.includes(status)) {
-        return res.status(400).json({
-          error: "Invalid status. Must be active, completed, or trimmed.",
-        });
-      }
-      const isInherited =
-        req.body?.isInherited === "true" ||
-        req.body?.isInherited === true ||
-        req.query?.isInherited === "true";
-
-      if (!status) {
-        return res.status(400).json({ error: "status is required" });
-      }
-
-      const result = await editStatus({
-        nodeId,
-        status,
-        version: Number(version),
-        isInherited,
-        userId,
+    if (!ALLOWED_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: "Invalid status. Must be active, completed, or trimmed.",
       });
-
-      // HTML redirect support
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/v1/node/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
-        );
-      }
-
-      res.json({ success: true, ...result });
-    } catch (err) {
-      console.error("editStatus error:", err);
-      res.status(400).json({ error: err.message });
     }
-  },
-);
+    const isInherited =
+      req.body?.isInherited === "true" ||
+      req.body?.isInherited === true ||
+      req.query?.isInherited === "true";
 
-router.post(
-  "/node/:nodeId/:version/prestige",
-  authenticate,
-  async (req, res) => {
-    try {
-      const { nodeId, version } = req.params;
-      const userId = req.userId;
-
-      const nextVersion = Number(version) + 1;
-
-      if (Number.isNaN(nextVersion)) {
-        return res.status(400).json({ error: "Invalid version" });
-      }
-
-      const result = await addPrestige({
-        nodeId,
-        userId,
-      });
-
-      // HTML redirect support
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/v1/node/${nodeId}/${nextVersion}?token=${req.query.token ?? ""}&html`,
-        );
-      }
-
-      res.json({ success: true, ...result });
-    } catch (err) {
-      console.error("prestige error:", err);
-      res.status(400).json({ error: err.message });
+    if (!status) {
+      return res.status(400).json({ error: "status is required" });
     }
-  },
-);
+
+    const result = await editStatus({
+      nodeId,
+      status,
+      version: Number(version),
+      isInherited,
+      userId,
+    });
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/v1/node/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
+      );
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("editStatus error:", err);
+    res.status(400).json({ error: err.message });
+  }
+};
+router.post("/node/:nodeId/editStatus", authenticate, useLatest, editStatusHandler);
+router.post("/node/:nodeId/:version/editStatus", authenticate, editStatusHandler);
+
+const prestigeHandler = async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const userId = req.userId;
+
+    const nextVersion = Number(version) + 1;
+
+    if (Number.isNaN(nextVersion)) {
+      return res.status(400).json({ error: "Invalid version" });
+    }
+
+    const result = await addPrestige({
+      nodeId,
+      userId,
+    });
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/v1/node/${nodeId}/${nextVersion}?token=${req.query.token ?? ""}&html`,
+      );
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("prestige error:", err);
+    res.status(400).json({ error: err.message });
+  }
+};
+router.post("/node/:nodeId/prestige", authenticate, useLatest, prestigeHandler);
+router.post("/node/:nodeId/:version/prestige", authenticate, prestigeHandler);
 
 router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
   try {
@@ -469,43 +473,40 @@ router.post("/node/:nodeId/delete", authenticate, async (req, res) => {
   }
 });
 
-router.post(
-  "/node/:nodeId/:version/editName",
-  authenticate,
-  async (req, res) => {
-    try {
-      const { nodeId } = req.params;
-      const userId = req.userId;
+const editNameHandler = async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const userId = req.userId;
 
-      const newName = req.body?.name || req.query?.name;
+    const newName = req.body?.name || req.query?.name;
 
-      if (!newName) {
-        return res.status(400).json({ error: "newName is required" });
-      }
-
-      const result = await editNodeName({
-        nodeId,
-        newName,
-        userId,
-      });
-
-      // HTML redirect support
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`,
-        );
-      }
-
-      res.json({
-        success: true,
-        ...result,
-      });
-    } catch (err) {
-      console.error("editName error:", err);
-      res.status(400).json({ error: err.message });
+    if (!newName) {
+      return res.status(400).json({ error: "newName is required" });
     }
-  },
-);
+
+    const result = await editNodeName({
+      nodeId,
+      newName,
+      userId,
+    });
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`,
+      );
+    }
+
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (err) {
+    console.error("editName error:", err);
+    res.status(400).json({ error: err.message });
+  }
+};
+router.post("/node/:nodeId/editName", authenticate, editNameHandler);
+router.post("/node/:nodeId/:version/editName", authenticate, editNameHandler);
 
 router.post(
   "/node/:nodeId/editType",
@@ -543,46 +544,43 @@ router.post(
   },
 );
 
-router.post(
-  "/node/:nodeId/:version/editSchedule",
-  authenticate,
-  async (req, res) => {
-    try {
-      const { nodeId, version } = req.params;
-      const userId = req.userId;
+const editScheduleHandler = async (req, res) => {
+  try {
+    const { nodeId, version } = req.params;
+    const userId = req.userId;
 
-      const newSchedule = req.body?.newSchedule || req.query?.newSchedule;
+    const newSchedule = req.body?.newSchedule || req.query?.newSchedule;
 
-      const reeffectTime = req.body?.reeffectTime ?? req.query?.reeffectTime;
+    const reeffectTime = req.body?.reeffectTime ?? req.query?.reeffectTime;
 
-      if (reeffectTime === undefined) {
-        return res.status(400).json({
-          error: "reeffectTime is required",
-        });
-      }
-
-      const result = await updateSchedule({
-        nodeId,
-        versionIndex: Number(version),
-        newSchedule,
-        reeffectTime: Number(reeffectTime),
-        userId,
+    if (reeffectTime === undefined) {
+      return res.status(400).json({
+        error: "reeffectTime is required",
       });
-
-      // HTML redirect support (same pattern as editStatus)
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/v1/node/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
-        );
-      }
-
-      res.json({ success: true, ...result });
-    } catch (err) {
-      console.error("editSchedule error:", err);
-      res.status(err.status || 400).json({ error: err.message });
     }
-  },
-);
+
+    const result = await updateSchedule({
+      nodeId,
+      versionIndex: Number(version),
+      newSchedule,
+      reeffectTime: Number(reeffectTime),
+      userId,
+    });
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/v1/node/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
+      );
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("editSchedule error:", err);
+    res.status(err.status || 400).json({ error: err.message });
+  }
+};
+router.post("/node/:nodeId/editSchedule", authenticate, useLatest, editScheduleHandler);
+router.post("/node/:nodeId/:version/editSchedule", authenticate, editScheduleHandler);
 
 router.get("/node/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
   try {

@@ -16,7 +16,7 @@ module.exports = (program) => {
       const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
-        const data = await api.createNote(nodeId, "latest", content);
+        const data = await api.createNote(nodeId, content);
         console.log(
           chalk.green("✓ Note saved") + "  " + chalk.dim(data._id || ""),
         );
@@ -27,10 +27,11 @@ module.exports = (program) => {
 
   program
     .command("notes")
-    .description("List notes (user notes at home, node notes in a tree). -l limit, -q search")
+    .description("List notes (user notes at home, node notes in a tree). -l limit, -q search, -v version")
     .option("-l, --limit [n]", "Limit results")
     .option("-q, --query [query]", "Search notes")
-    .action(async ({ limit, query }) => {
+    .option("-v, --version [n]", "Specific prestige version (default: latest)")
+    .action(async ({ limit, query, version }) => {
       const cfg = requireAuth();
       const api = getApi(cfg);
       try {
@@ -40,7 +41,9 @@ module.exports = (program) => {
           notes = data.notes || data || [];
         } else {
           const nodeId = currentNodeId(cfg);
-          const data = await api.listNotes(nodeId, "latest", { limit, q: query });
+          const opts = { limit, q: query };
+          if (version != null) opts.version = Number(version);
+          const data = await api.listNotes(nodeId, opts);
           notes = data.notes || data || [];
         }
         printNotes(Array.isArray(notes) ? notes : []);
@@ -83,7 +86,7 @@ module.exports = (program) => {
       const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
-        await api.deleteNote(nodeId, "latest", noteId);
+        await api.deleteNote(nodeId, noteId);
         console.log(chalk.green("✓ Note deleted"));
       } catch (e) {
         console.error(chalk.red(e.message));
@@ -109,8 +112,9 @@ module.exports = (program) => {
 
   program
     .command("contributions")
-    .description("List contributions (user at home, node in a tree)")
-    .action(async () => {
+    .description("List contributions (user at home, node in a tree). -v version")
+    .option("-v, --version [n]", "Specific prestige version (default: latest)")
+    .action(async ({ version }) => {
       const cfg = requireAuth();
       const api = getApi(cfg);
       try {
@@ -120,7 +124,9 @@ module.exports = (program) => {
           printContributions(Array.isArray(items) ? items : []);
         } else {
           const nodeId = currentNodeId(cfg);
-          const data = await api.listNodeContributions(nodeId, "latest", { limit: 50 });
+          const opts = { limit: 50 };
+          if (version != null) opts.version = Number(version);
+          const data = await api.listNodeContributions(nodeId, opts);
           const items = data.contributions || data || [];
           printContributions(Array.isArray(items) ? items : []);
         }
@@ -131,10 +137,11 @@ module.exports = (program) => {
 
   program
     .command("values")
-    .description("List values on the current node. -g global totals, -t per-node tree breakdown")
+    .description("List values on the current node. -g global totals, -t per-node tree breakdown, -v version")
     .option("-g, --global", "Show flat totals across the entire tree")
     .option("-t, --tree", "Show values as a tree with per-node breakdowns")
-    .action(async ({ global: isGlobal, tree: isTree }) => {
+    .option("-v, --version [n]", "Specific prestige version (default: latest)")
+    .action(async ({ global: isGlobal, tree: isTree, version }) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
@@ -175,7 +182,7 @@ module.exports = (program) => {
             entries.forEach(([k, v]) => console.log(`  ${chalk.cyan(k)}  ${v}`));
           }
         } else {
-          const data = await api.getValues(currentNodeId(cfg));
+          const data = await api.getValues(currentNodeId(cfg), version != null ? Number(version) : undefined);
           const vals = data.values || data || {};
           const entries = Object.entries(vals).filter(([k]) => !k.startsWith("_auto__"));
           if (!entries.length) return console.log(chalk.dim("  (no values)"));
@@ -198,7 +205,7 @@ module.exports = (program) => {
       try {
         const nodeId = currentNodeId(cfg);
         const parsed = isNaN(value) ? value : Number(value);
-        await api.setValue(nodeId, "latest", key, parsed);
+        await api.setValue(nodeId, key, parsed);
         console.log(chalk.green(`✓ Set ${key} = ${parsed}`));
       } catch (e) {
         console.error(chalk.red(e.message));
@@ -217,7 +224,7 @@ module.exports = (program) => {
       try {
         const nodeId = currentNodeId(cfg);
         const parsed = isNaN(goal) ? goal : Number(goal);
-        await api.setGoal(nodeId, "latest", key, parsed);
+        await api.setGoal(nodeId, key, parsed);
         console.log(chalk.green(`✓ Goal ${key} = ${parsed}`));
       } catch (e) {
         console.error(chalk.red(e.message));
@@ -258,7 +265,7 @@ module.exports = (program) => {
             notes = data.notes || data || [];
           } else {
             const nodeId = currentNodeId(cfg);
-            const data = await api.listNotes(nodeId, "latest");
+            const data = await api.listNotes(nodeId);
             notes = data.notes || data || [];
           }
           let note;

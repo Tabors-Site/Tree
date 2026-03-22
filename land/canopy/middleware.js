@@ -10,7 +10,7 @@ import { canopyResponseHeaders } from "./protocol.js";
 const rateLimitWindows = new Map();
 const WINDOW_MS = 60 * 1000;
 
-function checkRateLimit(key, maxRequests) {
+export function checkRateLimit(key, maxRequests) {
   const now = Date.now();
   const window = rateLimitWindows.get(key);
 

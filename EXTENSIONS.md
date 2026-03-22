@@ -40,11 +40,16 @@ Plan upgrades and additional energy purchases via Stripe.
 
 ## Prestige / Versioning
 
-Nodes can have multiple versions (prestige levels). Each prestige creates a new version with fresh values while archiving the previous one.
+Nodes can have multiple versions (prestige levels). Each prestige creates a new version with fresh values while archiving the previous one. Lands that implement prestige add versioned routes (`/:version/`) alongside the core versionless ones. The versionless routes always operate on the latest version.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | /api/v1/node/:nodeId/:version/prestige | Create new version |
+| POST | /api/v1/node/:nodeId/prestige | Create new version (latest) |
+| POST | /api/v1/node/:nodeId/:version/prestige | Create new version (specific) |
+| GET | /api/v1/node/:nodeId/:version | View specific version data |
+| GET | /api/v1/node/:nodeId/:version/notes | Notes on specific version |
+| GET | /api/v1/node/:nodeId/:version/values | Values on specific version |
+| GET | /api/v1/node/:nodeId/:version/contributions | Contributions on specific version |
 
 ## Schedules
 
@@ -52,7 +57,8 @@ Nodes can be scheduled with a date and optional repeat interval.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | /api/v1/node/:nodeId/:version/editSchedule | Set schedule. Body: `{ newSchedule, reeffectTime }` |
+| POST | /api/v1/node/:nodeId/editSchedule | Set schedule (latest version). Body: `{ newSchedule, reeffectTime }` |
+| POST | /api/v1/node/:nodeId/:version/editSchedule | Set schedule (specific version) |
 | GET | /api/v1/root/:rootId/calendar | Scheduled nodes by date range |
 
 ## Scripts
@@ -108,6 +114,104 @@ Runtime configuration stored in system nodes. Managed by admin.
 | GET | /api/v1/land/config | All config |
 | GET | /api/v1/land/config/:key | Single value |
 | PUT | /api/v1/land/config/:key | Set value (admin) |
+
+## Dreams
+
+Daily background maintenance cycle per tree. Runs cleanup (expand sparse branches, reorganize), drain (place deferred short-term memory items), and understanding (bottom-up compression).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/v1/root/:rootId/dream-time | Set daily dream time. Body: `{ dreamTime: "HH:MM" }` |
+
+How dreams are implemented internally (cleanup passes, drain pipeline, etc.) is up to the land.
+
+## Understanding
+
+Bottom-up compression of tree knowledge. Creates navigable summaries from a specified perspective.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/root/:rootId/understandings | List runs |
+| POST | /api/v1/root/:rootId/understandings | Start run. Body: `{ perspective, incremental }` |
+| GET | /api/v1/root/:rootId/understandings/run/:runId | View run results |
+| POST | /api/v1/root/:rootId/understandings/run/:runId/stop | Stop in-progress run |
+
+## Raw Ideas
+
+Unstructured capture (text or file). Ideas sit in a queue until auto-placed into the best tree by an AI agent or manually transferred.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/user/:userId/raw-ideas | List ideas |
+| POST | /api/v1/user/:userId/raw-ideas | Create idea (text or file upload) |
+| DELETE | /api/v1/user/:userId/raw-ideas/:id | Delete idea |
+| POST | /api/v1/user/:userId/raw-ideas/chat | Chat about ideas |
+| POST | /api/v1/user/:userId/raw-ideas/place | Auto-place idea into tree |
+| POST | /api/v1/user/:userId/raw-ideas/auto-place | Toggle auto-placement |
+| POST | /api/v1/user/:userId/raw-ideas/:id/transfer | Move idea to note on node |
+
+## Deleted Branches / Revive
+
+Soft-deleted nodes can be listed and revived. Deletion sets `parent: "deleted"`. Revival restores the node under a new parent or as a new root tree.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/user/:userId/deleted | List deleted branches |
+| POST | /api/v1/user/:userId/deleted/:nodeId/revive | Revive under parent. Body: `{ targetParentId }` |
+| POST | /api/v1/user/:userId/deleted/:nodeId/reviveAsRoot | Revive as new root tree |
+
+## Per-User LLM Assignments
+
+Profile-level LLM connections, separate from per-tree assignments in the core protocol. Users can set a default model and a raw-idea model.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/user/:userId/custom-llm | List user LLM connections |
+| POST | /api/v1/user/:userId/custom-llm | Create connection |
+| DELETE | /api/v1/user/:userId/custom-llm/:connectionId | Delete connection |
+| POST | /api/v1/user/:userId/llm-assign | Assign connection to slot. Body: `{ slot, connectionId }` |
+
+## User Queries
+
+User-level data access for notes, tags, contributions, chats, and notifications.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/user/:userId/notes | All notes by user |
+| GET | /api/v1/user/:userId/tags | Notes where user was @tagged |
+| GET | /api/v1/user/:userId/contributions | User contribution audit log |
+| GET | /api/v1/user/:userId/chats | AI chat history |
+| GET | /api/v1/user/:userId/notifications | System notifications |
+| GET | /api/v1/user/:userId/invites | Pending collaboration invites |
+| POST | /api/v1/user/:userId/invites/:inviteId/accept | Accept invite |
+| POST | /api/v1/user/:userId/invites/:inviteId/deny | Reject invite |
+
+## Solana Wallets
+
+On-chain value integration. Each node version can have a Solana wallet for native token operations.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/v1/node/:nodeId/values/solana | Wallet info and balances |
+| POST | /api/v1/node/:nodeId/values/solana | Create wallet for version |
+| POST | /api/v1/node/:nodeId/values/solana/send | Send SOL. Body: `{ to, amount }` |
+| POST | /api/v1/node/:nodeId/values/solana/transaction | Swap tokens |
+
+## Tree Visibility
+
+Control whether a tree is publicly discoverable via Canopy.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/v1/root/:rootId/visibility | Set public/private. Body: `{ visibility }` |
+
+## Transaction Policy
+
+Per-tree policy for who can propose transactions.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/v1/root/:rootId/transaction-policy | Set policy. Body: `{ policy }` |
 
 ## HTML Rendering
 

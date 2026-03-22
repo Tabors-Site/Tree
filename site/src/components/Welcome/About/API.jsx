@@ -1489,7 +1489,9 @@ dream-thought  - Nightly dream thought`}</div>
           </div>
           <div className="section-text">
             Structure and hierarchy management. Nodes are the building blocks of
-            every tree.
+            every tree. All endpoints below operate on the latest version by default.
+            Versioned paths (e.g. /node/:nodeId/:version/notes) are also supported
+            for accessing specific prestige versions.
           </div>
 
           <div className="sub-title">Node Management</div>
@@ -1513,9 +1515,9 @@ dream-thought  - Nightly dream thought`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/editName</span>
+              <span className="ep-url">/api/v1/node/:nodeId/editName</span>
             </div>
-            <div className="ep-desc">Rename the node.</div>
+            <div className="ep-desc">Rename the node. Versioned path (/:version/editName) also supported.</div>
             <div className="ep-label">Request Body</div>
             <div className="ep-code">{'{ "name": "New Node Name" }'}</div>
           </div>
@@ -1644,7 +1646,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/editStatus</span>
+              <span className="ep-url">/api/v1/node/:nodeId/editStatus</span>
             </div>
             <div className="ep-desc">Change status for this node. Optionally apply to all children.</div>
             <div className="ep-label">Request Body</div>
@@ -1658,7 +1660,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/editSchedule</span>
+              <span className="ep-url">/api/v1/node/:nodeId/editSchedule</span>
             </div>
             <div className="ep-desc">Set or clear the scheduled date for this node.</div>
             <div className="ep-label">Request Body</div>
@@ -1674,7 +1676,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/prestige</span>
+              <span className="ep-url">/api/v1/node/:nodeId/prestige</span>
             </div>
             <div className="ep-desc">Add a new version (prestige) to this node. Creates version N+1.</div>
           </div>
@@ -1687,7 +1689,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/notes</span>
+              <span className="ep-url">/api/v1/node/:nodeId/notes</span>
             </div>
             <div className="ep-desc">List all notes on this version.</div>
             <div className="ep-label">Query Parameters</div>
@@ -1708,7 +1710,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/notes</span>
+              <span className="ep-url">/api/v1/node/:nodeId/notes</span>
             </div>
             <div className="ep-desc">Create a new note. Supports text or file upload via multipart form data.</div>
             <div className="ep-label">Text Note — JSON Body</div>
@@ -1720,7 +1722,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/notes/:noteId</span>
+              <span className="ep-url">/api/v1/node/:nodeId/notes/:noteId</span>
             </div>
             <div className="ep-desc">View a single note. Text notes return content; file notes return the file.</div>
           </div>
@@ -1728,7 +1730,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method put">PUT</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/notes/:noteId</span>
+              <span className="ep-url">/api/v1/node/:nodeId/notes/:noteId</span>
             </div>
             <div className="ep-desc">Edit an existing text note. File notes cannot be edited.</div>
             <div className="ep-label">Request Body</div>
@@ -1740,7 +1742,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method delete">DELETE</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/notes/:noteId</span>
+              <span className="ep-url">/api/v1/node/:nodeId/notes/:noteId</span>
             </div>
             <div className="ep-desc">Permanently delete a note.</div>
           </div>
@@ -1748,7 +1750,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/notes/:noteId/transfer</span>
+              <span className="ep-url">/api/v1/node/:nodeId/notes/:noteId/transfer</span>
             </div>
             <div className="ep-desc">Transfer a note to a different node in the same tree. Logs contributions on both source and target.</div>
             <div className="ep-label">Request Body</div>
@@ -1760,7 +1762,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/notes/book</span>
+              <span className="ep-url">/api/v1/node/:nodeId/notes/book</span>
             </div>
             <div className="ep-desc">Book view — all notes in hierarchical format including children nodes.</div>
           </div>
@@ -1768,7 +1770,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/notes/editor</span>
+              <span className="ep-url">/api/v1/node/:nodeId/notes/editor</span>
             </div>
             <div className="ep-desc">Open the full-page note editor for creating a new note.</div>
             <div className="ep-note">HTML only. Add <code>?token=...&amp;html</code> to access.</div>
@@ -1777,7 +1779,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/notes/:noteId/editor</span>
+              <span className="ep-url">/api/v1/node/:nodeId/notes/:noteId/editor</span>
             </div>
             <div className="ep-desc">Open the full-page editor for an existing note.</div>
             <div className="ep-note">HTML only. File notes redirect to the view page.</div>
@@ -1791,7 +1793,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/contributions</span>
+              <span className="ep-url">/api/v1/node/:nodeId/contributions</span>
             </div>
             <div className="ep-desc">List all contributions on this node version.</div>
             <div className="ep-label">Query Parameters</div>
@@ -1822,7 +1824,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/values</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values</span>
             </div>
             <div className="ep-desc">List all values and goals on this version.</div>
           </div>
@@ -1830,7 +1832,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/value</span>
+              <span className="ep-url">/api/v1/node/:nodeId/value</span>
             </div>
             <div className="ep-desc">Set a value on this version.</div>
             <div className="ep-label">Request Body</div>
@@ -1840,7 +1842,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/goal</span>
+              <span className="ep-url">/api/v1/node/:nodeId/goal</span>
             </div>
             <div className="ep-desc">Set a goal on this version.</div>
             <div className="ep-label">Request Body</div>
@@ -1906,7 +1908,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/transactions</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions</span>
             </div>
             <div className="ep-desc">List all transactions (pending, accepted, and rejected) for this node version.</div>
           </div>
@@ -1914,7 +1916,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/transactions/:transactionId</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions/:transactionId</span>
             </div>
             <div className="ep-desc">View a single transaction including both sides, traded values, approval groups, and status.</div>
           </div>
@@ -1924,7 +1926,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/transactions</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions</span>
             </div>
             <div className="ep-desc">Create a new transaction proposal between two sides.</div>
             <div className="ep-label">Node ↔ Node Example</div>
@@ -1992,7 +1994,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/transactions/:transactionId/approve</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions/:transactionId/approve</span>
             </div>
             <div className="ep-desc">Approve a pending transaction. When enough approvals are collected (per policy), the transaction executes and values are exchanged.</div>
           </div>
@@ -2000,7 +2002,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/transactions/:transactionId/deny</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions/:transactionId/deny</span>
             </div>
             <div className="ep-desc">Deny a pending transaction. Sets the transaction status to rejected.</div>
           </div>
@@ -2022,7 +2024,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/values/solana</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values/solana</span>
             </div>
             <div className="ep-desc">Get wallet address, SOL balance, and token balances.</div>
           </div>
@@ -2030,7 +2032,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/values/solana</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values/solana</span>
             </div>
             <div className="ep-desc">Create or configure the wallet for this version.</div>
           </div>
@@ -2038,7 +2040,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/values/solana/send</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values/solana/send</span>
             </div>
             <div className="ep-desc">Send SOL to another address.</div>
             <div className="ep-label">Request Body</div>
@@ -2052,7 +2054,7 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/:version/values/solana/transaction</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values/solana/transaction</span>
             </div>
             <div className="ep-desc">Execute a token swap via Jupiter aggregator.</div>
             <div className="ep-label">Request Body</div>

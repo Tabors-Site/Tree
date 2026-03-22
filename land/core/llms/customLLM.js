@@ -177,6 +177,9 @@ function validateInputs(baseUrl, apiKey, model, requireApiKey) {
 
 const VALID_SLOTS = ["main", "rawIdea"];
 
+// Root-level LLM assignment slots (shared with Node schema and deletion cleanup)
+export const ROOT_LLM_SLOTS = ["default", "placement", "understanding", "respond", "notes", "cleanup", "drain", "notification"];
+
 // ─────────────────────────────────────────────────────────────────────────
 // PUBLIC API
 // ─────────────────────────────────────────────────────────────────────────
@@ -305,8 +308,7 @@ export async function deleteCustomLlmConnection(userId, connectionId) {
   }
 
   // If deleted connection was assigned to any root node slot, clear it
-  const rootSlots = ["default", "placement", "understanding", "respond", "notes", "cleanup", "drain", "notification"];
-  for (const slot of rootSlots) {
+  for (const slot of ROOT_LLM_SLOTS) {
     await Node.updateMany(
       { [`llmAssignments.${slot}`]: connectionId },
       { $set: { [`llmAssignments.${slot}`]: null } },

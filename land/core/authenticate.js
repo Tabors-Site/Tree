@@ -126,6 +126,12 @@ export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
       .exec();
 
     if (!matchedUser) {
+      console.log("[shareAuth] DENIED nodeId=%s userIds=%j tokenPrefix=%s", nodeId, userIds, shareToken?.slice(0, 6));
+      // Debug: check what tokens the users actually have
+      const users = await User.find({ _id: { $in: userIds } }).select("_id username htmlShareToken").lean();
+      for (const u of users) {
+        console.log("[shareAuth]   user=%s token=%s match=%s", u.username, u.htmlShareToken?.slice(0, 6), u.htmlShareToken === shareToken);
+      }
       return { allowed: false, reason: "Invalid share token for node" };
     }
 

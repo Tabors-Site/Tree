@@ -13,6 +13,7 @@ import {
 import {
   addCanopyHeaders,
   authenticateCanopy,
+  checkRateLimit as checkCanopyRateLimit,
 } from "../canopy/middleware.js";
 import {
   validateCanopyRequest,
@@ -33,6 +34,7 @@ import Invite from "../db/models/invite.js";
 import authenticate from "../middleware/authenticate.js";
 import { renderCanopyAdmin, renderCanopyInvites, renderCanopyDirectory } from "./api/html/canopy.js";
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
+import { isPrivateHost } from "../canopy/security.js";
 
 
 const router = express.Router();
@@ -224,11 +226,12 @@ router.post("/canopy/peer/register", async (req, res) => {
     try {
       const parsed = new URL(verifyUrl);
       const host = parsed.hostname;
-      if (/^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|fc|fd|fe80|::1|localhost)/i.test(host)) {
-        if (process.env.NODE_ENV === "production") {
+      if (isPrivateHost(host)) {
+        // Allow localhost in dev for local testing
+        if (!(host === "localhost" && process.env.NODE_ENV !== "production")) {
           return res.status(400).json({
             success: false,
-            error: "Private/internal addresses not allowed in production",
+            error: "Private/internal addresses not allowed",
           });
         }
       }
@@ -581,19 +584,32 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
       return res.status(400).json({ success: false, errors: validation.errors });
     }
 
-    const { messages, model, tools, tool_choice, slot } = req.body;
+    const { messages, tools, tool_choice, slot } = req.body;
 
     // Resolve the local (non-remote) user
     const user = await User.findOne({
       _id: req.canopy.userId,
       isRemote: { $ne: true },
-    }).select("_id").lean();
+    }).select("_id remoteRoots").lean();
 
     if (!user) {
       return res.status(404).json({
         success: false,
         error: "user_not_found",
         message: "User not found on this land",
+      });
+    }
+
+    // Verify user has a relationship with the calling land
+    const callingLand = req.canopy.sourceLandDomain;
+    const hasRelationship = user.remoteRoots?.some(
+      (rr) => rr.landDomain?.toLowerCase() === callingLand?.toLowerCase()
+    );
+    if (!hasRelationship) {
+      return res.status(403).json({
+        success: false,
+        error: "no_relationship",
+        message: "User has no relationship with the calling land",
       });
     }
 
@@ -623,7 +639,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
 
     // Run the LLM call
     const completion = await clientEntry.client.chat.completions.create({
-      model: model || clientEntry.model,
+      model: clientEntry.model,
       messages,
       tools: tools || undefined,
       tool_choice: tools ? (tool_choice || "auto") : undefined,
@@ -1045,6 +1061,11 @@ router.post("/canopy/admin/peer/discover", authenticate, requireAdmin, async (re
  * with a CanopyToken header signed by this land.
  */
 router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
+  // Per-user rate limit: 60 requests per minute
+  if (!checkCanopyRateLimit(`proxy:${req.userId}`, 60)) {
+    return res.status(429).json({ success: false, error: "Proxy rate limit exceeded" });
+  }
+
   try {
     const { domain } = req.params;
     // Extract the path after /canopy/proxy/:domain/

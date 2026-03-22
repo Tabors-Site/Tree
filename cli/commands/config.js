@@ -31,17 +31,78 @@ module.exports = (program) => {
   program
     .command("connect <url>")
     .description("Set the Land URL to connect to (e.g. http://localhost:3000)")
-    .action((url) => {
+    .action(async (url) => {
       try {
         const cfg = load();
         cfg.landUrl = url.replace(/\/+$/, "");
+        if (!/^https?:\/\//i.test(cfg.landUrl)) cfg.landUrl = `https://${cfg.landUrl}`;
+
+        // Fetch land protocol info
+        try {
+          const res = await fetch(`${cfg.landUrl}/api/v1/protocol`);
+          if (res.ok) {
+            const protocol = await res.json();
+            cfg.landProtocol = protocol;
+            console.log(
+              chalk.green(`Connected to ${cfg.landUrl}`) +
+              chalk.dim(` (${protocol.name || "TreeOS"} v${protocol.version || "?"}, ${(protocol.capabilities || []).length} capabilities, ${(protocol.extensions || []).length} extensions)`)
+            );
+          } else {
+            cfg.landProtocol = null;
+            console.log(chalk.green(`Connected to ${cfg.landUrl}`));
+            console.log(chalk.dim("  Land does not serve /protocol"));
+          }
+        } catch {
+          cfg.landProtocol = null;
+          console.log(chalk.green(`Connected to ${cfg.landUrl}`));
+        }
+
         save(cfg);
-        console.log(chalk.green(`Connected to ${cfg.landUrl}`));
         if (!cfg.apiKey) {
           console.log(chalk.dim("Next: treeos register or treeos login"));
         }
       } catch (e) {
         console.error(chalk.red("Error:"), e.message);
+      }
+    });
+
+  program
+    .command("protocol")
+    .description("Fetch and display the connected land's protocol info")
+    .action(async () => {
+      try {
+        const cfg = load();
+        let landUrl = cfg.landUrl || "https://treeOS.ai";
+        if (!/^https?:\/\//i.test(landUrl)) landUrl = `https://${landUrl}`;
+        const res = await fetch(`${landUrl}/api/v1/protocol`);
+        if (!res.ok) {
+          return console.log(chalk.yellow(`Land at ${landUrl} does not serve /protocol (HTTP ${res.status})`));
+        }
+        const protocol = await res.json();
+
+        // Cache it
+        cfg.landProtocol = protocol;
+        save(cfg);
+
+        console.log(chalk.bold(`${protocol.name || "TreeOS"} v${protocol.version || "?"}`));
+        console.log(chalk.dim(`Land: ${landUrl}\n`));
+
+        if (protocol.capabilities?.length) {
+          console.log(chalk.bold("Capabilities:"));
+          console.log("  " + protocol.capabilities.join(", "));
+        }
+
+        if (protocol.nodeTypes?.length) {
+          console.log(chalk.bold("\nNode Types:"));
+          console.log("  " + protocol.nodeTypes.join(", "));
+        }
+
+        if (protocol.extensions?.length) {
+          console.log(chalk.bold("\nExtensions:"));
+          console.log("  " + protocol.extensions.join(", "));
+        }
+      } catch (e) {
+        console.error(chalk.red(e.message));
       }
     });
 

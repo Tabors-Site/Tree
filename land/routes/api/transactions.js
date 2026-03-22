@@ -15,8 +15,20 @@ import {
   renderTransactionDetail,
 } from "./html/transactions.js";
 
+import { resolveVersion } from "../../core/tree/treeFetch.js";
+
 const router = express.Router();
 const allowedParams = ["token", "html"];
+
+// Resolve "latest" to actual prestige number
+router.param("version", async (req, res, next, val) => {
+  try {
+    req.params.version = String(await resolveVersion(req.params.nodeId, val));
+    next();
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+});
 
 /**
  * Parse JSON safely for values payloads.
@@ -359,5 +371,35 @@ router.get(
     }
   },
 );
+
+// Versionless aliases (protocol-compliant)
+async function useLatest(req, res, next) {
+  try {
+    req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
+    next();
+  } catch (err) {
+    return res.status(404).json({ error: err.message });
+  }
+}
+
+router.get("/node/:nodeId/transactions", urlAuth, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/transactions`;
+  router.handle(req, res, next);
+});
+
+router.post("/node/:nodeId/transactions", authenticate, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/transactions`;
+  router.handle(req, res, next);
+});
+
+router.post("/node/:nodeId/transactions/:transactionId/approve", authenticate, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/transactions/${req.params.transactionId}/approve`;
+  router.handle(req, res, next);
+});
+
+router.post("/node/:nodeId/transactions/:transactionId/deny", authenticate, useLatest, (req, res, next) => {
+  req.url = `/node/${req.params.nodeId}/${req.params.version}/transactions/${req.params.transactionId}/deny`;
+  router.handle(req, res, next);
+});
 
 export default router;

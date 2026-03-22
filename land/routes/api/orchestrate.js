@@ -488,13 +488,7 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
     });
   }
 
-  // Rate limit public queries
-  if (isPublicAccess && !checkPublicQueryLimit(req.ip || "unknown")) {
-    return res.status(429).json({
-      success: false,
-      answer: "Too many queries. Please try again later.",
-    });
-  }
+  // Rate limit public queries (moved below auth block to cover all public query paths)
 
   const rootCheck = await Node.findById(rootId)
     .select("rootOwner llmAssignments visibility")
@@ -518,23 +512,11 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
       return res.status(403).json({ success: false, answer: "This tree is not public." });
     }
 
-    const hasCanopyVisitor = !!req.canopyVisitor;
-
     if (treeHasLlm) {
       // Owner's LLM, owner pays
       effectiveUserId = rootCheck.rootOwner;
       const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
       effectiveUsername = owner?.username || "system";
-    } else if (hasCanopyVisitor) {
-      // Visitor authenticated on their home land. Route LLM through canopy proxy.
-      canopyProxyClient = createCanopyLlmProxyClient({
-        userId: req.canopyVisitor.userId,
-        homeLand: req.canopyVisitor.homeLand,
-        slot: "main",
-      });
-      effectiveUserId = rootCheck.rootOwner; // session runs under owner context locally
-      const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
-      effectiveUsername = `visitor@${req.canopyVisitor.homeLand}`;
     } else {
       // Anonymous, no owner LLM
       return res.status(403).json({
@@ -571,6 +553,17 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
           .status(403)
           .json({ success: false, answer: "Not authorized to access this tree." });
       }
+    }
+  }
+
+  // Rate limit all public tree queries (anonymous by IP, authenticated by userId)
+  if (isPublicQuery) {
+    const rateLimitKey = req.userId ? `user:${req.userId}` : (req.ip || "unknown");
+    if (!checkPublicQueryLimit(rateLimitKey)) {
+      return res.status(429).json({
+        success: false,
+        answer: "Too many queries. Please try again later.",
+      });
     }
   }
 
