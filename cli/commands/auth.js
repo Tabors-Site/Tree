@@ -153,17 +153,17 @@ module.exports = (program) => {
 
           // LLM connection (required for AI interaction)
           console.log(chalk.bold("\n  Connect Your LLM\n"));
-          console.log(chalk.dim("  TreeOS needs an LLM to power chat, placement, and understanding."));
-          console.log(chalk.dim("  Connect any OpenAI-compatible endpoint (Ollama, OpenRouter, Together, etc.)\n"));
+          console.log(chalk.dim("  Connect your own LLM for chat, placement, and understanding."));
+          console.log(chalk.dim("  Any OpenAI-compatible endpoint works (Ollama, OpenRouter, Together, etc.)\n"));
 
           let llmConnected = false;
           while (!llmConnected) {
             try {
               const llmName = await prompt("  Connection name (e.g. my-ollama): ");
               if (!llmName) {
-                const skip = await prompt("  Skip? You'll use the land's default model. (y/N): ");
+                const skip = await prompt("  Skip? You'll use tree owners' models when chatting. (y/N): ");
                 if (skip.toLowerCase() === "y") {
-                  console.log(chalk.dim("  Using land default. Run 'llm add' anytime to connect your own."));
+                  console.log(chalk.dim("  Skipped. Run 'llm add' anytime to connect your own."));
                   break;
                 }
                 continue;
