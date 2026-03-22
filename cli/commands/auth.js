@@ -201,15 +201,16 @@ module.exports = (program) => {
             console.log(chalk.dim("\n  What kind of tree is this?\n"));
             console.log("    1. " + chalk.cyan("goal") + chalk.dim("       . a desired outcome"));
             console.log("    2. " + chalk.cyan("plan") + chalk.dim("       . a strategy or sequence of steps"));
-            console.log("    3. " + chalk.cyan("knowledge") + chalk.dim("  . stored information or understanding"));
-            console.log("    4. " + chalk.cyan("identity") + chalk.dim("   . who or what this tree represents"));
+            console.log("    3. " + chalk.cyan("task") + chalk.dim("       . a discrete piece of work"));
+            console.log("    4. " + chalk.cyan("knowledge") + chalk.dim("  . stored information or understanding"));
             console.log("    5. " + chalk.cyan("resource") + chalk.dim("   . tools, skills, capabilities"));
-            console.log("    6. " + chalk.dim("(none)") + chalk.dim("     . no type, just a tree"));
+            console.log("    6. " + chalk.cyan("identity") + chalk.dim("   . who or what this tree represents"));
+            console.log("    7. " + chalk.dim("(none)") + chalk.dim("     . no type, just a tree"));
             console.log();
 
-            const typeInput = await prompt("  Type (1-6 or name): ");
-            const typeMap = { "1": "goal", "2": "plan", "3": "knowledge", "4": "identity", "5": "resource" };
-            const treeType = typeMap[typeInput] || (typeInput === "6" || !typeInput ? null : typeInput);
+            const typeInput = await prompt("  Type (1-7 or name): ");
+            const typeMap = { "1": "goal", "2": "plan", "3": "task", "4": "knowledge", "5": "resource", "6": "identity" };
+            const treeType = typeMap[typeInput] || (typeInput === "7" || !typeInput ? null : typeInput);
 
             try {
               const rootData = await api.createRoot(me.userId, treeName, treeType);
