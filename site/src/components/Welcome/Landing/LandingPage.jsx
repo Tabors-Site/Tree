@@ -88,16 +88,17 @@ const LandingPage = () => {
             <div className="lp-step">
               <div className="lp-step-num">3</div>
               <div className="lp-step-content">
-                <h4>Plant Your First Tree</h4>
-                <p>Name it, type it, and you're in. The AI starts building structure from your first message.</p>
-                <code>treeos chat "help me plan my week"</code>
+                <h4>Plant a Tree</h4>
+                <p>Give it a name and a type. Navigate with <code>cd</code> and <code>ls</code>. Build branches with <code>mkdir</code>. Add notes, values, goals.</p>
+                <code>treeos mkroot "Life Plan" --type goal</code>
               </div>
             </div>
             <div className="lp-step">
               <div className="lp-step-num">4</div>
               <div className="lp-step-content">
-                <h4>Grow Over Time</h4>
-                <p>Background processes compress, reorganize, and dream on your trees while you sleep. Knowledge compounds.</p>
+                <h4>Talk to It</h4>
+                <p>Chat creates and edits nodes. Place drops content into the right spot. Query reads without changing anything.</p>
+                <code>treeos chat "break this down into weekly tasks"</code>
               </div>
             </div>
           </div>
