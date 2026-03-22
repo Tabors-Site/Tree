@@ -6,7 +6,7 @@ import { notFoundPage } from "../../middleware/notFoundPage.js";
 import {
   getBook as coreGetBook,
   generateBook as coreGenerateBook,
-} from "../../core/tree/notes.js";
+} from "./core.js";
 import {
   renderBookPage,
   renderSharedBookPage,

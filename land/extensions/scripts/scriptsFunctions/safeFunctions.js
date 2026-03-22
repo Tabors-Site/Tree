@@ -3,7 +3,8 @@ import { getLandUrl } from "../../../canopy/identity.js";
 
 import { setValueForNode, setGoalForNode } from "../../../core/tree/values.js";
 
-import { editStatus, addPrestige } from "../../../core/tree/statuses.js";
+import { editStatus } from "../../../core/tree/statuses.js";
+import { addPrestige } from "../../prestige/core.js";
 import { updateSchedule } from "../../../core/tree/schedules.js";
 
 async function getApi(url) {

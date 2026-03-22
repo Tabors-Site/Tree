@@ -2,12 +2,12 @@
 // Periodically picks up the latest pending text raw idea for each premium/god user
 // and fires the raw-idea orchestrator as if they had clicked the Auto-place button.
 
-import User from "../db/models/user.js";
-import RawIdea from "../extensions/raw-ideas/model.js";
-import AIChat from "../db/models/aiChat.js";
-import { orchestrateRawIdeaPlacement } from "../orchestrators/pipelines/rawIdea.js";
-import { isUserOnline } from "../ws/websocket.js";
-import { userHasLlm } from "../ws/conversation.js";
+import User from "../../db/models/user.js";
+import RawIdea from "./model.js";
+import AIChat from "../../db/models/aiChat.js";
+import { orchestrateRawIdeaPlacement } from "./pipeline.js";
+import { isUserOnline } from "../../ws/websocket.js";
+import { userHasLlm } from "../../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG

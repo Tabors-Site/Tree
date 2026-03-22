@@ -2,11 +2,11 @@
 // Drains pending ShortMemory items into the tree.
 // Pipeline: cluster -> scout -> plan -> build -> place.
 
-import { OrchestratorRuntime } from "../runtime.js";
-import { acquireLock, releaseLock } from "../locks.js";
+import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
+import { acquireLock, releaseLock } from "../../orchestrators/locks.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
 import { buildDeepTreeSummary } from "../../core/tree/treeFetch.js";
-import ShortMemory from "../../extensions/dreams/model.js";
+import ShortMemory from "./model.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
 

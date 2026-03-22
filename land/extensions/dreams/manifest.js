@@ -19,7 +19,7 @@ export default {
     },
     routes: false,
     tools: false,
-    jobs: "../../jobs/treeDream.js",
+    jobs: "./treeDream.js",
     orchestrator: false,
     energyActions: {},
     sessionTypes: {

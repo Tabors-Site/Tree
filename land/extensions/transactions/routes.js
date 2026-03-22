@@ -3,6 +3,7 @@ import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
 
 import {
+  setTransactionPolicy,
   getTransactions,
   createTransaction,
   applyApproval,
@@ -400,6 +401,31 @@ router.post("/node/:nodeId/transactions/:transactionId/approve", authenticate, u
 router.post("/node/:nodeId/transactions/:transactionId/deny", authenticate, useLatest, (req, res, next) => {
   req.url = `/node/${req.params.nodeId}/${req.params.version}/transactions/${req.params.transactionId}/deny`;
   router.handle(req, res, next);
+});
+
+// Transaction policy (moved from routes/api/root.js)
+router.post("/root/:nodeId/transaction-policy", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { policy } = req.body;
+
+    const result = await setTransactionPolicy({
+      rootNodeId: nodeId,
+      policy,
+      userId: req.userId,
+    });
+
+    if ("html" in req.query) {
+      return res.redirect(
+        `/api/v1/root/${nodeId}?token=${req.query.token ?? ""}&html`,
+      );
+    }
+
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("Change policy error:", err);
+    res.status(400).json({ error: err.message });
+  }
 });
 
 export default router;

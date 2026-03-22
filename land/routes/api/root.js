@@ -6,12 +6,10 @@ import { getAllData, getTreeStructure } from "../../core/tree/treeDataFetching.j
 import { createInvite } from "../../core/tree/invites.js";
 import { sendRemoteInvite } from "../../core/tree/remoteInvites.js";
 import { getCalendar } from "../../core/tree/schedules.js";
-import { setTransactionPolicy } from "../../core/tree/transactions.js";
 import { getGlobalValuesTreeAndFlat } from "../../core/tree/values.js";
 
 import Node from "../../db/models/node.js";
-import { hasExtension } from "../../extensions/loader.js";
-import ShortMemory from "../../extensions/dreams/model.js";
+import mongoose from "mongoose";
 import { getConnectionsForUser, ROOT_LLM_SLOTS } from "../../core/llms/customLLM.js";
 import { getNodeAIChats } from "../../core/llms/aichat.js";
 import { buildPathString } from "../../core/tree/treeFetch.js";
@@ -92,7 +90,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
         ...allData,
         rootOwner: rootMeta?.rootOwner || null,
         contributors: rootMeta?.contributors || [],
-        dreamsEnabled: hasExtension("dreams"),
+        dreamsEnabled: !!mongoose.models.ShortMemory,
       };
 
       // Strip sensitive data for public visitors
@@ -111,10 +109,10 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     const currentUserId = req.userId ? req.userId.toString() : null;
     const token = req.query.token ?? "";
 
-    // Load deferred items (skip for public visitors)
+    // Load deferred items if dreams extension is loaded (skip for public visitors)
     let deferredItems = [];
-    if (!isPublicAccess) {
-      deferredItems = await ShortMemory.find({
+    if (!isPublicAccess && mongoose.models.ShortMemory) {
+      deferredItems = await mongoose.models.ShortMemory.find({
         rootId: nodeId,
         status: { $in: ["pending", "escalated"] },
       })
@@ -711,7 +709,7 @@ router.post(
 
 router.post("/root/:rootId/dream-time", authenticate, async (req, res) => {
   try {
-    if (!hasExtension("dreams")) {
+    if (!!!mongoose.models.ShortMemory) {
       return res.status(400).json({ error: "Dreams extension is not enabled on this land" });
     }
 
@@ -807,34 +805,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
   }
 });
 
-router.post(
-  "/root/:nodeId/transaction-policy",
-  authenticate,
-  async (req, res) => {
-    try {
-      const { nodeId } = req.params;
-      const { policy } = req.body;
-
-      const result = await setTransactionPolicy({
-        rootNodeId: nodeId,
-        policy,
-        userId: req.userId,
-      });
-
-      // HTML fallback
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/v1/root/${nodeId}?token=${req.query.token ?? ""}&html`,
-        );
-      }
-
-      return res.json({ success: true, ...result });
-    } catch (err) {
-      console.error("Change policy error:", err);
-      res.status(400).json({ error: err.message });
-    }
-  },
-);
+// Transaction policy endpoint moved to extensions/transactions/routes.js
 
 // This is the glassified version of the /root/:nodeId/values route
 // Replace your existing values route with this code

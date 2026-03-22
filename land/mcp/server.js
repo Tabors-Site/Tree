@@ -4,7 +4,7 @@ import { fileTypeFromBuffer } from "file-type";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
 
-import UnderstandingRun from "../extensions/understanding/understandingRun.js";
+import mongoose from "mongoose";
 
 import { emitNavigate } from "../ws/websocket.js";
 
@@ -39,7 +39,10 @@ import {
   createUnderstandingRun,
   listUnderstandingRuns,
 } from "../core/tree/understanding.js";
-import { editStatus, addPrestige } from "../core/tree/statuses.js";
+import { editStatus } from "../core/tree/statuses.js";
+// addPrestige is registered by prestige extension as MCP tool.
+// Stub here for backward compat until MCP tool extraction is complete.
+const addPrestige = async () => { throw new Error("Prestige extension not installed"); };
 import {
   createNote,
   getNotes,
@@ -2528,7 +2531,7 @@ RULES
     },
     async ({ understandingRunId, rootNodeId }) => {
       // 1️⃣ Load run to get perspective (authoritative)
-      const run = await UnderstandingRun.findById(understandingRunId).lean();
+      const run = await mongoose.models.UnderstandingRun.findById(understandingRunId).lean();
       if (!run) {
         return {
           content: [
@@ -2774,7 +2777,7 @@ Then IMMEDIATELY call understanding-capture with:
       }
 
       // 2️⃣ Load run
-      const run = await UnderstandingRun.findById(understandingRunId).lean();
+      const run = await mongoose.models.UnderstandingRun.findById(understandingRunId).lean();
       if (!run) {
         return {
           content: [

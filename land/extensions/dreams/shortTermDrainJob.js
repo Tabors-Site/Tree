@@ -2,10 +2,10 @@
 // Periodically drains pending ShortMemory items into their trees.
 // Finds all trees with pending items and processes them sequentially.
 
-import ShortMemory from "../extensions/dreams/model.js";
-import Node from "../db/models/node.js";
-import { drainTree } from "../orchestrators/pipelines/shortTermDrain.js";
-import { userHasLlm } from "../ws/conversation.js";
+import ShortMemory from "./model.js";
+import Node from "../../db/models/node.js";
+import { drainTree } from "./shortTermDrain.js";
+import { userHasLlm } from "../../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // STATE

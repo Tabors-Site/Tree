@@ -4,15 +4,15 @@
 // Pipeline: cleanup (multi-pass) → short-term drain (multi-pass) → understanding run.
 // Triggered by user-configured dreamTime on root nodes.
 
-import Node from "../db/models/node.js";
-import User from "../db/models/user.js";
-import ShortMemory from "../extensions/dreams/model.js";
-import { orchestrateReorganize } from "../orchestrators/pipelines/cleanupReorganize.js";
-import { orchestrateExpand } from "../orchestrators/pipelines/cleanupExpand.js";
-import { drainTree } from "../orchestrators/pipelines/shortTermDrain.js";
-import { findOrCreateUnderstandingRun } from "../core/tree/understanding.js";
-import { orchestrateUnderstanding } from "../orchestrators/pipelines/understand.js";
-import { orchestrateDreamNotify } from "../orchestrators/pipelines/dreamNotify.js";
+import Node from "../../db/models/node.js";
+import User from "../../db/models/user.js";
+import ShortMemory from "./model.js";
+import { orchestrateReorganize } from "../../orchestrators/pipelines/cleanupReorganize.js";
+import { orchestrateExpand } from "../../orchestrators/pipelines/cleanupExpand.js";
+import { drainTree } from "./shortTermDrain.js";
+import { findOrCreateUnderstandingRun } from "../../core/tree/understanding.js";
+import { orchestrateUnderstanding } from "../understanding/pipeline.js";
+import { orchestrateDreamNotify } from "../../orchestrators/pipelines/dreamNotify.js";
 import { userHasLlm } from "../ws/conversation.js";
 import { acquireLock, releaseLock } from "../orchestrators/locks.js";
 

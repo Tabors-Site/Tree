@@ -1,20 +1,20 @@
 // orchestrators/pipelines/rawIdea.js
 // Automates raw idea placement: chooseRoot -> delegate to treeOrchestrator -> record result.
 
-import { OrchestratorRuntime, parseJsonSafe } from "../runtime.js";
+import { OrchestratorRuntime, parseJsonSafe } from "../../orchestrators/runtime.js";
 import { SESSION_TYPES, updateSessionMeta } from "../../ws/sessionRegistry.js";
 import { setRootId, getClientForUser } from "../../ws/conversation.js";
 import { trackChainStep } from "../../ws/aiChatTracker.js";
-import { orchestrateTreeRequest } from "../tree.js";
+import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
 import {
   getRootNodesForUser,
   buildDeepTreeSummary,
 } from "../../core/tree/treeFetch.js";
 import { logContribution } from "../../db/utils.js";
-import RawIdea from "../../extensions/raw-ideas/model.js";
+import RawIdea from "./model.js";
 import Node from "../../db/models/node.js";
 
-import { nullSocket } from "../helpers.js";
+import { nullSocket } from "../../orchestrators/helpers.js";
 
 /**
  * Extract the best targetNodeId from a tree result's step summaries.

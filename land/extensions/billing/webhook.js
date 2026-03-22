@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { processPurchase } from "../../extensions/billing/core/processPurchase.js";
+import { processPurchase } from "./core/processPurchase.js";
 import { logContribution } from "../../db/utils.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;

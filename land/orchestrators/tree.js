@@ -21,8 +21,8 @@ import {
   getNavigationContext,
   buildDeepTreeSummary,
 } from "../core/tree/treeFetch.js";
+import mongoose from "mongoose";
 import Node from "../db/models/node.js";
-import ShortMemory from "../extensions/dreams/model.js";
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
 // ─────────────────────────────────────────────────────────────────────────
@@ -1158,6 +1158,8 @@ export async function orchestrateTreeRequest({
   if (deferDecision.defer) {
     console.log(`📝 Deferred to short memory: ${deferDecision.reason}`);
 
+    const ShortMemory = mongoose.models.ShortMemory;
+    if (!ShortMemory) throw new Error("Dreams extension required for short memory deferral");
     const memoryItem = await ShortMemory.create({
       rootId,
       userId,

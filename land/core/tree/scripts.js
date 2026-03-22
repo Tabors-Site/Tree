@@ -1,4 +1,15 @@
-let mod;
-try { mod = await import("../../extensions/scripts/core.js"); }
-catch { mod = { updateScript: async () => { throw new Error("Scripts extension not installed"); }, executeScript: async () => { throw new Error("Scripts extension not installed"); }, getScript: async () => null }; }
-export const { updateScript, executeScript, getScript } = mod;
+// Scripts system lives in extensions/scripts/.
+// These stubs prevent crashes if the extension isn't loaded.
+// MCP tools for scripts should be extracted to the extension.
+
+export async function updateScript() {
+  throw new Error("Scripts extension not installed");
+}
+
+export async function executeScript() {
+  throw new Error("Scripts extension not installed");
+}
+
+export async function getScript() {
+  return null;
+}

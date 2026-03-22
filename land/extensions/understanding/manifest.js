@@ -19,10 +19,10 @@ export default {
       UnderstandingRun: "./understandingRun.js",
       UnderstandingNode: "./understandingNode.js",
     },
-    routes: "../../routes/api/understanding.js",
-    tools: false,  // tools still registered in mcp/server.js for now
+    routes: "./routes.js",
+    tools: false,
     jobs: "../../jobs/understandingAutoRun.js",
-    orchestrator: "../../orchestrators/pipelines/understand.js",
+    orchestrator: "./pipeline.js",
     energyActions: {
       understanding: { cost: 1, unit: "per-node" },
     },

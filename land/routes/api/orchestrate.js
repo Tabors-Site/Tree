@@ -16,8 +16,8 @@ const JWT_SECRET = process.env.JWT_SECRET;
 import authenticate, { authenticateOrPublic } from "../../middleware/authenticate.js";
 import { createCanopyLlmProxyClient } from "../../canopy/llmProxy.js";
 import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
-import { orchestrateRawIdeaPlacement } from "../../orchestrators/pipelines/rawIdea.js";
-import { orchestrateUnderstanding } from "../../orchestrators/pipelines/understand.js";
+import { orchestrateRawIdeaPlacement } from "../../extensions/raw-ideas/pipeline.js";
+import { orchestrateUnderstanding } from "../../extensions/understanding/pipeline.js";
 import {
   setRootId,
   getClientForUser,
@@ -42,7 +42,7 @@ import {
 } from "../../ws/sessionRegistry.js";
 import User from "../../db/models/user.js";
 import Node from "../../db/models/node.js";
-import RawIdea from "../../extensions/raw-ideas/model.js";
+import mongoose from "mongoose";
 import { createRawIdea } from "../../core/tree/rawIdea.js";
 import { resolveTreeAccess } from "../../core/authenticate.js";
 import { nullSocket } from "../../orchestrators/helpers.js";
@@ -478,7 +478,7 @@ router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
       return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
     }
 
-    const alreadyProcessing = await RawIdea.findOne({
+    const alreadyProcessing = await mongoose.models.RawIdea.findOne({
       userId: req.userId.toString(),
       status: "processing",
     });
@@ -535,7 +535,7 @@ router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
       return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
     }
 
-    const alreadyProcessing = await RawIdea.findOne({
+    const alreadyProcessing = await mongoose.models.RawIdea.findOne({
       userId: req.userId.toString(),
       status: "processing",
     });
@@ -612,7 +612,7 @@ router.post(
         return res.status(403).json({ error: "Not authorized" });
       }
 
-      const rawIdea = await RawIdea.findById(rawIdeaId);
+      const rawIdea = await mongoose.models.RawIdea.findById(rawIdeaId);
       if (!rawIdea || rawIdea.userId === "deleted") {
         return res.status(404).json({ error: "Raw idea not found" });
       }
@@ -630,7 +630,7 @@ router.post(
         return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
       }
 
-      const alreadyProcessing = await RawIdea.findOne({
+      const alreadyProcessing = await mongoose.models.RawIdea.findOne({
         userId: req.userId.toString(),
         status: "processing",
       });
@@ -675,7 +675,7 @@ router.post(
         return res.status(403).json({ error: "Not authorized" });
       }
 
-      const rawIdea = await RawIdea.findById(rawIdeaId);
+      const rawIdea = await mongoose.models.RawIdea.findById(rawIdeaId);
       if (!rawIdea || rawIdea.userId === "deleted") {
         return res.status(404).json({ error: "Raw idea not found" });
       }
@@ -693,7 +693,7 @@ router.post(
         return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
       }
 
-      const alreadyProcessing = await RawIdea.findOne({
+      const alreadyProcessing = await mongoose.models.RawIdea.findOne({
         userId: req.userId.toString(),
         status: "processing",
       });

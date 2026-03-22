@@ -128,7 +128,4 @@ async function updateNodeStatusRecursively(
   }
 }
 
-// Prestige logic moved to extensions/prestige/core.js
-import { addPrestige } from "../../extensions/prestige/core.js";
-
-export { editStatus, addPrestige };
+export { editStatus };

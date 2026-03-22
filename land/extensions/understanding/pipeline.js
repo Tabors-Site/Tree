@@ -9,7 +9,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, "../../..", ".env") });
+dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -45,11 +45,11 @@ import {
   commitCompressionResult,
   prepareIncrementalRun,
 } from "../../core/tree/understanding.js";
-import UnderstandingRun from "../../extensions/understanding/understandingRun.js";
-import UnderstandingNode from "../../extensions/understanding/understandingNode.js";
+import UnderstandingRun from "./understandingRun.js";
+import UnderstandingNode from "./understandingNode.js";
 import Node from "../../db/models/node.js";
 
-import { acquireLock, releaseLock } from "../locks.js";
+import { acquireLock, releaseLock } from "../../orchestrators/locks.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // HELPERS

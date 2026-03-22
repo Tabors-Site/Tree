@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import User from "../../db/models/user.js";
-import { validatePurchase } from "../../extensions/billing/core/validatePurchase.js";
+import { validatePurchase } from "./core/validatePurchase.js";
 import { getLandUrl } from "../../canopy/identity.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
