@@ -1,6 +1,5 @@
 .about-layout {
   width: 100%;
-  max-width: 100vw;
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0;
@@ -9,31 +8,13 @@
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #1a1a1a;
   position: relative;
-  overflow-x: hidden;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   touch-action: manipulation;
   box-sizing: border-box;
-}
-
-/* Prevent any child from causing horizontal overflow */
-.about-layout > * {
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-/* Code blocks should scroll horizontally, not push the page */
-.about-layout code,
-.about-layout pre {
-  word-break: break-word;
-}
-
-.about-layout .ep-code,
-.about-layout .ep-url {
-  overflow-wrap: break-word;
-  word-break: break-all;
 }
 
 /* ── TOP BACK NAV (inside each card) ── */
