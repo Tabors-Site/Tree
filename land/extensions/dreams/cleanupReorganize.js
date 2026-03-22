@@ -2,7 +2,7 @@
 // Analyzes tree structure and moves misplaced nodes / removes empty misplaced nodes.
 // Pipeline: analyze (tool-less) -> execute moves via tree:structure -> execute deletes via tree:structure.
 
-import { OrchestratorRuntime } from "../runtime.js";
+import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
 import { buildDeepTreeSummary } from "../../core/tree/treeFetch.js";
 import Node from "../../db/models/node.js";

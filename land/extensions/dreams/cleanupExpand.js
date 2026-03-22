@@ -2,7 +2,7 @@
 // Scans nodes with dense notes and expands them into subtree structure.
 // Pipeline: find candidates -> scan each (tool-less) -> create branches via tree:structure -> delete notes via tree:notes.
 
-import { OrchestratorRuntime } from "../runtime.js";
+import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
 import Node from "../../db/models/node.js";
 import Note from "../../db/models/notes.js";

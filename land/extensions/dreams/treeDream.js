@@ -7,8 +7,8 @@
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
 import ShortMemory from "./model.js";
-import { orchestrateReorganize } from "../../orchestrators/pipelines/cleanupReorganize.js";
-import { orchestrateExpand } from "../../orchestrators/pipelines/cleanupExpand.js";
+import { orchestrateReorganize } from "./cleanupReorganize.js";
+import { orchestrateExpand } from "./cleanupExpand.js";
 import { drainTree } from "./shortTermDrain.js";
 import { findOrCreateUnderstandingRun } from "../../core/tree/understanding.js";
 import { orchestrateUnderstanding } from "../understanding/pipeline.js";

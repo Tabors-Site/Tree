@@ -2,11 +2,11 @@
 // Daily job: creates and runs a navigation-focused understanding pass per tree.
 // Produces per-node encodings that enhance tree summaries for librarian/scout navigation.
 
-import Node from "../db/models/node.js";
-import User from "../db/models/user.js";
-import { findOrCreateUnderstandingRun } from "../core/understanding.js";
-import { orchestrateUnderstanding } from "../orchestrators/pipelines/understand.js";
-import { userHasLlm } from "../ws/conversation.js";
+import Node from "../../db/models/node.js";
+import User from "../../db/models/user.js";
+import { findOrCreateUnderstandingRun } from "../../core/tree/understanding.js";
+import { orchestrateUnderstanding } from "./pipeline.js";
+import { userHasLlm } from "../../ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG

@@ -21,7 +21,7 @@ export default {
     },
     routes: "./routes.js",
     tools: true,
-    jobs: "../../jobs/understandingAutoRun.js",
+    jobs: "./autoRunJob.js",
     orchestrator: "./pipeline.js",
     energyActions: {
       understanding: { cost: 1, unit: "per-node" },

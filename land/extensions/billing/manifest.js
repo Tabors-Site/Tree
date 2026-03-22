@@ -13,7 +13,7 @@ export default {
 
   provides: {
     models: {},
-    routes: "../../routes/billing/purchase.js",
+    routes: "./purchase.js",
     tools: false,
     jobs: false,
     orchestrator: false,
