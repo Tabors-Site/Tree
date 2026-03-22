@@ -16,6 +16,48 @@ dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;
 
+/* ===========================
+    API KEY BRUTE-FORCE PROTECTION
+============================ */
+const failedAttempts = new Map();
+const FAIL_WINDOW_MS = 5 * 60 * 1000;
+const MAX_FAILURES = 10;
+
+function getClientIp(req) {
+  return req.ip || req.connection?.remoteAddress || "unknown";
+}
+
+function checkApiKeyRateLimit(ip) {
+  const entry = failedAttempts.get(ip);
+  if (!entry) return true;
+  if (Date.now() - entry.start > FAIL_WINDOW_MS) {
+    failedAttempts.delete(ip);
+    return true;
+  }
+  return entry.count < MAX_FAILURES;
+}
+
+function recordApiKeyFailure(ip) {
+  const entry = failedAttempts.get(ip);
+  if (!entry || Date.now() - entry.start > FAIL_WINDOW_MS) {
+    failedAttempts.set(ip, { start: Date.now(), count: 1 });
+  } else {
+    entry.count += 1;
+  }
+}
+
+function clearApiKeyFailures(ip) {
+  failedAttempts.delete(ip);
+}
+
+// Clean up stale entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of failedAttempts) {
+    if (now - entry.start > FAIL_WINDOW_MS * 2) failedAttempts.delete(ip);
+  }
+}, 10 * 60 * 1000);
+
 export default async function authenticate(req, res, next) {
   try {
     /* ===========================
@@ -118,6 +160,14 @@ export default async function authenticate(req, res, next) {
       });
     }
 
+    // Brute-force protection
+    const clientIp = getClientIp(req);
+    if (!checkApiKeyRateLimit(clientIp)) {
+      return res.status(429).json({
+        message: "Too many failed attempts. Try again later.",
+      });
+    }
+
     // Use key prefix for indexed lookup instead of scanning all users
     const prefix = apiKey.slice(0, 8);
     const candidates = await User.find({
@@ -133,6 +183,7 @@ export default async function authenticate(req, res, next) {
         const match = await bcrypt.compare(apiKey, key.keyHash);
         if (!match) continue;
 
+        clearApiKeyFailures(clientIp);
         req.userId = user._id;
         req.username = user.username;
         req.authType = "apiKey";
@@ -152,6 +203,7 @@ export default async function authenticate(req, res, next) {
       }
     }
 
+    recordApiKeyFailure(clientIp);
     return res.status(401).json({
       message: "Invalid API key",
     });
