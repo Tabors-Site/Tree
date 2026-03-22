@@ -9,6 +9,8 @@ import { startHealthCheckJob } from "./jobs/healthCheck.js";
 import { renderDashboard } from "./views/dashboard.js";
 import Land from "./db/models/land.js";
 import PublicTree from "./db/models/publicTree.js";
+import Extension from "./db/models/extension.js";
+import { renderExtensionPage } from "./views/extensionPage.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 4000;
@@ -49,7 +51,7 @@ app.get("/humans.txt", (req, res) => res.type("text/plain").sendFile(join(__dirn
 // Dashboard page at root
 app.get("/", async (req, res) => {
   try {
-    const [lands, rawTrees, landCount, treeCount, activeLands] = await Promise.all([
+    const [lands, rawTrees, landCount, treeCount, activeLands, extensions, extensionCount] = await Promise.all([
       Land.find({ status: { $ne: "dead" } })
         .sort({ lastSeenAt: -1 })
         .limit(50)
@@ -61,6 +63,15 @@ app.get("/", async (req, res) => {
       Land.countDocuments({ status: { $ne: "dead" } }),
       PublicTree.countDocuments(),
       Land.countDocuments({ status: "active" }),
+      Extension.aggregate([
+        { $sort: { name: 1, publishedAt: -1 } },
+        { $group: { _id: "$name", latest: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$latest" } },
+        { $sort: { downloads: -1, name: 1 } },
+        { $limit: 50 },
+        { $project: { name: 1, version: 1, description: 1, authorDomain: 1, authorName: 1, tags: 1, downloads: 1, publishedAt: 1 } },
+      ]),
+      Extension.distinct("name").then((r) => r.length),
     ]);
 
     // Enrich trees with land baseUrl for building links
@@ -73,13 +84,46 @@ app.get("/", async (req, res) => {
     const html = renderDashboard({
       lands,
       trees,
-      stats: { landCount, treeCount, activeLands },
+      extensions,
+      stats: { landCount, treeCount, activeLands, extensionCount },
     });
 
     res.setHeader("Content-Type", "text/html");
     res.send(html);
   } catch (err) {
     res.status(500).send("Directory error: " + err.message);
+  }
+});
+
+// Extension detail page (HTML)
+app.get("/extensions/:name/page", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const version = req.query.v || null;
+
+    const query = version ? { name, version } : null;
+    let ext;
+
+    if (query) {
+      ext = await Extension.findOne(query).lean();
+    } else {
+      ext = await Extension.findOne({ name }).sort({ publishedAt: -1 }).lean();
+    }
+
+    if (!ext) {
+      return res.status(404).send("Extension not found");
+    }
+
+    const versions = await Extension.find({ name })
+      .sort({ publishedAt: -1 })
+      .select("version publishedAt downloads")
+      .lean();
+
+    const html = renderExtensionPage({ ext, versions });
+    res.setHeader("Content-Type", "text/html");
+    res.send(html);
+  } catch (err) {
+    res.status(500).send("Error: " + err.message);
   }
 });
 

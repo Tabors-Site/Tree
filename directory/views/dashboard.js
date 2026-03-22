@@ -27,7 +27,7 @@ function statusColor(status) {
   }
 }
 
-export function renderDashboard({ lands, trees, stats }) {
+export function renderDashboard({ lands, trees, extensions, stats }) {
   const landCards = lands && lands.length > 0
     ? lands.map((land, i) => {
         const color = statusColor(land.status);
@@ -69,6 +69,29 @@ export function renderDashboard({ lands, trees, stats }) {
         </tr>`;
       }).join("")
     : '<tr><td colspan="4" class="empty-state">No public trees indexed yet.</td></tr>';
+
+  const extensionCards = extensions && extensions.length > 0
+    ? extensions.map((ext, i) => {
+        const tagHtml = (ext.tags || []).slice(0, 4).map(t =>
+          `<span class="ext-tag">${escapeHtml(t)}</span>`
+        ).join("");
+        return `
+          <a href="/extensions/${encodeURIComponent(ext.name)}/page" class="ext-card" style="animation-delay: ${0.15 + i * 0.04}s;">
+            <div class="ext-card-header">
+              <div class="ext-name">${escapeHtml(ext.name)}</div>
+              <div class="ext-version">v${escapeHtml(ext.version)}</div>
+            </div>
+            <div class="ext-desc">${escapeHtml(ext.description || "No description")}</div>
+            <div class="ext-meta">
+              <span class="ext-author">${escapeHtml(ext.authorName || ext.authorDomain || "unknown")}</span>
+              <span class="separator"></span>
+              <span class="ext-downloads">${ext.downloads || 0} downloads</span>
+            </div>
+            ${tagHtml ? `<div class="ext-tags">${tagHtml}</div>` : ""}
+          </a>
+        `;
+      }).join("")
+    : '<div class="empty-state">No extensions published yet.</div>';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -397,6 +420,70 @@ export function renderDashboard({ lands, trees, stats }) {
       color: var(--text-primary);
     }
 
+    /* Extension cards */
+    .ext-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .ext-card {
+      display: block;
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      animation: fadeInUp 0.5s ease-out both;
+      transition: background 0.2s ease;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }
+    .ext-card:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    .ext-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .ext-name {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .ext-version {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .ext-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .ext-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .ext-author { font-weight: 600; }
+    .ext-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .ext-tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.12);
+      color: rgba(16, 185, 129, 0.9);
+      font-weight: 600;
+    }
+
     @media (max-width: 640px) {
       body { padding: 12px; }
       .glass-card { padding: 16px; border-radius: 16px; }
@@ -420,6 +507,7 @@ export function renderDashboard({ lands, trees, stats }) {
         <div class="stat-chip"><span class="num">${stats.landCount}</span> lands</div>
         <div class="stat-chip"><span class="num">${stats.treeCount}</span> public trees</div>
         <div class="stat-chip"><span class="num">${stats.activeLands}</span> active</div>
+        <div class="stat-chip"><span class="num">${stats.extensionCount || 0}</span> extensions</div>
       </div>
     </div>
 
@@ -456,6 +544,18 @@ export function renderDashboard({ lands, trees, stats }) {
             ${treeRows}
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Extensions -->
+    <div class="glass-card" style="animation-delay: 0.2s;">
+      <h2>Extensions</h2>
+      <div class="search-row">
+        <input type="text" id="ext-search" placeholder="Search extensions..." onkeydown="if(event.key==='Enter')searchExtensions()" />
+        <button onclick="searchExtensions()">Search</button>
+      </div>
+      <div id="ext-grid" class="ext-grid">
+        ${extensionCards}
       </div>
     </div>
 
@@ -547,6 +647,41 @@ export function renderDashboard({ lands, trees, stats }) {
               (talkUrl ? '<a href="' + talkUrl + '" target="_blank" rel="noopener" class="btn-sm btn-talk">Talk</a>' : '') +
             '</td>' +
           '</tr>';
+        }).join("");
+      } catch (err) {
+        console.error("Search failed:", err);
+      }
+    }
+
+    async function searchExtensions() {
+      var q = document.getElementById("ext-search").value.trim();
+      try {
+        var res = await fetch("/extensions?q=" + encodeURIComponent(q) + "&limit=50");
+        var data = await res.json();
+        var grid = document.getElementById("ext-grid");
+
+        if (!data.extensions || data.extensions.length === 0) {
+          grid.innerHTML = '<div class="empty-state">No extensions found.</div>';
+          return;
+        }
+
+        grid.innerHTML = data.extensions.map(function(ext) {
+          var tags = (ext.tags || []).slice(0, 4).map(function(t) {
+            return '<span class="ext-tag">' + escapeHtml(t) + '</span>';
+          }).join("");
+          return '<a href="/extensions/' + encodeURIComponent(ext.name) + '/page" class="ext-card">' +
+            '<div class="ext-card-header">' +
+              '<div class="ext-name">' + escapeHtml(ext.name) + '</div>' +
+              '<div class="ext-version">v' + escapeHtml(ext.version) + '</div>' +
+            '</div>' +
+            '<div class="ext-desc">' + escapeHtml(ext.description || "No description") + '</div>' +
+            '<div class="ext-meta">' +
+              '<span class="ext-author">' + escapeHtml(ext.authorName || ext.authorDomain || "unknown") + '</span>' +
+              '<span class="separator"></span>' +
+              '<span class="ext-downloads">' + (ext.downloads || 0) + ' downloads</span>' +
+            '</div>' +
+            (tags ? '<div class="ext-tags">' + tags + '</div>' : '') +
+          '</a>';
         }).join("");
       } catch (err) {
         console.error("Search failed:", err);
