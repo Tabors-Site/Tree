@@ -1,6 +1,6 @@
+import mongoose from "mongoose";
 import Node from "../../db/models/node.js";
-import Note from "../../db/models/notes.js"; // adjust import
-
+import Note from "../../db/models/notes.js";
 import User from "../../db/models/user.js";
 
 export async function resolveVersion(nodeId, version) {
@@ -266,10 +266,9 @@ export async function buildDeepTreeSummary(
   let encodingMap = null;
   if (includeEncodings) {
     try {
-      const { default: UnderstandingRun } =
-        await import("../../extensions/understanding/understandingRun.js");
-      const { default: UnderstandingNode } =
-        await import("../../extensions/understanding/understandingNode.js");
+      const UnderstandingRun = mongoose.models.UnderstandingRun;
+      const UnderstandingNode = mongoose.models.UnderstandingNode;
+      if (!UnderstandingRun || !UnderstandingNode) throw new Error("skip");
 
       const latestRun = await UnderstandingRun.findOne({
         rootNodeId: rootId,
