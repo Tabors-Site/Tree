@@ -235,7 +235,8 @@ const LandingPage = () => {
               </p>
               <div className="lp-terminal-mini">
                 <div className="lp-term-line">npm install -g treeos</div>
-                <div className="lp-term-line">treeos start</div>
+                <div className="lp-term-line">treeos connect https://treeos.ai</div>
+                <div className="lp-term-line">treeos register</div>
               </div>
               <a href="/about/gettingstarted" className="lp-split-link">Getting started</a>
             </div>
@@ -294,7 +295,8 @@ const LandingPage = () => {
               <div className="lp-term-line lp-term-output">  Domain (localhost): _</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-comment"># Or connect to an existing land</div>
-              <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos start</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos connect https://treeos.ai</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos register</div>
             </div>
           </div>
         </div>
