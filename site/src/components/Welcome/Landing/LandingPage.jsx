@@ -323,13 +323,13 @@ const LandingPage = () => {
             <div className="lp-footer-col">
               <h4>Network</h4>
               <a href="/about/land">Land and Canopy</a>
+              <a href="https://dir.treeos.ai">Directory</a>
               <a href="/blog">Blog</a>
-              <a href="https://github.com/Tabors-Site/Tree">GitHub</a>
             </div>
             <div className="lp-footer-col">
-              <h4>Legal</h4>
-              <a href="/terms">Terms</a>
-              <a href="/privacy">Privacy</a>
+              <h4>Source</h4>
+              <a href="https://github.com/Tabors-Site/Tree">GitHub</a>
+              <a href="https://github.com/Tabors-Site/Tree/blob/main/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>
           <div className="lp-footer-bottom">
