@@ -8,6 +8,12 @@ import {
   getLandConfigValue,
   setLandConfigValue,
 } from "../../core/landConfig.js";
+import {
+  getLoadedExtensionNames,
+  getLoadedManifests,
+  hasExtension,
+  getExtensionManifest,
+} from "../../extensions/loader.js";
 
 const router = express.Router();
 
@@ -59,6 +65,123 @@ router.put("/land/config/:key", authenticate, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Extension management (god tier only)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/land/extensions
+ * List all loaded extensions with manifest info.
+ */
+router.get("/land/extensions", authenticate, async (req, res) => {
+  try {
+    const manifests = getLoadedManifests();
+    const disabled = (process.env.DISABLED_EXTENSIONS || "")
+      .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+    res.json({
+      loaded: manifests.map((m) => ({
+        name: m.name,
+        version: m.version,
+        description: m.description,
+        needs: m.needs || {},
+        optional: m.optional || {},
+        provides: {
+          routes: !!m.provides?.routes,
+          tools: !!m.provides?.tools,
+          jobs: !!m.provides?.jobs,
+          models: Object.keys(m.provides?.models || {}),
+          energyActions: Object.keys(m.provides?.energyActions || {}),
+          sessionTypes: Object.keys(m.provides?.sessionTypes || {}),
+        },
+      })),
+      disabled,
+      count: manifests.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/land/extensions/:name
+ * Get details for a specific extension.
+ */
+router.get("/land/extensions/:name", authenticate, async (req, res) => {
+  try {
+    const { name } = req.params;
+    if (!hasExtension(name)) {
+      return res.status(404).json({ error: `Extension "${name}" is not loaded` });
+    }
+    const manifest = getExtensionManifest(name);
+    res.json({ name, manifest });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/land/extensions/:name/disable
+ * Disable an extension. Adds to DISABLED_EXTENSIONS config.
+ * Requires restart to take effect.
+ */
+router.post("/land/extensions/:name/disable", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("profileType").lean();
+    if (!user || user.profileType !== "god") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { name } = req.params;
+    const current = getLandConfigValue("disabledExtensions") || [];
+    if (!current.includes(name)) {
+      current.push(name);
+      await setLandConfigValue("disabledExtensions", current);
+    }
+
+    res.json({
+      disabled: true,
+      name,
+      note: "Extension will be disabled on next restart.",
+      disabledExtensions: current,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/land/extensions/:name/enable
+ * Re-enable a disabled extension. Removes from disabled list.
+ * Requires restart to take effect.
+ */
+router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("profileType").lean();
+    if (!user || user.profileType !== "god") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { name } = req.params;
+    const current = getLandConfigValue("disabledExtensions") || [];
+    const updated = current.filter((n) => n !== name);
+    await setLandConfigValue("disabledExtensions", updated);
+
+    res.json({
+      enabled: true,
+      name,
+      note: "Extension will be enabled on next restart.",
+      disabledExtensions: updated,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Land root
+// ─────────────────────────────────────────────────────────────────────────
 
 /**
  * GET /api/v1/land/root

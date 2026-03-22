@@ -22,6 +22,7 @@ import rateLimit from "express-rate-limit";
 import { notFoundPage } from "../middleware/notFoundPage.js";
 
 import { loadExtensions, getLoadedExtensionNames } from "../extensions/loader.js";
+import { getLandConfigValue } from "../core/landConfig.js";
 
 const BLOCKED_IDS = ["deleted", "empty", "null", "system"];
 
@@ -55,8 +56,8 @@ export default async function registerURLRoutes(app) {
 
   app.use(apiLimiter);
 
-  // Load extensions (blog, etc. loaded via manifest system)
-  await loadExtensions(app);
+  // Load extensions (manifests discovered, deps validated, routes wired)
+  await loadExtensions(app, null, { getConfigValue: getLandConfigValue });
 
   app.post("/mcp", authenticateMCP, handleMcpRequest);
 

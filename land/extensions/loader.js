@@ -24,14 +24,23 @@ const registeredJobs = [];      // [{ name, start, stop }] from extensions
 // ---------------------------------------------------------------------------
 
 /**
- * Parse DISABLED_EXTENSIONS env var (comma-separated list).
- * Extensions in this list will be skipped during loading.
+ * Get disabled extensions from env var and optional config callback.
+ * Env: DISABLED_EXTENSIONS=solana,billing (comma-separated)
  */
-function getDisabledExtensions() {
-  const raw = process.env.DISABLED_EXTENSIONS || "";
-  return new Set(
-    raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
-  );
+function getDisabledExtensions(configFn) {
+  const fromEnv = (process.env.DISABLED_EXTENSIONS || "")
+    .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+  let fromConfig = [];
+  if (typeof configFn === "function") {
+    try {
+      fromConfig = configFn("disabledExtensions") || [];
+    } catch {
+      // Config not loaded yet, that's fine
+    }
+  }
+
+  return new Set([...fromEnv, ...fromConfig]);
 }
 
 // ---------------------------------------------------------------------------
@@ -166,6 +175,7 @@ function topologicalSort(manifests) {
  * @param {object} mcpServer   - MCP server instance (optional)
  * @param {object} opts
  * @param {object} opts.overrides - service overrides for buildCoreServices
+ * @param {Function} opts.getConfigValue - land config reader (key => value)
  * @returns {Map} loaded extensions
  */
 export async function loadExtensions(app, mcpServer, opts = {}) {
@@ -183,8 +193,8 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     return loaded;
   }
 
-  // Check disabled list
-  const disabled = getDisabledExtensions();
+  // Check disabled list (env var + land config)
+  const disabled = getDisabledExtensions(opts.getConfigValue);
   const enabled = manifests.filter(({ manifest }) => {
     if (disabled.has(manifest.name)) {
       console.log(`[Extensions] Disabled: ${manifest.name} (DISABLED_EXTENSIONS)`);

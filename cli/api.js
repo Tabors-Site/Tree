@@ -93,6 +93,20 @@ class TreeAPI {
     return this.put(`/land/config/${encodeURIComponent(key)}`, { value });
   }
 
+  // ── Extensions ──────────────────────────────────────────────────────────
+  getExtensions() {
+    return this.get("/land/extensions");
+  }
+  getExtension(name) {
+    return this.get(`/land/extensions/${encodeURIComponent(name)}`);
+  }
+  disableExtension(name) {
+    return this.post(`/land/extensions/${encodeURIComponent(name)}/disable`);
+  }
+  enableExtension(name) {
+    return this.post(`/land/extensions/${encodeURIComponent(name)}/enable`);
+  }
+
   // ── User ─────────────────────────────────────────────────────────────────
   me() {
     return this.get("/me");

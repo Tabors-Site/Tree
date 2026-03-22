@@ -145,6 +145,7 @@ require("./commands/ai")(program);
 require("./commands/blog")(program);
 require("./commands/config")(program);
 require("./commands/canopy")(program);
+require("./commands/extensions")(program);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHELL (interactive REPL)
