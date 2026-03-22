@@ -27,8 +27,11 @@ const WelcomeRoutes = () => {
   return (
     <Routes>
 
-      {/* Welcome layout */}
-      <Route path="/" element={<WelcomePage />} />
+      {/* Landing page (protocol site) */}
+      <Route path="/" element={<LandingPage />} />
+
+      {/* Original app welcome (treeos.ai example) */}
+      <Route path="/app" element={<WelcomePage />} />
       <Route path="/privacy" element={<AboutLayout />} >
         <Route index element={<PrivacySection />} />
 </Route>
@@ -56,6 +59,7 @@ const WelcomeRoutes = () => {
       <Route path="/blog" element={<BlogSection />} />
       <Route path="/blog/:slug" element={<BlogSection />} />
 
+      {/* Keep /landing as alias during transition */}
       <Route path="/landing" element={<LandingPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

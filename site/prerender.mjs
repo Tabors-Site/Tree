@@ -26,6 +26,7 @@ const STATIC_ROUTES = [
   "/about/node-types",
   "/about/extensions",
   "/landing",
+  "/app",
   "/privacy",
   "/terms",
   "/blog",
@@ -36,8 +37,12 @@ const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
 // Per-page metadata for SEO (title, description, og:title, og:description)
 const PAGE_META = {
   "/": {
-    title: "TreeOS - A Context Management System",
-    description: "TreeOS is a context management system for organizing, navigating, and understanding complex information.",
+    title: "TreeOS . An Operating System for Context",
+    description: "Persistent, structured memory that AI can navigate. Self-hosted, modular, federated. Build living trees of knowledge.",
+  },
+  "/app": {
+    title: "TreeOS",
+    description: "Start chatting with your trees or access your dashboard.",
   },
   "/about": {
     title: "About - TreeOS",
