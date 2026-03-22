@@ -20,7 +20,7 @@ export default {
       UnderstandingNode: "./understandingNode.js",
     },
     routes: "./routes.js",
-    tools: false,
+    tools: true,
     jobs: "../../jobs/understandingAutoRun.js",
     orchestrator: "./pipeline.js",
     energyActions: {

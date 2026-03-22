@@ -1,14 +1,16 @@
 import router from "./routes.js";
+import tools from "./tools.js";
 import {
   startRawIdeaAutoPlaceJob,
   runRawIdeaAutoPlace,
-} from "../../jobs/rawIdeaAutoPlace.js";
+} from "./autoPlaceJob.js";
 
 let stopFn = null;
 
 export async function init(core) {
   return {
     router,
+    tools,
     jobs: [
       {
         name: "raw-idea-auto-place",

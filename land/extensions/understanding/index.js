@@ -1,14 +1,16 @@
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
-import router from "../../routes/api/understanding.js";
+import router from "./routes.js";
+import tools from "./tools.js";
 
 export async function init(core) {
   const understanding = await import("../../core/tree/understanding.js");
-  const orchestrator = await import("../../orchestrators/pipelines/understand.js");
+  const orchestrator = await import("./pipeline.js");
 
   return {
     models: { UnderstandingRun, UnderstandingNode },
     router,
+    tools,
     exports: {
       orchestrateUnderstanding: orchestrator.orchestrateUnderstanding,
       createUnderstandingRun: understanding.createUnderstandingRun,

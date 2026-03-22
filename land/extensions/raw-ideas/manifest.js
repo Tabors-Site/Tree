@@ -17,9 +17,9 @@ export default {
       RawIdea: "./model.js",
     },
     routes: "./routes.js",
-    tools: false,
-    jobs: "../../jobs/rawIdeaAutoPlace.js",
-    orchestrator: "../../orchestrators/pipelines/rawIdea.js",
+    tools: true,
+    jobs: "./autoPlaceJob.js",
+    orchestrator: "./pipeline.js",
     energyActions: {
       rawIdeaPlacement: { cost: 2 },
     },
