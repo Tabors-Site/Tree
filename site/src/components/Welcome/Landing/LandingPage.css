@@ -183,6 +183,12 @@
   margin: 0;
 }
 
+.lp-cards-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
 .lp-card-sm {
   padding: 22px;
 }
@@ -249,6 +255,48 @@
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
+
+/* ── CLI FEATURES ── */
+.lp-cli-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 32px;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.lp-cli-feat {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+.lp-cli-feat strong {
+  color: rgba(255, 255, 255, 0.65);
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* ── TERMINAL PROMPT STYLES ── */
+.lp-term-path {
+  color: rgba(100, 160, 255, 0.6);
+  margin-left: 1px;
+}
+
+.lp-term-caret {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.lp-term-green { color: rgba(80, 200, 120, 0.7); }
+.lp-term-dim { color: rgba(255, 255, 255, 0.25); }
 
 /* ── EXTENSIONS ── */
 .lp-ext-groups {
@@ -461,6 +509,7 @@
 /* ── RESPONSIVE ── */
 @media (max-width: 1024px) {
   .lp-cards-3 { grid-template-columns: repeat(2, 1fr); }
+  .lp-cards-4 { grid-template-columns: repeat(2, 1fr); }
   .lp-ext-groups { grid-template-columns: repeat(2, 1fr); }
   .lp-footer-grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -472,8 +521,10 @@
   .lp-subtitle { font-size: 16px; }
   .lp-section-title { font-size: 24px; }
   .lp-cards-3 { grid-template-columns: 1fr; }
+  .lp-cards-4 { grid-template-columns: 1fr; }
   .lp-split { grid-template-columns: 1fr; }
   .lp-ext-groups { grid-template-columns: 1fr; }
+  .lp-cli-features { grid-template-columns: repeat(2, 1fr); }
   .lp-footer-grid { grid-template-columns: 1fr 1fr; }
   .lp-hero-ctas { flex-direction: column; align-items: center; }
 }
