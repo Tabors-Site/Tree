@@ -8004,7 +8004,7 @@ body::after {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/v1/user/${req.userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
         ← Back to Profile
       </a>
     </div>
@@ -8020,7 +8020,7 @@ body::after {
     <!-- Create API Key -->
     <div class="create-card">
       <form class="create-form" method="POST" action="/api/v1/user/${
-        req.userId
+        userId
       }/api-keys?token=${token}&html">
         <input type="text" name="name" placeholder="Key name (optional)" />
         <button type="submit">Create Key</button>
@@ -8121,7 +8121,7 @@ body::after {
 
       try {
         const res = await fetch(
-          "/api/v1/user/${req.userId}/api-keys/" + keyId + qs,
+          "/api/v1/user/${userId}/api-keys/" + keyId + qs,
           { method: "DELETE" }
         );
 
