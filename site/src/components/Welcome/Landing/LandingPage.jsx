@@ -148,8 +148,8 @@ const LandingPage = () => {
               <div className="lp-step-num">3</div>
               <div className="lp-step-content">
                 <h4>Plant a Tree</h4>
-                <p>Name it. Type it. Navigate with cd and ls. Build branches with mkdir. Add notes, values, goals.</p>
-                <code>treeos mkroot "Life Plan" --type goal</code>
+                <p>Name it. Type it. Navigate with cd and ls. Build branches with mkdir. Add notes and track values.</p>
+                <code>treeos mkroot "Fitness" --type goal</code>
               </div>
             </div>
             <div className="lp-step">
