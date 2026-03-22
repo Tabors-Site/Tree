@@ -26,9 +26,13 @@ ${itemsList}
 SCOUTED PINS
 ${JSON.stringify(pins, null, 2)}
 
+NODE TYPES
+Assign types to new nodes: goal, plan, task, knowledge, resource, identity, or null.
+${cluster.suggestedType ? `The cluster was classified as: ${cluster.suggestedType}` : "Choose based on content."}
+
 YOUR JOB
 Create a placement plan with two phases:
-1. BUILD: New nodes/branches to create first (if any)
+1. BUILD: New nodes/branches to create first (if any), with types
 2. PLACE: Where each item's content becomes a note
 
 OUTPUT FORMAT (STRICT JSON ONLY)
@@ -36,7 +40,7 @@ OUTPUT FORMAT (STRICT JSON ONLY)
   "buildSteps": [
     {
       "parentNodeId": string,
-      "structure": { "name": string, "children": [{ "name": string }] },
+      "structure": { "name": string, "type": "string or null", "children": [{ "name": string, "type": "string or null" }] },
       "reason": string
     }
   ],

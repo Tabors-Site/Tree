@@ -32,7 +32,7 @@ async function findExpansionCandidates(rootId) {
   async function walk(nodeId, depth) {
     if (candidates.length >= MAX_CANDIDATES_PER_RUN) return;
 
-    const node = await Node.findById(nodeId).select("_id name prestige children").lean();
+    const node = await Node.findById(nodeId).select("_id name type prestige children").lean();
     if (!node) return;
 
     const notes = await Note.find({
@@ -50,6 +50,7 @@ async function findExpansionCandidates(rootId) {
         candidates.push({
           nodeId: node._id,
           nodeName: node.name,
+          nodeType: node.type || null,
           prestige: node.prestige ?? 0,
           children: node.children || [],
           notes,
@@ -145,6 +146,7 @@ export async function orchestrateExpand({
         modeCtx: {
           nodeName: candidate.nodeName,
           nodeId: candidate.nodeId,
+          nodeType: candidate.nodeType,
           notes: notesWithUsernames,
           childrenNames,
         },

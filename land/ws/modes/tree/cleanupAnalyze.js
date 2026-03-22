@@ -14,10 +14,20 @@ export default {
 TREE STRUCTURE
 ${treeSummary}
 
+NODE TYPES
+Nodes may have a type: goal, plan, task, knowledge, resource, identity, or custom.
+Use types to evaluate structure quality:
+- A goal without child plans or tasks beneath it is unsupported
+- Tasks scattered outside any plan may belong grouped under one
+- Knowledge nodes buried under task branches may belong in a knowledge section
+- Identity nodes should be near the root, not deep in branches
+- Mistyped nodes (a task that's clearly knowledge) can be flagged
+
 YOUR JOB
 Analyze the tree for:
-1. Nodes under wrong parents — nodes whose topic clearly belongs under a different existing branch
-2. Empty misplaced nodes — nodes with no meaningful content that don't belong where they are
+1. Nodes under wrong parents, considering both topic AND type hierarchy
+2. Empty misplaced nodes with no meaningful content
+3. Type-structural issues: unsupported goals, orphaned tasks, misplaced identity nodes
 
 OUTPUT FORMAT (STRICT JSON ONLY)
 {
@@ -34,6 +44,15 @@ OUTPUT FORMAT (STRICT JSON ONLY)
       "nodeId": "the [id:xxx] from the tree",
       "nodeName": "human-readable name",
       "reason": "why this empty node should be removed"
+    }
+  ],
+  "typeIssues": [
+    {
+      "nodeId": "the [id:xxx] from the tree",
+      "nodeName": "human-readable name",
+      "currentType": "current type or null",
+      "suggestedType": "what it should be",
+      "reason": "why"
     }
   ],
   "summary": "one-sentence overview of changes"

@@ -391,6 +391,7 @@ export async function getNextCompressionPayloadForLLM(
         {
           realNodeId: realNode._id,
           nodeName: realNode.name,
+          nodeType: realNode.type || null,
           notes: notes.map((note) => ({
             content: note.content,
             username: note.username,
@@ -539,6 +540,7 @@ function buildMergePayload({
         understandingNodeId: node._id,
         realNodeId: realNode._id,
         nodeName: realNode.name,
+        nodeType: realNode.type || null,
         nextLayer,
         childSummaries,
       },

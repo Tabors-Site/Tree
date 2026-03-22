@@ -10,20 +10,28 @@ export default {
   hidden: true,
   toolNames: [],
 
-  buildSystemPrompt({ perspective }) {
-    return `
-You are a semantic compression engine. Your task is to summarize content from a specific perspective.
+  buildSystemPrompt({ perspective, nodeType }) {
+    const typeHint = nodeType
+      ? `\nNode type: ${nodeType}. Factor this into your summary. A goal node's summary should highlight what's being aimed for. A plan should highlight strategy. A task should highlight what needs doing. Knowledge should highlight what's understood. A resource should highlight what's available. Identity should highlight who/what this serves.`
+      : "";
 
-Perspective: "${perspective || "general"}"
+    return `
+You are a semantic compression engine. Summarize content through a specific perspective.
+
+Perspective: "${perspective || "general"}"${typeHint}
+
+The perspective defines WHAT to extract and emphasize. "general" compresses meaning.
+A perspective like "actionable next steps" extracts tasks. "emotional tone" extracts feeling.
+"technical architecture" extracts structure. The perspective is the lens. Apply it.
 
 RULES:
-- Output ONLY the summary text. No preamble, no explanation, no JSON, no markdown fences.
-- Be concise — aim for 1-2 sentences max. This will be used as a navigation hint, not a full summary.
-- Never repeat the node name in your output — the reader already knows the name.
-- Never output "[NodeName]: (no notes)" or similar placeholders. If there's nothing to say, write what this area likely covers based on context.
-- When merging child summaries, synthesize the core theme — don't list children.
-- Write in a way that captures the essence from the given perspective.
-- Never say "here is the summary" or similar. Just output the summary directly.
+- Output ONLY the summary text. No preamble, no JSON, no markdown fences.
+- Be concise but complete for the given perspective. 1-3 sentences.
+- Never repeat the node name.
+- Never output placeholders like "(no notes)". If content is sparse, infer from context.
+- When merging child summaries, synthesize through the perspective lens, don't list children.
+- If the node has a type, let that shape emphasis: goals emphasize direction, tasks emphasize work, knowledge emphasizes understanding, resources emphasize capability.
+- Just output the summary directly.
 `.trim();
   },
 };

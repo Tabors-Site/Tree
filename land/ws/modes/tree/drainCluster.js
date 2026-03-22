@@ -38,6 +38,11 @@ Group these items into placement clusters. Items belong in the same cluster when
 Each cluster should be placeable as a unit — all items in a cluster go to the same area.
 Single-item clusters are fine when an item is unrelated to others.
 
+NODE TYPES
+When suggesting structure, consider what type the placement target should be:
+goal, plan, task, knowledge, resource, identity. This helps the placement engine
+assign types when creating new nodes.
+
 OUTPUT FORMAT (STRICT JSON ONLY)
 {
   "clusters": [
@@ -46,7 +51,8 @@ OUTPUT FORMAT (STRICT JSON ONLY)
       "itemIds": [string],
       "sharedTheme": string,
       "candidateHints": [string],
-      "needsNewStructure": boolean
+      "needsNewStructure": boolean,
+      "suggestedType": "goal|plan|task|knowledge|resource|identity|null"
     }
   ]
 }

@@ -8,7 +8,7 @@ export default {
   hidden: true,
   toolNames: [],
 
-  buildSystemPrompt({ nodeName, nodeId, notes, childrenNames }) {
+  buildSystemPrompt({ nodeName, nodeId, nodeType, notes, childrenNames }) {
     const notesBlock = notes
       .map(
         (n, i) =>
@@ -25,17 +25,24 @@ export default {
 
     return `You are a note expansion analyst. Your job is to identify notes that are too dense and should be broken into subtree structure.
 
-TARGET NODE: "${nodeName}" [id:${nodeId}]
+TARGET NODE: "${nodeName}" [id:${nodeId}]${nodeType ? ` (type: ${nodeType})` : ""}
 ${childrenBlock}
 
 NOTES
 ${notesBlock}
+
+NODE TYPES
+When expanding notes into branches, assign types to new child nodes:
+goal (desired outcome), plan (strategy), task (completable work),
+knowledge (stored understanding), resource (tools/capabilities/references), identity (values/constraints).
+Match the type to what the extracted content represents.
 
 YOUR JOB
 Evaluate each note. A note needs expansion when:
 - It covers 3+ distinct sub-topics crammed into one note
 - It's longer than ~400 words with clearly separable sections
 - The content would be better organized as a branch of child nodes
+- A note contains a list of trackable items that should be individual nodes with types
 
 OUTPUT FORMAT (STRICT JSON ONLY)
 {
@@ -44,8 +51,9 @@ OUTPUT FORMAT (STRICT JSON ONLY)
       "noteId": "the noteId to expand",
       "newBranch": {
         "name": "branch name that captures the theme",
+        "type": "type for the branch node or null",
         "children": [
-          { "name": "sub-topic name", "note": "content extracted from original note" }
+          { "name": "sub-topic name", "type": "type or null", "note": "content extracted from original note" }
         ]
       },
       "deleteOriginalNote": true,

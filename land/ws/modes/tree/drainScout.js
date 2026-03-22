@@ -24,11 +24,16 @@ Tree root: ${rootId}
 ${treeSummary ? `TABLE OF CONTENTS:\n${treeSummary}\n` : ""}
 CLUSTER TO PLACE
 Theme: ${cluster.sharedTheme}
-Needs new structure: ${cluster.needsNewStructure ? "likely yes" : "probably not"}
+Needs new structure: ${cluster.needsNewStructure ? "likely yes" : "probably not"}${cluster.suggestedType ? `\nSuggested type: ${cluster.suggestedType}` : ""}
 Items:
 ${itemsList}
 
 Candidate hints: ${JSON.stringify(cluster.candidateHints || [])}
+
+NODE TYPES
+The tree uses types: goal, plan, task, knowledge, resource, identity.
+When scouting, consider type compatibility. Tasks belong under plans or goals.
+Knowledge belongs in knowledge sections. Note node types shown in the tree summary.
 
 YOUR JOB
 Find where these items belong in the tree. Drop "pins" on candidate locations.

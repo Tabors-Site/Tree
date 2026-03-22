@@ -62,7 +62,8 @@ function buildSummarizationPrompt(payload) {
     const notesText = input.notes
       .map((n) => `[${n.username}] ${n.content}`)
       .join("\n");
-    return `Summarize the notes for node "${input.nodeName}":\n\n${notesText}`;
+    const typeLabel = input.nodeType ? ` (type: ${input.nodeType})` : "";
+    return `Summarize the notes for node "${input.nodeName}"${typeLabel}:\n\n${notesText}`;
   }
 
   if (payload.mode === "merge") {
@@ -75,7 +76,8 @@ function buildSummarizationPrompt(payload) {
     const childText = nonEmpty
       .map((cs, i) => `[Child ${i + 1}] ${cs.summary}`)
       .join("\n\n");
-    return `Merge these child summaries into one cohesive summary for "${input.nodeName}":\n\n${childText}`;
+    const typeLabel = input.nodeType ? ` (type: ${input.nodeType})` : "";
+    return `Merge these child summaries into one cohesive summary for "${input.nodeName}"${typeLabel}:\n\n${childText}`;
   }
 
   throw new Error(`Unknown payload mode: ${payload.mode}`);
@@ -278,6 +280,7 @@ export async function orchestrateUnderstanding({
         username,
         userId,
         perspective: runPerspective,
+        nodeType: payload.inputs?.[0]?.nodeType || null,
         clearHistory: true,
       });
 
