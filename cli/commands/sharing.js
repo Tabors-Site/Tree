@@ -149,4 +149,47 @@ module.exports = (program) => {
 
       console.log(termLink(url, url));
     });
+
+  program
+    .command("visibility [level]")
+    .description("Show or set tree visibility. visibility public | visibility private")
+    .action(async (level) => {
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) {
+        return console.log(chalk.yellow("Enter a tree first."));
+      }
+      const api = new TreeAPI(cfg.apiKey);
+
+      if (!level) {
+        // Show current visibility
+        try {
+          const data = await api.getRoot(cfg.activeRootId);
+          const root = data.root || data;
+          const vis = root.visibility || "private";
+          const label = vis === "public"
+            ? chalk.green("public") + chalk.dim(" (anyone can view and query)")
+            : chalk.dim("private") + chalk.dim(" (invite only)");
+          console.log(`  Visibility: ${label}`);
+        } catch (e) {
+          console.error(chalk.red(e.message));
+        }
+        return;
+      }
+
+      const valid = ["public", "private"];
+      if (!valid.includes(level)) {
+        return console.log(chalk.yellow(`Must be one of: ${valid.join(", ")}`));
+      }
+
+      try {
+        await api.setVisibility(cfg.activeRootId, level);
+        if (level === "public") {
+          console.log(chalk.green("✓ Tree is now public. Anyone can view and query it."));
+        } else {
+          console.log(chalk.green("✓ Tree is now private. Only invited users can access it."));
+        }
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
 };

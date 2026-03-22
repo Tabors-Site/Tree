@@ -61,6 +61,9 @@ function filterQuery(req) {
 // ─────────────────────────────────────────────────────────────────────────
 router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
   try {
+    if (req.isPublicAccess) {
+      return res.status(403).json({ error: "Chat history not available for public access" });
+    }
     const { nodeId } = req.params;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
@@ -290,7 +293,7 @@ router.get("/node/:nodeId", urlAuth, async (req, res) => {
     const rootUrl = `/api/v1/root/${nodeId}${qs}`;
 
     return res.send(
-      renderNodeDetail({ node, nodeId, qs, parentName, rootUrl }),
+      renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPublicAccess: !!req.isPublicAccess }),
     );
   } catch (err) {
     console.error("Error fetching node:", err);
@@ -510,7 +513,10 @@ router.post(
       const { nodeId } = req.params;
       const userId = req.userId;
 
-      const newType = req.body?.type ?? req.query?.type ?? null;
+      // customType (free text) takes priority over select dropdown
+      const customType = req.body?.customType?.trim();
+      let newType = customType || req.body?.type || req.query?.type || null;
+      if (newType === "") newType = null;
 
       const result = await editNodeType({
         nodeId,

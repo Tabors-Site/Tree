@@ -1,10 +1,20 @@
+import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import User from "../db/models/user.js";
 import { resolveHtmlShareAccess } from "../core/authenticate.js";
+import { resolvePublicRoot, isPublic } from "../core/tree/publicAccess.js";
 import { errorHtml } from "./notFoundPage.js";
 import { verifyCanopyToken, getLandIdentity } from "../canopy/identity.js";
 import { getPeerByDomain, registerPeer } from "../canopy/peers.js";
 import { lookupLandByDomain } from "../canopy/directory.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function wantsHtml(req) {
   return "html" in req.query || (req.headers.accept || "").includes("text/html");
@@ -66,13 +76,32 @@ export default async function urlAuth(req, res, next) {
         isRemote: true,
         homeLand: payload.iss,
       });
-      if (!ghostUser) return res.status(403).json({ message: "Remote user not registered on this land" });
 
-      req.userId = ghostUser._id;
-      req.username = ghostUser.username;
-      req.authType = "canopy";
-      req.isHtmlShare = false;
-      return next();
+      if (ghostUser) {
+        req.userId = ghostUser._id;
+        req.username = ghostUser.username;
+        req.authType = "canopy";
+        req.isHtmlShare = false;
+        return next();
+      }
+
+      // No ghost user. Check if tree is public (allow as authenticated visitor).
+      const nodeId = req.params?.nodeId || req.params?.rootId;
+      if (nodeId) {
+        const rootInfo = await resolvePublicRoot(nodeId);
+        if (rootInfo && isPublic(rootInfo.visibility)) {
+          req.isPublicAccess = true;
+          req.publicRootId = rootInfo.rootId;
+          req.publicRootOwner = rootInfo.rootOwner;
+          req.publicLlmAssignments = rootInfo.llmAssignments;
+          req.userId = null;
+          req.canopyVisitor = { userId: payload.sub, homeLand: payload.iss };
+          req.isHtmlShare = false;
+          return next();
+        }
+      }
+
+      return res.status(403).json({ message: "Remote user not registered on this land" });
     }
 
     /* ===========================
@@ -116,13 +145,53 @@ export default async function urlAuth(req, res, next) {
     }
 
     /* ===========================
-        3️⃣ SHARE TOKEN AUTH (existing flow)
+        1.5️⃣ JWT AUTH (Bearer token or cookie)
+    ============================ */
+    let jwtToken = null;
+    if (authHeader?.startsWith("Bearer ")) {
+      jwtToken = authHeader.slice(7).trim();
+    }
+    if (!jwtToken && req.cookies?.token) {
+      jwtToken = req.cookies.token;
+    }
+    if (jwtToken && JWT_SECRET) {
+      try {
+        const decoded = jwt.verify(jwtToken, JWT_SECRET);
+        req.userId = decoded.userId;
+        req.username = decoded.username;
+        req.authType = "jwt";
+        req.isHtmlShare = false;
+        return next();
+      } catch (_) {
+        // Invalid JWT, fall through to share token / public
+      }
+    }
+
+    /* ===========================
+        2️⃣ SHARE TOKEN AUTH (existing flow)
     ============================ */
     const shareToken =
       req.query.token ||
       req.params.token;
 
     if (!shareToken) {
+      /* ===========================
+          3️⃣ PUBLIC TREE ACCESS (last resort, no credentials at all)
+      ============================ */
+      const nodeId = req.params?.nodeId || req.params?.rootId;
+      if (nodeId) {
+        const rootInfo = await resolvePublicRoot(nodeId);
+        if (rootInfo && isPublic(rootInfo.visibility)) {
+          req.isPublicAccess = true;
+          req.publicRootId = rootInfo.rootId;
+          req.publicRootOwner = rootInfo.rootOwner;
+          req.publicLlmAssignments = rootInfo.llmAssignments;
+          req.userId = null;
+          req.isHtmlShare = false;
+          return next();
+        }
+      }
+
       if (wantsHtml(req)) {
         return errorPage(res, 401, "Share Token Required",
           "No share token was provided. You need a valid share link to view this page.");
@@ -135,14 +204,14 @@ export default async function urlAuth(req, res, next) {
     const userId =
       req.params?.userId || req.body?.userId || req.query?.userId || null;
 
-    const nodeId =
+    const shareNodeId =
       req.params?.nodeId ||
       req.body?.nodeId ||
       req.query?.nodeId ||
       req.params?.rootId ||
       null;
 
-    if (!userId && !nodeId) {
+    if (!userId && !shareNodeId) {
       if (wantsHtml(req)) {
         return errorPage(res, 400, "Invalid Link",
           "This link is missing required information. Please check that you have the full URL.");
@@ -154,7 +223,7 @@ export default async function urlAuth(req, res, next) {
 
     const result = await resolveHtmlShareAccess({
       userId,
-      nodeId,
+      nodeId: shareNodeId,
       shareToken,
     });
 

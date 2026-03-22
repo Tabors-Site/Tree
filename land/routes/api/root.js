@@ -67,7 +67,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       .populate("rootOwner", "username _id profileType planExpiresAt")
       .populate("contributors", "username _id isRemote homeLand")
       .select(
-        "rootOwner contributors transactionPolicy llmAssignments dreamTime lastDreamAt",
+        "rootOwner contributors transactionPolicy llmAssignments dreamTime lastDreamAt visibility",
       )
       .lean()
       .exec();
@@ -81,32 +81,52 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       rootNameColor = "#b00020"; // red
     }
 
+    const isPublicAccess = !!req.isPublicAccess;
+    const isOwner =
+      rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();
+    const queryAvailable = isPublicAccess
+      ? !!(rootMeta?.llmAssignments?.placement || req.canopyVisitor)
+      : false;
+
     // JSON MODE
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({
+      const json = {
         ...allData,
         rootOwner: rootMeta?.rootOwner || null,
         contributors: rootMeta?.contributors || [],
-      });
+      };
+
+      // Strip sensitive data for public visitors
+      if (isPublicAccess) {
+        delete json.contributors;
+        json.rootOwner = rootMeta?.rootOwner?.username
+          ? { username: rootMeta.rootOwner.username }
+          : null;
+        json.isPublicAccess = true;
+        json.queryAvailable = queryAvailable;
+      }
+
+      return res.json(json);
     }
 
-    const isOwner =
-      rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();
     const currentUserId = req.userId ? req.userId.toString() : null;
     const token = req.query.token ?? "";
 
-    // Load deferred items
-    const deferredItems = await ShortMemory.find({
-      rootId: nodeId,
-      status: { $in: ["pending", "escalated"] },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    // Load deferred items (skip for public visitors)
+    let deferredItems = [];
+    if (!isPublicAccess) {
+      deferredItems = await ShortMemory.find({
+        rootId: nodeId,
+        status: { $in: ["pending", "escalated"] },
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+    }
 
-    // Load owner LLM connections (for AI Models section)
+    // Load owner LLM connections (for AI Models section, owner only)
     let ownerConnections = [];
-    if (isOwner && rootMeta?.rootOwner) {
+    if (!isPublicAccess && isOwner && rootMeta?.rootOwner) {
       ownerConnections = await getConnectionsForUser(
         rootMeta.rootOwner._id.toString(),
       );
@@ -120,6 +140,8 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
         isOwner,
         isDeleted,
         isRoot,
+        isPublicAccess,
+        queryAvailable,
         currentUserId,
         queryString,
         nodeId,
@@ -131,6 +153,36 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     );
   } catch (err) {
     console.error("Error in /root/:nodeId:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /root/:rootId/visibility
+router.post("/root/:rootId/visibility", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const { visibility } = req.body;
+
+    const validValues = ["private", "public"];
+    if (!validValues.includes(visibility)) {
+      return res.status(400).json({
+        error: `visibility must be one of: ${validValues.join(", ")}`,
+      });
+    }
+
+    const root = await Node.findById(rootId).select("rootOwner").lean();
+    if (!root) {
+      return res.status(404).json({ error: "Tree not found" });
+    }
+    if (String(root.rootOwner) !== String(req.userId)) {
+      return res.status(403).json({ error: "Only the tree owner can change visibility" });
+    }
+
+    await Node.findByIdAndUpdate(rootId, { $set: { visibility } });
+
+    return res.json({ success: true, visibility });
+  } catch (err) {
+    console.error("Error in /root/:rootId/visibility:", err);
     res.status(500).json({ error: err.message });
   }
 });

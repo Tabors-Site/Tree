@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import bcrypt from "bcrypt";
 import User from "../db/models/user.js";
 import { resolveTreeAccess } from "../core/authenticate.js";
+import { resolvePublicRoot, isPublic } from "../core/tree/publicAccess.js";
 import { verifyCanopyToken, getLandIdentity } from "../canopy/identity.js";
 import { getPeerByDomain } from "../canopy/peers.js";
 
@@ -231,4 +232,44 @@ async function attachTreeAccess(req) {
 
   req.rootId = access.rootId;
   req.treeAccess = access;
+}
+
+/**
+ * Middleware: Try normal auth first. If no credentials, check if the
+ * target tree is public. Used on routes that should allow public access
+ * (query endpoint, land root listing).
+ */
+export async function authenticateOrPublic(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const apiKey = req.headers["x-api-key"];
+  const cookieToken = req.cookies?.token;
+
+  const hasCredentials = !!(
+    authHeader ||
+    apiKey ||
+    cookieToken
+  );
+
+  // If credentials are present, try normal auth
+  if (hasCredentials) {
+    return authenticate(req, res, next);
+  }
+
+  // No credentials. Check if target tree is public.
+  const nodeId = req.params?.rootId || req.params?.nodeId;
+  if (nodeId) {
+    try {
+      const rootInfo = await resolvePublicRoot(nodeId);
+      if (rootInfo && isPublic(rootInfo.visibility)) {
+        req.isPublicAccess = true;
+        req.publicRootId = rootInfo.rootId;
+        req.publicRootOwner = rootInfo.rootOwner;
+        req.publicLlmAssignments = rootInfo.llmAssignments;
+        req.userId = null;
+        return next();
+      }
+    } catch (_) {}
+  }
+
+  return res.status(401).json({ message: "Missing credentials" });
 }

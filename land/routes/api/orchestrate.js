@@ -14,7 +14,7 @@ dotenv.config({ path: path.resolve(__dirname, "../../..", ".env") });
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;
 
-import authenticate from "../../middleware/authenticate.js";
+import authenticate, { authenticateOrPublic } from "../../middleware/authenticate.js";
 import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
 import { orchestrateRawIdeaPlacement } from "../../orchestrators/pipelines/rawIdea.js";
 import { orchestrateUnderstanding } from "../../orchestrators/pipelines/understand.js";
@@ -48,6 +48,29 @@ import { resolveTreeAccess } from "../../core/authenticate.js";
 import { nullSocket } from "../../orchestrators/helpers.js";
 
 const router = express.Router();
+
+// Rate limit public queries: 10 per 15 min per IP
+const publicQueryLimits = new Map();
+const PQ_WINDOW_MS = 15 * 60 * 1000;
+const PQ_MAX = 10;
+
+function checkPublicQueryLimit(ip) {
+  const now = Date.now();
+  const entry = publicQueryLimits.get(ip);
+  if (!entry || now - entry.start > PQ_WINDOW_MS) {
+    publicQueryLimits.set(ip, { start: now, count: 1 });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= PQ_MAX;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of publicQueryLimits) {
+    if (now - entry.start > PQ_WINDOW_MS * 2) publicQueryLimits.delete(ip);
+  }
+}, PQ_WINDOW_MS);
 
 /**
  * POST /api/v1/tree/:rootId/chat
@@ -440,12 +463,13 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
  * Body: { message: string }
  * Response: { success, answer }
  */
-router.post("/root/:rootId/query", authenticate, async (req, res) => {
+router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
   const { rootId } = req.params;
   const { message } = req.body;
+  const isPublicAccess = !!req.isPublicAccess;
 
   console.log(
-    `🔍 Tree query: rootId=${rootId} user=${req.username} message="${message?.slice(0, 80)}"`,
+    `🔍 Tree query: rootId=${rootId} user=${isPublicAccess ? "public" : req.username} message="${message?.slice(0, 80)}"`,
   );
 
   if (
@@ -460,33 +484,92 @@ router.post("/root/:rootId/query", authenticate, async (req, res) => {
     });
   }
 
-  // Check tree access
-  const queryAccess = await resolveTreeAccess(rootId, req.userId);
-  if (!queryAccess.isOwner && !queryAccess.isContributor) {
-    return res
-      .status(403)
-      .json({ success: false, answer: "Not authorized to access this tree." });
+  // Rate limit public queries
+  if (isPublicAccess && !checkPublicQueryLimit(req.ip || "unknown")) {
+    return res.status(429).json({
+      success: false,
+      answer: "Too many queries. Please try again later.",
+    });
   }
 
   const rootCheck = await Node.findById(rootId)
-    .select("rootOwner llmAssignments")
+    .select("rootOwner llmAssignments visibility")
     .lean();
-  const hasUserLlm = await userHasLlm(req.userId);
+
+  if (!rootCheck) {
+    return res.status(404).json({ success: false, answer: "Tree not found." });
+  }
+
+  // Determine who pays for LLM and which user context to use
+  let effectiveUserId = req.userId;
+  let effectiveUsername = req.username;
+  let isPublicQuery = false;
+
+  if (isPublicAccess) {
+    // Public access: tree must be public
+    if (rootCheck.visibility !== "public") {
+      return res.status(403).json({ success: false, answer: "This tree is not public." });
+    }
+
+    const hasRootLlm = !!rootCheck.llmAssignments?.placement;
+    const hasCanopyVisitor = !!req.canopyVisitor;
+
+    if (hasRootLlm) {
+      // Owner's LLM, owner pays
+      effectiveUserId = rootCheck.rootOwner;
+      const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
+      effectiveUsername = owner?.username || "system";
+    } else if (hasCanopyVisitor) {
+      // Visitor is authenticated on their home land, use their LLM via proxy
+      effectiveUserId = req.canopyVisitor.userId;
+      effectiveUsername = `visitor@${req.canopyVisitor.homeLand}`;
+    } else {
+      // Anonymous, no owner LLM
+      return res.status(403).json({
+        success: false,
+        answer: "No AI available on this tree. Log in to use your own.",
+      });
+    }
+    isPublicQuery = true;
+  } else {
+    // Authenticated user: check tree access
+    const queryAccess = await resolveTreeAccess(rootId, req.userId);
+    if (!queryAccess.isOwner && !queryAccess.isContributor) {
+      // Not owner/contributor, but tree might be public
+      if (rootCheck.visibility === "public") {
+        // Allow query. Use owner's LLM if available, else user's own.
+        const hasRootLlm = !!rootCheck.llmAssignments?.placement;
+        if (hasRootLlm) {
+          effectiveUserId = rootCheck.rootOwner;
+          const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
+          effectiveUsername = owner?.username || "system";
+        }
+        isPublicQuery = true;
+      } else {
+        return res
+          .status(403)
+          .json({ success: false, answer: "Not authorized to access this tree." });
+      }
+    }
+  }
+
+  // Verify LLM access for the effective user
+  const hasUserLlm = await userHasLlm(effectiveUserId);
   const hasRootLlm = !!rootCheck?.llmAssignments?.placement;
   if (!hasUserLlm && !hasRootLlm) {
     return res.status(403).json({
       success: false,
-      answer: "No LLM connection. Visit /setup to set one up.",
+      answer: "No LLM connection available for this query.",
     });
   }
 
-  const visitorId = `tree-query:${req.userId}:${Date.now()}`;
+  const visitorId = `tree-query:${effectiveUserId}:${Date.now()}`;
   const { sessionId } = createSession({
-    userId: req.userId,
+    userId: effectiveUserId,
     type: SESSION_TYPES.API_TREE_QUERY,
-    scopeKey: `${req.userId}:${rootId}`,
-    description: `API tree query on root ${rootId}`,
-    meta: { rootId, visitorId },
+    scopeKey: `${effectiveUserId}:${rootId}`,
+    description: `API tree query on root ${rootId}${isPublicQuery ? " (public)" : ""}`,
+    meta: { rootId, visitorId, isPublicQuery },
   });
   const abort = new AbortController();
   setSessionAbort(sessionId, abort);
@@ -518,12 +601,12 @@ router.post("/root/:rootId/query", authenticate, async (req, res) => {
   }, TIMEOUT_MS);
 
   try {
-    const clientInfo = await getClientForUser(req.userId);
+    const clientInfo = await getClientForUser(effectiveUserId);
     aiChat = await startAIChat({
-      userId: req.userId,
+      userId: effectiveUserId,
       sessionId,
       message: message.slice(0, 5000),
-      source: "api",
+      source: isPublicQuery ? "public-query" : "api",
       modeKey: "tree:query",
       llmProvider: {
         isCustom: clientInfo.isCustom,
@@ -540,7 +623,7 @@ router.post("/root/:rootId/query", authenticate, async (req, res) => {
   await enqueue(sessionId, async () => {
     try {
       const internalJwt = jwt.sign(
-        { userId: req.userId.toString(), username: req.username, visitorId },
+        { userId: effectiveUserId.toString(), username: effectiveUsername, visitorId },
         JWT_SECRET,
         { expiresIn: "1h" },
       );
@@ -552,8 +635,8 @@ router.post("/root/:rootId/query", authenticate, async (req, res) => {
         visitorId,
         message: message.trim(),
         socket: nullSocket,
-        username: req.username,
-        userId: req.userId,
+        username: effectiveUsername,
+        userId: effectiveUserId,
         signal: abort.signal,
         sessionId,
         rootId,

@@ -23,6 +23,7 @@ const STATIC_ROUTES = [
   "/about/cli",
   "/about/gateway",
   "/about/land",
+  "/about/node-types",
   "/privacy",
   "/terms",
   "/blog",
@@ -71,6 +72,10 @@ const PAGE_META = {
   "/about/land": {
     title: "Land and Canopy - TreeOS",
     description: "Self-host your own Land node, connect to the decentralized TreeOS network, and collaborate across servers.",
+  },
+  "/about/node-types": {
+    title: "Node Types - TreeOS",
+    description: "Semantic labels for nodes. Six core types, custom types, and how trees program their own agents.",
   },
   "/privacy": {
     title: "Privacy Policy - TreeOS",

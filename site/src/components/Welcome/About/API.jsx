@@ -1082,6 +1082,25 @@ rawIdea  — Used for raw idea auto-placement`}</div>
 
           <div className="section-spacer"></div>
 
+          {/* ── Visibility ── */}
+          <div className="sub-title">Visibility</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/visibility</span>
+            </div>
+            <div className="ep-desc">Set tree visibility. Public trees can be browsed and queried by anyone without authentication. Owner only.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{'{ "visibility": "public" }'}</div>
+            <div className="ep-label">Allowed Values</div>
+            <div className="ep-code">{`private — Only owner and invited contributors can access (default)
+public  — Anyone can browse and query the tree`}</div>
+            <div className="ep-note">When public, if the tree has an LLM assigned to the placement slot, anonymous visitors can query it (owner pays energy). If no LLM is assigned, only authenticated visitors with their own LLM can query.</div>
+          </div>
+
+          <div className="section-spacer"></div>
+
           {/* ── Transaction Policy ── */}
           <div className="sub-title">Transaction Policy</div>
 

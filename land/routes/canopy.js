@@ -161,7 +161,7 @@ router.get("/canopy/public-trees", async (req, res) => {
     }
 
     const trees = await Node.find(query)
-      .select("_id name rootOwner")
+      .select("_id name rootOwner llmAssignments")
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
@@ -178,6 +178,7 @@ router.get("/canopy/public-trees", async (req, res) => {
           name: tree.name || "",
           ownerUsername: owner?.username || "unknown",
           landDomain: identity.domain,
+          queryAvailable: !!tree.llmAssignments?.placement,
         };
       })
     );

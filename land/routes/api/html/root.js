@@ -33,6 +33,8 @@ export function renderRootOverview({
   isOwner,
   isDeleted,
   isRoot,
+  isPublicAccess,
+  queryAvailable,
   currentUserId,
   queryString,
   nodeId,
@@ -1425,6 +1427,13 @@ transition:
       ${treeHtml}
     </div>
 
+    ${isPublicAccess ? `
+    <div style="text-align:center;padding:16px 20px;background:rgba(72,187,120,0.1);border:1px solid rgba(72,187,120,0.25);border-radius:12px;margin:16px 0;color:rgba(255,255,255,0.8);font-size:0.9rem;">
+      Viewing public tree${queryAvailable ? ". You can query this tree using the API." : "."}
+    </div>
+    ` : ""}
+
+    ${!isPublicAccess ? `
     <!-- Deferred Items (Short-Term Holdings) -->
     <div class="content-card">
       <div class="section-header">
@@ -1432,16 +1441,39 @@ transition:
       </div>
       ${deferredHtml}
     </div>
+    ` : ""}
 
     <!-- Tree Settings Section -->
 ${
-  isOwner ||
+  !isPublicAccess && (isOwner ||
   rootMeta?.contributors?.some(
     (c) => c._id.toString() === userId?.toString(),
-  )
+  ))
     ? `
 
   ${isOwner ? `
+<div class="content-card">
+  <div class="section-header">
+    <h2>Visibility</h2>
+  </div>
+  <p style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin:0 0 12px">
+    Public trees can be browsed and queried by anyone without authentication.
+    If an LLM is assigned to the placement slot, anonymous visitors can query the tree (you pay energy).
+  </p>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <select id="visibilitySelect"
+      style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
+             background:rgba(255,255,255,0.06);color:#fff;font-size:0.95rem;min-width:140px">
+      <option value="private" ${(rootMeta.visibility || "private") === "private" ? "selected" : ""}>Private</option>
+      <option value="public" ${rootMeta.visibility === "public" ? "selected" : ""}>Public</option>
+    </select>
+    <button onclick="saveVisibility()" style="padding:8px 14px;border-radius:8px;
+      border:1px solid rgba(72,187,120,0.4);background:rgba(72,187,120,0.15);
+      color:rgba(72,187,120,0.9);font-weight:600;cursor:pointer">Save</button>
+    <span id="visibilityStatus" style="display:none;font-size:0.85rem"></span>
+  </div>
+</div>
+
 <div class="content-card">
   <div class="section-header">
     <h2>Tree Dream</h2>
@@ -1562,6 +1594,41 @@ ${
 
 
 <script>
+// VISIBILITY
+async function saveVisibility() {
+  var select = document.getElementById("visibilitySelect");
+  var status = document.getElementById("visibilityStatus");
+  if (!select) return;
+  try {
+    var res = await fetch("/api/v1/root/${nodeId}/visibility", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visibility: select.value }),
+    });
+    if (res.ok) {
+      if (status) {
+        status.style.display = "inline";
+        status.style.color = "rgba(72, 187, 120, 0.9)";
+        status.textContent = select.value === "public" ? "Now public" : "Now private";
+        setTimeout(function() { status.style.display = "none"; }, 3000);
+      }
+    } else {
+      var data = await res.json().catch(function() { return {}; });
+      if (status) {
+        status.style.display = "inline";
+        status.style.color = "rgba(255, 107, 107, 0.9)";
+        status.textContent = data.error || "Failed";
+      }
+    }
+  } catch (err) {
+    if (status) {
+      status.style.display = "inline";
+      status.style.color = "rgba(255, 107, 107, 0.9)";
+      status.textContent = "Error";
+    }
+  }
+}
+
 // DREAM TIME
 async function saveDreamTime() {
   var input = document.getElementById("dreamTimeInput");

@@ -154,6 +154,9 @@ class TreeAPI {
   retireRoot(rootId) {
     return this.post(`/root/${rootId}/retire`, {});
   }
+  setVisibility(rootId, visibility) {
+    return this.post(`/root/${rootId}/visibility`, { visibility });
+  }
   invite(rootId, userReceiving) {
     return this.post(`/root/${rootId}/invite`, { userReceiving });
   }

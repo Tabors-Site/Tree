@@ -1068,7 +1068,7 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 /* 2. renderNodeDetail                                                 */
 /* ================================================================== */
 
-export function renderNodeDetail({ node, nodeId, qs, parentName, rootUrl }) {
+export function renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPublicAccess }) {
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -1757,7 +1757,31 @@ html, body {
 
     <!-- Header -->
     <div class="header">
-      <h1>${node.name}</h1>
+      <h1
+        id="nodeNameDisplay"
+        ${!isPublicAccess ? `style="cursor:pointer;" title="Click to rename" onclick="document.getElementById('nodeNameDisplay').style.display='none';document.getElementById('renameForm').style.display='flex';"` : ""}
+      >${node.name}</h1>
+      ${!isPublicAccess ? `<form
+        id="renameForm"
+        method="POST"
+        action="/api/v1/node/${nodeId}/${node.prestige}/editName${qs}"
+        style="display:none;align-items:center;gap:8px;margin-bottom:12px;"
+      >
+        <input
+          type="text"
+          name="name"
+          value="${node.name.replace(/"/g, '&quot;')}"
+          required
+          style="flex:1;font-size:20px;font-weight:700;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:white;"
+        />
+        <button type="submit" class="primary-button" style="padding:8px 16px;">Save</button>
+        <button
+          type="button"
+          class="warning-button"
+          style="padding:8px 16px;"
+          onclick="document.getElementById('renameForm').style.display='none';document.getElementById('nodeNameDisplay').style.display='';"
+        >Cancel</button>
+      </form>` : ""}
 
       <div class="node-id-container">
         <code id="nodeIdCode">${node._id}</code>
@@ -1776,6 +1800,33 @@ html, body {
       </div>
     </div>
 
+    ${!isPublicAccess ? `<!-- Edit Type -->
+    <div class="hierarchy-section">
+      <h2>Node Type</h2>
+      <form
+        method="POST"
+        action="/api/v1/node/${nodeId}/editType${qs}"
+        class="action-form"
+      >
+        <select name="type" style="flex:1;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:white;font-size:14px;">
+          <option value="" ${!node.type ? "selected" : ""}>None</option>
+          <option value="goal" ${node.type === "goal" ? "selected" : ""}>goal</option>
+          <option value="plan" ${node.type === "plan" ? "selected" : ""}>plan</option>
+          <option value="task" ${node.type === "task" ? "selected" : ""}>task</option>
+          <option value="knowledge" ${node.type === "knowledge" ? "selected" : ""}>knowledge</option>
+          <option value="resource" ${node.type === "resource" ? "selected" : ""}>resource</option>
+          <option value="identity" ${node.type === "identity" ? "selected" : ""}>identity</option>
+        </select>
+        <input
+          type="text"
+          name="customType"
+          placeholder="or custom type..."
+          style="flex:1;"
+        />
+        <button type="submit" class="primary-button">Set Type</button>
+      </form>
+    </div>` : ""}
+
     <!-- Versions Section -->
     <div class="versions-section">
       <h2>Versions</h2>
@@ -1788,7 +1839,7 @@ html, body {
           )
           .join("")}
       </ul>
-      <form
+      ${!isPublicAccess ? `<form
         method="POST"
         action="/api/v1/node/${nodeId}/${node.prestige}/prestige${qs}"
         onsubmit="return confirm('This will complete the current version and create a new prestige level. Continue?')"
@@ -1797,7 +1848,7 @@ html, body {
         <button type="submit" class="primary-button">
           Add New Version
         </button>
-      </form>
+      </form>` : ""}
     </div>
 
     <!-- Parent Section -->
@@ -1809,7 +1860,7 @@ html, body {
           : `<p style="margin-bottom:16px;"><em>None (This is a root node)</em></p>`
       }
 
-      <h3>Change Parent</h3>
+      ${!isPublicAccess ? `<h3>Change Parent</h3>
       <form
         method="POST"
         action="/api/v1/node/${nodeId}/updateParent${qs}"
@@ -1824,7 +1875,7 @@ html, body {
         <button type="submit" class="warning-button">
           Move Node
         </button>
-      </form>
+      </form>` : ""}
     </div>
 
     <!-- Children Section -->
@@ -1913,7 +1964,7 @@ html, body {
       </ul>
     </div>
 
-    <!-- Delete Section -->
+    ${!isPublicAccess ? `<!-- Delete Section -->
     <div class="actions-section">
       <h3>Delete</h3>
       <form
@@ -1925,7 +1976,7 @@ html, body {
           Delete Node
         </button>
       </form>
-    </div>
+    </div>` : ""}
   </div>
 
   <script>
@@ -2864,9 +2915,41 @@ html, body {
 
     <!-- Header -->
     <div class="header">
-      <h1>
-        <a href="${backUrl}">${node.name}</a>
-      </h1>
+      <h1
+        id="nodeNameDisplay"
+        style="cursor:pointer;"
+        title="Click to rename"
+        onclick="document.getElementById('nodeNameDisplay').style.display='none';document.getElementById('renameForm').style.display='flex';"
+      >${node.name}</h1>
+      <form
+        id="renameForm"
+        method="POST"
+        action="/api/v1/node/${nodeId}/${version}/editName${qs}"
+        style="display:none;align-items:center;gap:8px;margin-bottom:12px;"
+      >
+        <input
+          type="text"
+          name="name"
+          value="${node.name.replace(/"/g, '&quot;')}"
+          required
+          style="flex:1;font-size:20px;font-weight:700;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:white;"
+        />
+        <button type="submit" class="primary-button" style="padding:8px 16px;">Save</button>
+        <button
+          type="button"
+          class="warning-button"
+          style="padding:8px 16px;"
+          onclick="document.getElementById('renameForm').style.display='none';document.getElementById('nodeNameDisplay').style.display='';"
+        >Cancel</button>
+      </form>
+
+      <div class="meta-row" style="margin-top:4px;">
+        <div class="meta-item">
+          <div class="meta-label">Type</div>
+          <div class="meta-value">${node.type ?? "None"}</div>
+        </div>
+      </div>
+
       <span class="version-badge version-status-${data.status}">Version ${version}</span>
 
       <div class="created-date">Created: ${createdDate}</div>

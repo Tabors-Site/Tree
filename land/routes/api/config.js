@@ -1,5 +1,5 @@
 import express from "express";
-import authenticate from "../../middleware/authenticate.js";
+import authenticate, { authenticateOrPublic } from "../../middleware/authenticate.js";
 import User from "../../db/models/user.js";
 import Node from "../../db/models/node.js";
 import { getLandRoot } from "../../core/landRoot.js";
@@ -68,7 +68,7 @@ router.put("/land/config/:key", authenticate, async (req, res) => {
  *   - Trees the user contributes to
  *   - Public trees on this land
  */
-router.get("/land/root", authenticate, async (req, res) => {
+router.get("/land/root", authenticateOrPublic, async (req, res) => {
   try {
     const landRoot = await getLandRoot();
     if (!landRoot) {
@@ -76,14 +76,16 @@ router.get("/land/root", authenticate, async (req, res) => {
     }
 
     const userId = req.userId;
+    const isAnon = !userId;
 
     // Fetch all Land root children with the fields we need to filter
     const children = await Node.find({ _id: { $in: landRoot.children } })
-      .select("_id name isSystem systemRole rootOwner contributors visibility metadata")
+      .select("_id name isSystem systemRole rootOwner contributors visibility llmAssignments metadata")
       .lean();
 
-    // Filter: system nodes + owned + contributing + public
+    // Filter: anonymous sees only public trees, authenticated sees system + owned + contributing + public
     const visible = children.filter((c) => {
+      if (isAnon) return c.visibility === "public";
       if (c.isSystem) return true;
       if (c.rootOwner && String(c.rootOwner) === String(userId)) return true;
       if (c.contributors && c.contributors.map(String).includes(String(userId))) return true;
@@ -97,11 +99,12 @@ router.get("/land/root", authenticate, async (req, res) => {
       children: visible.map((c) => ({
         _id: c._id,
         name: c.name,
-        isSystem: c.isSystem || false,
-        systemRole: c.systemRole || null,
+        isSystem: isAnon ? false : (c.isSystem || false),
+        systemRole: isAnon ? null : (c.systemRole || null),
         rootOwner: c.rootOwner || null,
-        isOwned: c.rootOwner && String(c.rootOwner) === String(userId),
+        isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(userId),
         isPublic: c.visibility === "public" || false,
+        queryAvailable: c.visibility === "public" && !!c.llmAssignments?.placement,
         metadata: c.metadata || null,
       })),
     });

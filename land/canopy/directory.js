@@ -15,7 +15,7 @@ async function getPublicTrees() {
       visibility: "public",
       rootOwner: { $nin: [null, "SYSTEM"] },
     })
-      .select("_id name description rootOwner")
+      .select("_id name description rootOwner llmAssignments")
       .populate("rootOwner", "username")
       .lean();
 
@@ -24,6 +24,7 @@ async function getPublicTrees() {
       name: n.name || "",
       description: n.description || "",
       ownerUsername: n.rootOwner?.username || "",
+      queryAvailable: !!n.llmAssignments?.placement,
     }));
   } catch {
     return [];
