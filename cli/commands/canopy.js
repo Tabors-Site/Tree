@@ -87,7 +87,7 @@ module.exports = (program) => {
 
   program
     .command("search [query...]")
-    .description("Search the directory for public trees across the network")
+    .description("Search the directory for public trees across the network. -l search lands instead")
     .option("-l, --lands", "Search for lands instead of trees")
     .action(async (parts, opts) => {
       const cfg = requireAuth();

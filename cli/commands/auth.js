@@ -98,7 +98,7 @@ module.exports = (program) => {
 
   program
     .command("register")
-    .description("Create a new account on the connected Land")
+    .description("Create a new account on the connected Land. --browser to open in browser")
     .option("--browser", "Open registration page in browser instead")
     .action(async (opts) => {
       const cfg = load();
@@ -165,7 +165,7 @@ module.exports = (program) => {
 
   program
     .command("login")
-    .description("Log in with username/password, API key, or browser")
+    .description("Log in with username/password. --key <apiKey>, --browser")
     .option("--key <apiKey>", "Authenticate with an API key")
     .option("--browser", "Open login page in browser instead")
     .action(async (opts) => {

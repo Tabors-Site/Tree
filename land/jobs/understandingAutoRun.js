@@ -48,7 +48,7 @@ async function processTree(rootNode) {
   }
 
   // Skip if owner has no LLM and root has no LLM assigned
-  const hasRootLlm = !!rootNode.llmAssignments?.placement;
+  const hasRootLlm = !!(rootNode.llmAssignments?.default && rootNode.llmAssignments.default !== "none");
   if (!hasRootLlm && !await userHasLlm(userId)) {
     console.log(`🧠 Skipping understanding for "${rootNode.name}" — owner has no LLM connection`);
     return;

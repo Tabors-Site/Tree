@@ -4,6 +4,17 @@ const { load, save, requireAuth } = require("../config");
 const { findChild } = require("../helpers");
 const { printTable } = require("../display");
 
+function resolveType(opts) {
+  if (opts.type) return opts.type;
+  if (opts.goal) return "goal";
+  if (opts.plan) return "plan";
+  if (opts.task) return "task";
+  if (opts.knowledge) return "knowledge";
+  if (opts.resource) return "resource";
+  if (opts.identity) return "identity";
+  return null;
+}
+
 module.exports = (program) => {
   program
     .command("roots")
@@ -74,15 +85,24 @@ module.exports = (program) => {
   program
     .command("mkroot [name...]")
     .description("Create a new root tree")
-    .action(async (parts) => {
+    .option("--type <type>", "Set node type (any string)")
+    .option("--goal", "Set type to goal")
+    .option("--plan", "Set type to plan")
+    .option("--task", "Set type to task")
+    .option("--knowledge", "Set type to knowledge")
+    .option("--resource", "Set type to resource")
+    .option("--identity", "Set type to identity")
+    .action(async (parts, opts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: mkroot <name>"));
       const name = parts.join(" ");
       const cfg = requireAuth();
       const api = new TreeAPI(cfg.apiKey);
+      const type = resolveType(opts);
       try {
-        const data = await api.createRoot(cfg.userId, name);
+        const data = await api.createRoot(cfg.userId, name, type);
+        const typeHint = type ? chalk.dim(` (${type})`) : "";
         console.log(
-          chalk.green(`✓ Created tree "${name}"  `) +
+          chalk.green(`✓ Created tree "${name}"`) + typeHint + "  " +
             chalk.dim(data.root?._id || ""),
         );
       } catch (e) {
@@ -93,7 +113,7 @@ module.exports = (program) => {
   program
     .command("retire [nameOrId...]")
     .alias("leave")
-    .description("Leave a shared tree, or delete if you are the sole owner. Name optional if inside a tree")
+    .description("Leave a shared tree, or delete if you are the sole owner. -f skip confirmation")
     .option("-f, --force", "Skip confirmation")
     .action(async (parts, opts) => {
       const cfg = requireAuth();

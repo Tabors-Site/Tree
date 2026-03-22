@@ -267,7 +267,7 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
   ` : `
   <div class="unavailable">
     <h2>Query not available</h2>
-    <p>This tree does not have AI configured for public queries.${isAuthenticated ? "" : " Log in on your own land to query with your own AI connection."}</p>
+    <p>This tree does not have AI configured for public queries.${isAuthenticated ? "" : " If you have an account on another land, you can query through the CLI or API using your own AI connection."}</p>
   </div>
   `}
 
@@ -355,20 +355,23 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
         body: JSON.stringify({ message: msg }),
       });
 
-      var data = await res.json();
+      var text = await res.text();
+      var data;
+      try { data = JSON.parse(text); } catch (_) { data = {}; }
 
       if (res.status === 429) {
         loadingDiv.className = "message error";
         loadingDiv.innerHTML = "<p>Rate limit reached. Please wait a few minutes before trying again.</p>";
       } else if (!res.ok || !data.success) {
+        var errMsg = data.answer || data.error || data.message || "Error (HTTP " + res.status + ")";
         loadingDiv.className = "message error";
-        loadingDiv.innerHTML = "<p>" + (data.answer || data.error || data.message || "Something went wrong.") + "</p>";
+        loadingDiv.innerHTML = "<p>" + errMsg + "</p>";
       } else {
         loadingDiv.innerHTML = markdownToHtml(data.answer);
       }
     } catch (err) {
       loadingDiv.className = "message error";
-      loadingDiv.innerHTML = "<p>Network error. Please try again.</p>";
+      loadingDiv.innerHTML = "<p>Network error: " + err.message + "</p>";
     }
 
     sending = false;

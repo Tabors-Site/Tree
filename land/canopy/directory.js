@@ -24,7 +24,7 @@ async function getPublicTrees() {
       name: n.name || "",
       description: n.description || "",
       ownerUsername: n.rootOwner?.username || "",
-      queryAvailable: !!n.llmAssignments?.placement,
+      queryAvailable: !!(n.llmAssignments?.default && n.llmAssignments.default !== "none"),
     }));
   } catch {
     return [];

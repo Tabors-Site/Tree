@@ -15,6 +15,7 @@ if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the se
 const JWT_SECRET = process.env.JWT_SECRET;
 
 import authenticate, { authenticateOrPublic } from "../../middleware/authenticate.js";
+import { createCanopyLlmProxyClient } from "../../canopy/llmProxy.js";
 import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
 import { orchestrateRawIdeaPlacement } from "../../orchestrators/pipelines/rawIdea.js";
 import { orchestrateUnderstanding } from "../../orchestrators/pipelines/understand.js";
@@ -112,7 +113,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
     .select("rootOwner llmAssignments")
     .lean();
   const hasUserLlm = await userHasLlm(req.userId);
-  const hasRootLlm = !!rootCheck?.llmAssignments?.placement;
+  const hasRootLlm = !!(rootCheck?.llmAssignments?.default && rootCheck.llmAssignments.default !== "none");
   if (!hasUserLlm && !hasRootLlm) {
     return res.status(403).json({
       success: false,
@@ -308,7 +309,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
     .select("rootOwner llmAssignments")
     .lean();
   const placeHasUserLlm = await userHasLlm(req.userId);
-  const placeHasRootLlm = !!placeRootCheck?.llmAssignments?.placement;
+  const placeHasRootLlm = !!(placeRootCheck?.llmAssignments?.default && placeRootCheck.llmAssignments.default !== "none");
   if (!placeHasUserLlm && !placeHasRootLlm) {
     return res.status(403).json({
       success: false,
@@ -504,6 +505,9 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
   let effectiveUserId = req.userId;
   let effectiveUsername = req.username;
   let isPublicQuery = false;
+  let canopyProxyClient = null; // set if using visitor's home land LLM
+
+  const treeHasLlm = !!(rootCheck.llmAssignments?.default && rootCheck.llmAssignments.default !== "none");
 
   if (isPublicAccess) {
     // Public access: tree must be public
@@ -511,23 +515,28 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
       return res.status(403).json({ success: false, answer: "This tree is not public." });
     }
 
-    const hasRootLlm = !!rootCheck.llmAssignments?.placement;
     const hasCanopyVisitor = !!req.canopyVisitor;
 
-    if (hasRootLlm) {
+    if (treeHasLlm) {
       // Owner's LLM, owner pays
       effectiveUserId = rootCheck.rootOwner;
       const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
       effectiveUsername = owner?.username || "system";
     } else if (hasCanopyVisitor) {
-      // Visitor is authenticated on their home land, use their LLM via proxy
-      effectiveUserId = req.canopyVisitor.userId;
+      // Visitor authenticated on their home land. Route LLM through canopy proxy.
+      canopyProxyClient = createCanopyLlmProxyClient({
+        userId: req.canopyVisitor.userId,
+        homeLand: req.canopyVisitor.homeLand,
+        slot: "main",
+      });
+      effectiveUserId = rootCheck.rootOwner; // session runs under owner context locally
+      const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
       effectiveUsername = `visitor@${req.canopyVisitor.homeLand}`;
     } else {
       // Anonymous, no owner LLM
       return res.status(403).json({
         success: false,
-        answer: "No AI available on this tree. Log in to use your own.",
+        answer: "This tree has no AI configured for public queries.",
       });
     }
     isPublicQuery = true;
@@ -538,8 +547,7 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
       // Not owner/contributor, but tree might be public
       if (rootCheck.visibility === "public") {
         // Allow query. Use owner's LLM if available, else user's own.
-        const hasRootLlm = !!rootCheck.llmAssignments?.placement;
-        if (hasRootLlm) {
+        if (treeHasLlm) {
           effectiveUserId = rootCheck.rootOwner;
           const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
           effectiveUsername = owner?.username || "system";
@@ -553,14 +561,17 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
     }
   }
 
-  // Verify LLM access for the effective user
-  const hasUserLlm = await userHasLlm(effectiveUserId);
-  const hasRootLlm = !!rootCheck?.llmAssignments?.placement;
-  if (!hasUserLlm && !hasRootLlm) {
-    return res.status(403).json({
-      success: false,
-      answer: "No LLM connection available for this query.",
-    });
+  // Verify LLM access (skip for canopy proxy, they handle their own)
+  if (!canopyProxyClient) {
+    const hasUserLlm = await userHasLlm(effectiveUserId);
+    if (!hasUserLlm && !treeHasLlm) {
+      return res.status(403).json({
+        success: false,
+        answer: isPublicAccess
+          ? "This tree has no AI configured for public queries."
+          : "No LLM connection configured. Set one up at /setup or assign one to this tree.",
+      });
+    }
   }
 
   const visitorId = `tree-query:${effectiveUserId}:${Date.now()}`;
@@ -601,7 +612,9 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
   }, TIMEOUT_MS);
 
   try {
-    const clientInfo = await getClientForUser(effectiveUserId);
+    const clientInfo = canopyProxyClient
+      ? { client: canopyProxyClient, isCustom: true, model: "proxy", connectionId: null }
+      : await getClientForUser(effectiveUserId);
     aiChat = await startAIChat({
       userId: effectiveUserId,
       sessionId,
@@ -1022,7 +1035,7 @@ router.post(
     const rootNode = await Node.findById(nodeId)
       .select("llmAssignments")
       .lean();
-    const hasRootLlm = !!rootNode?.llmAssignments?.placement;
+    const hasRootLlm = !!(rootNode?.llmAssignments?.default && rootNode.llmAssignments.default !== "none");
     if (!hasRootLlm && !(await userHasLlm(userId))) {
       return res.status(403).json({
         success: false,

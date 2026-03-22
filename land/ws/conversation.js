@@ -262,8 +262,9 @@ const MODE_TO_ASSIGNMENT = {
 
 /**
  * Resolve the LLM connectionId for a given mode on a tree.
- * Priority: llmAssignments[modeGroup] → llmAssignments.placement → null
- * Returns the connectionId string or null.
+ * Priority: llmAssignments[modeGroup] → llmAssignments.default → null
+ * If default is "none", LLM is explicitly disabled for this tree.
+ * Returns the connectionId string, or null.
  */
 export async function resolveRootLlmForMode(rootId, modeKey) {
   if (!rootId) return null;
@@ -273,14 +274,17 @@ export async function resolveRootLlmForMode(rootId, modeKey) {
       .lean();
     if (!rootNode?.llmAssignments) return null;
 
+    // "none" means LLM is explicitly off for this tree
+    if (rootNode.llmAssignments.default === "none") return null;
+
     const assignmentKey = MODE_TO_ASSIGNMENT[modeKey];
     if (assignmentKey) {
       const modeOverride = rootNode.llmAssignments[assignmentKey];
       if (modeOverride) return modeOverride;
     }
 
-    // Fallback to placement (tree-wide default)
-    return rootNode.llmAssignments.placement || null;
+    // Fallback to tree default
+    return rootNode.llmAssignments.default || null;
   } catch {
     return null;
   }

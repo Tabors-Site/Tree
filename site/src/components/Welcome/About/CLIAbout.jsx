@@ -61,9 +61,11 @@ const CLIAbout = () => {
           </div>
           <CmdRow cmd="roots" desc="List all your trees" />
           <CmdRow cmd="use <name> / root <name>" desc="Enter a tree by name or ID" />
-          <CmdRow cmd="mkroot <name>" desc="Create a new tree" />
+          <CmdRow cmd="mkroot <name>" desc="Create a new tree. --goal --plan --task --knowledge --resource --identity or --type custom" />
           <CmdRow cmd="retire/leave [name] -f" desc="Leave a shared tree or delete if sole owner" />
           <CmdRow cmd="home" desc="Leave current tree, return home" />
+          <CmdRow cmd="deleted" desc="List your deleted branches" />
+          <CmdRow cmd="revive <id> <target>" desc="Revive a deleted branch. Target is a parent node ID, or 'root' for a new tree" />
           <CmdRow cmd="invites" desc="List pending invites from other users" />
           <CmdRow cmd="tags / mail" desc="Notes where you've been @tagged" />
           <CmdRow cmd="notes" desc="Your user-level notes. -l limit, -q search" />
@@ -102,6 +104,8 @@ const CLIAbout = () => {
           <CmdRow cmd="pwd" desc="Print current path" />
           <CmdRow cmd="ls / ls -l" desc="List children. Long format shows IDs and status" />
           <CmdRow cmd="cd <name>" desc="Navigate into a child. Supports .., /, -r (search whole tree), path chaining (A/B/C)" />
+          <CmdRow cmd="cd /" desc="Go to tree root. At tree root, go to land" />
+          <CmdRow cmd="land" desc="Go to land root (/) from anywhere" />
           <CmdRow cmd="tree" desc="Render subtree. -a active, -c completed, -t trimmed" />
           <div className="cli-note" style={{ marginTop: 8 }}>
             Nodes have three statuses: <strong>active</strong> (green), <strong>completed</strong> (gray), <strong>trimmed</strong> (dim).
@@ -113,12 +117,14 @@ const CLIAbout = () => {
           <div className="cli-section-title">
             <span className="cli-section-icon">🔷</span> Node Management
           </div>
-          <CmdRow cmd="mkdir <name>" desc="Create child node(s). Comma-separate for multiple: mkdir foo, bar" />
+          <CmdRow cmd="mkdir <name>" desc="Create child node(s). Comma-separate for multiple: mkdir foo, bar. --goal --plan --task --knowledge --resource --identity or --type custom" />
           <CmdRow cmd="rm <name> -f" desc="Delete a node (soft delete)" />
           <CmdRow cmd="rename <name> <new>" desc="Rename a child node" />
           <CmdRow cmd="mv <name> <destId>" desc="Move a node to a new parent" />
           <CmdRow cmd="complete" desc="Set current node and all children to completed" />
           <CmdRow cmd="activate" desc="Set current node and all children to active" />
+          <CmdRow cmd="what / node" desc="Show details of the current node" />
+          <CmdRow cmd="type [newType]" desc="Set or clear the node type (goal, plan, task, knowledge, resource, identity, or custom)" />
           <CmdRow cmd="trim" desc="Set current node and all children to trimmed" />
           <CmdRow cmd="prestige" desc="Create a new version of the current node" />
         </div>
@@ -163,6 +169,7 @@ const CLIAbout = () => {
           <CmdRow cmd="invite deny <id>" desc="Decline a pending invite" />
           <CmdRow cmd="kick <username>" desc="Remove a contributor" />
           <CmdRow cmd="owner <username>" desc="Transfer tree ownership" />
+          <CmdRow cmd="visibility [level]" desc="Show or set tree visibility (public/private)" />
         </div>
 
         {/* ── LINKS & SHARING ── */}

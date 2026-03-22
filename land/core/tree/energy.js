@@ -171,8 +171,8 @@ export function maybeResetEnergy(user) {
     assignConnection(user._id, "main", null);
     assignConnection(user._id, "rawIdea", null);
     Node.updateMany(
-      { rootOwner: user._id, "llmAssignments.placement": { $ne: null } },
-      { $set: { "llmAssignments.placement": null } },
+      { rootOwner: user._id },
+      { $set: { "llmAssignments.default": null, "llmAssignments.placement": null } },
     ).catch(function (e) {
       console.error("Failed to clear root LLM on downgrade:", e.message);
     });

@@ -104,7 +104,7 @@ router.get("/land/root", authenticateOrPublic, async (req, res) => {
         rootOwner: c.rootOwner || null,
         isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(userId),
         isPublic: c.visibility === "public" || false,
-        queryAvailable: c.visibility === "public" && !!c.llmAssignments?.placement,
+        queryAvailable: c.visibility === "public" && !!(c.llmAssignments?.default && c.llmAssignments.default !== "none"),
         metadata: c.metadata || null,
       })),
     });

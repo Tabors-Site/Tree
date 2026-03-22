@@ -80,7 +80,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     const isOwner =
       rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();
     const queryAvailable = isPublicAccess
-      ? !!(rootMeta?.llmAssignments?.placement || req.canopyVisitor)
+      ? !!((rootMeta?.llmAssignments?.default && rootMeta.llmAssignments.default !== "none") || req.canopyVisitor)
       : false;
 
     // JSON MODE
@@ -172,7 +172,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
 
     const isPublicAccess = !!req.isPublicAccess;
     const isAuthenticated = !!req.userId;
-    const queryAvailable = !!(root.llmAssignments?.placement) || isAuthenticated;
+    const queryAvailable = !!(root.llmAssignments?.default && root.llmAssignments.default !== "none") || isAuthenticated;
 
     return res.send(
       renderQueryPage({
@@ -428,6 +428,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     const { slot, connectionId } = req.body;
 
     const validSlots = [
+      "default",
       "placement",
       "understanding",
       "respond",
@@ -438,7 +439,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     ];
     if (!validSlots.includes(slot)) {
       return res.status(400).json({
-        error: `Invalid slot — must be one of: ${validSlots.join(", ")}`,
+        error: `Invalid slot. Must be one of: ${validSlots.join(", ")}`,
       });
     }
 
@@ -453,8 +454,11 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
         .json({ error: "Only the root owner can assign LLM connections" });
     }
 
-    // If assigning, verify connection belongs to root owner
-    if (connectionId) {
+    // "none" is a special value for the default slot to disable LLM
+    if (connectionId === "none" && slot === "default") {
+      // Valid, skip connection check
+    } else if (connectionId) {
+      // Verify connection belongs to root owner
       const { default: CustomLlmConnection } =
         await import("../../db/models/customLlmConnection.js");
       const conn = await CustomLlmConnection.findOne({

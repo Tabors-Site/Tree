@@ -178,7 +178,7 @@ router.get("/canopy/public-trees", async (req, res) => {
           name: tree.name || "",
           ownerUsername: owner?.username || "unknown",
           landDomain: identity.domain,
-          queryAvailable: !!tree.llmAssignments?.placement,
+          queryAvailable: !!(tree.llmAssignments?.default && tree.llmAssignments.default !== "none"),
         };
       })
     );

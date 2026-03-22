@@ -50,6 +50,7 @@ const NodeSchema = new mongoose.Schema({
     default: "OWNER_ONLY",
   },
   llmAssignments: {
+    default: { type: String, default: null }, // tree-wide fallback. connectionId, or "none" to disable LLM
     placement: { type: String, ref: "CustomLlmConnection", default: null },
     understanding: { type: String, ref: "CustomLlmConnection", default: null },
     respond: { type: String, ref: "CustomLlmConnection", default: null },

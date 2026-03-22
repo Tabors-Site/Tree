@@ -22,28 +22,40 @@ program
           cmds: ["connect", "register", "login", "logout", "whoami"],
         },
         {
-          title: "Navigation",
-          cmds: ["pwd", "ls", "cd", "home", "tree", "calendar", "dream-time"],
+          title: "User Home",
+          cmds: ["roots", "use", "root", "mkroot", "retire", "home", "deleted", "revive", "invites", "tags", "contributions", "share-token"],
         },
         {
-          title: "Trees",
-          cmds: ["roots", "use", "root", "mkroot", "retire", "invites", "tags", "ideas", "idea", "idea-store", "rm-idea", "idea-place", "idea-auto", "idea-transfer", "contributions", "share-token", "share", "link"],
+          title: "Raw Ideas",
+          cmds: ["ideas", "idea", "idea-store", "idea-place", "idea-auto", "idea-transfer", "rm-idea"],
+        },
+        {
+          title: "Navigation",
+          cmds: ["pwd", "ls", "cd", "land", "tree"],
         },
         {
           title: "Node Management",
-          cmds: ["mkdir", "rm", "mv", "rename", "complete", "activate", "trim", "schedule", "prestige"],
+          cmds: ["mkdir", "rm", "mv", "rename", "what", "type", "complete", "activate", "trim", "prestige"],
         },
         {
           title: "Notes & Values",
           cmds: ["note", "notes", "cat", "rm-note", "book", "contributions", "values", "value", "goal"],
         },
         {
+          title: "Scheduling",
+          cmds: ["schedule", "calendar", "dream-time"],
+        },
+        {
           title: "Collaboration",
-          cmds: ["team", "invite", "invites", "kick", "owner"],
+          cmds: ["team", "invite", "invites", "kick", "owner", "visibility"],
+        },
+        {
+          title: "Links & Sharing",
+          cmds: ["link", "share"],
         },
         {
           title: "AI",
-          cmds: ["chat", "chats", "place", "query"],
+          cmds: ["chat", "place", "query", "chats"],
         },
         {
           title: "Understanding Runs",

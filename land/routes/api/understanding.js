@@ -50,7 +50,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
 
     // Check LLM access — tree owner needs an LLM or root must have one assigned
     const hasUserLlm = await userHasLlm(userId);
-    const hasRootLlm = !!rootNode.llmAssignments?.placement;
+    const hasRootLlm = !!(rootNode.llmAssignments?.default && rootNode.llmAssignments.default !== "none");
     if (!hasUserLlm && !hasRootLlm) {
       return res
         .status(403)

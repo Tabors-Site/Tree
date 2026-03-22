@@ -138,8 +138,10 @@ class TreeAPI {
     const qs = params.toString();
     return this.get(`/root/${rootId}${qs ? "?" + qs : ""}`);
   }
-  createRoot(userId, name) {
-    return this.post(`/user/${userId}/createRoot`, { name });
+  createRoot(userId, name, type) {
+    const body = { name };
+    if (type) body.type = type;
+    return this.post(`/user/${userId}/createRoot`, body);
   }
   getCalendar(rootId, opts = {}) {
     const params = new URLSearchParams();
@@ -180,8 +182,10 @@ class TreeAPI {
   getNodeVersion(nodeId, ver = "latest") {
     return this.get(`/node/${nodeId}/${ver}`);
   }
-  createChild(nodeId, name) {
-    return this.post(`/node/${nodeId}/createChild`, { name });
+  createChild(nodeId, name, type) {
+    const body = { name };
+    if (type) body.type = type;
+    return this.post(`/node/${nodeId}/createChild`, body);
   }
   renameNode(nodeId, ver, name) {
     return this.post(`/node/${nodeId}/${ver}/editName`, { name });
@@ -191,6 +195,15 @@ class TreeAPI {
   }
   deleteNode(nodeId) {
     return this.post(`/node/${nodeId}/delete`, {});
+  }
+  getDeleted(userId) {
+    return this.get(`/user/${userId}/deleted`);
+  }
+  revive(userId, nodeId, targetParentId) {
+    return this.post(`/user/${userId}/deleted/${nodeId}/revive`, { targetParentId });
+  }
+  reviveAsRoot(userId, nodeId) {
+    return this.post(`/user/${userId}/deleted/${nodeId}/reviveAsRoot`);
   }
   setStatus(nodeId, ver, status) {
     return this.post(`/node/${nodeId}/${ver}/editStatus`, {

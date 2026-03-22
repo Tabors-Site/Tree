@@ -2,11 +2,34 @@ const chalk = require("chalk");
 const { requireAuth, currentNodeId } = require("../config");
 const { getChildren, findChild, parseDate, getApi } = require("../helpers");
 
+function resolveType(opts) {
+  if (opts.type) return opts.type;
+  if (opts.goal) return "goal";
+  if (opts.plan) return "plan";
+  if (opts.task) return "task";
+  if (opts.knowledge) return "knowledge";
+  if (opts.resource) return "resource";
+  if (opts.identity) return "identity";
+  return null;
+}
+
+function addTypeFlags(cmd) {
+  return cmd
+    .option("--type <type>", "Set node type (any string)")
+    .option("--goal", "Set type to goal")
+    .option("--plan", "Set type to plan")
+    .option("--task", "Set type to task")
+    .option("--knowledge", "Set type to knowledge")
+    .option("--resource", "Set type to resource")
+    .option("--identity", "Set type to identity");
+}
+
 module.exports = (program) => {
+  addTypeFlags(
   program
     .command("mkdir [name...]")
     .description("Create child node(s). Comma-separate for multiple: mkdir foo, bar, baz")
-    .action(async (parts) => {
+  ).action(async (parts, opts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: mkdir <name>"));
       const raw = parts.join(" ");
       const names = raw.split(",").map(n => n.trim()).filter(Boolean);
@@ -14,12 +37,14 @@ module.exports = (program) => {
       if (!cfg.activeRootId)
         return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
       const api = getApi(cfg);
+      const type = resolveType(opts);
       try {
         const nodeId = currentNodeId(cfg);
         for (const name of names) {
-          const data = await api.createChild(nodeId, name);
+          const data = await api.createChild(nodeId, name, type);
           const id = data.node?._id || data._id || "";
-          console.log(chalk.green(`✓ Created "${name}"`) + "  " + chalk.dim(id));
+          const typeHint = type ? chalk.dim(` (${type})`) : "";
+          console.log(chalk.green(`✓ Created "${name}"`) + typeHint + "  " + chalk.dim(id));
         }
       } catch (e) {
         console.error(chalk.red(e.message));
@@ -28,7 +53,7 @@ module.exports = (program) => {
 
   program
     .command("rm [nameOrId]")
-    .description("Delete a child node by name or ID")
+    .description("Delete a child node by name or ID. -f skip confirmation")
     .option("-f, --force", "Skip confirmation")
     .action(async (name, { force }) => {
       if (!name) return console.log(chalk.yellow("Usage: rm <name> -f"));
@@ -107,6 +132,7 @@ module.exports = (program) => {
 
   program
     .command("what")
+    .alias("node")
     .description("Show details of the current node")
     .action(async () => {
       const cfg = requireAuth();
@@ -174,6 +200,46 @@ module.exports = (program) => {
         const typeVal = newType === "none" || newType === "null" || newType === "clear" ? null : newType;
         await api.post(`/node/${nodeId}/editType`, { type: typeVal });
         console.log(chalk.green(`✓ Type ${typeVal ? `set to "${typeVal}"` : "cleared"}`));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("deleted")
+    .description("List your deleted branches")
+    .action(async () => {
+      const cfg = requireAuth();
+      const api = getApi(cfg);
+      try {
+        const data = await api.getDeleted(cfg.userId);
+        const branches = data.deleted || [];
+        if (!Array.isArray(branches) || branches.length === 0) {
+          return console.log(chalk.dim("No deleted branches."));
+        }
+        for (const b of branches) {
+          console.log(chalk.yellow(b.name || "unnamed") + "  " + chalk.dim(b._id));
+        }
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("revive [deletedId] [target]")
+    .description("Revive a deleted branch. Target is a parent node ID, or 'root' to make it a new tree.")
+    .action(async (deletedId, target) => {
+      if (!deletedId || !target) return console.log(chalk.yellow("Usage: revive <deletedId> <parentNodeId>  or  revive <deletedId> root"));
+      const cfg = requireAuth();
+      const api = getApi(cfg);
+      try {
+        if (target === "root") {
+          await api.reviveAsRoot(cfg.userId, deletedId);
+          console.log(chalk.green("✓ Revived as new tree"));
+        } else {
+          await api.revive(cfg.userId, deletedId, target);
+          console.log(chalk.green(`✓ Revived under ${target}`));
+        }
       } catch (e) {
         console.error(chalk.red(e.message));
       }

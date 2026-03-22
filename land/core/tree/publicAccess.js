@@ -40,8 +40,10 @@ export async function resolvePublicRoot(nodeId) {
 }
 
 /**
- * Check if a public tree has owner-provided LLM for queries.
+ * Check if a tree has LLM enabled (default slot set and not "none").
  */
-export function hasOwnerLlm(rootInfo) {
-  return !!(rootInfo?.llmAssignments?.placement);
+export function hasTreeLlm(llmAssignments) {
+  if (!llmAssignments) return false;
+  if (llmAssignments.default === "none") return false;
+  return !!(llmAssignments.default);
 }

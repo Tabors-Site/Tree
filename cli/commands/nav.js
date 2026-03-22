@@ -34,6 +34,15 @@ function goHome(cfg) {
 
 module.exports = (program) => {
   program
+    .command("land")
+    .description("Go to land root (/)")
+    .action(() => {
+      const cfg = requireAuth();
+      goLand(cfg);
+      save(cfg);
+    });
+
+  program
     .command("pwd")
     .description("Print current path")
     .action(() => {
@@ -43,7 +52,7 @@ module.exports = (program) => {
 
   program
     .command("ls")
-    .description("List contents (/ = land, /~ = your trees, inside tree = children)")
+    .description("List contents (/ = land, /~ = your trees, inside tree = children). -l long format")
     .option("-l", "Long format with IDs and status")
     .action(async ({ l }) => {
       const cfg = requireAuth();
@@ -183,7 +192,7 @@ module.exports = (program) => {
 
   program
     .command("cd [nameOrId...]")
-    .description('Navigate by name, ID, ~, /, @domain/tree. Supports "..", -r, and path chaining')
+    .description('Navigate by name, ID, ~, /, @domain/tree. Supports .., -r (search whole tree), path chaining (A/B/C)')
     .option("-r, --recursive", "Search entire tree, not just direct children")
     .action(async (parts, opts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: cd <name or id> | cd @domain/tree"));
@@ -240,23 +249,24 @@ module.exports = (program) => {
         return;
       }
 
-      // ── cd / — go to tree root (if inside a tree), otherwise stay at land ──
+      // ── cd / — go to tree root if deep in tree, go to land if at tree root ──
       if (name === "/") {
         if (cfg.activeRootId && cfg.pathStack.length > 0) {
           // Inside a tree past root — go back to tree root
           cfg.pathStack = [];
-          save(cfg);
+        } else if (cfg.activeRootId) {
+          // At tree root — go to land
+          goLand(cfg);
         }
-        // If at tree root or no tree selected, / is already land — no-op
-        return;
-      }
-
-      // ── cd land — explicit land escape from anywhere ──
-      if (name === "land") {
-        goLand(cfg);
+        else if (cfg.atHome) {
+          // At /~ — go to land
+          goLand(cfg);
+        }
+        // Already at land — no-op
         save(cfg);
         return;
       }
+
 
       // ── At top level (/ or /~), no tree selected ──
       if (!cfg.activeRootId) {
@@ -489,7 +499,7 @@ module.exports = (program) => {
 
   program
     .command("tree")
-    .description("Render the subtree from the node you are in")
+    .description("Render the subtree from the node you are in. -a active, -c completed, -t trimmed")
     .option("-a, --active", "Show only active nodes")
     .option("-c, --completed", "Show only completed nodes")
     .option("-t, --trimmed", "Show only trimmed nodes")
@@ -514,7 +524,7 @@ module.exports = (program) => {
 
   program
     .command("calendar")
-    .description("Show scheduled dates across the tree")
+    .description("Show scheduled dates across the tree. -m month (1-12 or name), -y year")
     .option("-m, --month [month]", "Filter by month (1-12 or name, e.g. 3, mar, march)")
     .option("-y, --year [year]", "Filter by year")
     .action(async ({ month, year }) => {

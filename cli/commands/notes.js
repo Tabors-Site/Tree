@@ -27,7 +27,7 @@ module.exports = (program) => {
 
   program
     .command("notes")
-    .description("List notes (user notes at home, node notes in a tree)")
+    .description("List notes (user notes at home, node notes in a tree). -l limit, -q search")
     .option("-l, --limit [n]", "Limit results")
     .option("-q, --query [query]", "Search notes")
     .action(async ({ limit, query }) => {
@@ -69,7 +69,7 @@ module.exports = (program) => {
 
   program
     .command("rm-note [noteId]")
-    .description("Delete a note by ID")
+    .description("Delete a note by ID. -f skip confirmation")
     .option("-f, --force", "Skip confirmation prompt")
     .action(async (noteId, { force }) => {
       if (!noteId) return console.log(chalk.yellow("Usage: rm-note <noteId> -f"));
@@ -131,7 +131,7 @@ module.exports = (program) => {
 
   program
     .command("values")
-    .description("List values on the current node, or --global/--tree for the whole tree")
+    .description("List values on the current node. -g global totals, -t per-node tree breakdown")
     .option("-g, --global", "Show flat totals across the entire tree")
     .option("-t, --tree", "Show values as a tree with per-node breakdowns")
     .action(async ({ global: isGlobal, tree: isTree }) => {

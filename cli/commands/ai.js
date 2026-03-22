@@ -6,7 +6,7 @@ const { printChats } = require("../display");
 module.exports = (program) => {
   program
     .command("chats [scope]")
-    .description("List AI chats. In home: your profile chats. In tree: node chats. 'chats tree' = all chats across the whole tree")
+    .description("List AI chats. In home: your chats. In tree: node chats. 'chats tree' = whole tree. -l limit")
     .option("-l, --limit [n]", "Limit results")
     .action(async (scope, { limit }) => {
       const cfg = requireAuth();
@@ -98,7 +98,7 @@ module.exports = (program) => {
 
   program
     .command("ideas")
-    .description("List raw ideas (pending/stuck/processing by default). Stack flags to combine: --stuck --done")
+    .description("List raw ideas. -p pending, -r processing, -s stuck, -d done, -a all, -q search, -l limit")
     .option("-p, --pending", "Show pending ideas")
     .option("-r, --processing", "Show processing ideas")
     .option("-s, --stuck", "Show stuck ideas")
@@ -166,7 +166,7 @@ module.exports = (program) => {
 
   program
     .command("rm-idea [rawIdeaId]")
-    .description("Delete a raw idea")
+    .description("Delete a raw idea. -f skip confirmation")
     .option("-f, --force", "Skip confirmation")
     .action(async (rawIdeaId, { force }) => {
       if (!rawIdeaId) return console.log(chalk.yellow("Usage: rm-idea <id> -f"));
@@ -279,7 +279,7 @@ module.exports = (program) => {
 
   program
     .command("understand [perspective...]")
-    .description("Start an understanding run from the node you are in. Waits and returns the final encoding when complete")
+    .description("Start an understanding run from the node you are in. -i incremental (only new/changed nodes)")
     .option("-i, --incremental", "Only process new/changed nodes")
     .action(async (parts, { incremental }) => {
       const perspective = parts.length ? parts.join(" ") : "";

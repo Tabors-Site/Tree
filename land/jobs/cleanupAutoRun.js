@@ -66,7 +66,8 @@ export async function runCleanupAutoJob() {
 
     // Skip if owner has no LLM and root has no LLM assigned
     const rootFull = await Node.findById(rootId).select("llmAssignments").lean();
-    if (!rootFull?.llmAssignments?.placement && !await userHasLlm(userId)) {
+    const treeLlmOff = !rootFull?.llmAssignments?.default || rootFull.llmAssignments.default === "none";
+    if (treeLlmOff && !await userHasLlm(userId)) {
       console.log(`🧹 Skipping "${biggest.name}" — owner has no LLM connection`);
       return;
     }
