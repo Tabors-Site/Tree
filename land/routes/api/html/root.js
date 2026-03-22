@@ -347,10 +347,6 @@ ${ownerConnections.length === 0
         </li>
       </ul>`;
 
-  const jsonDump = JSON.stringify(allData, null, 2)
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -1602,6 +1598,7 @@ async function saveVisibility() {
   try {
     var res = await fetch("/api/v1/root/${nodeId}/visibility", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ visibility: select.value }),
     });
@@ -1636,6 +1633,7 @@ async function saveDreamTime() {
   try {
     var res = await fetch("/api/v1/root/${nodeId}/dream-time", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dreamTime: input.value || null }),
     });
@@ -1673,6 +1671,7 @@ async function assignRootLlm(slot, connId) {
   try {
     var res = await fetch("/api/v1/root/${nodeId}/llm-assign", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ slot: slot, connectionId: connId || null }),
     });
@@ -3056,6 +3055,7 @@ async function addChannel() {
   try {
     var res = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/channels", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name, type: type, direction: direction, mode: mode, config: config, notificationTypes: notificationTypes, queueBehavior: queueBehavior }),
     });
@@ -3072,6 +3072,7 @@ async function testChannel(channelId) {
   try {
     var res = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/channels/" + channelId + "/test", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
     });
     var data = await res.json();
@@ -3084,6 +3085,7 @@ async function toggleChannel(channelId, enabled) {
   try {
     var res = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/channels/" + channelId, {
       method: "PUT",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled: enabled }),
     });
@@ -3097,6 +3099,7 @@ async function deleteChannel(channelId) {
   try {
     var res = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/channels/" + channelId, {
       method: "DELETE",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
     });
     if (res.ok) location.reload();

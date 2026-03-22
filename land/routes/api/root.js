@@ -2,7 +2,7 @@ import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
 
-import { getAllData } from "../../core/tree/treeDataFetching.js";
+import { getAllData, getTreeStructure } from "../../core/tree/treeDataFetching.js";
 import { createInvite } from "../../core/tree/invites.js";
 import { sendRemoteInvite } from "../../core/tree/remoteInvites.js";
 import { getCalendar } from "../../core/tree/schedules.js";
@@ -49,18 +49,12 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 
     const queryString = filtered ? `?${filtered}` : "";
 
-    // CALL getAllData(rootId)
-    const fakeReq = { ...req, body: { rootId: nodeId } };
-    let allData = null;
-
-    const fakeRes = {
-      json(data) {
-        allData = data;
-      },
-    };
-
-    await getAllData(fakeReq, fakeRes);
-    if (!allData) return res.status(500).send("getAllData failed");
+    // Lightweight tree structure (no versions/notes/contributions/scripts)
+    const allData = await getTreeStructure(nodeId, {
+      active: req.query.active !== "false",
+      trimmed: req.query.trimmed === "true",
+      completed: req.query.completed !== "false",
+    });
 
     // Load owner + contributors + llm assignments
     const rootMeta = await Node.findById(nodeId)
@@ -153,6 +147,33 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     );
   } catch (err) {
     console.error("Error in /root/:nodeId:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /root/:rootId/all — full tree with versions, notes, contributions, scripts
+router.get("/root/:rootId/all", urlAuth, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+
+    const fakeReq = { ...req, body: { rootId } };
+    let allData = null;
+
+    const fakeRes = {
+      json(data) {
+        allData = data;
+      },
+      status() {
+        return { json(d) { allData = null; } };
+      },
+    };
+
+    await getAllData(fakeReq, fakeRes);
+    if (!allData) return res.status(500).json({ error: "Failed to fetch tree data" });
+
+    return res.json(allData);
+  } catch (err) {
+    console.error("Error in /root/:rootId/all:", err);
     res.status(500).json({ error: err.message });
   }
 });

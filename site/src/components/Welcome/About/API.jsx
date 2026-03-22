@@ -1010,7 +1010,7 @@ rawIdea  — Used for raw idea auto-placement`}</div>
               <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/root/:rootId</span>
             </div>
-            <div className="ep-desc">Full tree including all children, metadata, notes, and contributions.</div>
+            <div className="ep-desc">Tree structure: node names, types, hierarchy, and status. Lightweight, no notes or contributions.</div>
             <div className="ep-label">Query Parameters</div>
             <div className="param-row">
               <span className="param-key">?active=true|false</span>
@@ -1024,6 +1024,14 @@ rawIdea  — Used for raw idea auto-placement`}</div>
               <span className="param-key">?trimmed=true|false</span>
               <span className="param-desc">Filter by trimmed status</span>
             </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/all</span>
+            </div>
+            <div className="ep-desc">Full tree dump including all versions, notes, contributions, and scripts for every node.</div>
           </div>
 
           {/* ── Global Values ────── */}
@@ -1496,6 +1504,17 @@ dream-thought  - Nightly dream thought`}</div>
             <div className="ep-desc">Rename the node.</div>
             <div className="ep-label">Request Body</div>
             <div className="ep-code">{'{ "name": "New Node Name" }'}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/editType</span>
+            </div>
+            <div className="ep-desc">Set or clear the node's semantic type. Core types: goal, plan, task, knowledge, resource, identity. Custom types valid.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{'{ "type": "goal" }'}</div>
+            <div className="ep-code" style={{ marginTop: "4px" }}>{'{ "type": null }'} <span style={{ opacity: 0.5 }}>// clear type</span></div>
           </div>
 
           <div className="endpoint">

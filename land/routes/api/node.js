@@ -61,9 +61,6 @@ function filterQuery(req) {
 // ─────────────────────────────────────────────────────────────────────────
 router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
   try {
-    if (req.isPublicAccess) {
-      return res.status(403).json({ error: "Chat history not available for public access" });
-    }
     const { nodeId } = req.params;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 

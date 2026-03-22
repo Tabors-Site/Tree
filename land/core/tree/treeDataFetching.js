@@ -502,6 +502,88 @@ function removeNullFields(obj) {
   return obj;
 }
 
+const TREE_STRUCTURE_FIELDS =
+  "_id name type prestige children parent versions.prestige versions.status isSystem systemRole";
+
+async function getTreeStructure(rootId, filters = {}) {
+  if (!rootId) throw new Error("Root node ID is required");
+
+  const populateRecursive = async (nodeId) => {
+    const node = await Node.findById(nodeId)
+      .select(TREE_STRUCTURE_FIELDS)
+      .populate("children", TREE_STRUCTURE_FIELDS)
+      .lean()
+      .exec();
+
+    if (!node) return null;
+
+    if (node.children && node.children.length > 0) {
+      const populated = [];
+      for (const child of node.children) {
+        const childData = await populateRecursive(child._id);
+        if (childData) populated.push(childData);
+      }
+      node.children = populated;
+    }
+
+    return node;
+  };
+
+  const rootNode = await populateRecursive(rootId);
+  if (!rootNode) throw new Error("Node not found");
+
+  // Build ancestor chain (stop at system nodes)
+  const ancestors = [];
+  let currentId = rootNode.parent?._id || rootNode.parent;
+
+  while (currentId) {
+    const parentNode = await Node.findById(currentId)
+      .select("_id name parent systemRole")
+      .lean()
+      .exec();
+
+    if (!parentNode || parentNode.systemRole) break;
+
+    ancestors.push(parentNode);
+    currentId = parentNode.parent;
+  }
+
+  rootNode.ancestors = ancestors;
+
+  // Filter by status + flatten to clean shape in one pass
+  const allowedStatuses = [];
+  if (filters.active !== false) allowedStatuses.push("active");
+  if (filters.trimmed === true) allowedStatuses.push("trimmed");
+  if (filters.completed !== false) allowedStatuses.push("completed");
+
+  const filterAndFlatten = (node) => {
+    const currentVersion = node.versions?.find(
+      (v) => v.prestige === node.prestige,
+    );
+    const status = currentVersion?.status || "active";
+
+    const children = (node.children || [])
+      .map(filterAndFlatten)
+      .filter(Boolean);
+
+    if (!allowedStatuses.includes(status) && children.length === 0) {
+      return null;
+    }
+
+    return {
+      _id: node._id,
+      name: node.name,
+      type: node.type || null,
+      prestige: node.prestige,
+      status,
+      parent: node.parent,
+      children,
+    };
+  };
+
+  return filterAndFlatten(rootNode);
+}
+
 export {
   getRootNodes,
   getRootDetails,
@@ -510,4 +592,5 @@ export {
   getNodeForAi,
   getParents,
   getAllData,
+  getTreeStructure,
 };
