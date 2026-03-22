@@ -11,7 +11,7 @@ import registerURLRoutes from "./routes/routeHandler.js";
 import { initWebSocketServer } from "./ws/websocket.js";
 import { notFoundPage } from "./middleware/notFoundPage.js";
 import securityHeaders from "./middleware/securityHeaders.js";
-import { stripeWebhook } from "./routes/billing/webhook.js";
+import { stripeWebhook } from "./extensions/billing/webhook.js";
 import { onListen } from "./startup.js";
 import { getLandUrl } from "./canopy/identity.js";
 
