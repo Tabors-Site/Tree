@@ -39,7 +39,7 @@ app.disable("x-powered-by");
 app.use(securityHeaders);
 
 registerRoutes(app);
-registerURLRoutes(app);
+await registerURLRoutes(app);
 app.use((req, res) => notFoundPage(req, res));
 
 const server = http.createServer(app);

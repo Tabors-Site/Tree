@@ -25,6 +25,15 @@ export const SESSION_TYPES = {
   GATEWAY_INPUT: "gateway-input",
 };
 
+/**
+ * Register a custom session type (used by extensions).
+ * @param {string} key   - constant name, e.g. "MY_EXT_SESSION"
+ * @param {string} value - wire value, e.g. "my-ext-session"
+ */
+export function registerSessionType(key, value) {
+  SESSION_TYPES[key] = value;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // DATA STRUCTURES
 // ─────────────────────────────────────────────────────────────────────────

@@ -3544,4 +3544,4 @@ function mapToolCallToApiUrl(toolName, args) {
   }
 }
 
-export { getMcpServer, handleMcpRequest };
+export { server as mcpServerInstance, getMcpServer, handleMcpRequest };

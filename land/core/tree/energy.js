@@ -93,6 +93,21 @@ const CONTENT_ACTIONS = new Set(["note", "rawIdea", "editScript"]);
 /* 🔥 NEW — actions that scale with payload count */
 const VARIABLE_ACTIONS = new Set(["understanding"]);
 
+/* Extension-registered custom actions: name -> costFn(payload) => number */
+const customActions = new Map();
+
+/**
+ * Register a custom energy action (used by extensions).
+ * @param {string}   action  - action name, e.g. "my-ext-action"
+ * @param {function} costFn  - (payload) => number (energy cost)
+ */
+export function registerAction(action, costFn) {
+  if (typeof costFn !== "function") {
+    throw new Error(`registerAction: costFn must be a function for "${action}"`);
+  }
+  customActions.set(action, costFn);
+}
+
 export function calculateEnergyCost(action, payload) {
   /* ---------- FILES ---------- */
   if (payload?.type === "file") {
@@ -133,6 +148,11 @@ export function calculateEnergyCost(action, payload) {
   if (VARIABLE_ACTIONS.has(action)) {
     const amount = typeof payload === "number" ? payload : 1;
     return Math.max(2, amount * 2);
+  }
+
+  /* ---------- EXTENSION-REGISTERED ---------- */
+  if (customActions.has(action)) {
+    return customActions.get(action)(payload);
   }
 
   /* ---------- FIXED ---------- */

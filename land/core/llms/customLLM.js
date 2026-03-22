@@ -202,8 +202,23 @@ export async function addCustomLlmConnection(
   }
 
   var safeModel = validateInputs(baseUrl, apiKey, model, true);
+  // Basic format check for all users (including god)
+  var parsed;
+  try {
+    parsed = new URL(baseUrl);
+  } catch (_) {
+    throw new Error("Invalid base URL");
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Only http and https URLs are allowed");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("URLs with credentials are not allowed");
+  }
+
+  // God users skip SSRF/host blocking but still get format validation above
   var safeBaseUrl = isGod
-    ? baseUrl.replace(/\/+$/, "")
+    ? parsed.href.replace(/\/+$/, "")
     : validateCustomBaseUrl(baseUrl);
 
   if (!isGod) {

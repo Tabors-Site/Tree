@@ -11,7 +11,6 @@ import values from "./api/values.js";
 
 import understanding from "./api/understanding.js";
 import orchestrate from "./api/orchestrate.js";
-import blog from "./api/blog.js";
 import gatewayWebhooks from "./api/gatewayWebhooks.js";
 import landConfig from "./api/config.js";
 import canopy from "./canopy.js";
@@ -21,6 +20,8 @@ import authenticateMCP from "../middleware/authenticateMCP.js";
 
 import rateLimit from "express-rate-limit";
 import { notFoundPage } from "../middleware/notFoundPage.js";
+
+import { loadExtensions, getLoadedExtensionNames } from "../extensions/loader.js";
 
 const BLOCKED_IDS = ["deleted", "empty", "null", "system"];
 
@@ -38,7 +39,7 @@ const apiLimiter = rateLimit({
   },
 });
 
-export default function registerURLRoutes(app) {
+export default async function registerURLRoutes(app) {
   app.param("userId", (req, res, next, val) => {
     if (BLOCKED_IDS.includes(val)) return notFoundPage(req, res);
     next();
@@ -54,8 +55,8 @@ export default function registerURLRoutes(app) {
 
   app.use(apiLimiter);
 
-  // HTML pages served at root (flat paths from nginx)
-  app.use("/api/v1", blog);
+  // Load extensions (blog, etc. loaded via manifest system)
+  await loadExtensions(app);
 
   app.post("/mcp", authenticateMCP, handleMcpRequest);
 
@@ -79,6 +80,8 @@ export default function registerURLRoutes(app) {
 
   // Protocol spec endpoint (both paths for nginx compatibility)
   const protocolHandler = (req, res) => {
+    const allExtensions = getLoadedExtensionNames();
+
     res.json({
       name: "TreeOS",
       version: "1.0",
@@ -88,26 +91,7 @@ export default function registerURLRoutes(app) {
         "transactions", "contributions",
       ],
       nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
-      extensions: [
-        "energy",
-        "billing",
-        "scripts",
-        "prestige",
-        "schedules",
-        "dreams",
-        "understanding",
-        "raw-ideas",
-        "deleted-revive",
-        "user-llm",
-        "user-queries",
-        "solana",
-        "book",
-        "blog",
-        "api-keys",
-        "visibility",
-        "transaction-policy",
-        "html-rendering",
-      ],
+      extensions: allExtensions,
     });
   };
   app.get("/protocol", protocolHandler);

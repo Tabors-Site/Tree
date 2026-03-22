@@ -1,0 +1,308 @@
+import express from "express";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
+import authenticate from "../../middleware/authenticate.js";
+import urlAuth from "../../middleware/urlAuth.js";
+import preUploadCheck from "../../middleware/preUploadCheck.js";
+import { notFoundPage } from "../../middleware/notFoundPage.js";
+import { getLandUrl } from "../../canopy/identity.js";
+import RawIdea from "../../db/models/rawIdea.js";
+import User from "../../db/models/user.js";
+import {
+  createRawIdea as coreCreateRawIdea,
+  getRawIdeas as coreGetRawIdeas,
+  searchRawIdeasByUser as coreSearchRawIdeasByUser,
+  deleteRawIdeaAndFile as coreDeleteRawIdeaAndFile,
+  convertRawIdeaToNote as coreConvertRawIdeaToNote,
+  toggleAutoPlace as coreToggleAutoPlace,
+  AUTO_PLACE_ELIGIBLE,
+} from "../../core/tree/rawIdea.js";
+import {
+  renderRawIdeasList,
+  renderRawIdeaText,
+  renderRawIdeaFile,
+} from "../../routes/api/html/user.js";
+
+const router = express.Router();
+
+const uploadsFolder = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsFolder)) fs.mkdirSync(uploadsFolder);
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsFolder),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const name = Date.now() + "-" + Math.random().toString(36).slice(2);
+    cb(null, name + ext);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 4 * 1024 * 1024 * 1024 },
+});
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// POST create raw idea
+router.post(
+  "/user/:userId/raw-ideas",
+  authenticate,
+  preUploadCheck,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+      if (req.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ success: false, error: "Not authorized" });
+      }
+
+      const contentType = req.file ? "file" : "text";
+      const result = await coreCreateRawIdea({
+        contentType,
+        content: contentType === "file" ? req.file.filename : req.body.content,
+        userId: req.userId,
+        file: req.file,
+      });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/v1/user/${userId}?token=${req.query.token ?? ""}&html`,
+        );
+      }
+
+      return res.status(201).json({ success: true, rawIdea: result.rawIdea });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  },
+);
+
+// GET list raw ideas
+router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    const rawLimit = req.query.limit;
+    let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
+    if (limit >= 200 || limit == undefined) limit = 200;
+    if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid limit: must be a positive number",
+      });
+    }
+
+    const query = req.query.q || "";
+    const statusFilter = req.query.status || "pending";
+
+    let result;
+    if (query.trim() !== "") {
+      result = await coreSearchRawIdeasByUser({
+        userId, query, limit, startDate, endDate, status: statusFilter,
+      });
+    } else {
+      result = await coreGetRawIdeas({
+        userId, limit, startDate, endDate, status: statusFilter,
+      });
+    }
+
+    const rawIdeas = result.rawIdeas.map((r) => ({
+      ...r,
+      content: r.contentType === "file" ? `/api/v1/uploads/${r.content}` : r.content,
+    }));
+
+    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      return res.json({ success: true, rawIdeas });
+    }
+
+    const user = await User.findById(userId).lean();
+    const token = req.query.token ?? "";
+
+    const tabUrl = (s) => {
+      const base = `/api/v1/user/${userId}/raw-ideas`;
+      const params = new URLSearchParams();
+      if (token) params.set("token", token);
+      params.set("html", "");
+      if (s !== "pending") params.set("status", s);
+      return `${base}?${params.toString()}`;
+    };
+    const tabs = [
+      { key: "pending", label: "Pending" },
+      { key: "processing", label: "Active" },
+      { key: "succeeded", label: "Finished" },
+      { key: "stuck", label: "Stuck" },
+      { key: "deferred", label: "Deferred" },
+      { key: "deleted", label: "Deleted" },
+    ];
+
+    return res.send(
+      renderRawIdeasList({
+        userId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE,
+      }),
+    );
+  } catch (err) {
+    console.error("Error in /user/:userId/raw-ideas:", err);
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// POST toggle auto-place
+router.post(
+  "/user/:userId/raw-ideas/auto-place",
+  authenticate,
+  async (req, res) => {
+    try {
+      if (req.userId.toString() !== req.params.userId.toString()) {
+        return res.status(403).json({ success: false, error: "Not authorized" });
+      }
+      const enabled = req.body?.enabled;
+      if (typeof enabled !== "boolean") {
+        return res.status(400).json({ success: false, error: "enabled (boolean) is required" });
+      }
+      const result = await coreToggleAutoPlace({ userId: req.userId, enabled });
+      return res.json({ success: true, enabled: result.enabled });
+    } catch (err) {
+      const status = err.message.includes("only available on") ? 403 : 500;
+      return res.status(status).json({ success: false, error: err.message });
+    }
+  },
+);
+
+// DELETE raw idea
+router.delete(
+  "/user/:userId/raw-ideas/:rawIdeaId",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { userId, rawIdeaId } = req.params;
+      if (req.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ success: false, error: "Not authorized" });
+      }
+      const rawIdea = await RawIdea.findById(rawIdeaId);
+      if (!rawIdea) {
+        return res.status(404).json({ success: false, error: "Raw idea not found" });
+      }
+      if (rawIdea.status === "processing" || rawIdea.status === "succeeded") {
+        return res.status(409).json({
+          success: false,
+          error: `Cannot delete a raw idea with status "${rawIdea.status}"`,
+        });
+      }
+      const result = await coreDeleteRawIdeaAndFile({ rawIdeaId, userId: req.userId });
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  },
+);
+
+// POST transfer raw idea to note
+router.post(
+  "/user/:userId/raw-ideas/:rawIdeaId/transfer",
+  authenticate,
+  async (req, res) => {
+    try {
+      const { userId, rawIdeaId } = req.params;
+      const { nodeId } = req.body;
+      if (req.userId.toString() !== userId.toString()) {
+        return res.status(403).json({ success: false, error: "Not authorized" });
+      }
+      if (!rawIdeaId || !nodeId) {
+        return res.status(400).json({ success: false, error: "raw-idea Id and nodeId are required" });
+      }
+      const rawIdeaCheck = await RawIdea.findById(rawIdeaId).lean();
+      if (rawIdeaCheck?.status === "processing") {
+        return res.status(409).json({
+          success: false,
+          error: "Cannot transfer a raw idea while it is being processed",
+        });
+      }
+      const result = await coreConvertRawIdeaToNote({ rawIdeaId, userId: req.userId, nodeId });
+
+      if ("html" in req.query) {
+        return res.redirect(
+          `/api/v1/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html`,
+        );
+      }
+      return res.json({ success: true, note: result.note });
+    } catch (err) {
+      console.error("raw-idea transfer error:", err);
+      return res.status(400).json({ success: false, error: err.message });
+    }
+  },
+);
+
+// GET single raw idea
+router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
+  try {
+    const { userId, rawIdeaId } = req.params;
+    const rawIdea = await RawIdea.findById(rawIdeaId)
+      .populate("userId", "username")
+      .lean();
+
+    if (!rawIdea) {
+      return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
+    }
+
+    const rawUserId = rawIdea.userId?._id?.toString?.() ?? rawIdea.userId;
+    if (["deleted", "empty", "null", "system"].includes(rawUserId)) {
+      return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
+    }
+    if (rawUserId !== userId.toString()) {
+      return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
+    }
+
+    const token = req.query.token ?? "";
+    const tokenQS = token ? `?token=${token}&html` : `?html`;
+    const hasToken = !!token;
+    const back = hasToken
+      ? `/api/v1/user/${userId}/raw-ideas${tokenQS}`
+      : getLandUrl();
+    const backText = hasToken ? "← Back to Raw Ideas" : "← Back to Home";
+    const userLink =
+      rawIdea.userId && rawIdea.userId !== "empty"
+        ? `<a href="/api/v1/user/${rawIdea.userId._id}${tokenQS}">
+               ${escapeHtml(rawIdea.userId.username ?? String(rawIdea.userId))}
+             </a>`
+        : "Unknown user";
+
+    if (req.query.html !== undefined && process.env.ENABLE_FRONTEND_HTML === "true") {
+      if (rawIdea.contentType === "text") {
+        return res.send(
+          renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+        );
+      }
+      return res.send(
+        renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+      );
+    }
+
+    if (rawIdea.contentType === "text") {
+      return res.json({ text: rawIdea.content });
+    }
+    if (rawIdea.contentType === "file") {
+      const filePath = path.join(process.cwd(), "uploads", rawIdea.content);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      return res.sendFile(filePath);
+    }
+
+    res.status(400).json({ error: "Unknown raw idea type" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+export default router;
