@@ -133,7 +133,7 @@ const LandingPage = () => {
               <div className="lp-step-content">
                 <h4>Start a Land</h4>
                 <p>Your server. Stores trees, runs AI, serves the API. First boot walks you through config and extension selection.</p>
-                <code>npm land</code>
+                <code>treeos land</code>
               </div>
             </div>
             <div className="lp-step">
@@ -222,9 +222,8 @@ const LandingPage = () => {
                 Your data, your models, your rules.
               </p>
               <div className="lp-terminal-mini">
-                <div className="lp-term-line">git clone https://github.com/Tabors-Site/Tree</div>
-                <div className="lp-term-line">npm run install:all</div>
-                <div className="lp-term-line">npm land</div>
+                <div className="lp-term-line">npm install -g treeos</div>
+                <div className="lp-term-line">treeos land</div>
               </div>
               <a href="/about/land" className="lp-split-link">Land setup guide</a>
             </div>
@@ -236,8 +235,7 @@ const LandingPage = () => {
               </p>
               <div className="lp-terminal-mini">
                 <div className="lp-term-line">npm install -g treeos</div>
-                <div className="lp-term-line">treeos connect https://treeos.ai</div>
-                <div className="lp-term-line">treeos register</div>
+                <div className="lp-term-line">treeos start</div>
               </div>
               <a href="/about/gettingstarted" className="lp-split-link">Getting started</a>
             </div>
@@ -278,7 +276,7 @@ const LandingPage = () => {
       <section className="lp-section" ref={installRef}>
         <div className="lp-container">
           <h2 className="lp-section-title">Get Started</h2>
-          <p className="lp-section-sub">Clone, install, run.</p>
+          <p className="lp-section-sub">One package. Two commands.</p>
           <div className="lp-terminal">
             <div className="lp-term-header">
               <span className="lp-term-dot red"></span>
@@ -287,14 +285,16 @@ const LandingPage = () => {
               <span className="lp-term-title">Terminal</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-prompt">$</span> git clone https://github.com/Tabors-Site/Tree && cd Tree</div>
-              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npm run install:all</div>
-              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npm land</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npm install -g treeos</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-comment"># Start a land (server)</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos land</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-output">  Welcome to TreeOS.</div>
-              <div className="lp-term-line lp-term-output">  First-run setup. Answer a few questions to configure your Land.</div>
-              <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-output">  Domain (localhost): _</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-comment"># Or connect to an existing land</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos start</div>
             </div>
           </div>
         </div>
