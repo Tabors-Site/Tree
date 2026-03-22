@@ -103,6 +103,56 @@ export async function init(core) {
 | Orchestrator | `core.orchestrator.*` | Yes |
 | Energy | `core.energy.*` | No-op stub if extension not loaded |
 
+## CLI Declarations
+
+Extensions can declare CLI commands as metadata in the manifest.
+The CLI auto-registers thin API callers from these declarations.
+
+```js
+provides: {
+  cli: [
+    { command: "blogs", description: "List posts", method: "GET", endpoint: "/blog/posts" },
+    { command: "blog <slug>", description: "Read post", method: "GET", endpoint: "/blog/posts/:slug" },
+  ],
+}
+```
+
+Endpoints can use `:nodeId` (resolved from current position), `:version` (resolved to latest), and positional args.
+
+## Schema Migrations
+
+Extensions can declare schema versions and provide migration scripts:
+
+```js
+// manifest.js
+provides: {
+  schemaVersion: 2,
+  migrations: "./migrations.js",
+}
+
+// migrations.js
+export default [
+  { version: 1, up: async () => { /* create indexes, transform docs */ } },
+  { version: 2, up: async () => { /* add new fields */ } },
+];
+```
+
+On boot, the loader checks each extension's stored schema version (in the .extensions system node) against the declared version, and runs pending migrations in order.
+
+## .extensions System Node
+
+Each loaded extension is mirrored as a child node under the `.extensions` system node:
+
+```
+Land Root
+  .extensions (system)
+    blog (type: resource, values: { loaded: 1, version: "1.0.0", routes: 1 })
+    solana (type: resource, values: { loaded: 1, version: "1.0.0" })
+    scripts (type: resource, values: { loaded: 0 })  // disabled = trimmed
+```
+
+Browse via CLI: `treeos cd .extensions && treeos ls`
+
 ## Disable Extensions
 
 Set `DISABLED_EXTENSIONS` env var (comma-separated):
@@ -110,6 +160,30 @@ Set `DISABLED_EXTENSIONS` env var (comma-separated):
 ```
 DISABLED_EXTENSIONS=solana,billing,scripts
 ```
+
+Or use the CLI (god tier): `treeos ext disable solana`
+
+Both sources are merged. Disabled extensions are skipped during loading.
+
+## Background Jobs
+
+Extensions return `jobs` from `init()` with start/stop functions:
+
+```js
+export async function init(core) {
+  return {
+    jobs: [
+      {
+        name: "my-scheduled-task",
+        start: () => { timer = setInterval(doWork, 60000); },
+        stop: () => { clearInterval(timer); },
+      },
+    ],
+  };
+}
+```
+
+Jobs are auto-started after DB connect via `startExtensionJobs()`.
 
 ## Inter-Extension Communication
 

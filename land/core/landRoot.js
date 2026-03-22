@@ -103,7 +103,25 @@ export async function ensureLandRoot() {
   });
   await peersNode.save();
 
-  landRoot.children = [identityNode._id, configNode._id, peersNode._id];
+  const extensionsNode = new Node({
+    name: ".extensions",
+    parent: landRoot._id,
+    isSystem: true,
+    systemRole: "extensions",
+    children: [],
+    contributors: [],
+    versions: [
+      {
+        prestige: 0,
+        values: {},
+        status: "active",
+        dateCreated: new Date(),
+      },
+    ],
+  });
+  await extensionsNode.save();
+
+  landRoot.children = [identityNode._id, configNode._id, peersNode._id, extensionsNode._id];
 
   // Migrate existing user roots under the Land root
   const orphanRoots = await Node.find({
@@ -148,4 +166,82 @@ export function getLandRootId() {
  */
 export function isUserRoot(node) {
   return !!node.rootOwner && node.rootOwner !== "SYSTEM";
+}
+
+/**
+ * Sync loaded extensions to the .extensions system node.
+ * Creates/updates a child node per extension with manifest as notes and status as values.
+ * Called after extension loading is complete.
+ */
+export async function syncExtensionsToTree(manifests) {
+  const extNode = await Node.findOne({ systemRole: "extensions" });
+  if (!extNode) return; // Land root not bootstrapped yet
+
+  // Get existing extension child nodes
+  const existingChildren = await Node.find({
+    _id: { $in: extNode.children },
+  }).select("_id name").lean();
+
+  const existingByName = new Map();
+  for (const c of existingChildren) existingByName.set(c.name, c._id);
+
+  const currentNames = new Set();
+
+  for (const manifest of manifests) {
+    currentNames.add(manifest.name);
+
+    const values = new Map();
+    values.set("loaded", 1);
+    values.set("version", manifest.version || "0.0.0");
+    if (manifest.provides?.routes) values.set("routes", 1);
+    if (manifest.provides?.tools) values.set("tools", 1);
+    if (manifest.provides?.jobs) values.set("jobs", 1);
+    if (manifest.provides?.cli?.length) values.set("cli_commands", manifest.provides.cli.length);
+
+    if (existingByName.has(manifest.name)) {
+      // Update existing
+      const nodeId = existingByName.get(manifest.name);
+      await Node.findByIdAndUpdate(nodeId, {
+        $set: {
+          type: "resource",
+          "versions.0.values": Object.fromEntries(values),
+          "versions.0.status": "active",
+        },
+      });
+    } else {
+      // Create new
+      const child = new Node({
+        name: manifest.name,
+        parent: extNode._id,
+        isSystem: true,
+        type: "resource",
+        children: [],
+        contributors: [],
+        versions: [
+          {
+            prestige: 0,
+            values: Object.fromEntries(values),
+            status: "active",
+            dateCreated: new Date(),
+          },
+        ],
+      });
+      await child.save();
+      extNode.children.push(child._id);
+    }
+  }
+
+  // Mark unloaded extensions as trimmed
+  for (const [name, nodeId] of existingByName) {
+    if (!currentNames.has(name)) {
+      await Node.findByIdAndUpdate(nodeId, {
+        $set: {
+          "versions.0.status": "trimmed",
+          "versions.0.values.loaded": 0,
+        },
+      });
+    }
+  }
+
+  await extNode.save();
 }

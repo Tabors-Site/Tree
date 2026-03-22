@@ -453,6 +453,86 @@ export function getRegisteredJobs() {
   return registeredJobs;
 }
 
+// ---------------------------------------------------------------------------
+// Schema migrations
+// ---------------------------------------------------------------------------
+
+/**
+ * Run pending migrations for all loaded extensions.
+ * Each extension can provide migrations in its manifest:
+ *   provides.schemaVersion: 2
+ *   provides.migrations: "./migrations.js"
+ *
+ * The migrations module exports an array of { version, up } objects.
+ * Schema versions are tracked per extension in the .extensions system node values.
+ *
+ * Called from startup.js after DB connect.
+ */
+export async function runExtensionMigrations() {
+  let Node;
+  try {
+    Node = (await import("../db/models/node.js")).default;
+  } catch {
+    console.warn("[Extensions] Cannot run migrations: Node model not available");
+    return;
+  }
+
+  for (const [name, { manifest, instance }] of loaded) {
+    const targetVersion = manifest.provides?.schemaVersion;
+    if (!targetVersion) continue; // No schema versioning declared
+
+    // Get current version from .extensions node values
+    const extNode = await Node.findOne({
+      parent: { $ne: null },
+      isSystem: true,
+      name,
+    }).lean();
+
+    const currentVersion = extNode?.versions?.[0]?.values?.schemaVersion || 0;
+
+    if (currentVersion >= targetVersion) continue; // Up to date
+
+    // Load migrations
+    const migrationsPath = manifest.provides?.migrations;
+    if (!migrationsPath) {
+      console.warn(`[Extensions] ${name}: schemaVersion ${targetVersion} declared but no migrations path`);
+      continue;
+    }
+
+    try {
+      const entry = loaded.get(name);
+      const resolved = path.resolve(entry ? path.dirname(entry.manifest.name || "") : __dirname, name, migrationsPath);
+      const migrationsModule = await import(resolved);
+      const migrations = migrationsModule.default || migrationsModule.migrations || [];
+
+      // Run pending migrations in order
+      let ran = 0;
+      for (const migration of migrations) {
+        if (migration.version > currentVersion && migration.version <= targetVersion) {
+          console.log(`[Extensions] ${name}: running migration v${migration.version}`);
+          try {
+            await migration.up();
+            ran++;
+          } catch (err) {
+            console.error(`[Extensions] ${name}: migration v${migration.version} FAILED:`, err.message);
+            break; // Stop on first failure
+          }
+        }
+      }
+
+      // Update stored version
+      if (ran > 0 && extNode) {
+        await Node.findByIdAndUpdate(extNode._id, {
+          $set: { "versions.0.values.schemaVersion": targetVersion },
+        });
+        console.log(`[Extensions] ${name}: schema updated to v${targetVersion} (${ran} migration(s))`);
+      }
+    } catch (err) {
+      console.error(`[Extensions] ${name}: failed to load migrations:`, err.message);
+    }
+  }
+}
+
 /**
  * Start all extension jobs. Called from startup.js after DB connect.
  */

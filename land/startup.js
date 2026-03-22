@@ -2,9 +2,8 @@ import mongoose from "./db/config.js";
 import { getLandIdentity, getLandUrl } from "./canopy/identity.js";
 import { ensureLandRoot } from "./core/landRoot.js";
 import { initLandConfig } from "./core/landConfig.js";
-import { startRawIdeaAutoPlaceJob } from "./jobs/rawIdeaAutoPlace.js";
-import { startTreeDreamJob, runTreeDreamJob } from "./jobs/treeDream.js";
-import { startExtensionJobs } from "./extensions/loader.js";
+import { startExtensionJobs, getLoadedManifests, runExtensionMigrations } from "./extensions/loader.js";
+import { syncExtensionsToTree } from "./core/landRoot.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
 import { startOutboxJob } from "./canopy/events.js";
 import { startDirectoryRegistration } from "./canopy/directory.js";
@@ -28,13 +27,37 @@ export function onListen() {
     await ensureLandRoot();
     await initLandConfig();
 
-    startRawIdeaAutoPlaceJob({ intervalMs: 15 * 60 * 1000 });
-    startTreeDreamJob({ intervalMs: 30 * 60 * 1000 });
-    runTreeDreamJob();
+    // Ensure .extensions system node exists (for lands created before this feature)
+    const Node = (await import("./db/models/node.js")).default;
+    const extNode = await Node.findOne({ systemRole: "extensions" });
+    if (!extNode) {
+      const { getLandRoot } = await import("./core/landRoot.js");
+      const landRoot = await getLandRoot();
+      if (landRoot) {
+        const newExtNode = new Node({
+          name: ".extensions",
+          parent: landRoot._id,
+          isSystem: true,
+          systemRole: "extensions",
+          children: [],
+          contributors: [],
+          versions: [{ prestige: 0, values: {}, status: "active", dateCreated: new Date() }],
+        });
+        await newExtNode.save();
+        landRoot.children.push(newExtNode._id);
+        await landRoot.save();
+        console.log("[Land] Created .extensions system node");
+      }
+    }
+
+    // Sync extension manifests to .extensions tree node
+    await syncExtensionsToTree(getLoadedManifests());
+
+    // Run pending schema migrations
+    await runExtensionMigrations();
+
     startExtensionJobs();
-    console.log(
-      "[Land] Background jobs started (dream, drain, cleanup, understanding, extensions)",
-    );
+    console.log("[Land] Background jobs started (via extension loader)");
 
     startHeartbeatJob();
     startOutboxJob();
