@@ -14,7 +14,7 @@ import { getLandUrl } from "../../canopy/identity.js";
 const router = express.Router();
 
 /**
- * GET /app
+ * GET /dashboard
  * Authenticated iframe shell with integrated chat
  */
 router.get("/dashboard", authenticateLite, async (req, res) => {
