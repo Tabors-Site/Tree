@@ -254,6 +254,9 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
       }
 
       if (!res.headersSent) {
+        if (err.message?.includes("No LLM connection")) {
+          return res.status(403).json({ success: false, error: err.message, answer: err.message });
+        }
         return res
           .status(500)
           .json({ success: false, answer: "Something went wrong." });
@@ -546,11 +549,21 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
     if (!queryAccess.isOwner && !queryAccess.isContributor) {
       // Not owner/contributor, but tree might be public
       if (rootCheck.visibility === "public") {
-        // Allow query. Use owner's LLM if available, else user's own.
+        // Allow query. Use owner's LLM if available.
         if (treeHasLlm) {
           effectiveUserId = rootCheck.rootOwner;
           const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
           effectiveUsername = owner?.username || "system";
+        } else if (req.canopy?.sourceLandDomain) {
+          // Remote canopy user, no tree LLM. Fall back to their home land's LLM.
+          canopyProxyClient = createCanopyLlmProxyClient({
+            userId: req.userId,
+            homeLand: req.canopy.sourceLandDomain,
+            slot: "main",
+          });
+          effectiveUserId = rootCheck.rootOwner;
+          const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
+          effectiveUsername = `visitor@${req.canopy.sourceLandDomain}`;
         }
         isPublicQuery = true;
       } else {
@@ -700,6 +713,17 @@ router.post("/root/:rootId/query", authenticateOrPublic, async (req, res) => {
       }
 
       if (!res.headersSent) {
+        // Surface LLM config errors cleanly instead of generic 500
+        if (err.message?.includes("No LLM connection")) {
+          const msg = isPublicQuery
+            ? "This tree has no AI configured for public queries."
+            : err.message;
+          return res.status(403).json({
+            success: false,
+            error: msg,
+            answer: msg,
+          });
+        }
         return res
           .status(500)
           .json({ success: false, answer: "Something went wrong." });

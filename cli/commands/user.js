@@ -27,10 +27,18 @@ module.exports = (program) => {
         const roots = data.roots || data.user?.roots || [];
         if (!roots.length)
           return console.log(chalk.dim("No trees yet. Run: tree mkroot <name>"));
-        printTable(roots, [
-          { key: "name", label: "Name", width: 24 },
-          { key: "_id", label: "ID", width: 28 },
-        ]);
+        printTable(
+          roots.map((r) => ({
+            name: r.name,
+            visibility: r.visibility === "public" ? "public" : "private",
+            _id: r._id,
+          })),
+          [
+            { key: "name", label: "Name", width: 24 },
+            { key: "visibility", label: "Visibility", width: 10 },
+            { key: "_id", label: "ID", width: 28 },
+          ],
+        );
       } catch (e) {
         console.error(chalk.red(e.message));
       }

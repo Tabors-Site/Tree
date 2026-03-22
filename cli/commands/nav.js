@@ -1,7 +1,7 @@
 const chalk = require("chalk");
 const TreeAPI = require("../api");
 const { createProxyApi } = require("../api");
-const { load, save, requireAuth, currentNodeId, currentPath } = require("../config");
+const { load, save, requireAuth, currentNodeId, currentPath, currentLand } = require("../config");
 const { getChildren, flattenTree, findChild } = require("../helpers");
 const { printNode, printTable } = require("../display");
 
@@ -106,16 +106,19 @@ module.exports = (program) => {
 
             if (l) {
               const rows = [
-                ...roots.map((r) => ({ name: r.name, land: "local", _id: r._id })),
-                ...remoteRoots.map((r) => ({ name: r.rootName, land: `@${r.landDomain}`, _id: r.rootId })),
+                ...roots.map((r) => ({ name: r.name, visibility: r.visibility === "public" ? "public" : "private", land: "local", _id: r._id })),
+                ...remoteRoots.map((r) => ({ name: r.rootName, visibility: "", land: `@${r.landDomain}`, _id: r.rootId })),
               ];
               printTable(rows, [
                 { key: "name", label: "Name", width: 24 },
+                { key: "visibility", label: "Visibility", width: 10 },
                 { key: "land", label: "Land", width: 20 },
                 { key: "_id", label: "ID", width: 28 },
               ]);
             } else {
-              const localNames = roots.map((r) => chalk.cyan(r.name));
+              const localNames = roots.map((r) =>
+                r.visibility === "public" ? chalk.white(r.name) : chalk.cyan(r.name)
+              );
               const remoteNames = remoteRoots.map((r) => chalk.cyan(r.rootName) + chalk.dim(` @${r.landDomain}`));
               const all = [...localNames, ...remoteNames];
               console.log(all.join(chalk.dim("  ·  ")));
@@ -199,44 +202,62 @@ module.exports = (program) => {
       const name = parts.join(" ");
       const cfg = requireAuth();
 
-      // ── cd @domain/treename — enter a remote tree ──
-      if (name.startsWith("@") && name.includes("/")) {
+      // ── cd @domain/treename or cd @domain ──
+      if (name.startsWith("@")) {
         const slashIdx = name.indexOf("/");
-        const domain = name.slice(1, slashIdx);
-        const rest = name.slice(slashIdx + 1);
-        if (!domain || !rest) return console.log(chalk.yellow("Usage: cd @domain/treename"));
+        const hasTree = slashIdx > 0;
+        const domain = hasTree ? name.slice(1, slashIdx) : name.slice(1);
+        const rest = hasTree ? name.slice(slashIdx + 1) : null;
+        if (!domain) return console.log(chalk.yellow("Usage: cd @domain or cd @domain/treename"));
 
-        try {
-          const proxyApi = createProxyApi(cfg.apiKey, domain);
-          const landData = await proxyApi.getLandRoot();
-          const children = landData.children || [];
-          const target = findChild(children, rest);
-          if (!target) return;
+        // Detect if this is the user's own land — treat as local
+        const ownLand = currentLand(cfg);
+        const domainLower = domain.toLowerCase();
+        const isOwnLand = domainLower === ownLand.toLowerCase() || domainLower === cfg.landUrl?.replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
 
+        if (hasTree && !rest) return console.log(chalk.yellow("Usage: cd @domain/treename"));
+
+        if (hasTree) {
+          // cd @domain/treename
+          try {
+            const api = isOwnLand ? new TreeAPI(cfg.apiKey) : createProxyApi(cfg.apiKey, domain);
+            const landData = await api.getLandRoot();
+            const children = landData.children || [];
+            const target = findChild(children, rest);
+            if (!target) return;
+
+            cfg.remoteDomain = isOwnLand ? null : domain;
+            cfg.activeRootId = target._id;
+            cfg.activeRootName = target.name;
+            cfg.pathStack = [];
+            cfg.isSystemRoot = !!target.isSystem;
+            cfg.atHome = false;
+            save(cfg);
+            if (isOwnLand) {
+              console.log(chalk.green(`Entered ${target.name}`));
+            } else {
+              console.log(chalk.green(`Entered ${target.name} on ${chalk.dim(`@${domain}`)}`));
+            }
+          } catch (e) {
+            console.error(chalk.red(e.message));
+          }
+        } else {
+          // cd @domain
+          if (isOwnLand) {
+            // Already on this land, just go to land root
+            goLand(cfg);
+            save(cfg);
+            return;
+          }
           cfg.remoteDomain = domain;
-          cfg.activeRootId = target._id;
-          cfg.activeRootName = target.name;
+          cfg.activeRootId = null;
+          cfg.activeRootName = null;
           cfg.pathStack = [];
-          cfg.isSystemRoot = !!target.isSystem;
+          cfg.isSystemRoot = false;
+          cfg.atHome = false;
           save(cfg);
-          console.log(chalk.green(`Entered ${target.name} on ${chalk.dim(`@${domain}`)}`));
-        } catch (e) {
-          console.error(chalk.red(e.message));
+          console.log(chalk.green(`Entered @${domain}. Run ls to see trees.`));
         }
-        return;
-      }
-
-      // ── cd @domain — enter remote land root ──
-      if (name.startsWith("@") && !name.includes("/")) {
-        const domain = name.slice(1);
-        if (!domain) return console.log(chalk.yellow("Usage: cd @domain/treename"));
-        cfg.remoteDomain = domain;
-        cfg.activeRootId = null;
-        cfg.activeRootName = null;
-        cfg.pathStack = [];
-        cfg.isSystemRoot = false;
-        save(cfg);
-        console.log(chalk.green(`Entered @${domain}. Run ls to see trees.`));
         return;
       }
 

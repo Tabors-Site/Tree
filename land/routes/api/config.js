@@ -70,10 +70,13 @@ router.put("/land/config/:key", authenticate, async (req, res) => {
  */
 router.get("/land/root", authenticateOrPublic, async (req, res) => {
   try {
-    const landRoot = await getLandRoot();
-    if (!landRoot) {
+    const landRootCached = await getLandRoot();
+    if (!landRootCached) {
       return res.status(404).json({ error: "Land root not found" });
     }
+
+    // Fetch fresh from DB so we see newly created trees (cache may be stale)
+    const landRoot = await Node.findById(landRootCached._id).select("_id name children").lean();
 
     const userId = req.userId;
     const isAnon = !userId;

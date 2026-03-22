@@ -32,7 +32,7 @@ class TreeAPI {
     }
 
     if (!res.ok) {
-      const msg = json.error || json.message || `HTTP ${res.status}`;
+      const msg = json.error || json.message || json.answer || `HTTP ${res.status}`;
       throw new Error(msg);
     }
     return json;
@@ -60,7 +60,7 @@ class TreeAPI {
     }
 
     if (!res.ok) {
-      const msg = json.error || json.message || `HTTP ${res.status}`;
+      const msg = json.error || json.message || json.answer || `HTTP ${res.status}`;
       throw new Error(msg);
     }
     return json;

@@ -76,4 +76,30 @@ export default function registerURLRoutes(app) {
 
   // Canopy protocol stays at /canopy (not versioned with API)
   app.use("/", canopy);
+
+  // Protocol spec endpoint
+  app.get("/protocol", (req, res) => {
+    res.json({
+      name: "TreeOS",
+      version: "1.0",
+      capabilities: [
+        "chat", "place", "query",
+        "canopy", "transactions", "contributions", "types",
+        "llm-assignments", "raw-ideas", "gateway",
+        "dreams", "understanding",
+      ],
+      nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
+      extensions: [
+        "energy",
+        "billing",
+        "scripts",
+        "prestige",
+        "schedules",
+        "book",
+        "blog",
+        "api-keys",
+        "html-rendering",
+      ],
+    });
+  });
 }

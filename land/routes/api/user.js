@@ -136,7 +136,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     const queryString = filtered ? `?${filtered}` : "";
 
     const user = await User.findById(userId)
-      .populate("roots", "name _id")
+      .populate("roots", "name _id visibility")
       .lean()
       .exec();
 

@@ -304,15 +304,14 @@ export async function deleteCustomLlmConnection(userId, connectionId) {
     }
   }
 
-  // If deleted connection was assigned to any root node, clear those too
-  await Node.updateMany(
-    { "llmAssignments.default": connectionId },
-    { $set: { "llmAssignments.default": null } },
-  );
-  await Node.updateMany(
-    { "llmAssignments.placement": connectionId },
-    { $set: { "llmAssignments.placement": null } },
-  );
+  // If deleted connection was assigned to any root node slot, clear it
+  const rootSlots = ["default", "placement", "understanding", "respond", "notes", "cleanup", "drain", "notification"];
+  for (const slot of rootSlots) {
+    await Node.updateMany(
+      { [`llmAssignments.${slot}`]: connectionId },
+      { $set: { [`llmAssignments.${slot}`]: null } },
+    );
+  }
 
   return { removed: true };
 }

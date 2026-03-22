@@ -240,6 +240,11 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
     <div>
       <h1>${escapeHtml(treeName)}</h1>
       <div class="meta">by ${escapeHtml(ownerUsername)}</div>
+      <a href="https://dir.treeos.ai" target="_blank" rel="noopener"
+        style="font-size:0.75rem;color:rgba(255,255,255,0.35);text-decoration:none;margin-top:4px;display:inline-block;transition:color 0.2s;"
+        onmouseover="this.style.color='rgba(255,255,255,0.7)'"
+        onmouseout="this.style.color='rgba(255,255,255,0.35)'"
+      >Canopy Directory</a>
     </div>
     <span class="badge">Public</span>
   </div>
@@ -247,8 +252,7 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
   ${queryAvailable ? `
   <div class="chat-area" id="chatArea">
     <div class="empty-state" id="emptyState">
-      <div class="icon">?</div>
-      Ask a question about this tree. Responses are read only and will not modify the tree.
+      Ask the tree anything to find knowledge. Responses are read only and will not modify the tree.
     </div>
   </div>
 
@@ -299,32 +303,34 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
 
   function markdownToHtml(text) {
     if (!text) return "";
-    // Basic markdown: bold, italic, code blocks, inline code, paragraphs
+    var BT = String.fromCharCode(96);
     var html = text
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // Code blocks
-    html = html.replace(/\`\`\`(\\w*)?\\n([\\s\\S]*?)\`\`\`/g, function(_, lang, code) {
+    // Code blocks: ` + `` + `(\w*)?\n(content)` + `` + `
+    var codeBlockRe = new RegExp(BT + BT + BT + "(\\\\w*)?\\\\n([\\\\s\\\\S]*?)" + BT + BT + BT, "g");
+    html = html.replace(codeBlockRe, function(m, lang, code) {
       return "<pre><code>" + code.trim() + "</code></pre>";
     });
 
     // Inline code
-    html = html.replace(/\`([^\`]+)\`/g, "<code>$1</code>");
+    var inlineCodeRe = new RegExp(BT + "([^" + BT + "]+)" + BT, "g");
+    html = html.replace(inlineCodeRe, "<code>$1</code>");
 
     // Bold
-    html = html.replace(/\\*\\*(.+?)\\*\\*/g, "<strong>$1</strong>");
+    html = html.replace(/[*][*](.+?)[*][*]/g, "<strong>$1</strong>");
 
     // Italic
-    html = html.replace(/\\*(.+?)\\*/g, "<em>$1</em>");
+    html = html.replace(/[*](.+?)[*]/g, "<em>$1</em>");
 
     // Paragraphs
-    html = html.split(/\\n\\n+/).map(function(p) {
+    html = html.split(new RegExp("\\\\n\\\\n+")).map(function(p) {
       p = p.trim();
       if (!p) return "";
       if (p.startsWith("<pre>")) return p;
-      return "<p>" + p.replace(/\\n/g, "<br>") + "</p>";
+      return "<p>" + p.replace(new RegExp("\\\\n", "g"), "<br>") + "</p>";
     }).join("");
 
     return html;
