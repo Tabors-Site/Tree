@@ -316,6 +316,7 @@ const LandingPage = () => {
               <a href="/about/gettingstarted">Getting Started</a>
               <a href="/about/api">API</a>
               <a href="/about/cli">CLI</a>
+              <a href="/about/extensions">Extensions</a>
             </div>
             <div className="lp-footer-col">
               <h4>Protocol</h4>
