@@ -316,18 +316,16 @@ const LandingPage = () => {
               <a href="/about/gettingstarted">Getting Started</a>
               <a href="/about/api">API</a>
               <a href="/about/cli">CLI</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>Protocol</h4>
+              <a href="/about/node-types">Node Types</a>
+              <a href="/about/gateway">Gateway</a>
+              <a href="/about/land">Land and Canopy</a>
               <a href="/about/extensions">Extensions</a>
             </div>
             <div className="lp-footer-col">
-              <h4>System</h4>
-              <a href="/about/node-types">Node Types</a>
-              <a href="/about/energy">Energy</a>
-              <a href="/about/dreams">Dreams</a>
-              <a href="/about/gateway">Gateway</a>
-            </div>
-            <div className="lp-footer-col">
               <h4>Network</h4>
-              <a href="/about/land">Land and Canopy</a>
               <a href="https://dir.treeos.ai">Directory</a>
               <a href="/blog">Blog</a>
             </div>
