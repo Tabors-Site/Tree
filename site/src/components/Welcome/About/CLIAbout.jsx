@@ -235,6 +235,56 @@ const CLIAbout = () => {
           <CmdRow cmd="ext uninstall <name>" desc="Remove extension directory (data kept in database)" />
         </div>
 
+        {/* ── LLM CONNECTIONS ── */}
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">🔌</span> LLM Connections
+          </div>
+          <div className="cli-section-text" style={{ marginBottom: 14 }}>
+            Connect your own OpenAI-compatible endpoint. Assign models to user slots or per-tree slots.
+          </div>
+          <CmdRow cmd="llms" desc="List your LLM connections" />
+          <CmdRow cmd="llm add" desc="Interactive setup: name, URL, model, API key" />
+          <CmdRow cmd="llm remove <id>" desc="Delete a connection" />
+          <CmdRow cmd="llm assign <slot> <id>" desc="Assign to user slot (main, rawIdea)" />
+          <CmdRow cmd="llm tree-assign <slot> <id>" desc="Assign to tree slot (placement, respond, notes, understanding, cleanup, drain, notification)" />
+          <CmdRow cmd="llm clear <slot>" desc="Clear a user slot" />
+          <CmdRow cmd="llm tree-clear <slot>" desc="Clear a tree slot" />
+        </div>
+
+        {/* ── API KEYS ── */}
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">🔑</span> API Keys
+          </div>
+          <CmdRow cmd="api-keys" desc="List your API keys" />
+          <CmdRow cmd="api-keys create [name]" desc="Create a new key" />
+          <CmdRow cmd="api-keys revoke <id>" desc="Revoke a key" />
+        </div>
+
+        {/* ── CANOPY ── */}
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">🌐</span> Canopy (Federation)
+          </div>
+          <CmdRow cmd="peers" desc="List peered lands" />
+          <CmdRow cmd="peer add <domain>" desc="Peer with another land" />
+          <CmdRow cmd="peer remove <domain>" desc="Remove a peer" />
+          <CmdRow cmd="search <query>" desc="Search the directory for lands and trees" />
+          <CmdRow cmd="browse <domain> [query]" desc="Browse public trees on another land" />
+        </div>
+
+        {/* ── LAND CONFIG ── */}
+        <div className="cli-section">
+          <div className="cli-section-title">
+            <span className="cli-section-icon">⚙️</span> Land Config
+          </div>
+          <CmdRow cmd="config" desc="Show all land config values" />
+          <CmdRow cmd="config get <key>" desc="Get a config value" />
+          <CmdRow cmd="config set <key> <value>" desc="Set a config value (admin)" />
+          <CmdRow cmd="protocol" desc="Show land protocol info and capabilities" />
+        </div>
+
         {/* ── BLOG ── */}
         <div className="cli-section">
           <div className="cli-section-title">
