@@ -29,5 +29,9 @@ export default {
     sessionTypes: {
       UNDERSTANDING_ORCHESTRATE: "understanding-orchestrate",
     },
+    cli: [
+      { command: "understand", description: "Start an understanding run on current tree", method: "POST", endpoint: "/root/:rootId/understandings" },
+      { command: "understandings", description: "List understanding runs", method: "GET", endpoint: "/root/:rootId/understandings" },
+    ],
   },
 };

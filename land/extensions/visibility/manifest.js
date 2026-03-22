@@ -17,5 +17,8 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
+    cli: [
+      { command: "visibility <public|private>", description: "Set tree visibility", method: "POST", endpoint: "/root/:rootId/visibility" },
+    ],
   },
 };

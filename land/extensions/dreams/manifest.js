@@ -23,5 +23,8 @@ export default {
     sessionTypes: {
       DREAM_ORCHESTRATE: "dream-orchestrate",
     },
+    cli: [
+      { command: "dream-time <time>", description: "Set daily dream time (HH:MM) for current tree", method: "POST", endpoint: "/root/:rootId/dream-time" },
+    ],
   },
 };

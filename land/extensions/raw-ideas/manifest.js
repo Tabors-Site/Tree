@@ -26,5 +26,8 @@ export default {
     sessionTypes: {
       RAW_IDEA_ORCHESTRATE: "raw-idea-orchestrate",
     },
+    cli: [
+      { command: "ideas", description: "List raw ideas", method: "GET", endpoint: "/user/:userId/raw-ideas" },
+    ],
   },
 };

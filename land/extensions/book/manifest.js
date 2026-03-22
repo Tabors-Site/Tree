@@ -19,5 +19,8 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
+    cli: [
+      { command: "book", description: "View compiled notes for current tree", method: "GET", endpoint: "/root/:rootId/book" },
+    ],
   },
 };

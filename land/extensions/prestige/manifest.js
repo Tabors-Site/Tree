@@ -21,5 +21,8 @@ export default {
       prestige: { cost: 1 },
     },
     sessionTypes: {},
+    cli: [
+      { command: "prestige", description: "Add new version to current node", method: "POST", endpoint: "/node/:nodeId/prestige" },
+    ],
   },
 };

@@ -17,5 +17,8 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
+    cli: [
+      { command: "deleted", description: "List soft-deleted branches", method: "GET", endpoint: "/user/:userId/deleted" },
+    ],
   },
 };
