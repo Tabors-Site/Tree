@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
+    "land": "cd land && node boot.js",
     "start": "cd land && node boot.js",
     "dev": "cd land && SITE_DEV=true node boot.js",
     "build": "cd site && npm run build",

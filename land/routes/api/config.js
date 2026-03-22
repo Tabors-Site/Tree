@@ -308,15 +308,15 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
       return res.status(400).json({ error: "No DIRECTORY_URL configured" });
     }
 
-    const { getLandIdentity } = await import("../../canopy/identity.js");
+    const { getLandIdentity, signCanopyToken } = await import("../../canopy/identity.js");
     const identity = getLandIdentity();
+    const token = await signCanopyToken("extension-publish", "directory");
 
     const dirRes = await fetch(`${directoryUrl}/extensions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-land-id": identity.landId,
-        "x-land-domain": identity.domain,
+        Authorization: `CanopyToken ${token}`,
       },
       body: JSON.stringify({
         manifest,

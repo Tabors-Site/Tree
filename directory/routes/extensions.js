@@ -1,6 +1,31 @@
 import { Router } from "express";
 import Extension from "../db/models/extension.js";
+import Land from "../db/models/land.js";
 import { verifyDirectoryAuth } from "../auth.js";
+
+/**
+ * Middleware to extract land identity from verified canopy auth payload
+ * and attach req.landId, req.landDomain, req.landName for route handlers.
+ */
+function attachLandIdentity() {
+  return async (req, res, next) => {
+    const payload = req.canopyAuth?.payload;
+    if (!payload) {
+      return res.status(401).json({ error: "No auth payload" });
+    }
+    req.landId = payload.landId;
+    req.landDomain = payload.iss || "";
+
+    // Look up the land name from the registry
+    if (req.landDomain) {
+      const land = await Land.findOne({ domain: req.landDomain }).select("name").lean();
+      req.landName = land?.name || "";
+    } else {
+      req.landName = "";
+    }
+    next();
+  };
+}
 
 const router = Router();
 
@@ -134,7 +159,7 @@ router.get("/:name/:version", async (req, res) => {
  * Publish an extension. Requires land authentication.
  * Body: { manifest, files, readme, tags, repoUrl }
  */
-router.post("/", verifyDirectoryAuth(), async (req, res) => {
+router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) => {
   try {
     const { manifest, files, readme, tags, repoUrl } = req.body;
 
@@ -220,7 +245,7 @@ router.post("/", verifyDirectoryAuth(), async (req, res) => {
  * DELETE /extensions/:name/:version
  * Unpublish a version. Requires land authentication (author only).
  */
-router.delete("/:name/:version", verifyDirectoryAuth(), async (req, res) => {
+router.delete("/:name/:version", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) => {
   try {
     const { name, version } = req.params;
 

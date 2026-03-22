@@ -100,7 +100,95 @@ async function interactiveSetup(existingEnv = {}) {
 
   fs.writeFileSync(envPath, buildEnvFile(values), "utf8");
   console.log(`\n  Configuration saved to ${envPath}\n`);
+
+  // Extension picker (first-time only)
+  await pickExtensions(values.DIRECTORY_URL);
+
   console.log("  Starting Land server...\n");
+}
+
+async function pickExtensions(directoryUrl) {
+  if (!directoryUrl) return;
+
+  let extensions;
+  try {
+    const fetch = (await import("node-fetch")).default;
+    console.log(`  Checking extension registry at ${directoryUrl}...`);
+    const res = await fetch(`${directoryUrl}/extensions`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    extensions = data.extensions || [];
+  } catch (err) {
+    console.log(`  Could not reach registry: ${err.message}`);
+    console.log("  You can install extensions later with the CLI: treeos ext install <name>\n");
+    return;
+  }
+
+  if (extensions.length === 0) {
+    console.log("  No extensions in registry.\n");
+    return;
+  }
+
+  const rl = (await import("readline/promises")).createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  console.log(`\n  ${extensions.length} extensions available. Select which to install:\n`);
+
+  const selected = [];
+  for (const ext of extensions) {
+    const answer = await rl.question(
+      `  [${selected.length}/${extensions.length}] ${ext.name} v${ext.version} . ${ext.description || ""} (Y/n): `
+    );
+    if (!answer.trim() || answer.toLowerCase().startsWith("y")) {
+      selected.push(ext);
+    }
+  }
+
+  rl.close();
+
+  if (selected.length === 0) {
+    console.log("\n  No extensions selected. Install later with: treeos ext install <name>\n");
+    return;
+  }
+
+  console.log(`\n  Installing ${selected.length} extensions...\n`);
+
+  const fetch = (await import("node-fetch")).default;
+  const extDir = path.join(__dirname, "extensions");
+
+  for (const ext of selected) {
+    try {
+      const res = await fetch(`${directoryUrl}/extensions/${ext.name}/${ext.version}`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) { console.log(`  ${ext.name}: skipped (HTTP ${res.status})`); continue; }
+
+      const data = await res.json();
+      if (!data.files || !data.files.length) { console.log(`  ${ext.name}: skipped (no files)`); continue; }
+
+      const targetDir = path.join(extDir, ext.name);
+      if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+      for (const file of data.files) {
+        const normalized = path.normalize(file.path);
+        if (normalized.startsWith("..") || path.isAbsolute(normalized)) continue;
+        const filePath = path.join(targetDir, normalized);
+        const fileDir = path.dirname(filePath);
+        if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
+        fs.writeFileSync(filePath, file.content, "utf8");
+      }
+
+      console.log(`  ${ext.name} v${ext.version} (${data.files.length} files)`);
+    } catch (err) {
+      console.log(`  ${ext.name}: failed (${err.message})`);
+    }
+  }
+
+  console.log();
 }
 
 async function boot() {
