@@ -3275,7 +3275,7 @@ export function renderSharedBookPage({
   <div class="top-nav">
     <div class="top-nav-content">
       <div class="nav-buttons">
-        <a href="/app" class="nav-button" onclick="event.preventDefault();window.top.location.href='/app';">Home</a>
+        <a href="/" class="nav-button" onclick="event.preventDefault();window.top.location.href='/';">Home</a>
         <button class="nav-button" id="copyUrlBtn">Copy URL</button>
         <button class="nav-button" id="copyTextBtn">Copy Text</button>
         <button class="nav-button" id="toggleTitlesBtn" onclick="toggleTitles()" title="Toggle Titles">Aa</button>

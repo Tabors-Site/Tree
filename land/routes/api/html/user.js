@@ -3549,7 +3549,7 @@ export function renderResetPasswordExpired() {
 </head>
 <body>
   <div class="brand-header">
-    <a href="/app" style="text-decoration: none;">
+    <a href="/" style="text-decoration: none;">
       <div class="brand-logo">🌳</div>
       <h1 class="brand-title">TreeOS</h1>
     </a>
@@ -3846,7 +3846,7 @@ export function renderResetPasswordForm({ token }) {
 </head>
 <body>
   <div class="brand-header">
-    <a href="/app" style="text-decoration: none;">
+    <a href="/" style="text-decoration: none;">
       <div class="brand-logo">🌳</div>
       <h1 class="brand-title">TreeOS</h1>
     </a>
@@ -8665,7 +8665,7 @@ input:focus {
         <a class="back-link" href="/api/v1/user/${userId}${tokenQS}">
           ← Back to Profile
         </a>
-        <a class="back-link" target="_top" href="/app">
+        <a class="back-link" target="_top" href="/">
           ← Back to ${new URL(getLandUrl()).hostname}
         </a>
       </div>
