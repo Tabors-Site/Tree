@@ -70,6 +70,14 @@ program
           cmds: ["blogs", "blog"],
         },
         {
+          title: "API Keys",
+          cmds: ["api-keys"],
+        },
+        {
+          title: "LLM Connections",
+          cmds: ["llms", "llm"],
+        },
+        {
           title: "Land Config",
           cmds: ["config"],
         },
@@ -146,6 +154,8 @@ require("./commands/ai")(program);
 require("./commands/blog")(program);
 require("./commands/config")(program);
 require("./commands/canopy")(program);
+require("./commands/apikeys")(program);
+require("./commands/llm")(program);
 require("./commands/extensions")(program);
 
 // Dynamic commands from connected land's protocol (must be last)

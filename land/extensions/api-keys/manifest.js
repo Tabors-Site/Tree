@@ -17,8 +17,6 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
-    cli: [
-      { command: "api-keys", description: "List your API keys", method: "GET", endpoint: "/user/:userId/api-keys" },
-    ],
+    // CLI commands hardcoded in cli/commands/apikeys.js
   },
 };

@@ -170,6 +170,34 @@ class TreeAPI {
     return "https://dir.treeos.ai";
   }
 
+  // ── API Keys ────────────────────────────────────────────────────────────
+  listApiKeys(userId) {
+    return this.get(`/user/${userId}/api-keys`);
+  }
+  createApiKey(userId, name) {
+    return this.post(`/user/${userId}/api-keys`, { name });
+  }
+  deleteApiKey(userId, keyId) {
+    return this.del(`/user/${userId}/api-keys/${keyId}`);
+  }
+
+  // ── Custom LLM ─────────────────────────────────────────────────────────
+  listLlmConnections(userId) {
+    return this.get(`/user/${userId}/custom-llm`);
+  }
+  addLlmConnection(userId, { name, baseUrl, apiKey, model }) {
+    return this.post(`/user/${userId}/custom-llm`, { name, baseUrl, apiKey, model });
+  }
+  deleteLlmConnection(userId, connectionId) {
+    return this.del(`/user/${userId}/custom-llm/${connectionId}`);
+  }
+  assignLlm(userId, slot, connectionId) {
+    return this.post(`/user/${userId}/llm-assign`, { slot, connectionId });
+  }
+  assignTreeLlm(rootId, slot, connectionId) {
+    return this.post(`/root/${rootId}/llm-assign`, { slot, connectionId });
+  }
+
   // ── User ─────────────────────────────────────────────────────────────────
   me() {
     return this.get("/me");
