@@ -53,14 +53,22 @@ export function renderDashboard({ lands, trees, stats }) {
     : '<div class="empty-state">No lands registered yet.</div>';
 
   const treeRows = trees && trees.length > 0
-    ? trees.map((tree) => `
+    ? trees.map((tree) => {
+        const base = escapeHtml(tree.landBaseUrl || "");
+        const viewUrl = base ? `${base}/api/v1/root/${tree.rootId}?html` : "";
+        const talkUrl = base ? `${base}/api/v1/root/${tree.rootId}/query?html` : "";
+        return `
         <tr>
           <td>${escapeHtml(tree.name || "Untitled")}</td>
           <td>${escapeHtml(tree.ownerUsername || "unknown")}</td>
           <td><code>${escapeHtml(tree.landDomain || "")}</code></td>
-        </tr>
-      `).join("")
-    : '<tr><td colspan="3" class="empty-state">No public trees indexed yet.</td></tr>';
+          <td class="action-cell">
+            ${viewUrl ? `<a href="${viewUrl}" target="_blank" rel="noopener" class="btn-sm btn-view">View</a>` : ""}
+            ${talkUrl ? `<a href="${talkUrl}" target="_blank" rel="noopener" class="btn-sm btn-talk">Talk</a>` : ""}
+          </td>
+        </tr>`;
+      }).join("")
+    : '<tr><td colspan="4" class="empty-state">No public trees indexed yet.</td></tr>';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -309,6 +317,33 @@ export function renderDashboard({ lands, trees, stats }) {
       border-radius: 4px;
     }
 
+    .action-cell { white-space: nowrap; text-align: right; }
+
+    .btn-sm {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s;
+      margin-left: 6px;
+    }
+
+    .btn-view {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .btn-view:hover { background: rgba(255,255,255,0.15); }
+
+    .btn-talk {
+      background: rgba(72,187,120,0.12);
+      color: rgba(72,187,120,0.9);
+      border: 1px solid rgba(72,187,120,0.25);
+    }
+    .btn-talk:hover { background: rgba(72,187,120,0.22); }
+
     .empty-state {
       text-align: center;
       padding: 32px 16px;
@@ -414,6 +449,7 @@ export function renderDashboard({ lands, trees, stats }) {
               <th>Tree</th>
               <th>Owner</th>
               <th>Land</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="tree-body">
@@ -494,15 +530,22 @@ export function renderDashboard({ lands, trees, stats }) {
         var tbody = document.getElementById("tree-body");
 
         if (!data.trees || data.trees.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No trees found.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No trees found.</td></tr>';
           return;
         }
 
         tbody.innerHTML = data.trees.map(function(tree) {
+          var base = tree.landBaseUrl || "";
+          var viewUrl = base ? base + "/api/v1/root/" + tree.rootId + "?html" : "";
+          var talkUrl = base ? base + "/api/v1/root/" + tree.rootId + "/query?html" : "";
           return '<tr>' +
             '<td>' + escapeHtml(tree.name || "Untitled") + '</td>' +
             '<td>' + escapeHtml(tree.ownerUsername || "unknown") + '</td>' +
             '<td><code>' + escapeHtml(tree.landDomain || "") + '</code></td>' +
+            '<td class="action-cell">' +
+              (viewUrl ? '<a href="' + viewUrl + '" target="_blank" rel="noopener" class="btn-sm btn-view">View</a>' : '') +
+              (talkUrl ? '<a href="' + talkUrl + '" target="_blank" rel="noopener" class="btn-sm btn-talk">Talk</a>' : '') +
+            '</td>' +
           '</tr>';
         }).join("");
       } catch (err) {

@@ -128,6 +128,7 @@ router.post(
             ownerUsername: t.ownerUsername || "",
             tags: t.tags || [],
             nodeCount: t.nodeCount || 0,
+            queryAvailable: !!t.queryAvailable,
             lastUpdated: new Date(),
             indexedAt: new Date(),
           }));
@@ -260,7 +261,7 @@ router.get("/search/trees", async (req, res) => {
 
     const [trees, total] = await Promise.all([
       PublicTree.find(filter)
-        .select("rootId name description ownerUsername landDomain tags nodeCount")
+        .select("rootId name description ownerUsername landDomain tags nodeCount queryAvailable")
         .sort({ lastUpdated: -1 })
         .skip(skip)
         .limit(limit)
@@ -268,7 +269,22 @@ router.get("/search/trees", async (req, res) => {
       PublicTree.countDocuments(filter),
     ]);
 
-    return res.json({ success: true, trees, total, page });
+    // Attach baseUrl and siteUrl from Land model for building links
+    const landDomains = [...new Set(trees.map((t) => t.landDomain))];
+    const lands = await Land.find({ domain: { $in: landDomains } })
+      .select("domain baseUrl siteUrl")
+      .lean();
+    const landMap = Object.fromEntries(lands.map((l) => [l.domain, l]));
+
+    const enriched = trees.map((t) => {
+      const land = landMap[t.landDomain] || {};
+      return {
+        ...t,
+        landBaseUrl: land.siteUrl || land.baseUrl || null,
+      };
+    });
+
+    return res.json({ success: true, trees: enriched, total, page });
   } catch (err) {
     console.error("[Directory] Search trees error:", err.message);
     return res.status(500).json({ success: false, error: "Internal server error" });

@@ -391,7 +391,7 @@ router.get("/node/:nodeId/:version", urlAuth, async (req, res) => {
 router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params; // parent id
-    const { name } = req.body;
+    const { name, type, schedule, reeffectTime, values, goals, note } = req.body;
     const userId = req.userId;
 
     if (!name || typeof name !== "string") {
@@ -413,14 +413,19 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
     // Create child
     const childNode = await createNewNode(
       name,
-      null, // schedule
-      null, // reeffectTime
+      schedule || null,
+      reeffectTime || null,
       parentNode._id, // parentNodeID
       false, // isRoot
-      userId, // userId (from token)
-      {}, // values
-      {}, // goals
-      null, // note
+      userId,
+      values || {},
+      goals || {},
+      note || null,
+      null, // validatedUser
+      false, // wasAi
+      null, // aiChatId
+      null, // sessionId
+      type || null,
     );
 
     // HTML redirect support (same pattern)

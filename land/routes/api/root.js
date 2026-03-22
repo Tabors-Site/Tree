@@ -21,6 +21,7 @@ import {
   renderGateway,
   renderValuesPage,
 } from "./html/root.js";
+import { renderQueryPage } from "./html/query.js";
 
 const router = express.Router();
 
@@ -152,6 +153,42 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 });
 
 // GET /root/:rootId/all — full tree with versions, notes, contributions, scripts
+// GET /root/:rootId/query?html — Public query page
+router.get("/root/:rootId/query", urlAuth, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const wantHtml = req.query.html !== undefined;
+
+    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      return res.status(400).json({ error: "Use POST /root/:rootId/query to submit queries. Add ?html for the query page." });
+    }
+
+    const root = await Node.findById(rootId)
+      .select("name rootOwner visibility llmAssignments")
+      .populate("rootOwner", "username")
+      .lean();
+
+    if (!root) return res.status(404).json({ error: "Tree not found" });
+
+    const isPublicAccess = !!req.isPublicAccess;
+    const isAuthenticated = !!req.userId;
+    const queryAvailable = !!(root.llmAssignments?.placement) || isAuthenticated;
+
+    return res.send(
+      renderQueryPage({
+        treeName: root.name || "Untitled",
+        ownerUsername: root.rootOwner?.username || "unknown",
+        rootId,
+        queryAvailable,
+        isAuthenticated,
+      }),
+    );
+  } catch (err) {
+    console.error("Error in /root/:rootId/query:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/root/:rootId/all", urlAuth, async (req, res) => {
   try {
     const { rootId } = req.params;
@@ -170,6 +207,22 @@ router.get("/root/:rootId/all", urlAuth, async (req, res) => {
 
     await getAllData(fakeReq, fakeRes);
     if (!allData) return res.status(500).json({ error: "Failed to fetch tree data" });
+
+    // Strip sensitive payment/transaction data from contributions
+    const stripContributions = (node) => {
+      if (node.contributions) {
+        node.contributions = node.contributions.map((c) => {
+          const clean = { ...c._doc || c };
+          delete clean.purchaseMeta;
+          delete clean.transactionMeta;
+          return clean;
+        });
+      }
+      if (node.children) {
+        node.children.forEach(stripContributions);
+      }
+    };
+    stripContributions(allData);
 
     return res.json(allData);
   } catch (err) {

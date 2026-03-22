@@ -11,6 +11,7 @@ const PublicTreeSchema = new mongoose.Schema({
   ownerUsername: { type: String, default: "" },
   tags: { type: [String], default: [] },
   nodeCount: { type: Number, default: 0 },
+  queryAvailable: { type: Boolean, default: false },
   lastUpdated: { type: Date, default: Date.now },
   indexedAt: { type: Date, default: Date.now },
 });

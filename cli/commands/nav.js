@@ -240,8 +240,19 @@ module.exports = (program) => {
         return;
       }
 
-      // ── cd / — go to land level ──
+      // ── cd / — go to tree root (if inside a tree), otherwise stay at land ──
       if (name === "/") {
+        if (cfg.activeRootId && cfg.pathStack.length > 0) {
+          // Inside a tree past root — go back to tree root
+          cfg.pathStack = [];
+          save(cfg);
+        }
+        // If at tree root or no tree selected, / is already land — no-op
+        return;
+      }
+
+      // ── cd land — explicit land escape from anywhere ──
+      if (name === "land") {
         goLand(cfg);
         save(cfg);
         return;

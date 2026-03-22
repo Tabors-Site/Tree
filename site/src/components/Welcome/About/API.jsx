@@ -323,6 +323,20 @@ const ApiAccessSection = () => {
               Same orchestration as Tree Chat, but the classifier intent is forced
               to query-only. Even if the message sounds like a placement request,
               the AI will only respond with information and never edit the tree.
+              On public trees, this endpoint works without authentication if the tree owner has an LLM assigned to the placement slot (owner pays energy). Authenticated visitors from other lands can also query using their own LLM via canopy proxy.
+            </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/query?html</span>
+            </div>
+            <div className="ep-desc">
+              Renders a lightweight query page for interacting with the tree. On public trees, anyone can access this page without authentication.
+            </div>
+            <div className="ep-note">
+              Requires <code>ENABLE_FRONTEND_HTML=true</code>. The page provides a simple chat interface for sending queries and viewing responses. No tree editing, no mode switching.
             </div>
           </div>
         </div>

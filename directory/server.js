@@ -48,7 +48,7 @@ app.get("/humans.txt", (req, res) => res.type("text/plain").sendFile(join(__dirn
 // Dashboard page at root
 app.get("/", async (req, res) => {
   try {
-    const [lands, trees, landCount, treeCount, activeLands] = await Promise.all([
+    const [lands, rawTrees, landCount, treeCount, activeLands] = await Promise.all([
       Land.find({ status: { $ne: "dead" } })
         .sort({ lastSeenAt: -1 })
         .limit(50)
@@ -61,6 +61,13 @@ app.get("/", async (req, res) => {
       PublicTree.countDocuments(),
       Land.countDocuments({ status: "active" }),
     ]);
+
+    // Enrich trees with land baseUrl for building links
+    const landMap = Object.fromEntries(lands.map((l) => [l.domain, l]));
+    const trees = rawTrees.map((t) => {
+      const land = landMap[t.landDomain] || {};
+      return { ...t, landBaseUrl: land.siteUrl || land.baseUrl || null };
+    });
 
     const html = renderDashboard({
       lands,

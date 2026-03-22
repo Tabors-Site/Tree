@@ -718,7 +718,7 @@ router.post("/user/reset-password/:token", async (req, res) => {
 router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
   try {
     const { userId } = req.params;
-    const { name } = req.body;
+    const { name, type } = req.body;
 
     if (req.userId.toString() !== userId.toString()) {
       return res.status(403).json({ success: false, error: "Not authorized" });
@@ -742,6 +742,10 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
       {},
       null,
       req.user,
+      false, // wasAi
+      null, // aiChatId
+      null, // sessionId
+      type || null,
     );
 
     // HTML redirect support

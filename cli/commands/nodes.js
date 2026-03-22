@@ -105,6 +105,80 @@ module.exports = (program) => {
       }
     });
 
+  program
+    .command("what")
+    .description("Show details of the current node")
+    .action(async () => {
+      const cfg = requireAuth();
+      if (!cfg.activeRootId)
+        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const data = await api.getNode(nodeId);
+        const node = data.node || data;
+        const ver = node.versions?.[node.prestige] || {};
+
+        console.log(chalk.bold(node.name));
+        console.log(chalk.dim("ID:       ") + node._id);
+        console.log(chalk.dim("Type:     ") + (node.type || "none"));
+        console.log(chalk.dim("Status:   ") + (ver.status || "active"));
+        console.log(chalk.dim("Prestige: ") + (node.prestige || 0));
+
+        if (ver.schedule) {
+          console.log(chalk.dim("Schedule: ") + new Date(ver.schedule).toLocaleString());
+          if (ver.reeffectTime) console.log(chalk.dim("Reeffect: ") + ver.reeffectTime + "h");
+        }
+
+        const values = ver.values instanceof Object ? ver.values : {};
+        const valKeys = Object.keys(values);
+        if (valKeys.length > 0) {
+          console.log(chalk.dim("\nValues:"));
+          for (const k of valKeys) {
+            const goal = ver.goals?.[k];
+            const line = `  ${k}: ${values[k]}` + (goal !== undefined ? ` / ${goal}` : "");
+            console.log(line);
+          }
+        }
+
+        const children = getChildren(data);
+        if (children.length > 0) {
+          console.log(chalk.dim(`\nChildren: ${children.length}`));
+          for (const c of children.slice(0, 10)) {
+            console.log(`  ${c.name || c._id}`);
+          }
+          if (children.length > 10) console.log(chalk.dim(`  ... and ${children.length - 10} more`));
+        }
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("type [newType]")
+    .description("Set or clear the current node's type (goal, plan, task, knowledge, resource, identity, or custom)")
+    .action(async (newType) => {
+      const cfg = requireAuth();
+      if (!cfg.activeRootId)
+        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        if (!newType) {
+          // Show current type
+          const data = await api.getNode(nodeId);
+          const node = data.node || data;
+          console.log(node.type ? chalk.green(node.type) : chalk.dim("none"));
+          return;
+        }
+        const typeVal = newType === "none" || newType === "null" || newType === "clear" ? null : newType;
+        await api.post(`/node/${nodeId}/editType`, { type: typeVal });
+        console.log(chalk.green(`✓ Type ${typeVal ? `set to "${typeVal}"` : "cleared"}`));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
   for (const [cmd, stat] of [["complete", "completed"], ["activate", "active"], ["trim", "trimmed"]]) {
     program
       .command(cmd)
