@@ -3,11 +3,6 @@ import {
   register,
   login,
   logout,
-  setHtmlShareToken,
-  getHtmlShareToken,
-  forgotPassword,
-  resetPassword,
-  verifyEmail,
 } from "../core/users.js";
 import authenticate from "../middleware/authenticate.js";
 import User from "../db/models/user.js";
@@ -16,7 +11,6 @@ import CustomLlmConnection from "../db/models/customLlmConnection.js";
 import {
   renderLoginPage,
   renderRegisterPage,
-  renderForgotPasswordPage,
 } from "../core/login.js";
 
 import rateLimit from "express-rate-limit";
@@ -44,17 +38,6 @@ const loginLimiter = rateLimit({
   },
 });
 
-const emailLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 3,
-  handler: (req, res) => {
-    res.status(429).json({
-      error: "Too many email requests",
-      message: "Too many email requests.",
-    });
-  },
-});
-
 // API routes (mounted at /api/v1 by routeHandler.js)
 export const authApiRouter = express.Router();
 
@@ -66,13 +49,38 @@ authApiRouter.post(
   "/setHTMLShareToken",
   authenticate,
   loginLimiter,
-  setHtmlShareToken,
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      let { htmlShareToken } = req.body;
+      if (typeof htmlShareToken !== "string") return res.status(400).json({ message: "htmlShareToken must be a string" });
+      htmlShareToken = htmlShareToken.trim();
+      if (htmlShareToken.length > 128 || htmlShareToken.length < 1) return res.status(400).json({ message: "htmlShareToken must be 1 to 128 characters" });
+      if (!/^[A-Za-z0-9\-_.~]+$/.test(htmlShareToken)) return res.status(400).json({ message: "htmlShareToken may only contain URL-safe characters" });
+      user.htmlShareToken = htmlShareToken;
+      await user.save();
+      return res.json({ htmlShareToken: user.htmlShareToken });
+    } catch (err) {
+      console.error("[setHtmlShareToken]", err);
+      res.status(500).json({ message: "Failed to set html share token" });
+    }
+  },
 );
 
 authApiRouter.post(
   "/verify-token",
   authenticate,
-  getHtmlShareToken,
+  async (req, res, next) => {
+    try {
+      const user = await User.findById(req.userId).select("htmlShareToken").lean().exec();
+      req.HTMLShareToken = user?.htmlShareToken ?? null;
+      next();
+    } catch (err) {
+      console.error("[getHtmlShareToken]", err);
+      res.status(500).json({ message: "Failed to fetch HTML share token" });
+    }
+  },
   async (req, res) => {
     let hasLlm = false;
     try {
@@ -99,9 +107,7 @@ authApiRouter.post(
   },
 );
 
-authApiRouter.post("/forgot-password", emailLimiter, forgotPassword);
-authApiRouter.post("/user/reset-password", resetPassword);
-authApiRouter.get("/user/verify/:token", verifyEmail);
+// Email routes (forgot-password, reset-password, verify) moved to email extension
 
 // HTML pages + their POST handlers (mounted at / by routesHandler.js)
 export const authPageRouter = express.Router();
@@ -110,8 +116,6 @@ export const authPageRouter = express.Router();
 authPageRouter.post("/register", registerLimiter, register);
 authPageRouter.post("/login", loginLimiter, login);
 authPageRouter.post("/logout", authenticate, logout);
-authPageRouter.post("/forgot-password", emailLimiter, forgotPassword);
-authPageRouter.post("/user/reset-password", resetPassword);
 
 authPageRouter.get("/login", (req, res, next) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
@@ -121,7 +125,4 @@ authPageRouter.get("/register", (req, res, next) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
   renderRegisterPage(req, res, next);
 });
-authPageRouter.get("/forgot-password", (req, res, next) => {
-  if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
-  renderForgotPasswordPage(req, res, next);
-});
+// forgot-password page route moved to email extension

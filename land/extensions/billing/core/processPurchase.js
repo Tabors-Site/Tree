@@ -1,6 +1,7 @@
 import User from "../../../db/models/user.js";
 import { upgradeUserPlan } from "./upgradePlan.js";
 import { clearUserClientCache } from "../../../ws/conversation.js";
+import { getEnergy, setEnergy, getUserMeta, setUserMeta } from "../../../core/tree/userMetadata.js";
 
 /* ===============================
    CONFIG
@@ -51,15 +52,17 @@ export async function processPurchase({
       upgradeUserPlan(user, plan);
     }
 
-    // ⏳ Extend subscription time safely
+    // Extend subscription time safely
+    const billing = getUserMeta(user, "billing");
     const baseTime = Math.max(
       Date.now(),
-      user.planExpiresAt?.getTime() || 0
+      billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0)
     );
 
-    user.planExpiresAt = new Date(
-      baseTime + PLAN_DURATION_DAYS * 24 * 60 * 60 * 1000
-    );
+    setUserMeta(user, "billing", {
+      ...billing,
+      planExpiresAt: new Date(baseTime + PLAN_DURATION_DAYS * 24 * 60 * 60 * 1000),
+    });
   }
 
   /* ===============================
@@ -67,7 +70,9 @@ export async function processPurchase({
   =============================== */
 
   if (energyAmount > 0) {
-    user.additionalEnergy.amount += energyAmount;
+    const energy = getEnergy(user);
+    energy.additional.amount += energyAmount;
+    setEnergy(user, energy);
   }
 
   await user.save();

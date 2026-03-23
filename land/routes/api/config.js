@@ -371,16 +371,16 @@ router.get("/land/root", authenticateOrPublic, async (req, res) => {
 
     // Fetch all Land root children with the fields we need to filter
     const children = await Node.find({ _id: { $in: landRoot.children } })
-      .select("_id name isSystem systemRole rootOwner contributors visibility llmDefault metadata")
+      .select("_id name isSystem systemRole rootOwner contributors llmDefault metadata")
       .lean();
 
     // Filter: anonymous sees only public trees, authenticated sees system + owned + contributing + public
     const visible = children.filter((c) => {
-      if (isAnon) return c.visibility === "public";
+      if (isAnon) return ((c.metadata?.visibility?.level || "private") === "public");
       if (c.isSystem) return true;
       if (c.rootOwner && String(c.rootOwner) === String(userId)) return true;
       if (c.contributors && c.contributors.map(String).includes(String(userId))) return true;
-      if (c.visibility === "public") return true;
+      if (((c.metadata?.visibility?.level || "private") === "public")) return true;
       return false;
     });
 
@@ -394,8 +394,8 @@ router.get("/land/root", authenticateOrPublic, async (req, res) => {
         systemRole: isAnon ? null : (c.systemRole || null),
         rootOwner: c.rootOwner || null,
         isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(userId),
-        isPublic: c.visibility === "public" || false,
-        queryAvailable: c.visibility === "public" && !!(c.llmDefault && c.llmDefault !== "none"),
+        isPublic: ((c.metadata?.visibility?.level || "private") === "public") || false,
+        queryAvailable: ((c.metadata?.visibility?.level || "private") === "public") && !!(c.llmDefault && c.llmDefault !== "none"),
         metadata: c.metadata || null,
       })),
     });

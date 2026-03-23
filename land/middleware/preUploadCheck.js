@@ -1,4 +1,5 @@
 import User from "../db/models/user.js";
+import { getEnergy } from "../core/tree/userMetadata.js";
 // Energy: dynamic import, no-op if extension not installed
 let calculateFileEnergy = () => 0;
 let maybeResetEnergy = () => false;
@@ -58,9 +59,10 @@ export default function preUploadCheck(req, res, next) {
       const sizeMB = Math.ceil(contentLength / (1024 * 1024));
       if (sizeMB >= 1) {
         const cost = calculateFileEnergy(sizeMB);
+        const energy = getEnergy(user);
         const totalEnergy =
-          (user.availableEnergy?.amount || 0) +
-          (user.additionalEnergy?.amount || 0);
+          (energy.available?.amount || 0) +
+          (energy.additional?.amount || 0);
 
         if (totalEnergy < cost) {
           return res.status(400).json({

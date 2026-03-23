@@ -3,6 +3,7 @@ import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
 
 import User from "../../db/models/user.js";
+import { getEnergy, getUserMeta } from "../../core/tree/userMetadata.js";
 
 // Energy: dynamic import, no-op if extension not installed
 let maybeResetEnergy = () => false;
@@ -60,8 +61,9 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 
     const roots = user.roots || [];
     const profileType = user.profileType || "basic";
-    const energy = user.availableEnergy;
-    const extraEnergy = user.additionalEnergy;
+    const energyData = getEnergy(user);
+    const energy = energyData.available;
+    const extraEnergy = energyData.additional;
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
@@ -76,7 +78,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     }
 
     const ENERGY_RESET_MS = 24 * 60 * 60 * 1000;
-    const storageUsedKB = user.storageUsage || 0;
+    const storageUsedKB = energyData.storageUsage || 0;
 
     const lastResetAt = energy?.lastResetAt
       ? new Date(energy.lastResetAt)
@@ -100,7 +102,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         roots,
         profileType,
         energy,
-        extraEnergy: user.additionalEnergy,
+        extraEnergy,
         queryString,
         resetTimeLabel,
         storageUsedKB,

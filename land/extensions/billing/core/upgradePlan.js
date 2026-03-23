@@ -1,5 +1,6 @@
 let DAILY_LIMITS = {};
 try { ({ DAILY_LIMITS } = await import("../../energy/core.js")); } catch {}
+import { getEnergy, setEnergy, getUserMeta } from "../../../core/tree/userMetadata.js";
 
 const PLAN_DAILY_VALUE = {
   basic: 0,
@@ -11,16 +12,19 @@ export function upgradeUserPlan(user, newPlan) {
   const now = Date.now();
 
   const oldPlan = user.profileType;
-  const expiresAt = user.planExpiresAt?.getTime() || 0;
+  const billing = getUserMeta(user, "billing");
+  const expiresAt = billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0);
 
-  // ❌ Only allow upgrades here
+  // Only allow upgrades here
   if (PLAN_DAILY_VALUE[newPlan] <= PLAN_DAILY_VALUE[oldPlan]) {
     throw new Error("Not an upgrade");
   }
 
   /* ===============================
-     Convert Remaining Time → Energy
+     Convert Remaining Time -> Energy
      =============================== */
+
+  const energy = getEnergy(user);
 
   if (expiresAt > now && oldPlan !== "basic" && oldPlan !== "premium") {
     const remainingDays = Math.ceil((expiresAt - now) / (24 * 60 * 60 * 1000));
@@ -29,7 +33,7 @@ export function upgradeUserPlan(user, newPlan) {
 
     const compensationEnergy = remainingDays * energyPerDay;
 
-    user.additionalEnergy.amount += compensationEnergy;
+    energy.additional.amount += compensationEnergy;
   }
 
   /* ===============================
@@ -38,9 +42,9 @@ export function upgradeUserPlan(user, newPlan) {
 
   user.profileType = newPlan;
 
-  user.availableEnergy.amount = DAILY_LIMITS[newPlan] ?? DAILY_LIMITS.basic;
-
-  user.availableEnergy.lastResetAt = new Date();
+  energy.available.amount = DAILY_LIMITS[newPlan] ?? DAILY_LIMITS.basic;
+  energy.available.lastResetAt = new Date();
+  setEnergy(user, energy);
 
   return user;
 }

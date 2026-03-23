@@ -8,6 +8,7 @@ import dns from "dns/promises";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { getUserMeta } from "../tree/userMetadata.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -143,8 +144,9 @@ function validateCustomBaseUrl(baseUrl) {
 function hasPaidPlan(user) {
   if (!user) return false;
   if (user.profileType === "basic") return false;
-  if (!user.planExpiresAt) return false;
-  return user.planExpiresAt > new Date();
+  const billing = getUserMeta(user, "billing");
+  if (!billing.planExpiresAt) return false;
+  return new Date(billing.planExpiresAt) > new Date();
 }
 
 function validateInputs(baseUrl, apiKey, model, requireApiKey) {

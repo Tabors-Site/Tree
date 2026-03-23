@@ -1471,8 +1471,8 @@ ${
     <select id="visibilitySelect"
       style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
              background:rgba(255,255,255,0.06);color:#fff;font-size:0.95rem;min-width:140px">
-      <option value="private" ${(rootMeta.visibility || "private") === "private" ? "selected" : ""}>Private</option>
-      <option value="public" ${rootMeta.visibility === "public" ? "selected" : ""}>Public</option>
+      <option value="private" ${(rootMeta.metadata?.visibility?.level || "private") === "private" ? "selected" : ""}>Private</option>
+      <option value="public" ${rootMeta.metadata?.visibility?.level === "public" ? "selected" : ""}>Public</option>
     </select>
     <button onclick="saveVisibility()" style="padding:8px 14px;border-radius:8px;
       border:1px solid rgba(72,187,120,0.4);background:rgba(72,187,120,0.15);
@@ -1490,7 +1490,7 @@ ${
     and update tree understanding.
   </p>
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <input type="time" id="dreamTimeInput" value="${rootMeta.dreamTime || ""}"
+    <input type="time" id="dreamTimeInput" value="${rootMeta.metadata?.dreams?.dreamTime || ""}"
       style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
              background:rgba(255,255,255,0.06);color:#fff;font-size:0.95rem" />
     <button onclick="saveDreamTime()" style="padding:8px 14px;border-radius:8px;
@@ -1501,7 +1501,7 @@ ${
       color:rgba(255,107,107,0.8);cursor:pointer">Disable</button>
     <span id="dreamTimeStatus" style="display:none;font-size:0.85rem"></span>
   </div>
-  ${rootMeta.lastDreamAt ? `<p style="color:rgba(255,255,255,0.6);font-size:0.8rem;margin:8px 0 0">Last dream: ${new Date(rootMeta.lastDreamAt).toLocaleString()}</p>` : ""}
+  ${rootMeta.metadata?.dreams?.lastDreamAt ? `<p style="color:rgba(255,255,255,0.6);font-size:0.8rem;margin:8px 0 0">Last dream: ${new Date(rootMeta.metadata?.dreams?.lastDreamAt).toLocaleString()}</p>` : ""}
 </div>
   ` : ""}
 

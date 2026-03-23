@@ -5,6 +5,7 @@ import Node from "../../db/models/node.js";
 import Note from "../../db/models/notes.js";
 import User from "../../db/models/user.js";
 import { logContribution } from "../../db/utils.js";
+import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
 let useEnergy = async () => ({ energyUsed: 0 });
 try { ({ useEnergy } = await import("../energy/core.js")); } catch {}
 
@@ -492,7 +493,7 @@ async function toggleAutoPlace({ userId, enabled }) {
     throw new Error("enabled must be a boolean");
 
   const user = await User.findById(userId).select(
-    "profileType rawIdeaAutoPlace",
+    "profileType metadata",
   );
   if (!user) throw new Error("User not found");
 
@@ -502,7 +503,9 @@ async function toggleAutoPlace({ userId, enabled }) {
     );
   }
 
-  user.rawIdeaAutoPlace = enabled;
+  const rawIdeas = getUserMeta(user, "rawIdeas");
+  rawIdeas.autoPlace = enabled;
+  setUserMeta(user, "rawIdeas", rawIdeas);
   await user.save();
 
   return { message: `Auto-place ${enabled ? "enabled" : "disabled"}`, enabled };

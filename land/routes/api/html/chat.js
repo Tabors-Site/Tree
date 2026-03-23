@@ -1227,11 +1227,11 @@ export function renderChat({ username, userId, treesJSON, trees }) {
 
         // Dream time config (only when inside a tree and user is owner)
         if (activeRootId && data.isOwner) {
-          if (data.dreamTime) {
+          if (data.metadata?.dreams?.dreamTime) {
             html += '<div class="dream-config">' +
               '<div class="dream-config-label">Dream schedule</div>' +
               '<div class="dream-config-row">' +
-                '<input type="time" id="dreamTimeInput" value="' + escapeHtml(data.dreamTime) + '" />' +
+                '<input type="time" id="dreamTimeInput" value="' + escapeHtml(data.metadata?.dreams?.dreamTime) + '" />' +
                 '<button class="dream-config-save" onclick="saveDreamTime()">Save</button>' +
                 '<button class="dream-config-off" onclick="disableDreamTime()">Turn Off</button>' +
               '</div>' +

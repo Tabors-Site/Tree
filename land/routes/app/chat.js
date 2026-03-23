@@ -1295,11 +1295,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
         // Dream time config (only when inside a tree and user is owner)
         if (activeRootId && data.isOwner) {
-          if (data.dreamTime) {
+          if (data.metadata?.dreams?.dreamTime) {
             html += '<div class="dream-config">' +
               '<div class="dream-config-label">Dream schedule</div>' +
               '<div class="dream-config-row">' +
-                '<input type="time" id="dreamTimeInput" value="' + escapeHtml(data.dreamTime) + '" />' +
+                '<input type="time" id="dreamTimeInput" value="' + escapeHtml(data.metadata?.dreams?.dreamTime) + '" />' +
                 '<button class="dream-config-save" onclick="saveDreamTime()">Save</button>' +
                 '<button class="dream-config-off" onclick="disableDreamTime()">Turn Off</button>' +
               '</div>' +
@@ -1620,10 +1620,10 @@ router.get("/chat/notifications", authenticateLite, async (req, res) => {
     let isOwner = false;
     if (rootId) {
       const rootNode = await Node.findById(rootId)
-        .select("dreamTime rootOwner")
+        .select("metadata rootOwner")
         .lean();
       if (rootNode) {
-        dreamTime = rootNode.dreamTime || null;
+        dreamTime = rootNode.metadata?.dreams?.dreamTime || null;
         isOwner = rootNode.rootOwner?.toString() === req.userId.toString();
       }
     }

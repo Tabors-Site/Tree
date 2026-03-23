@@ -5,6 +5,7 @@
 import path from "path";
 import mime from "mime-types";
 import { getLandUrl } from "../../../canopy/identity.js";
+import { getRawIdeaAutoPlace } from "../../../core/tree/userMetadata.js";
 
 function escapeHtml(str) {
   return String(str || "")
@@ -4849,7 +4850,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
         </div>
         <div
           id="autoPlaceToggle"
-          class="auto-place-toggle${user.rawIdeaAutoPlace !== false ? " active" : ""}${!AUTO_PLACE_ELIGIBLE.includes(user.profileType) ? " muted" : ""}"
+          class="auto-place-toggle${getRawIdeaAutoPlace(user) !== false ? " active" : ""}${!AUTO_PLACE_ELIGIBLE.includes(user.profileType) ? " muted" : ""}"
           onclick="${AUTO_PLACE_ELIGIBLE.includes(user.profileType) ? "toggleAutoPlace()" : ""}"
         >
           <div class="auto-place-toggle-knob"></div>

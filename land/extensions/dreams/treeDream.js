@@ -232,7 +232,7 @@ export async function runTreeDreamJob() {
       rootOwner: { $nin: [null, "SYSTEM"] },
       dreamTime: { $ne: null },
     })
-      .select("_id name rootOwner children dreamTime lastDreamAt")
+      .select("_id name rootOwner children metadata")
       .lean();
 
     if (rootNodes.length === 0) return;
@@ -245,12 +245,12 @@ export async function runTreeDreamJob() {
 
     for (const rootNode of rootNodes) {
       // Parse dreamTime "HH:MM" → minutes since midnight
-      const [hours, minutes] = (rootNode.dreamTime || "")
+      const [hours, minutes] = (rootNode.metadata?.dreams?.dreamTime || "")
         .split(":")
         .map(Number);
       if (isNaN(hours) || isNaN(minutes)) {
         console.warn(
-          `⚠️ Invalid dreamTime "${rootNode.dreamTime}" for "${rootNode.name}"`,
+          `⚠️ Invalid dreamTime "${rootNode.metadata?.dreams?.dreamTime}" for "${rootNode.name}"`,
         );
         continue;
       }
@@ -258,10 +258,10 @@ export async function runTreeDreamJob() {
 
       // Check if it's time to dream: current time >= dreamTime AND haven't dreamed today
       const alreadyDreamedToday =
-        rootNode.lastDreamAt && rootNode.lastDreamAt >= startOfDay;
+        rootNode.metadata?.dreams?.lastDreamAt && rootNode.metadata?.dreams?.lastDreamAt >= startOfDay;
       if (currentMinutes >= dreamMinutes && !alreadyDreamedToday) {
         console.log(
-          `💤 Dream time reached for "${rootNode.name}" (${rootNode.dreamTime})`,
+          `💤 Dream time reached for "${rootNode.name}" (${rootNode.metadata?.dreams?.dreamTime})`,
         );
         await runTreeDream(rootNode);
       }

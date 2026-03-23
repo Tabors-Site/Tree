@@ -169,7 +169,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
     }
 
     const root = await Node.findById(rootId)
-      .select("name rootOwner visibility llmDefault metadata contributors")
+      .select("name rootOwner llmDefault metadata contributors")
       .populate("rootOwner", "username")
       .lean();
 
@@ -181,7 +181,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
     const isOwner = isAuthenticated && String(root.rootOwner?._id) === String(req.userId);
     const isContributor = isAuthenticated && (root.contributors || []).map(String).includes(String(req.userId));
 
-    if (root.visibility !== "public" && !isOwner && !isContributor) {
+    if ((root.metadata?.visibility?.level || "private") !== "public" && !isOwner && !isContributor) {
       return res.status(403).json({ error: "This tree is not public." });
     }
 

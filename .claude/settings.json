@@ -63,7 +63,9 @@
       "Bash(grep -n \"apiKeys\\\\._id\\\\|apiKeys\\\\.revoked\\\\|$push.*apiKeys\\\\|$pull.*apiKeys\" /home/tabor/github/Tree/land/core/users.js)",
       "Bash(echo \"=== core/gateway/ files ===\" ls /home/tabor/github/Tree/land/core/gateway/ echo \"\" echo \"=== Who imports from core/gateway/? ===\" grep -rn \"from.*core/gateway\\\\|from.*gateway\" /home/tabor/github/Tree/land/ --include=\"*.js\")",
       "Bash(sed -i 's|await import\\(\"\"../../core/gateway/gateway.js\"\"\\)|await import\\(\"\"../../extensions/gateway/core.js\"\"\\)|g' /home/tabor/github/Tree/land/routes/api/root.js)",
-      "Bash(sed -i 's|await import\\(\"\"../../core/gateway/gatewayDispatch.js\"\"\\)|await import\\(\"\"../../extensions/gateway/dispatch.js\"\"\\)|g' /home/tabor/github/Tree/land/routes/api/root.js)"
+      "Bash(sed -i 's|await import\\(\"\"../../core/gateway/gatewayDispatch.js\"\"\\)|await import\\(\"\"../../extensions/gateway/dispatch.js\"\"\\)|g' /home/tabor/github/Tree/land/routes/api/root.js)",
+      "Bash(echo \"=== visibility ===\" grep -rn \"\\\\.visibility\\\\b\" /home/tabor/github/Tree/land/ --include=\"*.js\")",
+      "Bash(echo \"=== email ===\" grep -rn \"\\\\.email\\\\b\\\\|user\\\\.email\\\\|\"\"email\"\"\" /home/tabor/github/Tree/land/ --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -50,6 +50,8 @@ const VALID_HOOKS = [
   "afterStatusChange",
   "beforeNodeDelete",
   "enrichContext",
+  "beforeRegister",
+  "afterRegister",
 ];
 
 const HOOK_TIMEOUT_MS = 5000;

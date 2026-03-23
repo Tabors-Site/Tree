@@ -83,9 +83,9 @@ export async function runRawIdeaAutoPlace() {
   try {
     const users = await User.find({
       profileType: { $in: ELIGIBLE_PLANS },
-      rawIdeaAutoPlace: { $ne: false },
+      "metadata.rawIdeas.autoPlace": { $ne: false },
     })
-      .select("_id username profileType")
+      .select("_id username profileType metadata")
       .lean();
 
     if (users.length === 0) {

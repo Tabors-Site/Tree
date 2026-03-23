@@ -4,6 +4,7 @@ export default {
   description: "User-generated API keys for programmatic tree access",
 
   needs: {
+    services: ["auth"],
     models: ["User"],
   },
 

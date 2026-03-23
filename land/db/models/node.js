@@ -18,17 +18,6 @@ const NodeSchema = new mongoose.Schema({
   rootOwner: { type: String, ref: "User", default: null }, //if null it is not a root
   contributors: [{ type: String, ref: "User" }], // Users who can contribute to this node from here on and have access to it
 
-  // Canopy: tree visibility for public discovery
-  visibility: {
-    type: String,
-    enum: ["private", "public"],
-    default: "private",
-  },
-
-  // Tree Dream — daily maintenance cycle (only meaningful on root nodes)
-  dreamTime: { type: String, default: null }, // "HH:MM" format, e.g. "03:00"
-  lastDreamAt: { type: Date, default: null },
-
   // Land system nodes (Land root, .identity, .config, .peers)
   isSystem: { type: Boolean, default: false },
   systemRole: {
@@ -39,37 +28,7 @@ const NodeSchema = new mongoose.Schema({
   metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
 });
 
-// Virtual: reconstructs llmAssignments from llmDefault + metadata.llm.slots
-// Extensions register slots in metadata.llm.slots (e.g. understanding, cleanup, drain)
-// Core only stores the default. This virtual lets existing code read llmAssignments unchanged.
-NodeSchema.virtual("llmAssignments")
-  .get(function () {
-    const meta = this.metadata instanceof Map ? this.metadata.get("llm") : this.metadata?.llm;
-    const slots = meta?.slots || {};
-    return { default: this.llmDefault, ...slots };
-  })
-  .set(function (v) {
-    if (v.default !== undefined) this.llmDefault = v.default;
-    // Store non-default slots in metadata
-    const slots = {};
-    for (const [key, val] of Object.entries(v)) {
-      if (key !== "default") slots[key] = val;
-    }
-    if (Object.keys(slots).length > 0) {
-      if (!this.metadata) this.metadata = new Map();
-      const existing = this.metadata instanceof Map ? this.metadata.get("llm") || {} : this.metadata?.llm || {};
-      existing.slots = { ...existing.slots, ...slots };
-      if (this.metadata instanceof Map) {
-        this.metadata.set("llm", existing);
-      } else {
-        this.metadata.llm = existing;
-      }
-      if (this.markModified) this.markModified("metadata");
-    }
-  });
-
-NodeSchema.set("toJSON", { virtuals: true });
-NodeSchema.set("toObject", { virtuals: true });
+// No virtuals. Extension data lives in metadata. Callers use getExtMeta/setExtMeta.
 
 NodeSchema.methods.addContributor = function (userId, removerId) {
   if (!this.rootOwner)

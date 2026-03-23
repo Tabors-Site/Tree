@@ -5,7 +5,8 @@ import {
   createApiKey,
   generateApiKey,
   deleteApiKey,
-} from "../../core/users.js";
+} from "./core.js";
+import { getApiKeys, setApiKeys } from "../../core/tree/userMetadata.js";
 import {
   renderApiKeyCreated,
   renderApiKeysList,
@@ -34,18 +35,21 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).send("User not found");
 
-    if (user.apiKeys.filter((k) => !k.revoked).length >= 10) {
+    let keys = getApiKeys(user);
+
+    if (keys.filter((k) => !k.revoked).length >= 10) {
       const token = req.query.token ?? "";
       const qs = token ? `?token=${token}&html` : `?html`;
       return res.redirect(`/api/v1/user/${userId}/api-keys${qs}&error=limit`);
     }
 
     if (revokeOld) {
-      user.apiKeys = user.apiKeys.map((k) => ({ ...k, revoked: true }));
+      keys = keys.map((k) => ({ ...k, revoked: true }));
     }
 
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
-    user.apiKeys = [...user.apiKeys, { keyHash, keyPrefix, name: safeName }];
+    keys = [...keys, { keyHash, keyPrefix, name: safeName }];
+    setApiKeys(user, keys);
     await user.save();
 
     const token = req.query.token ?? "";
@@ -71,7 +75,7 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
     const user = await User.findById(req.userId)
       .select("username metadata");
     if (!user) return res.status(404).json({ message: "User not found" });
-    const apiKeys = user.apiKeys ?? [];
+    const apiKeys = getApiKeys(user);
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
       return res.json(

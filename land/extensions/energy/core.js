@@ -3,6 +3,7 @@ import fs from "fs";
 import User from "../../db/models/user.js";
 import { assignConnection } from "../../core/llms/customLLM.js";
 import Node from "../../db/models/node.js";
+import { getEnergy, setEnergy, getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
 
 /* ================================
  * CONSTANTS (HALF-COST VERSION)
@@ -168,12 +169,14 @@ export function calculateEnergyCost(action, payload) {
  * DAILY RESET
  * ================================ */
 export function maybeResetEnergy(user) {
-  if (!user.availableEnergy) return false;
+  const energy = getEnergy(user);
+  if (!energy.available) return false;
 
   const now = Date.now();
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  const expiresAt = user.planExpiresAt?.getTime() || 0;
+  const billing = getUserMeta(user, "billing");
+  const expiresAt = billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0);
 
   if (
     user.profileType !== "basic" &&
@@ -182,11 +185,11 @@ export function maybeResetEnergy(user) {
     now > expiresAt
   ) {
     user.profileType = "basic";
-    user.planExpiresAt = null;
+    setUserMeta(user, "billing", { ...billing, planExpiresAt: null });
 
-    user.availableEnergy.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
-
-    user.availableEnergy.lastResetAt = new Date();
+    energy.available.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
+    energy.available.lastResetAt = new Date();
+    setEnergy(user, energy);
     // Clear all LLM assignments on downgrade (user slots + root nodes)
     assignConnection(user._id, "main", null);
     assignConnection(user._id, "rawIdea", null);
@@ -207,14 +210,15 @@ export function maybeResetEnergy(user) {
     });
   }
 
-  const lastReset = user.availableEnergy.lastResetAt?.getTime() || 0;
+  const lastReset = energy.available.lastResetAt?.getTime?.() || 0;
 
   if (now - lastReset < DAY_MS) return false;
 
   const limit = DAILY_LIMITS[user.profileType] ?? DAILY_LIMITS.basic;
 
-  user.availableEnergy.amount = limit;
-  user.availableEnergy.lastResetAt = new Date();
+  energy.available.amount = limit;
+  energy.available.lastResetAt = new Date();
+  setEnergy(user, energy);
 
   return true;
 }
@@ -281,8 +285,9 @@ export async function useEnergy({
 
   const cost = calculateEnergyCost(action, payload);
 
-  const baseEnergy = user.availableEnergy.amount || 0;
-  const extraEnergy = user.additionalEnergy?.amount || 0;
+  const energy = getEnergy(user);
+  const baseEnergy = energy.available.amount || 0;
+  const extraEnergy = energy.additional?.amount || 0;
   const totalEnergy = baseEnergy + extraEnergy;
 
   if (totalEnergy < cost) {
@@ -299,25 +304,26 @@ export async function useEnergy({
 
   let remainingCost = cost;
 
-  if (user.availableEnergy.amount >= remainingCost) {
-    user.availableEnergy.amount -= remainingCost;
+  if (energy.available.amount >= remainingCost) {
+    energy.available.amount -= remainingCost;
     remainingCost = 0;
   } else {
-    remainingCost -= user.availableEnergy.amount;
-    user.availableEnergy.amount = 0;
+    remainingCost -= energy.available.amount;
+    energy.available.amount = 0;
   }
 
   if (remainingCost > 0) {
-    user.additionalEnergy.amount -= remainingCost;
+    energy.additional.amount -= remainingCost;
     remainingCost = 0;
   }
 
+  setEnergy(user, energy);
   await user.save();
 
   return {
     energyUsed: cost,
-    remainingEnergy: user.availableEnergy.amount + user.additionalEnergy.amount,
-    remainingBaseEnergy: user.availableEnergy.amount,
-    remainingAdditionalEnergy: user.additionalEnergy.amount,
+    remainingEnergy: energy.available.amount + energy.additional.amount,
+    remainingBaseEnergy: energy.available.amount,
+    remainingAdditionalEnergy: energy.additional.amount,
   };
 }
