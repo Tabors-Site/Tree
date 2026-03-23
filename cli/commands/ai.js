@@ -33,15 +33,27 @@ module.exports = (program) => {
 
   program
     .command("chat [message...]")
-    .description("Chat with AI about the branch you are in")
+    .description("Chat with AI. In a tree: about the branch. At land root: land management.")
     .action(async (parts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: chat <message>"));
       const message = parts.join(" ");
       const cfg = requireAuth();
-      if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
-      console.log(chalk.dim("Thinking…"));
       const api = getApi(cfg);
+
+      // At land root -> land management chat
+      if (!cfg.activeRootId || cfg.isSystemRoot) {
+        console.log(chalk.dim("Land Manager…"));
+        try {
+          const data = await api.post("/land/chat", { message });
+          console.log(chalk.bold("\nLand:") + " " + (data.answer || JSON.stringify(data)));
+        } catch (e) {
+          console.error(chalk.red(e.message));
+        }
+        return;
+      }
+
+      // In a tree -> tree chat
+      console.log(chalk.dim("Thinking…"));
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.chat(nodeId, message);

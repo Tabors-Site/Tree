@@ -64,4 +64,61 @@ router.get("/land/users", authenticate, async (req, res) => {
   }
 });
 
+// POST /land/chat - land management chat (god only)
+// Uses processMessage with land-manager mode
+router.post("/land/chat", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("profileType username").lean();
+    if (user?.profileType !== "god") {
+      return res.status(403).json({ error: "Requires god-tier." });
+    }
+
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: "message required" });
+
+    const visitorId = `land-manager-${req.userId}`;
+
+    // Import conversation utilities
+    const { processMessage, switchMode, getCurrentMode } = await import("../../ws/conversation.js");
+    const { connectToMCP, closeMCPClient, MCP_SERVER_URL } = await import("../../ws/mcp.js");
+    const jwt = (await import("jsonwebtoken")).default;
+
+    const JWT_SECRET = process.env.JWT_SECRET;
+    const internalJwt = jwt.sign(
+      { userId: req.userId.toString(), username: user.username, visitorId },
+      JWT_SECRET,
+      { expiresIn: "5m" }
+    );
+
+    // Connect MCP if needed
+    try {
+      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+    } catch {}
+
+    // Switch to land-manager mode if not already
+    const currentMode = getCurrentMode(visitorId);
+    if (currentMode !== "home:land-manager") {
+      try {
+        switchMode(visitorId, "home:land-manager", { username: user.username, userId: req.userId });
+      } catch {}
+    }
+
+    // Run the message through processMessage with land-manager tools
+    const result = await processMessage(visitorId, message, {
+      username: user.username,
+      userId: req.userId,
+    });
+
+    const answer = result?.content || result?.choices?.[0]?.message?.content || JSON.stringify(result);
+
+    // Cleanup
+    try { closeMCPClient(visitorId); } catch {}
+
+    res.json({ success: true, answer });
+  } catch (err) {
+    log.error("LandManager", "Chat error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
