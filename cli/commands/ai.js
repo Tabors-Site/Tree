@@ -40,28 +40,27 @@ module.exports = (program) => {
       const cfg = requireAuth();
       const api = getApi(cfg);
 
-      // At land root -> land management chat
-      if (!cfg.activeRootId || cfg.isSystemRoot) {
-        console.log(chalk.dim("Land Manager…"));
-        try {
-          const data = await api.post("/land/chat", { message });
-          console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
-        } catch (e) {
-          console.error(chalk.red(e.message));
-        }
-        return;
-      }
+      // Ctrl+C aborts the request
+      const abort = new AbortController();
+      const onSigint = () => { abort.abort(); console.log(chalk.dim("\nCancelled.")); };
+      process.on("SIGINT", onSigint);
 
-      // In a tree -> tree chat
-      console.log(chalk.dim("Thinking…"));
       try {
-        const nodeId = currentNodeId(cfg);
-        const data = await api.chat(nodeId, message);
-        console.log(
-          chalk.bold("\nTree:") + " " + (data.answer || "No response."),
-        );
+        if (!cfg.activeRootId || cfg.isSystemRoot) {
+          console.log(chalk.dim("Land Manager…"));
+          const data = await api.post("/land/chat", { message }, { signal: abort.signal });
+          console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
+        } else {
+          console.log(chalk.dim("Thinking…"));
+          const nodeId = currentNodeId(cfg);
+          const data = await api.chat(nodeId, message, { signal: abort.signal });
+          console.log(chalk.bold("\nTree:") + " " + (data.answer || "No response."));
+        }
       } catch (e) {
+        if (e.name === "AbortError") return;
         console.error(chalk.red(e.message));
+      } finally {
+        process.removeListener("SIGINT", onSigint);
       }
     });
 

@@ -29,7 +29,7 @@ class TreeAPI {
     return {};
   }
 
-  async _req(method, path, body) {
+  async _req(method, path, body, { signal } = {}) {
     const opts = {
       method,
       headers: {
@@ -38,6 +38,7 @@ class TreeAPI {
       },
     };
     if (body) opts.body = JSON.stringify(body);
+    if (signal) opts.signal = signal;
 
     const res = await fetch(getBase() + path, opts);
     const text = await res.text();
@@ -85,17 +86,17 @@ class TreeAPI {
     return json;
   }
 
-  get(path) {
-    return this._req("GET", path);
+  get(path, opts) {
+    return this._req("GET", path, null, opts);
   }
-  post(path, body) {
-    return this._req("POST", path, body);
+  post(path, body, opts) {
+    return this._req("POST", path, body, opts);
   }
-  put(path, body) {
-    return this._req("PUT", path, body);
+  put(path, body, opts) {
+    return this._req("PUT", path, body, opts);
   }
-  del(path) {
-    return this._req("DELETE", path);
+  del(path, opts) {
+    return this._req("DELETE", path, null, opts);
   }
 
   // ── Land Config ─────────────────────────────────────────────────────────
@@ -411,14 +412,14 @@ class TreeAPI {
   }
 
   // ── AI ────────────────────────────────────────────────────────────────────
-  chat(rootId, message) {
-    return this.post(`/root/${rootId}/chat`, { message });
+  chat(rootId, message, opts) {
+    return this.post(`/root/${rootId}/chat`, { message }, opts);
   }
-  place(rootId, message) {
-    return this.post(`/root/${rootId}/place`, { message });
+  place(rootId, message, opts) {
+    return this.post(`/root/${rootId}/place`, { message }, opts);
   }
-  query(rootId, message) {
-    return this.post(`/root/${rootId}/query`, { message });
+  query(rootId, message, opts) {
+    return this.post(`/root/${rootId}/query`, { message }, opts);
   }
 
   // ── Raw Ideas ───────────────────────────────────────────────────────────────
