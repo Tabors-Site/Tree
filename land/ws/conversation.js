@@ -174,14 +174,14 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
   }
 
   try {
-    var user = await User.findById(userId).select("metadata").lean();
+    var user = await User.findById(userId).select("llmDefault metadata").lean();
     var meta = user?.metadata || {};
-    var assignments = meta?.userLlm?.assignments || { main: null, rawIdea: null };
-    var connectionId = (assignments && assignments[slot]) || null;
+    var extSlots = meta?.userLlm?.slots || {};
+    var connectionId = slot === "main" ? user?.llmDefault : (extSlots[slot] || null);
 
-    // Fall back to "main" slot if the specific slot has no assignment
-    if (!connectionId && slot !== "main" && assignments && assignments.main) {
-      connectionId = assignments.main;
+    // Fall back to "main" (llmDefault) if the specific slot has no assignment
+    if (!connectionId && slot !== "main" && user?.llmDefault) {
+      connectionId = user.llmDefault;
     }
 
     if (connectionId) {
