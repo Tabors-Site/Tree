@@ -7,7 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices, NOOP_ENERGY } from "../core/services.js";
-import { setExtensionToolResolver } from "../ws/modes/registry.js";
+import { setExtensionToolResolver, registerMode } from "../ws/modes/registry.js";
 import { hooks } from "../core/hooks.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
@@ -511,6 +511,16 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (instance.modeTools) {
         for (const injection of instance.modeTools) {
           modeToolExtensions.push(injection);
+        }
+      }
+
+      // Register custom modes (extensions can define entirely new AI modes)
+      if (instance.modes) {
+        for (const modeDef of instance.modes) {
+          if (modeDef.key && modeDef.handler) {
+            modeDef.handler._extName = manifest.name;
+            registerMode(modeDef.key, modeDef.handler, manifest.name);
+          }
         }
       }
 

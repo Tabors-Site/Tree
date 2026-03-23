@@ -144,6 +144,58 @@ export function setExtensionToolResolver(fn) {
 }
 
 /**
+ * Register a custom mode from an extension.
+ * The mode object must have: name, bigMode, toolNames[], buildSystemPrompt(ctx)
+ * Optional: emoji, label, hidden, maxMessagesBeforeLoop, preserveContextOnLoop
+ */
+export function registerMode(modeKey, modeConfig, extName = "unknown") {
+  if (!modeKey || !modeConfig) {
+    console.warn(`[Modes] Invalid mode registration from ${extName}`);
+    return false;
+  }
+  if (!modeConfig.buildSystemPrompt || typeof modeConfig.buildSystemPrompt !== "function") {
+    console.warn(`[Modes] Mode "${modeKey}" from ${extName} missing buildSystemPrompt(). Skipped.`);
+    return false;
+  }
+  if (!Array.isArray(modeConfig.toolNames)) {
+    console.warn(`[Modes] Mode "${modeKey}" from ${extName} missing toolNames[]. Skipped.`);
+    return false;
+  }
+  if (ALL_MODES[modeKey]) {
+    console.warn(`[Modes] Mode "${modeKey}" already registered. ${extName} cannot override.`);
+    return false;
+  }
+
+  // Fill in defaults
+  const mode = {
+    name: modeKey,
+    emoji: modeConfig.emoji || "🧩",
+    label: modeConfig.label || modeKey.split(":")[1] || modeKey,
+    bigMode: modeConfig.bigMode || modeKey.split(":")[0] || "tree",
+    hidden: modeConfig.hidden ?? false,
+    toolNames: modeConfig.toolNames,
+    buildSystemPrompt: modeConfig.buildSystemPrompt,
+    maxMessagesBeforeLoop: modeConfig.maxMessagesBeforeLoop,
+    preserveContextOnLoop: modeConfig.preserveContextOnLoop,
+  };
+
+  ALL_MODES[modeKey] = mode;
+  console.log(`[Modes] Registered: ${modeKey} (${extName})`);
+  return true;
+}
+
+/**
+ * Unregister all modes from an extension.
+ */
+export function unregisterModes(extName) {
+  for (const [key, mode] of Object.entries(ALL_MODES)) {
+    if (mode._extName === extName) {
+      delete ALL_MODES[key];
+    }
+  }
+}
+
+/**
  * Build the system prompt for a mode, given context.
  * ctx = { username, userId, rootId }
  */

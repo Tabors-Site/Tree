@@ -26,5 +26,14 @@ export default {
       // { key: "MY_API_URL", required: false, default: "https://api.example.com" },
     ],
     cli: [],
+
+    // Custom AI modes (optional). Each mode gets its own system prompt and tools.
+    // modes: [
+    //   {
+    //     key: "tree:my-mode",
+    //     handler: "./modes/myMode.js",  // exports { buildSystemPrompt, toolNames, ... }
+    //     assignmentSlot: "myMode",      // LLM assignment slot name
+    //   }
+    // ],
   },
 };

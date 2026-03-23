@@ -26,7 +26,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, "../.env") });
+dotenv.config({ path: path.join(__dirname, "../../.env") });
 
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || "mongodb://localhost:27017/treeos";
 
@@ -254,12 +254,78 @@ async function migrate() {
     console.log(`  Moved llmAssignments for ${llmCount} nodes`);
   }
 
+  // ── Phase 3: Move transactionPolicy, scripts to metadata ──
+  console.log("\nPhase 3: Moving transactionPolicy, scripts to metadata...");
+
+  // transactionPolicy -> metadata.transactions.policy
+  const tpNodes = await nodesCollection.countDocuments({
+    transactionPolicy: { $exists: true },
+  });
+  if (tpNodes > 0) {
+    const tpCursor = nodesCollection.find({ transactionPolicy: { $exists: true } });
+    let tpCount = 0;
+    for await (const node of tpCursor) {
+      const meta = node.metadata || {};
+      if (!meta.transactions) meta.transactions = {};
+      meta.transactions.policy = node.transactionPolicy;
+      await nodesCollection.updateOne(
+        { _id: node._id },
+        { $set: { metadata: meta }, $unset: { transactionPolicy: "" } },
+      );
+      tpCount++;
+    }
+    console.log(`  Moved transactionPolicy for ${tpCount} nodes`);
+  }
+
+  // scripts -> metadata.scripts
+  const scriptNodes = await nodesCollection.countDocuments({
+    scripts: { $exists: true, $ne: null, $not: { $size: 0 } },
+  });
+  if (scriptNodes > 0) {
+    const sCursor = nodesCollection.find({ scripts: { $exists: true, $ne: null, $not: { $size: 0 } } });
+    let sCount = 0;
+    for await (const node of sCursor) {
+      const meta = node.metadata || {};
+      meta.scripts = node.scripts;
+      await nodesCollection.updateOne(
+        { _id: node._id },
+        { $set: { metadata: meta }, $unset: { scripts: "" } },
+      );
+      sCount++;
+    }
+    console.log(`  Moved scripts for ${sCount} nodes`);
+  }
+
+  // Clean up stale top-level prestige field (numeric, already moved to metadata.prestige)
+  const stalePrestige = await nodesCollection.countDocuments({
+    prestige: { $exists: true, $type: "number" },
+  });
+  if (stalePrestige > 0) {
+    const pCursor = nodesCollection.find({ prestige: { $exists: true, $type: "number" } });
+    let pCount = 0;
+    for await (const node of pCursor) {
+      const meta = node.metadata || {};
+      if (!meta.prestige) {
+        meta.prestige = { current: node.prestige || 0, history: [] };
+      }
+      await nodesCollection.updateOne(
+        { _id: node._id },
+        { $set: { metadata: meta }, $unset: { prestige: "", versions: "" } },
+      );
+      pCount++;
+    }
+    console.log(`  Cleaned stale prestige for ${pCount} nodes`);
+  }
+
   console.log("\nNode migration complete:");
   console.log(`  Phase 1 (versions): ${migrated} migrated, ${skipped} skipped, ${errors} errors`);
   console.log(`  Phase 1 (default status): ${noVersions}`);
   console.log(`  Phase 2 (visibility): ${visNodes}`);
   console.log(`  Phase 2 (dreams): ${dreamNodes}`);
   console.log(`  Phase 2 (llmAssignments): ${llmNodes}`);
+  console.log(`  Phase 3 (transactionPolicy): ${tpNodes}`);
+  console.log(`  Phase 3 (scripts): ${scriptNodes}`);
+  console.log(`  Phase 3 (stale prestige): ${stalePrestige}`);
 
   await mongoose.disconnect();
   console.log("Disconnected.");

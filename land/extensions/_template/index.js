@@ -14,9 +14,21 @@ export async function init(core) {
   // setExtMeta(node, "my-extension", { key: "value" });
   // await node.save();
 
+  // Register custom AI modes (see manifest.js for declaration)
+  // core.modes.registerMode("tree:my-mode", {
+  //   emoji: "🔬",
+  //   label: "My Mode",
+  //   bigMode: "tree",
+  //   toolNames: ["my-tool-1", "my-tool-2"],
+  //   buildSystemPrompt({ username, rootId, currentNodeId }) {
+  //     return `You are a custom agent for ${username}. Do something special.`;
+  //   },
+  // }, "my-extension");
+
   return {
     // router,    // Express router, mounted at /api/v1
     // tools,     // MCP tool definitions for AI
+    // modes,     // Custom AI conversation modes [{key, handler}]
     // modeTools, // Inject tools into existing conversation modes
     // jobs,      // Background jobs with start/stop
   };

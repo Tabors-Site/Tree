@@ -131,6 +131,14 @@ async function migrate() {
       needsUpdate = true;
     }
 
+    // htmlShareToken: top-level -> metadata.html.shareToken (html-rendering extension)
+    if (user.htmlShareToken) {
+      const existing = user.metadata?.html || {};
+      $set["metadata.html"] = { ...existing, shareToken: user.htmlShareToken };
+      $unset["htmlShareToken"] = "";
+      needsUpdate = true;
+    }
+
     if (needsUpdate) {
       const update = {};
       if (Object.keys($set).length) update.$set = $set;
