@@ -42,12 +42,11 @@ module.exports = (program) => {
 
       // Ctrl+C aborts the request but stays in the shell
       const abort = new AbortController();
-      const existingSigint = process.listeners("SIGINT").slice();
+      global._treeosHandlingSigint = true;
       const onSigint = () => {
         abort.abort();
         console.log(chalk.dim("\nCancelled."));
       };
-      process.removeAllListeners("SIGINT");
       process.on("SIGINT", onSigint);
 
       try {
@@ -66,7 +65,7 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       } finally {
         process.removeListener("SIGINT", onSigint);
-        for (const fn of existingSigint) process.on("SIGINT", fn);
+        global._treeosHandlingSigint = false;
       }
     });
 
