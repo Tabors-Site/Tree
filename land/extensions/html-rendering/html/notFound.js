@@ -1,3 +1,5 @@
+import { baseStyles } from "./baseStyles.js";
+
 export function errorHtml(status, title, message) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -9,19 +11,19 @@ export function errorHtml(status, title, message) {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>${title} - TreeOS</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { background: #736fe6; }
+${baseStyles}
+
+/* ── 404 page overrides on base ── */
 html, body { height: 100%; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
 }
+
+/* Hide base orbs for centered layout */
+body::before, body::after { display: none; }
 .card {
   background: rgba(255,255,255,0.12);
   backdrop-filter: blur(20px);

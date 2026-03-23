@@ -4,6 +4,7 @@
 
 import mime from "mime-types";
 import { getLandUrl } from "../../../canopy/identity.js";
+import { baseStyles, backNavStyles } from "./baseStyles.js";
 
 function escapeHtml(str) {
   return str
@@ -201,6 +202,9 @@ export function renderEditorPage({
 <meta name="theme-color" content="#667eea">
 <title>${isNew ? "New Note" : "Edit Note"} · Editor</title>
 <style>
+${baseStyles}
+
+/* ── Editor-specific overrides on base ── */
 :root {
   --glass-rgb: 115, 111, 230;
   --sidebar-w: 280px;
@@ -211,30 +215,21 @@ export function renderEditorPage({
   --editor-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html, body { background: #736fe6; height: 100%; overflow: hidden; }
-
+html, body { height: 100%; overflow: hidden; }
 body {
   font-family: var(--editor-font);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white; display: flex; flex-direction: column;
   height: 100vh; height: 100dvh;
-  position: relative;
-  margin: 0; padding: 0;
-  overflow: hidden;
+  padding: 0; min-height: auto;
 }
 
+/* Override base orbs: editor uses a single subtler orb */
 body::before {
-  content: ''; position: fixed; width: 600px; height: 600px;
-  border-radius: 50%; background: white; opacity: 0.05;
-  top: -300px; right: -200px; pointer-events: none;
-  animation: float 25s infinite ease-in-out;
+  opacity: 0.05;
+  animation-duration: 25s;
 }
-
-@keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-20px) rotate(3deg); }
-}
+body::before { transform: none; }
+body::after { display: none; }
 
 /* ── TOOLBAR ─────────────────── */
 .toolbar {
@@ -1681,81 +1676,10 @@ export function renderBookPage({
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Book: ${escapeHtml(title)}</title>
   <style>
-    :root {
-      --glass-water-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-      --glass-alpha-hover: 0.38;
-    }
+    ${baseStyles}
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      color: #1a1a1a;
-      position: relative;
-      overflow-x: hidden;
-      touch-action: manipulation;
-    }
-
-    /* Animated background */
-    body::before,
-    body::after {
-      content: '';
-      position: fixed;
-      border-radius: 50%;
-      opacity: 0.08;
-      animation: float 20s infinite ease-in-out;
-      pointer-events: none;
-    }
-
-    body::before {
-      width: 600px;
-      height: 600px;
-      background: white;
-      top: -300px;
-      right: -200px;
-      animation-delay: -5s;
-    }
-
-    body::after {
-      width: 400px;
-      height: 400px;
-      background: white;
-      bottom: -200px;
-      left: -100px;
-      animation-delay: -10s;
-    }
-
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
-    }
- html, body {
-        background: #736fe6;
-        margin: 0;
-        padding: 0;
-      }
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
+    /* ── Book page overrides on base ── */
+    body { padding: 0; }
 
     /* Top Navigation Bar - Glass */
     .top-nav {
@@ -2557,82 +2481,10 @@ export function renderSharedBookPage({
   <meta property="og:site_name" content="TreeOS" />
   <meta property="og:image" content="${getLandUrl()}/tree.png" />
   <style>
-    :root {
-      --glass-water-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-      --glass-alpha-hover: 0.38;
-    }
+    ${baseStyles}
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      color: #1a1a1a;
-      position: relative;
-      overflow-x: hidden;
-      touch-action: manipulation;
-    }
-
-    /* Animated background */
-    body::before,
-    body::after {
-      content: '';
-      position: fixed;
-      border-radius: 50%;
-      opacity: 0.08;
-      animation: float 20s infinite ease-in-out;
-      pointer-events: none;
-    }
-
-    body::before {
-      width: 600px;
-      height: 600px;
-      background: white;
-      top: -300px;
-      right: -200px;
-      animation-delay: -5s;
-    }
-
-    body::after {
-      width: 400px;
-      height: 400px;
-      background: white;
-      bottom: -200px;
-      left: -100px;
-      animation-delay: -10s;
-    }
-       html, body {
-        background: #736fe6;
-        margin: 0;
-        padding: 0;
-      }
-
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
-    }
-
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
+    /* ── Shared book page overrides on base ── */
+    body { padding: 0; }
 
     /* Top Navigation Bar - Glass */
     .top-nav {
@@ -3453,70 +3305,17 @@ export function renderNotesList({
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>${escapeHtml(nodeName)} — Notes</title>
   <style>
-    /* Replace the <style> content in your /node/:nodeId/:version/notes route with this */
+${baseStyles}
 
-:root {
-  --glass-water-rgb: 115, 111, 230;
-  --glass-alpha: 0.28;
-  --glass-alpha-hover: 0.38;
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-
+/* ── Notes list overrides on base ── */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   height: 100vh;
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  color: #1a1a1a;
   overflow: hidden;
-  position: relative;
-  touch-action: manipulation;
-}
-
-/* Animated background */
-body::before,
-body::after {
-  content: '';
-  position: fixed;
-  border-radius: 50%;
-  opacity: 0.08;
-  animation: float 20s infinite ease-in-out;
-  pointer-events: none;
-}
-
-body::before {
-  width: 600px;
-  height: 600px;
-  background: white;
-  top: -300px;
-  right: -200px;
-  animation-delay: -5s;
-}
-
-body::after {
-  width: 400px;
-  height: 400px;
-  background: white;
-  bottom: -200px;
-  left: -100px;
-  animation-delay: -10s;
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-30px) rotate(5deg);
-  }
+  padding: 0;
+  min-height: auto;
 }
 
 /* Glass Top Navigation */
@@ -4580,142 +4379,8 @@ export function renderTextNote({
   <meta property="og:site_name" content="TreeOS" />
   <meta property="og:image" content="${getLandUrl()}/tree.png" />
   <style>
-    :root {
-      --glass-water-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-      --glass-alpha-hover: 0.38;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-      position: relative;
-      overflow-x: hidden;
-    }
-
-    /* Animated background */
-    body::before,
-    body::after {
-      content: '';
-      position: fixed;
-      border-radius: 50%;
-      opacity: 0.08;
-      animation: float 20s infinite ease-in-out;
-      pointer-events: none;
-    }
-
-    body::before {
-      width: 600px;
-      height: 600px;
-      background: white;
-      top: -300px;
-      right: -200px;
-      animation-delay: -5s;
-    }
-
-    body::after {
-      width: 400px;
-      height: 400px;
-      background: white;
-      bottom: -200px;
-      left: -100px;
-      animation-delay: -10s;
-    }
- html, body {
-        background: #736fe6;
-        margin: 0;
-        padding: 0;
-      }
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
-    }
-
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      position: relative;
-      z-index: 1;
-    }
-
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      animation: fadeInUp 0.5s ease-out;
-    }
-
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 20px;
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
-      backdrop-filter: blur(22px) saturate(140%);
-      -webkit-backdrop-filter: blur(22px) saturate(140%);
-      color: white;
-      text-decoration: none;
-      border-radius: 980px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-      border: 1px solid rgba(255, 255, 255, 0.28);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .back-link::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: radial-gradient(
-        120% 60% at 0% 0%,
-        rgba(255, 255, 255, 0.35),
-        transparent 60%
-      );
-      opacity: 0;
-      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-      pointer-events: none;
-    }
-
-    .back-link:hover {
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
-      transform: translateY(-2px);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
-    }
-
-    .back-link:hover::before {
-      opacity: 1;
-      transform: translateX(30%) translateY(10%);
-    }
+    ${baseStyles}
+    ${backNavStyles}
 
     /* Note Card */
     .note-card {
@@ -5052,142 +4717,8 @@ export function renderFileNote({
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>${escapeHtml(fileName)}</title>
   <style>
-    :root {
-      --glass-water-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-      --glass-alpha-hover: 0.38;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-      position: relative;
-      overflow-x: hidden;
-    }
-
-    /* Animated background */
-    body::before,
-    body::after {
-      content: '';
-      position: fixed;
-      border-radius: 50%;
-      opacity: 0.08;
-      animation: float 20s infinite ease-in-out;
-      pointer-events: none;
-    }
-
-    body::before {
-      width: 600px;
-      height: 600px;
-      background: white;
-      top: -300px;
-      right: -200px;
-      animation-delay: -5s;
-    }
-
-    body::after {
-      width: 400px;
-      height: 400px;
-      background: white;
-      bottom: -200px;
-      left: -100px;
-      animation-delay: -10s;
-    }
- html, body {
-        background: #736fe6;
-        margin: 0;
-        padding: 0;
-      }
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
-    }
-
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      position: relative;
-      z-index: 1;
-    }
-
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      animation: fadeInUp 0.5s ease-out;
-    }
-
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 20px;
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
-      backdrop-filter: blur(22px) saturate(140%);
-      -webkit-backdrop-filter: blur(22px) saturate(140%);
-      color: white;
-      text-decoration: none;
-      border-radius: 980px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-      border: 1px solid rgba(255, 255, 255, 0.28);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .back-link::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: radial-gradient(
-        120% 60% at 0% 0%,
-        rgba(255, 255, 255, 0.35),
-        transparent 60%
-      );
-      opacity: 0;
-      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-      pointer-events: none;
-    }
-
-    .back-link:hover {
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
-      transform: translateY(-2px);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
-    }
-
-    .back-link:hover::before {
-      opacity: 1;
-      transform: translateX(30%) translateY(10%);
-    }
+    ${baseStyles}
+    ${backNavStyles}
 
     /* File Card */
     .file-card {

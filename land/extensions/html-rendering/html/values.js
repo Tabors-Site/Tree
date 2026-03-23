@@ -2,6 +2,8 @@
 /* HTML renderer for values & solana wallet pages     */
 /* ------------------------------------------------- */
 
+import { baseStyles } from "./baseStyles.js";
+
 function isAutoKey(key) {
   return key.startsWith("_auto__");
 }
@@ -119,103 +121,7 @@ export function renderValues({
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>${nodeName} — Values & Goals</title>
 <style>
-  /* =========================================================
-   GLOBAL VARIABLES — matches root route
-   ========================================================= */
-
-:root {
-  --glass-water-rgb: 115, 111, 230;
-  --glass-alpha: 0.28;
-  --glass-alpha-hover: 0.38;
-}
-
-/* =========================================================
-   RESET & BASE
-   ========================================================= */
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: 20px;
-  color: #1a1a1a;
-  position: relative;
-  overflow-x: hidden;
-  touch-action: manipulation;
-}
-
-/* =========================================================
-   ANIMATED BACKGROUND
-   ========================================================= */
-
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  border-radius: 50%;
-  opacity: 0.08;
-  animation: float 20s infinite ease-in-out;
-  pointer-events: none;
-}
-
-body::before {
-  width: 600px;
-  height: 600px;
-  background: white;
-  top: -300px;
-  right: -200px;
-  animation-delay: -5s;
-}
-
-body::after {
-  width: 400px;
-  height: 400px;
-  background: white;
-  bottom: -200px;
-  left: -100px;
-  animation-delay: -10s;
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-30px) rotate(5deg);
-  }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* =========================================================
-   LAYOUT
-   ========================================================= */
-
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-}
+${baseStyles}
 
 /* =========================================================
    UNIFIED GLASS BUTTON SYSTEM
@@ -750,12 +656,6 @@ td code.show-tooltip::before {
     max-width: 700px;
   }
 }
-
-html, body {
-  background: #736fe6;
-  margin: 0;
-  padding: 0;
-}
 </style>
 
   </head>
@@ -949,92 +849,7 @@ export function renderSolanaNoWallet({
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Solana Wallet — Version ${parsedVersion}</title>
   <style>
-    /* =========================================================
-   GLOBAL VARIABLES
-   ========================================================= */
-
-:root {
-  --glass-water-rgb: 115, 111, 230;
-  --glass-alpha: 0.28;
-  --glass-alpha-hover: 0.38;
-}
-
-/* =========================================================
-   RESET & BASE
-   ========================================================= */
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: 20px;
-  color: #1a1a1a;
-  position: relative;
-  overflow-x: hidden;
-  touch-action: manipulation;
-}
-
-/* =========================================================
-   ANIMATED BACKGROUND
-   ========================================================= */
-
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  border-radius: 50%;
-  opacity: 0.08;
-  animation: float 20s infinite ease-in-out;
-  pointer-events: none;
-}
-
-body::before {
-  width: 600px;
-  height: 600px;
-  background: white;
-  top: -300px;
-  right: -200px;
-  animation-delay: -5s;
-}
-
-body::after {
-  width: 400px;
-  height: 400px;
-  background: white;
-  bottom: -200px;
-  left: -100px;
-  animation-delay: -10s;
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-30px) rotate(5deg);
-  }
-}
-
-/* =========================================================
-   LAYOUT
-   ========================================================= */
-
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-}
+${baseStyles}
 
 /* =========================================================
    UNIFIED GLASS BUTTON SYSTEM
@@ -1254,12 +1069,6 @@ button:active,
     justify-content: center;
   }
 }
-
-html, body {
-  background: #736fe6;
-  margin: 0;
-  padding: 0;
-}
   </style>
 </head>
 <body>
@@ -1369,92 +1178,7 @@ export function renderSolanaWallet({
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Solana Wallet — Version ${parsedVersion}</title>
   <style>
-    /* =========================================================
-   GLOBAL VARIABLES
-   ========================================================= */
-
-:root {
-  --glass-water-rgb: 115, 111, 230;
-  --glass-alpha: 0.28;
-  --glass-alpha-hover: 0.38;
-}
-
-/* =========================================================
-   RESET & BASE
-   ========================================================= */
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: 20px;
-  color: #1a1a1a;
-  position: relative;
-  overflow-x: hidden;
-  touch-action: manipulation;
-}
-
-/* =========================================================
-   ANIMATED BACKGROUND
-   ========================================================= */
-
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  border-radius: 50%;
-  opacity: 0.08;
-  animation: float 20s infinite ease-in-out;
-  pointer-events: none;
-}
-
-body::before {
-  width: 600px;
-  height: 600px;
-  background: white;
-  top: -300px;
-  right: -200px;
-  animation-delay: -5s;
-}
-
-body::after {
-  width: 400px;
-  height: 400px;
-  background: white;
-  bottom: -200px;
-  left: -100px;
-  animation-delay: -10s;
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-30px) rotate(5deg);
-  }
-}
-
-/* =========================================================
-   LAYOUT
-   ========================================================= */
-
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-}
+${baseStyles}
 
 /* =========================================================
    UNIFIED GLASS BUTTON SYSTEM
@@ -1940,12 +1664,6 @@ select {
   td {
     padding: 10px 6px;
   }
-}
-
-html, body {
-  background: #736fe6;
-  margin: 0;
-  padding: 0;
 }
   </style>
 </head>

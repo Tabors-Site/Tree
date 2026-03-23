@@ -3,6 +3,7 @@
 /* ─────────────────────────────────────────────── */
 
 import { getLandUrl } from "../../../canopy/identity.js";
+import { baseStyles } from "./baseStyles.js";
 
 function escapeHtml(str) {
   return str
@@ -35,9 +36,11 @@ export function renderChat({ username, userId, treesJSON, trees }) {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
+    ${baseStyles}
+
+    /* ── Chat-specific overrides on base ── */
     :root {
       --glass-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
       --glass-blur: 22px;
       --glass-border: rgba(255, 255, 255, 0.28);
       --glass-border-light: rgba(255, 255, 255, 0.15);
@@ -52,10 +55,11 @@ export function renderChat({ username, userId, treesJSON, trees }) {
       --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text-primary); }
-    html { background: #736fe6; }
-    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); background-attachment: fixed; }
+    body { background-attachment: fixed; padding: 0; min-height: auto; }
+
+    /* Hide base orbs for full-screen chat */
+    body::before, body::after { display: none; }
 
     /* Layout */
     .container {

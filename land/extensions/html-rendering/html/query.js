@@ -2,6 +2,11 @@
 /* Public query page renderer                        */
 /* Lightweight chat UI for querying public trees      */
 /* ------------------------------------------------- */
+/* NOTE: baseStyles not imported here. The query page */
+/* uses a dark theme (gradient #0f0c29 -> #16213e)   */
+/* that diverges entirely from the purple base. Only  */
+/* the * reset overlaps, which is not worth the       */
+/* import + override cost.                            */
 
 function escapeHtml(str) {
   if (!str) return "";

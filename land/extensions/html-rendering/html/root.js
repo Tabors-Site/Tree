@@ -2,6 +2,8 @@
 /* HTML renderers for root.js pages                   */
 /* ------------------------------------------------- */
 
+import { baseStyles, backNavStyles, responsiveBase } from './baseStyles.js';
+
 function escapeHtml(str) {
   return str
     .replace(/&/g, '&amp;')
@@ -369,145 +371,11 @@ ${ownerConnections.length === 0
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>${escapeHtml(allData.name)} - TreeOS</title>
   <style>
-   :root {
-      --glass-water-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-      --glass-alpha-hover: 0.38;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-      position: relative;
-      overflow-x: hidden;
-      touch-action: manipulation;
-    }
-
-    /* Animated background */
-    body::before,
-    body::after {
-      content: '';
-      position: fixed;
-      border-radius: 50%;
-      opacity: 0.08;
-      animation: float 20s infinite ease-in-out;
-      pointer-events: none;
-    }
-
-    body::before {
-      width: 600px;
-      height: 600px;
-      background: white;
-      top: -300px;
-      right: -200px;
-      animation-delay: -5s;
-    }
-
-    body::after {
-      width: 400px;
-      height: 400px;
-      background: white;
-      bottom: -200px;
-      left: -100px;
-      animation-delay: -10s;
-    }
+    ${baseStyles}
+    ${backNavStyles}
 
     .current {
     color: rgb(51, 66, 85);}
-
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
-    }
-
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      position: relative;
-      z-index: 1;
-    }
-
-    /* Glass Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      animation: fadeInUp 0.5s ease-out;
-    }
-
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
-      color: white;
-      text-decoration: none;
-      border-radius: 980px;
-      font-weight: 600;
-      font-size: 14px;
-transition:
-  transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-  background-color 0.3s ease,
-  opacity 0.3s ease;
-     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-      border: 1px solid rgba(255, 255, 255, 0.28);
-      position: relative;
-      overflow: hidden;
-      touch-action: manipulation;
-    }
-
-    .back-link::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: radial-gradient(
-        120% 60% at 0% 0%,
-        rgba(255, 255, 255, 0.35),
-        transparent 60%
-      );
-      opacity: 0;
-      transform: translateX(-30%) translateY(-10%);
-      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-      pointer-events: none;
-    }
-
-    .back-link:hover {
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
-      transform: translateY(-2px);
-    }
-
-    .back-link:hover::before {
-      opacity: 1;
-      transform: translateX(30%) translateY(10%);
-    }
 
     /* Glass Content Cards */
     .content-card {
@@ -547,11 +415,6 @@ transition:
 
   pointer-events: none;
 }
-   html, body {
-        background: #736fe6;
-        margin: 0;
-        padding: 0;
-      }
 
     /* Header Section */
     .header-section {
@@ -1257,11 +1120,9 @@ transition:
   }
 }
 
-    @media (max-width: 640px) {
-      body {
-        padding: 16px;
-      }
+    ${responsiveBase}
 
+    @media (max-width: 640px) {
       .content-card {
         padding: 20px;
       }
@@ -1270,23 +1131,8 @@ transition:
         font-size: 24px;
       }
 
-      .back-nav {
-        flex-direction: column;
-      }
-
-      .back-link {
-        justify-content: center;
-      }
-
       ul {
         padding-left: 8px;
-      }
-
-    }
-
-    @media (min-width: 641px) and (max-width: 1024px) {
-      .container {
-        max-width: 700px;
       }
     }
 
@@ -1867,84 +1713,9 @@ export function renderCalendar({ rootId, queryString, month, year, byDay }) {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Calendar</title>
   <style>
-    :root {
-      --glass-water-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-      --glass-alpha-hover: 0.38;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: white;
-      position: relative;
-      overflow-x: hidden;
-    }
-
-    /* Animated background */
-    body::before,
-    body::after {
-      content: '';
-      position: fixed;
-      border-radius: 50%;
-      opacity: 0.08;
-      animation: float 20s infinite ease-in-out;
-      pointer-events: none;
-    }
-
-    body::before {
-      width: 600px;
-      height: 600px;
-      background: white;
-      top: -300px;
-      right: -200px;
-      animation-delay: -5s;
-    }
-
-    body::after {
-      width: 400px;
-      height: 400px;
-      background: white;
-      bottom: -200px;
-      left: -100px;
-      animation-delay: -10s;
-    }
-
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
-    }
-
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      position: relative;
-      z-index: 1;
-    }
+    ${baseStyles}
+    body { color: white; }
+    .container { max-width: 1200px; }
 
     /* Glass Card Base */
     .glass-card {
@@ -1987,50 +1758,7 @@ export function renderCalendar({ rootId, queryString, month, year, byDay }) {
       flex-wrap: wrap;
     }
 
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
-      color: white;
-      text-decoration: none;
-      border-radius: 980px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                  background-color 0.3s ease;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-      border: 1px solid rgba(255, 255, 255, 0.28);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .back-link::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: radial-gradient(
-        120% 60% at 0% 0%,
-        rgba(255, 255, 255, 0.35),
-        transparent 60%
-      );
-      opacity: 0;
-      transform: translateX(-30%) translateY(-10%);
-      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-      pointer-events: none;
-    }
-
-    .back-link:hover {
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
-      transform: translateY(-2px);
-    }
-
-    .back-link:hover::before {
-      opacity: 1;
-      transform: translateX(30%) translateY(10%);
-    }
+    ${backNavStyles}
 
     .nav-controls {
       display: flex;
@@ -2730,32 +2458,8 @@ export function renderGateway({ rootId, rootName, queryString, channels }) {
   <meta name="theme-color" content="#667eea">
   <title>Gateway -- ${escapeHtml(rootName)}</title>
   <style>
-    :root {
-      --glass-water-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh; padding: 20px; color: #fff;
-      position: relative; overflow-x: hidden;
-    }
-    body::before, body::after {
-      content: ''; position: fixed; border-radius: 50%; opacity: 0.08;
-      animation: float 20s infinite ease-in-out; pointer-events: none;
-    }
-    body::before { width: 600px; height: 600px; background: white; top: -300px; right: -200px; }
-    body::after { width: 400px; height: 400px; background: white; bottom: -200px; left: -100px; }
-    @keyframes float {
-      0%, 100% { transform: translateY(0) rotate(0deg); }
-      50% { transform: translateY(-30px) rotate(5deg); }
-    }
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(30px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .container { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+    ${baseStyles}
+    body { color: #fff; }
     .content-card {
       background: rgba(var(--glass-water-rgb), var(--glass-alpha));
       backdrop-filter: blur(22px) saturate(140%);
@@ -3256,84 +2960,10 @@ export function renderValuesPage({ nodeId, queryString, result }) {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Global Values - ${rootNodeName}</title>
   <style>
-    :root {
-      --glass-water-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-      --glass-alpha-hover: 0.38;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: white;
-      position: relative;
-      overflow-x: hidden;
-    }
-
-    /* Animated background */
-    body::before,
-    body::after {
-      content: '';
-      position: fixed;
-      border-radius: 50%;
-      opacity: 0.08;
-      animation: float 20s infinite ease-in-out;
-      pointer-events: none;
-    }
-
-    body::before {
-      width: 600px;
-      height: 600px;
-      background: white;
-      top: -300px;
-      right: -200px;
-      animation-delay: -5s;
-    }
-
-    body::after {
-      width: 400px;
-      height: 400px;
-      background: white;
-      bottom: -200px;
-      left: -100px;
-      animation-delay: -10s;
-    }
-
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-30px) rotate(5deg);
-      }
-    }
-
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .container {
-      max-width: 1000px;
-      margin: 0 auto;
-      position: relative;
-      z-index: 1;
-    }
+    ${baseStyles}
+    ${backNavStyles}
+    body { color: white; }
+    .container { max-width: 1000px; }
 
     /* Glass Card Base */
     .glass-card {
@@ -3359,60 +2989,6 @@ export function renderValuesPage({ nodeId, queryString, result }) {
         rgba(255,255,255,0.05)
       );
       pointer-events: none;
-    }
-
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      animation: fadeInUp 0.5s ease-out;
-    }
-
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
-      color: white;
-      text-decoration: none;
-      border-radius: 980px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                  background-color 0.3s ease;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-      border: 1px solid rgba(255, 255, 255, 0.28);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .back-link::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: radial-gradient(
-        120% 60% at 0% 0%,
-        rgba(255, 255, 255, 0.35),
-        transparent 60%
-      );
-      opacity: 0;
-      transform: translateX(-30%) translateY(-10%);
-      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-      pointer-events: none;
-    }
-
-    .back-link:hover {
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
-      transform: translateY(-2px);
-    }
-
-    .back-link:hover::before {
-      opacity: 1;
-      transform: translateX(30%) translateY(10%);
     }
 
     /* Header */

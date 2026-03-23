@@ -2,6 +2,8 @@
 /* HTML renderers for Canopy admin pages              */
 /* ------------------------------------------------- */
 
+import { baseStyles } from "./baseStyles.js";
+
 function escapeHtml(str) {
   if (!str) return "";
   return String(str)
@@ -48,79 +50,20 @@ function timeAgo(date) {
 // ─────────────────────────────────────────────────────────────────────────
 
 const sharedStyles = `
+${baseStyles}
+
+/* ── Canopy overrides ── */
 :root {
-  --glass-water-rgb: 115, 111, 230;
-  --glass-alpha: 0.28;
-  --glass-alpha-hover: 0.38;
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.75);
   --text-muted: rgba(255, 255, 255, 0.45);
   --accent: #10b981;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-
 body {
   font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
     "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: 20px;
   color: var(--text-primary);
-  position: relative;
-  overflow-x: hidden;
-  touch-action: manipulation;
-}
-
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  border-radius: 50%;
-  opacity: 0.08;
-  animation: float 20s infinite ease-in-out;
-  pointer-events: none;
-}
-
-body::before {
-  width: 600px;
-  height: 600px;
-  background: white;
-  top: -300px;
-  right: -200px;
-  animation-delay: -5s;
-}
-
-body::after {
-  width: 400px;
-  height: 400px;
-  background: white;
-  bottom: -200px;
-  left: -100px;
-  animation-delay: -10s;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-30px) rotate(5deg); }
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
 }
 
 /* =========================================================
