@@ -13,8 +13,7 @@
     "dev": "cd land && SITE_DEV=true node boot.js",
     "build": "cd site && npm run build",
     "dev:site": "cd site && npm run dev",
-    "install:all": "cd land && npm install && cd ../site && npm install --no-optional && cd ../cli && npm install",
-    "install:land": "cd land && npm install",
+    "postinstall": "cd land && npm install && cd ../site && npm install && cd ../cli && npm install",
     "test": "node --test test/core.test.js"
   }
 }
