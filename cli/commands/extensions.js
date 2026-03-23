@@ -189,6 +189,26 @@ module.exports = (program) => {
         const data = await api.installExtension(name, version);
         console.log(chalk.green(`Installed: ${name} v${data.version || "?"}`));
         console.log(chalk.dim(`${data.filesWritten} files written.`));
+
+        // Check if this extension needs other extensions
+        if (data.needs?.extensions?.length > 0) {
+          const protocol = await api.get("/protocol");
+          const loaded = new Set(protocol?.extensions || []);
+          const missing = data.needs.extensions.filter(dep => !loaded.has(dep));
+          if (missing.length > 0) {
+            console.log(chalk.yellow(`\nRequires: ${missing.join(", ")}`));
+            for (const dep of missing) {
+              console.log(chalk.dim(`  Installing ${dep}...`));
+              try {
+                const depData = await api.installExtension(dep);
+                console.log(chalk.green(`  Installed: ${dep} v${depData.version || "?"}`));
+              } catch (depErr) {
+                console.log(chalk.red(`  Failed to install ${dep}: ${depErr.message}`));
+              }
+            }
+          }
+        }
+
         console.log(chalk.dim("Restart the land to load it."));
         await refreshProtocolCache();
       } catch (err) {
