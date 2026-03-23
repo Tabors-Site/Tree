@@ -24,5 +24,9 @@ export default {
     cli: [
       { command: "prestige", description: "Add new version to current node", method: "POST", endpoint: "/node/:nodeId/prestige" },
     ],
+    hooks: {
+      fires: [],
+      listens: ["beforeNote", "beforeContribution", "enrichContext"],
+    },
   },
 };

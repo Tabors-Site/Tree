@@ -289,9 +289,15 @@ const startShell = module.exports.startShell = async () => {
         });
       });
 
+      // Strip "treeos" prefix if user types it inside the shell
+      let cleanInput = input;
+      if (/^treeos\s+/i.test(cleanInput)) {
+        cleanInput = cleanInput.replace(/^treeos\s+/i, "");
+      }
+
       // Re-dispatch through Commander as if the user typed "tree <input>"
       try {
-        await program.parseAsync(["node", "tree", ...shellSplit(input)]);
+        await program.parseAsync(["node", "tree", ...shellSplit(cleanInput)]);
       } catch (e) {
         // exitOverride throws instead of exiting — just swallow
         if (!e.code?.startsWith("commander.")) {

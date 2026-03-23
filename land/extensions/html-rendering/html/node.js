@@ -3,18 +3,17 @@
 /* ------------------------------------------------------------------ */
 
 import { baseStyles, backNavStyles, glassHeaderStyles, emptyStateStyles, responsiveBase } from "./baseStyles.js";
-
-const esc = (str = "") =>
-  String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-
-const truncate = (str, len = 200) => {
-  if (!str) return "";
-  const clean = esc(str);
-  return clean.length > len ? clean.slice(0, len) + "..." : clean;
-};
+import {
+  esc,
+  truncate,
+  formatTime,
+  formatDuration,
+  modeLabel,
+  sourceLabel,
+  actionLabel,
+  actionColorHex,
+  groupIntoChains,
+} from "./utils.js";
 
 const linkifyNodeIds = (html, token) =>
   html.replace(
@@ -22,16 +21,6 @@ const linkifyNodeIds = (html, token) =>
     (_, id) =>
       `Placed on node <a class="node-link" href="/api/v1/root/${id}${token ? `?token=${token}&html` : "?html"}">${id}</a>`,
   );
-
-const formatTime = (d) => (d ? new Date(d).toLocaleString() : "--");
-
-const formatDuration = (start, end) => {
-  if (!start || !end) return null;
-  const ms = new Date(end) - new Date(start);
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
-};
 
 const formatContent = (str) => {
   if (!str) return "";
@@ -47,113 +36,6 @@ const formatContent = (str) => {
     } catch (_) {}
   }
   return esc(s);
-};
-
-const modeLabel = (path) => {
-  if (!path) return "unknown";
-  if (path === "translator") return "Translator";
-  if (path.startsWith("tree:orchestrator:plan:")) {
-    const num = path.split(":")[3];
-    return `Plan Step ${num}`;
-  }
-  const parts = path.split(":");
-  const labels = { home: "Home", tree: "Tree", rawIdea: "Raw Idea" };
-  const subLabels = {
-    default: "Default",
-    chat: "Chat",
-    structure: "Structure",
-    edit: "Edit",
-    be: "Be",
-    reflect: "Reflect",
-    navigate: "Navigate",
-    understand: "Understand",
-    getContext: "Context",
-    respond: "Respond",
-    notes: "Notes",
-    start: "Start",
-    chooseRoot: "Choose Root",
-    complete: "Placed",
-    stuck: "Stuck",
-  };
-  const big = labels[parts[0]] || parts[0];
-  const sub = subLabels[parts[1]] || parts[1] || "";
-  return sub ? `${big} ${sub}` : big;
-};
-
-const sourceLabel = (src) => {
-  const map = {
-    user: "User",
-    api: "API",
-    orchestrator: "Chain",
-    background: "Background",
-    script: "Script",
-    system: "System",
-  };
-  return map[src] || src;
-};
-
-const actionLabel = (action) => {
-  const map = {
-    create: "Created",
-    editStatus: "Status",
-    editValue: "Values",
-    prestige: "Prestige",
-    trade: "Trade",
-    delete: "Deleted",
-    invite: "Invite",
-    editSchedule: "Schedule",
-    editGoal: "Goal",
-    transaction: "Transaction",
-    note: "Note",
-    updateParent: "Moved",
-    editScript: "Script",
-    executeScript: "Ran script",
-    updateChildNode: "Child",
-    editNameNode: "Renamed",
-    rawIdea: "Raw idea",
-    branchLifecycle: "Branch",
-    purchase: "Purchase",
-    understanding: "Understanding",
-  };
-  return map[action] || action;
-};
-
-const actionColor = (action) => {
-  switch (action) {
-    case "create":
-      return "#48bb78";
-    case "delete":
-    case "branchLifecycle":
-      return "#c85050";
-    case "editStatus":
-    case "editValue":
-    case "editGoal":
-    case "editSchedule":
-    case "editNameNode":
-    case "editScript":
-      return "#5082dc";
-    case "executeScript":
-      return "#38bdd2";
-    case "prestige":
-      return "#c8aa32";
-    case "note":
-    case "rawIdea":
-      return "#9b64dc";
-    case "invite":
-      return "#d264a0";
-    case "transaction":
-    case "trade":
-      return "#dc8c3c";
-    case "purchase":
-      return "#34be82";
-    case "updateParent":
-    case "updateChildNode":
-      return "#3caab4";
-    case "understanding":
-      return "#6464d2";
-    default:
-      return "#736fe6";
-  }
 };
 
 const renderTreeContext = (tc, tokenQS) => {
@@ -213,31 +95,6 @@ const renderModelBadge = (chat) => {
   const model = connName || chat.llmProvider?.model;
   if (!model) return "";
   return `<span class="chain-model">${esc(model)}</span>`;
-};
-
-const groupIntoChains = (chats) => {
-  const chainMap = new Map();
-  const chainOrder = [];
-  for (const chat of chats) {
-    const key = chat.rootChatId || chat._id;
-    if (!chainMap.has(key)) {
-      chainMap.set(key, { root: null, steps: [] });
-      chainOrder.push(key);
-    }
-    const chain = chainMap.get(key);
-    if (chat.chainIndex === 0 || chat._id === key) {
-      chain.root = chat;
-    } else {
-      chain.steps.push(chat);
-    }
-  }
-  return chainOrder
-    .map((key) => {
-      const chain = chainMap.get(key);
-      chain.steps.sort((a, b) => a.chainIndex - b.chainIndex);
-      return chain;
-    })
-    .filter((c) => c.root);
 };
 
 const groupStepsIntoPhases = (steps) => {
@@ -497,7 +354,7 @@ const renderChain = (chain, tokenQS, token) => {
         c.understandingMeta?.rootNodeId
           ? ` <a class="understanding-link" href="/api/v1/root/${c.understandingMeta.rootNodeId}/understandings/run/${c.understandingMeta.understandingRunId}${tokenQS}">View run</a>`
           : "";
-      const color = actionColor(c.action);
+      const color = actionColorHex(c.action);
       return `
         <tr class="contrib-row">
           <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}${understandingLink}</td>

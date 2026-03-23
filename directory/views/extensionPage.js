@@ -55,19 +55,26 @@ export function renderExtensionPage({ ext, versions }) {
   const manifest = ext.manifest || {};
   const provides = manifest.provides || {};
   const needs = manifest.needs || {};
+  const optional = manifest.optional || {};
+  const hooks = provides.hooks || {};
   const providesList = [];
-  if (provides.models) providesList.push(Object.keys(provides.models).length + " models");
+  if (provides.models && Object.keys(provides.models).length) providesList.push(Object.keys(provides.models).length + " models");
   if (provides.routes) providesList.push("routes");
   if (provides.tools) providesList.push("tools");
   if (provides.jobs) providesList.push("jobs");
   if (provides.orchestrator) providesList.push("orchestrator");
   if (provides.cli && provides.cli.length) providesList.push(provides.cli.length + " CLI commands");
-  if (provides.energyActions) providesList.push(Object.keys(provides.energyActions).length + " energy actions");
+  if (provides.energyActions && Object.keys(provides.energyActions).length) providesList.push(Object.keys(provides.energyActions).length + " energy actions");
+  if (hooks.fires && hooks.fires.length) providesList.push(hooks.fires.length + " custom hooks");
 
   const needsList = [];
   if (needs.services && needs.services.length) needsList.push("services: " + needs.services.join(", "));
   if (needs.models && needs.models.length) needsList.push("models: " + needs.models.join(", "));
   if (needs.extensions && needs.extensions.length) needsList.push("extensions: " + needs.extensions.join(", "));
+
+  const optionalList = [];
+  if (optional.services && optional.services.length) optionalList.push("services: " + optional.services.join(", "));
+  if (optional.extensions && optional.extensions.length) optionalList.push("extensions: " + optional.extensions.join(", "));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -405,7 +412,7 @@ export function renderExtensionPage({ ext, versions }) {
       <div class="install-cmd">treeos ext install ${escapeHtml(ext.name)}</div>
     </div>
 
-    ${(providesList.length || needsList.length) ? `
+    ${(providesList.length || needsList.length || optionalList.length) ? `
     <!-- Manifest -->
     <div class="glass-card" style="animation-delay: 0.05s;">
       <h2>Manifest</h2>
@@ -424,7 +431,16 @@ export function renderExtensionPage({ ext, versions }) {
             ${needsList.map(n => `<li>${escapeHtml(n)}</li>`).join("")}
           </ul>
         </div>` : ""}
+        ${optionalList.length ? `
+        <div class="manifest-section">
+          <h3>Optional</h3>
+          <ul class="manifest-list">
+            ${optionalList.map(o => `<li>${escapeHtml(o)}</li>`).join("")}
+          </ul>
+        </div>` : ""}
       </div>
+      ${ext.checksum ? `<div style="margin-top:12px;font-size:11px;color:var(--text-muted);">SHA256: <code>${escapeHtml(ext.checksum)}</code></div>` : ""}
+      ${ext.maintainers && ext.maintainers.length ? `<div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Maintainers: ${ext.maintainers.map(m => `<strong>${escapeHtml(m)}</strong>`).join(", ")}</div>` : ""}
     </div>` : ""}
 
     ${provides.cli && provides.cli.length ? `
@@ -447,6 +463,35 @@ export function renderExtensionPage({ ext, versions }) {
           }).join("")}
         </tbody>
       </table>
+    </div>` : ""}
+
+    ${(hooks.fires && hooks.fires.length) || (hooks.listens && hooks.listens.length) ? `
+    <!-- Hooks -->
+    <div class="glass-card" style="animation-delay: 0.085s;">
+      <h2>Hooks</h2>
+      ${hooks.listens && hooks.listens.length ? `
+      <div class="manifest-section">
+        <h3>Listens To</h3>
+        <ul class="manifest-list">
+          ${hooks.listens.map(h => `<li><code>${escapeHtml(h)}</code></li>`).join("")}
+        </ul>
+      </div>` : ""}
+      ${hooks.fires && hooks.fires.length ? `
+      <div class="manifest-section" style="margin-top:14px;">
+        <h3>Fires</h3>
+        <table class="data-table">
+          <thead><tr><th>Hook</th><th>Data</th><th>Description</th></tr></thead>
+          <tbody>
+            ${hooks.fires.map(h =>
+              `<tr>
+                <td><code>${escapeHtml(h.name || h)}</code></td>
+                <td><code>${escapeHtml(h.data || "")}</code></td>
+                <td>${escapeHtml(h.description || "")}</td>
+              </tr>`
+            ).join("")}
+          </tbody>
+        </table>
+      </div>` : ""}
     </div>` : ""}
 
     ${provides.env && provides.env.length ? `

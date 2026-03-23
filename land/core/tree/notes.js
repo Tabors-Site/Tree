@@ -103,8 +103,8 @@ async function createNote({
     throw new Error("Missing required fields");
   }
 
-  const targetNode = await Node.findById(nodeId).select("isSystem").lean();
-  if (targetNode?.isSystem) throw new Error("Cannot modify system nodes");
+  const targetNode = await Node.findById(nodeId).select("systemRole").lean();
+  if (targetNode?.systemRole) throw new Error("Cannot modify system nodes");
 
   let filePath = null;
   if (contentType === "file") {
@@ -158,10 +158,16 @@ async function createNote({
 
   await newNote.save();
 
-  // afterNote hook (fire-and-forget)
-  hooks.run("afterNote", { note: newNote, nodeId, userId }).catch(() => {});
+  // Storage tracking (core concern, per-user disk usage)
+  const sizeKB = contentType === "file" && file
+    ? Math.ceil(file.size / 1024)
+    : Math.ceil(Buffer.byteLength(finalContent || "", "utf8") / 1024);
+  if (sizeKB > 0) {
+    User.findByIdAndUpdate(userId, { $inc: { "metadata.storage.usageKB": sizeKB } }).catch(() => {});
+  }
 
-  // Storage tracking handled by energy extension via afterNote hook
+  // afterNote hook (fire-and-forget)
+  hooks.run("afterNote", { note: newNote, nodeId, userId, contentType, sizeKB, action: "create" }).catch(() => {});
 
   // ── LOG ─────────────────────────────────────────
   await logContribution({
@@ -280,16 +286,12 @@ async function editNote({
     finalContent = rewrittenContent;
   }
 
-  // ── STORAGE DELTA ───────────────────────────────
+  // ── SIZE DELTA ──────────────────────────────────
   const oldSizeKB = Math.ceil(Buffer.byteLength(oldContent, "utf8") / 1024);
   const newSizeKB = Math.ceil(
     Buffer.byteLength(finalContent || "", "utf8") / 1024,
   );
   const deltaKB = newSizeKB - oldSizeKB;
-
-  if (deltaKB !== 0) {
-    await User.findByIdAndUpdate(userId, { $inc: { "metadata.energy.storageUsage": deltaKB } });
-  }
 
   // ── APPLY ───────────────────────────────────────
   note.content = finalContent;
@@ -298,6 +300,14 @@ async function editNote({
   note.sizeKB = newSizeKB;
 
   await note.save();
+
+  // Storage tracking (core concern)
+  if (deltaKB !== 0) {
+    User.findByIdAndUpdate(userId, { $inc: { "metadata.storage.usageKB": deltaKB } }).catch(() => {});
+  }
+
+  // afterNote hook (fire-and-forget)
+  hooks.run("afterNote", { note, nodeId: note.nodeId, userId, contentType: note.contentType, sizeKB: newSizeKB, deltaKB, action: "edit" }).catch(() => {});
 
   // ── LOG ─────────────────────────────────────────
   await logContribution({
@@ -510,29 +520,20 @@ async function deleteNoteAndFile({
 
   await note.save();
 
-  if (
-    fileDeleted &&
-    fileSizeKB > 0 &&
-    fileOwnerId &&
-    fileOwnerId !== "deleted"
-  ) {
-    try {
-      await User.findByIdAndUpdate(fileOwnerId, [
-        {
-          $set: {
-            storageUsage: {
-              $max: [{ $subtract: ["$storageUsage", fileSizeKB] }, 0],
-            },
-          },
-        },
-      ]);
-    } catch (err) {
-      log.error("Notes", "Storage update failed", {
-        fileOwnerId,
-        fileSizeKB,
-        noteId,
-      });
-    }
+  // Storage tracking (core concern, decrement on file delete)
+  if (fileDeleted && fileSizeKB > 0 && fileOwnerId && fileOwnerId !== "deleted") {
+    User.findByIdAndUpdate(fileOwnerId, [
+      { $set: { "metadata.storage.usageKB": { $max: [{ $subtract: [{ $ifNull: ["$metadata.storage.usageKB", 0] }, fileSizeKB] }, 0] } } },
+    ]).catch(() => {});
+  }
+
+  // afterNote hook for delete (fire-and-forget)
+  if (fileOwnerId && fileOwnerId !== "deleted") {
+    hooks.run("afterNote", {
+      note, nodeId, userId: fileOwnerId,
+      contentType: note.contentType, fileSizeKB,
+      action: "delete", fileDeleted,
+    }).catch(() => {});
   }
 
   await logContribution({

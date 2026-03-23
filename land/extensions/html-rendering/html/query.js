@@ -8,15 +8,7 @@
 /* the * reset overlaps, which is not worth the       */
 /* import + override cost.                            */
 
-function escapeHtml(str) {
-  if (!str) return "";
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+import { escapeHtml } from "./utils.js";
 
 export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailable, isAuthenticated }) {
   return `<!DOCTYPE html>

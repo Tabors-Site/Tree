@@ -3,21 +3,7 @@
 /* ------------------------------------------------- */
 
 import { baseStyles } from "./baseStyles.js";
-
-function escapeHtml(str) {
-  if (!str) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function truncate(str, len = 24) {
-  if (!str) return "";
-  return str.length > len ? str.slice(0, len) + "..." : str;
-}
+import { escapeHtml, truncateRaw as truncate, timeAgo } from "./utils.js";
 
 function statusColor(status) {
   switch (status) {
@@ -34,15 +20,6 @@ function statusColor(status) {
     default:
       return "#9ca3af";
   }
-}
-
-function timeAgo(date) {
-  if (!date) return "never";
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (seconds < 60) return seconds + "s ago";
-  if (seconds < 3600) return Math.floor(seconds / 60) + "m ago";
-  if (seconds < 86400) return Math.floor(seconds / 3600) + "h ago";
-  return Math.floor(seconds / 86400) + "d ago";
 }
 
 // ─────────────────────────────────────────────────────────────────────────

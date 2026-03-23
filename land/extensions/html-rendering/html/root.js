@@ -3,26 +3,7 @@
 /* ------------------------------------------------- */
 
 import { baseStyles, backNavStyles, responsiveBase } from './baseStyles.js';
-
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-// Rainbow colors by depth
-const rainbow = [
-  "#ff3b30",
-  "#ff9500",
-  "#ffcc00",
-  "#34c759",
-  "#32ade6",
-  "#5856d6",
-  "#af52de",
-];
+import { escapeHtml, rainbow } from './utils.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // 1. renderRootOverview

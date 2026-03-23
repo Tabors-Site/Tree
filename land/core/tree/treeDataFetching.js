@@ -464,7 +464,7 @@ function removeNullFields(obj) {
 }
 
 const TREE_STRUCTURE_FIELDS =
-  "_id name type status children parent isSystem systemRole";
+  "_id name type status children parent systemRole";
 
 async function getTreeStructure(rootId, filters = {}) {
   if (!rootId) throw new Error("Root node ID is required");

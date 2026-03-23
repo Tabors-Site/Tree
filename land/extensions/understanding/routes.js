@@ -16,14 +16,8 @@ import Node from "../../db/models/node.js";
 import { userHasLlm } from "../../ws/conversation.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
 import { getSessionsForUser, endSession, SESSION_TYPES } from "../../ws/sessionRegistry.js";
-import {
-  renderUnderstandingRun,
-  renderUnderstandingNode,
-  renderUnderstandingsList,
-  renderRunNodeView,
-  buildRunNodeInputsHtml,
-  buildRunCards,
-} from "./html/understanding.js";
+import { getExtension } from "../loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 function buildQueryString(req) {
   const allowedParams = ["token", "html"];
@@ -251,7 +245,7 @@ router.get(
       const createdDate = new Date(run.createdAt).toLocaleString();
 
       return res.send(
-        renderUnderstandingRun({
+        html().renderUnderstandingRun({
           run,
           qs,
           nodes,
@@ -372,7 +366,7 @@ router.get(
       const realNodeUrl = `/api/v1/node/${data.realNode.id}${qs}`;
 
       return res.send(
-        renderUnderstandingNode({
+        html().renderUnderstandingNode({
           data,
           nodeId,
           qs,
@@ -419,14 +413,14 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
       return res.json(data);
     }
 
-    const runCards = buildRunCards({
+    const runCards = html().buildRunCards({
       understandings: data.understandings,
       nodeId,
       queryString,
     });
 
     return res.send(
-      renderUnderstandingsList({
+      html().renderUnderstandingsList({
         data,
         nodeId,
         queryString,
@@ -572,7 +566,7 @@ router.get(
       const backTreeUrl = `/api/v1/root/${nodeId}${qs}`;
       const backRunUrl = `/api/v1/root/${nodeId}/understandings/run/${runId}${qs}`;
 
-      const { inputsHtml, inputsSectionTitle } = buildRunNodeInputsHtml({
+      const { inputsHtml, inputsSectionTitle } = html().buildRunNodeInputsHtml({
         isLeaf,
         isCompleted,
         chats,
@@ -583,7 +577,7 @@ router.get(
       });
 
       return res.send(
-        renderRunNodeView({
+        html().renderRunNodeView({
           data,
           nodeId,
           runId,

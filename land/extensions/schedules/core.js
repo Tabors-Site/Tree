@@ -32,7 +32,7 @@ async function updateSchedule({
     error.status = 404;
     throw error;
   }
-  if (node.isSystem) throw new Error("Cannot modify system nodes");
+  if (node.systemRole) throw new Error("Cannot modify system nodes");
 
   let formattedDate = null;
 

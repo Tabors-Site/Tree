@@ -17,7 +17,7 @@ async function addPrestige({
 }) {
   const node = await findNodeById(nodeId);
   if (!node) throw new Error("Node not found");
-  if (node.isSystem) throw new Error("Cannot modify system nodes");
+  if (node.systemRole) throw new Error("Cannot modify system nodes");
 
   const { energyUsed } = await useEnergy({
     userId,

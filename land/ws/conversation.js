@@ -659,8 +659,8 @@ export async function processMessage(visitorId, message, ctx) {
       const visited = new Set();
       while (cursor && !visited.has(cursor)) {
         visited.add(cursor);
-        const n = await Node.findById(cursor).select("metadata parent isSystem").lean();
-        if (!n || n.isSystem) break;
+        const n = await Node.findById(cursor).select("metadata parent systemRole").lean();
+        if (!n || n.systemRole) break;
         const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
         if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
         if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);

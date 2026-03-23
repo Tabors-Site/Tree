@@ -25,5 +25,9 @@ export default {
       { command: "schedule <date>", description: "Set schedule on current node", method: "POST", endpoint: "/node/:nodeId/editSchedule" },
       { command: "calendar", description: "Show scheduled nodes for current tree", method: "GET", endpoint: "/root/:rootId/calendar" },
     ],
+    hooks: {
+      fires: [],
+      listens: ["enrichContext"],
+    },
   },
 };

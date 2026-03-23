@@ -410,7 +410,7 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
         : mime.lookup(filePath) || "application/octet-stream";
       const mediaHtml = fileDeleted
         ? ""
-        : html().renderMediaImmediate(fileUrl, mimeType);
+        : html().renderMedia(fileUrl, mimeType, { lazy: false });
       const fileName = fileDeleted
         ? "File was deleted"
         : path.basename(note.content);

@@ -1,59 +1,50 @@
 import log from "./log.js";
 /**
- * Core Hook System
+ * Hook System
  *
- * Extensions register hooks during init() to modify or react to core operations
- * without core knowing about extensions.
+ * An open pub/sub bus for kernel and extension events. Any hook name is valid.
+ * Core fires kernel hooks. Extensions fire their own and listen to each other's.
  *
- * Lifecycle hooks:
- *   beforeNote        - Before note save. Modify { nodeId, version, content, userId, contentType }
- *   afterNote         - After note saved. React to { note, nodeId, userId }
+ * Core hooks (fired by kernel):
+ *   beforeNote         - Before note save. Modify { nodeId, version, content, userId, contentType }
+ *   afterNote          - After note saved. React to { note, nodeId, userId, sizeKB, action }
  *   beforeContribution - Before contribution log. Modify { nodeId, nodeVersion, action, userId }
- *   afterNodeCreate   - After node saved. React to { node, userId }
+ *   afterNodeCreate    - After node saved. React to { node, userId }
  *   beforeStatusChange - Before status write. Modify/validate { node, status, userId }
  *   afterStatusChange  - After status saved. React to { node, status, userId }
- *   beforeNodeDelete  - Before soft delete. Cleanup { node, userId }
- *   enrichContext     - During AI context build. Enrich { context, node, meta }
+ *   beforeNodeDelete   - Before deletion. Cleanup { node, userId }
+ *   enrichContext      - During AI context build. Enrich { context, node, meta }
+ *   beforeRegister     - Before user registration
+ *   afterRegister      - After user registration
  *
- * Execution order: hooks run in extension load order (topological sort by deps).
- * "before" hooks can modify the data object. Return false to cancel. Throwing also cancels.
- * "after" hooks run in parallel, fire-and-forget. Errors logged, never block.
- * "enrichContext" hooks run sequentially (extensions may depend on each other's additions).
+ * Extension hooks (examples, extensions define their own):
+ *   gateway:beforeDispatch    - Before notification dispatch
+ *   understanding:afterRun    - After understanding run completes
+ *   dreams:afterDream         - After dream cycle finishes
+ *
+ * Naming convention: core hooks are camelCase. Extension hooks use "extName:hookName".
+ *
+ * Execution rules:
+ *   "before*" hooks: sequential, can modify data, return false or throw to cancel.
+ *   "after*" hooks: parallel, fire-and-forget, errors logged but never block.
+ *   "enrichContext": sequential (extensions may read each other's additions).
+ *   All other hooks: parallel by default (same as "after" behavior).
  *
  * run() returns { cancelled: false } or { cancelled: true, reason: "..." }.
  *
  * One handler per extension per hook. Duplicate registrations replace the previous one.
- * Max 100 handlers per hook as a safety cap.
- *
- * All handlers have a 5s timeout. Hanging handlers are killed and logged.
+ * Max 100 handlers per hook as a safety cap. 5s timeout per handler.
  *
  * Usage in extensions:
- *   export async function init(core) {
- *     core.hooks.register("beforeNote", async (data) => {
- *       data.version = getPrestigeLevel(data.nodeId);
- *     });
- *   }
+ *   // Listen to a core hook
+ *   core.hooks.register("afterNote", async (data) => { ... }, "my-ext");
  *
- * Usage in core:
- *   import { hooks } from "../core/hooks.js";
- *   const data = { nodeId, version: 0, content, userId };
- *   const result = await hooks.run("beforeNote", data);
- *   if (result.cancelled) return { error: result.reason };
- *   // proceed with data.version (may have been modified by prestige)
+ *   // Fire your own hook for other extensions to listen to
+ *   core.hooks.run("my-ext:afterProcess", { result, userId });
+ *
+ *   // Listen to another extension's hook
+ *   core.hooks.register("gateway:beforeDispatch", async (data) => { ... }, "my-ext");
  */
-
-const VALID_HOOKS = [
-  "beforeNote",
-  "afterNote",
-  "beforeContribution",
-  "afterNodeCreate",
-  "beforeStatusChange",
-  "afterStatusChange",
-  "beforeNodeDelete",
-  "enrichContext",
-  "beforeRegister",
-  "afterRegister",
-];
 
 const HOOK_TIMEOUT_MS = 5000;
 const MAX_HANDLERS_PER_HOOK = 100;
@@ -61,8 +52,19 @@ const MAX_HANDLERS_PER_HOOK = 100;
 // Map<hookName, Array<{ extName, handler }>>
 const registry = new Map();
 
-for (const hook of VALID_HOOKS) {
-  registry.set(hook, []);
+/** Simple Levenshtein distance for typo detection. */
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => i);
+  for (let j = 1; j <= n; j++) {
+    let prev = dp[0]; dp[0] = j;
+    for (let i = 1; i <= m; i++) {
+      const tmp = dp[i];
+      dp[i] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[i], dp[i - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[m];
 }
 
 /**
@@ -84,13 +86,27 @@ function withTimeout(promise, ms, label) {
  * One handler per extension per hook. Second call replaces the first.
  */
 function register(hookName, handler, extName = "unknown") {
-  if (!VALID_HOOKS.includes(hookName)) {
-    log.warn("Hooks", `Unknown hook "${hookName}" registered by ${extName}. Ignored.`);
-    return;
-  }
   if (typeof handler !== "function") {
     log.warn("Hooks", `Hook "${hookName}" from ${extName} is not a function. Ignored.`);
     return;
+  }
+
+  // Auto-create registry entry for new hook names (extensions can define their own)
+  if (!registry.has(hookName)) {
+    // Typo detection: warn if it looks like a misspelled core hook
+    const CORE_HOOKS = ["beforeNote", "afterNote", "beforeContribution", "afterNodeCreate",
+      "beforeStatusChange", "afterStatusChange", "beforeNodeDelete", "enrichContext",
+      "beforeRegister", "afterRegister"];
+    if (!hookName.includes(":")) {
+      // Only check non-namespaced hooks (ext hooks use "extName:hookName")
+      for (const core of CORE_HOOKS) {
+        if (core !== hookName && levenshtein(core, hookName) <= 2) {
+          log.warn("Hooks", `"${hookName}" from ${extName} looks like a typo for "${core}". Registering anyway.`);
+          break;
+        }
+      }
+    }
+    registry.set(hookName, []);
   }
 
   const handlers = registry.get(hookName);
@@ -184,5 +200,4 @@ export const hooks = {
   unregister,
   run,
   list,
-  VALID_HOOKS,
 };

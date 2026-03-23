@@ -29,5 +29,9 @@ export default {
       { command: "script <id>", description: "View a script", method: "GET", endpoint: "/node/:nodeId/script/:id" },
       { command: "run <id>", description: "Execute a script", method: "POST", endpoint: "/node/:nodeId/script/:id/execute" },
     ],
+    hooks: {
+      fires: [],
+      listens: ["enrichContext"],
+    },
   },
 };

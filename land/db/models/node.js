@@ -26,8 +26,7 @@ const NodeSchema = new mongoose.Schema({
     default: "private",
   },
 
-  // Land system nodes (Land root, .identity, .config, .peers)
-  isSystem: { type: Boolean, default: false },
+  // Land system nodes. If systemRole is set, node is a system node.
   systemRole: {
     type: String,
     enum: [null, "land-root", "identity", "config", "peers", "extensions"],
@@ -73,7 +72,7 @@ NodeSchema.methods.transferOwnership = function (newOwnerId, removerId) {
 };
 
 NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
-  if (this.isSystem) {
+  if (this.systemRole) {
     throw new Error("System nodes cannot be deleted");
   }
   const Node = mongoose.model("Node");

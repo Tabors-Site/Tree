@@ -96,7 +96,7 @@ export async function updateScript({
   if (!node) {
     throw new Error("Node not found by that ID");
   }
-  if (node.isSystem) throw new Error("Cannot modify system nodes");
+  if (node.systemRole) throw new Error("Cannot modify system nodes");
 
   const scripts = getScripts(node);
   let targetScript;
@@ -182,7 +182,7 @@ export async function executeScript({
   if (!node) {
     throw new Error("Node not found");
   }
-  if (node.isSystem) throw new Error("Cannot modify system nodes");
+  if (node.systemRole) throw new Error("Cannot modify system nodes");
 
   const scripts = getScripts(node);
   const scriptObj = findScript(scripts, scriptId);

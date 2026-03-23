@@ -70,7 +70,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     }
 
     const ENERGY_RESET_MS = 24 * 60 * 60 * 1000;
-    const storageUsedKB = energyData.storageUsage || 0;
+    const storageUsedKB = getUserMeta(user, "storage").usageKB || 0;
 
     const lastResetAt = energy?.lastResetAt
       ? new Date(energy.lastResetAt)

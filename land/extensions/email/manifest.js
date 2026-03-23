@@ -24,5 +24,9 @@ export default {
       { key: "EMAIL_PASS", required: true, secret: true, description: "Email account password or app password" },
     ],
     cli: [],
+    hooks: {
+      fires: [],
+      listens: ["beforeRegister", "afterRegister"],
+    },
   },
 };

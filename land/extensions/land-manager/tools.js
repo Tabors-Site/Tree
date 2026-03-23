@@ -148,7 +148,7 @@ export default function getTools() {
       annotations: { readOnlyHint: true },
       async handler({ userId }) {
         try {
-          const systemNodes = await Node.find({ isSystem: true }).select("name systemRole children metadata").lean();
+          const systemNodes = await Node.find({ systemRole: { $ne: null } }).select("name systemRole children metadata").lean();
           const result = systemNodes.map(n => ({
             name: n.name,
             role: n.systemRole,

@@ -5,87 +5,7 @@
 import mime from "mime-types";
 import { getLandUrl } from "../../../canopy/identity.js";
 import { baseStyles, backNavStyles } from "./baseStyles.js";
-
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function renderMedia(fileUrl, mimeType) {
-  if (mimeType.startsWith("image/")) {
-    return `
-      <img
-        data-src="${fileUrl}"
-        loading="lazy"
-        style="max-width:100%;"
-        class="lazy-media"
-        alt=""
-      />
-    `;
-  }
-
-  if (mimeType.startsWith("video/")) {
-    return `
-      <video
-        controls
-        preload="none"
-        data-src="${fileUrl}"
-        class="lazy-media"
-        style="max-width:100%;"
-      ></video>
-    `;
-  }
-
-  if (mimeType.startsWith("audio/")) {
-    return `
-      <audio
-        controls
-        preload="none"
-        data-src="${fileUrl}"
-        class="lazy-media"
-      ></audio>
-    `;
-  }
-
-  if (mimeType === "application/pdf") {
-    return `
-      <iframe
-        data-src="${fileUrl}"
-        loading="lazy"
-        class="lazy-media"
-        style="width:100%; height:90vh; border:none;"
-      ></iframe>
-    `;
-  }
-
-  return ``;
-}
-
-function renderMediaImmediate(fileUrl, mimeType) {
-  if (mimeType.startsWith("image/")) {
-    return `<img src="${fileUrl}" style="max-width:100%;" />`;
-  }
-
-  if (mimeType.startsWith("video/")) {
-    return `<video src="${fileUrl}" controls style="max-width:100%;"></video>`;
-  }
-
-  if (mimeType.startsWith("audio/")) {
-    return `<audio src="${fileUrl}" controls></audio>`;
-  }
-
-  if (mimeType === "application/pdf") {
-    return `
-      <iframe src="${fileUrl}" style="width:100%; height:90vh; border:none;"></iframe>
-    `;
-  }
-
-  return ``;
-}
+import { escapeHtml, renderMedia } from "./utils.js";
 
 function renderBookNode(node, depth, token, version) {
   const level = Math.min(depth, 5);
@@ -5006,4 +4926,4 @@ export function renderFileNote({
 `;
 }
 
-export { escapeHtml, renderMediaImmediate, parseBool, normalizeStatusFilters, renderBookNode };
+export { parseBool, normalizeStatusFilters, renderBookNode };

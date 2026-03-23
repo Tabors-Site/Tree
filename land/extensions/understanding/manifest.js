@@ -12,6 +12,7 @@ export default {
   // Optional: works without these, gets no-op stubs if missing
   optional: {
     services: ["energy", "contributions"],
+    extensions: ["html-rendering"],
   },
 
   provides: {

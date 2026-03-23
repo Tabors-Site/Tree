@@ -384,13 +384,13 @@ router.get("/land/root", authenticateOrPublic, async (req, res) => {
 
     // Fetch all Land root children with the fields we need to filter
     const children = await Node.find({ _id: { $in: landRoot.children } })
-      .select("_id name isSystem systemRole rootOwner contributors visibility llmDefault metadata")
+      .select("_id name systemRole systemRole rootOwner contributors visibility llmDefault metadata")
       .lean();
 
     // Filter: anonymous sees only public trees, authenticated sees system + owned + contributing + public
     const visible = children.filter((c) => {
       if (isAnon) return c.visibility === "public";
-      if (c.isSystem) return true;
+      if (c.systemRole) return true;
       if (c.rootOwner && String(c.rootOwner) === String(userId)) return true;
       if (c.contributors && c.contributors.map(String).includes(String(userId))) return true;
       if (c.visibility === "public") return true;
@@ -403,7 +403,7 @@ router.get("/land/root", authenticateOrPublic, async (req, res) => {
       children: visible.map((c) => ({
         _id: c._id,
         name: c.name,
-        isSystem: isAnon ? false : (c.isSystem || false),
+        systemRole: isAnon ? false : (c.systemRole || false),
         systemRole: isAnon ? null : (c.systemRole || null),
         rootOwner: c.rootOwner || null,
         isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(userId),

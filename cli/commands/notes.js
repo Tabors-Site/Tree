@@ -274,7 +274,7 @@ module.exports = (program) => {
 
         if (opts.rawIdea) {
           // Raw idea mode
-          const data = await api.getRawIdeas(cfg.userId, {});
+          const data = await api.listRawIdeas(cfg.userId, {});
           const ideas = data.rawIdeas || data.ideas || data || [];
           const num = parseInt(id, 10);
           if (!isNaN(num) && num > 0 && num <= ideas.length) {
@@ -287,7 +287,7 @@ module.exports = (program) => {
           // Note mode
           if (!cfg.activeRootId) return console.log(chalk.yellow("No tree selected."));
           const nodeId = currentNodeId(cfg);
-          const data = await api.getNotes(nodeId, { limit: 100 });
+          const data = await api.listNotes(nodeId, { limit: 100 });
           const notes = data.notes || data || [];
           const num = parseInt(id, 10);
           if (!isNaN(num) && num > 0 && num <= notes.length) {
@@ -299,7 +299,10 @@ module.exports = (program) => {
         }
 
         if (item.contentType === "file") {
-          const url = `${api.baseUrl || ""}/uploads/${item.content}`;
+          const rawPath = item.content || "";
+          const filePath = rawPath.startsWith("/") ? rawPath : `/api/v1/uploads/${rawPath}`;
+          const base = (api.baseUrl || "").replace(/\/+$/, "");
+          const url = `${base}${filePath}`;
           const res = await fetch(url, { headers: { "x-api-key": api.apiKey } });
           if (!res.ok) return console.log(chalk.red("Failed to download file"));
           const outPath = opts.output || item.content;

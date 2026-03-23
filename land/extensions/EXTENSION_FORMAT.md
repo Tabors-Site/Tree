@@ -45,6 +45,15 @@ export default {
     sessionTypes: {
       MY_SESSION: "my-session-type",    // Registered in session registry
     },
+    hooks: {
+      fires: [                          // Hooks this extension emits (other extensions can listen)
+        { name: "my-ext:afterProcess", data: "{ result, userId }", description: "Fired after processing completes" },
+      ],
+      listens: [                        // Hooks this extension handles
+        "afterNote", "enrichContext",    // Core hooks
+        "gateway:beforeDispatch",       // Another extension's hook
+      ],
+    },
   },
 };
 ```
@@ -298,36 +307,57 @@ Endpoint placeholders are resolved automatically by the CLI:
 
 ## Hooks
 
-Extensions can register hooks to react to or modify core operations without touching core code.
-Hooks are always available via `core.hooks` (no need to declare in `needs`).
+The hook system is an open pub/sub bus. Core fires kernel hooks. Extensions can fire their own hooks and listen to each other's. Any hook name is valid. No whitelist.
 
 ```js
 export async function init(core) {
+  // Listen to a core hook
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
     const myData = meta["my-extension"] || {};
     if (Object.keys(myData).length > 0) context.myData = myData;
   }, "my-extension");
+
+  // Listen to another extension's hook
+  core.hooks.register("gateway:beforeDispatch", async (data) => {
+    // modify or react to gateway dispatches
+  }, "my-extension");
+
+  // Fire your own hook for other extensions to listen to
+  await core.hooks.run("my-extension:afterProcess", { result, userId });
 }
 ```
 
-### Available hooks
+### Core hooks (fired by kernel)
 
 | Hook | Data shape | Type | Purpose |
 |------|-----------|------|---------|
 | `beforeNote` | `{ nodeId, version, content, userId, contentType }` | before | Modify note data before save. Prestige uses this to tag version. |
-| `afterNote` | `{ note, nodeId, userId }` | after | React after note saved. Understanding uses this to flag dirty nodes. |
+| `afterNote` | `{ note, nodeId, userId, sizeKB, deltaKB, action }` | after | React after note create/edit/delete. Understanding flags dirty nodes. Energy meters storage. |
 | `beforeContribution` | `{ nodeId, nodeVersion, action, userId }` | before | Modify contribution metadata. Prestige uses this to tag nodeVersion. |
 | `afterNodeCreate` | `{ node, userId }` | after | Initialize extension data on new nodes. |
 | `beforeStatusChange` | `{ node, status, userId }` | before | Validate or intercept status changes. |
 | `afterStatusChange` | `{ node, status, userId }` | after | React after status saved. |
 | `beforeNodeDelete` | `{ node, userId }` | before | Clean up extension data before deletion. |
 | `enrichContext` | `{ context, node, meta }` | enrich | Inject extension data into AI context. |
+| `beforeRegister` | `{ username, password }` | before | Validate or modify registration. |
+| `afterRegister` | `{ user }` | after | Initialize user data after registration. |
+
+### Extension hooks (examples)
+
+Extensions define their own hooks using the `extName:hookName` naming convention:
+
+| Hook | Extension | Purpose |
+|------|-----------|---------|
+| `gateway:beforeDispatch` | gateway | Before sending notifications to channels |
+| `understanding:afterRun` | understanding | After understanding run completes |
+| `dreams:afterDream` | dreams | After dream cycle finishes for a tree |
 
 ### Hook types
 
 - **before**: Runs sequentially. Can modify the data object. Return `false` to cancel the operation. If a handler throws, the operation is also cancelled. The caller receives `{ cancelled: true, reason: "..." }`.
 - **after**: Runs in parallel, fire-and-forget. Errors are logged but never block the operation.
 - **enrich**: Runs sequentially (extensions may read each other's additions). Mutate `context` directly.
+- **Custom hooks**: Follow the same rules based on prefix. `before*` hooks are sequential and cancellable. Everything else runs in parallel.
 
 ### Constraints
 

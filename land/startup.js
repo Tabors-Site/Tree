@@ -3,6 +3,7 @@ import { getLandIdentity, getLandUrl } from "./canopy/identity.js";
 import { ensureLandRoot } from "./core/landRoot.js";
 import { initLandConfig } from "./core/landConfig.js";
 import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames } from "./extensions/loader.js";
+import { startUploadCleanup } from "./core/tree/uploadCleanup.js";
 import { syncExtensionsToTree } from "./core/landRoot.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
 import { startOutboxJob } from "./canopy/events.js";
@@ -76,7 +77,6 @@ export function onListen() {
         const newExtNode = new Node({
           name: ".extensions",
           parent: landRoot._id,
-          isSystem: true,
           systemRole: "extensions",
           children: [],
           contributors: [],
@@ -92,6 +92,7 @@ export function onListen() {
     await runExtensionMigrations();
 
     startExtensionJobs();
+    startUploadCleanup();
     log.verbose("Land", "Background jobs started");
 
     startHeartbeatJob();

@@ -709,7 +709,7 @@ export async function getContextForAi(nodeId, options = {}) {
 
       const siblingNodes = await Node.find({
         _id: { $in: siblingIds },
-        isSystem: { $ne: true },
+        systemRole: null,
       })
         .select("_id name")
         .lean()

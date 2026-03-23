@@ -237,7 +237,7 @@ router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
 
     const node = await Node.findById(nodeId);
     if (!node) return res.status(404).json({ error: "Node not found" });
-    if (node.isSystem) return res.status(400).json({ error: "Cannot modify system nodes" });
+    if (node.systemRole) return res.status(400).json({ error: "Cannot modify system nodes" });
 
     const { getExtMeta, setExtMeta } = await import("../../core/tree/extensionMetadata.js");
 
@@ -284,8 +284,8 @@ router.get("/node/:nodeId/tools", async (req, res) => {
 
     while (cursor && !visited.has(cursor)) {
       visited.add(cursor);
-      const n = await Node.findById(cursor).select("name metadata parent isSystem").lean();
-      if (!n || n.isSystem) break;
+      const n = await Node.findById(cursor).select("name metadata parent systemRole").lean();
+      if (!n || n.systemRole) break;
       const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
       const nodeTools = meta.tools || null;
       if (nodeTools) {
@@ -319,7 +319,7 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
 
     const node = await Node.findById(nodeId);
     if (!node) return res.status(404).json({ error: "Node not found" });
-    if (node.isSystem) return res.status(400).json({ error: "Cannot modify system nodes" });
+    if (node.systemRole) return res.status(400).json({ error: "Cannot modify system nodes" });
 
     const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
     const toolConfig = {};

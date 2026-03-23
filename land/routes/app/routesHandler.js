@@ -28,14 +28,14 @@ export default async function registerRoutes(app) {
     app.use("/", htmlExt.pageRouter);
   }
 
-  // App routes (chat, setup, etc.) are dynamic so they don't crash if html-rendering is missing
+  // App routes (chat, setup, etc.) loaded directly from html-rendering
   try {
-    const appe = (await import("./app.js")).default;
-    const chat = (await import("./chat.js")).default;
-    const setup = (await import("./setup.js")).default;
-    app.use("/", appe);
-    app.use("/", chat);
-    app.use("/", setup);
+    const appRouter = (await import("../../extensions/html-rendering/app/app.js")).default;
+    const chatRouter = (await import("../../extensions/html-rendering/app/chat.js")).default;
+    const setupRouter = (await import("../../extensions/html-rendering/app/setup.js")).default;
+    app.use("/", appRouter);
+    app.use("/", chatRouter);
+    app.use("/", setupRouter);
   } catch {
     // html-rendering not installed, skip page routes
   }

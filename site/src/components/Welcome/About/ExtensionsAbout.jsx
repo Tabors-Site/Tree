@@ -317,55 +317,21 @@ if (other?.exports?.myFunction) {
         {/* -- HOOKS -- */}
         <div className="ext-section">
           <div className="ext-section-title">
-            <span className="ext-section-icon">🪝</span> Lifecycle Hooks
+            <span className="ext-section-icon">🪝</span> Hooks
           </div>
           <div className="ext-section-text">
-            Extensions can register hooks to modify or react to core operations
-            without core knowing about them. This is how extensions integrate
-            deeply without coupling. Hooks are registered during <code>init(core)</code>.
+            Extensions integrate deeply through an open hook system. The kernel
+            fires events when things happen (note created, status changed, node
+            deleted). Extensions listen and react without the kernel knowing
+            they exist. Extensions can also fire their own hooks for other
+            extensions to listen to.
           </div>
           <div className="ext-section-text" style={{ marginTop: 12 }}>
-            <strong>Before hooks</strong> run before the operation. They can modify
-            the data (e.g. set a version number) or cancel it (return false or throw).
-            <strong> After hooks</strong> run in parallel after the operation completes.
-            They cannot block or cancel.
-            <strong> enrichContext</strong> runs during AI context building and lets
-            extensions inject their data so the agent sees it.
-          </div>
-
-          <div className="ext-section-text" style={{ marginTop: 16 }}>
-            Available hooks:
-          </div>
-          <div className="ext-file-list">
-            <div className="ext-file-item">
-              <code>beforeNote</code> . before note creation. Modify version, content, or cancel.
-            </div>
-            <div className="ext-file-item">
-              <code>afterNote</code> . after note saved. React (e.g. flag node as dirty).
-            </div>
-            <div className="ext-file-item">
-              <code>beforeContribution</code> . before audit log. Modify nodeVersion.
-            </div>
-            <div className="ext-file-item">
-              <code>afterNodeCreate</code> . after node created. Initialize extension data.
-            </div>
-            <div className="ext-file-item">
-              <code>beforeStatusChange</code> . before status write. Validate or cancel.
-            </div>
-            <div className="ext-file-item">
-              <code>afterStatusChange</code> . after status saved. React (e.g. clear schedule).
-            </div>
-            <div className="ext-file-item">
-              <code>beforeNodeDelete</code> . before deletion. Cleanup extension data.
-            </div>
-            <div className="ext-file-item">
-              <code>enrichContext</code> . during AI context build. Inject extension data.
-            </div>
-          </div>
-          <div className="ext-section-text" style={{ marginTop: 12 }}>
-            All handlers have a 5 second timeout. One handler per extension per hook.
-            Before hooks that throw cancel the operation. After hooks run in parallel
-            and never block.
+            This is how energy tracks usage without being hardcoded into the
+            kernel. How prestige tags version numbers without the kernel knowing
+            about versions. How understanding flags dirty nodes without the
+            kernel knowing about compression. Each extension hooks into the
+            events it cares about and ignores everything else.
           </div>
         </div>
 

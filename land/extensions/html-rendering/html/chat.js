@@ -4,15 +4,7 @@
 
 import { getLandUrl } from "../../../canopy/identity.js";
 import { baseStyles } from "./baseStyles.js";
-
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+import { escapeHtml } from "./utils.js";
 
 export function renderChat({ username, userId, treesJSON, trees }) {
   return `<!DOCTYPE html>

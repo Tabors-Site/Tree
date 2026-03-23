@@ -22,7 +22,6 @@ export async function ensureLandRoot() {
     name: identity.name || "My Land",
     rootOwner: "SYSTEM",
     parent: null,
-    isSystem: true,
     systemRole: "land-root",
     children: [],
     contributors: [],
@@ -33,7 +32,6 @@ export async function ensureLandRoot() {
   const identityNode = new Node({
     name: ".identity",
     parent: landRoot._id,
-    isSystem: true,
     systemRole: "identity",
     children: [],
     contributors: [],
@@ -49,7 +47,6 @@ export async function ensureLandRoot() {
   const configNode = new Node({
     name: ".config",
     parent: landRoot._id,
-    isSystem: true,
     systemRole: "config",
     children: [],
     contributors: [],
@@ -67,7 +64,6 @@ export async function ensureLandRoot() {
   const peersNode = new Node({
     name: ".peers",
     parent: landRoot._id,
-    isSystem: true,
     systemRole: "peers",
     children: [],
     contributors: [],
@@ -78,7 +74,6 @@ export async function ensureLandRoot() {
   const extensionsNode = new Node({
     name: ".extensions",
     parent: landRoot._id,
-    isSystem: true,
     systemRole: "extensions",
     children: [],
     contributors: [],
@@ -181,7 +176,6 @@ export async function syncExtensionsToTree(manifests) {
       const child = new Node({
         name: manifest.name,
         parent: extNode._id,
-        isSystem: true,
         type: "resource",
         status: "active",
         children: [],

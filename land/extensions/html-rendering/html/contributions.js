@@ -10,14 +10,7 @@ import {
   emptyStateStyles,
   responsiveBase,
 } from "./baseStyles.js";
-
-const esc = (str = "") =>
-  String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+import { esc, actionColorClass } from "./utils.js";
 
 const link = (id, queryString) =>
   id
@@ -48,44 +41,6 @@ const kvMap = (data) => {
         `<span class="kv-chip"><code>${esc(k)}</code> ${esc(String(v))}</span>`,
     )
     .join(" ");
-};
-
-const actionColor = (action) => {
-  switch (action) {
-    case "create":
-      return "glass-green";
-    case "delete":
-    case "branchLifecycle":
-      return "glass-red";
-    case "editStatus":
-    case "editValue":
-    case "editGoal":
-    case "editSchedule":
-    case "editNameNode":
-    case "editScript":
-      return "glass-blue";
-    case "executeScript":
-      return "glass-cyan";
-    case "prestige":
-      return "glass-gold";
-    case "note":
-    case "rawIdea":
-      return "glass-purple";
-    case "invite":
-      return "glass-pink";
-    case "transaction":
-    case "trade":
-      return "glass-orange";
-    case "purchase":
-      return "glass-emerald";
-    case "updateParent":
-    case "updateChildNode":
-      return "glass-teal";
-    case "understanding":
-      return "glass-indigo";
-    default:
-      return "glass-default";
-  }
 };
 
 function renderAction(rawC, { nodeId, parsedVersion, nextVersion, queryString }) {
@@ -313,7 +268,7 @@ export function renderContributions({ nodeId, version, nodeName, contributions, 
   const items = contributions.map((c) => {
     const time = new Date(c.date).toLocaleString();
     const actionHtml = renderAction(c, { nodeId, parsedVersion, nextVersion, queryString });
-    const colorClass = actionColor(c.action);
+    const colorClass = actionColorClass(c.action);
 
     const aiBadge = c.wasAi ? `<span class="badge badge-ai">AI</span>` : "";
     const energyBadge =

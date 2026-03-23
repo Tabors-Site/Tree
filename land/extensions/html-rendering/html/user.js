@@ -7,31 +7,15 @@ import mime from "mime-types";
 import { getLandUrl } from "../../../canopy/identity.js";
 import { getUserMeta } from "../../../core/tree/userMetadata.js";
 import { baseStyles, backNavStyles, glassHeaderStyles, glassCardStyles, emptyStateStyles, responsiveBase } from "./baseStyles.js";
+import {
+  esc, escapeHtml, truncate, formatTime, formatDuration,
+  actionColorClass, actionColorHex, actionLabel,
+  renderMedia as _renderMedia,
+  groupIntoChains, modeLabel, sourceLabel,
+} from "./utils.js";
 
-function escapeHtml(str) {
-  return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function renderMedia(fileUrl, mimeType) {
-  if (mimeType.startsWith("image/")) {
-    return `<img src="${fileUrl}" style="max-width:100%;" />`;
-  }
-  if (mimeType.startsWith("video/")) {
-    return `<video src="${fileUrl}" controls style="max-width:100%;"></video>`;
-  }
-  if (mimeType.startsWith("audio/")) {
-    return `<audio src="${fileUrl}" controls></audio>`;
-  }
-  if (mimeType === "application/pdf") {
-    return `<iframe src="${fileUrl}" style="width:100%; height:90vh; border:none;"></iframe>`;
-  }
-  return ``;
-}
+// user.js always renders immediately (no lazy loading)
+const renderMedia = (fileUrl, mimeType) => _renderMedia(fileUrl, mimeType, { lazy: false });
 
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1785,14 +1769,6 @@ ${responsiveBase}
 export async function renderUserContributions({ userId, contributions, username, getNodeName, token }) {
   const tokenQS = token ? `?token=${token}&html` : `?html`;
 
-  const esc = (str = "") =>
-    String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-
   const link = (id, label) =>
     id
       ? `<a href="/api/v1/node/${id}${tokenQS}">${label || `<code>${esc(id)}</code>`}</a>`
@@ -1830,44 +1806,6 @@ export async function renderUserContributions({ userId, contributions, username,
       )
       .join(" ");
   };
-
-    const actionColor = (action) => {
-      switch (action) {
-        case "create":
-          return "glass-green";
-        case "delete":
-        case "branchLifecycle":
-          return "glass-red";
-        case "editStatus":
-        case "editValue":
-        case "editGoal":
-        case "editSchedule":
-        case "editNameNode":
-        case "editScript":
-          return "glass-blue";
-        case "executeScript":
-          return "glass-cyan";
-        case "prestige":
-          return "glass-gold";
-        case "note":
-        case "rawIdea":
-          return "glass-purple";
-        case "invite":
-          return "glass-pink";
-        case "transaction":
-        case "trade":
-          return "glass-orange";
-        case "purchase":
-          return "glass-emerald";
-        case "updateParent":
-        case "updateChildNode":
-          return "glass-teal";
-        case "understanding":
-          return "glass-indigo";
-        default:
-          return "glass-default";
-      }
-    };
 
     /* ─────────────────────────────────────────────── */
     /* ACTION RENDERER                                  */
@@ -2099,7 +2037,7 @@ export async function renderUserContributions({ userId, contributions, username,
         const nodeName = nId ? await getNodeName(nId) : null;
         const time = new Date(c.date).toLocaleString();
         const actionHtml = renderAction(c, nodeName);
-        const colorClass = actionColor(c.action);
+        const colorClass = actionColorClass(c.action);
 
         const aiBadge = c.wasAi ? `<span class="badge badge-ai">AI</span>` : "";
         const energyBadge =
@@ -4873,12 +4811,6 @@ ${responsiveBase}
 // ═══════════════════════════════════════════════════════════════════
 export function renderApiKeyCreated({ userId, safeName, rawKey, token }) {
   const tokenQS = token ? `?token=${token}&html` : `?html`;
-
-  const esc = (str = "") =>
-    String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
 
     return (`
 <!DOCTYPE html>
@@ -7749,34 +7681,12 @@ renderCheckout();
 export function renderChats({ userId, chats, sessions, username, token, sessionId }) {
   const tokenQS = token ? `?token=${token}&html` : `?html`;
 
-  const esc = (str = "") =>
-    String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-
-  const truncate = (str, len = 200) => {
-    if (!str) return "";
-    const clean = esc(str);
-    return clean.length > len ? clean.slice(0, len) + "…" : clean;
-  };
-
   const linkifyNodeIds = (html) =>
     html.replace(
       /Placed on node ([0-9a-f-]{36})/g,
       (_, id) =>
         `Placed on node <a class="node-link" href="/api/v1/root/${id}${token ? `?token=${token}&html` : "?html"}">${id}</a>`,
     );
-
-  const formatTime = (d) => (d ? new Date(d).toLocaleString() : "—");
-
-  const formatDuration = (start, end) => {
-    if (!start || !end) return null;
-    const ms = new Date(end) - new Date(start);
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${(ms / 60000).toFixed(1)}m`;
-  };
 
   const formatContent = (str) => {
     if (!str) return "";
@@ -7793,119 +7703,6 @@ export function renderChats({ userId, chats, sessions, username, token, sessionI
     }
     return esc(s);
   };
-
-    const modeLabel = (path) => {
-      if (!path) return "unknown";
-
-      if (path === "translator") return "🔄 Translator";
-      if (path.startsWith("tree:orchestrator:plan:")) {
-        const num = path.split(":")[3];
-        return `📋 Plan Step ${num}`;
-      }
-
-      const parts = path.split(":");
-      const labels = {
-        home: "🏠 Home",
-        tree: "🌳 Tree",
-        rawIdea: "📥 Raw Idea",
-      };
-      const subLabels = {
-        default: "Default",
-        chat: "💬 Chat",
-        structure: "🏗️ Structure",
-        edit: "✏️ Edit",
-        be: "Be",
-        reflect: "Reflect",
-        navigate: "🧭 Navigate",
-        understand: "Understand",
-        getContext: "📖 Context",
-        respond: "💬 Respond",
-        notes: "📝 Notes",
-        start: "Start",
-        chooseRoot: "Choose Root",
-        complete: "Placed",
-        stuck: "Stuck",
-      };
-      const big = labels[parts[0]] || parts[0];
-      const sub = subLabels[parts[1]] || parts[1] || "";
-      return sub ? `${big} ${sub}` : big;
-    };
-
-    const sourceLabel = (src) => {
-      const map = {
-        user: "👤 User",
-        api: "🔌 API",
-        orchestrator: "⚙️ Chain",
-        background: "🕐 Background",
-        script: "📜 Script",
-        system: "🔧 System",
-      };
-      return map[src] || src;
-    };
-
-    const actionLabel = (action) => {
-      const map = {
-        create: "Created",
-        editStatus: "Status",
-        editValue: "Values",
-        prestige: "Prestige",
-        trade: "Trade",
-        delete: "Deleted",
-        invite: "Invite",
-        editSchedule: "Schedule",
-        editGoal: "Goal",
-        transaction: "Transaction",
-        note: "Note",
-        updateParent: "Moved",
-        editScript: "Script",
-        executeScript: "Ran script",
-        updateChildNode: "Child",
-        editNameNode: "Renamed",
-        rawIdea: "Raw idea",
-        branchLifecycle: "Branch",
-        purchase: "Purchase",
-        understanding: "Understanding",
-      };
-      return map[action] || action;
-    };
-
-    const actionColor = (action) => {
-      switch (action) {
-        case "create":
-          return "#48bb78";
-        case "delete":
-        case "branchLifecycle":
-          return "#c85050";
-        case "editStatus":
-        case "editValue":
-        case "editGoal":
-        case "editSchedule":
-        case "editNameNode":
-        case "editScript":
-          return "#5082dc";
-        case "executeScript":
-          return "#38bdd2";
-        case "prestige":
-          return "#c8aa32";
-        case "note":
-        case "rawIdea":
-          return "#9b64dc";
-        case "invite":
-          return "#d264a0";
-        case "transaction":
-        case "trade":
-          return "#dc8c3c";
-        case "purchase":
-          return "#34be82";
-        case "updateParent":
-        case "updateChildNode":
-          return "#3caab4";
-        case "understanding":
-          return "#6464d2";
-        default:
-          return "#736fe6";
-      }
-    };
 
     // ── Tree context helpers ───────────────────────────────
 
@@ -7966,37 +7763,6 @@ export function renderChats({ userId, chats, sessions, username, token, sessionI
     };
 
     const sessionGroups = sessions;
-
-    // ── Chain grouping ─────────────────────────────────────
-
-    const groupIntoChains = (chats) => {
-      // Group by rootChatId for proper chain separation
-      const chainMap = new Map();
-      const chainOrder = [];
-
-      for (const chat of chats) {
-        const key = chat.rootChatId || chat._id;
-        if (!chainMap.has(key)) {
-          chainMap.set(key, { root: null, steps: [] });
-          chainOrder.push(key);
-        }
-        const chain = chainMap.get(key);
-        if (chat.chainIndex === 0 || chat._id === key) {
-          chain.root = chat;
-        } else {
-          chain.steps.push(chat);
-        }
-      }
-
-      // Sort steps within each chain by chainIndex
-      return chainOrder
-        .map((key) => {
-          const chain = chainMap.get(key);
-          chain.steps.sort((a, b) => a.chainIndex - b.chainIndex);
-          return chain;
-        })
-        .filter((c) => c.root);
-    };
 
     // ── Phase grouping ─────────────────────────────────────
 
@@ -8292,7 +8058,7 @@ export function renderChats({ userId, chats, sessions, username, token, sessionI
             c.understandingMeta?.rootNodeId
               ? ` <a class="understanding-link" href="/api/v1/root/${c.understandingMeta.rootNodeId}/understandings/run/${c.understandingMeta.understandingRunId}${tokenQS}">🧠 View run →</a>`
               : "";
-          const color = actionColor(c.action);
+          const color = actionColorHex(c.action);
           return `
         <tr class="contrib-row">
           <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}${understandingLink}</td>
@@ -8743,12 +8509,6 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 // ═══════════════════════════════════════════════════════════════════
 export function renderNotifications({ userId, notifications, total, username, token }) {
   const tokenQS = token ? `?token=${token}&html` : `?html`;
-
-  const esc = (str = "") =>
-    String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
 
     const items = notifications
       .map((n) => {

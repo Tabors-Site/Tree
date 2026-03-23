@@ -99,7 +99,7 @@ export async function createNewNode(
   } else if (parentNodeID) {
     const parentNode = await Node.findById(parentNodeID);
     if (!parentNode) throw new Error("Parent node not found");
-    if (parentNode.isSystem) throw new Error("Cannot create nodes under system nodes");
+    if (parentNode.systemRole) throw new Error("Cannot create nodes under system nodes");
 
     parentNode.children.addToSet(newNode._id);
     await parentNode.save();
@@ -314,7 +314,7 @@ export async function updateParentRelationship(
   const nodeNewParent = await Node.findById(nodeNewParentId);
 
   if (!nodeNewParent) throw new Error("New parent node not found");
-  if (nodeNewParent.isSystem) throw new Error("Cannot move into a system node");
+  if (nodeNewParent.systemRole) throw new Error("Cannot move into a system node");
   if (await isDescendant(nodeChildId, nodeNewParentId)) {
     throw new Error("Cannot move a node into its own descendant");
   }
@@ -434,7 +434,7 @@ export async function editNodeName({
   if (!node) {
     throw new Error("Node not found");
   }
-  if (node.isSystem) throw new Error("Cannot modify system nodes");
+  if (node.systemRole) throw new Error("Cannot modify system nodes");
   const energyUsed = 0; // Energy metered by extension hooks if installed
 
 
@@ -480,7 +480,7 @@ export async function reviveNodeBranch({
     throw new Error("Cannot revive into a deleted branch");
   }
 
-  if (targetParent.isSystem) {
+  if (targetParent.systemRole) {
     throw new Error("Cannot revive into a system node");
   }
 

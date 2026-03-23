@@ -32,5 +32,9 @@ export default {
       { command: "holdings-dismiss <id>", description: "Dismiss a deferred item", method: "POST", endpoint: "/root/:rootId/holdings/:id/dismiss" },
       { command: "holdings-view <id>", description: "View details of a deferred item", method: "GET", endpoint: "/root/:rootId/holdings/:id" },
     ],
+    hooks: {
+      fires: [],
+      listens: [],
+    },
   },
 };

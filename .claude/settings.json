@@ -129,7 +129,19 @@
       "Bash(echo \"Clean\" __NEW_LINE_0d7e26889bde3710__ echo \"\" echo \"=== Final: any useEnergy/calculateFileEnergy in kernel? ===\" grep -rn \"useEnergy\\\\|calculateFileEnergy\\\\|maybeResetEnergy\" land/core/ land/ws/ land/middleware/ land/orchestrators/ land/db/models/ --include=\"*.js\")",
       "Bash(sed -i 's/core\\\\.energy === NOOP_ENERGY/!core.energy/g' land/extensions/loader.js)",
       "Bash(sed -i 's/coreServices\\\\.energy !== NOOP_ENERGY/coreServices.energy/g' land/extensions/loader.js)",
-      "Bash(sed -i '/import.*NOOP_ENERGY/d' land/extensions/loader.js)"
+      "Bash(sed -i '/import.*NOOP_ENERGY/d' land/extensions/loader.js)",
+      "Read(//^const extraStyles = `/,/**)",
+      "Bash(grep -o \"@keyframes [a-zA-Z]*\" /home/tabor/github/Tree/land/extensions/html-rendering/html/*.js)",
+      "Bash(wc -l /home/tabor/github/Tree/land/extensions/html-rendering/html/*.js)",
+      "Bash(ls land/routes/app/*.js)",
+      "Bash(echo '=== isSystem refs ===' grep -rc isSystem land/core/ land/ws/ land/routes/ land/extensions/ land/db/ --include=*.js)",
+      "Bash(grep -v \":0$\")",
+      "Bash(grep -rn \"systemRole.*$ne.*true\\\\|systemRole.*true\" land/ --include=\"*.js\")",
+      "Bash(sed -i '/isSystem: true,/d' land/core/landRoot.js land/extensions/loader.js)",
+      "Bash(sed -i 's/isSystem systemRole/systemRole/g' land/core/tree/treeDataFetching.js)",
+      "Bash(sed -i 's/node\\\\.isSystem/node.systemRole/g' land/extensions/scripts/core.js)",
+      "Bash(sed -i 's/{ isSystem: true }/{ systemRole: { $ne: null } }/g' land/extensions/land-manager/tools.js)",
+      "Bash(sed -i 's/this\\\\.isSystem/this.systemRole/g' land/db/models/node.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

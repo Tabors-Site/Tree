@@ -57,7 +57,7 @@ export async function editNodeType({
   if (!node) {
     throw new Error("Node not found");
   }
-  if (node.isSystem) throw new Error("Cannot modify system nodes");
+  if (node.systemRole) throw new Error("Cannot modify system nodes");
 
   const energyUsed = 0; // Energy metered by extension hooks if installed
 

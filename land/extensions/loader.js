@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
+import { buildCoreServices } from "../core/services.js";
 import { setExtensionToolResolver, registerMode } from "../ws/modes/registry.js";
 import { hooks } from "../core/hooks.js";
 import { registerOrchestrator } from "../core/orchestratorRegistry.js";
@@ -1280,7 +1281,6 @@ export async function runExtensionMigrations() {
     // Get current version from .extensions node values
     const extNode = await Node.findOne({
       parent: { $ne: null },
-      isSystem: true,
       name,
     }).lean();
 

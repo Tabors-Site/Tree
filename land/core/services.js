@@ -82,12 +82,7 @@ const NOOP_WEBSOCKET = {
 export function buildCoreServices({ loadedExtensions = new Map(), overrides = {} } = {}) {
   const hasWebsocket = typeof emitNavigate === "function";
 
-  // Energy starts as no-op. If energy extension loads, it replaces via setCoreService().
-  // energy: set by energy extension during init() if loaded. null otherwise.
-
   const core = {
-    // --- Optional services (no-op stubs if not available) ---
-
     // --- Always-available services ---
     contributions: { logContribution },
     auth: {

@@ -17,8 +17,13 @@ export default {
     energyActions: {},
     sessionTypes: {},
     env: [
-      { key: "ENABLE_FRONTEND_HTML", required: false, default: "true", description: "Enable server-rendered HTML pages. Set to false for API-only mode." },
+      { key: "ENABLE_FRONTEND_HTML", required: false, default: "true", description: "Enable server-rendered HTML and share token auth. Set to false to disable all ?html routes, share token access, and extension HTML renderers. API endpoints still return JSON." },
     ],
+
+    hooks: {
+      fires: [],
+      listens: ["afterRegister"],
+    },
 
     // Documented exports (available via getExtension("html-rendering")?.exports)
     //

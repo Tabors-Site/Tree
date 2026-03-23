@@ -3,24 +3,7 @@
 /* ─────────────────────────────────────────────── */
 
 import { baseStyles } from "./baseStyles.js";
-
-const esc = (str = "") =>
-  String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
-const rainbow = [
-  "#ff3b30",
-  "#ff9500",
-  "#ffcc00",
-  "#34c759",
-  "#32ade6",
-  "#5856d6",
-  "#af52de",
-];
+import { esc, rainbow } from "./utils.js";
 
 /* =========================================================
    1. renderUnderstandingRun

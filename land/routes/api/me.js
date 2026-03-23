@@ -24,7 +24,7 @@ router.get("/me", authenticate, async (req, res) => {
     planExpiresAt: getUserMeta(user, "billing").planExpiresAt || null,
     email: getUserMeta(user, "auth")?.email || null,
     shareToken: getUserMeta(user, "html")?.shareToken || null,
-    storageUsageMb: energy.storageUsage ?? 0,
+    storageUsageKB: getUserMeta(user, "storage").usageKB ?? 0,
     energy: {
       available,
       additional,
