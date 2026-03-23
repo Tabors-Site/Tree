@@ -34,7 +34,12 @@ export function onListen() {
       const llmTimeout = getLandConfigValue("llmTimeout");
       if (llmTimeout) {
         const { setLlmTimeout } = await import("./ws/conversation.js");
-        setLlmTimeout(Number(llmTimeout) * 1000); // config is in seconds
+        setLlmTimeout(Number(llmTimeout) * 1000);
+      }
+      const llmRetries = getLandConfigValue("llmMaxRetries");
+      if (llmRetries) {
+        const { setLlmMaxRetries } = await import("./ws/conversation.js");
+        setLlmMaxRetries(Number(llmRetries));
       }
     } catch {}
 

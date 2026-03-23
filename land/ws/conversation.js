@@ -41,7 +41,10 @@ const MAX_TOOL_ITERATIONS = 15;
 let LLM_TIMEOUT_MS = 15 * 60 * 1000;
 const MODE_TIMEOUTS = {}; // modeKey -> ms
 
+let LLM_MAX_RETRIES = 3;
+
 export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
+export function setLlmMaxRetries(n) { LLM_MAX_RETRIES = n; }
 export function registerModeTimeout(modeKey, ms) { MODE_TIMEOUTS[modeKey] = ms; }
 function getTimeoutForMode(modeKey, nodeMetadata = null) {
   // Per-node override
@@ -119,7 +122,7 @@ async function resolveConnection(connectionId, cacheKey) {
     client: new OpenAI({
       baseURL: baseURL,
       apiKey: apiKey,
-      maxRetries: 3,
+      maxRetries: LLM_MAX_RETRIES,
       timeout: LLM_TIMEOUT_MS,
       defaultHeaders: {
         "HTTP-Referer": getLandUrl(),
