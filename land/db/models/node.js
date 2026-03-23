@@ -11,7 +11,7 @@ const NodeSchema = new mongoose.Schema({
   status: { type: String, default: "active" },
   dateCreated: { type: Date, default: Date.now },
   // Core LLM assignment: tree-wide default. Extension slots live in metadata.
-  llmDefault: { type: String, default: null },
+  llmDefault: { type: String, ref: "CustomLlmConnection", default: null },
   children: [{ type: String, ref: "Node" }],
   parent: { type: String, ref: "Node", default: null },
 
