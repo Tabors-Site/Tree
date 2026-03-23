@@ -8,25 +8,33 @@ TreeOS gives AI persistent, structured memory. Instead of flat conversations tha
 
 Trees hold anything: goals, plans, tasks, knowledge bases, research, project tracking, or any structured system that needs to persist and grow over time. Both humans and AI read from and write to the same tree.
 
+## Architecture: Three Layers
+
+**Kernel** (cannot change without forking): Node schema (_id, name, type, status, children, parent, metadata), User schema (_id, username, password, roots, llmDefault, metadata), Note model, Contribution model. The API protocol (chat/place/query behavioral contracts). 8 lifecycle hooks. Mode registry. Orchestrator registry. Extension loader. Canopy federation. Per-node tool/mode/timeout customization.
+
+**Core** (ships with every land, replaceable): AI conversation loop (processMessage, runChat, runPipeline). WebSocket server. MCP bridge. OrchestratorRuntime. Built-in tree modes. parseJsonSafe. Session management. 11 kernel config keys tunable from land .config node.
+
+**Extensions** (optional, installable): Everything else. Values, schedules, scripts, dreams, orchestrators. Install what you need. The kernel boots without any of them.
+
+Every land serves its capabilities at `GET /api/v1/protocol`.
+
 ## Core Protocol
 
-The core protocol defines:
-- **Nodes**: hierarchical structures with notes, trackable values, and children
-- **Types**: six semantic labels (goal, plan, task, knowledge, resource, identity) plus custom types
+- **Nodes**: hierarchical structures with notes and metadata (extension data)
+- **Types**: six semantic labels (goal, plan, task, knowledge, resource, identity) plus custom
 - **AI Modes**: three strict interaction boundaries
   - **Chat**: reads and writes (conversational)
   - **Place**: writes content without conversation
   - **Query**: reads only, changes nothing
-- **Canopy**: federation protocol connecting lands (servers) into a network
-- **Gateway**: channels for external input/output (Telegram, Discord, etc.)
-
-Every land serves its capabilities at `GET /api/v1/protocol`.
+- **Per-node customization**: tools (what AI can do), modes (how AI thinks), timeouts. Inherits parent to child.
+- **Canopy**: federation protocol connecting lands into a network
+- **Hooks**: beforeNote, afterNote, beforeContribution, afterNodeCreate, beforeStatusChange, afterStatusChange, beforeNodeDelete, enrichContext
 
 ## Extensions
 
 Everything beyond the core protocol is a modular extension. Install, disable, remove, or build your own.
 
-22 built-in extensions: tree-orchestrator (chat/place/query AI, replaceable), understanding (tree compression), dreams (background maintenance), scripts (sandboxed JS), energy (usage metering), billing (Stripe), prestige (versioning), values (numeric values and goals), schedules, raw-ideas (auto-placement), blog, book (note exports), solana (on-chain wallets), api-keys, user-llm (custom model connections), user-queries, deleted-revive, transactions (value trading), gateway (external channels), email (forgot password, email), html-rendering, console (structured logging).
+25 built-in extensions: tree-orchestrator (chat/place/query AI, replaceable), land-manager (autonomous land management, 11 tools), shell (server command execution), understanding (tree compression), dreams (background maintenance), scripts (sandboxed JS), energy (usage metering), billing (Stripe), prestige (versioning), values (numeric values and goals), schedules, raw-ideas (auto-placement), blog, book (note exports), solana (on-chain wallets), api-keys, user-llm (custom model connections), user-queries, deleted-revive, transactions (value trading), gateway (external channels), email (forgot password), html-rendering, console (structured logging), visibility (public/private toggle and share tokens).
 
 Extensions declare dependencies in a manifest and only receive the services they request. The extension registry at dir.treeos.ai allows publishing and pulling packages.
 
@@ -58,7 +66,7 @@ Lands connect through the Canopy protocol. Users on one land can browse public t
 
 ## LLM Setup
 
-Every user connects their own OpenAI-compatible endpoint (Ollama, OpenRouter, Together, etc.) or uses the tree owner's model. Per-tree LLM slots: default, placement, respond, notes, understanding, cleanup, drain, notification.
+Every user connects their own OpenAI-compatible endpoint (Ollama, OpenRouter, Together, etc.) or uses the tree owner's model. Core tree slots: default, placement, respond, notes. Extensions register additional slots via registerModeAssignment().
 
 ## Site Structure
 

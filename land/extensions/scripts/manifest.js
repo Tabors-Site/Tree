@@ -9,6 +9,7 @@ export default {
 
   optional: {
     services: ["energy"],
+    extensions: ["values", "prestige", "schedules"],
   },
 
   provides: {
