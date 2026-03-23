@@ -574,11 +574,7 @@ export async function processMessage(visitorId, message, ctx) {
     modeConnectionId,
   );
   if (clientEntry.noLlm) {
-    // Charge energy to discourage chatting without a connection
-    try {
-      const { useEnergy } = await import("../extensions/energy/core.js");
-      await useEnergy({ userId: ctx.userId, action: "chatError" });
-    } catch (_) {}
+    // Energy metering handled by energy extension hooks if installed
     return {
       content:
         "No LLM connection configured. Set one up at /setup to use AI features.",

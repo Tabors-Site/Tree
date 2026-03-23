@@ -4,8 +4,6 @@ import {
 } from "../../db/utils.js";
 import { hooks } from "../hooks.js";
 // Energy: dynamic import, no-op if extension not installed
-let useEnergy = async () => ({ energyUsed: 0 });
-try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
 
 async function editStatus({
   nodeId,
@@ -28,10 +26,7 @@ async function editStatus({
   if (status === "completed") {
     isInherited = true;
   }
-  const { energyUsed } = await useEnergy({
-    userId,
-    action: "editStatus",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
 
   const beforeData = { node, status, userId };
   const hookResult = await hooks.run("beforeStatusChange", beforeData);

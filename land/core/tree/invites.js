@@ -3,8 +3,6 @@ import User from "../../db/models/user.js";
 import Invite from "../../db/models/invite.js";
 import { logContribution } from "../../db/utils.js";
 // Energy: dynamic import, no-op if extension not installed
-let useEnergy = async () => ({ energyUsed: 0 });
-try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
 import { queueCanopyEvent } from "../../canopy/events.js";
 
 function escapeRegex(str) {
@@ -71,10 +69,8 @@ export async function createInvite({
 
   // EXACT OLD OWNER CHECK (no optional chaining)
   const isOwner = node.rootOwner._id.toString() === userInvitingId;
-  const { energyUsed } = await useEnergy({
-    userId: userInvitingId,
-    action: "invite",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
   const invite = new Invite({
     userInviting: userInvitingId,
     userReceiving: receivingUser._id,
@@ -340,10 +336,8 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
 
   const node = await Node.findById(invite.rootId);
   if (!node) throw new Error("Node not found");
-  const { energyUsed } = await useEnergy({
-    userId,
-    action: "invite",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
   const inviteAction = { receivingId: userId };
 
   if (acceptInvite) {

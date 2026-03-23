@@ -130,22 +130,25 @@ const Guide = () => {
             An extension is a folder with a <code>manifest.js</code> and an <code>index.js</code>.
             The manifest declares what it needs and what it provides. The index exports an
             <code> init(core)</code> function that receives the core services bundle.
+            Dependencies support semver constraints (<code>needs.extensions: ["other@^1.0.0"]</code>).
           </P>
           <P>
             An extension can provide: HTTP routes, MCP tools, AI conversation modes, a custom
             orchestrator, background jobs, lifecycle hooks, CLI commands, Mongoose models,
-            energy metering, session types, LLM assignment slots, and environment variable
-            declarations.
+            energy metering, session types, LLM assignment slots, environment variable
+            declarations, and exported functions for other extensions to call.
           </P>
           <P>
             Extension data lives in <code>metadata</code> (a Map on every node and user).
-            Each extension gets a namespace key matching its name. The kernel never reads
-            extension data directly. Extensions use hooks to inject their data into AI context.
+            Each extension gets a namespace key matching its name. Extensions communicate
+            through <code>getExtension()</code> and declared exports, never through direct
+            file imports. Uninstalling one gracefully degrades everything that depends on it.
           </P>
           <P>
             Install from the registry: <code>treeos ext install understanding</code>.
-            Disable: <code>treeos ext disable understanding</code>.
-            Build your own: create a folder in <code>extensions/</code> with a manifest.
+            Dependencies are resolved automatically. Installs are verified with SHA256
+            checksums. Extensions can also be installed from git repositories.
+            Publish your own: <code>treeos ext publish my-extension</code>.
           </P>
           <P>
             <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.8)" }}>Full extension docs</a>
@@ -352,14 +355,17 @@ treeos register`}</Code>
             <code> index.js</code>. Restart. Your extension loads.
           </P>
           <P>
-            The manifest declares dependencies (models, services, other extensions) and
-            what you provide (routes, tools, modes, orchestrator, hooks, jobs, CLI commands).
+            The manifest declares dependencies (models, services, other extensions with
+            semver constraints) and what you provide (routes, tools, modes, orchestrator,
+            hooks, jobs, CLI commands, exported functions).
             The <code>init(core)</code> function receives only the services you declared.
           </P>
           <P>
             Store data in <code>node.metadata</code> or <code>user.metadata</code> under
-            your extension name. Use hooks to inject into AI context. Use the orchestrator
-            registry to replace the conversation flow. Publish to the registry for others.
+            your extension name. Communicate with other extensions
+            through <code>getExtension()</code> and declared exports. Use hooks to inject
+            into AI context. Use <code>html-rendering</code>'s <code>registerPage()</code> to
+            add your own HTML pages. Publish to the registry for others.
           </P>
           <P>
             <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.8)" }}>Full extension developer docs</a>

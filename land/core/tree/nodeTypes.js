@@ -1,8 +1,6 @@
 import Node from "../../db/models/node.js";
 import { logContribution } from "../../db/utils.js";
 // Energy: dynamic import, no-op if extension not installed
-let useEnergy = async () => ({ energyUsed: 0 });
-try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
 
 export const CORE_NODE_TYPES = [
   "goal",
@@ -61,10 +59,8 @@ export async function editNodeType({
   }
   if (node.isSystem) throw new Error("Cannot modify system nodes");
 
-  const { energyUsed } = await useEnergy({
-    userId,
-    action: "editType",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
 
   const oldType = node.type;
   node.type = newType;

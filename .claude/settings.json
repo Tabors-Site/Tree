@@ -116,7 +116,13 @@
       "Read(//home/tabor/github/Tree/=== 5. mcp/**)",
       "Read(//home/tabor/github/Tree/=== prestige in core/**)",
       "Read(//home/tabor/github/Tree/=== bridge/**)",
-      "Read(//home/tabor/github/Tree/=== dynamic try/**)"
+      "Read(//home/tabor/github/Tree/=== dynamic try/**)",
+      "Bash(grep -r \"extension\" /home/tabor/github/Tree/site/src/components/Welcome/About/*.jsx)",
+      "Bash(echo \"=== getProfileType callers ===\" grep -rln \"getProfileType\" land/ --include=\"*.js\")",
+      "Bash(wc -l /home/tabor/github/Tree/land/extensions/html-rendering/html/*.js /home/tabor/github/Tree/land/extensions/html-rendering/*.js)",
+      "Bash(git checkout:*)",
+      "Bash(grep -l \"const.*[Ss]tyles\\\\s*=\" /home/tabor/github/Tree/land/extensions/html-rendering/html/*.js)",
+      "Bash(echo '=== Extension references remaining in kernel ===' grep -rn \"energy\\\\|billing\\\\|scripts\\\\|prestige\\\\|rawIdea\\\\|gateway\\\\|solana\" land/core/ land/ws/ land/middleware/ land/orchestrators/ land/db/models/ --include=*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

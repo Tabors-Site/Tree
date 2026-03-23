@@ -336,6 +336,7 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
         tags: req.body.tags || [],
         readme: req.body.readme || "",
         repoUrl: req.body.repoUrl || null,
+        maintainers: req.body.maintainers || [],
       }),
     });
 

@@ -6,10 +6,13 @@ const ExtensionSchema = new mongoose.Schema({
   version: { type: String, required: true },
   description: { type: String, default: "" },
 
-  // Author
+  // Author (the land that originally published)
   authorLandId: { type: String, required: true },
   authorDomain: { type: String, required: true },
   authorName: { type: String, default: "" },
+
+  // Additional lands allowed to publish updates (land domains)
+  maintainers: [{ type: String }],
 
   // Manifest (the full contract)
   manifest: { type: mongoose.Schema.Types.Mixed, required: true },

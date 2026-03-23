@@ -12,8 +12,6 @@ import { hooks } from "../hooks.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
 // Energy: dynamic import, no-op if extension not installed
-let useEnergy = async () => ({ energyUsed: 0 });
-try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -125,12 +123,8 @@ async function createNote({
     payload = (content || "").length;
   }
 
-  const { energyUsed } = await useEnergy({
-    userId,
-    action: "note",
-    payload,
-    file,
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
 
   // ── TAG EXTRACTION ──────────────────────────────
   const isReflectionBool = isReflection === "true" || isReflection === true;
@@ -167,18 +161,7 @@ async function createNote({
   // afterNote hook (fire-and-forget)
   hooks.run("afterNote", { note: newNote, nodeId, userId }).catch(() => {});
 
-  // ── STORAGE ─────────────────────────────────────
-  if (contentType === "file" && file?.size) {
-    const sizeKB = Math.ceil(file.size / 1024);
-    await User.findByIdAndUpdate(userId, { $inc: { "metadata.energy.storageUsage": sizeKB } });
-  }
-
-  if (contentType === "text" && finalContent) {
-    const sizeKB = Math.ceil(Buffer.byteLength(finalContent, "utf8") / 1024);
-    if (sizeKB > 0) {
-      await User.findByIdAndUpdate(userId, { $inc: { "metadata.energy.storageUsage": sizeKB } });
-    }
-  }
+  // Storage tracking handled by energy extension via afterNote hook
 
   // ── LOG ─────────────────────────────────────────
   await logContribution({

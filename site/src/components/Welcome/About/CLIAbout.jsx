@@ -224,15 +224,16 @@ const CLIAbout = () => {
             <span className="cli-section-icon">🧩</span> Extensions
           </div>
           <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Manage land extensions. Install from the registry, disable, enable, or remove.
+            Manage land extensions. Install from the registry or git repos.
+            Installs verify SHA256 checksums and auto-resolve dependencies.
           </div>
           <CmdRow cmd="ext list" desc="List all loaded extensions with status" />
           <CmdRow cmd="ext info <name>" desc="Show manifest details for a local extension" />
           <CmdRow cmd="ext search [query]" desc="Search the registry. -l limit, -t tag" />
           <CmdRow cmd="ext view <name> [version]" desc="Full registry details: manifest, files, readme, versions" />
-          <CmdRow cmd="ext install <name> [version]" desc="Install from registry (auto-pulls dependencies)" />
+          <CmdRow cmd="ext install <name> [version]" desc="Install from registry or git repo (auto-resolves deps, verifies checksum)" />
           <CmdRow cmd="ext update <name>" desc="Update to latest version from registry" />
-          <CmdRow cmd="ext publish <name>" desc="Publish a local extension to the registry" />
+          <CmdRow cmd="ext publish <name>" desc="Publish local extension to registry with Canopy auth" />
           <CmdRow cmd="ext disable <name>" desc="Disable an extension (warns about dependents)" />
           <CmdRow cmd="ext enable <name>" desc="Re-enable a disabled extension" />
           <CmdRow cmd="ext uninstall <name>" desc="Remove extension (blocks if dependents exist, -f to force)" />

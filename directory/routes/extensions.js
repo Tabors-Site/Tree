@@ -215,7 +215,7 @@ router.get("/:name/:version", async (req, res) => {
  */
 router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) => {
   try {
-    const { manifest, files, readme, tags, repoUrl } = req.body;
+    const { manifest, files, readme, tags, repoUrl, maintainers } = req.body;
 
     if (!manifest || !manifest.name || !manifest.version) {
       return res.status(400).json({ error: "manifest with name and version is required" });
@@ -247,9 +247,11 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
     });
 
     if (existing) {
-      // Update existing version (only author can update)
-      if (existing.authorLandId !== req.landId) {
-        return res.status(403).json({ error: "Only the original author can update this extension" });
+      // Update existing version (author land or maintainer lands can update)
+      const isAuthor = existing.authorLandId === req.landId;
+      const isMaintainer = (existing.maintainers || []).includes(req.landDomain);
+      if (!isAuthor && !isMaintainer) {
+        return res.status(403).json({ error: "Only the author or maintainers can update this extension" });
       }
 
       existing.manifest = manifest;
@@ -259,6 +261,7 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
       existing.readme = readme || existing.readme;
       existing.tags = tags || existing.tags;
       existing.repoUrl = repoUrl || existing.repoUrl;
+      if (maintainers && isAuthor) existing.maintainers = maintainers;
       existing.updatedAt = new Date();
       await existing.save();
 
@@ -280,6 +283,7 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
       readme: readme || "",
       tags: tags || [],
       repoUrl: repoUrl || null,
+      maintainers: maintainers || [],
     });
 
     await ext.save();
@@ -312,8 +316,10 @@ router.delete("/:name/:version", verifyDirectoryAuth(), attachLandIdentity(), as
       return res.status(404).json({ error: "Extension version not found" });
     }
 
-    if (ext.authorLandId !== req.landId) {
-      return res.status(403).json({ error: "Only the author can unpublish" });
+    const isAuthor = ext.authorLandId === req.landId;
+    const isMaintainer = (ext.maintainers || []).includes(req.landDomain);
+    if (!isAuthor && !isMaintainer) {
+      return res.status(403).json({ error: "Only the author or maintainers can unpublish" });
     }
 
     await ext.deleteOne();

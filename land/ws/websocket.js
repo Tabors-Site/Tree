@@ -19,8 +19,6 @@ import {
   MCP_SERVER_URL,
 } from "./mcp.js";
 // Energy: dynamic import, no-op if extension not installed
-let useEnergy = async () => ({ energyUsed: 0 });
-try { ({ useEnergy } = await import("../extensions/energy/core.js")); } catch {}
 import { getNodeName } from "../core/tree/treeDataFetching.js";
 import Node from "../db/models/node.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
@@ -714,20 +712,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
             log.error("WS", "Chat error:", err);
 
-            // Charge energy on LLM failure to prevent spam of fake endpoints
-            try {
-              await useEnergy({ userId: socket.userId, action: "chatError" });
-              log.debug("WS",
-                "⚡ Charged 2 energy for failed LLM call (user:",
-                socket.userId,
-                ")",
-              );
-            } catch (energyErr) {
-              log.error("WS",
-                "⚠️ Energy charge on error failed:",
-                energyErr.message,
-              );
-            }
+            // Energy metering handled by energy extension hooks if installed
 
             socket.emit("chatError", { error: err.message, generation });
 

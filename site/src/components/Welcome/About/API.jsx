@@ -2084,7 +2084,8 @@ updateScheduleForNode(datetime | null)`}</div>
           </div>
           <div className="section-text">
             Manage modular extensions on your land. All endpoints require admin (god plan) authentication.
-            See the <a href="/about/extensions">Extensions guide</a> for full documentation.
+            Installs include SHA256 integrity verification. Publishing uses Canopy authentication with
+            maintainer support. See the <a href="/about/extensions">Extensions guide</a> for full documentation.
           </div>
 
           <div className="endpoint">
@@ -2108,7 +2109,7 @@ updateScheduleForNode(datetime | null)`}</div>
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/land/extensions/install</span>
             </div>
-            <div className="ep-desc">Install extension from registry data. Body: {"{ name, version, manifest, files }"}</div>
+            <div className="ep-desc">Install extension from registry data. Verifies SHA256 checksum. Body: {"{ name, version, manifest, files }"}</div>
           </div>
 
           <div className="endpoint">
@@ -2116,7 +2117,7 @@ updateScheduleForNode(datetime | null)`}</div>
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/land/extensions/:name/publish</span>
             </div>
-            <div className="ep-desc">Publish a local extension to the Canopy Directory registry.</div>
+            <div className="ep-desc">Publish local extension to registry. Computes checksum. Body: {"{ tags, readme, repoUrl, maintainers }"}</div>
           </div>
 
           <div className="endpoint">
@@ -2140,7 +2141,7 @@ updateScheduleForNode(datetime | null)`}</div>
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/land/extensions/:name/uninstall</span>
             </div>
-            <div className="ep-desc">Remove extension directory. Database data is kept. Takes effect on restart.</div>
+            <div className="ep-desc">Remove extension directory. Checks dependents first. Database data kept.</div>
           </div>
         </div>
 

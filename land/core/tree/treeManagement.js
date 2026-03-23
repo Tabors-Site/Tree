@@ -6,8 +6,6 @@ import { resolveTreeAccess } from "../authenticate.js";
 import { isDescendant } from "./treeFetch.js";
 import { hooks } from "../hooks.js";
 // Energy: dynamic import, no-op if extension not installed
-let useEnergy = async () => ({ energyUsed: 0 });
-try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
 import { getLandRootId } from "../landRoot.js";
 
 function containsHtml(str) {
@@ -61,10 +59,8 @@ export async function createNewNode(
   }
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
-  const { energyUsed } = await useEnergy({
-    userId: user._id,
-    action: "create",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
 
   values = values && typeof values === "object" ? values : {};
   goals = goals && typeof goals === "object" ? goals : {};
@@ -249,10 +245,8 @@ export async function deleteNodeBranch(
   // beforeNodeDelete hook
   await hooks.run("beforeNodeDelete", { node: nodeToDelete, userId });
 
-  const { energyUsed } = await useEnergy({
-    userId,
-    action: "branchLifecycle",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
   nodeToDelete.rootOwner = userId;
   const oldParent = nodeToDelete.parent;
   nodeToDelete.parent = "deleted";
@@ -344,10 +338,8 @@ export async function updateParentRelationship(
       );
     }
   }
-  const { energyUsed } = await useEnergy({
-    userId,
-    action: "updateParent",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
 
   // Remove from old parent
   if (oldParent) {
@@ -443,10 +435,8 @@ export async function editNodeName({
     throw new Error("Node not found");
   }
   if (node.isSystem) throw new Error("Cannot modify system nodes");
-  const { energyUsed } = await useEnergy({
-    userId,
-    action: "editNameNode",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
 
   const oldName = node.name;
   node.name = newName;
@@ -504,10 +494,8 @@ export async function reviveNodeBranch({
   if (await isDescendant(deletedNodeId, targetParentId)) {
     throw new Error("Cannot revive a node into its own descendant");
   }
-  const { energyUsed } = await useEnergy({
-    userId,
-    action: "branchLifecycle",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
 
   deletedNode.parent = targetParentId;
   deletedNode.rootOwner = null;
@@ -568,10 +556,8 @@ export async function reviveNodeBranchAsRoot({
   if (!deletedNode.rootOwner) {
     throw new Error("Deleted node has no root owner and cannot be revived");
   }
-  const { energyUsed } = await useEnergy({
-    userId,
-    action: "branchLifecycle",
-  });
+  const energyUsed = 0; // Energy metered by extension hooks if installed
+
 
   deletedNode.parent = getLandRootId();
   deletedNode.rootOwner = userId;
