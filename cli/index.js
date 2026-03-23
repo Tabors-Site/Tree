@@ -277,6 +277,10 @@ const startShell = module.exports.startShell = async () => {
         rl.close();
         return;
       }
+      if (input === "shell" || input === "start") {
+        console.log(chalk.dim("Already in shell. Type 'help' for commands, 'exit' to quit."));
+        return prompt();
+      }
 
       // Reset all subcommand options so flags don't stick between invocations
       program.commands.forEach((cmd) => {

@@ -84,6 +84,9 @@ router.post("/land/chat", authenticate, async (req, res) => {
     const jwt = (await import("jsonwebtoken")).default;
 
     const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      return res.status(500).json({ error: "JWT_SECRET not configured" });
+    }
     const internalJwt = jwt.sign(
       { userId: req.userId.toString(), username: user.username, visitorId },
       JWT_SECRET,
