@@ -1284,16 +1284,31 @@ text-decoration: none;
       }
     });
 
-    // Form submission with progress
+    // Form submission with progress + cancel
+    let activeXhr = null;
+
+    sendBtn.addEventListener('click', (e) => {
+      if (activeXhr) {
+        e.preventDefault();
+        activeXhr.abort();
+        activeXhr = null;
+        sendBtn.classList.remove('loading');
+        sendBtn.querySelector('.send-label').textContent = 'Send';
+        progressBar.style.width = '0%';
+        return;
+      }
+    });
+
     form.addEventListener('submit', (e) => {
       e.preventDefault();
 
       sendBtn.classList.add('loading');
-      sendBtn.disabled = true;
+      sendBtn.querySelector('.send-label').textContent = 'Cancel';
       progressBar.style.width = '15%';
 
       const formData = new FormData(form);
       const xhr = new XMLHttpRequest();
+      activeXhr = xhr;
 
       xhr.open('POST', form.action, true);
 
@@ -1305,6 +1320,7 @@ text-decoration: none;
       };
 
       xhr.onload = () => {
+        activeXhr = null;
         if (xhr.status >= 200 && xhr.status < 300) {
           progressBar.style.width = '100%';
           setTimeout(() => document.location.reload(), 150);
@@ -1314,8 +1330,12 @@ text-decoration: none;
       };
 
       xhr.onerror = fail;
+      xhr.onabort = () => {
+        activeXhr = null;
+      };
 
       function fail() {
+        activeXhr = null;
         var msg = 'Send failed';
         try {
           var body = JSON.parse(xhr.responseText);
@@ -1323,7 +1343,7 @@ text-decoration: none;
         } catch(e) {}
         alert(msg);
         sendBtn.classList.remove('loading');
-        sendBtn.disabled = false;
+        sendBtn.querySelector('.send-label').textContent = 'Send';
         progressBar.style.width = '0%';
       }
 
