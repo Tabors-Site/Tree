@@ -5,7 +5,7 @@ import log from "../../core/log.js";
 import { OrchestratorRuntime, parseJsonSafe } from "../../orchestrators/runtime.js";
 import { SESSION_TYPES, updateSessionMeta } from "../../ws/sessionRegistry.js";
 import { setRootId, getClientForUser } from "../../ws/conversation.js";
-import { trackChainStep } from "../../ws/aiChatTracker.js";
+
 import { getOrchestrator } from "../../core/orchestratorRegistry.js";
 let orchestrateTreeRequest;
 try { ({ orchestrateTreeRequest } = await import("../tree-orchestrator/orchestrator.js")); } catch { orchestrateTreeRequest = async () => { throw new Error("No tree orchestrator installed"); }; }
@@ -113,7 +113,6 @@ export async function orchestrateRawIdeaPlacement({
     rawIdeaAction: { action: "aiStarted", rawIdeaId: rawIdeaId.toString() },
   });
 
-  let chainIndex = rt.chainIndex; // track manually for non-runStep calls
 
  log.verbose("Raw Ideas", `Raw-idea orchestrator started for ${rawIdeaId} (session: ${rt.sessionId})`);
 
@@ -122,16 +121,9 @@ export async function orchestrateRawIdeaPlacement({
     rawIdea.status = "stuck";
     await rawIdea.save();
     rt.setResult(reason, "rawIdea:stuck");
-    trackChainStep({
-      userId,
-      sessionId: rt.sessionId,
-      rootChatId: rt.mainChatId,
-      chainIndex: rt.chainIndex++,
-      modeKey: "rawIdea:complete",
-      source: "orchestrator",
+    rt.trackStep("rawIdea:complete", {
       input: reason,
       output: { status: "stuck", reason },
-      llmProvider: rt.llmProvider,
     });
     logContribution({
       userId,
@@ -203,16 +195,9 @@ export async function orchestrateRawIdeaPlacement({
       rawIdea.aiSessionId = rt.sessionId;
       await rawIdea.save();
 
-      trackChainStep({
-        userId,
-        sessionId: rt.sessionId,
-        rootChatId: rt.mainChatId,
-        chainIndex: rt.chainIndex++,
-        modeKey: "rawIdea:deferred",
-        source: "orchestrator",
+      rt.trackStep("rawIdea:deferred", {
         input: rawIdea.content,
         output: { status: "deferred", memoryItemId: treeResult.memoryItemId },
-        llmProvider: rt.llmProvider,
       });
 
       rt.setResult(
@@ -274,16 +259,9 @@ export async function orchestrateRawIdeaPlacement({
       rawIdeaAction: { action: "placed", rawIdeaId: rawIdeaId.toString(), targetNodeId },
     });
 
-    trackChainStep({
-      userId,
-      sessionId: rt.sessionId,
-      rootChatId: rt.mainChatId,
-      chainIndex: rt.chainIndex++,
-      modeKey: "rawIdea:complete",
-      source: "orchestrator",
+    rt.trackStep("rawIdea:complete", {
       input: rawIdea.content,
       output: { status: "succeeded", targetNodeId },
-      llmProvider: rt.llmProvider,
     });
 
     rt.setResult(
@@ -308,16 +286,9 @@ export async function orchestrateRawIdeaPlacement({
     try {
       rawIdea.status = "stuck";
       await rawIdea.save();
-      trackChainStep({
-        userId,
-        sessionId: rt.sessionId,
-        rootChatId: rt.mainChatId,
-        chainIndex: rt.chainIndex++,
-        modeKey: "rawIdea:complete",
-        source: "orchestrator",
+      rt.trackStep("rawIdea:complete", {
         input: rawIdea.content,
         output: { status: "stuck", reason: err.message },
-        llmProvider: rt.llmProvider,
       });
       logContribution({
         userId,

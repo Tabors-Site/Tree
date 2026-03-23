@@ -93,20 +93,37 @@ export class OrchestratorRuntime {
   }
 
   /**
-   * Attach to an existing session (for real-time orchestrators called from websocket).
-   * Skips session creation, MCP connection, and AIChat creation.
-   * Uses the provided visitorId, sessionId, and mainChatId.
-   * cleanup() becomes a no-op (caller owns the lifecycle).
+   * Attach to an existing session (for real-time orchestrators or chain steps).
+   * Skips session creation and AIChat creation.
+   * If connectMcp is true, creates its own MCP connection (for chain steps
+   * that use a different visitorId than the parent).
+   * cleanup() closes MCP if we opened it, otherwise no-op.
    */
-  attach({ sessionId, mainChatId, llmProvider, signal, chainIndex = 1 }) {
+  async attach({ sessionId, mainChatId, llmProvider, signal, chainIndex = 1, connectMcp = false }) {
     this.sessionId = sessionId;
     this.mainChatId = mainChatId;
     this.llmProvider = llmProvider;
     this.chainIndex = chainIndex;
     this._attached = true;
+    this._ownsMcp = false;
     if (signal) {
       this.abort = { signal };
     }
+
+    if (connectMcp) {
+      const internalJwt = jwt.sign(
+        { userId: this.userId, username: this.username, visitorId: this.visitorId },
+        JWT_SECRET,
+        { expiresIn: "1h" },
+      );
+      await connectToMCP(MCP_SERVER_URL, this.visitorId, internalJwt);
+      setRootId(this.visitorId, this.rootId);
+      if (this.mainChatId) {
+        setAiContributionContext(this.visitorId, this.sessionId, this.mainChatId);
+      }
+      this._ownsMcp = true;
+    }
+
     return true;
   }
 
@@ -272,7 +289,12 @@ export class OrchestratorRuntime {
    * Call this in a finally block. No-op in attached mode (caller owns lifecycle).
    */
   async cleanup() {
-    if (this._attached) return;
+    if (this._attached && !this._ownsMcp) return;
+    if (this._attached && this._ownsMcp) {
+      clearAiContributionContext(this.visitorId);
+      closeMCPClient(this.visitorId);
+      return;
+    }
     if (this.mainChatId) {
       await finalizeAIChat({ chatId: this.mainChatId, ...this._finalizeArgs }).catch((e) =>
         log.error("Orchestrator", `Failed to finalize pipeline chat:`, e.message),

@@ -3,18 +3,7 @@
 // Mirrors the tree.js API endpoint pattern but with per-channel queue + cancel.
 
 import log from "../../core/log.js";
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-dotenv.config({ path: path.resolve(__dirname, "../../..", ".env") });
-
-if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
-const JWT_SECRET = process.env.JWT_SECRET;
-
+import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 import GatewayChannel from "./model.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
@@ -22,24 +11,13 @@ import { getOrchestrator } from "../../core/orchestratorRegistry.js";
 let orchestrateTreeRequest;
 try { ({ orchestrateTreeRequest } = await import("../tree-orchestrator/orchestrator.js")); } catch { orchestrateTreeRequest = async () => { throw new Error("No tree orchestrator installed"); }; }
 import {
-  setRootId,
-  getClientForUser,
-  clearSession,
   userHasLlm,
 } from "../../ws/conversation.js";
-import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../../ws/mcp.js";
-import {
-  startAIChat,
-  finalizeAIChat,
-  setAiContributionContext,
-  clearAiContributionContext,
-} from "../../ws/aiChatTracker.js";
 import { enqueue, getQueueDepth } from "../../ws/requestQueue.js";
 import {
-  createSession,
-  endSession,
   setSessionAbort,
   clearSessionAbort,
+  endSession,
   abortSessionsByScope,
   SESSION_TYPES,
 } from "../../ws/sessionRegistry.js";
@@ -109,7 +87,7 @@ export async function processGatewayMessage(
     var scopeKey = "gw:" + channelId;
     abortSessionsByScope(scopeKey);
 
- log.verbose("Gateway", 
+ log.verbose("Gateway",
       `Gateway: ${lowerTrimmed} command for channel ${channelId}, aborted ${abortCount} in-flight message(s)`,
     );
 
@@ -131,7 +109,7 @@ export async function processGatewayMessage(
         },
       );
     } catch (err) {
- log.error("Gateway", 
+ log.error("Gateway",
         "Gateway: failed to finalize AIChats on cancel:",
         err.message,
       );
@@ -178,85 +156,48 @@ export async function processGatewayMessage(
   // 8. Label message with sender identity
   var labeledMessage = senderName ? `${senderName}: "${trimmed}"` : trimmed;
 
-  // 9. Create session + enqueue
-  var visitorId = `gateway:${channel.type}:${channelId}:${Date.now()}`;
-  var scopeKey = "gw:" + channelId;
-
-  var { sessionId } = createSession({
-    userId: channel.userId,
-    type: SESSION_TYPES.GATEWAY_INPUT,
-    scopeKey,
-    description: `Gateway ${channel.type} input on root ${channel.rootId}`,
-    meta: { rootId: channel.rootId, channelId, visitorId, senderName },
-  });
-
+  // 9. Pre-queue abort tracking (must exist before enqueue for cancel to work)
   var abort = new AbortController();
-  setSessionAbort(sessionId, abort);
-
-  // Track this abort controller for the channel (supports concurrent cancellation)
   if (!channelAborts.has(channelId)) channelAborts.set(channelId, new Set());
   channelAborts.get(channelId).add(abort);
 
-  // AIChat tracking
-  var aiChat = null;
-  try {
-    var clientInfo = await getClientForUser(channel.userId);
-    aiChat = await startAIChat({
-      userId: channel.userId,
-      sessionId,
-      message: trimmed.slice(0, 5000),
-      source: "gateway",
-      modeKey:
-        "tree:" +
-        (channel.mode === "write"
-          ? "place"
-          : channel.mode === "read"
-            ? "query"
-            : "chat"),
-      llmProvider: {
-        isCustom: clientInfo.isCustom,
-        model: clientInfo.model,
-        connectionId: clientInfo.connectionId || null,
-      },
-      treeContext: { targetNodeId: channel.rootId },
-    });
-    if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
-  } catch (err) {
- log.error("Gateway", "Gateway: failed to create AIChat:", err.message);
-  }
+  var modeKey = "tree:" +
+    (channel.mode === "write"
+      ? "place"
+      : channel.mode === "read"
+        ? "query"
+        : "chat");
 
   // 10. Enqueue with max concurrent 2
+  var visitorId = `gateway:${channel.type}:${channelId}:${Date.now()}`;
+
   var result = await enqueue(
     queueKey,
     async () => {
+      // Create runtime for session + MCP + AIChat lifecycle
+      var rt = new OrchestratorRuntime({
+        rootId: channel.rootId,
+        userId: channel.userId,
+        username: user.username,
+        visitorId,
+        sessionType: SESSION_TYPES.GATEWAY_INPUT,
+        description: `Gateway ${channel.type} input on root ${channel.rootId}`,
+        modeKeyForLlm: modeKey,
+        source: "gateway",
+      });
+
+      await rt.init(trimmed.slice(0, 5000));
+      setSessionAbort(rt.sessionId, abort);
+
       var timedOut = false;
       var TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes for gateway
-      var timer = setTimeout(() => {
+      var timer = setTimeout(async () => {
         timedOut = true;
-        closeMCPClient(visitorId);
-        clearAiContributionContext(visitorId);
-        if (aiChat) {
-          finalizeAIChat({
-            chatId: aiChat._id,
-            content: "Error: Request timed out",
-            stopped: false,
-          }).catch(() => {});
-        }
+        rt.setError("Request timed out", "gateway:timeout");
+        await rt.cleanup().catch(() => {});
       }, TIMEOUT_MS);
 
       try {
-        var internalJwt = jwt.sign(
-          {
-            userId: channel.userId.toString(),
-            username: user.username,
-            visitorId,
-          },
-          JWT_SECRET,
-          { expiresIn: "1h" },
-        );
-        await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
-        setRootId(visitorId, channel.rootId);
-
         var orchResult = await orchestrateTreeRequest({
           visitorId,
           message: labeledMessage,
@@ -264,31 +205,22 @@ export async function processGatewayMessage(
           username: user.username,
           userId: channel.userId,
           signal: abort.signal,
-          sessionId,
+          sessionId: rt.sessionId,
           rootId: channel.rootId,
           skipRespond,
           forceQueryOnly,
-          rootChatId: aiChat?._id || null,
+          rootChatId: rt.mainChatId || null,
           sourceType,
         });
 
         clearTimeout(timer);
         if (timedOut) return { success: false, answer: "Request timed out." };
 
-        if (aiChat) {
-          var wasAborted = abort.signal.aborted;
-          var answer = wasAborted
-            ? "Cancelled by user"
-            : orchResult?.answer || orchResult?.reason || null;
-          finalizeAIChat({
-            chatId: aiChat._id,
-            content: answer,
-            stopped: wasAborted,
-            modeKey: orchResult?.modeKey || "tree:orchestrator",
-          }).catch((err) =>
- log.error("Gateway", "Gateway: AIChat finalize failed:", err.message),
-          );
-        }
+        var wasAborted = abort.signal.aborted;
+        var answer = wasAborted
+          ? "Cancelled by user"
+          : orchResult?.answer || orchResult?.reason || null;
+        rt.setResult(answer, orchResult?.modeKey || "tree:orchestrator");
 
         return (
           orchResult || {
@@ -301,24 +233,17 @@ export async function processGatewayMessage(
         if (timedOut) return { success: false, answer: "Request timed out." };
  log.error("Gateway", "Gateway: orchestration error:", err.message);
 
-        if (aiChat) {
-          finalizeAIChat({
-            chatId: aiChat._id,
-            content: abort.signal.aborted
-              ? "Cancelled by user"
-              : "Error: " + err.message,
-            stopped: abort.signal.aborted,
-          }).catch(() => {});
-        }
+        rt.setError(
+          abort.signal.aborted ? "Cancelled by user" : "Error: " + err.message,
+          modeKey,
+        );
 
         return { success: false, answer: "Something went wrong." };
       } finally {
         clearTimeout(timer);
-        clearAiContributionContext(visitorId);
-        clearSessionAbort(sessionId);
-        endSession(sessionId);
-        if (!timedOut) closeMCPClient(visitorId);
-        clearSession(visitorId);
+        if (!timedOut) {
+          await rt.cleanup();
+        }
         // Remove this abort controller from the channel tracking
         var abortSet = channelAborts.get(channelId);
         if (abortSet) {

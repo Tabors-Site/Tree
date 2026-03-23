@@ -3,42 +3,12 @@
 // uses LLM for summarization only (no tool calling), commits results.
 
 import log from "../../core/log.js";
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
-
-if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
-const JWT_SECRET = process.env.JWT_SECRET;
-
-import {
-  switchMode,
-  processMessage,
-  getClientForUser,
-  resolveRootLlmForMode,
-  clearSession,
-} from "../../ws/conversation.js";
-import {
-  trackChainStep,
-  startAIChat,
-  finalizeAIChat,
-  setAiContributionContext,
-  clearAiContributionContext,
-} from "../../ws/aiChatTracker.js";
-import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../../ws/mcp.js";
+import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 import { emitNavigate, emitToUser } from "../../ws/websocket.js";
 import {
-  createSession,
-  endSession,
   setActiveNavigator,
   getSession,
   updateSessionMeta,
-  setSessionAbort,
-  clearSessionAbort,
   SESSION_TYPES,
 } from "../../ws/sessionRegistry.js";
 import {
@@ -48,7 +18,6 @@ import {
 } from "./core.js";
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
-import Node from "../../db/models/node.js";
 
 import { acquireLock, releaseLock } from "../../orchestrators/locks.js";
 
@@ -184,83 +153,49 @@ export async function orchestrateUnderstanding({
   const isChainStep = !!externalSessionId;
   const isSite = fromSite && !isChainStep;
   const visitorId = `understand:${rootId}:${Date.now()}`;
-  let sessionId;
-  const abort = new AbortController();
+
+  const rt = new OrchestratorRuntime({
+    rootId,
+    userId,
+    username,
+    visitorId,
+    sessionType: SESSION_TYPES.UNDERSTANDING_ORCHESTRATE,
+    description: `Understanding: ${runPerspective}`,
+    modeKeyForLlm: "tree:understand",
+    source,
+    slot: "understand",
+  });
 
   if (isChainStep) {
-    sessionId = externalSessionId;
+    await rt.attach({
+      sessionId: externalSessionId,
+      mainChatId: externalRootChatId || null,
+      llmProvider: undefined,
+      chainIndex: startingChainIndex || 1,
+      connectMcp: true,
+    });
   } else {
-    ({ sessionId } = createSession({
-      userId,
-      type: SESSION_TYPES.UNDERSTANDING_ORCHESTRATE,
-      description: `Understanding: ${runPerspective}`,
-      meta: { rootId, runId: understandingRunId, visitorId },
-    }));
-    setSessionAbort(sessionId, abort);
+    await rt.init(`Understanding tree ${rootId} (${runPerspective})`);
   }
 
   if (isSite) {
-    setActiveNavigator(userId, sessionId);
-    const sess = getSession(sessionId);
+    setActiveNavigator(userId, rt.sessionId);
+    const sess = getSession(rt.sessionId);
     emitToUser(userId, "navigatorSession", {
-      sessionId,
+      sessionId: rt.sessionId,
       type: sess?.type || SESSION_TYPES.UNDERSTANDING_ORCHESTRATE,
       description: sess?.description || `Understanding: ${runPerspective}`,
     });
   }
 
-  let chainIndex = startingChainIndex || 1;
   let nodesProcessed = 0;
-  let finalizeArgs = { content: null, stopped: true, modeKey: "tree:understand" };
-  let mainChatId = externalRootChatId || null;
-
-  // Resolve LLM provider
-  let llmProvider;
-  try {
-    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:understand");
-    const clientInfo = await getClientForUser(userId, "understand", modeConnectionId);
-    llmProvider = {
-      isCustom: clientInfo.isCustom,
-      model: clientInfo.model,
-      connectionId: clientInfo.connectionId || null,
-    };
-  } catch {
-    llmProvider = undefined;
-  }
-
-  // MCP connection
-  const internalJwt = jwt.sign({ userId, username, visitorId }, JWT_SECRET, { expiresIn: "1h" });
-  await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
-
-  // Start AIChat record (standalone only)
-  if (!isChainStep) {
-    const mainChat = await startAIChat({
-      userId,
-      sessionId,
-      message: `Understanding tree ${rootId} (${runPerspective})`,
-      source,
-      modeKey: "tree:understand",
-      llmProvider,
-    });
-    mainChatId = mainChat._id;
-  }
-  if (mainChatId) {
-    setAiContributionContext(visitorId, sessionId, mainChatId);
-  }
 
  log.verbose("Understanding", `Understand orchestrator started for run ${understandingRunId} (${runPerspective}, ${nodeCount} nodes)`);
 
   try {
-    trackChainStep({
-      userId,
-      sessionId,
-      rootChatId: mainChatId,
-      chainIndex: chainIndex++,
-      modeKey: "tree:understand",
-      source,
+    rt.trackStep("tree:understand", {
       input: `Run ${understandingRunId} (${runPerspective})`,
       output: { understandingRunId, perspective: runPerspective, nodeCount },
-      llmProvider,
     });
 
     // Compression loop
@@ -269,7 +204,7 @@ export async function orchestrateUnderstanding({
     let lastEmptyNodeId = null;
 
     while (true) {
-      if (abort.signal.aborted) throw new Error("Session stopped");
+      if (rt.aborted) throw new Error("Session stopped");
 
       const payload = await getNextCompressionPayloadForLLM(understandingRunId, userId);
       if (!payload) break;
@@ -290,7 +225,7 @@ export async function orchestrateUnderstanding({
         userId,
         rootId,
         slot: "understand",
-        signal: abort.signal,
+        signal: rt.signal,
       });
 
       if (result && !result.success && result.content && !result.answer) {
@@ -326,8 +261,8 @@ export async function orchestrateUnderstanding({
             currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
             userId,
             wasAi: true,
-            aiChatId: mainChatId,
-            sessionId,
+            aiChatId: rt.mainChatId,
+            sessionId: rt.sessionId,
           });
           nodesProcessed++;
  log.warn("Understanding", `Committed placeholder for stuck node ${nodeId}, moving on`);
@@ -348,28 +283,22 @@ export async function orchestrateUnderstanding({
         currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
         userId,
         wasAi: true,
-        aiChatId: mainChatId,
-        sessionId,
+        aiChatId: rt.mainChatId,
+        sessionId: rt.sessionId,
       });
 
       nodesProcessed++;
-      updateSessionMeta(sessionId, { nodeId: payload.target.realNodeId || rootId });
+      updateSessionMeta(rt.sessionId, { nodeId: payload.target.realNodeId || rootId });
 
       if (isSite) {
         emitNavigate({
           userId,
           url: `/api/v1/root/${rootId}/understandings/run/${understandingRunId}/${payload.target.understandingNodeId}?html`,
-          sessionId,
+          sessionId: rt.sessionId,
         });
       }
 
-      trackChainStep({
-        userId,
-        sessionId,
-        rootChatId: mainChatId,
-        chainIndex: chainIndex++,
-        modeKey: "tree:understand-summarize",
-        source,
+      rt.trackStep("tree:understand-summarize", {
         input: `${payload.mode}: ${payload.inputs[0]?.nodeName || "unknown"}`,
         output: {
           mode: payload.mode,
@@ -378,7 +307,7 @@ export async function orchestrateUnderstanding({
         },
         startTime: stepStart,
         endTime: stepEnd,
-        llmProvider: result?.llmProvider || llmProvider,
+        llmProvider: result?.llmProvider || rt.llmProvider,
       });
 
  log.debug("Understanding", `  ${payload.mode} node ${payload.inputs[0]?.nodeName} (${nodesProcessed}/${nodeCount})`);
@@ -400,17 +329,16 @@ export async function orchestrateUnderstanding({
         : { status: "completed", lastCompletedAt: completedAt },
     );
 
-    finalizeArgs = {
-      content: rootEncoding || `Processed ${nodesProcessed} nodes`,
-      stopped: false,
-      modeKey: "tree:understand",
-    };
+    rt.setResult(
+      rootEncoding || `Processed ${nodesProcessed} nodes`,
+      "tree:understand",
+    );
 
     if (isSite) {
       emitNavigate({
         userId,
         url: `/api/v1/root/${rootId}/understandings/run/${understandingRunId}?html`,
-        sessionId,
+        sessionId: rt.sessionId,
       });
     }
 
@@ -426,18 +354,11 @@ export async function orchestrateUnderstanding({
     };
   } catch (err) {
  log.error("Understanding", `Understanding orchestration error for root ${rootId}:`, err.message);
-    finalizeArgs = { content: err.message, stopped: abort.signal.aborted, modeKey: "tree:understand" };
+    rt.setError(err.message, "tree:understand");
 
-    trackChainStep({
-      userId,
-      sessionId,
-      rootChatId: mainChatId,
-      chainIndex: chainIndex++,
-      modeKey: "tree:understand",
-      source,
+    rt.trackStep("tree:understand", {
       input: "error",
       output: { error: err.message },
-      llmProvider,
     });
 
     return { success: false, error: err.message };
@@ -449,17 +370,6 @@ export async function orchestrateUnderstanding({
       }
     } catch (_) {}
     releaseLock("understand", understandingRunId);
-    if (!isChainStep && mainChatId) {
-      finalizeAIChat({ chatId: mainChatId, ...finalizeArgs }).catch((e) =>
- log.error("Understanding", `Failed to finalize understand session chat:`, e.message),
-      );
-    }
-    clearAiContributionContext(visitorId);
-    if (!isChainStep) {
-      clearSessionAbort(sessionId);
-      endSession(sessionId);
-    }
-    closeMCPClient(visitorId);
-    clearSession(visitorId);
+    await rt.cleanup();
   }
 }
