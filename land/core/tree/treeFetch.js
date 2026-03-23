@@ -237,8 +237,12 @@ export async function getActiveLeafExecutionFrontier(rootId) {
     leaves,
   };
 }
-const TREE_SUMMARY_MAX_DEPTH = 4;
-const TREE_SUMMARY_MAX_NODES = 60;
+let TREE_SUMMARY_MAX_DEPTH = 4;
+let TREE_SUMMARY_MAX_NODES = 60;
+export function setTreeSummaryLimits(depth, nodes) {
+  if (depth) TREE_SUMMARY_MAX_DEPTH = depth;
+  if (nodes) TREE_SUMMARY_MAX_NODES = nodes;
+}
 
 export async function buildDeepTreeSummary(
   rootId,

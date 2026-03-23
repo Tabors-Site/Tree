@@ -31,18 +31,24 @@ dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 // DEFAULT LLM CLIENT (your server)
 // ─────────────────────────────────────────────────────────────────────────
 
-const DEFAULT_MODEL = process.env.AI_MODEL || "qwen3.5:27b";
-
-const MAX_MESSAGES = 30;
-const MAX_TOOL_ITERATIONS = 15;
-
-// LLM call timeout (ms). Configurable via land config "llmTimeout".
-// Default 5 minutes. Extensions can override per-mode via registerModeTimeout().
+let DEFAULT_MODEL = process.env.AI_MODEL || "qwen3.5:27b";
+let MAX_MESSAGES = 30;
+let MAX_TOOL_ITERATIONS = 15;
 let LLM_TIMEOUT_MS = 15 * 60 * 1000;
-const MODE_TIMEOUTS = {}; // modeKey -> ms
-
 let LLM_MAX_RETRIES = 3;
+const MODE_TIMEOUTS = {};
 
+// ── Kernel config setters (called from startup.js after land config loads) ──
+export function setKernelConfig(key, value) {
+  const num = Number(value);
+  switch (key) {
+    case "llmTimeout": LLM_TIMEOUT_MS = num * 1000; break;
+    case "llmMaxRetries": LLM_MAX_RETRIES = num; break;
+    case "maxToolIterations": MAX_TOOL_ITERATIONS = num; break;
+    case "maxConversationMessages": MAX_MESSAGES = num; break;
+    case "defaultModel": DEFAULT_MODEL = String(value); break;
+  }
+}
 export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
 export function setLlmMaxRetries(n) { LLM_MAX_RETRIES = n; }
 export function registerModeTimeout(modeKey, ms) { MODE_TIMEOUTS[modeKey] = ms; }

@@ -56,7 +56,8 @@ const sessionAbortControllers = new Map();
 
 // scopeKey → { sessionId, lastActivity }  (for idle-TTL reuse of scoped sessions)
 const scopedSessions = new Map();
-const DEFAULT_SCOPE_TTL = 15 * 60 * 1000; // 15 minutes
+let DEFAULT_SCOPE_TTL = 15 * 60 * 1000; // 15 minutes
+export function setSessionTTL(ms) { DEFAULT_SCOPE_TTL = ms; }
 
 // ─────────────────────────────────────────────────────────────────────────
 // SESSION CREATION — single entry point for all session creation
@@ -424,7 +425,8 @@ function promoteNavigator(userId) {
 // AUTO-CLEANUP: sweep stale non-websocket sessions every 5 minutes
 // ─────────────────────────────────────────────────────────────────────────
 
-const STALE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+let STALE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+export function setStaleTimeout(ms) { STALE_TIMEOUT = ms; }
 
 setInterval(() => {
   const now = Date.now();

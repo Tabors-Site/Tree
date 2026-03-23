@@ -94,7 +94,10 @@
       "Bash(echo \"=== Who calls processMessage directly ===\" grep -rn \"processMessage\\\\b\" /home/tabor/github/Tree/land/extensions/ --include=\"*.js\")",
       "Read(//^async function|^export async function|^function /{fname=$0} /processMessage/**)",
       "Bash(echo '=== KERNEL FILES ===' echo '--- core/ ---' ls land/core/*.js land/core/tree/*.js land/core/llms/*.js)",
-      "Bash(sort echo:*)"
+      "Bash(sort echo:*)",
+      "Bash(echo \"=== Hardcoded values in kernel that should be configurable ===\" grep -rn \"const.*=.*60\\\\|const.*=.*15\\\\|const.*=.*30\\\\|MAX_\\\\|LIMIT_\\\\|DEFAULT_\\\\|STALE_\\\\|CARRY_\" /home/tabor/github/Tree/land/ws/ --include=\"*.js\")",
+      "Bash(head -20 echo \"\" grep -rn \"const.*=.*60\\\\|MAX_\\\\|LIMIT_\\\\|DEFAULT_\" /home/tabor/github/Tree/land/orchestrators/ --include=\"*.js\")",
+      "Bash(head -10 echo \"\" grep -rn \"MAX_\\\\|LIMIT_\\\\|DEFAULT_MODEL\\\\|DEFAULT_\" /home/tabor/github/Tree/land/core/ --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

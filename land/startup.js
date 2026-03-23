@@ -31,15 +31,36 @@ export function onListen() {
     // Apply land config to kernel settings
     try {
       const { getLandConfigValue } = await import("./core/landConfig.js");
-      const llmTimeout = getLandConfigValue("llmTimeout");
-      if (llmTimeout) {
-        const { setLlmTimeout } = await import("./ws/conversation.js");
-        setLlmTimeout(Number(llmTimeout) * 1000);
-      }
-      const llmRetries = getLandConfigValue("llmMaxRetries");
-      if (llmRetries) {
-        const { setLlmMaxRetries } = await import("./ws/conversation.js");
-        setLlmMaxRetries(Number(llmRetries));
+      const { setKernelConfig } = await import("./ws/conversation.js");
+
+      // Kernel config keys: read from land .config node, apply to runtime
+      const KERNEL_CONFIG = {
+        llmTimeout:              { setter: setKernelConfig },
+        llmMaxRetries:           { setter: setKernelConfig },
+        maxToolIterations:       { setter: setKernelConfig },
+        maxConversationMessages: { setter: setKernelConfig },
+        defaultModel:            { setter: setKernelConfig },
+        noteMaxChars:            { load: () => import("./core/tree/notes.js").then(m => m.setNoteMaxChars) },
+        treeSummaryMaxDepth:     { load: () => import("./core/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(v, null)) },
+        treeSummaryMaxNodes:     { load: () => import("./core/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(null, v)) },
+        carryMessages:           { load: () => import("./ws/modes/registry.js").then(m => m.setCarryMessages) },
+        sessionTTL:              { load: () => import("./ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
+        staleSessionTimeout:     { load: () => import("./ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
+      };
+
+      for (const [key, cfg] of Object.entries(KERNEL_CONFIG)) {
+        const val = getLandConfigValue(key);
+        if (val == null) continue;
+        try {
+          if (cfg.setter) {
+            cfg.setter(key, val);
+          } else if (cfg.load) {
+            const fn = await cfg.load();
+            fn(Number(val));
+          }
+        } catch (e) {
+          log.warn("Land", `Config "${key}" failed: ${e.message}`);
+        }
       }
     } catch {}
 

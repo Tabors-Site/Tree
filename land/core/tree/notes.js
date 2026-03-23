@@ -68,7 +68,8 @@ async function extractTaggedUsersAndRewrite(content) {
     rewrittenContent,
   };
 }
-export const NOTE_TEXT_MAX_CHARS = 5000;
+export let NOTE_TEXT_MAX_CHARS = 5000;
+export function setNoteMaxChars(n) { NOTE_TEXT_MAX_CHARS = n; }
 
 export async function assertNoteTextWithinLimit(content, userId) {
   if (!content) return;

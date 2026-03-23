@@ -274,4 +274,5 @@ export function getAllToolNamesForBigMode(bigMode) {
 /**
  * Number of recent messages to carry across a mode switch.
  */
-export const CARRY_MESSAGES = 4;
+export let CARRY_MESSAGES = 4;
+export function setCarryMessages(n) { CARRY_MESSAGES = n; }
