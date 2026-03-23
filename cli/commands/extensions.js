@@ -197,6 +197,7 @@ module.exports = (program) => {
           const missing = data.needs.extensions.filter(dep => !loaded.has(dep));
           if (missing.length > 0) {
             console.log(chalk.yellow(`\nRequires: ${missing.join(", ")}`));
+            let allResolved = true;
             for (const dep of missing) {
               console.log(chalk.dim(`  Installing ${dep}...`));
               try {
@@ -204,7 +205,13 @@ module.exports = (program) => {
                 console.log(chalk.green(`  Installed: ${dep} v${depData.version || "?"}`));
               } catch (depErr) {
                 console.log(chalk.red(`  Failed to install ${dep}: ${depErr.message}`));
+                allResolved = false;
               }
+            }
+            if (!allResolved) {
+              console.log(chalk.red(`\nUninstalling ${name}. Required dependencies could not be installed.`));
+              try { await api.uninstallExtension(name); } catch {}
+              return;
             }
           }
         }
