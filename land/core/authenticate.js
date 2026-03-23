@@ -84,7 +84,7 @@ export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
   if (userId && !nodeId) {
     const user = await User.findOne({
       _id: userId,
-      htmlShareToken: shareToken,
+      shareToken,
     })
       .select("_id username")
       .lean()
@@ -119,7 +119,7 @@ export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
 
     const matchedUser = await User.findOne({
       _id: { $in: userIds },
-      htmlShareToken: shareToken,
+      shareToken,
     })
       .select("_id username")
       .lean()
@@ -128,9 +128,9 @@ export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
     if (!matchedUser) {
       console.log("[shareAuth] DENIED nodeId=%s userIds=%j tokenPrefix=%s", nodeId, userIds, shareToken?.slice(0, 6));
       // Debug: check what tokens the users actually have
-      const users = await User.find({ _id: { $in: userIds } }).select("_id username htmlShareToken").lean();
+      const users = await User.find({ _id: { $in: userIds } }).select("_id username metadata").lean();
       for (const u of users) {
-        console.log("[shareAuth]   user=%s token=%s match=%s", u.username, u.htmlShareToken?.slice(0, 6), u.htmlShareToken === shareToken);
+        console.log("[shareAuth]   user=%s token=%s match=%s", u.username, u.metadata?.html?.shareToken?.slice(0, 6), u.metadata?.html?.shareToken === shareToken);
       }
       return { allowed: false, reason: "Invalid share token for node" };
     }

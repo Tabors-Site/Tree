@@ -236,7 +236,8 @@ const user = await User.findOne({
       message: "Login successful",
       token,
       userId: user._id.toString(),
-      htmlShareToken: (user.metadata instanceof Map ? user.metadata.get("htmlRendering") : user.metadata?.htmlRendering)?.shareToken || null,
+      username: user.username,
+      htmlShareToken: user.metadata?.html?.shareToken || null,
     });
   } catch (error) {
     console.error("Error during login:", error);

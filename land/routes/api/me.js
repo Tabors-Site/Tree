@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.get("/me", authenticate, async (req, res) => {
   const user = await User.findById(req.userId)
-    .select("username email profileType htmlShareToken metadata");
+    .select("username profileType metadata");
 
   if (!user)
     return res.status(404).json({ success: false, error: "User not found" });
@@ -22,8 +22,8 @@ router.get("/me", authenticate, async (req, res) => {
     username: req.username,
     profileType: user.profileType,
     planExpiresAt: getUserMeta(user, "billing").planExpiresAt || null,
-    email: user.email,
-    shareToken: user.htmlShareToken || null,
+    email: getUserMeta(user, "auth")?.email || null,
+    shareToken: getUserMeta(user, "html")?.shareToken || null,
     storageUsageMb: energy.storageUsage ?? 0,
     energy: {
       available,

@@ -123,8 +123,8 @@ router.get("/user/reset-password/:token", async (req, res) => {
     const { token } = req.params;
 
     const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpiry: { $gt: Date.now() },
+      "metadata.auth.resetPasswordToken": token,
+      "metadata.auth.resetPasswordExpiry": { $gt: Date.now() },
     });
 
     if (!user) {
@@ -151,8 +151,8 @@ router.post("/user/reset-password/:token", async (req, res) => {
     }
 
     const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpiry: { $gt: Date.now() },
+      "metadata.auth.resetPasswordToken": token,
+      "metadata.auth.resetPasswordExpiry": { $gt: Date.now() },
     });
 
     if (!user) {
@@ -160,8 +160,11 @@ router.post("/user/reset-password/:token", async (req, res) => {
     }
 
     user.password = password;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpiry = undefined;
+    const { setUserMeta, getUserMeta } = await import("../../core/tree/userMetadata.js");
+    const auth = getUserMeta(user, "auth");
+    delete auth.resetPasswordToken;
+    delete auth.resetPasswordExpiry;
+    setUserMeta(user, "auth", auth);
 
     await user.save();
 

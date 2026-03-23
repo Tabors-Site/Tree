@@ -2,6 +2,7 @@ import { z } from "zod";
 import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fileTypeFromBuffer } from "file-type";
 import User from "../db/models/user.js";
+import { getUserMeta } from "../core/tree/userMetadata.js";
 import Node from "../db/models/node.js";
 
 import { emitNavigate } from "../ws/websocket.js";
@@ -2075,8 +2076,8 @@ async function handleMcpRequest(req, res) {
       requestArgs.aiChatId = aiCtx.aiChatId;
       requestArgs.sessionId = aiCtx.sessionId;
 
-      const user = await User.findById(req.userId).select("htmlShareToken");
-      const htmlShareToken = user?.htmlShareToken ?? null;
+      const user = await User.findById(req.userId).select("metadata");
+      const htmlShareToken = getUserMeta(user, "html")?.shareToken ?? null;
 
       // inject into args so mapper can use it
       if (args && htmlShareToken) {
@@ -2243,8 +2244,8 @@ async function handleMcpRequest(req, res) {
       requestArgs.aiChatId = aiCtx2.aiChatId;
       requestArgs.sessionId = aiCtx2.sessionId;
 
-      const user = await User.findById(req.userId).select("htmlShareToken");
-      const htmlShareToken = user?.htmlShareToken ?? null;
+      const user = await User.findById(req.userId).select("metadata");
+      const htmlShareToken = getUserMeta(user, "html")?.shareToken ?? null;
 
       // inject into args so mapper can use it
       if (args && htmlShareToken) {

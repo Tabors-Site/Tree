@@ -16,14 +16,14 @@ router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
     }
 
     const user = await User.findById(userId)
-      .select("username htmlShareToken")
+      .select("username metadata")
       .lean();
 
     if (!user) {
       return notFoundPage(req, res, "This user doesn't exist.");
     }
 
-    const token = user.htmlShareToken;
+    const token = getUserMeta(user, "html")?.shareToken;
     const tokenQS = req.query.token
       ? `?token=${req.query.token}&html`
       : "?html";
@@ -48,7 +48,7 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const hadShareTokenBefore = Boolean(user.htmlShareToken);
+    const hadShareTokenBefore = Boolean(getUserMeta(user, "html")?.shareToken);
 
     const u = await setHtmlShareToken({
       userId,
@@ -60,11 +60,11 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
         return res.redirect("/dashboard");
       }
       return res.redirect(
-        `/api/v1/user/${userId}?token=${u.htmlShareToken ?? ""}&html`,
+        `/api/v1/user/${userId}?token=${getUserMeta(u, "html")?.shareToken ?? ""}&html`,
       );
     }
 
-    return res.json({ success: true, shareToken: u.htmlShareToken });
+    return res.json({ success: true, shareToken: getUserMeta(u, "html")?.shareToken });
   } catch (err) {
     console.error("shareToken update error:", err);
     if ("html" in req.query) {

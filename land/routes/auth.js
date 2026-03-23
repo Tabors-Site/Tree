@@ -58,9 +58,10 @@ authApiRouter.post(
       htmlShareToken = htmlShareToken.trim();
       if (htmlShareToken.length > 128 || htmlShareToken.length < 1) return res.status(400).json({ message: "htmlShareToken must be 1 to 128 characters" });
       if (!/^[A-Za-z0-9\-_.~]+$/.test(htmlShareToken)) return res.status(400).json({ message: "htmlShareToken may only contain URL-safe characters" });
-      user.htmlShareToken = htmlShareToken;
+      const { setUserMeta } = await import("../core/tree/userMetadata.js");
+      setUserMeta(user, "html", { shareToken: htmlShareToken });
       await user.save();
-      return res.json({ htmlShareToken: user.htmlShareToken });
+      return res.json({ htmlShareToken });
     } catch (err) {
       console.error("[setHtmlShareToken]", err);
       res.status(500).json({ message: "Failed to set html share token" });
@@ -73,8 +74,8 @@ authApiRouter.post(
   authenticate,
   async (req, res, next) => {
     try {
-      const user = await User.findById(req.userId).select("htmlShareToken").lean().exec();
-      req.HTMLShareToken = user?.htmlShareToken ?? null;
+      const user = await User.findById(req.userId).select("metadata").lean().exec();
+      req.HTMLShareToken = user?.metadata?.html?.shareToken ?? null;
       next();
     } catch (err) {
       console.error("[getHtmlShareToken]", err);

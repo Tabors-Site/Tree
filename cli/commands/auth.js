@@ -71,25 +71,21 @@ async function saveLogin(cfg, apiKey) {
  * After register/login, create an API key via the extension endpoint.
  * Falls back to JWT-only auth if the api-keys extension isn't loaded.
  */
-async function createCliApiKey(cfg, token, userId) {
+async function createCliApiKey(cfg, token, userId, username) {
   try {
     const keyData = await jwtPost(token, `/user/${userId}/api-keys`, { name: "treeos-cli" });
     return await saveLogin(cfg, keyData.apiKey);
   } catch (e) {
     // api-keys extension not loaded, or key creation failed. Use JWT directly.
-    const TreeAPIWithJwt = require("../api");
-    // Store token as the auth credential (TreeAPI supports Bearer too via x-api-key,
-    // but we need a JWT-aware path). Save what we can from the token.
     cfg.apiKey = null;
     cfg.jwtToken = token;
     cfg.userId = userId;
+    cfg.username = username || null;
     cfg.pathStack = [];
     cfg.activeRootId = null;
     cfg.activeRootName = null;
     save(cfg);
-    // Create a temporary API instance using JWT for the setup flow
-    const api = { me: async () => ({ userId, username: cfg.username }) };
-    return { me: { userId, username: cfg.username }, api };
+    return { me: { userId, username: username || null }, api: new TreeAPI(null) };
   }
 }
 
@@ -174,8 +170,7 @@ module.exports = (program) => {
           if (data.firstUser) {
             console.log(chalk.green("\n  First user. You are the admin (god tier)."));
           }
-          const { me, api } = await createCliApiKey(cfg, data.token, data.userId);
-          cfg.username = data.username || me.username;
+          const { me, api } = await createCliApiKey(cfg, data.token, data.userId, data.username || username);
           save(cfg);
           await printLoginSuccess(me, api);
 
@@ -317,7 +312,7 @@ module.exports = (program) => {
         const userId = loginData.userId;
 
         // Create an API key for CLI usage (falls back to JWT if api-keys extension not loaded)
-        const { me, api } = await createCliApiKey(cfg, token, userId);
+        const { me, api } = await createCliApiKey(cfg, token, userId, username);
         await printLoginSuccess(me, api);
         const { startShell } = require("../index");
         await startShell();

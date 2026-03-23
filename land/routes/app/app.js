@@ -51,9 +51,11 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       }
     }
 
-    const { htmlShareToken, username } = user;
+    const { getUserMeta } = await import("../../core/tree/userMetadata.js");
+    const htmlShareToken = getUserMeta(user, "html")?.shareToken || "";
+    const { username } = user;
     const hasLlm =
-      !!user.llmAssignments?.main ||
+      !!user.llmDefault ||
       (await CustomLlmConnection.countDocuments({ userId: req.userId })) > 0;
 
     return res.send(`<!DOCTYPE html>

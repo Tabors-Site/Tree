@@ -19,7 +19,7 @@ export async function createPurchaseSession(req, res) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const token = user.htmlShareToken || "";
+    const token = getUserMeta(user, "html")?.shareToken || "";
 
     /* ===============================
        PRE-VALIDATE BEFORE STRIPE

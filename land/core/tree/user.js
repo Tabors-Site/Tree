@@ -1,46 +1,24 @@
 import User from "../../db/models/user.js";
 import Node from "../../db/models/node.js";
+import { getUserMeta, setUserMeta } from "./userMetadata.js";
 
 const URL_SAFE_REGEX = /^[A-Za-z0-9\-_.~]+$/;
 
 export async function setHtmlShareToken({ userId, htmlShareToken }) {
-  if (!userId) {
-    const err = new Error("Not authenticated");
-    throw err;
-  }
-
-  if (typeof htmlShareToken !== "string") {
-    const err = new Error("htmlShareToken must be a string");
-    throw err;
-  }
+  if (!userId) throw new Error("Not authenticated");
+  if (typeof htmlShareToken !== "string") throw new Error("htmlShareToken must be a string");
 
   const token = htmlShareToken.trim();
-
-  if (token.length < 1 || token.length > 128) {
-    const err = new Error("htmlShareToken must be 1–128 characters");
-    throw err;
-  }
-
-  if (!URL_SAFE_REGEX.test(token)) {
-    const err = new Error(
-      "htmlShareToken may only contain URL-safe characters (A–Z a–z 0–9 - _ . ~)",
-    );
-    throw err;
-  }
+  if (token.length < 1 || token.length > 128) throw new Error("htmlShareToken must be 1 to 128 characters");
+  if (!URL_SAFE_REGEX.test(token)) throw new Error("htmlShareToken may only contain URL-safe characters");
 
   const user = await User.findById(userId);
-  if (!user) {
-    const err = new Error("User not found");
-    err.code = "USER_NOT_FOUND";
-    throw err;
-  }
+  if (!user) throw new Error("User not found");
 
-  user.htmlShareToken = token;
+  setUserMeta(user, "html", { shareToken: token });
   await user.save();
 
-  return {
-    htmlShareToken: user.htmlShareToken,
-  };
+  return { htmlShareToken: token };
 }
 
 export async function updateRecentRoots(userId, rootId) {
