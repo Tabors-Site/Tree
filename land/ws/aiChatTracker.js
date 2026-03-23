@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 // ws/aiChatTracker.js
 // Tracks AI chat sessions — each LLM call = one AIChat document
 // All calls in a chain share the same sessionId and are ordered by chainIndex
@@ -48,7 +49,7 @@ export function ensureSession(socket) {
   });
 
   if (!reused) {
-    console.log(
+    log.debug("AI", 
       `🆕 New AI session for ${socket.visitorId || socket.userId}: ${sessionId}`,
     );
   }
@@ -71,7 +72,7 @@ export function rotateSession(socket) {
     meta: { visitorId: socket.visitorId },
   });
 
-  console.log(
+  log.debug("AI", 
     `🔄 Rotated AI session for ${socket.visitorId || socket.userId}: ${sessionId}`,
   );
 
@@ -120,11 +121,11 @@ export async function finalizeOpenChat(socket) {
       content: null,
       stopped: true,
     });
-    console.log(
+    log.debug("AI", 
       `⏹ Finalized orphaned AIChat ${active.chatId} for ${socket.visitorId}`,
     );
   } catch (err) {
-    console.error(`⚠️ Failed to finalize orphaned AIChat:`, err.message);
+    log.warn("AI", `Failed to finalize orphaned AIChat:`, err.message);
   }
 }
 
@@ -299,6 +300,6 @@ export function trackChainStep({
     llmProvider: llmProvider || { isCustom: false, model: null, connectionId: null },
     ...(treeContext ? { treeContext } : {}),
   }).catch((err) => {
-    console.error(`⚠️ Failed to track chain step [${modeKey}]:`, err.message);
+    log.warn("AI", `Failed to track chain step [${modeKey}]:`, err.message);
   });
 }

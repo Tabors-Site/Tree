@@ -83,7 +83,7 @@ async function resolveConnection(connectionId, cacheKey) {
       var hostname = new URL(conn.baseUrl).hostname;
       await resolveAndValidateHost(hostname);
     } catch (err) {
-      console.error(
+      log.error("LLM", 
         "Blocked custom LLM connection " + connectionId + ": " + err.message,
       );
       return null;
@@ -155,7 +155,7 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
       );
       if (overrideEntry) return overrideEntry;
     } catch (err) {
-      console.error(
+      log.error("LLM", 
         "Failed to resolve override connection " +
           overrideConnectionId +
           ": " +
@@ -189,7 +189,7 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
       if (entry) return entry;
     }
   } catch (err) {
-    console.error(
+    log.error("LLM", 
       "Failed to load custom LLM for user " + userId + ": " + err.message,
     );
   }
@@ -216,7 +216,7 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
       return proxyEntry;
     }
   } catch (err) {
-    console.error("Failed to create canopy LLM proxy for user " + userId + ": " + err.message);
+    log.error("LLM", "Failed to create canopy LLM proxy for user " + userId + ": " + err.message);
   }
 
   var noLlmEntry = {
@@ -358,7 +358,7 @@ setInterval(
       }
     }
     if (swept > 0)
-      console.log(
+      log.debug("LLM", 
         `🧹 Swept ${swept} stale conversation session(s) (${sessions.size} remaining)`,
       );
   },
@@ -425,7 +425,7 @@ export function switchMode(visitorId, newModeKey, ctx) {
   session.modeKey = newModeKey;
   session.bigMode = mode.bigMode;
 
-  console.log(
+  log.debug("LLM", 
     `🔄 Mode switch for ${visitorId}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`,
   );
 
@@ -515,7 +515,7 @@ export async function processMessage(visitorId, message, ctx) {
     mode.maxMessagesBeforeLoop &&
     session.messages.length > mode.maxMessagesBeforeLoop
   ) {
-    console.log(`🔁 Conversation loop for ${visitorId} in ${session.modeKey}`);
+    log.debug("LLM", `🔁 Conversation loop for ${visitorId} in ${session.modeKey}`);
     const recentMessages = session.messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-(CARRY_MESSAGES * 2)); // carry more on loop
@@ -603,7 +603,7 @@ export async function processMessage(visitorId, message, ctx) {
         }
 
         if (extracted) {
-          console.warn(`⚠️ Model invented tool "${apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?"}". Extracted response from failed_generation.`);
+          log.warn("LLM", `⚠️ Model invented tool "${apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?"}". Extracted response from failed_generation.`);
           session.messages.push({ role: "assistant", content: extracted });
           response = { choices: [{ message: { content: extracted }, finish_reason: "stop" }] };
         } else {
@@ -638,7 +638,7 @@ export async function processMessage(visitorId, message, ctx) {
         /```tool_code/i.test(_content);
 
       if (looksLikeToolCall) {
-        console.warn(
+        log.warn("LLM", 
           `⚠️ Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`,
         );
         session.messages.pop();
@@ -753,7 +753,7 @@ export async function processMessage(visitorId, message, ctx) {
       try {
         args = JSON.parse(toolCall.function.arguments);
       } catch (e) {
-        console.error(`❌ Invalid tool arguments for ${toolName}:`, e.message);
+        log.error("LLM", `❌ Invalid tool arguments for ${toolName}:`, e.message);
         session.messages.push({
           role: "tool",
           tool_call_id: toolCall.id,
@@ -770,7 +770,7 @@ export async function processMessage(visitorId, message, ctx) {
       // Auto-inject userId
       args.userId = ctx.userId;
 
-      console.log(`🔧 [${session.modeKey}] ${toolName}`, args);
+      log.debug("LLM", `🔧 [${session.modeKey}] ${toolName}`, args);
 
       try {
         const result = await client.callTool({
@@ -790,7 +790,7 @@ export async function processMessage(visitorId, message, ctx) {
 
         toolResults.push({ tool: toolName, args, success: true });
       } catch (err) {
-        console.error(`❌ Tool ${toolName} failed:`, err.message);
+        log.error("LLM", `❌ Tool ${toolName} failed:`, err.message);
 
         session.messages.push({
           role: "tool",
@@ -909,7 +909,7 @@ export function resetConversation(visitorId, ctx) {
   });
 
   session.messages = [{ role: "system", content: systemPrompt }];
-  console.log(
+  log.debug("LLM", 
     `🔄 Reset conversation for ${visitorId} (mode: ${session.modeKey}, root: ${session.rootId})`,
   );
 }

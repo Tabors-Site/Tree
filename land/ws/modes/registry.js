@@ -1,6 +1,7 @@
 // ws/modes/registry.js
 // Central mode registry: defines all modes, their tools, and switching logic
 
+import log from "../../core/log.js";
 import { resolveTools } from "../tools.js";
 
 // ── HOME sub-modes ──────────────────────────────────────────────────────
@@ -125,19 +126,19 @@ export function setExtensionToolResolver(fn) {
  */
 export function registerMode(modeKey, modeConfig, extName = "unknown") {
   if (!modeKey || !modeConfig) {
-    console.warn(`[Modes] Invalid mode registration from ${extName}`);
+    log.warn("Modes", `Invalid mode registration from ${extName}`);
     return false;
   }
   if (!modeConfig.buildSystemPrompt || typeof modeConfig.buildSystemPrompt !== "function") {
-    console.warn(`[Modes] Mode "${modeKey}" from ${extName} missing buildSystemPrompt(). Skipped.`);
+    log.warn("Modes", `Mode "${modeKey}" from ${extName} missing buildSystemPrompt(). Skipped.`);
     return false;
   }
   if (!Array.isArray(modeConfig.toolNames)) {
-    console.warn(`[Modes] Mode "${modeKey}" from ${extName} missing toolNames[]. Skipped.`);
+    log.warn("Modes", `Mode "${modeKey}" from ${extName} missing toolNames[]. Skipped.`);
     return false;
   }
   if (ALL_MODES[modeKey]) {
-    console.warn(`[Modes] Mode "${modeKey}" already registered. ${extName} cannot override.`);
+    log.warn("Modes", `Mode "${modeKey}" already registered. ${extName} cannot override.`);
     return false;
   }
 
@@ -155,7 +156,7 @@ export function registerMode(modeKey, modeConfig, extName = "unknown") {
   };
 
   ALL_MODES[modeKey] = mode;
-  console.log(`[Modes] Registered: ${modeKey} (${extName})`);
+  log.verbose("Modes", `Registered: ${modeKey} (${extName})`);
   return true;
 }
 

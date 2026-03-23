@@ -10,6 +10,7 @@ import { buildCoreServices, NOOP_ENERGY } from "../core/services.js";
 import { setExtensionToolResolver, registerMode } from "../ws/modes/registry.js";
 import { hooks } from "../core/hooks.js";
 import { registerOrchestrator } from "../core/orchestratorRegistry.js";
+import log from "../core/log.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
 function toImportURL(filePath) {
@@ -45,7 +46,7 @@ export function syncDisabledFile(list) {
   try {
     fs.writeFileSync(DISABLED_FILE, JSON.stringify(list), "utf8");
   } catch (err) {
-    console.warn("[Extensions] Failed to write disabled file:", err.message);
+    log.warn("Extensions", "Failed to write disabled file:", err.message);
   }
 }
 
@@ -202,7 +203,7 @@ function resolveExtensionEnv(manifest) {
   }
 
   if (generated.length > 0) {
-    console.log(`[Extensions] ${manifest.name}: auto-generated ${generated.join(", ")}`);
+    log.verbose("Extensions", ${manifest.name}: auto-generated ${generated.join(", ")}`);
   }
 
   return missing.length > 0 ? { ok: false, missing } : { ok: true };
@@ -359,7 +360,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   const manifests = await discoverManifests();
 
   if (manifests.length === 0) {
-    console.log("[Extensions] No extension manifests found");
+    log.info("Extensions", "No extension manifests found");
     return loaded;
   }
 
@@ -367,7 +368,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   const disabled = getDisabledExtensions(opts.getConfigValue);
   const enabled = manifests.filter(({ manifest }) => {
     if (disabled.has(manifest.name)) {
-      console.log(`[Extensions] Disabled: ${manifest.name} (DISABLED_EXTENSIONS)`);
+      log.verbose("Extensions", Disabled: ${manifest.name} (DISABLED_EXTENSIONS)`);
       return false;
     }
     return true;
@@ -382,8 +383,8 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Validate required dependencies
       const missing = validateNeeds(manifest, coreServices);
       if (missing.length > 0) {
-        console.warn(
-          `[Extensions] Skipping "${manifest.name}": missing required deps: ${missing.join(", ")}`
+        log.warn("Extensions",
+          `Skipping "${manifest.name}": missing required deps: ${missing.join(", ")}`
         );
         continue;
       }
@@ -392,8 +393,8 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (manifest.provides?.env) {
         const envResult = resolveExtensionEnv(manifest);
         if (!envResult.ok) {
-          console.warn(
-            `[Extensions] Skipping "${manifest.name}": ${envResult.missing.join(", ")}. Set in .env and restart.`
+          log.warn("Extensions",
+          `Skipping "${manifest.name}": ${envResult.missing.join(", ")}. Set in .env and restart.`
           );
           continue;
         }
@@ -405,7 +406,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Load the extension's init function
       const extModule = await import(toImportURL(entryPath));
       if (typeof extModule.init !== "function") {
-        console.warn(`[Extensions] Skipping "${manifest.name}": no init() export`);
+        log.warn("Extensions", `Skipping "${manifest.name}": no init() export`);
         continue;
       }
 
@@ -417,19 +418,19 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Validate init() return
       if (!instance || typeof instance !== "object") {
-        console.warn(`[Extensions] "${manifest.name}": init() must return an object. Got ${typeof instance}. Skipped.`);
+        log.warn("Extensions", `"${manifest.name}": init() must return an object. Got ${typeof instance}. Skipped.`);
         continue;
       }
       if (instance.router && typeof instance.router.use !== "function") {
-        console.warn(`[Extensions] "${manifest.name}": router is not a valid Express router. Skipped.`);
+        log.warn("Extensions", `"${manifest.name}": router is not a valid Express router. Skipped.`);
         continue;
       }
       if (instance.tools !== undefined && !Array.isArray(instance.tools)) {
-        console.warn(`[Extensions] "${manifest.name}": tools must be an array. Skipped.`);
+        log.warn("Extensions", `"${manifest.name}": tools must be an array. Skipped.`);
         continue;
       }
       if (instance.jobs !== undefined && !Array.isArray(instance.jobs)) {
-        console.warn(`[Extensions] "${manifest.name}": jobs must be an array. Skipped.`);
+        log.warn("Extensions", `"${manifest.name}": jobs must be an array. Skipped.`);
         continue;
       }
 
@@ -450,7 +451,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         for (const rpath of routePaths) {
           if (routeOwnership.has(rpath)) {
             const owner = routeOwnership.get(rpath);
-            console.error(`[Extensions] Route collision: "${rpath}" claimed by both "${owner}" and "${manifest.name}". Skipping "${manifest.name}" routes.`);
+            log.error("Extensions", `Route collision: "${rpath}" claimed by both "${owner}" and "${manifest.name}". Skipping "${manifest.name}" routes.`);
             hasCollision = true;
             break;
           }
@@ -492,7 +493,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
               coreServices.models[modelName] = mod.default || mod;
               AVAILABLE_MODELS.add(modelName);
             } catch (err) {
-              console.warn(`[Extensions] ${manifest.name}: failed to load model ${modelName}:`, err.message);
+              log.warn("Extensions", `${manifest.name}: failed to load model ${modelName}:`, err.message);
             }
           }
         }
@@ -557,10 +558,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (instance.tools?.length) parts.push(`${instance.tools.length} tools`);
       if (instance.jobs?.length) parts.push(`${instance.jobs.length} jobs`);
       if (instance.modeTools?.length) parts.push(`${instance.modeTools.length} mode injections`);
-      console.log(`[Extensions] Loaded: ${parts.join(" | ")}`);
+      log.verbose("Extensions", Loaded: ${parts.join(" | ")}`);
 
     } catch (err) {
-      console.error(`[Extensions] Failed to load "${manifest.name}":`, err.message);
+      log.error("Extensions", `Failed to load "${manifest.name}":`, err.message);
     }
   }
 
@@ -665,8 +666,8 @@ async function discoverManifests() {
 
           const errors = validateManifest(manifest, entry.name);
           if (errors.length > 0) {
-            for (const err of errors) console.error(`[Extensions] Manifest validation: ${err}`);
-            console.warn(`[Extensions] Skipping "${entry.name}" due to invalid manifest`);
+            for (const err of errors) log.error("Extensions", `Manifest validation: ${err}`);
+            log.warn("Extensions", `Skipping "${entry.name}" due to invalid manifest`);
             continue;
           }
 
@@ -689,11 +690,11 @@ async function discoverManifests() {
             entryPath,
           });
         } else {
-          console.warn(`[Extensions] Manifest "${entry.name}" found but no entry point "${name}.js"`);
+          log.warn("Extensions", `Manifest "${entry.name}" found but no entry point "${name}.js"`);
         }
       }
     } catch (err) {
-      console.error(`[Extensions] Error reading manifest for "${entry.name}":`, err.message);
+      log.error("Extensions", `Error reading manifest for "${entry.name}":`, err.message);
     }
   }
 
@@ -788,7 +789,7 @@ export async function uninstallExtension(name) {
   // Remove from loaded map if currently loaded
   loaded.delete(name);
 
-  console.log(`[Extensions] Uninstalled: ${name}`);
+  log.verbose("Extensions", Uninstalled: ${name}`);
   return { found: true };
 }
 
@@ -832,7 +833,7 @@ export async function installExtensionFiles(name, files) {
     filesWritten++;
   }
 
-  console.log(`[Extensions] Installed: ${name} (${filesWritten} files)`);
+  log.verbose("Extensions", Installed: ${name} (${filesWritten} files)`);
   return { filesWritten };
 }
 
@@ -925,7 +926,7 @@ export async function runExtensionMigrations() {
   try {
     Node = (await import("../db/models/node.js")).default;
   } catch {
-    console.warn("[Extensions] Cannot run migrations: Node model not available");
+    log.warn("Extensions", "Cannot run migrations: Node model not available");
     return;
   }
 
@@ -947,7 +948,7 @@ export async function runExtensionMigrations() {
     // Load migrations
     const migrationsPath = manifest.provides?.migrations;
     if (!migrationsPath) {
-      console.warn(`[Extensions] ${name}: schemaVersion ${targetVersion} declared but no migrations path`);
+      log.warn("Extensions", `${name}: schemaVersion ${targetVersion} declared but no migrations path`);
       continue;
     }
 
@@ -961,12 +962,12 @@ export async function runExtensionMigrations() {
       let ran = 0;
       for (const migration of migrations) {
         if (migration.version > currentVersion && migration.version <= targetVersion) {
-          console.log(`[Extensions] ${name}: running migration v${migration.version}`);
+          log.verbose("Extensions", ${name}: running migration v${migration.version}`);
           try {
             await migration.up(coreServices);
             ran++;
           } catch (err) {
-            console.error(`[Extensions] ${name}: migration v${migration.version} FAILED:`, err.message);
+            log.error("Extensions", `${name}: migration v${migration.version} FAILED:`, err.message);
             break; // Stop on first failure
           }
         }
@@ -977,10 +978,10 @@ export async function runExtensionMigrations() {
         await Node.findByIdAndUpdate(extNode._id, {
           $set: { "versions.0.values.schemaVersion": targetVersion },
         });
-        console.log(`[Extensions] ${name}: schema updated to v${targetVersion} (${ran} migration(s))`);
+        log.verbose("Extensions", ${name}: schema updated to v${targetVersion} (${ran} migration(s))`);
       }
     } catch (err) {
-      console.error(`[Extensions] ${name}: failed to load migrations:`, err.message);
+      log.error("Extensions", `${name}: failed to load migrations:`, err.message);
     }
   }
 }
@@ -993,10 +994,10 @@ export function startExtensionJobs() {
     try {
       if (typeof job.start === "function") {
         job.start();
-        console.log(`[Extensions] Job started: ${job.name} (${job.extensionName})`);
+        log.verbose("Extensions", Job started: ${job.name} (${job.extensionName})`);
       }
     } catch (err) {
-      console.error(`[Extensions] Job failed to start: ${job.name}:`, err.message);
+      log.error("Extensions", `Job failed to start: ${job.name}:`, err.message);
     }
   }
 }
@@ -1011,7 +1012,7 @@ export function stopExtensionJobs() {
         job.stop();
       }
     } catch (err) {
-      console.error(`[Extensions] Job failed to stop: ${job.name}:`, err.message);
+      log.error("Extensions", `Job failed to stop: ${job.name}:`, err.message);
     }
   }
 }

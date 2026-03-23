@@ -1,6 +1,7 @@
 // ws/websocket.js
 // WebSocket server - handles socket events, delegates to conversation manager
 
+import log from "../core/log.js";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
@@ -203,7 +204,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     }
 
     socket.on("ready", () => {
-      console.log(`✅ App ready for user: ${userId}`);
+      log.verbose("WS", `App ready: ${userId}`);
     });
 
     // ── REGISTER ──────────────────────────────────────────────────────
@@ -319,7 +320,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
               socket.emit("recentRoots", { roots: rootsWithNames });
             })
             .catch((err) =>
-              console.error("Failed to update recent roots:", err.message),
+              log.error("WS", "Failed to update recent roots:", err.message),
             );
         }
       } else if (nodeId) {
@@ -381,7 +382,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           });
           socket.emit("modeSwitched", { ...result, carriedMessages: [] });
         } catch (err) {
-          console.error(`❌ Big mode switch failed:`, err.message);
+          log.error("WS", `Big mode switch failed:`, err.message);
         }
       }
 
@@ -468,7 +469,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           currentMode = result.modeKey;
           socket.emit("modeSwitched", { ...result, carriedMessages: [] });
         } catch (err) {
-          console.error("❌ Failed to initialize/correct mode:", err.message);
+          log.error("WS", "Failed to initialize/correct mode:", err.message);
         }
       }
 
@@ -602,7 +603,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             setActiveChat(socket, aiChat._id, aiChat.startMessage.time);
             setAiContributionContext(socket.visitorId, sessionId, aiChat._id);
           } catch (err) {
-            console.error("⚠️ Failed to create AIChat:", err.message);
+            log.warn("WS", "Failed to create AIChat:", err.message);
           }
 
           try {
@@ -679,7 +680,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                   stopped: false,
                   modeKey: finalMode,
                 }).catch((err) =>
-                  console.error("⚠️ AIChat finalize failed:", err.message),
+                  log.warn("WS", "AIChat finalize failed:", err.message),
                 );
               }
               clearAiContributionContext(socket.visitorId);
@@ -709,14 +710,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                   content: null,
                   stopped: true,
                 }).catch((e) =>
-                  console.error("⚠️ AIChat abort finalize failed:", e.message),
+                  log.warn("WS", "AIChat abort finalize failed:", e.message),
                 );
               }
               clearActiveChat(socket);
               return;
             }
 
-            console.error("❌ Chat error:", err);
+            log.error("WS", "Chat error:", err);
 
             // Charge energy on LLM failure to prevent spam of fake endpoints
             try {
@@ -742,7 +743,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                 content: `Error: ${err.message}`,
                 stopped: false,
               }).catch((e) =>
-                console.error("⚠️ AIChat error finalize failed:", e.message),
+                log.warn("WS", "AIChat error finalize failed:", e.message),
               );
             }
             clearActiveChat(socket);
@@ -758,7 +759,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     // ── CANCEL REQUEST ────────────────────────────────────────────────
     socket.on("cancelRequest", () => {
       if (socket._chatAbort) {
-        console.log(`⏹ Cancel request for ${socket.visitorId}`);
+        log.debug("WS", `Cancel request: ${socket.visitorId}`);
         socket._chatAbort.abort();
         socket._chatAbort = null;
       }
@@ -770,7 +771,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const visitorId = socket.visitorId;
       if (visitorId && rootId) {
         setRootId(visitorId, rootId);
-        console.log(`🌳 Set active root for ${visitorId}: ${rootId}`);
+        log.debug("WS", `Set root: ${visitorId}: ${rootId}`);
       }
     });
     socket.on("getRecentRoots", async () => {
@@ -799,7 +800,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
         socket.emit("recentRoots", { roots: rootsWithNames });
       } catch (err) {
-        console.error("Failed to get recent roots:", err.message);
+        log.error("WS", "Failed to get recent roots:", err.message);
         socket.emit("recentRoots", { roots: [] });
       }
     });
@@ -976,7 +977,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
 
     socket.on("disconnect", async (reason) => {
-      console.log(`🔌 Disconnected: ${socket.id} (${reason})`);
+      log.debug("WS", `Disconnected: ${socket.id} (${reason})`);
 
       // Finalize any in-flight chat
       await finalizeOpenChat(socket);

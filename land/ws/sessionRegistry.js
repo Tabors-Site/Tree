@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 // ws/sessionRegistry.js
 // Tracks all active sessions per user and gates iframe navigation so only
 // the designated "active navigator" session can redirect the user's view.
@@ -156,7 +157,7 @@ export function registerSession({ sessionId, userId, type, description = "", met
   }
 
   const isNav = activeNavigator.get(uid) === sessionId;
-  console.log(
+  log.debug("Session", 
     `📋 Session registered: ${type} [${sessionId.slice(0, 8)}] for user ${uid} (navigator: ${isNav})`,
   );
 
@@ -409,7 +410,7 @@ function promoteNavigator(userId) {
       const s = sessions.get(sid);
       if (s && s.type === type && s.status === "active") {
         activeNavigator.set(userId, sid);
-        console.log(`📋 Navigator promoted: ${type} [${sid.slice(0, 8)}] for user ${userId}`);
+        log.debug("Session", `📋 Navigator promoted: ${type} [${sid.slice(0, 8)}] for user ${userId}`);
         return;
       }
     }
@@ -431,7 +432,7 @@ setInterval(() => {
     // websocket-chat sessions are cleaned up by socket disconnect, not stale sweep
     if (session.type === SESSION_TYPES.WEBSOCKET_CHAT) continue;
     if (now - session.lastActivity > STALE_TIMEOUT) {
-      console.log(`🧹 Stale session removed: ${session.type} [${sessionId.slice(0, 8)}]`);
+      log.debug("Session", `🧹 Stale session removed: ${session.type} [${sessionId.slice(0, 8)}]`);
       endSession(sessionId);
     }
   }
