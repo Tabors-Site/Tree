@@ -162,20 +162,4 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
   return core;
 }
 
-// ---------------------------------------------------------------------------
-// Optional energy import — extensions use this instead of copy-pasting try/catch.
-// Returns the real energy module if loaded, otherwise NOOP_ENERGY.
-// ---------------------------------------------------------------------------
-
-let _resolvedEnergy = null;
-export async function optionalEnergy() {
-  if (_resolvedEnergy) return _resolvedEnergy;
-  try {
-    _resolvedEnergy = await import("../extensions/energy/core.js");
-  } catch {
-    _resolvedEnergy = NOOP_ENERGY;
-  }
-  return _resolvedEnergy;
-}
-
 export { NOOP_ENERGY, NOOP_CONTRIBUTIONS, NOOP_WEBSOCKET, authStrategies };

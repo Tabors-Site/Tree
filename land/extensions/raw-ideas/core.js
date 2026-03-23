@@ -7,8 +7,8 @@ import User from "../../db/models/user.js";
 import { logContribution } from "../../db/utils.js";
 import { createNote } from "../../core/tree/notes.js";
 import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
-import { optionalEnergy } from "../../core/services.js";
-const { useEnergy } = await optionalEnergy();
+let useEnergy = async () => ({ energyUsed: 0 });
+export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 import { fileURLToPath } from "url";
 

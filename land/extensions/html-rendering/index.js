@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import router, { pageRouter } from "./routes.js";
+import { renderLoginPage, renderRegisterPage, renderForgotPasswordPage } from "./pages.js";
 
 function generateShareToken() {
   return crypto.randomBytes(16).toString("base64url");
@@ -19,5 +20,13 @@ export async function init(core) {
     await freshUser.save();
   }, "html-rendering");
 
-  return { router, pageRouter };
+  return {
+    router,
+    pageRouter,
+    exports: {
+      renderLoginPage,
+      renderRegisterPage,
+      renderForgotPasswordPage,
+    },
+  };
 }

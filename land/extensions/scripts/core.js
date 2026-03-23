@@ -4,8 +4,9 @@ import Node from "../../db/models/node.js";
 import { logContribution } from "../../db/utils.js";
 import Contribution from "../../db/models/contribution.js";
 import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
-import { optionalEnergy } from "../../core/services.js";
-const { useEnergy } = await optionalEnergy();
+
+let useEnergy = async () => ({ energyUsed: 0 });
+export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";
 

@@ -1,5 +1,6 @@
 import router from "./routes.js";
 import { startupScan, disconnectAllBots } from "./discordBotManager.js";
+import { dispatchNotifications, dispatchTestNotification } from "./dispatch.js";
 
 export async function init(core) {
   return {
@@ -11,5 +12,9 @@ export async function init(core) {
         stop: () => { disconnectAllBots(); },
       },
     ],
+    exports: {
+      dispatchNotifications,
+      dispatchTestNotification,
+    },
   };
 }

@@ -5,6 +5,7 @@
 import log from "../../core/log.js";
 import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
+import { getExtension } from "../loader.js";
 import AIChat from "../../db/models/aiChat.js";
 import Node from "../../db/models/node.js";
 import Notification from "./notification.model.js";
@@ -148,9 +149,11 @@ export async function orchestrateDreamNotify({
         uniqueNotifs.push({ type: "dream-thought", title: thought.title, content: thought.content });
       }
       if (uniqueNotifs.length > 0) {
-        import("../gateway/dispatch.js")
-          .then(({ dispatchNotifications }) => dispatchNotifications(rootId, uniqueNotifs))
- .catch((err) => log.error("Dreams", `Gateway dispatch error for root ${rootId}:`, err.message));
+        const gateway = getExtension("gateway");
+        if (gateway?.exports?.dispatchNotifications) {
+          gateway.exports.dispatchNotifications(rootId, uniqueNotifs)
+            .catch((err) => log.error("Dreams", `Gateway dispatch error for root ${rootId}:`, err.message));
+        }
       }
     }
 

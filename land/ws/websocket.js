@@ -138,15 +138,12 @@ async function loadTreeForDashboard(rootId) {
     return {
       id: String(obj._id),
       name: obj.name,
-      prestige: obj.prestige || 0,
-      status:
-        obj.versions?.find((v) => v.prestige === obj.prestige)?.status ||
-        "active",
+      status: obj.status || "active",
       children: (obj.children || []).map((c) =>
         simplify(
           typeof c === "object" && c !== null
             ? c
-            : { _id: c, name: "?", children: [], versions: [], prestige: 0 },
+            : { _id: c, name: "?", children: [], status: "active" },
         ),
       ),
     };

@@ -7,12 +7,8 @@ import TempUser from "./model.js";
 import { sendResetEmail } from "./core.js";
 import { getLandUrl } from "../../canopy/identity.js";
 import { getLandConfigValue } from "../../core/landConfig.js";
+import { getExtension } from "../loader.js";
 import rateLimit from "express-rate-limit";
-
-let renderForgotPasswordPage;
-try {
-  ({ renderForgotPasswordPage } = await import("../html-rendering/pages.js"));
-} catch {}
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -169,10 +165,12 @@ router.get("/user/verify/:token", async (req, res) => {
 });
 
 router.get("/forgot-password", (req, res) => {
-  if (process.env.ENABLE_FRONTEND_HTML !== "true" || !renderForgotPasswordPage) {
+  const htmlExt = getExtension("html-rendering");
+  const render = htmlExt?.exports?.renderForgotPasswordPage;
+  if (process.env.ENABLE_FRONTEND_HTML !== "true" || !render) {
     return res.status(404).json({ error: "Not available" });
   }
-  renderForgotPasswordPage(req, res);
+  render(req, res);
 });
 
 export default router;

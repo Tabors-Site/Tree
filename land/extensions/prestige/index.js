@@ -2,8 +2,10 @@ import router from "./routes.js";
 import tools from "./tools.js";
 import { getExtMeta } from "../../core/tree/extensionMetadata.js";
 import Node from "../../db/models/node.js";
+import { setEnergyService } from "./core.js";
 
 export async function init(core) {
+  setEnergyService(core.energy);
   core.hooks.register("beforeNote", async (data) => {
     const node = await Node.findById(data.nodeId).select("metadata").lean();
     if (!node) return;

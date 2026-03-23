@@ -11,15 +11,7 @@ import ShortMemory from "./model.js";
 import { orchestrateReorganize } from "./cleanupReorganize.js";
 import { orchestrateExpand } from "./cleanupExpand.js";
 import { drainTree } from "./shortTermDrain.js";
-// Dynamic imports: understanding is a separate extension
-let findOrCreateUnderstandingRun, orchestrateUnderstanding;
-try {
-  ({ findOrCreateUnderstandingRun } = await import("../understanding/core.js"));
-  ({ orchestrateUnderstanding } = await import("../understanding/pipeline.js"));
-} catch {
-  findOrCreateUnderstandingRun = async () => null;
-  orchestrateUnderstanding = async () => {};
-}
+import { getExtension } from "../loader.js";
 import { orchestrateDreamNotify } from "./dreamNotify.js";
 import { userHasLlm } from "../../ws/conversation.js";
 import { acquireLock, releaseLock } from "../../orchestrators/locks.js";

@@ -223,7 +223,18 @@ router.post("/land/extensions/:name/uninstall", authenticate, async (req, res) =
       return res.status(400).json({ error: "Invalid extension name" });
     }
 
-    const { uninstallExtension } = await import("../../extensions/loader.js");
+    // Check if other extensions depend on this one
+    const { uninstallExtension, getLoadedManifests } = await import("../../extensions/loader.js");
+    const dependents = getLoadedManifests()
+      .filter(m => m.needs?.extensions?.includes(name))
+      .map(m => m.name);
+    if (dependents.length > 0 && !req.body?.force) {
+      return res.status(409).json({
+        error: `Cannot uninstall "${name}": ${dependents.join(", ")} depend on it. Pass { "force": true } to override.`,
+        dependents,
+      });
+    }
+
     const result = await uninstallExtension(name);
 
     if (!result.found) {

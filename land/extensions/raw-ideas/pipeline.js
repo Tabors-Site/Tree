@@ -7,8 +7,6 @@ import { SESSION_TYPES, updateSessionMeta } from "../../ws/sessionRegistry.js";
 import { setRootId, getClientForUser } from "../../ws/conversation.js";
 
 import { getOrchestrator } from "../../core/orchestratorRegistry.js";
-let orchestrateTreeRequest;
-try { ({ orchestrateTreeRequest } = await import("../tree-orchestrator/orchestrator.js")); } catch { orchestrateTreeRequest = async () => { throw new Error("No tree orchestrator installed"); }; }
 import {
   getRootNodesForUser,
   buildDeepTreeSummary,
@@ -173,7 +171,9 @@ export async function orchestrateRawIdeaPlacement({
     setRootId(rt.visitorId, chosenRootId);
     updateSessionMeta(rt.sessionId, { rootId: chosenRootId });
 
-    const treeResult = await orchestrateTreeRequest({
+    const treeOrch = getOrchestrator("tree");
+    if (!treeOrch) throw new Error("No tree orchestrator installed");
+    const treeResult = await treeOrch.handle({
       visitorId: rt.visitorId,
       message: rawIdea.content,
       socket: nullSocket,

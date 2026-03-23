@@ -4,8 +4,9 @@ import {
   handleSchedule,
 } from "../../db/utils.js";
 import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
-import { optionalEnergy } from "../../core/services.js";
-const { useEnergy } = await optionalEnergy();
+
+let useEnergy = async () => ({ energyUsed: 0 });
+export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 async function addPrestige({
   nodeId,

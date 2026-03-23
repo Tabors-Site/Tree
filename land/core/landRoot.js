@@ -26,14 +26,7 @@ export async function ensureLandRoot() {
     systemRole: "land-root",
     children: [],
     contributors: [],
-    versions: [
-      {
-        prestige: 0,
-        values: {},
-        status: "active",
-        dateCreated: new Date(),
-      },
-    ],
+    status: "active",
   });
   await landRoot.save();
 
@@ -44,14 +37,7 @@ export async function ensureLandRoot() {
     systemRole: "identity",
     children: [],
     contributors: [],
-    versions: [
-      {
-        prestige: 0,
-        values: {},
-        status: "active",
-        dateCreated: new Date(),
-      },
-    ],
+    status: "active",
     metadata: new Map([
       ["landId", identity.landId],
       ["domain", identity.domain],
@@ -67,14 +53,7 @@ export async function ensureLandRoot() {
     systemRole: "config",
     children: [],
     contributors: [],
-    versions: [
-      {
-        prestige: 0,
-        values: {},
-        status: "active",
-        dateCreated: new Date(),
-      },
-    ],
+    status: "active",
     metadata: new Map([
       ["LAND_NAME", identity.name || "My Land"],
       ["LAND_DEFAULT_TIER", process.env.LAND_DEFAULT_TIER || "basic"],
@@ -92,14 +71,7 @@ export async function ensureLandRoot() {
     systemRole: "peers",
     children: [],
     contributors: [],
-    versions: [
-      {
-        prestige: 0,
-        values: {},
-        status: "active",
-        dateCreated: new Date(),
-      },
-    ],
+    status: "active",
   });
   await peersNode.save();
 
@@ -110,14 +82,7 @@ export async function ensureLandRoot() {
     systemRole: "extensions",
     children: [],
     contributors: [],
-    versions: [
-      {
-        prestige: 0,
-        values: {},
-        status: "active",
-        dateCreated: new Date(),
-      },
-    ],
+    status: "active",
   });
   await extensionsNode.save();
 
@@ -207,8 +172,7 @@ export async function syncExtensionsToTree(manifests) {
       await Node.findByIdAndUpdate(nodeId, {
         $set: {
           type: "resource",
-          "versions.0.values": Object.fromEntries(values),
-          "versions.0.status": "active",
+          status: "active",
           metadata,
         },
       });
@@ -219,17 +183,10 @@ export async function syncExtensionsToTree(manifests) {
         parent: extNode._id,
         isSystem: true,
         type: "resource",
+        status: "active",
         children: [],
         contributors: [],
         metadata,
-        versions: [
-          {
-            prestige: 0,
-            values: Object.fromEntries(values),
-            status: "active",
-            dateCreated: new Date(),
-          },
-        ],
       });
       await child.save();
       extNode.children.push(child._id);
@@ -240,10 +197,7 @@ export async function syncExtensionsToTree(manifests) {
   for (const [name, nodeId] of existingByName) {
     if (!currentNames.has(name)) {
       await Node.findByIdAndUpdate(nodeId, {
-        $set: {
-          "versions.0.status": "trimmed",
-          "versions.0.values.loaded": 0,
-        },
+        $set: { status: "trimmed" },
       });
     }
   }

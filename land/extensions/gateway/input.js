@@ -8,8 +8,6 @@ import GatewayChannel from "./model.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
 import { getOrchestrator } from "../../core/orchestratorRegistry.js";
-let orchestrateTreeRequest;
-try { ({ orchestrateTreeRequest } = await import("../tree-orchestrator/orchestrator.js")); } catch { orchestrateTreeRequest = async () => { throw new Error("No tree orchestrator installed"); }; }
 import {
   userHasLlm,
 } from "../../ws/conversation.js";
@@ -198,7 +196,9 @@ export async function processGatewayMessage(
       }, TIMEOUT_MS);
 
       try {
-        var orchResult = await orchestrateTreeRequest({
+        var treeOrch = getOrchestrator("tree");
+        if (!treeOrch) throw new Error("No tree orchestrator installed");
+        var orchResult = await treeOrch.handle({
           visitorId,
           message: labeledMessage,
           socket: nullSocket,

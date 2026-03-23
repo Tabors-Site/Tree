@@ -1,6 +1,7 @@
 import { getEnergy, setEnergy, getUserMeta } from "../../../core/tree/userMetadata.js";
-import { optionalEnergy } from "../../../core/services.js";
-const { DAILY_LIMITS } = await optionalEnergy();
+
+let DAILY_LIMITS = {};
+export function setEnergyService(energy) { DAILY_LIMITS = energy.DAILY_LIMITS || {}; }
 
 const PLAN_DAILY_VALUE = {
   basic: 0,

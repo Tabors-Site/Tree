@@ -1,7 +1,9 @@
 import router from "./routes.js";
 import getTools from "./tools.js";
+import { setEnergyService } from "./core.js";
 
 export async function init(core) {
+  setEnergyService(core.energy);
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
     const values = meta.values || {};
     const goals = meta.goals || {};

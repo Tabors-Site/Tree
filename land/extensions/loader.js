@@ -966,7 +966,8 @@ export async function runExtensionMigrations() {
       name,
     }).lean();
 
-    const currentVersion = extNode?.versions?.[0]?.values?.schemaVersion || 0;
+    const meta = extNode?.metadata instanceof Map ? Object.fromEntries(extNode.metadata) : (extNode?.metadata || {});
+    const currentVersion = meta.schemaVersion || 0;
 
     if (currentVersion >= targetVersion) continue; // Up to date
 
@@ -1001,7 +1002,7 @@ export async function runExtensionMigrations() {
       // Update stored version
       if (ran > 0 && extNode) {
         await Node.findByIdAndUpdate(extNode._id, {
-          $set: { "versions.0.values.schemaVersion": targetVersion },
+          $set: { "metadata.schemaVersion": targetVersion },
         });
         log.verbose("Extensions", `${name}: schema updated to v${targetVersion} (${ran} migration(s))`);
       }
