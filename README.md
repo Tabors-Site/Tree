@@ -16,8 +16,8 @@ You need Node.js 18+ and MongoDB running.
 
 ```
 git clone <repo-url> && cd Tree
-npm run install:all
-npm land
+npm install
+npm start
 ```
 
 First run walks you through setup: domain, port, MongoDB, directory URL. Then it pulls the extension registry and lets you choose which to install. After that, your land boots.
