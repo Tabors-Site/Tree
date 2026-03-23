@@ -47,7 +47,7 @@ const CLIAbout = () => {
           <CmdRow cmd="login --key <key>" desc="Authenticate with an API key" />
           <CmdRow cmd="start / shell" desc="Launch interactive shell" />
           <CmdRow cmd="stop / exit" desc="Exit the shell" />
-          <CmdRow cmd="logout" desc="Clear stored credentials" />
+          <CmdRow cmd="logout" desc="Clear stored credentials and exit" />
           <CmdRow cmd="whoami" desc="Show login, plan, energy, and active tree" />
         </div>
 
@@ -138,6 +138,7 @@ const CLIAbout = () => {
           <CmdRow cmd="notes" desc="List notes on the current node. -l limit, -q search" />
           <CmdRow cmd="cat note <id or #>" desc="View full content of a note" />
           <CmdRow cmd="rm-note <id> -f" desc="Delete a note" />
+          <CmdRow cmd="download <id or #>" desc="Download a note to local file. -o output path, -r for raw idea instead of note" />
           <CmdRow cmd="book" desc="Print the full book of notes from current node down" />
           <CmdRow cmd="contributions" desc="List contributions on the current node" />
           <CmdRow cmd="values" desc="List values on the current node. -g global totals, -t per-node tree breakdown" />

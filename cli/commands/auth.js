@@ -336,6 +336,7 @@ module.exports = (program) => {
       cfg.activeRootName = null;
       save(cfg);
       console.log(chalk.green("Logged out."));
+      process.exit(0);
     });
 
   // ── Whoami ────────────────────────────────────────────────────────────
