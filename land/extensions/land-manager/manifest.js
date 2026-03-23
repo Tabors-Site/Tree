@@ -8,7 +8,7 @@ export default {
   },
 
   optional: {
-    extensions: ["shell", "tree-cli"],
+    extensions: ["shell"],
   },
 
   provides: {

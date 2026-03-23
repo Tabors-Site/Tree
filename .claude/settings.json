@@ -86,7 +86,10 @@
       "Read(//home/tabor/github/Tree/$dir/**)",
       "Read(//home/**)",
       "Read(//dev/**)",
-      "Bash(grep -n 'log\\\\.\\\\\\(verbose\\\\|info\\\\|warn\\\\|error\\\\|debug\\\\\\).*[^`]${' /home/tabor/github/Tree/land/extensions/loader.js)"
+      "Bash(grep -n 'log\\\\.\\\\\\(verbose\\\\|info\\\\|warn\\\\|error\\\\|debug\\\\\\).*[^`]${' /home/tabor/github/Tree/land/extensions/loader.js)",
+      "Bash(npm audit:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(timeout 20 PORT=39999 MONGODB_URI=\"mongodb://localhost:27017/tree-test-vm2\" LAND_DOMAIN=localhost JWT_SECRET=test CUSTOM_LLM_API_SECRET_KEY=test node land/server.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

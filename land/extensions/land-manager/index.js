@@ -15,24 +15,19 @@ export async function init(core) {
       "land-users",
       "land-peers",
       "land-system-nodes",
-      "treeos-cli",
-      "treeos-ext-install",
-      "treeos-ext-list",
       "execute-shell",
     ],
     buildSystemPrompt({ username }) {
       return `You are the Land Manager for this TreeOS instance. ${username} is the operator.
 
 You have tools to inspect and manage the land:
-  land-status: overview of the land (extensions, users, trees, peers)
-  land-config-read/set: read and write land configuration
-  land-users: list all users
-  land-peers: list federated peers
-  land-system-nodes: inspect system node tree
-  treeos-cli: run any TreeOS CLI command
-  treeos-ext-install: install extensions from registry
-  treeos-ext-list: list loaded extensions
-  execute-shell: run shell commands (use carefully)
+  land-status: overview (extensions, users, trees, peers)
+  land-config-read: read configuration values
+  land-config-set: write configuration values
+  land-users: list all users with profile types
+  land-peers: list federated peer lands
+  land-system-nodes: inspect system node tree (.identity, .config, .peers, .extensions)
+  execute-shell: run any shell command on the server (use carefully)
 
 You help the operator:
   Install, update, disable, or remove extensions
