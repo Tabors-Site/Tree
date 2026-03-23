@@ -74,7 +74,11 @@
       "Bash(echo \"=== Hardcoded CLI command files ===\" ls /home/tabor/github/Tree/cli/commands/*.js)",
       "Bash(xargs -I{} basename {} echo \"\" echo \"=== Which have hasExtension checks? ===\" grep -l \"hasExtension\" /home/tabor/github/Tree/cli/commands/*.js)",
       "Bash(xargs -I{} basename {} echo \"\" echo \"=== Commands that should be extension-gated but aren''''t ===\" grep -n \"prestige\\\\|understand\\\\|dream\\\\|schedule\\\\|calendar\\\\|book\\\\|blog\\\\|idea\\\\|solana\\\\|wallet\\\\|script\\\\|value\\\\b\\\\|goal\\\\b\" /home/tabor/github/Tree/cli/commands/*.js)",
-      "Bash(ls /home/tabor/github/Tree/land/extensions/understanding/model*)"
+      "Bash(ls /home/tabor/github/Tree/land/extensions/understanding/model*)",
+      "Bash(echo \"=== Node schema fields ===\" node -e \"import\\(''''./land/db/models/node.js''''\\).then\\(m => { console.log\\(Object.keys\\(m.default.schema.paths\\).filter\\(k => !k.startsWith\\(''''__''''\\)\\).sort\\(\\).join\\('''', ''''\\)\\); }\\);\" 2)",
+      "Bash(1 __NEW_LINE_c3a9c18e6b1d0abd__ echo \"\" echo \"=== User schema fields ===\" node -e \"import\\(''''./land/db/models/user.js''''\\).then\\(m => { console.log\\(Object.keys\\(m.default.schema.paths\\).filter\\(k => !k.startsWith\\(''''__''''\\)\\).sort\\(\\).join\\('''', ''''\\)\\); }\\);\" 2)",
+      "Bash(1 __NEW_LINE_c3a9c18e6b1d0abd__ echo \"\" echo \"=== Extensions ===\" ls -d land/extensions/*/)",
+      "Bash(echo \"doesn''''t exist\" echo echo '=== Other stale docs ===' find /home/tabor/github/Tree -maxdepth 1 -name *.md)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
