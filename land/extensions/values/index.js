@@ -3,7 +3,7 @@ import getTools from "./tools.js";
 import { setEnergyService, setValueForNode, setGoalForNode } from "./core.js";
 
 export async function init(core) {
-  setEnergyService(core.energy);
+  if (core.energy) setEnergyService(core.energy);
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
     const values = meta.values || {};
     const goals = meta.goals || {};

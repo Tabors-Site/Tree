@@ -8,7 +8,7 @@ import understandSummarize from "./modes/understandSummarize.js";
 
 export async function init(core) {
   const understanding = await import("./core.js");
-  understanding.setEnergyService(core.energy);
+  understanding.if (core.energy) setEnergyService(core.energy);
   const orchestrator = await import("./pipeline.js");
 
   // Register understanding modes + LLM slot mappings

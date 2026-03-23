@@ -11,6 +11,7 @@ export default {
 
   optional: {
     services: ["energy"],
+    extensions: ["gateway"],
   },
 
   provides: {

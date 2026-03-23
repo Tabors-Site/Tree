@@ -5,7 +5,7 @@ import Node from "../../db/models/node.js";
 import { setEnergyService, addPrestige } from "./core.js";
 
 export async function init(core) {
-  setEnergyService(core.energy);
+  if (core.energy) setEnergyService(core.energy);
   core.hooks.register("beforeNote", async (data) => {
     const node = await Node.findById(data.nodeId).select("metadata").lean();
     if (!node) return;

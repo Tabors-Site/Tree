@@ -5,7 +5,7 @@ import { setExtensions } from "./scriptsFunctions/safeFunctions.js";
 import { getExtension } from "../loader.js";
 
 export async function init(core) {
-  setEnergyService(core.energy);
+  if (core.energy) setEnergyService(core.energy);
 
   // Wire optional extension functions for sandboxed scripts
   setExtensions({
