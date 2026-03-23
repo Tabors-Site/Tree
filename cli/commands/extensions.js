@@ -247,6 +247,18 @@ module.exports = (program) => {
       const name = parts.join("-");
       try {
         const api = getApi();
+
+        // Warn if other extensions depend on this one
+        const allManifests = await api.get("/land/extensions");
+        if (allManifests?.extensions) {
+          const dependents = allManifests.extensions
+            .filter(e => e.name !== name && (e.needs?.extensions || e.manifest?.needs?.extensions || []).includes(name))
+            .map(e => e.name);
+          if (dependents.length > 0) {
+            console.log(chalk.yellow(`Warning: ${dependents.join(", ")} depend on "${name}" and will fail to load.`));
+          }
+        }
+
         const data = await api.disableExtension(name);
         console.log(chalk.yellow(`Disabled: ${name}`));
         console.log(chalk.dim("Restart the land for this to take effect."));
