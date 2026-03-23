@@ -66,7 +66,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       .populate("rootOwner", "username _id profileType planExpiresAt")
       .populate("contributors", "username _id isRemote homeLand")
       .select(
-        "rootOwner contributors metadata llmDefault dreamTime lastDreamAt visibility",
+        "rootOwner contributors metadata llmDefault visibility",
       )
       .lean()
       .exec();
@@ -169,7 +169,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
     }
 
     const root = await Node.findById(rootId)
-      .select("name rootOwner llmDefault metadata contributors")
+      .select("name rootOwner visibility llmDefault metadata contributors")
       .populate("rootOwner", "username")
       .lean();
 
@@ -181,7 +181,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
     const isOwner = isAuthenticated && String(root.rootOwner?._id) === String(req.userId);
     const isContributor = isAuthenticated && (root.contributors || []).map(String).includes(String(req.userId));
 
-    if ((root.metadata?.visibility?.level || "private") !== "public" && !isOwner && !isContributor) {
+    if (root.visibility !== "public" && !isOwner && !isContributor) {
       return res.status(403).json({ error: "This tree is not public." });
     }
 
@@ -267,7 +267,7 @@ router.post("/root/:rootId/visibility", authenticate, async (req, res) => {
     }
 
     await Node.findByIdAndUpdate(rootId, {
-      $set: { "metadata.visibility": { level: visibility } },
+      $set: { visibility },
     });
 
     // Immediately re-sync with directory so public/private change is reflected

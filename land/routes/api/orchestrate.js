@@ -269,7 +269,7 @@ async function checkTreeAccess(rootId, userId, res) {
 
 async function checkLlmAccess(rootId, userId, res) {
   const rootCheck = await Node.findById(rootId)
-    .select("rootOwner llmDefault metadata")
+    .select("rootOwner visibility llmDefault metadata")
     .lean();
   const hasUserLlm = await userHasLlm(userId);
   const hasRootLlm = !!(rootCheck?.llmDefault && rootCheck.llmDefault !== "none");
@@ -342,7 +342,7 @@ async function handleQuery(req, res) {
   if (!validateMessage(message, res)) return;
 
   const rootCheck = await Node.findById(rootId)
-    .select("rootOwner llmDefault metadata")
+    .select("rootOwner visibility llmDefault metadata")
     .lean();
 
   if (!rootCheck) {
@@ -358,7 +358,7 @@ async function handleQuery(req, res) {
   const treeHasLlm = rootCheck.llmDefault !== "none";
 
   if (isPublicAccess) {
-    if ((rootCheck.metadata?.visibility?.level || "private") !== "public") {
+    if (rootCheck.visibility !== "public") {
       return res.status(403).json({ success: false, answer: "This tree is not public." });
     }
     if (!treeHasLlm) {
@@ -371,7 +371,7 @@ async function handleQuery(req, res) {
   } else {
     const queryAccess = await resolveTreeAccess(rootId, req.userId);
     if (!queryAccess.isOwner && !queryAccess.isContributor) {
-      if ((rootCheck.metadata?.visibility?.level || "private") === "public") {
+      if (rootCheck.visibility === "public") {
         if (treeHasLlm) {
           effectiveUserId = rootCheck.rootOwner;
           const owner = await User.findById(rootCheck.rootOwner).select("username").lean();

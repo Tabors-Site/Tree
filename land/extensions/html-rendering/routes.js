@@ -3,6 +3,11 @@ import crypto from "crypto";
 import authenticate from "../../middleware/authenticate.js";
 import User from "../../db/models/user.js";
 import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
+import {
+  renderLoginPage,
+  renderRegisterPage,
+  renderForgotPasswordPage,
+} from "./pages.js";
 import rateLimit from "express-rate-limit";
 
 const router = express.Router();
@@ -85,6 +90,30 @@ router.post("/verify-token", authenticate, async (req, res) => {
     console.error("[verify-token]", err);
     res.status(500).json({ message: "Failed to verify token" });
   }
+});
+
+// Page routes (mounted at / not /api/v1)
+export const pageRouter = express.Router();
+
+pageRouter.get("/login", (req, res) => {
+  if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
+  }
+  renderLoginPage(req, res);
+});
+
+pageRouter.get("/register", (req, res) => {
+  if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
+  }
+  renderRegisterPage(req, res);
+});
+
+pageRouter.get("/forgot-password", (req, res) => {
+  if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
+  }
+  renderForgotPasswordPage(req, res);
 });
 
 export default router;

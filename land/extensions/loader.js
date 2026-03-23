@@ -458,6 +458,11 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         }
       }
 
+      // Wire page routes (mounted at / for HTML pages like /login, /register)
+      if (instance.pageRouter && typeof instance.pageRouter.use === "function") {
+        app.use("/", instance.pageRouter);
+      }
+
       // Wire MCP tools
       if (instance.tools && mcpServer) {
         for (const tool of instance.tools) {

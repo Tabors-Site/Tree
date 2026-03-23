@@ -48,7 +48,8 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
     }
 
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
-    keys = [...keys, { keyHash, keyPrefix, name: safeName }];
+    const crypto = await import("crypto");
+    keys = [...keys, { _id: crypto.randomUUID(), keyHash, keyPrefix, name: safeName, createdAt: new Date() }];
     setApiKeys(user, keys);
     await user.save();
 

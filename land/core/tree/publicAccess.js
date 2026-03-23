@@ -15,7 +15,7 @@ export async function resolvePublicRoot(nodeId) {
   if (!nodeId) return null;
 
   let node = await Node.findById(nodeId)
-    .select("parent rootOwner llmDefault metadata")
+    .select("parent rootOwner visibility llmDefault metadata")
     .lean();
 
   if (!node) return null;
@@ -33,7 +33,7 @@ export async function resolvePublicRoot(nodeId) {
 
   return {
     rootId: node._id.toString(),
-    visibility: (node.metadata?.visibility?.level || (node.metadata instanceof Map ? node.metadata.get("visibility")?.level : undefined) || "private"),
+    visibility: node.visibility || "private",
     rootOwner: node.rootOwner,
     llmDefault: node.llmDefault || null,
   };

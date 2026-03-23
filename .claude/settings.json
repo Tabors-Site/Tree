@@ -73,14 +73,16 @@
       "Bash(echo \"=== Old field refs in HTML renderers ===\" grep -rn \"\\\\.availableEnergy\\\\|\\\\.additionalEnergy\\\\|\\\\.storageUsage\\\\|\\\\.apiKeys\\\\|\\\\.planExpiresAt\\\\|\\\\.rawIdeaAutoPlace\\\\|\\\\.llmAssignments\\\\|\\\\.htmlShareToken\\\\|\\\\.email\\\\b\\\\|\\\\.visibility\\\\b\\\\|\\\\.dreamTime\\\\|\\\\.lastDreamAt\\\\|\\\\.versions\\\\[\" /home/tabor/github/Tree/land/routes/api/html/ --include=\"*.js\")",
       "Bash(echo \"=== Hardcoded CLI command files ===\" ls /home/tabor/github/Tree/cli/commands/*.js)",
       "Bash(xargs -I{} basename {} echo \"\" echo \"=== Which have hasExtension checks? ===\" grep -l \"hasExtension\" /home/tabor/github/Tree/cli/commands/*.js)",
-      "Bash(xargs -I{} basename {} echo \"\" echo \"=== Commands that should be extension-gated but aren''''t ===\" grep -n \"prestige\\\\|understand\\\\|dream\\\\|schedule\\\\|calendar\\\\|book\\\\|blog\\\\|idea\\\\|solana\\\\|wallet\\\\|script\\\\|value\\\\b\\\\|goal\\\\b\" /home/tabor/github/Tree/cli/commands/*.js)"
+      "Bash(xargs -I{} basename {} echo \"\" echo \"=== Commands that should be extension-gated but aren''''t ===\" grep -n \"prestige\\\\|understand\\\\|dream\\\\|schedule\\\\|calendar\\\\|book\\\\|blog\\\\|idea\\\\|solana\\\\|wallet\\\\|script\\\\|value\\\\b\\\\|goal\\\\b\" /home/tabor/github/Tree/cli/commands/*.js)",
+      "Bash(ls /home/tabor/github/Tree/land/extensions/understanding/model*)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
       "/home/tabor/github/Tree/s/node\\.llmAssignments = { placement: null };/\\/\\/ llmDefault is null by default, no need to set",
       "/home/tabor/github/Tree/s/u\\.htmlShareToken/u.metadata?.html?.shareToken",
       "/home/tabor/github/Tree/s/shareToken: user\\.htmlShareToken || null/shareToken: getUserMeta(user, \"html\")?.shareToken || null",
-      "/home/tabor/github/Tree/Deleted: core/gateway/ (4 files), routes/api"
+      "/home/tabor/github/Tree/Deleted: core/gateway/ (4 files), routes/api",
+      "/home/tabor/github/Tree/s/rootMeta\\.metadata?\\.visibility?\\.level/rootMeta.visibility"
     ]
   }
 }

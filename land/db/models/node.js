@@ -18,6 +18,13 @@ const NodeSchema = new mongoose.Schema({
   rootOwner: { type: String, ref: "User", default: null }, //if null it is not a root
   contributors: [{ type: String, ref: "User" }], // Users who can contribute to this node from here on and have access to it
 
+  // Tree visibility (core protocol, used by Canopy federation)
+  visibility: {
+    type: String,
+    enum: ["private", "public"],
+    default: "private",
+  },
+
   // Land system nodes (Land root, .identity, .config, .peers)
   isSystem: { type: Boolean, default: false },
   systemRole: {

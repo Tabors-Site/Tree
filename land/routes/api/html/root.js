@@ -1471,8 +1471,8 @@ ${
     <select id="visibilitySelect"
       style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
              background:rgba(255,255,255,0.06);color:#fff;font-size:0.95rem;min-width:140px">
-      <option value="private" ${(rootMeta.metadata?.visibility?.level || "private") === "private" ? "selected" : ""}>Private</option>
-      <option value="public" ${rootMeta.metadata?.visibility?.level === "public" ? "selected" : ""}>Public</option>
+      <option value="private" ${rootMeta.visibility || "private" === "private" ? "selected" : ""}>Private</option>
+      <option value="public" ${rootMeta.visibility === "public" ? "selected" : ""}>Public</option>
     </select>
     <button onclick="saveVisibility()" style="padding:8px 14px;border-radius:8px;
       border:1px solid rgba(72,187,120,0.4);background:rgba(72,187,120,0.15);

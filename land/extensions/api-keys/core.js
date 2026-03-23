@@ -42,16 +42,16 @@ export const createApiKey = async (req, res) => {
 
     let keys = getApiKeys(user);
 
-    if (keys.filter((k) => !k.revoked).length >= MAX_API_KEYS_PER_USER) {
-      return res.status(400).json({ message: "API key limit reached" });
-    }
-
     if (revokeOld) {
       keys = keys.map((k) => ({ ...k, revoked: true }));
     }
 
+    if (keys.filter((k) => !k.revoked).length > MAX_API_KEYS_PER_USER) {
+      return res.status(400).json({ message: "API key limit reached" });
+    }
+
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
-    keys = [...keys, { keyHash, keyPrefix, name: safeName }];
+    keys = [...keys, { _id: crypto.randomUUID(), keyHash, keyPrefix, name: safeName, createdAt: new Date() }];
     setApiKeys(user, keys);
     await user.save();
 

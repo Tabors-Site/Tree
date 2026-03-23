@@ -5,12 +5,6 @@ import {
   logout,
 } from "../core/users.js";
 import authenticate from "../middleware/authenticate.js";
-
-import {
-  renderLoginPage,
-  renderRegisterPage,
-} from "../core/login.js";
-
 import rateLimit from "express-rate-limit";
 
 const registerLimiter = rateLimit({
@@ -43,23 +37,14 @@ authApiRouter.post("/register", registerLimiter, register);
 authApiRouter.post("/login", loginLimiter, login);
 authApiRouter.post("/logout", authenticate, logout);
 
-// setHTMLShareToken and verify-token moved to html-rendering extension
+// HTML page routes, share token, verify-token moved to html-rendering extension
 // Email routes (forgot-password, reset-password, verify) moved to email extension
 
-// HTML pages + their POST handlers (mounted at / by routesHandler.js)
+// HTML form POST handlers (mounted at / by routesHandler.js)
 export const authPageRouter = express.Router();
 
-// POST routes needed by the server-rendered HTML forms
 authPageRouter.post("/register", registerLimiter, register);
 authPageRouter.post("/login", loginLimiter, login);
 authPageRouter.post("/logout", authenticate, logout);
 
-authPageRouter.get("/login", (req, res, next) => {
-  if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
-  renderLoginPage(req, res, next);
-});
-authPageRouter.get("/register", (req, res, next) => {
-  if (process.env.ENABLE_FRONTEND_HTML !== "true") return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
-  renderRegisterPage(req, res, next);
-});
-// forgot-password page route moved to email extension
+// GET /login, GET /register, GET /forgot-password pages served by html-rendering extension
