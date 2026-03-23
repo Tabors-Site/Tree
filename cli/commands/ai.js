@@ -45,7 +45,7 @@ module.exports = (program) => {
         console.log(chalk.dim("Land Manager…"));
         try {
           const data = await api.post("/land/chat", { message });
-          console.log(chalk.bold("\nLand:") + " " + (data.answer || JSON.stringify(data)));
+          console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
         } catch (e) {
           console.error(chalk.red(e.message));
         }
@@ -58,7 +58,7 @@ module.exports = (program) => {
         const nodeId = currentNodeId(cfg);
         const data = await api.chat(nodeId, message);
         console.log(
-          chalk.bold("\nTree:") + " " + (data.answer || JSON.stringify(data)),
+          chalk.bold("\nTree:") + " " + (data.answer || "No response."),
         );
       } catch (e) {
         console.error(chalk.red(e.message));
@@ -102,7 +102,7 @@ module.exports = (program) => {
         const nodeId = currentNodeId(cfg);
         const data = await api.query(nodeId, message);
         console.log(
-          chalk.bold("\nTree:") + " " + (data.answer || JSON.stringify(data)),
+          chalk.bold("\nTree:") + " " + (data.answer || "No response."),
         );
       } catch (e) {
         console.error(chalk.red(e.message));
