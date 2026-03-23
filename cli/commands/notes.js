@@ -161,6 +161,7 @@ module.exports = (program) => {
       }
     });
 
+  if (hasExtension(cfg, "values")) {
   program
     .command("values")
     .description("List values on the current node. -g global totals, -t per-node tree breakdown, -v version")
@@ -256,6 +257,7 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+  } // end values extension
 
   program
     .command("cat [type] [idOrNumber...]")

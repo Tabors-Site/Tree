@@ -10,8 +10,17 @@ function getBase() {
 
 class TreeAPI {
   constructor(apiKey, jwtToken) {
-    this.apiKey = apiKey;
-    this.jwtToken = jwtToken;
+    // Auto-load from config if no explicit jwtToken passed
+    if (!jwtToken) {
+      try {
+        const cfg = load();
+        this.apiKey = apiKey || cfg.apiKey || null;
+        this.jwtToken = cfg.jwtToken || null;
+        return;
+      } catch {}
+    }
+    this.apiKey = apiKey || null;
+    this.jwtToken = jwtToken || null;
   }
 
   _authHeaders() {

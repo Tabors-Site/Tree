@@ -320,8 +320,7 @@ module.exports = (program) => {
       try {
         const nodeId = currentNodeId(cfg);
         const data = await api.prestige(nodeId);
-        const ver = data.version ?? data.newVersion ?? "";
-        console.log(chalk.green(`✓ Prestiged`) + (ver !== "" ? `  ${chalk.dim("version " + ver)}` : ""));
+        console.log(chalk.green("✓ Prestiged"));
       } catch (e) {
         console.error(chalk.red(e.message));
       }
