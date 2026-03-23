@@ -1,4 +1,5 @@
-import { DAILY_LIMITS } from "../../energy/core.js";
+let DAILY_LIMITS = {};
+try { ({ DAILY_LIMITS } = await import("../../energy/core.js")); } catch {}
 
 const PLAN_DAILY_VALUE = {
   basic: 0,
