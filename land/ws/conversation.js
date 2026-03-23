@@ -995,6 +995,14 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const contextKey = bigMode === "tree" && rootId ? rootId : bigMode;
   const visitorId = `${contextKey}:${userId}`;
 
+  // Persistent sessionId per zone (chains AIChats together)
+  if (!runChat._sessions) runChat._sessions = new Map();
+  if (!runChat._sessions.has(visitorId)) {
+    const { v4: uuidv4 } = await import("uuid");
+    runChat._sessions.set(visitorId, uuidv4());
+  }
+  const sessionId = runChat._sessions.get(visitorId);
+
   // Abort controller for cancellation (Ctrl+C, timeout, etc.)
   const abort = signal ? { signal } : new AbortController();
   const abortSignal = signal || abort.signal;
@@ -1037,16 +1045,17 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
     const clientInfo = await getClientForUser(userId, visitorId) || {};
     aiChat = await startAIChat({
       userId,
+      sessionId,
       message,
       modeKey: mode,
-      llmInfo: {
+      llmProvider: {
         isCustom: clientInfo.isCustom || false,
         model: clientInfo.model || "unknown",
         connectionId: clientInfo.connectionId || null,
       },
       treeContext: rootId ? { targetNodeId: rootId } : undefined,
     });
-    if (aiChat) setAiContributionContext(visitorId, null, aiChat._id);
+    if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
   } catch (err) {
     log.warn("RunChat", `AIChat create failed: ${err.message}`);
   }
