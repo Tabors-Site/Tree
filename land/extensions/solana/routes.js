@@ -255,8 +255,8 @@ router.get("/node/:nodeId/values/solana", authenticate, async (req, res) => {
 
 router.post("/node/:nodeId/values/solana", authenticate, async (req, res) => {
   try {
-    await ensureVersionWallet(req.params.nodeId, 0);
-    res.json({ success: true });
+    const result = await ensureVersionWallet(req.params.nodeId, 0);
+    res.json({ success: true, publicKey: result.publicKey, created: result.created });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -155,6 +155,17 @@ module.exports = (program) => {
             // Commander passes args then the Command object
             const args = actionArgs.slice(0, argNames.length);
 
+            // Check for missing required args (anything in <brackets>)
+            const requiredArgs = (decl.command.match(/<[^>]+>/g) || []).map(a => a.replace(/[<>]/g, ""));
+            for (let i = 0; i < requiredArgs.length; i++) {
+              if (args[i] === undefined || args[i] === "") {
+                console.log(chalk.yellow(`Missing required argument: ${requiredArgs[i]}`));
+                console.log(chalk.dim(`Usage: ${decl.command}`));
+                if (decl.description) console.log(chalk.dim(decl.description));
+                return;
+              }
+            }
+
             const endpoint = resolveEndpoint(decl.endpoint, args, cfg);
             const method = (decl.method || "GET").toUpperCase();
 
