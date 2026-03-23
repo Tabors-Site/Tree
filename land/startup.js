@@ -11,19 +11,20 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import log from "./core/log.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function onListen() {
   const land = getLandIdentity();
-  console.log("[Land] Initializing Tree Land Node...");
-  console.log(`[Land] Domain: ${land.domain}`);
-  console.log(`[Land] Name: ${land.name}`);
-  console.log(`[Land] Land ID: ${land.landId}`);
-  console.log(`[Land] Canopy Protocol Version: ${land.protocolVersion}`);
+  log.info("Land", "Initializing Tree Land Node...");
+  log.info("Land", `Domain: ${land.domain}`);
+  log.info("Land", `Name: ${land.name}`);
+  log.verbose("Land", `Land ID: ${land.landId}`);
+  log.verbose("Land", `Protocol: v${land.protocolVersion}`);
 
   const onDbReady = async () => {
-    console.log("[Land] MongoDB connected");
+    log.info("Land", "MongoDB connected");
     await ensureLandRoot();
     await initLandConfig();
 
@@ -41,37 +42,33 @@ export function onListen() {
           systemRole: "extensions",
           children: [],
           contributors: [],
-          versions: [{ prestige: 0, values: {}, status: "active", dateCreated: new Date() }],
         });
         await newExtNode.save();
         landRoot.children.push(newExtNode._id);
         await landRoot.save();
-        console.log("[Land] Created .extensions system node");
+        log.verbose("Land", "Created .extensions system node");
       }
     }
 
-    // Sync extension manifests to .extensions tree node
     await syncExtensionsToTree(getLoadedManifests());
-
-    // Run pending schema migrations
     await runExtensionMigrations();
 
     startExtensionJobs();
-    console.log("[Land] Background jobs started (via extension loader)");
+    log.verbose("Land", "Background jobs started");
 
     startHeartbeatJob();
     startOutboxJob();
     startDirectoryRegistration();
-    console.log("[Land] Canopy API ready");
+    log.verbose("Canopy", "Peering, outbox, directory ready");
 
     import("./extensions/gateway/discordBotManager.js")
       .then(({ startupScan }) => {
         startupScan();
-        console.log("[Land] Gateway scan complete");
+        log.verbose("Gateway", "Channel scan complete");
         printReady();
       })
       .catch((err) => {
-        console.error("[Land] Discord bot startup scan failed:", err.message);
+        log.debug("Gateway", `Scan skipped: ${err.message}`);
         printReady();
       });
   };
@@ -88,14 +85,13 @@ function printReady() {
   const apiUrl = getLandUrl();
 
   console.log("");
-  console.log("[Land] Land node online.");
-  console.log(`[Land] API:  ${apiUrl}`);
+  log.info("Land", "Land node online.");
+  log.info("Land", `API:  ${apiUrl}`);
 
   if (process.env.ENABLE_FRONTEND_HTML === "true") {
-    console.log(`[Land] HTML: ${apiUrl}/login`);
+    log.info("Land", `HTML: ${apiUrl}/login`);
   }
 
-  // Start Vite dev server if site/ exists and SITE_DEV is set
   const siteDir = path.resolve(__dirname, "../site");
   if (process.env.SITE_DEV === "true") {
     if (fs.existsSync(path.join(siteDir, "package.json"))) {
@@ -104,7 +100,7 @@ function printReady() {
   }
 
   console.log("");
-  console.log("[Land] Quick start:");
+  log.info("Land", "Quick start:");
   console.log(`  treeos connect ${apiUrl}`);
   console.log("  treeos register");
   console.log("  treeos start");
@@ -121,17 +117,16 @@ function startSiteDev(siteDir) {
 
   siteProcess.stdout.on("data", (data) => {
     const line = data.toString().trim();
-    if (line) console.log(`[Site] ${line}`);
+    if (line) log.verbose("Site", line);
   });
   siteProcess.stderr.on("data", (data) => {
     const line = data.toString().trim();
-    if (line && !line.includes("VITE")) console.error(`[Site] ${line}`);
+    if (line && !line.includes("VITE")) log.error("Site", line);
   });
   siteProcess.on("close", (code) => {
     siteProcess = null;
-    if (code && code !== 0)
-      console.log(`[Site] Dev server exited (code ${code})`);
+    if (code && code !== 0) log.warn("Site", `Dev server exited (code ${code})`);
   });
 
-  console.log("[Site] Vite dev server starting on port 5174...");
+  log.verbose("Site", "Vite dev server starting on port 5174...");
 }

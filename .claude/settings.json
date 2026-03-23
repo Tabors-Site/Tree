@@ -84,7 +84,8 @@
       "Bash(for dir:*)",
       "Bash(grep -r \"hooks\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
       "Read(//home/tabor/github/Tree/$dir/**)",
-      "Read(//home/**)"
+      "Read(//home/**)",
+      "Read(//dev/**)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

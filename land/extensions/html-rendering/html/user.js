@@ -2686,7 +2686,9 @@ export async function renderUserContributions({ userId, contributions, username,
     /* ACTION RENDERER                                  */
     /* ─────────────────────────────────────────────── */
 
-    const renderAction = (c, nodeName) => {
+    const renderAction = (rawC, nodeName) => {
+      // Merge extensionData into contribution so action renderers work
+      const c = rawC.extensionData ? { ...rawC, ...rawC.extensionData } : rawC;
       const nId = c.nodeId?._id || c.nodeId;
       const v = Number(c.nodeVersion ?? 0);
       const nLink = nodeLink(nId, nodeName, v);

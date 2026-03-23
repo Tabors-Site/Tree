@@ -79,7 +79,9 @@ const actionColor = (action) => {
   }
 };
 
-function renderAction(c, { nodeId, parsedVersion, nextVersion, queryString }) {
+function renderAction(rawC, { nodeId, parsedVersion, nextVersion, queryString }) {
+  // Merge extensionData so action renderers can access extension fields directly
+  const c = rawC.extensionData ? { ...rawC, ...rawC.extensionData } : rawC;
   switch (c.action) {
     case "create":
       return `Created node`;
