@@ -120,11 +120,15 @@ module.exports = (program) => {
 
   program
     .command("register")
-    .description("Create a new account on the connected Land. --browser to open in browser")
+    .description("Create a new account. --browser, --username, --password, --email")
     .option("--browser", "Open registration page in browser instead")
+    .option("--username <username>", "Username (non-interactive)")
+    .option("--password <password>", "Password (non-interactive)")
+    .option("--email <email>", "Email (non-interactive, optional)")
     .action(async (opts) => {
       const cfg = load();
       const landUrl = (cfg.landUrl || "https://treeOS.ai").replace(/\/+$/, "");
+      const nonInteractive = !!(opts.username && opts.password);
 
       if (opts.browser) {
         openBrowser(`${landUrl}/register`);
@@ -133,16 +137,18 @@ module.exports = (program) => {
       }
 
       try {
-        const username = await prompt("  Username: ");
+        const username = opts.username || await prompt("  Username: ");
         if (!username) return console.log(chalk.yellow("Username is required."));
 
-        const password = await readPassword("  Password: ");
+        const password = opts.password || await readPassword("  Password: ");
         if (!password) return console.log(chalk.yellow("Password is required."));
 
-        const confirm = await readPassword("  Confirm password: ");
-        if (password !== confirm) return console.log(chalk.red("Passwords do not match."));
+        if (!nonInteractive) {
+          const confirm = await readPassword("  Confirm password: ");
+          if (password !== confirm) return console.log(chalk.red("Passwords do not match."));
+        }
 
-        const email = await prompt("  Email (optional): ");
+        const email = opts.email || (nonInteractive ? undefined : await prompt("  Email (optional): "));
 
         let data;
         try {
@@ -173,6 +179,10 @@ module.exports = (program) => {
           const { me, api } = await createCliApiKey(cfg, data.token, data.userId, data.username || username);
           save(cfg);
           await printLoginSuccess(me, api);
+
+          if (nonInteractive) {
+            return; // Non-interactive: skip LLM setup and tree creation
+          }
 
           // LLM connection (required for AI interaction)
           console.log(chalk.bold("\n  Connect Your LLM\n"));
@@ -271,9 +281,11 @@ module.exports = (program) => {
 
   program
     .command("login")
-    .description("Log in with username/password. --key <apiKey>, --browser")
+    .description("Log in with username/password. --key <apiKey>, --browser, --username, --password")
     .option("--key <apiKey>", "Authenticate with an API key")
     .option("--browser", "Open login page in browser instead")
+    .option("--username <username>", "Username (non-interactive)")
+    .option("--password <password>", "Password (non-interactive)")
     .action(async (opts) => {
       const cfg = load();
       const landUrl = (cfg.landUrl || "https://treeOS.ai").replace(/\/+$/, "");
@@ -298,12 +310,12 @@ module.exports = (program) => {
         return;
       }
 
-      // Interactive: username + password
+      // Non-interactive or interactive: username + password
       try {
-        const username = await prompt("  Username: ");
+        const username = opts.username || await prompt("  Username: ");
         if (!username) return console.log(chalk.yellow("Username is required."));
 
-        const password = await readPassword("  Password: ");
+        const password = opts.password || await readPassword("  Password: ");
         if (!password) return console.log(chalk.yellow("Password is required."));
 
         // Authenticate
