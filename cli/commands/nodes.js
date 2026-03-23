@@ -169,6 +169,16 @@ module.exports = (program) => {
           }
         }
 
+        // Show tool config if any
+        try {
+          const toolData = await api.get(`/node/${nodeId}/tools`);
+          if (toolData.added?.length || toolData.blocked?.length) {
+            console.log(chalk.dim("\nAI Tools:"));
+            if (toolData.added?.length) console.log(`  ${chalk.green("+ " + toolData.added.join(", "))}`);
+            if (toolData.blocked?.length) console.log(`  ${chalk.red("- " + toolData.blocked.join(", "))}`);
+          }
+        } catch {}
+
         const children = getChildren(data);
         if (children.length > 0) {
           console.log(chalk.dim(`\nChildren: ${children.length}`));
@@ -326,4 +336,114 @@ module.exports = (program) => {
       }
     });
   } // end prestige extension
+
+  // ── AI Tools (core) ──
+  program
+    .command("tools")
+    .description("Show AI tools available at the current node (effective = base + added - blocked)")
+    .action(async () => {
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const data = await api.get(`/node/${nodeId}/tools`);
+
+        console.log(chalk.bold("Effective tools:"));
+        for (const t of data.effective || []) {
+          const isAdded = (data.added || []).includes(t);
+          console.log(`  ${isAdded ? chalk.green("+ " + t) : chalk.dim(t)}`);
+        }
+
+        if (data.blocked?.length) {
+          console.log(chalk.bold("\nBlocked:"));
+          for (const t of data.blocked) console.log(`  ${chalk.red("- " + t)}`);
+        }
+
+        if (data.chain?.length) {
+          console.log(chalk.bold("\nInheritance:"));
+          for (const c of data.chain) {
+            const parts = [];
+            if (c.allowed?.length) parts.push(chalk.green("+" + c.allowed.join(", +")));
+            if (c.blocked?.length) parts.push(chalk.red("-" + c.blocked.join(", -")));
+            if (parts.length) console.log(`  ${chalk.dim(c.name)}: ${parts.join("  ")}`);
+          }
+        }
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("tools-allow [toolNames...]")
+    .description("Add AI tools to the current node. Comma or space separated.")
+    .action(async (parts) => {
+      if (!parts?.length) return console.log(chalk.yellow("Usage: tools-allow <tool1> <tool2> or tools-allow tool1,tool2"));
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const tools = parts.join(",").split(",").map(s => s.trim()).filter(Boolean);
+        // Get existing config and merge
+        const current = await api.get(`/node/${nodeId}/tools`);
+        const existingAllowed = [];
+        const existingBlocked = [];
+        for (const c of current.chain || []) {
+          if (c.nodeId === nodeId) {
+            existingAllowed.push(...(c.allowed || []));
+            existingBlocked.push(...(c.blocked || []));
+          }
+        }
+        const allowed = [...new Set([...existingAllowed, ...tools])];
+        await api.post(`/node/${nodeId}/tools`, { allowed, blocked: existingBlocked });
+        console.log(chalk.green(`✓ Allowed: ${tools.join(", ")}`));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("tools-block [toolNames...]")
+    .description("Block AI tools at the current node. Comma or space separated.")
+    .action(async (parts) => {
+      if (!parts?.length) return console.log(chalk.yellow("Usage: tools-block <tool1> <tool2> or tools-block tool1,tool2"));
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const tools = parts.join(",").split(",").map(s => s.trim()).filter(Boolean);
+        const current = await api.get(`/node/${nodeId}/tools`);
+        const existingAllowed = [];
+        const existingBlocked = [];
+        for (const c of current.chain || []) {
+          if (c.nodeId === nodeId) {
+            existingAllowed.push(...(c.allowed || []));
+            existingBlocked.push(...(c.blocked || []));
+          }
+        }
+        const blocked = [...new Set([...existingBlocked, ...tools])];
+        await api.post(`/node/${nodeId}/tools`, { allowed: existingAllowed, blocked });
+        console.log(chalk.green(`✓ Blocked: ${tools.join(", ")}`));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("tools-clear")
+    .description("Clear all tool config on the current node (inherit from parent only)")
+    .action(async () => {
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        await api.post(`/node/${nodeId}/tools`, { allowed: [], blocked: [] });
+        console.log(chalk.green("✓ Tools cleared. Inheriting from parent."));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
 };

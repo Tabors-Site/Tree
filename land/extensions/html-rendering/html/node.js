@@ -1838,17 +1838,20 @@ html, body {
         <h2>AI Tools</h2>
         <p style="color:rgba(255,255,255,0.5);font-size:0.85rem;margin-bottom:12px;">
           Control what the AI can do at this node. Inherits up the tree.
+          <a href="/api/v1/node/${nodeId}/tools" target="_blank" style="color:rgba(255,255,255,0.6);text-decoration:underline;margin-left:8px;">View resolved list</a>
         </p>
+        ${allowed ? `<div style="margin-bottom:8px;"><span style="color:rgba(16,185,129,0.9);font-size:0.85rem;">Added: ${allowed}</span></div>` : ""}
+        ${blocked ? `<div style="margin-bottom:8px;"><span style="color:rgba(239,68,68,0.9);font-size:0.85rem;">Blocked: ${blocked}</span></div>` : ""}
         <form method="POST" action="/api/v1/node/${nodeId}/tools${qs}">
           <div style="margin-bottom:8px;">
-            <label style="display:block;font-size:0.8rem;color:rgba(255,255,255,0.6);margin-bottom:4px;">Allowed (comma-separated tool names to add)</label>
+            <label style="display:block;font-size:0.8rem;color:rgba(255,255,255,0.6);margin-bottom:4px;">Allow tools (comma-separated)</label>
             <input type="text" name="allowedRaw" value="${allowed}" placeholder="execute-shell, web-search" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:white;font-size:0.9rem;" />
           </div>
           <div style="margin-bottom:8px;">
-            <label style="display:block;font-size:0.8rem;color:rgba(255,255,255,0.6);margin-bottom:4px;">Blocked (comma-separated tool names to remove)</label>
+            <label style="display:block;font-size:0.8rem;color:rgba(255,255,255,0.6);margin-bottom:4px;">Block tools (comma-separated)</label>
             <input type="text" name="blockedRaw" value="${blocked}" placeholder="delete-node-branch" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:white;font-size:0.9rem;" />
           </div>
-          <button type="submit" class="primary-button" style="padding:8px 16px;">Save Tools</button>
+          <button type="submit" class="primary-button" style="padding:8px 16px;">Save</button>
         </form>
       </div>`;
     })() : ""}
