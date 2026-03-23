@@ -557,13 +557,32 @@ export async function processMessage(visitorId, message, ctx) {
 
   session.messages.push({ role: "user", content: message });
 
-  // Get tools for current mode (with per-tree tool config if in a tree)
+  // Get tools for current mode (with per-node tool config, inherited up the tree)
   let treeToolConfig = null;
-  if (session.rootId) {
+  const currentNodeId = session.currentNodeId || session.rootId;
+  if (currentNodeId) {
     try {
-      const rootNode = await Node.findById(session.rootId).select("metadata").lean();
-      const meta = rootNode?.metadata instanceof Map ? Object.fromEntries(rootNode.metadata) : (rootNode?.metadata || {});
-      if (meta.tools) treeToolConfig = meta.tools;
+      // Walk from current node up to root, merging tool configs
+      // Child overrides parent. Allowed accumulates. Blocked accumulates.
+      const allowed = new Set();
+      const blocked = new Set();
+      let cursor = currentNodeId;
+      const visited = new Set();
+      while (cursor && !visited.has(cursor)) {
+        visited.add(cursor);
+        const n = await Node.findById(cursor).select("metadata parent isSystem").lean();
+        if (!n || n.isSystem) break;
+        const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
+        if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
+        if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
+        cursor = n.parent;
+      }
+      if (allowed.size || blocked.size) {
+        treeToolConfig = {
+          allowed: allowed.size ? [...allowed] : undefined,
+          blocked: blocked.size ? [...blocked] : undefined,
+        };
+      }
     } catch {}
   }
   const tools = getToolsForMode(session.modeKey, treeToolConfig);
