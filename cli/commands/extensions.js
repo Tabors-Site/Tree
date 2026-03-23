@@ -42,7 +42,19 @@ module.exports = (program) => {
   const ext = program
     .command("ext")
     .description("Manage land extensions")
-    .action(() => {
+    .addHelpText("after", `
+Examples:
+  ext search               List all extensions in registry
+  ext search ai -l 10      Search by keyword, limit 10
+  ext view understanding    Full details from registry
+  ext install understanding Install from registry
+  ext update understanding  Update to latest version
+  ext list                  Show loaded extensions on this land
+    `)
+    .action((args) => {
+      if (args?.args?.length) {
+        console.log(chalk.red(`Unknown ext command: ${args.args[0]}`));
+      }
       ext.outputHelp();
     });
 
