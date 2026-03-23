@@ -136,13 +136,37 @@ async function pickExtensions(directoryUrl) {
     output: process.stdout,
   });
 
+  console.log(`\n  ${extensions.length} extensions available.\n`);
+  const mode = await rl.question("  Install all extensions (a), recommended only (r), or choose individually (c)? (a/r/c): ");
+  const installMode = mode.trim().toLowerCase();
+
+  if (installMode === "a") {
+    // Install everything
+    console.log(`\n  Installing all ${extensions.length} extensions...\n`);
+    rl.close();
+    const selected = extensions;
+    // Jump to install (reuse code below)
+    return await installSelected(selected, directoryUrl);
+  }
+
   // Categorize extensions
-  const REQUIRED = ["tree-orchestrator"]; // must have for chat/place/query
+  const REQUIRED = ["tree-orchestrator"];
   const CORE_AI = ["understanding", "dreams", "raw-ideas"];
   const DATA = ["values", "schedules", "prestige", "transactions", "energy", "billing"];
   const TOOLS = ["scripts", "solana", "gateway", "api-keys", "user-llm"];
   const CONTENT = ["blog", "book", "email", "html-rendering"];
   const SYSTEM = ["user-queries", "deleted-revive", "console"];
+
+  const extMap = {};
+  for (const ext of extensions) extMap[ext.name] = ext;
+
+  if (installMode === "r") {
+    const recommended = [...REQUIRED, ...CORE_AI, ...SYSTEM].filter(n => extMap[n]);
+    console.log(`\n  Installing ${recommended.length} recommended extensions...\n`);
+    for (const name of recommended) console.log(`    ${name}`);
+    rl.close();
+    return await installSelected(recommended.map(n => extMap[n]), directoryUrl);
+  }
 
   const categories = [
     { title: "Required (chat/place/query need this)", names: REQUIRED, defaultYes: true, force: true },
@@ -152,9 +176,6 @@ async function pickExtensions(directoryUrl) {
     { title: "Content and Rendering", names: CONTENT, defaultYes: false },
     { title: "System Utilities", names: SYSTEM, defaultYes: true },
   ];
-
-  const extMap = {};
-  for (const ext of extensions) extMap[ext.name] = ext;
 
   const selected = [];
 
@@ -205,6 +226,10 @@ async function pickExtensions(directoryUrl) {
     return;
   }
 
+  await installSelected(selected, directoryUrl);
+}
+
+async function installSelected(selected, directoryUrl) {
   console.log(`\n  Installing ${selected.length} extensions...\n`);
 
   const fetch = (await import("node-fetch")).default;
@@ -215,10 +240,10 @@ async function pickExtensions(directoryUrl) {
       const res = await fetch(`${directoryUrl}/extensions/${ext.name}/${ext.version}`, {
         headers: { "Content-Type": "application/json" },
       });
-      if (!res.ok) { console.log(`  ${ext.name}: skipped (HTTP ${res.status})`); continue; }
+      if (!res.ok) { console.log(`    ${ext.name}: skipped (HTTP ${res.status})`); continue; }
 
       const data = await res.json();
-      if (!data.files || !data.files.length) { console.log(`  ${ext.name}: skipped (no files)`); continue; }
+      if (!data.files || !data.files.length) { console.log(`    ${ext.name}: skipped (no files)`); continue; }
 
       const targetDir = path.join(extDir, ext.name);
       if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
@@ -232,9 +257,9 @@ async function pickExtensions(directoryUrl) {
         fs.writeFileSync(filePath, file.content, "utf8");
       }
 
-      console.log(`  ${ext.name} v${ext.version} (${data.files.length} files)`);
+      console.log(`    ${ext.name} v${ext.version} (${data.files.length} files)`);
     } catch (err) {
-      console.log(`  ${ext.name}: failed (${err.message})`);
+      console.log(`    ${ext.name}: failed (${err.message})`);
     }
   }
 
