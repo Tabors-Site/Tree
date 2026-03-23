@@ -171,7 +171,7 @@ export function getActiveBotCount() {
  */
 export async function startupScan() {
   try {
-    var GatewayChannel = (await import("../../db/models/gatewayChannel.js"))
+    var GatewayChannel = (await import("./model.js"))
       .default;
     var channels = await GatewayChannel.find({
       type: "discord",

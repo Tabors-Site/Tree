@@ -1,4 +1,4 @@
-import GatewayChannel from "../db/models/gatewayChannel.js";
+import GatewayChannel from "./model.js";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import path from "path";

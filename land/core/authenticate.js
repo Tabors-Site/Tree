@@ -84,7 +84,7 @@ export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
   if (userId && !nodeId) {
     const user = await User.findOne({
       _id: userId,
-      shareToken,
+      "metadata.html.shareToken": shareToken,
     })
       .select("_id username")
       .lean()
@@ -119,7 +119,7 @@ export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
 
     const matchedUser = await User.findOne({
       _id: { $in: userIds },
-      shareToken,
+      "metadata.html.shareToken": shareToken,
     })
       .select("_id username")
       .lean()

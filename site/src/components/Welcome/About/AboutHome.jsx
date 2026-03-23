@@ -105,7 +105,7 @@ const AboutHome = () => {
           <div className="ah-section-text">
             TreeOS is a self-hosted, modular, federated system for building
             persistent knowledge structures. Lands host trees. Trees hold nodes.
-            Each node carries notes, trackable values, and one of six semantic types
+            Each node carries notes and one of six semantic types
             (goal, plan, task, knowledge, resource, identity). Extensions store
             their data in node metadata. AI interacts through three strict modes.
             Lands connect into a network. The whole thing runs from a terminal.
@@ -134,8 +134,9 @@ const AboutHome = () => {
           <div className="ah-arch-item">
             <div className="ah-arch-label">Tree</div>
             <div className="ah-arch-desc">
-              The data structure. A tree is a hierarchy of nodes, each with notes, trackable values,
-              and a semantic type (goal, plan, task, knowledge, resource, identity). Navigate with
+              The data structure. A tree is a hierarchy of nodes, each with notes
+              and a semantic type (goal, plan, task, knowledge, resource, identity). Extensions add
+              values, schedules, scripts, and more through metadata. Navigate with
               <code>cd</code> and <code>ls</code>. AI interacts through three strict modes:
               chat (read+write), place (write), query (read only).
             </div>
@@ -156,8 +157,8 @@ const AboutHome = () => {
           <div className="ah-arch-item">
             <div className="ah-arch-label">Extensions</div>
             <div className="ah-arch-desc">
-              The module system. The core protocol handles nodes, notes, values, types,
-              and AI modes. Everything else is a package: understanding, scripts, energy,
+              The module system. The core protocol handles nodes, notes, types, status,
+              and AI modes. Everything else is a package: values, understanding, scripts, energy,
               billing, dreams, Solana wallets. Install what you need. Disable what you
               don't. Build your own and publish to the registry.
             </div>

@@ -58,19 +58,21 @@ Both layers use the same core functions, but the MCP path adds AI-specific track
 
 ### Tree Structure
 
-- **Root Node** → has rootOwner (User), contributors, dreamTime, llmAssignments
-- **Node** → parent/children hierarchy, status (active/completed/trimmed), type, metadata (Map for extension data)
-- **Extension data** → values/goals in metadata.values/goals (values ext), schedule in metadata.schedule (schedules ext), prestige history in metadata.prestige (prestige ext), scripts in metadata.scripts (scripts ext)
+- **Root Node** → has rootOwner (User), contributors, llmDefault, visibility
+- **Node** → _id, name, type, status, dateCreated, llmDefault, visibility, children, parent, rootOwner, contributors, isSystem, systemRole, metadata (Map)
+- **User** → _id, username, password, roots, recentRoots, remoteRoots, llmDefault, profileType, isRemote, homeLand, metadata (Map)
+- **Extension data** → stored in metadata Map. Values/goals (values ext), schedule (schedules ext), prestige (prestige ext), scripts (scripts ext), energy (energy ext), apiKeys (api-keys ext), dreamTime (dreams ext)
 - **Contribution** → audit trail for all changes (create/edit/delete/prestige/transaction/understanding)
-- **Hook system** → 8 lifecycle hooks (beforeNote, afterNote, beforeContribution, afterNodeCreate, beforeStatusChange, afterStatusChange, beforeNodeDelete, enrichContext). Extensions register via core.hooks.register(). Core fires hooks at lifecycle points. Prestige uses hooks to tag versions on notes and contributions without core knowing about it.
+- **Hook system** → 8 lifecycle hooks (beforeNote, afterNote, beforeContribution, afterNodeCreate, beforeStatusChange, afterStatusChange, beforeNodeDelete, enrichContext). Extensions register via core.hooks.register(). Core fires hooks at lifecycle points.
 
 ### LLM Assignment System (per-mode routing)
 
-- 6 slots on root node: `placement`, `understanding`, `respond`, `notes`, `cleanup`, `drain`
-- Resolution: `llmAssignments[modeGroup]` → `llmAssignments.placement` (fallback) → user default
-- `resolveRootLlmForMode(rootId, modeKey)` in conversation.js handles resolution
-- `MODE_TO_ASSIGNMENT` maps mode keys (e.g. `tree:librarian` → `placement`, `tree:respond` → `respond`)
-- `processMessage` auto-resolves per-mode LLM, returns `_llmProvider` (internal) / `llmProvider` (external)
+- `llmDefault` on both User and Node (core field, the default LLM connection)
+- Extension slots stored in `metadata.llm.slots` on nodes, `metadata.userLlm.slots` on users
+- Resolution chain: extension slot on tree -> tree llmDefault -> extension slot on user -> user llmDefault
+- `resolveRootLlmForMode(rootId, modeKey)` in conversation.js handles tree-level resolution
+- `MODE_TO_ASSIGNMENT` maps mode keys (e.g. `tree:librarian` -> `placement`, `tree:respond` -> `respond`)
+- Extensions register custom modes via `core.modes.registerMode()` with their own LLM slots
 
 ### Understanding System
 

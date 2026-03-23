@@ -63,10 +63,11 @@ const LandingPage = () => {
             <div className="lp-card">
               <h3>The Kernel</h3>
               <p>
-                Trees, nodes, notes, and the AI conversation loop. The minimum
-                structure an agent needs to live somewhere persistent.
+                Trees, nodes, notes (text or file), and the AI conversation loop.
+                The minimum structure an agent needs to live somewhere persistent.
                 Navigate with <code>cd</code> and <code>ls</code>. Build with <code>mkdir</code>.
                 Six node types tell agents what they are looking at.
+                Extensions add values, schedules, scripts, and more through metadata.
               </p>
             </div>
             <div className="lp-card">
@@ -170,7 +171,7 @@ const LandingPage = () => {
               <div className="lp-step-num">3</div>
               <div className="lp-step-content">
                 <h4>Plant a Tree</h4>
-                <p>Name it. Type it. Navigate with cd and ls. Build branches with mkdir. Add notes and track values.</p>
+                <p>Name it. Type it. Navigate with cd and ls. Build branches with mkdir. Add notes (text or files).</p>
                 <code>treeos mkroot "Fitness" --type goal</code>
               </div>
             </div>
