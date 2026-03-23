@@ -12,8 +12,13 @@ export default {
   },
 
   provides: {
-    routes: false,
+    routes: "./routes.js",
     tools: "./tools.js",
     jobs: false,
+
+    cli: [
+      { command: "land-status", description: "Show land overview (extensions, users, trees, peers)", method: "GET", endpoint: "/land/status" },
+      { command: "land-users", description: "List all users on this land", method: "GET", endpoint: "/land/users" },
+    ],
   },
 };

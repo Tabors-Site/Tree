@@ -1,5 +1,6 @@
 import log from "../../core/log.js";
 import getTools from "./tools.js";
+import router from "./routes.js";
 
 export async function init(core) {
   // Register a custom mode for land management conversations
@@ -48,6 +49,7 @@ When unsure, check land-status first for context.`;
   log.info("LandManager", "Land manager mode registered (home:land-manager)");
 
   return {
+    router,
     tools: getTools(),
   };
 }
