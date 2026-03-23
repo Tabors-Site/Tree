@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
@@ -133,7 +134,7 @@ export default async function authenticate(req, res, next) {
       message: "Missing or invalid credentials",
     });
   } catch (err) {
-    console.error("Auth error:", err);
+    log.error("Auth", "Auth error:", err);
     return res.status(401).json({
       message: "Invalid or expired credentials",
     });

@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -96,7 +97,7 @@ router.get("/node/:nodeId/:version/notes/editor", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Editor page error:", err);
+    log.error("API", "Editor page error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -148,7 +149,7 @@ router.get(
         }),
       );
     } catch (err) {
-      console.error("Editor page error:", err);
+      log.error("API", "Editor page error:", err);
       res.status(500).json({ error: err.message });
     }
   },
@@ -164,7 +165,7 @@ router.get(
       const history = await getNoteEditHistory(noteId);
       return res.json({ history });
     } catch (err) {
-      console.error("Note history error:", err);
+      log.error("API", "Note history error:", err);
       res.status(500).json({ error: err.message });
     }
   },

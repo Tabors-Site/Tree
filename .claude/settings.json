@@ -85,7 +85,8 @@
       "Bash(grep -r \"hooks\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
       "Read(//home/tabor/github/Tree/$dir/**)",
       "Read(//home/**)",
-      "Read(//dev/**)"
+      "Read(//dev/**)",
+      "Bash(grep -n 'log\\\\.\\\\\\(verbose\\\\|info\\\\|warn\\\\|error\\\\|debug\\\\\\).*[^`]${' /home/tabor/github/Tree/land/extensions/loader.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

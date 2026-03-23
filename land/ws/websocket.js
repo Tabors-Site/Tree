@@ -190,7 +190,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
   io.on("connection", (socket) => {
     const userId = socket.userId;
-    console.log(
+    log.debug("WS",
       `🔗 Socket connected: ${socket.id} (user: ${userId || "anon"})`,
     );
 
@@ -248,7 +248,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         await connectToMCP(MCP_SERVER_URL, visitorId, mcpJwt);
         socket.emit("registered", { success: true, visitorId });
       } catch (err) {
-        console.error(
+        log.error("WS",
           `❌ MCP connection failed for ${visitorId}:`,
           err.message,
         );
@@ -693,7 +693,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                   content: null,
                   stopped: true,
                 }).catch((err) =>
-                  console.error(
+                  log.error("WS",
                     "⚠️ AIChat cancel finalize failed:",
                     err.message,
                   ),
@@ -722,13 +722,13 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             // Charge energy on LLM failure to prevent spam of fake endpoints
             try {
               await useEnergy({ userId: socket.userId, action: "chatError" });
-              console.log(
+              log.debug("WS",
                 "⚡ Charged 2 energy for failed LLM call (user:",
                 socket.userId,
                 ")",
               );
             } catch (energyErr) {
-              console.error(
+              log.error("WS",
                 "⚠️ Energy charge on error failed:",
                 energyErr.message,
               );
@@ -885,7 +885,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (!socket.userId || !sessionId) return;
       const session = getSession(sessionId);
       if (!session || session.userId !== String(socket.userId)) return;
-      console.log(
+      log.debug("WS",
         `🛑 Session stopped by user: ${session.type} [${sessionId.slice(0, 8)}]`,
       );
       endSession(sessionId);
@@ -1002,7 +1002,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         if (userSockets.get(visitorId) === socket.id) {
           userSockets.delete(visitorId);
           closeMCPClient(visitorId).catch((err) =>
-            console.error(
+            log.error("WS",
               `❌ MCP cleanup failed for ${visitorId}:`,
               err.message,
             ),
@@ -1030,7 +1030,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     if (userSocket) emitNavigatorStatus(userSocket);
   });
 
-  console.log("🚀 WebSocket server initialized");
+  log.info("WS", "WebSocket server initialized");
   return io;
 }
 
@@ -1054,7 +1054,7 @@ export function emitNavigate({
 
   // If sessionId provided, only allow if this session is the active navigator
   if (sessionId && !canNavigate(sessionId)) {
-    console.log(
+    log.debug("WS",
       `🚫 Nav blocked: session ${sessionId.slice(0, 8)} is not active navigator for user ${userId}`,
     );
     return;
@@ -1063,7 +1063,7 @@ export function emitNavigate({
   const socketId = authSessions.get(userId);
   if (socketId) {
     io.to(socketId).emit("navigate", { url, replace });
-    console.log(
+    log.debug("WS",
       `📍 Navigated user ${userId} to ${url} (session: ${sessionId ? sessionId.slice(0, 8) : "ungated"})`,
     );
   }
@@ -1097,7 +1097,7 @@ export function notifyTreeChange({ userId, nodeId, changeType, details }) {
 }
 
 function logStats() {
-  console.log(
+  log.debug("WS",
     `📊 Auth: ${authSessions.size} | Visitors: ${userSockets.size} | MCP: ${mcpClients.size} | Sessions: ${sessionCount()} | Registry: ${registeredSessionCount()}`,
   );
 }

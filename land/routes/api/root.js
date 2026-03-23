@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -152,7 +153,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Error in /root/:nodeId:", err);
+    log.error("API", "Error in /root/:nodeId:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -198,7 +199,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Error in /root/:rootId/query:", err);
+    log.error("API", "Error in /root/:rootId/query:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -240,7 +241,7 @@ router.get("/root/:rootId/all", urlAuth, async (req, res) => {
 
     return res.json(allData);
   } catch (err) {
-    console.error("Error in /root/:rootId/all:", err);
+    log.error("API", "Error in /root/:rootId/all:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -272,12 +273,12 @@ router.post("/root/:rootId/visibility", authenticate, async (req, res) => {
 
     // Immediately re-sync with directory so public/private change is reflected
     registerWithDirectory().catch((err) =>
-      console.error("[Land] Directory re-sync after visibility change failed:", err)
+      log.error("API", "[Land] Directory re-sync after visibility change failed:", err)
     );
 
     return res.json({ success: true, visibility });
   } catch (err) {
-    console.error("Error in /root/:rootId/visibility:", err);
+    log.error("API", "Error in /root/:rootId/visibility:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -552,7 +553,7 @@ router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Error in /root/:rootId/gateway:", err);
+    log.error("API", "Error in /root/:rootId/gateway:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -813,7 +814,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
       renderCalendar({ rootId, queryString, month, year, byDay }),
     );
   } catch (err) {
-    console.error("Calendar error:", err);
+    log.error("API", "Calendar error:", err);
     res.status(err.status || 500).json({ error: err.message });
   }
 });
@@ -844,7 +845,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
 
     return res.send(renderValuesPage({ nodeId, queryString, result }));
   } catch (err) {
-    console.error("Error in /root/:nodeId/values:", err);
+    log.error("API", "Error in /root/:nodeId/values:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1950,7 +1951,7 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 </html>
 `);
   } catch (err) {
-    console.error("Root chats error:", err);
+    log.error("API", "Root chats error:", err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -1,3 +1,4 @@
+import log from "../log.js";
 import AIChat from "../../db/models/aiChat.js";
 import Contribution from "../../db/models/contribution.js";
 import { getDescendantIds } from "../tree/treeFetch.js";
@@ -143,7 +144,7 @@ async function getAIChats({
       sessions,
     };
   } catch (err) {
-    console.error("Error in getAIChats:", err);
+    log.error("AI", "getAIChats:", err);
     throw new Error(
       err.message || "Database error occurred while retrieving AI chats.",
     );
@@ -316,7 +317,7 @@ async function getNodeAIChats({
       sessions,
     };
   } catch (err) {
-    console.error("Error in getNodeAIChats:", err);
+    log.error("AI", "getNodeAIChats:", err);
     throw new Error(
       err.message || "Database error occurred while retrieving AI chats.",
     );

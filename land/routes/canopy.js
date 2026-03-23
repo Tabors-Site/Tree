@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import express from "express";
 import { getLandInfoPayload, getLandIdentity, signCanopyToken } from "../canopy/identity.js";
 import {
@@ -653,7 +654,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
       model: clientEntry.model,
     });
   } catch (err) {
-    console.error("[Canopy] LLM proxy error:", err.message);
+    log.error("API", "[Canopy] LLM proxy error:", err.message);
     res.status(502).json({
       success: false,
       error: "llm_error",

@@ -224,6 +224,49 @@ module.exports = (program) => {
     });
 
   ext
+    .command("update [name...]")
+    .description("Update an installed extension to the latest version from the registry")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext update <name>. Updates to latest version from registry."));
+      const name = parts.join("-");
+      try {
+        const api = getApi();
+
+        // Get current installed version
+        const protocol = await api.get("/protocol");
+        const manifests = await api.get("/land/extensions");
+        const installed = manifests?.extensions?.find(e => e.name === name);
+        if (!installed) return console.log(chalk.red(`"${name}" is not installed.`));
+
+        const currentVersion = installed.version || installed.manifest?.version;
+
+        // Check registry for latest
+        console.log(chalk.dim(`Checking registry for ${name}...`));
+        let registry;
+        try {
+          const dirUrl = await api._getDirectoryUrl();
+          const res = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}`);
+          if (res.ok) registry = await res.json();
+        } catch {}
+        if (!registry?.latest) return console.log(chalk.red(`"${name}" not found in registry.`));
+
+        const latestVersion = registry.latest.version;
+
+        if (currentVersion === latestVersion) {
+          return console.log(chalk.dim(`${name} is already at v${currentVersion} (latest).`));
+        }
+
+        console.log(chalk.dim(`Updating ${name}: v${currentVersion} -> v${latestVersion}`));
+        const data = await api.installExtension(name, latestVersion);
+        console.log(chalk.green(`Updated: ${name} v${latestVersion}`));
+        console.log(chalk.dim(`${data.filesWritten} files written. Restart the land to load.`));
+        await refreshProtocolCache();
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
     .command("publish [name...]")
     .description("Publish a local extension to the registry")
     .action(async (parts) => {

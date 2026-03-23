@@ -1,3 +1,4 @@
+import log from "./log.js";
 import Node from "../db/models/node.js";
 import { getLandIdentity } from "../canopy/identity.js";
 
@@ -11,7 +12,7 @@ export async function ensureLandRoot() {
   const existing = await Node.findOne({ systemRole: "land-root" });
   if (existing) {
     landRootCache = existing;
-    console.log("[Land] Land root found:", existing._id);
+    log.verbose("Land", "Land root found:", existing._id);
     return existing;
   }
 
@@ -138,7 +139,7 @@ export async function ensureLandRoot() {
   await landRoot.save();
   landRootCache = landRoot;
 
-  console.log(
+  log.verbose("Land",
     `[Land] Created Land root (${landRoot._id}) with ${orphanRoots.length} migrated tree(s)`
   );
   return landRoot;

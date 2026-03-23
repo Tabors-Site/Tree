@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 // ws/mcp.js
 // MCP client lifecycle management
 
@@ -20,7 +21,7 @@ export const mcpClients = new Map();
 export async function connectToMCP(serverUrl, visitorId, jwtToken) {
   const existing = mcpClients.get(visitorId);
   if (existing && existing._jwtToken === jwtToken) {
-    console.log(`♻️  Reusing MCP client for ${visitorId}`);
+    log.debug("MCP", `Reusing MCP client for ${visitorId}`);
     return existing;
   }
 
@@ -32,7 +33,7 @@ export async function connectToMCP(serverUrl, visitorId, jwtToken) {
     mcpClients.delete(visitorId);
   }
 
-  console.log(`🔌 Connecting MCP client for ${visitorId}...`);
+  log.verbose("MCP", `Connecting MCP client for ${visitorId}...`);
 
   const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
     requestInit: {
@@ -49,7 +50,7 @@ export async function connectToMCP(serverUrl, visitorId, jwtToken) {
   );
 
   await client.connect(transport);
-  console.log(`✅ MCP client connected for ${visitorId}`);
+  log.verbose("MCP", ` client connected for ${visitorId}`);
 
   client._jwtToken = jwtToken; // tag for comparison
   mcpClients.set(visitorId, client);
@@ -66,9 +67,9 @@ export async function closeMCPClient(visitorId) {
     } else if (client.transport?.close) {
       await client.transport.close();
     }
-    console.log(`🔒 Closed MCP client for ${visitorId}`);
+    log.debug("MCP", `Closed MCP client for ${visitorId}`);
   } catch (err) {
-    console.warn(`⚠️  Error closing MCP client for ${visitorId}:`, err.message);
+    log.warn("MCP", `Error closing MCP client for ${visitorId}:`, err.message);
   }
 
   mcpClients.delete(visitorId);

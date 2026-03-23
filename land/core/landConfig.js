@@ -1,3 +1,4 @@
+import log from "./log.js";
 import Node from "../db/models/node.js";
 
 let configCache = null;
@@ -60,5 +61,5 @@ export function getAllLandConfig() {
 export async function initLandConfig() {
   await loadConfigFromDb();
   initialized = true;
-  console.log("[Land] Config loaded from .config node");
+  log.verbose("Land", "Config loaded from .config node");
 }

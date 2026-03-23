@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 // ws/tools.js
 // Complete tool catalog - modes reference these by name
 

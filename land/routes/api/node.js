@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -122,7 +123,7 @@ router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Node chats error:", err);
+    log.error("API", "Node chats error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -163,7 +164,7 @@ const editStatusHandler = async (req, res) => {
 
     res.json({ success: true, ...result });
   } catch (err) {
-    console.error("editStatus error:", err);
+    log.error("API", "editStatus error:", err);
     res.status(400).json({ error: err.message });
   }
 };
@@ -205,7 +206,7 @@ router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
       nodeNewParent: result.nodeNewParent,
     });
   } catch (err) {
-    console.error("updateParent error:", err);
+    log.error("API", "updateParent error:", err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -246,7 +247,7 @@ router.get("/node/:nodeId", urlAuth, async (req, res) => {
       renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPublicAccess: !!req.isPublicAccess }),
     );
   } catch (err) {
-    console.error("Error fetching node:", err);
+    log.error("API", "Error fetching node:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -335,7 +336,7 @@ router.get("/node/:nodeId/:version", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Error fetching version:", err);
+    log.error("API", "Error fetching version:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -392,7 +393,7 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
       child: childNode,
     });
   } catch (err) {
-    console.error("createChild error:", err);
+    log.error("API", "createChild error:", err);
     res.status(400).json({ success: false, error: err.message });
   }
 });
@@ -415,7 +416,7 @@ router.post("/node/:nodeId/delete", authenticate, async (req, res) => {
       deletedNode: deletedNode._id,
     });
   } catch (err) {
-    console.error("delete node error:", err);
+    log.error("API", "delete node error:", err);
     return res.status(400).json({ error: err.message });
   }
 });
@@ -448,7 +449,7 @@ const editNameHandler = async (req, res) => {
       ...result,
     });
   } catch (err) {
-    console.error("editName error:", err);
+    log.error("API", "editName error:", err);
     res.status(400).json({ error: err.message });
   }
 };
@@ -485,7 +486,7 @@ router.post(
         ...result,
       });
     } catch (err) {
-      console.error("editType error:", err);
+      log.error("API", "editType error:", err);
       res.status(400).json({ error: err.message });
     }
   },

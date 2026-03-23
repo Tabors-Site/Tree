@@ -1,3 +1,4 @@
+import log from "./log.js";
 import User from "../db/models/user.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -185,7 +186,7 @@ const register = async (req, res) => {
       profileType: user.profileType,
     });
   } catch (error) {
-    console.error("Error during registration:", error);
+    log.error("Auth", "Registration error:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -243,7 +244,7 @@ const user = await User.findOne({
       htmlShareToken: user.metadata?.html?.shareToken || null,
     });
   } catch (error) {
-    console.error("Error during login:", error);
+    log.error("Auth", "Login error:", error);
     res.status(500).json({ message: "Server is down" });
   }
 };
@@ -263,7 +264,7 @@ const logout = async (req, res) => {
 
     return res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
-    console.error("Error during logout:", error);
+    log.error("Auth", "Logout error:", error);
     return res.status(500).json({ message: "Logout failed" });
   }
 };

@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -109,7 +110,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Error in /user/:userId:", err);
+    log.error("API", "Error in /user/:userId:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -133,7 +134,7 @@ router.get("/user/reset-password/:token", async (req, res) => {
 
     return res.send(renderResetPasswordForm({ token }));
   } catch (err) {
-    console.error("Error loading reset password page:", err);
+    log.error("API", "Error loading reset password page:", err);
     res.status(500).send("Server error");
   }
 });
@@ -170,7 +171,7 @@ router.post("/user/reset-password/:token", async (req, res) => {
 
     return res.send(renderResetPasswordSuccess());
   } catch (err) {
-    console.error("Error resetting password:", err);
+    log.error("API", "Error resetting password:", err);
     res.status(500).send("Server error");
   }
 });
@@ -221,7 +222,7 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
       root: rootNode,
     });
   } catch (err) {
-    console.error("createRoot error:", err);
+    log.error("API", "createRoot error:", err);
     res.status(400).json({ success: false, error: err.message });
   }
 });
@@ -250,7 +251,7 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
 
     return res.send(renderInvites({ userId, invites, token }));
   } catch (err) {
-    console.error("invites page error:", err);
+    log.error("API", "invites page error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -289,7 +290,7 @@ router.post(
         accepted: acceptInvite,
       });
     } catch (err) {
-      console.error("respond invite error:", err);
+      log.error("API", "respond invite error:", err);
       return res.status(400).json({
         success: false,
         error: err.message,

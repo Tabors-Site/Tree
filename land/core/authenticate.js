@@ -1,3 +1,4 @@
+import log from "./log.js";
 import Node from "../db/models/node.js";
 import User from "../db/models/user.js";
 import { resolveRootNode } from "./tree/treeFetch.js";
@@ -126,11 +127,11 @@ export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
       .exec();
 
     if (!matchedUser) {
-      console.log("[shareAuth] DENIED nodeId=%s userIds=%j tokenPrefix=%s", nodeId, userIds, shareToken?.slice(0, 6));
+      log.debug("Auth", "ShareAuth: DENIED nodeId=%s userIds=%j tokenPrefix=%s", nodeId, userIds, shareToken?.slice(0, 6));
       // Debug: check what tokens the users actually have
       const users = await User.find({ _id: { $in: userIds } }).select("_id username metadata").lean();
       for (const u of users) {
-        console.log("[shareAuth]   user=%s token=%s match=%s", u.username, u.metadata?.html?.shareToken?.slice(0, 6), u.metadata?.html?.shareToken === shareToken);
+        log.debug("Auth", "ShareAuth:   user=%s token=%s match=%s", u.username, u.metadata?.html?.shareToken?.slice(0, 6), u.metadata?.html?.shareToken === shareToken);
       }
       return { allowed: false, reason: "Invalid share token for node" };
     }

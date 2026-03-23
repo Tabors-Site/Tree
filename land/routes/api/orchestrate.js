@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 // LLM orchestration routes: tree chat/place/query, raw idea chat/place, understanding.
 
 import express from "express";
@@ -97,7 +98,7 @@ async function runTreeOrchestration(opts, res) {
 
   const timer = setTimeout(() => {
     timedOut = true;
-    console.error(`Tree ${mode} timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
+    log.error("API", `Tree ${mode} timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
     closeMCPClient(visitorId);
     clearAiContributionContext(visitorId);
     if (aiChat) {
@@ -134,7 +135,7 @@ async function runTreeOrchestration(opts, res) {
     });
     if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
   } catch (err) {
-    console.error("Failed to create AIChat:", err.message);
+    log.error("API", "Failed to create AIChat:", err.message);
   }
 
   // Enqueue to serialize per user+tree
@@ -179,7 +180,7 @@ async function runTreeOrchestration(opts, res) {
           content: summary,
           stopped: false,
           modeKey: result?.modeKey || "tree:orchestrator",
-        }).catch((err) => console.error("AIChat finalize failed:", err.message));
+        }).catch((err) => log.error("API", "AIChat finalize failed:", err.message));
       }
 
       // Format response based on mode
@@ -206,14 +207,14 @@ async function runTreeOrchestration(opts, res) {
     } catch (err) {
       clearTimeout(timer);
       if (timedOut) return;
-      console.error(`Tree ${mode} error:`, err.message);
+      log.error("API", `Tree ${mode} error:`, err.message);
 
       if (aiChat) {
         finalizeAIChat({
           chatId: aiChat._id,
           content: abort.signal.aborted ? null : `Error: ${err.message}`,
           stopped: abort.signal.aborted,
-        }).catch((e) => console.error("AIChat error finalize failed:", e.message));
+        }).catch((e) => log.error("API", "AIChat error finalize failed:", e.message));
       }
 
       if (!res.headersSent) {

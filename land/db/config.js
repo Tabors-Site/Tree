@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import path from "path";
@@ -10,10 +11,10 @@ const mongooseUri = process.env.MONGODB_URI;
 
 mongoose
   .connect(mongooseUri, { serverSelectionTimeoutMS: 5000 })
-  .then(() => console.log("MongoDB connected"))
+  .then(() => log.verbose("DB", "MongoDB connected"))
   .catch((err) => {
-    console.error("MongoDB connection failed:", err.message);
-    console.error("Make sure MongoDB is running and MONGODB_URI is correct in .env");
+    log.error("DB", "MongoDB connection failed:", err.message);
+    log.error("DB", "Make sure MongoDB is running and MONGODB_URI is correct in .env");
     process.exit(1);
   });
 

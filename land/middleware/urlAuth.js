@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
@@ -225,7 +226,7 @@ export default async function urlAuth(req, res, next) {
 
     next();
   } catch (err) {
-    console.error("[urlAuth] error:", err);
+    log.error("Auth", "[urlAuth] error:", err);
     if (wantsHtml(req)) {
       return errorPage(res, 403, "Authorization Failed",
         "Something went wrong while verifying your access. Please try again or request a new share link.");
