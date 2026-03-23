@@ -65,7 +65,7 @@ router.get("/land/users", authenticate, async (req, res) => {
 });
 
 // POST /land/chat - land management chat (god only)
-// Uses processMessage with land-manager mode
+// POST /land/chat - land management chat (god only)
 router.post("/land/chat", authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("profileType username").lean();
@@ -76,80 +76,16 @@ router.post("/land/chat", authenticate, async (req, res) => {
     const { message } = req.body;
     if (!message) return res.status(400).json({ error: "message required" });
 
-    const visitorId = `land-manager-${req.userId}`;
+    const { runChat } = await import("../../ws/conversation.js");
 
-    // Import conversation utilities
-    const { processMessage, switchMode, getCurrentMode } = await import("../../ws/conversation.js");
-    const { connectToMCP, closeMCPClient, MCP_SERVER_URL } = await import("../../ws/mcp.js");
-    const jwt = (await import("jsonwebtoken")).default;
-
-    const JWT_SECRET = process.env.JWT_SECRET;
-    if (!JWT_SECRET) {
-      return res.status(500).json({ error: "JWT_SECRET not configured" });
-    }
-    const internalJwt = jwt.sign(
-      { userId: req.userId.toString(), username: user.username, visitorId },
-      JWT_SECRET,
-      { expiresIn: "5m" }
-    );
-
-    // AIChat tracking
-    const { startAIChat, finalizeAIChat, setAiContributionContext } = await import("../../ws/aiChatTracker.js");
-    const { getClientForUser } = await import("../../ws/conversation.js");
-
-    // Connect MCP
-    try {
-      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
-    } catch {}
-
-    // Switch to land-manager mode
-    const currentMode = getCurrentMode(visitorId);
-    if (currentMode !== "land:manager") {
-      try {
-        switchMode(visitorId, "land:manager", { username: user.username, userId: req.userId });
-      } catch (err) {
-        log.warn("LandManager", `Mode switch failed: ${err.message}`);
-      }
-    }
-
-    // Create AIChat record
-    let aiChat;
-    try {
-      const clientInfo = await getClientForUser(req.userId, visitorId) || {};
-      aiChat = await startAIChat({
-        userId: req.userId,
-        message,
-        modeKey: "land:manager",
-        llmInfo: {
-          isCustom: clientInfo.isCustom || false,
-          model: clientInfo.model || "unknown",
-          connectionId: clientInfo.connectionId || null,
-        },
-      });
-      if (aiChat) setAiContributionContext(visitorId, null, aiChat._id);
-    } catch (err) {
-      log.warn("LandManager", `AIChat create failed: ${err.message}`);
-    }
-
-    // Run the message
-    const result = await processMessage(visitorId, message, {
-      username: user.username,
+    const { answer, aiChatId } = await runChat({
       userId: req.userId,
+      username: user.username,
+      message,
+      mode: "land:manager",
     });
 
-    const answer = result?.content || result?.choices?.[0]?.message?.content || JSON.stringify(result);
-
-    // Finalize AIChat
-    if (aiChat) {
-      try {
-        await finalizeAIChat({ chatId: aiChat._id, content: answer, stopped: false, modeKey: "land:manager" });
-      } catch {}
-    }
-
-    // Cleanup
-    try { closeMCPClient(visitorId); } catch {}
-
-    res.json({ success: true, answer });
+    res.json({ success: true, answer, aiChatId });
   } catch (err) {
     log.error("LandManager", "Chat error:", err.message);
     res.status(500).json({ error: err.message });

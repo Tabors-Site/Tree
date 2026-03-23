@@ -959,3 +959,111 @@ export function getSessionInfo(visitorId) {
 export function sessionCount() {
   return sessions.size;
 }
+
+/**
+ * High-level chat utility for extensions and routes.
+ * Handles all boilerplate: MCP connection, mode switch, AIChat tracking,
+ * processMessage, cleanup. One call.
+ *
+ * Usage:
+ *   const { answer, aiChatId } = await runChat({
+ *     userId, username, message, mode: "land:manager",
+ *     rootId: null,  // optional, for tree modes
+ *     nodeId: null,  // optional, for per-node context
+ *   });
+ */
+export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null }) {
+  if (!userId || !message || !mode) {
+    throw new Error("runChat requires userId, message, and mode");
+  }
+
+  const jwt = (await import("jsonwebtoken")).default;
+  const { connectToMCP, closeMCPClient, MCP_SERVER_URL } = await import("./mcp.js");
+  const { startAIChat, finalizeAIChat, setAiContributionContext } = await import("./aiChatTracker.js");
+
+  const JWT_SECRET = process.env.JWT_SECRET;
+  if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
+
+  const visitorId = `runChat-${userId}-${Date.now()}`;
+
+  const internalJwt = jwt.sign(
+    { userId: userId.toString(), username: username || "unknown", visitorId },
+    JWT_SECRET,
+    { expiresIn: "5m" }
+  );
+
+  // 1. Connect MCP
+  try {
+    await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+  } catch (err) {
+    log.warn("RunChat", `MCP connect failed: ${err.message}`);
+  }
+
+  // 2. Set root/node if provided
+  if (rootId) setRootId(visitorId, rootId);
+  if (nodeId) setCurrentNodeId(visitorId, nodeId);
+
+  // 3. Switch mode
+  try {
+    switchMode(visitorId, mode, { username, userId });
+  } catch (err) {
+    log.warn("RunChat", `Mode switch to ${mode} failed: ${err.message}`);
+  }
+
+  // 4. Create AIChat record
+  let aiChat;
+  try {
+    const clientInfo = await getClientForUser(userId, visitorId) || {};
+    aiChat = await startAIChat({
+      userId,
+      message,
+      modeKey: mode,
+      llmInfo: {
+        isCustom: clientInfo.isCustom || false,
+        model: clientInfo.model || "unknown",
+        connectionId: clientInfo.connectionId || null,
+      },
+      treeContext: rootId ? { targetNodeId: rootId } : undefined,
+    });
+    if (aiChat) setAiContributionContext(visitorId, null, aiChat._id);
+  } catch (err) {
+    log.warn("RunChat", `AIChat create failed: ${err.message}`);
+  }
+
+  // 5. Run processMessage
+  let result;
+  try {
+    result = await processMessage(visitorId, message, {
+      username,
+      userId,
+      rootId,
+    });
+  } catch (err) {
+    // Finalize as error
+    if (aiChat) {
+      try { await finalizeAIChat({ chatId: aiChat._id, content: `Error: ${err.message}`, stopped: false }); } catch {}
+    }
+    closeMCPClient(visitorId);
+    clearSession(visitorId);
+    throw err;
+  }
+
+  const answer = result?.content || result?.choices?.[0]?.message?.content || JSON.stringify(result);
+
+  // 6. Finalize AIChat
+  if (aiChat) {
+    try {
+      await finalizeAIChat({ chatId: aiChat._id, content: answer, stopped: false, modeKey: mode });
+    } catch {}
+  }
+
+  // 7. Cleanup
+  try { closeMCPClient(visitorId); } catch {}
+
+  return {
+    answer,
+    aiChatId: aiChat?._id || null,
+    modeKey: mode,
+    visitorId,
+  };
+}
