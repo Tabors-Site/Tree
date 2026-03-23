@@ -23,10 +23,11 @@ export default {
     schemaVersion: 1,
     migrations: "./migrations.js",
     cli: [
-      { command: "wallet", description: "Show wallet info for current node", method: "GET", endpoint: "/node/:nodeId/values/solana" },
-      { command: "wallet-create", description: "Create wallet for current node", method: "POST", endpoint: "/node/:nodeId/values/solana" },
-      { command: "send-sol <amount> <destination>", description: "Send SOL to address or node ID", method: "POST", endpoint: "/node/:nodeId/0/values/solana/send", body: ["amount", "destination"] },
-      { command: "swap <inputMint> <outputMint> <amount>", description: "Swap tokens via Jupiter (use 'sol' for SOL)", method: "POST", endpoint: "/node/:nodeId/0/values/solana/transaction", body: ["inputMint", "outputMint", "amountUi"] },
+      { command: "wallet [action] [args...]", description: "Solana wallet. Actions: create, send, swap. No action shows info.", method: "GET", endpoint: "/node/:nodeId/values/solana", subcommands: {
+        "create": { method: "POST", endpoint: "/node/:nodeId/values/solana", description: "Create a wallet on this node" },
+        "send": { method: "POST", endpoint: "/node/:nodeId/0/values/solana/send", args: ["amount", "destination"], description: "Send SOL. Usage: wallet send <amount> <address or nodeId>" },
+        "swap": { method: "POST", endpoint: "/node/:nodeId/0/values/solana/transaction", args: ["inputMint", "outputMint", "amountUi"], description: "Swap tokens via Jupiter. Usage: wallet swap <from> <to> <amount>. Use 'sol' for SOL." },
+      }},
     ],
   },
 };

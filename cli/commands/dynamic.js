@@ -155,11 +155,62 @@ module.exports = (program) => {
             // Commander passes args then the Command object
             const args = actionArgs.slice(0, argNames.length);
 
+            // Handle subcommands pattern: wallet [action] [args...]
+            if (decl.subcommands) {
+              const action = args[0];
+              const subArgs = args[1] || [];
+
+              // No action = default (GET the base endpoint)
+              if (!action) {
+                const endpoint = resolveEndpoint(decl.endpoint, [], cfg);
+                const data = await api.get(endpoint);
+                printResponse(data);
+                return;
+              }
+
+              const sub = decl.subcommands[action];
+              if (!sub) {
+                console.log(chalk.yellow(`Unknown action: ${action}`));
+                console.log(chalk.dim("Available:"));
+                for (const [name, s] of Object.entries(decl.subcommands)) {
+                  console.log(chalk.dim(`  ${cmdName} ${name}`) + (s.description ? chalk.dim(`  ${s.description}`) : ""));
+                }
+                return;
+              }
+
+              // Check required args for subcommand
+              if (sub.args && sub.args.length > 0) {
+                const subArgValues = Array.isArray(subArgs) ? subArgs : subArgs.split(/\s+/);
+                for (let i = 0; i < sub.args.length; i++) {
+                  if (!subArgValues[i]) {
+                    console.log(chalk.yellow(`Missing: ${sub.args[i]}`));
+                    console.log(chalk.dim(sub.description || `Usage: ${cmdName} ${action} ${sub.args.map(a => `<${a}>`).join(" ")}`));
+                    return;
+                  }
+                }
+
+                const endpoint = resolveEndpoint(sub.endpoint, subArgValues, cfg);
+                const body = {};
+                for (let i = 0; i < sub.args.length; i++) {
+                  body[sub.args[i]] = subArgValues[i];
+                }
+                const data = await api.post(endpoint, body);
+                printResponse(data);
+              } else {
+                const endpoint = resolveEndpoint(sub.endpoint, [], cfg);
+                const method = (sub.method || "POST").toUpperCase();
+                const data = method === "GET" ? await api.get(endpoint) : await api.post(endpoint, {});
+                printResponse(data);
+              }
+              return;
+            }
+
+            // Standard flat command (no subcommands)
             // Check for missing required args (anything in <brackets>)
             const requiredArgs = (decl.command.match(/<[^>]+>/g) || []).map(a => a.replace(/[<>]/g, ""));
             for (let i = 0; i < requiredArgs.length; i++) {
               if (args[i] === undefined || args[i] === "") {
-                console.log(chalk.yellow(`Missing required argument: ${requiredArgs[i]}`));
+                console.log(chalk.yellow(`Missing: ${requiredArgs[i]}`));
                 console.log(chalk.dim(`Usage: ${decl.command}`));
                 if (decl.description) console.log(chalk.dim(decl.description));
                 return;
