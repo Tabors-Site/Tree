@@ -146,6 +146,19 @@ Navigation determines what the AI can do. No mode switching. Just `cd`.
 
 The tree-orchestrator and land-manager are both extensions. They register orchestrators and modes. Replace either with your own implementation.
 
+## Tool Resolution (3 layers)
+
+```
+1. Mode base tools (what the mode defines)
+2. Extension tools (what extensions inject via loader)
+3. Tree config (metadata.tools.allowed[] / blocked[] on root node)
+```
+
+Tree owners control what the AI can do per-tree:
+- `metadata.tools.allowed = ["execute-shell"]` adds shell to a DevOps tree
+- `metadata.tools.blocked = ["delete-node-branch"]` makes a tree read-heavy
+- Both can be combined
+
 ## LLM Resolution Chain
 
 ```

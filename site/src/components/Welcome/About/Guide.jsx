@@ -87,6 +87,13 @@ const Guide = () => {
             How tree mode works internally (the orchestrator, classifier, placement strategy) is
             an extension. The built-in tree-orchestrator handles it. Replace it with your own.
           </P>
+          <P>
+            Each tree can customize what tools the AI has access to. Set
+            <code> metadata.tools.allowed</code> on the root node to add tools
+            (like shell access for a DevOps tree) or <code>metadata.tools.blocked</code> to
+            remove them (like blocking deletes on a reference tree). Three layers
+            merge: mode base tools, extension tools, tree config.
+          </P>
         </Section>
 
         {/* ══════════════════════════════════════════════════════════════ */}

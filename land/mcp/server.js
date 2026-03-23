@@ -101,10 +101,7 @@ const TimeWindowSchema = {
     .describe("ISO date/time. Include items created on or before this time."),
 };
 const server = getMcpServer();
-const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: undefined, // Stateless mode (no session tracking)
-  enableJsonResponse: true,      // Allow JSON responses alongside SSE
-});
+const transport = new StreamableHTTPServerTransport({});
 function getMcpServer() {
   const server = new McpServer({
     name: "tree-helper",
