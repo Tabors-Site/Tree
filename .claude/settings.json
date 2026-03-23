@@ -83,7 +83,8 @@
       "Bash(echo \"=== Extension orchestrator usage ===\" grep -rn \"OrchestratorRuntime\\\\|orchestrateTreeRequest\\\\|orchestrate\" /home/tabor/github/Tree/land/extensions/ --include=\"*.js\")",
       "Bash(for dir:*)",
       "Bash(grep -r \"hooks\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
-      "Read(//home/tabor/github/Tree/$dir/**)"
+      "Read(//home/tabor/github/Tree/$dir/**)",
+      "Read(//home/**)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

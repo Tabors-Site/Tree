@@ -29,7 +29,7 @@ const LandingPage = () => {
           </p>
           <div className="lp-hero-ctas">
             <button className="lp-btn lp-btn-primary" onClick={scrollToInstall}>Get Started</button>
-            <a className="lp-btn lp-btn-secondary" href="/about">Learn More</a>
+            <a className="lp-btn lp-btn-secondary" href="/guide">Learn More</a>
           </div>
           <a className="lp-hero-example" href="/app">
             Example App <span>built on the protocol</span>

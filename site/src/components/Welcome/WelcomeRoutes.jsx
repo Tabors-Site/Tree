@@ -19,6 +19,7 @@ import PrivacySection from "./PrivacySection.jsx";
 import TermsSection from "./TermsSections.jsx";
 
 import AboutHome from "./About/AboutHome.jsx";
+import Guide from "./About/Guide.jsx";
 import AboutLayout from "./About/AboutLayout.jsx";
 import BlogSection from "./Blog/BlogSection.jsx";
 import NotFound from "./NotFound.jsx";
@@ -55,6 +56,9 @@ const WelcomeRoutes = () => {
         <Route path="extensions" element={<ExtensionsAbout />} />
 
       </Route>
+
+      {/* Guide (narrative, start to finish) */}
+      <Route path="/guide" element={<Guide />} />
 
       <Route path="/blog" element={<BlogSection />} />
       <Route path="/blog/:slug" element={<BlogSection />} />
