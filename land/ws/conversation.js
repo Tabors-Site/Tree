@@ -50,6 +50,60 @@ export function setKernelConfig(key, value) {
   }
 }
 export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
+
+// ── LLM Failover Stack ──────────────────────────────────────────────────
+// When the primary LLM connection fails (429, 500, timeout), try the next
+// connection in the user's failover stack. Kernel-level reliability.
+
+const RETRYABLE_CODES = new Set([429, 500, 502, 503, 504]);
+
+async function getFailoverStack(userId) {
+  const user = await User.findById(userId).select("metadata").lean();
+  const meta = user?.metadata instanceof Map ? Object.fromEntries(user.metadata) : (user?.metadata || {});
+  return meta.llm?.failoverStack || [];
+}
+
+/**
+ * Try an LLM call with the primary client. On retryable failure, walk the
+ * failover stack and try each connection until one succeeds.
+ * @param {Function} callFn - async (openaiClient, model) => response
+ * @param {object} primaryClient - { client, model, connectionId, ... }
+ * @param {string} userId - for failover stack lookup
+ * @returns {object} { response, usedClient }
+ */
+async function callWithFailover(callFn, primaryClient, userId) {
+  // Try primary
+  try {
+    const response = await callFn(primaryClient.client, primaryClient.model);
+    return { response, usedClient: primaryClient };
+  } catch (err) {
+    const status = err.status || err.code;
+    if (!RETRYABLE_CODES.has(status) && !err.message?.includes("timed out")) {
+      throw err; // not retryable
+    }
+    log.warn("LLM", `Primary failed (${status}): ${primaryClient.model}. Trying failover stack.`);
+  }
+
+  // Walk failover stack
+  const stack = await getFailoverStack(userId);
+  for (const connId of stack) {
+    if (connId === primaryClient.connectionId) continue; // skip primary
+    try {
+      const fallbackClient = await resolveConnection(connId, "failover:" + connId);
+      if (!fallbackClient) continue;
+      log.verbose("LLM", `Trying failover: ${fallbackClient.model} (${connId})`);
+      const response = await callFn(fallbackClient.client, fallbackClient.model);
+      log.verbose("LLM", `Failover succeeded: ${fallbackClient.model}`);
+      return { response, usedClient: fallbackClient };
+    } catch (err) {
+      log.warn("LLM", `Failover ${connId} failed: ${err.message?.slice(0, 100)}`);
+      continue;
+    }
+  }
+
+  // All failed
+  throw new Error(`All LLM connections failed (primary + ${stack.length} failover). Check your connections.`);
+}
 export function setLlmMaxRetries(n) { LLM_MAX_RETRIES = n; }
 const MODE_RETRIES = {};
 export function registerModeTimeout(modeKey, ms) { MODE_TIMEOUTS[modeKey] = ms; }
@@ -642,7 +696,16 @@ export async function processMessage(visitorId, message, ctx) {
     const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
 
     try {
-      response = await openai.chat.completions.create(requestParams, requestOpts);
+      const failoverResult = await callWithFailover(
+        (client, model) => client.chat.completions.create({ ...requestParams, model }, requestOpts),
+        clientEntry,
+        ctx.userId,
+      );
+      response = failoverResult.response;
+      // If a failover client was used, update tracking
+      if (failoverResult.usedClient !== clientEntry) {
+        Object.assign(clientEntry, failoverResult.usedClient);
+      }
     } catch (apiErr) {
       // Handle models that invent tool names (e.g. "json") instead of using defined tools
       if (apiErr.code === "tool_use_failed" && apiErr.error?.failed_generation) {

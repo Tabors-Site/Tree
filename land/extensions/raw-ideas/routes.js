@@ -22,11 +22,8 @@ import {
   toggleAutoPlace as coreToggleAutoPlace,
   AUTO_PLACE_ELIGIBLE,
 } from "./core.js";
-import {
-  renderRawIdeasList,
-  renderRawIdeaText,
-  renderRawIdeaFile,
-} from "../../routes/api/html/user.js";
+import { getExtension } from "../loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
 
@@ -151,7 +148,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
     ];
 
     return res.send(
-      renderRawIdeasList({
+      html().renderRawIdeasList({
         userId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE,
       }),
     );
@@ -284,7 +281,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     if (req.query.html !== undefined && process.env.ENABLE_FRONTEND_HTML === "true") {
       if (rawIdea.contentType === "text") {
         return res.send(
-          renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+          html().renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }),
         );
       }
       return res.send(

@@ -8,10 +8,8 @@ import {
   executeScript,
   getScript,
 } from "./core.js";
-import {
-  renderScriptDetail,
-  renderScriptHelp,
-} from "../../routes/api/html/node.js";
+import { getExtension } from "../loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
 
@@ -47,7 +45,7 @@ router.get("/node/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
     }
 
     return res.send(
-      renderScriptDetail({ nodeId, script, contributions, qsWithQ }),
+      html().renderScriptDetail({ nodeId, script, contributions, qsWithQ }),
     );
   } catch (err) {
  log.error("Scripts", "Error fetching script:", err);
@@ -236,7 +234,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, 0 + 1);`,
     const qsWithQ = qs ? `?${qs}` : "";
 
     return res.send(
-      renderScriptHelp({ nodeId, nodeName: node.name, data, qsWithQ }),
+      html().renderScriptHelp({ nodeId, nodeName: node.name, data, qsWithQ }),
     );
   } catch (err) {
  log.error("Scripts", "Error loading script help:", err);

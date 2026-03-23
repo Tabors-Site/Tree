@@ -112,4 +112,62 @@ router.delete(
   },
 );
 
+// ── Failover Stack ──
+
+router.get("/user/:userId/llm-failover", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("metadata").lean();
+    const meta = user?.metadata instanceof Map ? Object.fromEntries(user.metadata) : (user?.metadata || {});
+    const stack = meta.llm?.failoverStack || [];
+    res.json({ stack });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/user/:userId/llm-failover", authenticate, async (req, res) => {
+  try {
+    const { connectionId } = req.body;
+    if (!connectionId) return res.status(400).json({ error: "connectionId required" });
+
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const { getUserMeta, setUserMeta } = await import("../../core/tree/userMetadata.js");
+    const llmMeta = getUserMeta(user, "llm") || {};
+    const stack = llmMeta.failoverStack || [];
+
+    if (stack.includes(connectionId)) return res.status(400).json({ error: "Already in stack" });
+    stack.push(connectionId);
+
+    llmMeta.failoverStack = stack;
+    setUserMeta(user, "llm", llmMeta);
+    await user.save();
+
+    res.json({ stack });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/user/:userId/llm-failover", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const { getUserMeta, setUserMeta } = await import("../../core/tree/userMetadata.js");
+    const llmMeta = getUserMeta(user, "llm") || {};
+    const stack = llmMeta.failoverStack || [];
+    const removed = stack.pop();
+
+    llmMeta.failoverStack = stack;
+    setUserMeta(user, "llm", llmMeta);
+    await user.save();
+
+    res.json({ removed, stack });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

@@ -8,10 +8,8 @@ import {
   deleteApiKey,
 } from "./core.js";
 import { getApiKeys, setApiKeys } from "../../core/tree/userMetadata.js";
-import {
-  renderApiKeyCreated,
-  renderApiKeysList,
-} from "../../routes/api/html/user.js";
+import { getExtension } from "../loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
 
@@ -58,7 +56,7 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
 
     return res
       .status(201)
-      .send(renderApiKeyCreated({ userId, safeName, rawKey, token }));
+      .send(html().renderApiKeyCreated({ userId, safeName, rawKey, token }));
   } catch (err) {
  log.error("Api Keys", "API key create (html) error:", err);
     return res.status(500).send("Failed to create API key");
@@ -96,7 +94,7 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
     const errorParam = req.query.error || null;
 
     return res.send(
-      renderApiKeysList({ userId, user, apiKeys, token, errorParam }),
+      html().renderApiKeysList({ userId, user, apiKeys, token, errorParam }),
     );
   } catch (err) {
  log.error("Api Keys", "api keys page error:", err);

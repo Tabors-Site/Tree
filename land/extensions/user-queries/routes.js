@@ -11,13 +11,8 @@ import {
 import { getNotifications } from "../../core/tree/notifications.js";
 import { getContributionsByUser } from "../../core/tree/contributions.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
-import {
-  renderUserNotes,
-  renderUserTags,
-  renderUserContributions,
-  renderChats,
-  renderNotifications,
-} from "../../routes/api/html/user.js";
+import { getExtension } from "../loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 function escapeHtml(str) {
   return String(str || "")
@@ -111,7 +106,7 @@ export default function createRouter(core) {
         }),
       );
 
-      return res.send(renderUserNotes({ userId, user, notes, processedNotes, query, token }));
+      return res.send(html().renderUserNotes({ userId, user, notes, processedNotes, query, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/notes:", err);
       res.status(400).json({ success: false, error: err.message });
@@ -145,7 +140,7 @@ export default function createRouter(core) {
       }
 
       const user = await User.findById(userId).lean();
-      return res.send(await renderUserTags({ userId, user, notes, getNodeName, token }));
+      return res.send(await html().renderUserTags({ userId, user, notes, getNodeName, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/tags:", err);
       res.status(400).json({ success: false, error: err.message });
@@ -172,7 +167,7 @@ export default function createRouter(core) {
       }
 
       const user = await User.findById(userId).lean();
-      return res.send(renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
+      return res.send(html().renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/contributions:", err);
       res.status(400).json({ error: err.message });
@@ -214,7 +209,7 @@ export default function createRouter(core) {
       const user = await User.findById(userId).lean();
       const username = user?.username || "Unknown user";
 
-      return res.send(renderChats({ userId, chats: allChats, sessions, username, token, sessionId }));
+      return res.send(html().renderChats({ userId, chats: allChats, sessions, username, token, sessionId }));
     } catch (err) {
  log.error("User Queries", err);
       res.status(500).json({ error: err.message });
@@ -243,7 +238,7 @@ export default function createRouter(core) {
       const username = user?.username || "Unknown user";
       const token = req.query.token ?? "";
 
-      return res.send(renderNotifications({ userId, notifications, total, username, token }));
+      return res.send(html().renderNotifications({ userId, notifications, total, username, token }));
     } catch (err) {
  log.error("User Queries", "Notifications route error:", err);
       res.status(500).json({ error: err.message });
