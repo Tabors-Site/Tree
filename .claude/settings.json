@@ -112,7 +112,8 @@
       "Bash(ls land/extensions/html-rendering/*.md)",
       "Read(//home/tabor/github/Tree/=== TODO/FIXME/**)",
       "Read(//home/tabor/github/Tree/=== Potential memory leaks \\(Maps/**)",
-      "Bash(find land/extensions/html-rendering/ -name \"*.js\" -exec wc -c {} +)"
+      "Bash(find land/extensions/html-rendering/ -name \"*.js\" -exec wc -c {} +)",
+      "Read(//home/tabor/github/Tree/=== 5. mcp/**)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

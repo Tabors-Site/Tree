@@ -13,6 +13,7 @@ export async function init(core) {
   if (core.energy) setEnergyService(core.energy);
   core.modes.registerMode("home:raw-idea-choose-root", chooseRoot, "raw-ideas");
   core.modes.registerMode("home:raw-idea-placement", rawIdeaPlacement, "raw-ideas");
+  core.llm.registerUserLlmSlot?.("rawIdea");
 
   return {
     router,

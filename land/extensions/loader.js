@@ -906,6 +906,174 @@ export async function readExtensionFiles(name) {
   return { manifest, files };
 }
 
+// ---------------------------------------------------------------------------
+// Install from registry (used by AI tools and internal APIs)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the directory service URL from land config or env.
+ */
+function getDirectoryUrl() {
+  try {
+    const { getLandConfigValue } = require("../core/landConfig.js");
+    return getLandConfigValue("directoryUrl") || process.env.DIRECTORY_URL || "https://dir.treeos.ai";
+  } catch {
+    return process.env.DIRECTORY_URL || "https://dir.treeos.ai";
+  }
+}
+
+/**
+ * Compute SHA256 checksum of extension files for integrity verification.
+ */
+function computeChecksum(files) {
+  const hash = crypto.createHash("sha256");
+  for (const file of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+    hash.update(file.path);
+    hash.update(file.content);
+  }
+  return hash.digest("hex");
+}
+
+/**
+ * Install an extension from the registry by name.
+ * Fetches metadata + files from the directory service, verifies integrity,
+ * and writes files to disk.
+ *
+ * @param {string} name - extension name
+ * @param {string} [version] - specific version (default: latest)
+ * @returns {{ name, version, filesWritten, checksum }}
+ */
+export async function installExtension(name, version) {
+  if (!/^[a-z0-9-]+$/i.test(name)) {
+    throw new Error("Invalid extension name");
+  }
+
+  const dirUrl = getDirectoryUrl();
+
+  // Fetch extension metadata (latest or specific version)
+  const metaUrl = version
+    ? `${dirUrl}/extensions/${encodeURIComponent(name)}/${version}`
+    : `${dirUrl}/extensions/${encodeURIComponent(name)}`;
+  const metaRes = await fetch(metaUrl);
+  if (!metaRes.ok) {
+    const err = await metaRes.json().catch(() => ({ error: `HTTP ${metaRes.status}` }));
+    throw new Error(err.error || `Registry error: ${metaRes.status}`);
+  }
+  const metaData = await metaRes.json();
+
+  // Resolve to specific version
+  let ext = version ? metaData : metaData.latest;
+  if (!ext) throw new Error(`Extension "${name}" not found in registry`);
+
+  // Fetch full version with files if not included
+  if (!ext.files) {
+    const fullRes = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}/${ext.version}`);
+    if (!fullRes.ok) throw new Error("Failed to fetch extension files from registry");
+    ext = await fullRes.json();
+  }
+
+  if (!ext.files || !ext.files.length) {
+    throw new Error("Extension has no files");
+  }
+
+  // Verify integrity if checksum provided
+  if (ext.checksum) {
+    const computed = computeChecksum(ext.files);
+    if (computed !== ext.checksum) {
+      throw new Error(`Integrity check failed: expected ${ext.checksum.slice(0, 12)}..., got ${computed.slice(0, 12)}...`);
+    }
+    log.verbose("Extensions", `Integrity verified: ${name} v${ext.version} (${ext.checksum.slice(0, 12)}...)`);
+  }
+
+  // Write files to disk
+  const result = await installExtensionFiles(ext.name || name, ext.files);
+
+  log.info("Extensions", `Installed from registry: ${name} v${ext.version} (${result.filesWritten} files)`);
+  return {
+    name: ext.name || name,
+    version: ext.version,
+    filesWritten: result.filesWritten,
+    checksum: ext.checksum || computeChecksum(ext.files),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Disable / Enable (used by AI tools)
+// ---------------------------------------------------------------------------
+
+/**
+ * Disable an extension. Adds to disabled list, syncs to disk and config DB.
+ * Extension will not load on next restart.
+ *
+ * @param {string} name - extension name
+ */
+export async function disableExtension(name) {
+  if (!/^[a-z0-9-]+$/i.test(name)) {
+    throw new Error("Invalid extension name");
+  }
+
+  const current = readDisabledFile();
+  if (!current.includes(name)) {
+    current.push(name);
+    syncDisabledFile(current);
+  }
+
+  // Also persist to DB config if available
+  try {
+    const { getLandConfigValue, setLandConfigValue } = await import("../core/landConfig.js");
+    const dbList = getLandConfigValue("disabledExtensions") || [];
+    if (!dbList.includes(name)) {
+      dbList.push(name);
+      await setLandConfigValue("disabledExtensions", dbList);
+    }
+  } catch {
+    // DB config not available (boot time), file sync is enough
+  }
+
+  log.info("Extensions", `Disabled: ${name}`);
+}
+
+/**
+ * Re-enable a disabled extension. Removes from disabled list.
+ * Extension will load on next restart.
+ *
+ * @param {string} name - extension name
+ */
+export async function enableExtension(name) {
+  if (!/^[a-z0-9-]+$/i.test(name)) {
+    throw new Error("Invalid extension name");
+  }
+
+  const current = readDisabledFile();
+  const updated = current.filter((n) => n !== name);
+  syncDisabledFile(updated);
+
+  // Also persist to DB config if available
+  try {
+    const { getLandConfigValue, setLandConfigValue } = await import("../core/landConfig.js");
+    const dbList = getLandConfigValue("disabledExtensions") || [];
+    const dbUpdated = dbList.filter((n) => n !== name);
+    await setLandConfigValue("disabledExtensions", dbUpdated);
+  } catch {
+    // DB config not available, file sync is enough
+  }
+
+  log.info("Extensions", `Enabled: ${name}`);
+}
+
+/**
+ * Get the set of disabled extension names.
+ * Merges env var, .disabled file, and DB config.
+ *
+ * @param {Function} [configFn] - optional config reader (getLandConfigValue)
+ * @returns {Set<string>}
+ */
+export { getDisabledExtensions };
+
+// ---------------------------------------------------------------------------
+// Extension tools for modes
+// ---------------------------------------------------------------------------
+
 /**
  * Get additional tools injected by extensions for a specific mode.
  * Called by the mode registry when resolving tools.

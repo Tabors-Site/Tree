@@ -8,7 +8,7 @@ import dns from "dns/promises";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { getUserMeta } from "../tree/userMetadata.js";
+// getUserMeta removed: billing check moved to billing extension
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -141,13 +141,7 @@ function validateCustomBaseUrl(baseUrl) {
 // VALIDATION HELPERS
 // ─────────────────────────────────────────────────────────────────────────
 
-function hasPaidPlan(user) {
-  if (!user) return false;
-  if (user.profileType === "basic") return false;
-  const billing = getUserMeta(user, "billing");
-  if (!billing.planExpiresAt) return false;
-  return new Date(billing.planExpiresAt) > new Date();
-}
+// hasPaidPlan removed: billing is an extension concern, not kernel
 
 function validateInputs(baseUrl, apiKey, model, requireApiKey) {
   if (!baseUrl || typeof baseUrl !== "string" || baseUrl.length > 500) {
@@ -177,14 +171,18 @@ function validateInputs(baseUrl, apiKey, model, requireApiKey) {
   return safeModel;
 }
 
-const VALID_SLOTS = ["main", "rawIdea"];
+// Core user slots. Extensions register additional via registerUserLlmSlot().
+const CORE_USER_SLOTS = new Set(["main"]);
+const _extUserSlots = new Set();
+export function registerUserLlmSlot(slot) { _extUserSlots.add(slot); }
+function isValidUserSlot(slot) { return CORE_USER_SLOTS.has(slot) || _extUserSlots.has(slot); }
 
-// Core LLM slots. Extensions register additional slots via registerModeAssignment().
+// Core tree slots. Extensions register additional via registerRootLlmSlot().
 const CORE_ROOT_SLOTS = new Set(["default", "placement", "respond", "notes"]);
-const _extSlots = new Set();
-export function registerRootLlmSlot(slot) { _extSlots.add(slot); }
-export function isValidRootLlmSlot(slot) { return CORE_ROOT_SLOTS.has(slot) || _extSlots.has(slot); }
-export function getAllRootLlmSlots() { return [...CORE_ROOT_SLOTS, ..._extSlots]; }
+const _extRootSlots = new Set();
+export function registerRootLlmSlot(slot) { _extRootSlots.add(slot); }
+export function isValidRootLlmSlot(slot) { return CORE_ROOT_SLOTS.has(slot) || _extRootSlots.has(slot); }
+export function getAllRootLlmSlots() { return [...CORE_ROOT_SLOTS, ..._extRootSlots]; }
 
 // ─────────────────────────────────────────────────────────────────────────
 // PUBLIC API
@@ -353,7 +351,7 @@ export async function getConnectionsForUser(userId) {
 }
 
 export async function assignConnection(userId, slot, connectionId) {
-  if (!VALID_SLOTS.includes(slot)) {
+  if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
   }
 

@@ -38,7 +38,7 @@ import {
 } from "../ws/conversation.js";
 
 import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
-import { registerRootLlmSlot } from "./llms/customLLM.js";
+import { registerRootLlmSlot, registerUserLlmSlot } from "./llms/customLLM.js";
 import { emitNavigate, emitToUser } from "../ws/websocket.js";
 import { OrchestratorRuntime } from "../orchestrators/runtime.js";
 import { acquireLock, releaseLock, isLocked } from "../orchestrators/locks.js";
@@ -85,16 +85,10 @@ const NOOP_WEBSOCKET = {
  * @returns {object} the core services bundle
  */
 export function buildCoreServices({ loadedExtensions = new Map(), overrides = {} } = {}) {
-  // Determine what's available on this land
-  const hasEnergy = loadedExtensions.has("energy");
   const hasWebsocket = typeof emitNavigate === "function";
 
+  // Energy starts as no-op. If energy extension loads, it replaces via setCoreService().
   let energyService = NOOP_ENERGY;
-  if (hasEnergy) {
-    // Energy extension will register itself and replace this
-    // via core.energy = realEnergyService in its init()
-    energyService = NOOP_ENERGY;
-  }
 
   const core = {
     // --- Optional services (no-op stubs if not available) ---
@@ -129,7 +123,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       setCurrentNodeId, getCurrentNodeId, getCurrentMode,
       clearSession: clearConversationSession,
       resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
-      registerRootLlmSlot,
+      registerRootLlmSlot, registerUserLlmSlot,
     },
 
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },

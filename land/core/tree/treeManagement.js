@@ -69,11 +69,11 @@ export async function createNewNode(
   values = values && typeof values === "object" ? values : {};
   goals = goals && typeof goals === "object" ? goals : {};
 
+  // Build metadata from extension-specific params
+  // Extensions own their metadata keys. Core just passes them through.
   const metadata = new Map();
-  // Store values/goals in metadata if provided (values extension reads from here)
   if (Object.keys(values).length > 0) metadata.set("values", values);
   if (Object.keys(goals).length > 0) metadata.set("goals", goals);
-  // Store schedule in metadata if provided (schedules extension reads from here)
   if (schedule) metadata.set("schedule", new Date(schedule));
   if (reeffectTime) metadata.set("reeffectTime", reeffectTime);
 
