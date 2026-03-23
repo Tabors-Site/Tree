@@ -345,9 +345,9 @@ module.exports = (program) => {
     .description("Show current login and active tree")
     .action(async () => {
       const cfg = load();
-      if (!cfg.apiKey) return console.log(chalk.yellow("Not logged in. Run: treeos login or treeos register"));
+      if (!cfg.apiKey && !cfg.jwtToken) return console.log(chalk.yellow("Not logged in. Run: treeos login or treeos register"));
       try {
-        const api = new TreeAPI(cfg.apiKey);
+        const api = new TreeAPI(cfg.apiKey, cfg.jwtToken);
         const me = await api.me();
         cfg.username = me.username;
         cfg.plan = me.profileType || null;

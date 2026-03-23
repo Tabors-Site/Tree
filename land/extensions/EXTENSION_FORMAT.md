@@ -316,6 +316,95 @@ export const { myFn } = mod;
 
 This lets core gracefully degrade when an extension is disabled.
 
+## Custom AI Modes
+
+Extensions can register entirely new AI conversation modes. Each mode has its own system prompt, tool set, and LLM assignment slot.
+
+```js
+// manifest.js
+provides: {
+  modes: [
+    {
+      key: "tree:research",
+      handler: "./modes/research.js",
+      assignmentSlot: "research",
+    }
+  ],
+}
+```
+
+The handler file exports the same shape as core modes:
+
+```js
+// modes/research.js
+export default {
+  emoji: "🔬",
+  label: "Research",
+  bigMode: "tree",
+  toolNames: ["web-search", "summarize", "create-new-node-branch"],
+  buildSystemPrompt({ username, rootId, currentNodeId }) {
+    return `You are a research agent for ${username}. Search the web and place findings into the tree.`;
+  },
+};
+```
+
+Or register during init():
+
+```js
+export async function init(core) {
+  core.modes.registerMode("tree:research", {
+    emoji: "🔬",
+    label: "Research",
+    bigMode: "tree",
+    toolNames: ["web-search", "summarize"],
+    buildSystemPrompt(ctx) { return "..."; },
+  }, "my-extension");
+}
+```
+
+Modes cannot override core modes. The conversation system routes to custom modes the same way it routes to built-in modes.
+
+## CLI Subcommands
+
+For extensions with multiple related commands, use the subcommands pattern:
+
+```js
+provides: {
+  cli: [
+    {
+      command: "wallet [action] [args...]",
+      description: "Solana wallet. Actions: create, send, swap.",
+      method: "GET",
+      endpoint: "/node/:nodeId/values/solana",
+      subcommands: {
+        "create": { method: "POST", endpoint: "/node/:nodeId/values/solana", description: "Create wallet" },
+        "send": { method: "POST", endpoint: "/node/:nodeId/0/values/solana/send", args: ["amount", "destination"], description: "Send SOL" },
+        "swap": { method: "POST", endpoint: "/node/:nodeId/0/values/solana/transaction", args: ["inputMint", "outputMint", "amountUi"], description: "Swap tokens" },
+      },
+    },
+  ],
+}
+```
+
+No action = default GET. Unknown action shows available subcommands. Missing required args show usage hints.
+
+## Per-User Data Storage (metadata)
+
+Same pattern as per-node metadata. Extensions store user-scoped data in `user.metadata`:
+
+```js
+import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
+
+// Read
+const energy = getUserMeta(user, "energy");  // returns {} if empty
+
+// Write
+setUserMeta(user, "energy", { available: { amount: 100 } });
+await user.save();
+```
+
+Convention: namespace key matches your manifest name. Same rules as node metadata.
+
 ## Inter-Extension Communication
 
 Use `getExtension(name)` from the loader:

@@ -194,7 +194,7 @@ const startShell = module.exports.startShell = async () => {
     const readline = require("readline");
     const cfg = load();
 
-    if (!cfg.apiKey) {
+    if (!cfg.apiKey && !cfg.jwtToken) {
       console.log(
         chalk.yellow(
           "Not logged in. Run: treeos login or treeos register",
