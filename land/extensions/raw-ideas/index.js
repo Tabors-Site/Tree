@@ -12,7 +12,7 @@ let stopFn = null;
 
 export async function init(core) {
   // Register raw-idea modes
-  core.modes.registerMode("rawIdea:chooseRoot", chooseRoot, "raw-ideas");
+  core.modes.registerMode("home:raw-idea-choose-root", chooseRoot, "raw-ideas");
   core.modes.registerMode("home:raw-idea-placement", rawIdeaPlacement, "raw-ideas");
 
   return {

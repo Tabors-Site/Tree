@@ -14,9 +14,6 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function init(core) {
   const User = core.models.User;
 
-  // Intercept registration when email is involved.
-  // If this land requires email, block registration without it.
-  // If email is provided, create TempUser and send verification.
   core.hooks.register("beforeRegister", async (data) => {
     const { username, password, email, req, res } = data;
 
@@ -28,9 +25,8 @@ export async function init(core) {
       return;
     }
 
-    if (!email) return; // No email provided, let core handle it
+    if (!email) return;
 
-    // Validate email
     if (!EMAIL_REGEX.test(email) || email.length > 320) {
       res.status(400).json({ message: "Please enter a valid email address" });
       data.handled = true;
@@ -39,7 +35,6 @@ export async function init(core) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check duplicate email in metadata
     const existingEmail = await User.findOne({ "metadata.email.address": normalizedEmail });
     if (existingEmail) {
       res.status(400).json({ message: "Email already registered" });
@@ -47,7 +42,6 @@ export async function init(core) {
       return;
     }
 
-    // Clean up any existing temp users for this email/username
     await TempUser.deleteMany({
       $or: [
         { email: normalizedEmail },
@@ -75,7 +69,6 @@ export async function init(core) {
     data.handled = true;
   }, "email");
 
-  // After registration, store email in metadata if provided (for non-verification flows)
   core.hooks.register("afterRegister", async ({ user, email }) => {
     if (!email) return;
     const normalizedEmail = email.trim().toLowerCase();

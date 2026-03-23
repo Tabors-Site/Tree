@@ -18,6 +18,5 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
-    // CLI commands hardcoded in cli/commands/apikeys.js
   },
 };

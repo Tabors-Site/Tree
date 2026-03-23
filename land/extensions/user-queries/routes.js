@@ -31,7 +31,6 @@ function escapeHtml(str) {
 export default function createRouter(core) {
   const router = express.Router();
 
-  // GET /user/:userId/notes
   router.get("/user/:userId/notes", urlAuth, async (req, res) => {
     try {
       const userId = req.params.userId;
@@ -119,7 +118,6 @@ export default function createRouter(core) {
     }
   });
 
-  // GET /user/:userId/tags
   router.get("/user/:userId/tags", urlAuth, async (req, res) => {
     try {
       const userId = req.params.userId;
@@ -154,7 +152,6 @@ export default function createRouter(core) {
     }
   });
 
-  // GET /user/:userId/contributions
   router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
@@ -182,7 +179,6 @@ export default function createRouter(core) {
     }
   });
 
-  // GET /user/:userId/chats
   router.get("/user/:userId/chats", urlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
@@ -225,7 +221,6 @@ export default function createRouter(core) {
     }
   });
 
-  // GET /user/:userId/notifications
   router.get("/user/:userId/notifications", urlAuth, async (req, res) => {
     try {
       const { userId } = req.params;

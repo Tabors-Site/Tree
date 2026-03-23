@@ -112,12 +112,6 @@ export const deleteApiKey = async (req, res) => {
   }
 };
 
-/* ===========================
-    AUTH STRATEGY HANDLER
-    Called by authenticate/urlAuth middleware via the strategy pattern.
-    Returns { userId, username, extra: { apiKeyId } } or null.
-============================ */
-
 const failedAttempts = new Map();
 const FAIL_WINDOW_MS = 5 * 60 * 1000;
 const MAX_FAILURES = 10;
@@ -126,7 +120,6 @@ function getClientIp(req) {
   return req.ip || req.connection?.remoteAddress || "unknown";
 }
 
-// Clean up stale entries every 10 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [ip, entry] of failedAttempts) {
@@ -142,7 +135,6 @@ export async function apiKeyAuthStrategy(req) {
 
   if (!apiKey) return null;
 
-  // Brute-force protection
   const clientIp = getClientIp(req);
   const entry = failedAttempts.get(clientIp);
   if (entry && Date.now() - entry.start <= FAIL_WINDOW_MS && entry.count >= MAX_FAILURES) {
@@ -166,10 +158,8 @@ export async function apiKeyAuthStrategy(req) {
       const match = await bcrypt.compare(apiKey, key.keyHash);
       if (!match) continue;
 
-      // Clear failures on success
       failedAttempts.delete(clientIp);
 
-      // Usage tracking
       key.usageCount = (key.usageCount || 0) + 1;
       key.lastUsedAt = new Date();
       setApiKeys(user, keys);
@@ -179,7 +169,6 @@ export async function apiKeyAuthStrategy(req) {
     }
   }
 
-  // Record failure
   if (!entry || Date.now() - entry.start > FAIL_WINDOW_MS) {
     failedAttempts.set(clientIp, { start: Date.now(), count: 1 });
   } else {

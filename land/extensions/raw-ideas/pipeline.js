@@ -160,7 +160,7 @@ export async function orchestrateRawIdeaPlacement({
       }),
     );
 
-    const { parsed, raw: chooseResult } = await rt.runStep("rawIdea:chooseRoot", {
+    const { parsed, raw: chooseResult } = await rt.runStep("home:raw-idea-choose-root", {
       prompt: rawIdea.content,
       modeCtx: { content: rawIdea.content, rootSummaries },
       input: rawIdea.content,

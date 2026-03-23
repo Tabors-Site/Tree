@@ -6,7 +6,6 @@ const PLAN_DAILY_VALUE = {
 
 export function validatePurchase(user, { plan, energyAmount }) {
 
-  // ===== PLAN VALIDATION =====
   if (plan) {
     if (!["standard", "premium"].includes(plan)) {
       throw new Error("Invalid plan");
@@ -15,13 +14,11 @@ export function validatePurchase(user, { plan, energyAmount }) {
     const oldVal = PLAN_DAILY_VALUE[user.profileType] ?? 0;
     const newVal = PLAN_DAILY_VALUE[plan] ?? 0;
 
-    // 🚫 Prevent downgrades BEFORE Stripe
     if (newVal < oldVal) {
       throw new Error("Cannot downgrade plan");
     }
   }
 
-  // ===== ENERGY VALIDATION =====
   if (energyAmount != null) {
     if (typeof energyAmount !== "number" || energyAmount < 0) {
       throw new Error("Invalid energy amount");

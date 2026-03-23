@@ -3,7 +3,6 @@ import Stripe from "stripe";
 import User from "../../db/models/user.js";
 import { validatePurchase } from "./core/validatePurchase.js";
 import { getLandUrl } from "../../canopy/identity.js";
-import { getUserMeta } from "../../core/tree/userMetadata.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
@@ -16,8 +15,6 @@ export async function createPurchaseSession(req, res) {
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-
-    const token = getUserMeta(user, "html")?.shareToken || "";
 
     try {
       validatePurchase(user, { plan, energyAmount });
@@ -38,43 +35,25 @@ export async function createPurchaseSession(req, res) {
       return res.status(400).json({ error: "Nothing to purchase" });
     }
 
-    /* ===============================
-       🔥 SMART PRODUCT NAME (NEW)
-    =============================== */
+    let productName = "Purchase";
 
-  let productName = "Purchase";
+    if (plan && energyAmount > 0) {
+      if (plan === "standard") {
+        productName = "Standard Plan, 1 Month + Energy";
+      } else if (plan === "premium") {
+        productName = "Premium Plan, 1 Month + Energy";
+      } else {
+        productName = "Plan + Energy Purchase";
+      }
+    } else if (plan === "standard") {
+      productName = "Standard Plan, 1 Month";
+    } else if (plan === "premium") {
+      productName = "Premium Plan, 1 Month";
+    } else if (energyAmount > 0) {
+      productName = "Additional Energy Boost";
+    }
 
-if (plan && energyAmount > 0) {
-  // 🔥 PLAN + ENERGY COMBOS
-  if (plan === "standard") {
-    productName = "Standard Plan — 1 Month + Energy";
-  } else if (plan === "premium") {
-    productName = "Premium Plan — 1 Month + Energy";
-  } else {
-    productName = "Plan + Energy Purchase";
-  }
-
-} else if (plan === "standard") {
-  productName = "Standard Plan — 1 Month";
-
-} else if (plan === "premium") {
-  // ⭐ PREMIUM ONLY OPTIONS
-  productName = "Premium Plan — 1 Month";
-
-} else if (energyAmount > 0) {
-  // ⚡ ENERGY ONLY OPTIONS
-  productName = energyAmount >= 500
-    ? "Additional Energy Boost"
-    : "Additional Energy Boost";
-}
-
-    /* ===============================
-       STRIPE CHECKOUT SESSION
-    =============================== */
-
-    const successUrl =
-`${getLandUrl()}/app`;
-
+    const successUrl = `${getLandUrl()}/app`;
     const cancelUrl = successUrl;
 
     const session = await stripe.checkout.sessions.create({
@@ -86,7 +65,7 @@ if (plan && energyAmount > 0) {
           price_data: {
             currency: "usd",
             product_data: {
-              name: productName, // ✅ dynamic naming
+              name: productName,
             },
             unit_amount: totalCents,
           },

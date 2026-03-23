@@ -52,7 +52,7 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
         ? renderBookNode(book, 1, token)
         : `
     <div class="empty-state">
-      <div class="empty-state-icon">📖</div>
+      <div class="empty-state-icon"></div>
       <div class="empty-state-text">No content</div>
       <div class="empty-state-subtext">
         This node has no notes or child notes under the current filters.
@@ -156,7 +156,7 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
         ? renderBookNode(book, 1, token)
         : `
     <div class="empty-state">
-      <div class="empty-state-icon">📖</div>
+      <div class="empty-state-icon"></div>
       <div class="empty-state-text">No content</div>
       <div class="empty-state-subtext">
         This node has no notes or child notes under the current filters.

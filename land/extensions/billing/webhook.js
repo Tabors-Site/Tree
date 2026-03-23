@@ -22,10 +22,6 @@ export async function stripeWebhook(req, res) {
     return res.status(400).send("Webhook Error");
   }
 
-  /* ===============================
-     HANDLE EVENTS
-  =============================== */
-
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
@@ -33,15 +29,10 @@ export async function stripeWebhook(req, res) {
     const plan = session.metadata.plan || null;
     const energyAmount = Number(session.metadata.energyAmount || 0);
 
-    /* ===============================
-       ⭐ CREATE PURCHASE CONTRIBUTION
-       (IDEMPOTENCY LOCK)
-    =============================== */
-
     try {
       await logContribution({
         userId,
-        nodeId: "SYSTEM",      // system-level event
+        nodeId: "SYSTEM",
         nodeVersion: "0",
         action: "purchase",
 
@@ -56,7 +47,6 @@ export async function stripeWebhook(req, res) {
         },
       });
     } catch (err) {
-      // ⭐ If duplicate Stripe retry, ignore safely
       if (
         err?.code === 11000 ||
         err?.message?.toLowerCase().includes("duplicate")
@@ -68,10 +58,6 @@ export async function stripeWebhook(req, res) {
  log.error("Billing", "Contribution logging failed:", err);
       return res.status(500).json({ error: "Contribution logging failed" });
     }
-
-    /* ===============================
-       EXISTING LOGIC (UNCHANGED)
-    =============================== */
 
     await processPurchase({
       userId,

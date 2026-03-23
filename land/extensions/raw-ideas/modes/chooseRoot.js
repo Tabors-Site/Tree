@@ -3,8 +3,8 @@
 // Pure reasoning — no tools. All context is injected into the system prompt.
 
 export default {
-  name: "rawIdea:chooseRoot",
-  bigMode: "rawIdea",
+  name: "home:raw-idea-choose-root",
+  bigMode: "home",
   hidden: true,
   toolNames: [],
 

@@ -38,7 +38,6 @@ const emailLimiter = rateLimit({
 
 const router = express.Router();
 
-// Forgot password
 router.post("/forgot-password", emailLimiter, async (req, res) => {
   const { email } = req.body;
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,7 +52,6 @@ router.post("/forgot-password", emailLimiter, async (req, res) => {
 
   const token = crypto.randomBytes(32).toString("hex");
 
-  // Store reset token in metadata.email namespace
   const emailMeta = (user.metadata instanceof Map ? user.metadata.get("email") : user.metadata?.email) || {};
   emailMeta.resetToken = token;
   emailMeta.resetExpiry = Date.now() + 1000 * 60 * 15;
@@ -72,7 +70,6 @@ router.post("/forgot-password", emailLimiter, async (req, res) => {
   res.json({ message: "Reset link sent if email exists" });
 });
 
-// Reset password
 router.post("/user/reset-password", async (req, res) => {
   const { token, password } = req.body;
   if (!password || typeof password !== "string" || password.length < 8) {
@@ -103,7 +100,6 @@ router.post("/user/reset-password", async (req, res) => {
   res.json({ message: "Password has been reset successfully" });
 });
 
-// Verify email (registration completion)
 router.get("/user/verify/:token", async (req, res) => {
   try {
     const { token } = req.params;
@@ -137,7 +133,6 @@ router.get("/user/verify/:token", async (req, res) => {
       profileType: getLandConfigValue("LAND_DEFAULT_TIER") || "basic",
     });
 
-    // Store email in metadata
     if (user.metadata instanceof Map) {
       user.metadata.set("email", { address: tempUser.email, verified: true });
     } else {
@@ -147,7 +142,6 @@ router.get("/user/verify/:token", async (req, res) => {
     if (user.markModified) user.markModified("metadata");
     await user.save();
 
-    // Fire afterRegister so other extensions (html-rendering, etc.) can initialize
     const { hooks } = await import("../../core/hooks.js");
     hooks.run("afterRegister", { user, email: tempUser.email }).catch(() => {});
 
@@ -174,7 +168,6 @@ router.get("/user/verify/:token", async (req, res) => {
   }
 });
 
-// Forgot password HTML page
 router.get("/forgot-password", (req, res) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true" || !renderForgotPasswordPage) {
     return res.status(404).json({ error: "Not available" });

@@ -15,14 +15,9 @@ export function upgradeUserPlan(user, newPlan) {
   const billing = getUserMeta(user, "billing");
   const expiresAt = billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0);
 
-  // Only allow upgrades here
   if (PLAN_DAILY_VALUE[newPlan] <= PLAN_DAILY_VALUE[oldPlan]) {
     throw new Error("Not an upgrade");
   }
-
-  /* ===============================
-     Convert Remaining Time -> Energy
-     =============================== */
 
   const energy = getEnergy(user);
 
@@ -35,10 +30,6 @@ export function upgradeUserPlan(user, newPlan) {
 
     energy.additional.amount += compensationEnergy;
   }
-
-  /* ===============================
-     Switch Plan
-     =============================== */
 
   user.profileType = newPlan;
 
