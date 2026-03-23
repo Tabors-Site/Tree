@@ -107,7 +107,9 @@
       "Bash(npx vite:*)",
       "Bash(grep -r optional.services /home/tabor/github/Tree/land/extensions/*/manifest.js)",
       "Bash(sed -i 's/setEnergyService\\(core\\\\.energy\\);/if \\(core.energy\\) setEnergyService\\(core.energy\\);/' \"$f\")",
-      "Bash(echo \"Fixed: $f\")"
+      "Bash(echo \"Fixed: $f\")",
+      "Bash(echo \"=== CLI help - failover commands? ===\" grep -n \"failover\" /home/tabor/github/Tree/cli/commands/*.js)",
+      "Bash(ls land/extensions/html-rendering/*.md)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

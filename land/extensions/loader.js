@@ -618,6 +618,8 @@ function validateManifest(manifest, dirName) {
     errors.push(`${dirName}: missing or invalid "name"`);
   } else if (!/^[a-z][a-z0-9-]*$/.test(manifest.name)) {
     errors.push(`${dirName}: name "${manifest.name}" must be lowercase alphanumeric with hyphens`);
+  } else if (["node_modules", ".disabled", "_template", "loader"].includes(manifest.name)) {
+    errors.push(`${dirName}: name "${manifest.name}" is reserved`);
   }
   if (!manifest.version || typeof manifest.version !== "string") {
     errors.push(`${dirName}: missing or invalid "version"`);

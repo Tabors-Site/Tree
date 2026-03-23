@@ -1,7 +1,4 @@
-import log from "./log.js";
 import Node from "../db/models/node.js";
-import User from "../db/models/user.js";
-import { resolveRootNode } from "./tree/treeFetch.js";
 
 export async function resolveTreeAccess(nodeId, userId) {
   if (!nodeId) {
@@ -28,7 +25,12 @@ export async function resolveTreeAccess(nodeId, userId) {
     };
   }
 
+  let depth = 0;
+  const MAX_DEPTH = 100;
   while (!node.rootOwner || node.rootOwner === "SYSTEM") {
+    if (++depth > MAX_DEPTH) {
+      return { ok: false, error: "BROKEN_TREE", message: "Tree depth limit exceeded (circular reference?)" };
+    }
     if (!node.parent) {
       return {
         ok: false,
@@ -74,82 +76,4 @@ export async function resolveTreeAccess(nodeId, userId) {
   };
 }
 
-export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
-  if (!shareToken) {
-    return { allowed: false, reason: "Missing share token" };
-  }
-
-  // ─────────────────────────────────────
-  // CASE 1: userId-based access
-  // ─────────────────────────────────────
-  if (userId && !nodeId) {
-    const user = await User.findOne({
-      _id: userId,
-      "metadata.html.shareToken": shareToken,
-    })
-      .select("_id username")
-      .lean()
-      .exec();
-
-    if (!user) {
-      return { allowed: false, reason: "Invalid share token" };
-    }
-
-    return {
-      allowed: true,
-      matchedUserId: user._id,
-      matchedUsername: user.username,
-      scope: "user",
-    };
-  }
-
-  // ─────────────────────────────────────
-  // CASE 2: nodeId-based access
-  // ─────────────────────────────────────
-  if (nodeId) {
-    const rootNode = await resolveRootNode(nodeId);
-
-    const userIds = [
-      rootNode.rootOwner,
-      ...(rootNode.contributors || []),
-    ].filter(Boolean);
-
-    if (userIds.length === 0) {
-      return { allowed: false, reason: "No users associated with root" };
-    }
-
-    const matchedUser = await User.findOne({
-      _id: { $in: userIds },
-      "metadata.html.shareToken": shareToken,
-    })
-      .select("_id username")
-      .lean()
-      .exec();
-
-    if (!matchedUser) {
-      log.debug("Auth", "ShareAuth: DENIED nodeId=%s userIds=%j tokenPrefix=%s", nodeId, userIds, shareToken?.slice(0, 6));
-      // Debug: check what tokens the users actually have
-      const users = await User.find({ _id: { $in: userIds } }).select("_id username metadata").lean();
-      for (const u of users) {
-        log.debug("Auth", "ShareAuth:   user=%s token=%s match=%s", u.username, u.metadata?.html?.shareToken?.slice(0, 6), u.metadata?.html?.shareToken === shareToken);
-      }
-      return { allowed: false, reason: "Invalid share token for node" };
-    }
-
-    return {
-      allowed: true,
-      rootId: rootNode._id.toString(),
-      matchedUserId: matchedUser._id,
-      matchedUsername: matchedUser.username,
-      scope: "node",
-    };
-  }
-
-  // ─────────────────────────────────────
-  // INVALID
-  // ─────────────────────────────────────
-  return {
-    allowed: false,
-    reason: "userId or nodeId is required",
-  };
-}
+// resolveHtmlShareAccess moved to extensions/html-rendering/shareAuth.js

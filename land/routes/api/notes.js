@@ -19,14 +19,8 @@ import authenticate from "../../middleware/authenticate.js";
 import preUploadCheck from "../../middleware/preUploadCheck.js";
 import { notFoundPage } from "../../middleware/notFoundPage.js";
 import { resolveVersion } from "../../core/tree/treeFetch.js";
-import {
-  renderEditorPage,
-  renderNotesList,
-  renderTextNote,
-  renderFileNote,
-  escapeHtml,
-  renderMediaImmediate,
-} from "./html/notes.js";
+import { getExtension } from "../../extensions/loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 import { getLandUrl } from "../../canopy/identity.js";
 
 const router = express.Router();
@@ -86,7 +80,7 @@ router.get("/node/:nodeId/:version/notes/editor", urlAuth, async (req, res) => {
     const tokenQS = token ? `?token=${token}&html` : "?html";
 
     return res.send(
-      renderEditorPage({
+      html().renderEditorPage({
         nodeId,
         version,
         noteId: null,
@@ -138,7 +132,7 @@ router.get(
       }
 
       return res.send(
-        renderEditorPage({
+        html().renderEditorPage({
           nodeId,
           version,
           noteId,
@@ -218,7 +212,7 @@ router.get("/node/:nodeId/:version/notes", urlAuth, async (req, res) => {
       const currentUserId = req.userId ? req.userId.toString() : null;
 
       return res.send(
-        renderNotesList({
+        html().renderNotesList({
           nodeId,
           version: Number(version),
           token,
@@ -388,15 +382,15 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
 
     const userLink = note.userId
       ? `<a href="/api/v1/user/${note.userId._id}${qs}">
-     ${escapeHtml(note.userId.username ?? "Unknown user")}
+     ${html().escapeHtml(note.userId.username ?? "Unknown user")}
    </a>`
-      : escapeHtml(note.username ?? "Unknown user");
+      : html().escapeHtml(note.username ?? "Unknown user");
 
     const wantHtml = req.query.html !== undefined;
     if (wantHtml && process.env.ENABLE_FRONTEND_HTML === "true") {
       if (note.contentType === "text") {
         return res.send(
-          renderTextNote({
+          html().renderTextNote({
             back,
             backText,
             userLink,
@@ -416,13 +410,13 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
         : mime.lookup(filePath) || "application/octet-stream";
       const mediaHtml = fileDeleted
         ? ""
-        : renderMediaImmediate(fileUrl, mimeType);
+        : html().renderMediaImmediate(fileUrl, mimeType);
       const fileName = fileDeleted
         ? "File was deleted"
         : path.basename(note.content);
 
       return res.send(
-        renderFileNote({
+        html().renderFileNote({
           back,
           backText,
           userLink,

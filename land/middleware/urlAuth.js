@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import User from "../db/models/user.js";
-import { resolveHtmlShareAccess } from "../core/authenticate.js";
+import { getExtension } from "../extensions/loader.js";
 import { resolvePublicRoot, isPublic } from "../core/tree/publicAccess.js";
 import { errorHtml } from "./notFoundPage.js";
 import { verifyCanopyToken, getLandIdentity } from "../canopy/identity.js";
@@ -203,7 +203,12 @@ export default async function urlAuth(req, res, next) {
       });
     }
 
-    const result = await resolveHtmlShareAccess({
+    const htmlExt = getExtension("html-rendering");
+    const resolveShare = htmlExt?.exports?.resolveHtmlShareAccess;
+    if (!resolveShare) {
+      return res.status(403).json({ message: "Share token auth not available (html-rendering not installed)" });
+    }
+    const result = await resolveShare({
       userId,
       nodeId: shareNodeId,
       shareToken,

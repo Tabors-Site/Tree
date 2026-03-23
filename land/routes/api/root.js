@@ -6,12 +6,8 @@ import authenticate from "../../middleware/authenticate.js";
 import { getAllData, getTreeStructure } from "../../core/tree/treeDataFetching.js";
 import { createInvite } from "../../core/tree/invites.js";
 import { sendRemoteInvite } from "../../core/tree/remoteInvites.js";
-// Schedules: dynamic import, stub if extension not installed
-let getCalendar = async () => ({ nodes: [] });
-try { ({ getCalendar } = await import("../../extensions/schedules/core.js")); } catch {}
-// Values: dynamic import, stub if extension not installed
-let getGlobalValuesTreeAndFlat = async () => ({ flat: {}, tree: {} });
-try { ({ getGlobalValuesTreeAndFlat } = await import("../../extensions/values/core.js")); } catch {}
+import { getExtension } from "../../extensions/loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 import Node from "../../db/models/node.js";
 import mongoose from "mongoose";
@@ -19,13 +15,6 @@ import { getConnectionsForUser, ROOT_LLM_SLOTS } from "../../core/llms/customLLM
 import { getNodeAIChats } from "../../core/llms/aichat.js";
 import { buildPathString } from "../../core/tree/treeFetch.js";
 
-import {
-  renderRootOverview,
-  renderCalendar,
-  renderGateway,
-  renderValuesPage,
-} from "./html/root.js";
-import { renderQueryPage } from "./html/query.js";
 import { registerWithDirectory } from "../../canopy/directory.js";
 
 const router = express.Router();
@@ -134,7 +123,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     }
 
     return res.send(
-      renderRootOverview({
+      html().renderRootOverview({
         allData,
         rootMeta,
         ancestors: allData.ancestors || [],
@@ -190,7 +179,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
     const queryAvailable = treeHasLlm || (isOwner || isContributor);
 
     return res.send(
-      renderQueryPage({
+      html().renderQueryPage({
         treeName: root.name || "Untitled",
         ownerUsername: root.rootOwner?.username || "unknown",
         rootId,
@@ -545,7 +534,7 @@ router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
     }
 
     return res.send(
-      renderGateway({
+      html().renderGateway({
         rootId,
         rootName: root.name,
         queryString,
@@ -790,6 +779,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     const startDate = new Date(year, month, 1);
     const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
 
+    const getCalendar = getExtension("schedules")?.exports?.getCalendar || (async () => ({ nodes: [] }));
     const calendar = await getCalendar({
       rootNodeId: rootId,
       startDate,
@@ -811,7 +801,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     }
 
     return res.send(
-      renderCalendar({ rootId, queryString, month, year, byDay }),
+      html().renderCalendar({ rootId, queryString, month, year, byDay }),
     );
   } catch (err) {
     log.error("API", "Calendar error:", err);
@@ -835,6 +825,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
 
     const queryString = filtered ? `?${filtered}` : "";
 
+    const getGlobalValuesTreeAndFlat = getExtension("values")?.exports?.getGlobalValuesTreeAndFlat || (async () => ({ flat: {}, tree: {} }));
     const result = await getGlobalValuesTreeAndFlat(nodeId);
 
     // JSON MODE (default)
@@ -843,7 +834,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
       return res.json(result);
     }
 
-    return res.send(renderValuesPage({ nodeId, queryString, result }));
+    return res.send(html().renderValuesPage({ nodeId, queryString, result }));
   } catch (err) {
     log.error("API", "Error in /root/:nodeId/values:", err);
     res.status(500).json({ error: err.message });

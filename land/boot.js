@@ -5,6 +5,17 @@ import { fileURLToPath } from "url";
 import { createInterface } from "readline/promises";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Global error handlers
+process.on("unhandledRejection", (err) => {
+  console.error("[KERNEL] Unhandled rejection:", err?.message || err);
+  if (err?.stack) console.error(err.stack);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[KERNEL] Uncaught exception:", err?.message || err);
+  if (err?.stack) console.error(err.stack);
+  process.exit(1);
+});
 const envPath = path.resolve(__dirname, "../.env");
 
 const REQUIRED_KEYS = ["MONGODB_URI", "JWT_SECRET", "PORT", "LAND_DOMAIN"];

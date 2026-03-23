@@ -269,8 +269,6 @@ const logout = async (req, res) => {
   }
 };
 
-// getHtmlShareToken and setHtmlShareToken moved to extensions/html-rendering
-
 /* ===========================
     EXPORT CONTROLLERS
 =========================== */

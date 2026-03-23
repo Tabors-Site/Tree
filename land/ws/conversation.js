@@ -128,7 +128,9 @@ const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";
 
 function decrypt(encryptedText) {
+  if (!ENCRYPTION_KEY) throw new Error("CUSTOM_LLM_API_SECRET_KEY not set. Cannot decrypt LLM credentials.");
   const [ivHex, encrypted] = encryptedText.split(":");
+  if (!ivHex || !encrypted) throw new Error("Malformed encrypted text");
   const iv = Buffer.from(ivHex, "hex");
   const key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
@@ -145,6 +147,15 @@ function decrypt(encryptedText) {
 const userClientCache = new Map();
 const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
 const PROXY_CACHE_TTL = 60 * 1000; // 1 min for canopy proxy clients
+
+// Periodic cache cleanup (every 10 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of userClientCache) {
+    const ttl = entry.isCanopyProxy ? PROXY_CACHE_TTL : CLIENT_CACHE_TTL;
+    if (now - entry.fetchedAt > ttl * 2) userClientCache.delete(key);
+  }
+}, 10 * 60 * 1000).unref();
 
 /**
  * Returns { client, model, isCustom } for a user.
@@ -1095,10 +1106,10 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const visitorId = `${contextKey}:${userId}`;
 
   // Persistent sessionId per zone (chains AIChats together)
+  // Uses crypto.randomUUID() (sync) to avoid race condition between check and set
   if (!runChat._sessions) runChat._sessions = new Map();
   if (!runChat._sessions.has(visitorId)) {
-    const { v4: uuidv4 } = await import("uuid");
-    runChat._sessions.set(visitorId, uuidv4());
+    runChat._sessions.set(visitorId, crypto.randomUUID());
   }
   const sessionId = runChat._sessions.get(visitorId);
 
