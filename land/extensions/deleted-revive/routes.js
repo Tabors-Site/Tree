@@ -14,7 +14,6 @@ import User from "../../db/models/user.js";
 export default function createRouter(core) {
   const router = express.Router();
 
-  // GET /user/:userId/deleted
   router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
@@ -42,7 +41,6 @@ export default function createRouter(core) {
     }
   });
 
-  // POST /user/:userId/deleted/:nodeId/revive
   router.post("/user/:userId/deleted/:nodeId/revive", authenticate, async (req, res) => {
     try {
       const { userId, nodeId } = req.params;
@@ -75,7 +73,6 @@ export default function createRouter(core) {
     }
   });
 
-  // POST /user/:userId/deleted/:nodeId/reviveAsRoot
   router.post("/user/:userId/deleted/:nodeId/reviveAsRoot", authenticate, async (req, res) => {
     try {
       const { userId, nodeId } = req.params;

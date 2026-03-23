@@ -22,12 +22,20 @@ import treeLibrarian from "./tree/librarian.js";
 // ─────────────────────────────────────────────────────────────────────────
 // BIG MODES
 // ─────────────────────────────────────────────────────────────────────────
+// Core bigModes (always available)
 export const BIG_MODES = {
   LAND: "land",
   HOME: "home",
   TREE: "tree",
-  RAW_IDEA: "rawIdea",
 };
+
+/**
+ * Register a custom bigMode from an extension.
+ * e.g. raw-ideas extension registers RAW_IDEA.
+ */
+export function registerBigMode(key, value) {
+  BIG_MODES[key] = value;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODE DEFINITIONS

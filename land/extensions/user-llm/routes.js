@@ -12,7 +12,6 @@ import {
 
 const router = express.Router();
 
-// List all custom LLM connections
 router.get("/user/:userId/custom-llm", authenticate, async (req, res) => {
   try {
     const connections = await getConnectionsForUser(req.params.userId);
@@ -22,7 +21,6 @@ router.get("/user/:userId/custom-llm", authenticate, async (req, res) => {
   }
 });
 
-// Assign a connection to a user-level slot
 router.post("/user/:userId/llm-assign", authenticate, async (req, res) => {
   try {
     const { slot, connectionId } = req.body;
@@ -39,7 +37,6 @@ router.post("/user/:userId/llm-assign", authenticate, async (req, res) => {
   }
 });
 
-// Add a new connection
 router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
   try {
     const { name, baseUrl, apiKey, model } = req.body;
@@ -55,7 +52,6 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
       model,
     });
 
-    // Auto-assign as profile chat if none is set
     try {
       const user = await User.findById(req.params.userId)
         .select("llmDefault metadata")
@@ -75,7 +71,6 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
   }
 });
 
-// Update a connection
 router.put(
   "/user/:userId/custom-llm/:connectionId",
   authenticate,
@@ -100,7 +95,6 @@ router.put(
   },
 );
 
-// Delete a connection
 router.delete(
   "/user/:userId/custom-llm/:connectionId",
   authenticate,

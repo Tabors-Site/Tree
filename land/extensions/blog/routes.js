@@ -7,7 +7,6 @@ export default function createRouter(core) {
   const { User } = core.models;
   const router = express.Router();
 
-  // List all published posts (summary only)
   router.get("/blog/posts", async (req, res) => {
     try {
       const posts = await BlogPost.find({ published: true })
@@ -21,7 +20,6 @@ export default function createRouter(core) {
     }
   });
 
-  // Get single post by slug
   router.get("/blog/posts/:slug", async (req, res) => {
     try {
       const post = await BlogPost.findOne({
@@ -36,7 +34,6 @@ export default function createRouter(core) {
     }
   });
 
-  // Create a blog post (god plan only)
   router.post("/blog/posts", authenticate, async (req, res) => {
     try {
       const user = await User.findById(req.userId)
@@ -74,7 +71,6 @@ export default function createRouter(core) {
     }
   });
 
-  // Update a blog post by slug (god plan only)
   router.put("/blog/posts/:slug", authenticate, async (req, res) => {
     try {
       const user = await User.findById(req.userId).select("profileType").lean();
@@ -106,7 +102,6 @@ export default function createRouter(core) {
     }
   });
 
-  // Delete a blog post by slug (god plan only)
   router.delete("/blog/posts/:slug", authenticate, async (req, res) => {
     try {
       const user = await User.findById(req.userId).select("profileType").lean();

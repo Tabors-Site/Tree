@@ -2,9 +2,6 @@ import { setFormatter, setLogLevel, getLogLevel } from "../../core/log.js";
 import express from "express";
 import authenticate from "../../middleware/authenticate.js";
 
-const LEVEL_LABELS = { 1: "INFO", 2: "VERBOSE", 3: "DEBUG", warn: "WARN", error: "ERROR" };
-
-// Muted dim gray for timestamps and low-priority info
 const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
@@ -57,7 +54,6 @@ function formatter(level, tag, message, ...args) {
 
 const router = express.Router();
 
-// POST /land/log-level - change level at runtime
 router.post("/land/log-level", authenticate, async (req, res) => {
   try {
     const level = parseInt(req.body.level, 10);
@@ -71,7 +67,6 @@ router.post("/land/log-level", authenticate, async (req, res) => {
   }
 });
 
-// GET /land/log-level - check current level
 router.get("/land/log-level", authenticate, async (req, res) => {
   res.json({ level: getLogLevel(), labels: { 1: "info", 2: "verbose", 3: "debug" } });
 });
