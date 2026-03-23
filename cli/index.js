@@ -88,22 +88,28 @@ program
         cmdMap[c.name()] = c;
       });
 
-      let out = `Usage: ${helper.commandUsage(cmd)}\n\n`;
-      out += `What is Tree?\n`;
-      out += `  A living structure for everything you're building, thinking, and tracking.\n`;
-      out += `  Organize knowledge into trees of nodes, each with history, AI context,\n`;
-      out += `  goals, and values. Navigate and manage your trees from the terminal.\n\n`;
-      out += `  https://treeOS.ai/about\n\n`;
-      out += `  Docs:\n`;
-      out += `    Getting Started    https://treeOS.ai/about/gettingstarted\n`;
-      out += `    Raw Ideas          https://treeOS.ai/about/raw-ideas\n`;
-      out += `    Energy System      https://treeOS.ai/about/energy\n`;
-      out += `    Tree Dreams        https://treeOS.ai/about/dreams\n`;
-      out += `    CLI                https://treeOS.ai/about/cli\n`;
-      out += `    Gateway            https://treeOS.ai/about/gateway\n`;
-      out += `    API Reference      https://treeOS.ai/about/api\n`;
-      out += `    Extensions          https://treeOS.ai/about/extensions\n`;
-      out += `    Blog               https://treeOS.ai/blog\n\n`;
+      // Dynamic land info header
+      const cfg = load();
+      const landUrl = cfg.landUrl || cfg.remoteDomain || null;
+      const username = cfg.username || null;
+      const extCount = cfg.landProtocol?.extensions?.length || 0;
+      const treeName = cfg.activeRootName || null;
+
+      let out = "";
+
+      if (landUrl) {
+        out += `Land: ${landUrl}`;
+        if (username) out += `  User: ${username}`;
+        if (extCount) out += `  Extensions: ${extCount}`;
+        out += "\n";
+        if (treeName) out += `Tree: ${treeName}\n`;
+        out += `Run 'ext list' for loaded extensions, 'ext search' for registry.\n`;
+        out += "\n";
+      } else {
+        out += `TreeOS CLI v${version}\n`;
+        out += `Not connected. Run: treeos connect <url>\n`;
+        out += `Docs: https://treeos.ai/guide\n\n`;
+      }
 
       const fmtUsage = (c) => {
         return (c.name() + " " + c.usage()).replace(/ \[options\]/g, "").trim();
