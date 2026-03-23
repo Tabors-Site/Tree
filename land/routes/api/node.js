@@ -564,11 +564,11 @@ router.get("/node/:nodeId/tools", async (req, res) => {
       cursor = n.parent;
     }
 
-    // Get base mode tools (from default tree mode)
+    // Get all registered tools (core + extension)
     let baseTools = [];
     try {
-      const { getToolsForMode } = await import("../../ws/modes/registry.js");
-      baseTools = getToolsForMode("tree:respond").map(t => t.function?.name || t.name).filter(Boolean);
+      const TOOL_DEFS = (await import("../../ws/tools.js")).default;
+      baseTools = Object.keys(TOOL_DEFS);
     } catch {}
 
     // Merge: base + allowed - blocked
