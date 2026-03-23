@@ -67,7 +67,7 @@ export async function registerWithDirectory() {
     const data = await res.json();
 
     if (data.success) {
-      console.log(`[Land] Registered with directory at ${DIRECTORY_URL}`);
+      log.verbose("Canopy", `Registered with directory at ${DIRECTORY_URL}`);
     } else {
       log.error("Canopy", `[Land] Directory registration failed: ${data.error}`);
     }
