@@ -43,7 +43,16 @@ const MODE_TIMEOUTS = {}; // modeKey -> ms
 
 export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
 export function registerModeTimeout(modeKey, ms) { MODE_TIMEOUTS[modeKey] = ms; }
-function getTimeoutForMode(modeKey) { return MODE_TIMEOUTS[modeKey] || LLM_TIMEOUT_MS; }
+function getTimeoutForMode(modeKey, nodeMetadata = null) {
+  // Per-node override
+  const meta = nodeMetadata instanceof Map ? Object.fromEntries(nodeMetadata) : (nodeMetadata || {});
+  const nodeTimeout = meta.timeouts?.[modeKey];
+  if (nodeTimeout && Number.isFinite(nodeTimeout)) return nodeTimeout;
+  // Per-mode (extension registered)
+  if (MODE_TIMEOUTS[modeKey]) return MODE_TIMEOUTS[modeKey];
+  // Land default
+  return LLM_TIMEOUT_MS;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // ENCRYPTION HELPERS (must match whatever you use when saving)
