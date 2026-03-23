@@ -38,7 +38,7 @@ const MAX_TOOL_ITERATIONS = 15;
 
 // LLM call timeout (ms). Configurable via land config "llmTimeout".
 // Default 5 minutes. Extensions can override per-mode via registerModeTimeout().
-let LLM_TIMEOUT_MS = 5 * 60 * 1000;
+let LLM_TIMEOUT_MS = 15 * 60 * 1000;
 const MODE_TIMEOUTS = {}; // modeKey -> ms
 
 export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
