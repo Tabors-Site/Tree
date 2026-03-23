@@ -9,8 +9,8 @@ import {
   glassCardStyles,
   emptyStateStyles,
   responsiveBase,
-} from "./baseStyles.js";
-import { esc, actionColorClass } from "./utils.js";
+} from "../../../shared/html/baseStyles.js";
+import { esc, actionColorClass } from "../../../shared/html/utils.js";
 
 const link = (id, queryString) =>
   id

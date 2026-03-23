@@ -69,7 +69,7 @@ async function getAIChats({
       .populate({
         path: "contributions",
         select:
-          "_id action nodeId nodeVersion wasAi energyUsed date understandingMeta",
+          "_id action nodeId nodeVersion wasAi energyUsed date extensionData",
         populate: { path: "nodeId", select: "name" },
       })
       .populate({
@@ -248,7 +248,7 @@ async function getNodeAIChats({
       .populate({
         path: "contributions",
         select:
-          "_id action nodeId nodeVersion wasAi energyUsed date understandingMeta",
+          "_id action nodeId nodeVersion wasAi energyUsed date extensionData",
         populate: { path: "nodeId", select: "name" },
       })
       .populate({

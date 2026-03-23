@@ -2,7 +2,7 @@
 /* HTML renderers for node routes                                      */
 /* ------------------------------------------------------------------ */
 
-import { baseStyles, backNavStyles, glassHeaderStyles, emptyStateStyles, responsiveBase } from "./baseStyles.js";
+import { baseStyles, backNavStyles, glassHeaderStyles, emptyStateStyles, responsiveBase } from "../../../shared/html/baseStyles.js";
 import {
   esc,
   truncate,
@@ -13,7 +13,7 @@ import {
   actionLabel,
   actionColorHex,
   groupIntoChains,
-} from "./utils.js";
+} from "../../../shared/html/utils.js";
 
 const linkifyNodeIds = (html, token) =>
   html.replace(

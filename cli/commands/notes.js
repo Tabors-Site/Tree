@@ -301,11 +301,11 @@ module.exports = (program) => {
         if (item.contentType === "file") {
           const rawPath = item.content || "";
           const filePath = rawPath.startsWith("/") ? rawPath : `/api/v1/uploads/${rawPath}`;
-          const base = (api.baseUrl || "").replace(/\/+$/, "");
-          const url = `${base}${filePath}`;
-          const res = await fetch(url, { headers: { "x-api-key": api.apiKey } });
+          const landUrl = (cfg.landUrl || "https://treeos.ai").replace(/\/+$/, "");
+          const url = `${landUrl}${filePath}`;
+          const res = await fetch(url, { headers: api._authHeaders() });
           if (!res.ok) return console.log(chalk.red("Failed to download file"));
-          const outPath = opts.output || item.content;
+          const outPath = opts.output || path.basename(item.content);
           const buffer = Buffer.from(await res.arrayBuffer());
           fs.writeFileSync(outPath, buffer);
           console.log(chalk.green(`Downloaded: ${outPath} (${buffer.length} bytes)`));

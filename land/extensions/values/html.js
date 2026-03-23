@@ -2,7 +2,7 @@
 /* HTML renderer for values page                      */
 /* ------------------------------------------------- */
 
-import { baseStyles } from "../html-rendering/html/baseStyles.js";
+import { baseStyles } from "../../shared/html/baseStyles.js";
 
 function isAutoKey(key) {
   return key.startsWith("_auto__");

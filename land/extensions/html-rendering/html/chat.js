@@ -3,8 +3,8 @@
 /* ─────────────────────────────────────────────── */
 
 import { getLandUrl } from "../../../canopy/identity.js";
-import { baseStyles } from "./baseStyles.js";
-import { escapeHtml } from "./utils.js";
+import { baseStyles } from "../../../shared/html/baseStyles.js";
+import { escapeHtml } from "../../../shared/html/utils.js";
 
 export function renderChat({ username, userId, treesJSON, trees }) {
   return `<!DOCTYPE html>

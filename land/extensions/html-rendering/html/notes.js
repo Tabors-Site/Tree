@@ -4,8 +4,8 @@
 
 import mime from "mime-types";
 import { getLandUrl } from "../../../canopy/identity.js";
-import { baseStyles, backNavStyles } from "./baseStyles.js";
-import { escapeHtml, renderMedia } from "./utils.js";
+import { baseStyles, backNavStyles } from "../../../shared/html/baseStyles.js";
+import { escapeHtml, renderMedia } from "../../../shared/html/utils.js";
 
 function renderBookNode(node, depth, token, version) {
   const level = Math.min(depth, 5);

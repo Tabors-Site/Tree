@@ -1,4 +1,4 @@
-import { baseStyles } from "./baseStyles.js";
+import { baseStyles } from "../../../shared/html/baseStyles.js";
 
 export function errorHtml(status, title, message) {
   return `<!DOCTYPE html>
