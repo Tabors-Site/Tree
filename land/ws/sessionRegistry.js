@@ -75,8 +75,21 @@ export function setSessionTTL(ms) { DEFAULT_SCOPE_TTL = ms; }
  * @param {number}  [opts.idleTTL]   - ms before a scoped session expires (default 15 min)
  * @returns {{ sessionId: string, reused: boolean, isActiveNavigator: boolean }}
  */
+let MAX_SESSIONS = 10000;
+export function setMaxSessions(n) { MAX_SESSIONS = n; }
+
 export function createSession({ userId, type, scopeKey, description = "", meta = {}, idleTTL = DEFAULT_SCOPE_TTL }) {
   const now = Date.now();
+
+  // Land-level session cap
+  if (sessions.size >= MAX_SESSIONS) {
+    // Evict oldest session before creating new one
+    let oldestKey = null, oldestTime = Infinity;
+    for (const [id, s] of sessions) {
+      if (s.lastActivity < oldestTime) { oldestTime = s.lastActivity; oldestKey = id; }
+    }
+    if (oldestKey) endSession(oldestKey);
+  }
 
   // If scopeKey provided, try to reuse an existing scoped session
   if (scopeKey) {

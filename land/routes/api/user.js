@@ -7,8 +7,8 @@ import User from "../../db/models/user.js";
 import { getEnergy, getUserMeta } from "../../core/tree/userMetadata.js";
 
 // Energy: dynamic import, no-op if extension not installed
-let maybeResetEnergy = () => false;
-try { ({ maybeResetEnergy } = await import("../../extensions/energy/core.js")); } catch {}
+import { getExtension } from "../../extensions/loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 import { createNewNode } from "../../core/tree/treeManagement.js";
 
@@ -17,15 +17,6 @@ import {
   respondToInvite,
 } from "../../core/tree/invites.js";
 
-import {
-  renderUserProfile,
-  renderResetPasswordExpired,
-  renderResetPasswordForm,
-  renderResetPasswordMismatch,
-  renderResetPasswordInvalid,
-  renderResetPasswordSuccess,
-  renderInvites,
-} from "./html/user.js";
 
 const router = express.Router();
 
@@ -58,7 +49,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    maybeResetEnergy(user);
+    (getExtension("energy")?.exports?.maybeResetEnergy || (() => false))(user);
 
     const roots = user.roots || [];
     const profileType = user.profileType || "basic";
@@ -97,7 +88,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       : "—";
 
     return res.send(
-      renderUserProfile({
+      html().renderUserProfile({
         userId,
         user,
         roots,
@@ -129,10 +120,10 @@ router.get("/user/reset-password/:token", async (req, res) => {
     });
 
     if (!user) {
-      return res.send(renderResetPasswordExpired());
+      return res.send(html().renderResetPasswordExpired());
     }
 
-    return res.send(renderResetPasswordForm({ token }));
+    return res.send(html().renderResetPasswordForm({ token }));
   } catch (err) {
     log.error("API", "Error loading reset password page:", err);
     res.status(500).send("Server error");
@@ -148,7 +139,7 @@ router.post("/user/reset-password/:token", async (req, res) => {
     const { password, confirm } = req.body;
 
     if (password !== confirm) {
-      return res.send(renderResetPasswordMismatch({ token }));
+      return res.send(html().renderResetPasswordMismatch({ token }));
     }
 
     const user = await User.findOne({
@@ -157,7 +148,7 @@ router.post("/user/reset-password/:token", async (req, res) => {
     });
 
     if (!user) {
-      return res.send(renderResetPasswordInvalid());
+      return res.send(html().renderResetPasswordInvalid());
     }
 
     user.password = password;
@@ -169,7 +160,7 @@ router.post("/user/reset-password/:token", async (req, res) => {
 
     await user.save();
 
-    return res.send(renderResetPasswordSuccess());
+    return res.send(html().renderResetPasswordSuccess());
   } catch (err) {
     log.error("API", "Error resetting password:", err);
     res.status(500).send("Server error");
@@ -249,7 +240,7 @@ router.get("/user/:userId/invites", urlAuth, async (req, res) => {
     const token = req.query.token ?? "";
     const tokenQS = token ? `?token=${token}&html` : `?html`;
 
-    return res.send(renderInvites({ userId, invites, token }));
+    return res.send(html().renderInvites({ userId, invites, token }));
   } catch (err) {
     log.error("API", "invites page error:", err);
     res.status(500).json({ error: err.message });

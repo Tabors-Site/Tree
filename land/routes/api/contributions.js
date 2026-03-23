@@ -4,7 +4,8 @@ import urlAuth from "../../middleware/urlAuth.js";
 import { getContributions } from "../../core/tree/contributions.js";
 import getNodeName from "./helpers/getNameById.js";
 import { resolveVersion } from "../../core/tree/treeFetch.js";
-import { renderContributions } from "./html/contributions.js";
+import { getExtension } from "../../extensions/loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ router.get(
       const contributions = result.contributions || [];
 
       return res.send(
-        renderContributions({
+        html().renderContributions({
           nodeId,
           version: parsedVersion,
           nodeName,

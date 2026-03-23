@@ -1,6 +1,6 @@
 import router from "./routes.js";
 import tools from "./tools.js";
-import { setEnergyService, updateSchedule } from "./core.js";
+import { setEnergyService, updateSchedule, getCalendar } from "./core.js";
 
 export async function init(core) {
   if (core.energy) setEnergyService(core.energy);
@@ -12,6 +12,6 @@ export async function init(core) {
   return {
     router,
     tools,
-    exports: { updateSchedule },
+    exports: { updateSchedule, getCalendar },
   };
 }

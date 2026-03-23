@@ -46,6 +46,7 @@ export function onListen() {
         carryMessages:           { load: () => import("./ws/modes/registry.js").then(m => m.setCarryMessages) },
         sessionTTL:              { load: () => import("./ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
         staleSessionTimeout:     { load: () => import("./ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
+        maxSessions:             { load: () => import("./ws/sessionRegistry.js").then(m => m.setMaxSessions) },
       };
 
       for (const [key, cfg] of Object.entries(KERNEL_CONFIG)) {

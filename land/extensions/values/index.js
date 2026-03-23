@@ -1,6 +1,6 @@
 import router from "./routes.js";
 import getTools from "./tools.js";
-import { setEnergyService, setValueForNode, setGoalForNode } from "./core.js";
+import { setEnergyService, setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat } from "./core.js";
 
 export async function init(core) {
   if (core.energy) setEnergyService(core.energy);
@@ -14,6 +14,6 @@ export async function init(core) {
   return {
     router,
     tools: getTools(),
-    exports: { setValueForNode, setGoalForNode },
+    exports: { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat },
   };
 }

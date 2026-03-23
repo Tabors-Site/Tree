@@ -16,11 +16,8 @@ import User from "../../db/models/user.js";
 import { resolveVersion, buildPathString } from "../../core/tree/treeFetch.js";
 import { getNodeAIChats } from "../../core/llms/aichat.js";
 
-import {
-  renderNodeChats,
-  renderNodeDetail,
-  renderVersionDetail,
-} from "./html/node.js";
+import { getExtension } from "../../extensions/loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
 
@@ -112,7 +109,7 @@ router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
     const nodePath = await buildPathString(nodeId);
 
     return res.send(
-      renderNodeChats({
+      html().renderNodeChats({
         nodeId,
         nodeName,
         nodePath,
@@ -377,7 +374,7 @@ router.get("/node/:nodeId", urlAuth, async (req, res) => {
     const rootUrl = `/api/v1/root/${nodeId}${qs}`;
 
     return res.send(
-      renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPublicAccess: !!req.isPublicAccess }),
+      html().renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPublicAccess: !!req.isPublicAccess }),
     );
   } catch (err) {
     log.error("API", "Error fetching node:", err);
@@ -452,7 +449,7 @@ router.get("/node/:nodeId/:version", urlAuth, async (req, res) => {
       data.reeffectTime !== undefined ? data.reeffectTime : "<em>None</em>";
 
     return res.send(
-      renderVersionDetail({
+      html().renderVersionDetail({
         node,
         nodeId,
         version: v,
