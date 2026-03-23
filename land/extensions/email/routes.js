@@ -10,7 +10,7 @@ import rateLimit from "express-rate-limit";
 
 let renderForgotPasswordPage;
 try {
-  ({ renderForgotPasswordPage } = await import("../../core/login.js"));
+  ({ renderForgotPasswordPage } = await import("../html-rendering/pages.js"));
 } catch {}
 
 const JWT_SECRET = process.env.JWT_SECRET;

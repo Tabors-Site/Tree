@@ -1,4 +1,4 @@
-import { getLandUrl } from "../canopy/identity.js";
+import { getLandUrl } from "../../../canopy/identity.js";
 
 export function renderLoginPage(req, res) {
   const redirect = req.query.redirect || "";

@@ -1,0 +1,12127 @@
+/* ─────────────────────────────────────────────── */
+/* HTML renderers for user routes                  */
+/* ─────────────────────────────────────────────── */
+
+import path from "path";
+import mime from "mime-types";
+import { getLandUrl } from "../../../canopy/identity.js";
+import { getRawIdeaAutoPlace } from "../../../core/tree/userMetadata.js";
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function renderMedia(fileUrl, mimeType) {
+  if (mimeType.startsWith("image/")) {
+    return `<img src="${fileUrl}" style="max-width:100%;" />`;
+  }
+  if (mimeType.startsWith("video/")) {
+    return `<video src="${fileUrl}" controls style="max-width:100%;"></video>`;
+  }
+  if (mimeType.startsWith("audio/")) {
+    return `<audio src="${fileUrl}" controls></audio>`;
+  }
+  if (mimeType === "application/pdf") {
+    return `<iframe src="${fileUrl}" style="width:100%; height:90vh; border:none;"></iframe>`;
+  }
+  return ``;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// 1. Profile Page - GET /user/:userId
+// ═══════════════════════════════════════════════════════════════════
+export function renderUserProfile({ userId, user, roots, profileType, energy, extraEnergy, queryString, resetTimeLabel, storageUsedKB }) {
+  const safeUsername = escapeHtml(user.username);
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-visual">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>@${safeUsername} — Profile</title>
+  <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 20px;
+      color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+    html {
+      background: #736fe6;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      height: 100%;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Glass Card Base */
+    .glass-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out both;
+    }
+
+    /* Header Section */
+    .header {
+      animation-delay: 0.1s;
+    }
+
+    .user-info h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 16px;
+      letter-spacing: -0.5px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .user-info h1::before {
+      content: '👤 ';
+      font-size: 28px;
+    }
+
+    /* User Meta Info */
+    .user-meta {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+.send-button.loading {
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.send-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.25),
+    rgba(255,255,255,0.6),
+    rgba(255,255,255,0.25)
+  );
+  transition: width 0.2s ease;
+  pointer-events: none;
+}
+
+    .plan-badge {
+      padding: 8px 16px;
+      border-radius: 980px;
+      font-weight: 600;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #667eea;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+.plan-basic {
+  background: rgba(255, 255, 255, 0.9);
+  color: #64748b;
+}
+
+/* STANDARD */
+.plan-standard {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  color: white;
+}
+
+/* PREMIUM */
+.plan-premium {
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  color: white;
+}
+
+/* GOD ✨ */
+.plan-god {
+  background: linear-gradient(
+    135deg,
+    #facc15,
+    #f59e0b,
+    #eab308
+  );
+  color: #3a2e00;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 0 20px rgba(250, 204, 21, 0.6),
+    0 6px 24px rgba(234, 179, 8, 0.5);
+  border: 1px solid rgba(255, 215, 0, 0.9);
+}
+    .meta-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 980px;
+      font-size: 13px;
+      font-weight: 500;
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .storage-toggle-btn {
+      padding: 2px 8px;
+      margin-left: 4px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.2);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: white;
+    }
+
+    .storage-toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.05);
+    }
+
+    .logout-btn {
+      padding: 8px 16px;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(239, 68, 68, 0.3);
+      backdrop-filter: blur(10px);
+      color: white;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+    }
+
+    .logout-btn:hover {
+      background: rgba(239, 68, 68, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
+    }
+
+    .header { position: relative; }
+
+    .basic-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      padding: 8px 16px;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(16, 185, 129, 0.3);
+      backdrop-filter: blur(10px);
+      color: white;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+      text-decoration: none;
+    }
+
+    .basic-btn:hover {
+      background: rgba(16, 185, 129, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+    }
+
+    /* User ID */
+    .user-id-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 10px;
+      margin-top: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .user-id-container code {
+      flex: 1;
+      background: transparent;
+      padding: 0;
+      font-size: 13px;
+      font-family: 'SF Mono', Monaco, monospace;
+      color: white;
+      font-weight: 600;
+      word-break: break-all;
+    }
+
+    #copyNodeIdBtn {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 16px;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    #copyNodeIdBtn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.1);
+    }
+
+    /* Raw Ideas Capture - Enhanced with glow */
+    .raw-ideas-section {
+      animation-delay: 0.2s;
+      box-shadow: 
+        0 20px 60px rgba(16, 185, 129, 0.3),
+        0 0 40px rgba(16, 185, 129, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+
+    .raw-ideas-section::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(
+        circle,
+        rgba(16, 185, 129, 0.15) 0%,
+        transparent 70%
+      );
+      animation: pulse 8s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 0.5;
+      }
+      50% {
+        transform: scale(1.1) rotate(180deg);
+        opacity: 0.8;
+      }
+    }
+
+    .raw-ideas-section h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 1;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2),
+        0 0 20px rgba(16, 185, 129, 0.4);
+    }
+
+    .raw-ideas-section h2::before {
+      content: '💡 ';
+      font-size: 20px;
+    }
+
+    .raw-idea-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    #rawIdeaInput {
+      width: 100%;
+      padding: 16px 20px;
+      font-size: 16px;
+      line-height: 1.6;
+      border-radius: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      font-family: inherit;
+      resize: vertical;
+      min-height: 80px;
+      max-height: 400px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 
+        0 4px 20px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      color: #5044c9;
+      font-weight: 600;
+      text-shadow: 
+        0 0 12px rgba(102, 126, 234, 0.7),
+        0 0 20px rgba(102, 126, 234, 0.4),
+        0 1px 3px rgba(255, 255, 255, 1),
+        0 2px 8px rgba(80, 68, 201, 0.5);
+      letter-spacing: 0.3px;
+    }
+
+    #rawIdeaInput:focus {
+      outline: none;
+      border-color: rgba(102, 126, 234, 0.6);
+      backdrop-filter: blur(28px) saturate(170%);
+      -webkit-backdrop-filter: blur(28px) saturate(170%);
+      box-shadow: 
+        0 0 0 4px rgba(102, 126, 234, 0.25),
+        0 0 40px rgba(102, 126, 234, 0.5),
+        0 8px 30px rgba(102, 126, 234, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      transform: translateY(-2px);
+    }
+    
+    #rawIdeaInput:focus::placeholder {
+      color: rgba(80, 68, 201, 0.4);
+    }
+
+    #rawIdeaInput::placeholder {
+      color: rgba(80, 68, 201, 0.4);
+      font-weight: 400;
+      text-shadow: 0 0 6px rgba(102, 126, 234, 0.25);
+    }
+
+    #rawIdeaInput:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      background: rgba(255, 255, 255, 0.1);
+      transform: none;
+    }
+
+    #rawIdeaInput:disabled::placeholder {
+      color: rgba(80, 68, 201, 0.25);
+    }
+
+    /* Character counter */
+    .char-counter {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      margin-top: -8px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .char-counter.warning {
+      color: rgba(255, 193, 7, 0.9);
+    }
+
+    .char-counter.danger {
+      color: rgba(239, 68, 68, 0.9);
+      font-weight: 600;
+    }
+
+    .char-counter.disabled {
+      opacity: 0.4;
+    }
+
+    /* Energy display */
+    .energy-display {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 10px;
+      padding: 2px 8px;
+      background: rgba(255, 215, 79, 0.2);
+      border: 1px solid rgba(255, 215, 79, 0.3);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255, 215, 79, 1);
+      transition: all 0.2s;
+    }
+
+    .energy-display:empty {
+      display: none;
+    }
+
+    .energy-display.file-energy {
+      background: rgba(255, 220, 100, 0.9);
+      border-color: rgba(255, 200, 50, 1);
+      color: #1a1a1a;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 12px;
+      box-shadow: 0 2px 8px rgba(255, 200, 50, 0.4);
+    }
+
+    /* File selected badge */
+    .file-selected-badge {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      color: white;
+    }
+
+    .file-selected-badge.visible {
+      display: inline-flex;
+    }
+
+    .file-selected-badge .file-name {
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-selected-badge .clear-file {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 10px;
+      color: white;
+      transition: all 0.2s;
+    }
+
+    .file-selected-badge .clear-file:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .file-input-wrapper {
+      flex: 1;
+      min-width: 180px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type="file"] {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.9);
+      cursor: pointer;
+    }
+
+    input[type="file"]::file-selector-button {
+      padding: 8px 16px;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+      margin-right: 10px;
+    }
+
+    input[type="file"]::file-selector-button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+
+    input[type="file"].hidden-input {
+      display: none;
+    }
+
+    .send-button {
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 980px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(16, 185, 129, 0.9);
+      backdrop-filter: blur(10px);
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+      white-space: nowrap;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .send-button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .send-button:hover {
+      background: rgba(16, 185, 129, 1);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.5);
+    }
+
+    .send-button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Navigation Section */
+    .nav-section {
+      animation-delay: 0.3s;
+    }
+
+    .nav-section h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 20px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .nav-links {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .nav-links a {
+      display: block;
+      padding: 14px 18px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 980px;
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.3s;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .nav-links a::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: linear-gradient(
+        120deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.25),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-100%);
+      transition: opacity 0.3s, transform 0.6s;
+    }
+
+    .nav-links a:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .nav-links a:hover::before {
+      opacity: 1;
+      transform: translateX(100%);
+    }
+
+    /* Roots Section */
+    .roots-section {
+      animation-delay: 0.4s;
+    }
+
+    .roots-section h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 20px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .roots-section h2::before {
+      content: '🌳 ';
+      font-size: 20px;
+    }
+
+    .roots-list {
+      list-style: none;
+      margin-bottom: 24px;
+    }
+
+    .roots-list li {
+      margin-bottom: 10px;
+    }
+
+    .roots-list a {
+      display: block;
+      padding: 14px 18px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      color: white;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 15px;
+      transition: all 0.3s;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .roots-list a::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: linear-gradient(
+        120deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.25),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-100%);
+      transition: opacity 0.3s, transform 0.6s;
+    }
+
+    .roots-list a:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .roots-list a:hover::before {
+      opacity: 1;
+      transform: translateX(100%);
+    }
+
+    .roots-list em {
+      color: rgba(255, 255, 255, 0.7);
+      font-style: italic;
+      display: block;
+      padding: 20px;
+      text-align: center;
+    }
+
+    /* Create Root Form */
+    .create-root-form {
+      display: flex;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .create-root-form input[type="text"] {
+      flex: 1;
+      padding: 14px 18px;
+      font-size: 15px;
+      border-radius: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.9);
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .create-root-form input[type="text"]:focus {
+      outline: none;
+      border-color: white;
+      background: white;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2),
+        0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .create-root-button {
+      padding: 14px 20px;
+      font-size: 24px;
+      line-height: 1;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: 300;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .create-root-button::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .create-root-button:hover {
+      background: rgba(255, 255, 255, 0.35);
+      transform: scale(1.05) translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .create-root-button:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .glass-card {
+        padding: 24px 20px;
+      }
+
+      .user-info h1 {
+        font-size: 28px;
+      }
+
+      .user-meta {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .meta-item,
+      .plan-badge,
+      .logout-btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .file-input-wrapper {
+        order: 2;
+        min-width: auto;
+      }
+
+      .send-button {
+        order: 1;
+        width: 100%;
+      }
+
+      .nav-links {
+        grid-template-columns: 1fr;
+      }
+
+      .create-root-form {
+        flex-direction: column;
+      }
+
+      .create-root-button {
+        width: 100%;
+      }
+
+      .user-id-container code {
+        font-size: 11px;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 750px;
+      }
+
+      .nav-links {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+      a {
+text-decoration: none;
+        color: inherit;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="glass-card header">
+      <a href="/chat" target="_top" class="basic-btn">Back to Basic Chat</a>
+      <div class="user-info">
+       <a href="/api/v1/user/${userId}/energy${queryString}">
+        <h1>@${safeUsername}</h1> </a>
+
+        <div class="user-meta">
+   <a href="/api/v1/user/${userId}/energy${queryString}">
+  <span class="plan-badge plan-${profileType}">
+  ${profileType === "god" ? "👑 " : ""}
+  ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Plan
+</span></a>
+
+          <span class="meta-item">
+            <a href="/api/v1/user/${userId}/energy${queryString}">⚡ ${(energy?.amount ?? 0) + (extraEnergy?.amount ?? 0)} · resets ${resetTimeLabel}
+</a>
+          </span>
+
+          <span class="meta-item">
+            💾 <span id="storageValue"></span>
+            <button
+              id="storageToggle"
+              class="storage-toggle-btn"
+              data-storage-kb="${storageUsedKB}"
+            >
+              MB
+            </button>
+            used
+          </span>
+
+          <button id="logoutBtn" class="logout-btn">
+            Log out
+          </button>
+        </div>
+
+        <div class="user-id-container">
+          <code id="nodeIdCode">${user._id}</code>
+          <button id="copyNodeIdBtn" title="Copy ID">📋</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Raw Ideas Capture -->
+    <div class="glass-card raw-ideas-section">
+      <h2>Capture a Raw Idea</h2>
+      <form
+        method="POST"
+        action="/api/v1/user/${userId}/raw-ideas${queryString}"
+        enctype="multipart/form-data"
+        class="raw-idea-form"
+        id="rawIdeaForm"
+      >
+        <textarea
+          name="content"
+          placeholder="What's on your mind?"
+          id="rawIdeaInput"
+          rows="1"
+          maxlength="5000"
+          autofocus
+        ></textarea>
+
+        <div class="char-counter" id="charCounter">
+          <span id="charCount">0</span> / 5000
+          <span class="energy-display" id="energyDisplay"></span>
+        </div>
+
+        <div class="form-actions">
+          <div class="file-input-wrapper">
+            <input type="file" name="file" id="fileInput" />
+            <div class="file-selected-badge" id="fileSelectedBadge">
+              <span>📎</span>
+              <span class="file-name" id="fileName"></span>
+              <button type="button" class="clear-file" id="clearFileBtn" title="Remove file">✕</button>
+            </div>
+          </div>
+          <button type="submit" class="send-button" title="Save raw idea" id="rawIdeaSendBtn">
+            <span class="send-label">Send</span>
+            <span class="send-progress"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Navigation Links -->
+    <div class="glass-card nav-section">
+      <h2>Quick Links</h2>
+      <ul class="nav-links">
+        <li><a href="/api/v1/user/${userId}/raw-ideas${queryString}">Raw Ideas</a></li>
+                <li><a href="/api/v1/user/${userId}/chats${queryString}">AI Chats</a></li>
+
+        <li><a href="/api/v1/user/${userId}/notes${queryString}">Notes</a></li>
+        <li><a href="/api/v1/user/${userId}/tags${queryString}">Mail</a></li>
+        <li><a href="/api/v1/user/${userId}/contributions${queryString}">Contributions</a></li>
+        <li><a href="/api/v1/user/${userId}/notifications${queryString}">Notifications</a></li>
+        <li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>
+        <li><a href="/api/v1/user/${userId}/deleted${queryString}">Deleted</a></li>
+        <li><a href="/api/v1/user/${userId}/api-keys${queryString}">API Keys</a></li>
+        <li><a href="/api/v1/user/${userId}/sharetoken${queryString}">Share Token</a></li>
+      </ul>
+    </div>
+
+    <!-- Roots Section -->
+    <div class="glass-card roots-section">
+      <h2>My Roots</h2>
+      ${
+        roots.length > 0
+          ? `
+        <ul class="roots-list">
+          ${roots
+            .map(
+              (r) => `
+            <li>
+              <a href="/api/v1/root/${r._id}${queryString}">
+                  ${escapeHtml(r.name || "Untitled")}
+              </a>
+            </li>
+          `,
+            )
+            .join("")}
+        </ul>
+      `
+          : `<ul class="roots-list"><li><em>No roots yet — create your first one below!</em></li></ul>`
+      }
+      
+      <form
+        method="POST"
+        action="/api/v1/user/${userId}/createRoot${queryString}"
+        class="create-root-form"
+      >
+        <input
+          type="text"
+          name="name"
+          placeholder="New root name..."
+          required
+        />
+        <button type="submit" class="create-root-button" title="Create root">
+          ＋
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Copy ID functionality
+    document.getElementById("copyNodeIdBtn").addEventListener("click", () => {
+      const code = document.getElementById("nodeIdCode");
+      const btn = document.getElementById("copyNodeIdBtn");
+      
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = "✔️";
+        setTimeout(() => (btn.textContent = "📋"), 1000);
+      });
+    });
+
+    // Storage toggle
+    (() => {
+      const toggleBtn = document.getElementById("storageToggle");
+      const valueEl = document.getElementById("storageValue");
+      const storageKB = Number(toggleBtn.dataset.storageKb || 0);
+      let unit = "MB";
+
+      function render() {
+        if (unit === "MB") {
+          const mb = storageKB / 1024;
+          valueEl.textContent = mb.toFixed(mb < 10 ? 2 : 1);
+          toggleBtn.textContent = "MB";
+        } else {
+          const gb = storageKB / (1024 * 1024);
+          valueEl.textContent = gb.toFixed(gb < 1 ? 3 : 2);
+          toggleBtn.textContent = "GB";
+        }
+      }
+
+      toggleBtn.addEventListener("click", () => {
+        unit = unit === "GB" ? "MB" : "GB";
+        render();
+      });
+
+      render();
+    })();
+
+    // Logout
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      try {
+        await fetch("/api/v1/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+        window.top.location.href = "/login";
+      } catch (err) {
+        console.error("Logout failed", err);
+        alert("Logout failed. Please try again.");
+      }
+    });
+
+    // Elements
+    const form = document.getElementById('rawIdeaForm');
+    const textarea = document.getElementById('rawIdeaInput');
+    const charCounter = document.getElementById('charCounter');
+    const charCount = document.getElementById('charCount');
+    const energyDisplay = document.getElementById('energyDisplay');
+    const fileInput = document.getElementById('fileInput');
+    const fileSelectedBadge = document.getElementById('fileSelectedBadge');
+    const fileName = document.getElementById('fileName');
+    const clearFileBtn = document.getElementById('clearFileBtn');
+    const sendBtn = document.getElementById('rawIdeaSendBtn');
+    const progressBar = sendBtn.querySelector('.send-progress');
+
+    const MAX_CHARS = 5000;
+    let hasFile = false;
+
+    // Auto-resize textarea
+    function autoResize() {
+      textarea.style.height = 'auto';
+      const maxHeight = 400;
+      const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+      textarea.style.height = newHeight + 'px';
+      textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+      updateCharCounter();
+    }
+    
+    textarea.addEventListener('input', autoResize);
+    autoResize();
+
+    // Character counter with energy (1 per 1000 chars)
+    function updateCharCounter() {
+      const len = textarea.value.length;
+      charCount.textContent = len;
+      
+      const remaining = MAX_CHARS - len;
+      charCounter.classList.remove('warning', 'danger', 'disabled');
+      
+      if (hasFile) {
+        charCounter.classList.add('disabled');
+      } else if (remaining <= 100) {
+        charCounter.classList.add('danger');
+      } else if (remaining <= 500) {
+        charCounter.classList.add('warning');
+      }
+      
+      // Energy cost: 1 per 1000 chars (minimum 1 if any text)
+      if (len > 0 && !hasFile) {
+        const cost = Math.max(1, Math.ceil(len / 1000));
+        energyDisplay.textContent = '⚡' + cost;
+        energyDisplay.classList.remove('file-energy');
+      } else if (!hasFile) {
+        energyDisplay.textContent = '';
+      }
+    }
+
+    // File energy calculation
+    const FILE_MIN_COST = 5;
+    const FILE_BASE_RATE = 1.5;
+    const FILE_MID_RATE = 3;
+    const SOFT_LIMIT_MB = 100;
+    const HARD_LIMIT_MB = 1024;
+
+    function calculateFileEnergy(sizeMB) {
+      if (sizeMB <= SOFT_LIMIT_MB) {
+        return Math.max(FILE_MIN_COST, Math.ceil(sizeMB * FILE_BASE_RATE));
+      }
+      if (sizeMB <= HARD_LIMIT_MB) {
+        const base = SOFT_LIMIT_MB * FILE_BASE_RATE;
+        const extra = (sizeMB - SOFT_LIMIT_MB) * FILE_MID_RATE;
+        return Math.ceil(base + extra);
+      }
+      const base = SOFT_LIMIT_MB * FILE_BASE_RATE + 
+                   (HARD_LIMIT_MB - SOFT_LIMIT_MB) * FILE_MID_RATE;
+      const overGB = sizeMB - HARD_LIMIT_MB;
+      return Math.ceil(base + Math.pow(overGB / 50, 2) * 50);
+    }
+
+    // File selection - blocks text input
+    fileInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) {
+        const file = this.files[0];
+        hasFile = true;
+        
+        // Disable textarea
+        textarea.disabled = true;
+        textarea.value = '';
+        textarea.placeholder = 'File selected - text disabled';
+        
+        // Show file badge, hide file input
+        fileInput.classList.add('hidden-input');
+        fileSelectedBadge.classList.add('visible');
+        
+        // Truncate filename
+        let displayName = file.name;
+        if (displayName.length > 20) {
+          displayName = displayName.substring(0, 17) + '...';
+        }
+        fileName.textContent = displayName;
+        fileSelectedBadge.title = file.name;
+        
+        // Calculate and show energy (+1 for the note itself)
+        const sizeMB = file.size / (1024 * 1024);
+        const fileCost = calculateFileEnergy(sizeMB);
+        const totalCost = fileCost + 1;
+        energyDisplay.textContent = '~⚡' + totalCost;
+        energyDisplay.classList.add('file-energy');
+        
+        updateCharCounter();
+      }
+    });
+
+    // Clear file selection
+    clearFileBtn.addEventListener('click', function() {
+      hasFile = false;
+      fileInput.value = '';
+      fileInput.classList.remove('hidden-input');
+      fileSelectedBadge.classList.remove('visible');
+      
+      textarea.disabled = false;
+      textarea.placeholder = "What's on your mind?";
+      
+      energyDisplay.textContent = '';
+      energyDisplay.classList.remove('file-energy');
+      
+      updateCharCounter();
+    });
+
+    // Submit with Enter (desktop only)
+    textarea.addEventListener("keydown", (e) => {
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (!isMobile && e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    // Form submission with progress + cancel
+    let activeXhr = null;
+
+    sendBtn.addEventListener('click', (e) => {
+      if (activeXhr) {
+        e.preventDefault();
+        activeXhr.abort();
+        activeXhr = null;
+        sendBtn.classList.remove('loading');
+        sendBtn.querySelector('.send-label').textContent = 'Send';
+        progressBar.style.width = '0%';
+        return;
+      }
+    });
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      sendBtn.classList.add('loading');
+      sendBtn.querySelector('.send-label').textContent = 'Cancel';
+      progressBar.style.width = '15%';
+
+      const formData = new FormData(form);
+      const xhr = new XMLHttpRequest();
+      activeXhr = xhr;
+
+      xhr.open('POST', form.action, true);
+
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        const realPercent = (e.loaded / e.total) * 100;
+        const lagged = Math.min(90, Math.round(realPercent * 0.8));
+        progressBar.style.width = lagged + '%';
+      };
+
+      xhr.onload = () => {
+        activeXhr = null;
+        if (xhr.status >= 200 && xhr.status < 300) {
+          progressBar.style.width = '100%';
+          setTimeout(() => document.location.reload(), 150);
+        } else {
+          fail();
+        }
+      };
+
+      xhr.onerror = fail;
+      xhr.onabort = () => {
+        activeXhr = null;
+      };
+
+      function fail() {
+        activeXhr = null;
+        var msg = 'Send failed';
+        try {
+          var body = JSON.parse(xhr.responseText);
+          if (body.error) msg = body.error;
+        } catch(e) {}
+        alert(msg);
+        sendBtn.classList.remove('loading');
+        sendBtn.querySelector('.send-label').textContent = 'Send';
+        progressBar.style.width = '0%';
+      }
+
+      xhr.send(formData);
+    });
+
+    // Form reset handler
+    form.addEventListener('reset', () => {
+      hasFile = false;
+      fileInput.classList.remove('hidden-input');
+      fileSelectedBadge.classList.remove('visible');
+      textarea.disabled = false;
+      textarea.placeholder = "What's on your mind?";
+      energyDisplay.textContent = '';
+      energyDisplay.classList.remove('file-energy');
+      charCount.textContent = '0';
+      charCounter.classList.remove('warning', 'danger', 'disabled');
+    });
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 2. Notes Page - GET /user/:userId/notes
+// ═══════════════════════════════════════════════════════════════════
+export function renderUserNotes({ userId, user, notes, processedNotes, query, token }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>${escapeHtml(user.username)} — Notes</title>
+  <style>
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Glass Header Section */
+.header {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header h1 a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 20px;
+  font-weight: 400;
+}
+
+/* Glass Search Form */
+.search-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-form input[type="text"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  font-size: 16px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.search-form input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.search-form input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15),
+    0 8px 30px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+}
+.notes-list {
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.note-card {
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.note-card:nth-child(1) { animation-delay: 0.25s; }
+.note-card:nth-child(2) { animation-delay: 0.3s; }
+.note-card:nth-child(3) { animation-delay: 0.35s; }
+.note-card:nth-child(4) { animation-delay: 0.4s; }
+.note-card:nth-child(5) { animation-delay: 0.45s; }
+.note-card:nth-child(n+6) { animation-delay: 0.5s; }
+.search-form button {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.search-form button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.search-form button:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.search-form button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Glass Notes List */
+.notes-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.note-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+}
+
+.note-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.note-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.note-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Card Actions (Edit + Delete buttons) */
+.card-actions {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.edit-button,
+.delete-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  color: white;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.8;
+  transition: all 0.3s;
+  text-decoration: none;
+}
+
+.edit-button:hover {
+  opacity: 1;
+  background: rgba(72, 187, 178, 0.4);
+  border-color: rgba(72, 187, 178, 0.6);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(72, 187, 178, 0.3);
+}
+
+.delete-button:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 0.6);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.note-content {
+  padding-right: 80px;
+  margin-bottom: 12px;
+}
+
+.note-author {
+  font-weight: 600;
+  color: white;
+  font-size: 13px;
+  margin-bottom: 6px;
+  opacity: 0.9;
+  letter-spacing: -0.2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.note-link {
+  color: white;
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1.6;
+  display: block;
+  word-wrap: break-word;
+  transition: all 0.2s;
+  font-weight: 400;
+}
+
+.note-link:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.file-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Note Meta */
+.note-meta {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.8;
+}
+
+.note-meta a {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.note-meta a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.meta-separator {
+  margin: 0 6px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Empty State */
+.empty-state {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .search-form {
+    flex-direction: column;
+  }
+
+  .search-form input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  .search-form button {
+    width: 100%;
+  }
+
+  .note-card {
+    padding: 20px 16px;
+  }
+
+  .card-actions {
+    top: 16px;
+    right: 16px;
+    gap: 6px;
+  }
+
+  .edit-button,
+  .delete-button {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .note-content {
+    padding-right: 70px;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
+
+    <!-- Header Section -->
+    <div class="header">
+      <h1>
+        Notes by
+<a href="/api/v1/user/${userId}${tokenQS}">${escapeHtml(user.username)}</a>
+      </h1>
+      <div class="header-subtitle">
+        View and manage your last 200notes across every tree
+      </div>
+
+      <!-- Search Form -->
+      <form method="GET" action="/api/v1/user/${userId}/notes" class="search-form">
+        <input type="hidden" name="token" value="${token}">
+        <input type="hidden" name="html" value="">
+        <input
+          type="text"
+          name="q"
+          placeholder="Search notes..."
+value="${escapeHtml(query)}"
+        />
+        <button type="submit">Search</button>
+      </form>
+    </div>
+
+    <!-- Notes List -->
+    ${
+      notes.length > 0
+        ? `
+    <ul class="notes-list">
+      ${processedNotes.join("")}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📝</div>
+      <div class="empty-state-text">No notes yet</div>
+      <div class="empty-state-subtext">
+        ${
+          query.trim() !== ""
+            ? "Try a different search term"
+            : "Notes will appear here as you create them"
+        }
+      </div>
+    </div>
+    `
+    }
+  </div>
+
+  <script>
+    document.addEventListener("click", async (e) => {
+      if (!e.target.classList.contains("delete-button")) return;
+
+      const card = e.target.closest(".note-card");
+      const noteId = card.dataset.noteId;
+      const nodeId = card.dataset.nodeId;
+      const version = card.dataset.version;
+
+      // Debug: log what we're trying to delete
+
+      if (!noteId || !nodeId || !version) {
+        alert("Error: Missing note data. Please refresh and try again.");
+        return;
+      }
+
+      if (!confirm("Delete this note? This cannot be undone.")) return;
+
+      const token = new URLSearchParams(window.location.search).get("token") || "";
+      const qs = token ? "?token=" + encodeURIComponent(token) : "";
+
+      try {
+        const url = "/api/v1/" + nodeId + "/" + version + "/notes/" + noteId + qs;
+
+        const res = await fetch(url, { method: "DELETE" });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || "Delete failed");
+
+        // Fade out animation
+        card.style.transition = "all 0.3s ease";
+        card.style.opacity = "0";
+        card.style.transform = "translateX(-20px)";
+        setTimeout(() => card.remove(), 300);
+      } catch (err) {
+        alert("Failed to delete: " + (err.message || "Unknown error"));
+      }
+    });
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 3. Tags/Mail Page - GET /user/:userId/tags
+// ═══════════════════════════════════════════════════════════════════
+export async function renderUserTags({ userId, user, notes, getNodeName, token }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${escapeHtml(user.username)} — Mail</title>
+  <style>
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header h1 a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.message-count {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border-radius: 980px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Glass Notes List */
+.notes-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.note-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.note-card:nth-child(1) { animation-delay: 0.25s; }
+.note-card:nth-child(2) { animation-delay: 0.3s; }
+.note-card:nth-child(3) { animation-delay: 0.35s; }
+.note-card:nth-child(4) { animation-delay: 0.4s; }
+.note-card:nth-child(5) { animation-delay: 0.45s; }
+.note-card:nth-child(n+6) { animation-delay: 0.5s; }
+
+.note-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.note-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.note-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.note-content {
+  margin-bottom: 12px;
+}
+
+.note-author {
+  font-weight: 600;
+  color: white;
+  font-size: 15px;
+  margin-bottom: 8px;
+  display: block;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.note-author a {
+  color: white;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.note-author a:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.note-link {
+  color: white;
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1.6;
+  display: block;
+  word-wrap: break-word;
+  transition: all 0.2s;
+  font-weight: 400;
+}
+
+.note-link:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.file-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Note Meta */
+.note-meta {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.8;
+}
+
+.note-meta a {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.note-meta a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.meta-separator {
+  margin: 0 6px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .message-count {
+    display: block;
+    margin-left: 0;
+    margin-top: 8px;
+    width: fit-content;
+  }
+
+  .note-card {
+    padding: 20px 16px;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
+
+    <!-- Header Section -->
+    <div class="header">
+      <h1>
+        Mail for
+        <a href="/api/v1/user/${userId}${tokenQS}">@${escapeHtml(user.username)}</a>
+        ${
+          notes.length > 0
+            ? `<span class="message-count">${notes.length}</span>`
+            : ""
+        }
+      </h1>
+      <div class="header-subtitle">Notes where others have mentioned you</div>
+    </div>
+
+    <!-- Notes List -->
+    ${
+      notes.length > 0
+        ? `
+    <ul class="notes-list">
+      ${await Promise.all(
+        notes.map(async (n) => {
+          const nodeName = await getNodeName(n.nodeId);
+          const preview =
+            n.contentType === "text"
+              ? n.content.length > 120
+                ? n.content.substring(0, 120) + "…"
+                : n.content
+              : n.content.split("/").pop();
+
+          const author = n.userId.username || n.userId._id;
+
+          return `
+          <li class="note-card">
+            <div class="note-content">
+              <div class="note-author">
+                <a href="/api/v1/user/${n.userId._id}${tokenQS}">
+                  ${escapeHtml(author)}
+                </a>
+              </div>
+              <a href="/api/v1/node/${n.nodeId}/${n.version}/notes/${
+                n._id
+              }${tokenQS}" class="note-link">
+                ${
+                  n.contentType === "file"
+                    ? `<span class="file-badge">FILE</span>`
+                    : ""
+                }${escapeHtml(preview)}
+              </a>
+            </div>
+
+            <div class="note-meta">
+              ${new Date(n.createdAt).toLocaleString()}
+              <span class="meta-separator">•</span>
+              <a href="/api/v1/node/${n.nodeId}/${n.version}${tokenQS}">
+                ${escapeHtml(nodeName)} v${n.version}
+              </a>
+              <span class="meta-separator">•</span>
+              <a href="/api/v1/node/${n.nodeId}/${n.version}/notes${tokenQS}">
+                View Notes
+              </a>
+            </div>
+          </li>
+        `;
+        }),
+      ).then((results) => results.join(""))}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📬</div>
+      <div class="empty-state-text">No messages yet</div>
+      <div class="empty-state-subtext">
+        Notes where you're mentioned will appear here
+      </div>
+    </div>
+    `
+    }
+  </div>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 4. User Contributions Page - GET /user/:userId/contributions
+// ═══════════════════════════════════════════════════════════════════
+export async function renderUserContributions({ userId, contributions, username, getNodeName, token }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+  const esc = (str = "") =>
+    String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+  const link = (id, label) =>
+    id
+      ? `<a href="/api/v1/node/${id}${tokenQS}">${label || `<code>${esc(id)}</code>`}</a>`
+      : `<code>unknown</code>`;
+
+  const nodeLink = (id, name, version) => {
+    if (!id) return `<code>unknown node</code>`;
+    const v = version != null ? `/${version}` : "";
+    const display = name || id;
+    return `<a href="/api/v1/node/${id}${v}${tokenQS}"><code>${esc(display)}</code></a>`;
+  };
+
+  const userTag = (u) => {
+    if (!u) return `<code>unknown user</code>`;
+    if (typeof u === "object" && u.username)
+      return `<a href="/api/v1/user/${u._id}${tokenQS}"><code>${esc(u.username)}</code></a>`;
+    if (typeof u === "string")
+      return `<a href="/api/v1/user/${u}${tokenQS}"><code>${esc(u)}</code></a>`;
+    return `<code>unknown user</code>`;
+  };
+
+  const kvMap = (data) => {
+    if (!data) return "";
+    const entries =
+      data instanceof Map
+        ? [...data.entries()]
+        : typeof data === "object"
+          ? Object.entries(data)
+          : [];
+    if (entries.length === 0) return "";
+    return entries
+      .map(
+        ([k, v]) =>
+          `<span class="kv-chip"><code>${esc(k)}</code> ${esc(String(v))}</span>`,
+      )
+      .join(" ");
+  };
+
+    const actionColor = (action) => {
+      switch (action) {
+        case "create":
+          return "glass-green";
+        case "delete":
+        case "branchLifecycle":
+          return "glass-red";
+        case "editStatus":
+        case "editValue":
+        case "editGoal":
+        case "editSchedule":
+        case "editNameNode":
+        case "editScript":
+          return "glass-blue";
+        case "executeScript":
+          return "glass-cyan";
+        case "prestige":
+          return "glass-gold";
+        case "note":
+        case "rawIdea":
+          return "glass-purple";
+        case "invite":
+          return "glass-pink";
+        case "transaction":
+        case "trade":
+          return "glass-orange";
+        case "purchase":
+          return "glass-emerald";
+        case "updateParent":
+        case "updateChildNode":
+          return "glass-teal";
+        case "understanding":
+          return "glass-indigo";
+        default:
+          return "glass-default";
+      }
+    };
+
+    /* ─────────────────────────────────────────────── */
+    /* ACTION RENDERER                                  */
+    /* ─────────────────────────────────────────────── */
+
+    const renderAction = (c, nodeName) => {
+      const nId = c.nodeId?._id || c.nodeId;
+      const v = Number(c.nodeVersion ?? 0);
+      const nLink = nodeLink(nId, nodeName, v);
+
+      switch (c.action) {
+        case "create":
+          return `Created ${nLink}`;
+
+        case "editStatus":
+          return `Marked ${nLink} as <code>${esc(c.statusEdited)}</code>`;
+
+        case "editValue":
+          return `Adjusted values on ${nLink} ${kvMap(c.valueEdited)}`;
+
+        case "prestige":
+          return `Prestiged ${nLink} to a new version`;
+
+        case "trade":
+          return `Traded on ${nLink}`;
+
+        case "delete":
+          return `Deleted ${nLink}`;
+
+        case "invite": {
+          const ia = c.inviteAction || {};
+          const target = userTag(ia.receivingId);
+          const labels = {
+            invite: `Invited ${target} to collaborate on`,
+            acceptInvite: `Accepted an invitation on`,
+            denyInvite: `Declined an invitation on`,
+            removeContributor: `Removed ${target} from`,
+            switchOwner: `Transferred ownership of`,
+          };
+          const suffix = ia.action === "switchOwner" ? ` to ${target}` : "";
+          return `${labels[ia.action] || "Updated collaboration on"} ${nLink}${suffix}`;
+        }
+
+        case "editSchedule": {
+          const s = c.scheduleEdited || {};
+          const parts = [];
+          if (s.date)
+            parts.push(
+              `date to <code>${new Date(s.date).toLocaleString()}</code>`,
+            );
+          if (s.reeffectTime != null)
+            parts.push(`re-effect to <code>${s.reeffectTime}</code>`);
+          return parts.length
+            ? `Set ${parts.join(" and ")} on ${nLink}`
+            : `Updated the schedule on ${nLink}`;
+        }
+
+        case "editGoal":
+          return `Set new goals on ${nLink} ${kvMap(c.goalEdited)}`;
+
+        case "transaction": {
+          const tm = c.transactionMeta;
+          if (!tm) return `Recorded a transaction on ${nLink}`;
+          const eventLabel = esc(tm.event || "unknown").replace(/_/g, " ");
+          const counterparty = tm.counterpartyNodeId
+            ? ` with ${link(tm.counterpartyNodeId)}`
+            : "";
+          const sent = kvMap(tm.valuesSent);
+          const recv = kvMap(tm.valuesReceived);
+          let flow = "";
+          if (sent) flow += ` — sent ${sent}`;
+          if (recv) flow += `${sent ? "," : " —"} received ${recv}`;
+          return `Transaction <code>${eventLabel}</code> as ${esc(tm.role)} (side ${esc(tm.side)}) on ${nLink}${counterparty}${flow}`;
+        }
+
+        case "note": {
+          const na = c.noteAction || {};
+
+          let verb;
+          switch (na.action) {
+            case "add":
+              verb = "Added a note to";
+              break;
+            case "edit":
+              verb = "Edited a note in";
+              break;
+            case "remove":
+              verb = "Removed a note from";
+              break;
+            default:
+              verb = "Updated a note in";
+          }
+
+          const noteRef = na.noteId
+            ? ` <a href="/api/v1/node/${nId}/${v}/notes/${na.noteId}${tokenQS}"><code>${esc(na.noteId)}</code></a>`
+            : "";
+
+          return `${verb} ${nLink}${noteRef}`;
+        }
+
+        case "updateParent": {
+          const up = c.updateParent || {};
+          const from = up.oldParentId
+            ? link(up.oldParentId)
+            : `<code>none</code>`;
+          const to = up.newParentId
+            ? link(up.newParentId)
+            : `<code>none</code>`;
+          return `Moved ${nLink} from ${from} to ${to}`;
+        }
+
+        case "editScript": {
+          const es = c.editScript || {};
+          return `Edited script <code>${esc(es.scriptName || es.scriptId)}</code> on ${nLink}`;
+        }
+
+        case "executeScript": {
+          const xs = c.executeScript || {};
+          const icon = xs.success ? "✅" : "❌";
+          let text = `${icon} Ran <code>${esc(xs.scriptName || xs.scriptId)}</code> on ${nLink}`;
+          if (xs.error) text += ` — <code>${esc(xs.error)}</code>`;
+          return text;
+        }
+
+        case "updateChildNode": {
+          const uc = c.updateChildNode || {};
+          return uc.action === "added"
+            ? `Added ${link(uc.childId)} as a child of ${nLink}`
+            : `Removed child ${link(uc.childId)} from ${nLink}`;
+        }
+
+        case "editNameNode": {
+          const en = c.editNameNode || {};
+          return `Renamed ${nLink} from <code>${esc(en.oldName)}</code> to <code>${esc(en.newName)}</code>`;
+        }
+
+        case "rawIdea": {
+          const ri = c.rawIdeaAction || {};
+          const ideaRef = `<a href="/api/v1/user/${userId}/raw-ideas/${ri.rawIdeaId}${tokenQS}"><code>${esc(ri.rawIdeaId)}</code></a>`;
+          if (ri.action === "add") return `Captured a raw idea ${ideaRef}`;
+          if (ri.action === "delete")
+            return `Discarded raw idea <code>${esc(ri.rawIdeaId)}</code>`;
+          if (ri.action === "placed") {
+            const target = ri.targetNodeId ? link(ri.targetNodeId) : nLink;
+            return `Placed raw idea ${ideaRef} into ${target}`;
+          }
+          if (ri.action === "aiStarted")
+            return `AI began processing raw idea ${ideaRef}`;
+          if (ri.action === "aiFailed")
+            return `AI failed to place raw idea ${ideaRef}`;
+          return `Updated raw idea ${ideaRef}`;
+        }
+
+        case "branchLifecycle": {
+          const bl = c.branchLifecycle || {};
+          if (bl.action === "retired") {
+            let text = `Retired branch ${nLink}`;
+            if (bl.fromParentId) text += ` from ${link(bl.fromParentId)}`;
+            return text;
+          }
+          if (bl.action === "revived") {
+            let text = `Revived branch ${nLink}`;
+            if (bl.toParentId) text += ` under ${link(bl.toParentId)}`;
+            return text;
+          }
+          return `Revived ${nLink} as a new root`;
+        }
+
+        case "purchase": {
+          const pm = c.purchaseMeta || {};
+          const parts = [];
+          if (pm.plan) parts.push(`the <code>${esc(pm.plan)}</code> plan`);
+          if (pm.energyAmount)
+            parts.push(`<code>${pm.energyAmount}</code> energy`);
+          const price = pm.totalCents
+            ? ` for $${(pm.totalCents / 100).toFixed(2)} ${esc(pm.currency || "usd").toUpperCase()}`
+            : "";
+          return parts.length
+            ? `Purchased ${parts.join(" and ")}${price}`
+            : `Made a purchase${price}`;
+        }
+
+        case "understanding": {
+          const um = c.understandingMeta || {};
+          const rootNode = um.rootNodeId || nId;
+          const runId = um.understandingRunId;
+
+          if (um.stage === "createRun") {
+            const runLink =
+              runId && rootNode
+                ? `<a href="/api/v1/root/${rootNode}/understandings/run/${runId}${tokenQS}"><code>${esc(runId)}</code></a>`
+                : `<code>unknown run</code>`;
+            let text = `Started understanding run ${runLink}`;
+            if (rootNode) text += ` on ${link(rootNode)}`;
+            if (um.nodeCount != null)
+              text += ` spanning <code>${um.nodeCount}</code> nodes`;
+            if (um.perspective) text += ` — "${esc(um.perspective)}"`;
+            return text;
+          }
+
+          if (um.stage === "processStep") {
+            const uNodeId = um.understandingNodeId;
+            const uNodeLink =
+              uNodeId && runId && rootNode
+                ? `<a href="/api/v1/root/${rootNode}/understandings/run/${runId}/${uNodeId}${tokenQS}"><code>${esc(uNodeId)}</code></a>`
+                : uNodeId
+                  ? `<code>${esc(uNodeId)}</code>`
+                  : `<code>unknown</code>`;
+            let text = `Understanding encoded ${uNodeLink}`;
+            if (um.mode)
+              text += ` <span class="kv-chip">${esc(um.mode)}</span>`;
+            if (um.layer != null) text += ` at layer <code>${um.layer}</code>`;
+            return text;
+          }
+
+          return `Understanding activity on ${nLink}`;
+        }
+
+        default:
+          return `<code>${esc(c.action)}</code> on ${nLink}`;
+      }
+    };
+
+    const items = await Promise.all(
+      contributions.map(async (c) => {
+        const nId = c.nodeId?._id || c.nodeId;
+        const nodeName = nId ? await getNodeName(nId) : null;
+        const time = new Date(c.date).toLocaleString();
+        const actionHtml = renderAction(c, nodeName);
+        const colorClass = actionColor(c.action);
+
+        const aiBadge = c.wasAi ? `<span class="badge badge-ai">AI</span>` : "";
+        const energyBadge =
+          c.energyUsed != null && c.energyUsed > 0
+            ? `<span class="badge badge-energy">⚡ ${c.energyUsed}</span>`
+            : "";
+
+        return `
+      <li class="note-card ${colorClass}">
+        <div class="note-content">
+          <div class="contribution-action">${actionHtml}</div>
+        </div>
+        <div class="note-meta">
+          ${time}
+          ${aiBadge}${energyBadge}
+          <span class="meta-separator">·</span>
+          <code class="contribution-id">${esc(c._id)}</code>
+        </div>
+      </li>`;
+      }),
+    );
+
+    /* ─────────────────────────────────────────────── */
+    /* HTML SHELL                                       */
+    /* ─────────────────────────────────────────────── */
+
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${esc(username)} — Contributions</title>
+  <style>
+:root {
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px; height: 600px;
+  background: white;
+  top: -300px; right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px; height: 400px;
+  background: white;
+  bottom: -200px; left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Glass Back Nav ─────────────────────────────── */
+
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(115, 111, 230, var(--glass-alpha-hover));
+  transform: translateY(-1px);
+}
+
+.back-link:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Glass Header ───────────────────────────────── */
+
+.header {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.header:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.header h1 {
+  font-size: 28px; font-weight: 600; color: white;
+  margin-bottom: 8px; line-height: 1.3; letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.header h1 a {
+  color: white; text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.message-count {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.25);
+  color: white; border-radius: 980px;
+  font-size: 14px; font-weight: 600;
+  margin-left: 12px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.header-subtitle {
+  font-size: 14px; color: rgba(255,255,255,0.9);
+  margin-bottom: 16px; font-weight: 400; line-height: 1.5;
+}
+
+.nav-links {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+
+.nav-links a {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.18);
+  color: white; border-radius: 980px;
+  font-size: 13px; font-weight: 600;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.25);
+  transition: all 0.2s;
+}
+
+.nav-links a:hover {
+  background: rgba(255,255,255,0.32);
+  transform: translateY(-1px);
+}
+
+/* ── Glass Cards — base ─────────────────────────── */
+
+.notes-list {
+  list-style: none;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+.note-card {
+  --card-rgb: 115, 111, 230;
+  position: relative;
+  background: rgba(var(--card-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  color: white; overflow: hidden;
+
+}
+.notes-list {
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.note-card:nth-child(1) { animation-delay: 0.25s; }
+.note-card:nth-child(2) { animation-delay: 0.3s; }
+.note-card:nth-child(3) { animation-delay: 0.35s; }
+.note-card:nth-child(4) { animation-delay: 0.4s; }
+.note-card:nth-child(5) { animation-delay: 0.45s; }
+.note-card:nth-child(n+6) { animation-delay: 0.5s; }
+
+
+.note-card::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.note-card:hover {
+  background: rgba(var(--card-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+}
+
+.note-card:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Color Variants ─────────────────────────────── */
+
+.glass-default  { --card-rgb: 115, 111, 230; }
+.glass-green    { --card-rgb: 72, 187, 120;  }
+.glass-red      { --card-rgb: 200, 80, 80;   }
+.glass-blue     { --card-rgb: 80, 130, 220;  }
+.glass-cyan     { --card-rgb: 56, 189, 210;  }
+.glass-gold     { --card-rgb: 200, 170, 50;  }
+.glass-purple   { --card-rgb: 155, 100, 220; }
+.glass-pink     { --card-rgb: 210, 100, 160; }
+.glass-orange   { --card-rgb: 220, 140, 60;  }
+.glass-emerald  { --card-rgb: 52, 190, 130;  }
+.glass-teal     { --card-rgb: 60, 170, 180;  }
+.glass-indigo   { --card-rgb: 100, 100, 210; }
+
+/* ── Card Inner ─────────────────────────────────── */
+
+.note-content {
+  margin-bottom: 12px;
+}
+
+.contribution-action {
+  font-size: 15px; line-height: 1.6;
+  color: white; font-weight: 400;
+  word-wrap: break-word;
+}
+
+.contribution-action a {
+  color: white; text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.contribution-action a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.contribution-action code {
+  background: rgba(255,255,255,0.18);
+  padding: 2px 7px; border-radius: 5px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+/* ── Note Meta ──────────────────────────────────── */
+
+.note-meta {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  font-size: 12px; color: rgba(255,255,255,0.85);
+  line-height: 1.8;
+  display: flex; flex-wrap: wrap;
+  align-items: center; gap: 6px;
+}
+
+.note-meta a {
+  color: white; text-decoration: none; font-weight: 500;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.note-meta a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.meta-separator { color: rgba(255,255,255,0.5); }
+
+.contribution-id {
+  background: rgba(255,255,255,0.12);
+  padding: 2px 6px; border-radius: 4px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* ── Badges ─────────────────────────────────────── */
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 980px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.badge-ai {
+  background: rgba(255,200,50,0.35);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.badge-energy {
+  background: rgba(100,220,255,0.3);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* ── KV Chips ───────────────────────────────────── */
+
+.kv-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 6px; font-size: 12px;
+  margin: 2px 2px;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.kv-chip code {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  font-weight: 600;
+}
+
+/* ── Empty State ────────────────────────────────── */
+
+.empty-state {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+    animation: fadeInUp 0.6s ease-out 0.2s both;
+
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.empty-state-icon {
+  font-size: 64px; margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+}
+
+.empty-state-text {
+  font-size: 20px; color: white;
+  margin-bottom: 8px; font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px; color: rgba(255,255,255,0.85);
+}
+
+/* ── Responsive ─────────────────────────────────── */
+
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .header { padding: 24px 20px; }
+  .header h1 { font-size: 24px; }
+  .message-count { display: block; margin-left: 0; margin-top: 8px; width: fit-content; }
+  .note-card { padding: 20px 16px; }
+  .back-nav { flex-direction: column; }
+  .back-link { width: 100%; justify-content: center; }
+  .empty-state { padding: 40px 24px; }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container { max-width: 700px; }
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
+    </div>
+
+    <div class="header">
+      <h1>
+        Contributions by
+        <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
+        ${contributions.length > 0 ? `<span class="message-count">${contributions.length}</span>` : ""}
+      </h1>
+      <div class="header-subtitle">Activity &amp; change history</div>
+
+    </div>
+
+    ${
+      items.length
+        ? `<ul class="notes-list">${items.join("")}</ul>`
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📊</div>
+      <div class="empty-state-text">No contributions yet</div>
+      <div class="empty-state-subtext">Contributions and activity will appear here</div>
+    </div>`
+    }
+  </div>
+
+ 
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 5. Reset Password Page (expired) - GET /user/reset-password/:token
+// ═══════════════════════════════════════════════════════════════════
+export function renderResetPasswordExpired() {
+      return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#736fe6">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>TreeOS - Link Expired</title>
+  <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      background: #736fe6;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px; height: 600px;
+      background: white;
+      top: -300px; right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px; height: 400px;
+      background: white;
+      bottom: -200px; left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-30px) rotate(5deg); }
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .brand-header {
+      position: relative; z-index: 1;
+      margin-bottom: 32px; text-align: center;
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    .brand-logo {
+      font-size: 80px; margin-bottom: 16px; display: inline-block;
+      filter: drop-shadow(0 8px 32px rgba(0,0,0,0.2));
+      animation: fadeInDown 0.5s ease-out both, grow 4.5s ease-in-out infinite;
+    }
+
+    @keyframes grow {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    .brand-title {
+      font-size: 56px; font-weight: 600; color: white;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      letter-spacing: -1.5px; margin-bottom: 8px;
+    }
+
+    .container {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      padding: 48px;
+      border-radius: 16px;
+      width: 100%; max-width: 460px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+      border: 1px solid rgba(255,255,255,0.28);
+      text-align: center;
+      position: relative; z-index: 1;
+      animation: slideUp 0.6s ease-out 0.2s both;
+    }
+
+    h2 {
+      font-size: 32px; font-weight: 600; color: white;
+      margin-bottom: 12px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .subtitle {
+      font-size: 15px; color: rgba(255,255,255,0.85);
+      margin-bottom: 24px; line-height: 1.5;
+    }
+
+    .back-btn {
+      display: inline-block;
+      width: 100%;
+      padding: 14px;
+      margin-top: 16px;
+      border-radius: 980px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.25);
+      backdrop-filter: blur(10px);
+      color: white;
+      font-size: 16px; font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      text-align: center;
+      font-family: inherit;
+    }
+
+    .back-btn:hover {
+      background: rgba(255,255,255,0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    }
+
+    @media (max-width: 640px) {
+      .brand-logo { font-size: 64px; }
+      .brand-title { font-size: 42px; }
+      .container { padding: 32px 24px; }
+      h2 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="brand-header">
+    <a href="/" style="text-decoration: none;">
+      <div class="brand-logo">🌳</div>
+      <h1 class="brand-title">TreeOS</h1>
+    </a>
+  </div>
+
+  <div class="container">
+    <h2>Link Expired</h2>
+    <p class="subtitle">This reset link is invalid or has expired. Please request a new password reset.</p>
+    <a href="/login" class="back-btn">← Back to Login</a>
+  </div>
+</body>
+</html>
+      `);
+}
+
+// Reset Password Form Page
+export function renderResetPasswordForm({ token }) {
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#736fe6">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>TreeOS - Reset Password</title>
+  <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      background: #736fe6;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px; height: 600px;
+      background: white;
+      top: -300px; right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px; height: 400px;
+      background: white;
+      bottom: -200px; left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-30px) rotate(5deg); }
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .brand-header {
+      position: relative; z-index: 1;
+      margin-bottom: 32px; text-align: center;
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    .brand-logo {
+      font-size: 80px; margin-bottom: 16px; display: inline-block;
+      filter: drop-shadow(0 8px 32px rgba(0,0,0,0.2));
+      animation: fadeInDown 0.5s ease-out both, grow 4.5s ease-in-out infinite;
+    }
+
+    @keyframes grow {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    .brand-title {
+      font-size: 56px; font-weight: 600; color: white;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      letter-spacing: -1.5px; margin-bottom: 8px;
+    }
+
+    .container {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      padding: 48px;
+      border-radius: 16px;
+      width: 100%; max-width: 460px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+      border: 1px solid rgba(255,255,255,0.28);
+      text-align: center;
+      position: relative; z-index: 1;
+      animation: slideUp 0.6s ease-out 0.2s both;
+    }
+
+    h2 {
+      font-size: 32px; font-weight: 600; color: white;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .subtitle {
+      font-size: 15px; color: rgba(255,255,255,0.85);
+      margin-bottom: 32px; line-height: 1.5;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    label {
+      display: block;
+      font-size: 14px; font-weight: 600; color: white;
+      margin-bottom: 8px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    input {
+      width: 100%;
+      padding: 14px 18px;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      font-size: 16px;
+      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      font-family: inherit;
+      color: white;
+      font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.25);
+    }
+
+    input:focus {
+      outline: none;
+      border-color: rgba(255,255,255,0.6);
+      background: rgba(255,255,255,0.25);
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.15), 0 8px 30px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.4);
+      transform: translateY(-2px);
+    }
+
+    input::placeholder {
+      color: rgba(255,255,255,0.5);
+      font-weight: 400;
+    }
+
+    input.error {
+      border-color: rgba(239,68,68,0.6);
+      background: rgba(239,68,68,0.1);
+    }
+
+    .password-hint {
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 6px;
+      text-align: left;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      margin-top: 8px;
+      border-radius: 980px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.25);
+      backdrop-filter: blur(10px);
+      color: white;
+      font-size: 16px; font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      font-family: inherit;
+      position: relative;
+      overflow: hidden;
+    }
+
+    button:hover {
+      background: rgba(255,255,255,0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    }
+
+    button:active { transform: translateY(0); }
+
+    button.loading {
+      color: transparent;
+      pointer-events: none;
+    }
+
+    button.loading::after {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      top: 50%; left: 50%;
+      margin-left: -10px; margin-top: -10px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .message {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px; font-weight: 600;
+      text-align: left;
+      display: none;
+    }
+
+    .error-message {
+      color: white;
+      background: rgba(239,68,68,0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(239,68,68,0.4);
+    }
+
+    .success-message {
+      color: white;
+      background: rgba(16,185,129,0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(16,185,129,0.4);
+    }
+
+    .message.show { display: block; }
+
+    .back-btn {
+      display: inline-block;
+      width: 100%;
+      padding: 12px;
+      margin-top: 16px;
+      border-radius: 980px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.15);
+      color: white;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .back-btn:hover {
+      background: rgba(255,255,255,0.25);
+      transform: translateY(-2px);
+    }
+
+    @media (max-width: 640px) {
+      .brand-logo { font-size: 64px; }
+      .brand-title { font-size: 42px; }
+      .container { padding: 32px 24px; }
+      h2 { font-size: 28px; }
+      input { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="brand-header">
+    <a href="/" style="text-decoration: none;">
+      <div class="brand-logo">🌳</div>
+      <h1 class="brand-title">TreeOS</h1>
+    </a>
+  </div>
+
+  <div class="container">
+    <h2>Reset Password</h2>
+    <p class="subtitle">Enter your new password below</p>
+
+    <form id="resetForm">
+      <div class="input-group">
+        <label for="password">New Password</label>
+        <input
+          type="password"
+          id="password"
+          placeholder="Enter new password"
+          required
+          autocomplete="new-password"
+        />
+        <div class="password-hint">Must be at least 8 characters</div>
+      </div>
+
+      <div class="input-group">
+        <label for="confirm">Confirm Password</label>
+        <input
+          type="password"
+          id="confirm"
+          placeholder="Confirm new password"
+          required
+          autocomplete="new-password"
+        />
+      </div>
+
+      <button type="submit" id="resetBtn">Reset Password</button>
+    </form>
+
+    <div id="errorMessage" class="message error-message"></div>
+    <div id="successMessage" class="message success-message">
+      ✓ Password reset successful! Redirecting to login...
+    </div>
+
+    <a href="/login" class="back-btn">← Back to Login</a>
+  </div>
+
+  <script>
+    const form = document.getElementById("resetForm");
+    const passwordInput = document.getElementById("password");
+    const confirmInput = document.getElementById("confirm");
+    const errorEl = document.getElementById("errorMessage");
+    const successEl = document.getElementById("successMessage");
+    const btn = document.getElementById("resetBtn");
+
+    confirmInput.addEventListener("input", () => {
+      if (confirmInput.value && passwordInput.value !== confirmInput.value) {
+        confirmInput.classList.add("error");
+      } else {
+        confirmInput.classList.remove("error");
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const password = passwordInput.value;
+      const confirm = confirmInput.value;
+
+      errorEl.classList.remove("show");
+      successEl.classList.remove("show");
+      passwordInput.classList.remove("error");
+      confirmInput.classList.remove("error");
+
+      if (password.length < 8) {
+        errorEl.textContent = "Password must be at least 8 characters.";
+        errorEl.classList.add("show");
+        passwordInput.classList.add("error");
+        passwordInput.focus();
+        return;
+      }
+
+      if (password !== confirm) {
+        errorEl.textContent = "Passwords do not match.";
+        errorEl.classList.add("show");
+        confirmInput.classList.add("error");
+        confirmInput.focus();
+        return;
+      }
+
+      btn.classList.add("loading");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/v1/user/reset-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: "${token}", password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorEl.textContent = data.message || "Reset failed. Please try again.";
+          errorEl.classList.add("show");
+          btn.classList.remove("loading");
+          btn.disabled = false;
+          return;
+        }
+
+        successEl.classList.add("show");
+        form.style.display = "none";
+
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+
+      } catch (err) {
+        errorEl.textContent = "An error occurred. Please try again.";
+        errorEl.classList.add("show");
+        btn.classList.remove("loading");
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
+    `);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 6. Reset Password POST responses
+// ═══════════════════════════════════════════════════════════════════
+export function renderResetPasswordMismatch({ token }) {
+      return (`
+        <html><body style="font-family:sans-serif; padding:20px;">
+        <h2>Passwords Do Not Match</h2>
+        <p><a href="/api/v1/user/reset-password/${token}">Try Again</a></p>
+        </body></html>
+      `);
+}
+
+export function renderResetPasswordInvalid() {
+      return (`
+        <html><body style="font-family:sans-serif; padding:20px;">
+        <h2>Reset Link Expired or Invalid</h2>
+        <p>Please request a new password reset.</p>
+        </body></html>
+      `);
+}
+
+export function renderResetPasswordSuccess() {
+    return (`
+      <html><body style="font-family:sans-serif; padding:20px;">
+      <h2>Password Reset Successfully</h2>
+      <p>You can now log in with your new password.</p>
+      </body></html>
+    `);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 7. Raw Ideas List - GET /user/:userId/raw-ideas
+// ═══════════════════════════════════════════════════════════════════
+export function renderRawIdeasList({ userId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>${escapeHtml(user.username)} -- Raw Ideas</title>
+  <style>
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+.auto-place-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+}
+.auto-place-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+.auto-place-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 2px;
+}
+.auto-place-toggle {
+  position: relative;
+  width: 54px; height: 28px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(18px);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+.auto-place-toggle.active {
+  background: rgba(72, 187, 178, 0.45);
+  box-shadow: 0 0 16px rgba(72, 187, 178, 0.35);
+}
+.auto-place-toggle.muted {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.auto-place-toggle-knob {
+  position: absolute;
+  top: 4px; left: 4px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.auto-place-toggle.active .auto-place-toggle-knob {
+  left: 28px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
+
+
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
+
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header h1 a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 20px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Glass Search Form */
+.search-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-form input[type="text"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  font-size: 16px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.search-form input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.search-form input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15),
+    0 8px 30px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.search-form button {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.search-form button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.search-form button:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.search-form button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Glass Ideas List */
+.ideas-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.idea-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.ideas-list {
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.idea-card:nth-child(1) { animation-delay: 0.25s; }
+.idea-card:nth-child(2) { animation-delay: 0.3s; }
+.idea-card:nth-child(3) { animation-delay: 0.35s; }
+.idea-card:nth-child(4) { animation-delay: 0.4s; }
+.idea-card:nth-child(5) { animation-delay: 0.45s; }
+.idea-card:nth-child(n+6) { animation-delay: 0.5s; }
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.idea-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.idea-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.idea-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.delete-button {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  color: white;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.8;
+  transition: all 0.3s;
+  z-index: 10;
+}
+
+.delete-button:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 0.6);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.idea-content {
+  padding-right: 48px;
+  margin-bottom: 16px;
+}
+
+.idea-link {
+  color: white;
+  text-decoration: none;
+  font-size: 16px;
+  line-height: 1.6;
+  display: block;
+  word-wrap: break-word;
+  transition: all 0.2s;
+  font-weight: 400;
+}
+
+.idea-link:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.file-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Subtle Transfer Form */
+.transfer-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.transfer-form input[type="text"] {
+  flex: 1;
+  min-width: 180px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.transfer-form input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+}
+
+.transfer-form input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.transfer-form button {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  opacity: 0.85;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.transfer-form button:hover {
+  background: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Metadata */
+.idea-meta {
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+  letter-spacing: 0.3px;
+}
+.status-badge--pending { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); }
+.status-badge--processing { background: rgba(255,200,0,0.25); color: #ffe066; }
+.status-badge--succeeded { background: rgba(50,220,120,0.25); color: #7effc0; }
+.status-badge--stuck { background: rgba(255,140,0,0.25); color: #ffcf7e; }
+
+/* Placed / stuck notices */
+.placed-notice .chat-link {
+  color: #7effc0;
+  opacity: 0.8;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.placed-notice .chat-link:hover { opacity: 1; }
+.placed-notice {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(50,220,120,0.15);
+  border-radius: 10px;
+  font-size: 13px;
+  color: #7effc0;
+  border: 1px solid rgba(50,220,120,0.25);
+}
+.stuck-notice {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  background: rgba(255,140,0,0.15);
+  border-radius: 10px;
+  font-size: 13px;
+  color: #ffcf7e;
+  border: 1px solid rgba(255,140,0,0.25);
+}
+.processing-notice {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(255,200,0,0.12);
+  border-radius: 10px;
+  font-size: 13px;
+  color: #ffe066;
+  border: 1px solid rgba(255,200,0,0.2);
+}
+
+/* Status filter tabs */
+.filter-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.filter-tab {
+  padding: 5px 14px;
+  border-radius: 980px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+.filter-tab:hover { background: rgba(255,255,255,0.16); color: rgba(255,255,255,0.9); }
+.filter-tab--active { background: rgba(255,255,255,0.22); color: white; border-color: rgba(255,255,255,0.35); }
+
+/* Auto-place button */
+.auto-place-btn {
+  margin-top: 14px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+.auto-place-btn:hover {
+  background: rgba(255,255,255,0.28);
+  transform: translateY(-1px);
+}
+.auto-place-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+    animation: fadeInUp 0.6s ease-out 0.2s both;
+
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .search-form {
+    flex-direction: column;
+  }
+
+  .search-form input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  .search-form button {
+    width: 100%;
+  }
+
+  .idea-card {
+    padding: 20px 16px;
+  }
+
+  .delete-button {
+    top: 16px;
+    right: 16px;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  .transfer-form {
+    flex-direction: column;
+  }
+
+  .transfer-form input[type="text"] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .transfer-form button {
+    width: 100%;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
+
+    <!-- Header Section -->
+    <div class="header">
+      <h1>
+        Raw Ideas for
+<a href="/api/v1/user/${userId}${tokenQS}">${escapeHtml(user.username)}</a>
+      </h1>
+      <div class="header-subtitle">
+These will be placed onto your trees automatically while you dream (Standard+ plans)</div>
+
+      <div class="auto-place-row">
+        <div>
+          <div class="auto-place-label">Auto-place ideas</div>
+          <div class="auto-place-hint">${
+            AUTO_PLACE_ELIGIBLE.includes(user.profileType)
+              ? "Pending ideas are placed automatically every 15 minutes while you're offline."
+              : "Available on Standard, Premium, and God plans."
+          }</div>
+        </div>
+        <div
+          id="autoPlaceToggle"
+          class="auto-place-toggle${getRawIdeaAutoPlace(user) !== false ? " active" : ""}${!AUTO_PLACE_ELIGIBLE.includes(user.profileType) ? " muted" : ""}"
+          onclick="${AUTO_PLACE_ELIGIBLE.includes(user.profileType) ? "toggleAutoPlace()" : ""}"
+        >
+          <div class="auto-place-toggle-knob"></div>
+        </div>
+      </div>
+
+      <!-- Search Form -->
+      <form method="GET" action="/api/v1/user/${userId}/raw-ideas" class="search-form">
+        <input type="hidden" name="token" value="${token}">
+        <input type="hidden" name="html" value="">
+        ${statusFilter !== "pending" ? `<input type="hidden" name="status" value="${statusFilter}">` : ""}
+        <input
+          type="text"
+          name="q"
+          placeholder="Search raw ideas..."
+          value="${query.replace(/"/g, "&quot;")}"
+        />
+        <button type="submit">Search</button>
+      </form>
+
+      <!-- Status Filter Tabs -->
+      <div class="filter-tabs">
+        ${tabs.map((t) => `<a href="${tabUrl(t.key)}" class="filter-tab${statusFilter === t.key ? " filter-tab--active" : ""}">${t.label}</a>`).join("")}
+      </div>
+    </div>
+
+    <!-- Raw Ideas List -->
+    ${
+      rawIdeas.length > 0
+        ? `
+    <ul class="ideas-list">
+      ${rawIdeas
+        .map(
+          (r) => `
+        <li class="idea-card idea-card--${r.status || "pending"}" data-raw-idea-id="${r._id}" data-status="${r.status || "pending"}">
+          ${!r.status || r.status === "pending" || r.status === "stuck" ? `<button class="delete-button" title="Delete raw idea">✕</button>` : ""}
+
+          <div class="idea-content">
+            <a
+              href="/api/v1/user/${userId}/raw-ideas/${r._id}${tokenQS}"
+              class="idea-link"
+            >
+             ${
+               r.contentType === "file"
+                 ? `<span class="file-badge">FILE</span>${escapeHtml(r.content)}`
+                 : escapeHtml(r.content)
+             }
+            </a>
+            <span class="status-badge status-badge--${r.status || "pending"}">
+              ${r.status === "processing" ? "⏳ processing" : r.status === "succeeded" ? "✓ placed by AI" : r.status === "stuck" ? "⚠ stuck" : r.status === "deleted" ? "deleted" : "pending"}
+            </span>
+          </div>
+
+          ${
+            r.status === "succeeded"
+              ? `
+          <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>
+          `
+              : r.status === "processing"
+                ? `
+          <div class="processing-notice">Being processed by AI — please wait.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>
+          `
+                : r.status === "deleted"
+                  ? ``
+                  : `
+          ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed — place manually below.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>` : ""}
+
+          ${
+            (!r.status || r.status === "pending") && r.contentType !== "file"
+              ? `
+          <button
+            class="auto-place-btn"
+            data-raw-idea-id="${r._id}"
+            data-token="${token}"
+            data-user-id="${userId}"
+          >✨ Auto-place</button>
+          `
+              : ""
+          }
+
+          <form
+            method="POST"
+            action="/api/v1/user/${userId}/raw-ideas/${
+              r._id
+            }/transfer?token=${token}&html"
+            class="transfer-form"
+          >
+            <input
+              type="text"
+              name="nodeId"
+              placeholder="Target node ID"
+              required
+            />
+            <button type="submit">Transfer to Node</button>
+          </form>
+          `
+          }
+
+          <div class="idea-meta">
+            ${new Date(r.createdAt).toLocaleString()}
+          </div>
+        </li>
+      `,
+        )
+        .join("")}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">💭</div>
+      <div class="empty-state-text">No ${statusFilter === "pending" ? "" : statusFilter + " "}raw ideas</div>
+      <div class="empty-state-subtext">
+        ${
+          query.trim() !== ""
+            ? "Try a different search term"
+            : statusFilter === "pending"
+              ? "Start capturing your ideas from the user page"
+              : "Nothing here yet"
+        }
+      </div>
+    </div>
+    `
+    }
+  </div>
+
+ <script>
+    const urlToken = new URLSearchParams(window.location.search).get("token") || "";
+    const tokenQs = urlToken ? "?token=" + encodeURIComponent(urlToken) : "";
+
+    // Auto-refresh if any card is processing
+    if (document.querySelector(".idea-card[data-status='processing']")) {
+      setTimeout(() => window.location.reload(), 3000);
+    }
+
+    document.addEventListener("click", async function(e) {
+      // ── Delete ──────────────────────────────────────────────────────────
+      const deleteBtn = e.target.closest(".delete-button");
+      if (deleteBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const card = deleteBtn.closest(".idea-card");
+        if (!card) return;
+        const rawIdeaId = card.dataset.rawIdeaId;
+
+        if (!confirm("Delete this raw idea? This cannot be undone.")) return;
+
+        try {
+          const res = await fetch(
+            "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + tokenQs,
+            { method: "DELETE" }
+          );
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error || "Delete failed");
+
+          card.style.transition = "all 0.3s ease";
+          card.style.opacity = "0";
+          card.style.transform = "translateX(-20px)";
+          setTimeout(() => card.remove(), 300);
+        } catch (err) {
+          alert("Failed to delete: " + (err.message || "Unknown error"));
+        }
+        return;
+      }
+
+      // ── Auto-place ───────────────────────────────────────────────────────
+      const autoBtn = e.target.closest(".auto-place-btn");
+      if (autoBtn) {
+        e.preventDefault();
+        const rawIdeaId = autoBtn.dataset.rawIdeaId;
+        const card = autoBtn.closest(".idea-card");
+
+        autoBtn.disabled = true;
+        autoBtn.textContent = "⏳ Starting…";
+
+        try {
+          const res = await fetch(
+            "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + "/place" + tokenQs,
+            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: "user" }) }
+          );
+          if (res.status === 202) {
+            card.dataset.status = "processing";
+            // Update badge
+            const badge = card.querySelector(".status-badge");
+            if (badge) { badge.className = "status-badge status-badge--processing"; badge.textContent = "⏳ processing"; }
+            autoBtn.textContent = "⏳ Processing…";
+            // Reload after 4s to show result
+            setTimeout(() => window.location.reload(), 4000);
+          } else {
+            const data = await res.json().catch(() => ({}));
+            autoBtn.disabled = false;
+            autoBtn.textContent = "✨ Auto-place";
+            alert(data.error || "Could not start orchestration");
+          }
+        } catch (err) {
+          autoBtn.disabled = false;
+          autoBtn.textContent = "✨ Auto-place";
+          alert("Error: " + (err.message || "Unknown"));
+        }
+        return;
+      }
+    }, true);
+
+    async function toggleAutoPlace() {
+      var toggle = document.getElementById("autoPlaceToggle");
+      if (!toggle || toggle.classList.contains("muted")) return;
+      var isActive = toggle.classList.contains("active");
+      var newEnabled = !isActive;
+      toggle.classList.toggle("active");
+      try {
+        var res = await fetch(
+          "/api/v1/user/${userId}/raw-ideas/auto-place" + tokenQs,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: newEnabled }) }
+        );
+        var data = await res.json();
+        if (!data.success) {
+          toggle.classList.toggle("active");
+          alert(data.error || "Failed to toggle");
+        }
+      } catch (err) {
+        toggle.classList.toggle("active");
+        alert("Error: " + (err.message || "Unknown"));
+      }
+    }
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 8a. Single Raw Idea (text) - GET /user/:userId/raw-ideas/:rawIdeaId
+// ═══════════════════════════════════════════════════════════════════
+export function renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+        return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - TreeOS</title>
+  <meta name="description" content="${escapeHtml((rawIdea.content || "").slice(0, 160))}" />
+  <meta property="og:title" content="Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - TreeOS" />
+  <meta property="og:description" content="${escapeHtml((rawIdea.content || "").slice(0, 160))}" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="TreeOS" />
+  <meta property="og:image" content="${getLandUrl()}/tree.png" />
+  <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      background: #736fe6;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      animation: fadeInUp 0.5s ease-out;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      color: white;
+      text-decoration: none;
+      border-radius: 980px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .back-link::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .back-link:hover {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    }
+
+    .back-link:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Raw Idea Card */
+    .raw-idea-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
+    }
+
+    /* User Info */
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .user-info::before {
+      content: '💡';
+      font-size: 18px;
+    }
+
+    .user-info a {
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.2s;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .user-info a:hover {
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+      transform: translateX(2px);
+    }
+
+    .note-time {
+      margin-left: auto;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
+    }
+
+    /* Status badge */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .status-badge--pending   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.2); }
+    .status-badge--processing{ background: rgba(255,200,0,0.25);   color: #ffe066;               border: 1px solid rgba(255,200,0,0.3); }
+    .status-badge--succeeded { background: rgba(50,220,120,0.25);  color: #7effc0;               border: 1px solid rgba(50,220,120,0.3); }
+    .status-badge--stuck     { background: rgba(255,140,0,0.25);   color: #ffcf7e;               border: 1px solid rgba(255,140,0,0.3); }
+    .status-badge--deleted   { background: rgba(255,80,80,0.2);    color: #ff9ea0;               border: 1px solid rgba(255,80,80,0.25); }
+    .ai-chat-link {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.9);
+      border: 1px solid rgba(255,255,255,0.25);
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .ai-chat-link:hover { background: rgba(255,255,255,0.25); }
+
+    /* Copy Button Bar */
+    .copy-bar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      font-size: 20px;
+      padding: 8px 12px;
+      border-radius: 980px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .copy-btn::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .copy-btn:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    .copy-btn:active {
+      transform: translateY(0);
+    }
+
+    #copyUrlBtn {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Raw Idea Content */
+    pre {
+      background: rgba(255, 255, 255, 0.3);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      padding: 20px;
+      border-radius: 12px;
+      font-size: 16px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      color: #3d2f8f;
+      font-weight: 600;
+      text-shadow:
+        0 0 10px rgba(102, 126, 234, 0.4),
+        0 1px 3px rgba(255, 255, 255, 1);
+      box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    pre::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        110deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.4),
+        transparent 60%
+      );
+      opacity: 0;
+      transform: translateX(-100%);
+      pointer-events: none;
+    }
+
+    pre:hover {
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow:
+        0 8px 32px rgba(102, 126, 234, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    pre.flash::before {
+      opacity: 1;
+      animation: glassShimmer 1.2s ease forwards;
+    }
+
+    pre:hover::before {
+      opacity: 1;
+      animation: glassShimmer 1.2s ease forwards;
+    }
+
+    pre.copied {
+      animation: textGlow 0.8s ease-out;
+    }
+
+    @keyframes textGlow {
+      0% {
+        box-shadow:
+          0 4px 20px rgba(0, 0, 0, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      }
+      50% {
+        box-shadow:
+          0 0 40px rgba(102, 126, 234, 0.6),
+          0 0 60px rgba(102, 126, 234, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        text-shadow:
+          0 0 20px rgba(102, 126, 234, 0.8),
+          0 0 30px rgba(102, 126, 234, 0.6),
+          0 1px 3px rgba(255, 255, 255, 1);
+      }
+      100% {
+        box-shadow:
+          0 4px 20px rgba(0, 0, 0, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      }
+    }
+
+    @keyframes glassShimmer {
+      0% {
+        opacity: 0;
+        transform: translateX(-120%) skewX(-15deg);
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+        transform: translateX(120%) skewX(-15deg);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .raw-idea-card {
+        padding: 24px 20px;
+      }
+
+      pre {
+        font-size: 17px;
+        padding: 16px;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+<a href="${back}" class="back-link">${backText}</a>
+      <button id="copyUrlBtn" class="copy-btn" title="Copy URL to share">🔗</button>
+    </div>
+
+    <!-- Raw Idea Card -->
+    <div class="raw-idea-card">
+      <div class="user-info">
+        ${userLink}
+        ${rawIdea.createdAt ? `<span class="note-time">${new Date(rawIdea.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at ${new Date(rawIdea.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>` : ""}
+      </div>
+
+      ${
+        hasToken
+          ? `<div class="status-row">
+        <span class="status-badge status-badge--${rawIdea.status || "pending"}">
+          ${rawIdea.status === "processing" ? "⏳ processing" : rawIdea.status === "succeeded" ? "✓ placed by AI" : rawIdea.status === "stuck" ? "⚠ stuck" : rawIdea.status === "deleted" ? "deleted" : "pending"}
+        </span>
+        ${rawIdea.aiSessionId && (rawIdea.status === "succeeded" || rawIdea.status === "stuck" || rawIdea.status === "processing") ? `<a class="ai-chat-link" href="/api/v1/user/${userId}/chats?sessionId=${rawIdea.aiSessionId}&token=${token}&html">View AI chat →</a>` : ""}
+      </div>`
+          : ""
+      }
+
+      <div class="copy-bar">
+        <button id="copyBtn" class="copy-btn" title="Copy raw idea">📋</button>
+      </div>
+
+      <pre id="content">${escapeHtml(rawIdea.content)}</pre>
+    </div>
+  </div>
+
+  <script>
+    const copyBtn = document.getElementById("copyBtn");
+    const copyUrlBtn = document.getElementById("copyUrlBtn");
+    const content = document.getElementById("content");
+
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(content.textContent).then(() => {
+        copyBtn.textContent = "✔️";
+        setTimeout(() => (copyBtn.textContent = "📋"), 900);
+
+        content.classList.add("copied");
+        setTimeout(() => content.classList.remove("copied"), 800);
+
+        setTimeout(() => {
+          content.classList.remove("flash");
+          void content.offsetWidth;
+          content.classList.add("flash");
+          setTimeout(() => content.classList.remove("flash"), 1300);
+        }, 600);
+      });
+    });
+
+    copyUrlBtn.addEventListener("click", () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      if (!url.searchParams.has('html')) {
+        url.searchParams.set('html', '');
+      }
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        copyUrlBtn.textContent = "✔️";
+        setTimeout(() => (copyUrlBtn.textContent = "🔗"), 900);
+      });
+    });
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 8b. Single Raw Idea (file) - GET /user/:userId/raw-ideas/:rawIdeaId
+// ═══════════════════════════════════════════════════════════════════
+export function renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const fileDeleted = rawIdea.content === "File was deleted";
+  const fileUrl = fileDeleted ? "" : `/api/v1/uploads/${rawIdea.content}`;
+  const filePath = fileDeleted
+    ? ""
+    : path.join(process.cwd(), "uploads", rawIdea.content);
+  const mimeType = fileDeleted
+    ? ""
+    : mime.lookup(filePath) || "application/octet-stream";
+  const mediaHtml = fileDeleted ? "" : renderMedia(fileUrl, mimeType);
+  const fileName = fileDeleted ? "File was deleted" : rawIdea.content;
+      return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${escapeHtml(fileName)}</title>
+  <style>
+    :root {
+      --glass-water-rgb: 115, 111, 230;
+      --glass-alpha: 0.28;
+      --glass-alpha-hover: 0.38;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      background: #736fe6;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      opacity: 0.08;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+
+    body::before {
+      width: 600px;
+      height: 600px;
+      background: white;
+      top: -300px;
+      right: -200px;
+      animation-delay: -5s;
+    }
+
+    body::after {
+      width: 400px;
+      height: 400px;
+      background: white;
+      bottom: -200px;
+      left: -100px;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+      }
+      50% {
+        transform: translateY(-30px) rotate(5deg);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Back Navigation */
+    .back-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      animation: fadeInUp 0.5s ease-out;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      color: white;
+      text-decoration: none;
+      border-radius: 980px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .back-link::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .back-link:hover {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    }
+
+    .back-link:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* File Card */
+    .file-card {
+      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.6s ease-out 0.1s both;
+    }
+
+    /* User Info */
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .user-info::before {
+      content: '👤';
+      font-size: 18px;
+    }
+
+    .user-info a {
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.2s;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .user-info a:hover {
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+      transform: translateX(2px);
+    }
+
+    .note-time {
+      margin-left: auto;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
+    }
+
+    /* File Header */
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 20px;
+      word-break: break-word;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Action Buttons */
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .download {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
+      color: white;
+      text-decoration: none;
+      border-radius: 980px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .download::after {
+      content: '⬇️';
+      font-size: 16px;
+      margin-left: 4px;
+    }
+
+    .download::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .download:hover {
+      background: rgba(255, 255, 255, 0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    }
+
+    .download:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    .copy-url-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 980px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.3s;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .copy-url-btn::after {
+      content: '🔗';
+      font-size: 16px;
+      margin-left: 4px;
+    }
+
+    .copy-url-btn::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+        120% 60% at 0% 0%,
+        rgba(255, 255, 255, 0.35),
+        transparent 60%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .copy-url-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .copy-url-btn:hover::before {
+      opacity: 1;
+      transform: translateX(30%) translateY(10%);
+    }
+
+    /* Media Container */
+    .media {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .media img,
+    .media video,
+    .media audio {
+      max-width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .file-card {
+        padding: 24px 20px;
+      }
+
+      h1 {
+        font-size: 22px;
+      }
+
+      .action-bar {
+        flex-direction: column;
+      }
+
+      .download,
+      .copy-url-btn {
+        padding: 12px 18px;
+        font-size: 16px;
+        width: 100%;
+        justify-content: center;
+      }
+
+      .back-nav {
+        flex-direction: column;
+      }
+
+      .back-link {
+        justify-content: center;
+      }
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .status-badge--pending   { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.2); }
+    .status-badge--processing{ background: rgba(255,200,0,0.25);   color: #ffe066;               border: 1px solid rgba(255,200,0,0.3); }
+    .status-badge--succeeded { background: rgba(50,220,120,0.25);  color: #7effc0;               border: 1px solid rgba(50,220,120,0.3); }
+    .status-badge--stuck     { background: rgba(255,140,0,0.25);   color: #ffcf7e;               border: 1px solid rgba(255,140,0,0.3); }
+    .status-badge--deleted   { background: rgba(255,80,80,0.2);    color: #ff9ea0;               border: 1px solid rgba(255,80,80,0.25); }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .container {
+        max-width: 700px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+<a href="${back}" class="back-link">${backText}</a>
+    </div>
+
+    <!-- File Card -->
+    <div class="file-card">
+      <div class="user-info">
+        ${userLink}
+        ${rawIdea.createdAt ? `<span class="note-time">${new Date(rawIdea.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at ${new Date(rawIdea.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>` : ""}
+      </div>
+
+      ${
+        hasToken
+          ? `<div class="status-row">
+        <span class="status-badge status-badge--${rawIdea.status || "pending"}">
+          ${rawIdea.status === "processing" ? "⏳ processing" : rawIdea.status === "succeeded" ? "✓ placed by AI" : rawIdea.status === "stuck" ? "⚠ stuck" : rawIdea.status === "deleted" ? "deleted" : "pending"}
+        </span>
+      </div>`
+          : ""
+      }
+
+      <h1>${escapeHtml(fileName)}</h1>
+
+      ${
+        fileDeleted
+          ? ""
+          : `<div class="action-bar">
+        <a class="download" href="${fileUrl}" download>Download</a>
+        <button id="copyUrlBtn" class="copy-url-btn">Share</button>
+      </div>`
+      }
+
+      <div class="media">
+        ${fileDeleted ? `<p style="color:rgba(255,255,255,0.6); padding:40px 0;">File was deleted</p>` : mediaHtml}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const copyUrlBtn = document.getElementById("copyUrlBtn");
+
+    copyUrlBtn.addEventListener("click", () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      if (!url.searchParams.has('html')) {
+        url.searchParams.set('html', '');
+      }
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        const originalText = copyUrlBtn.textContent;
+        copyUrlBtn.textContent = "✔️ Copied!";
+        setTimeout(() => (copyUrlBtn.textContent = originalText), 900);
+      });
+    });
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 9. Invites Page - GET /user/:userId/invites
+// ═══════════════════════════════════════════════════════════════════
+export function renderInvites({ userId, invites, token }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Invites</title>
+  <style>
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
+
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Glass Invites List */
+.invites-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.invite-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  
+  /* Start hidden for lazy loading */
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* When item becomes visible */
+.invite-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.invite-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.invite-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.invite-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.invite-text {
+  font-size: 16px;
+  line-height: 1.6;
+  color: white;
+  margin-bottom: 16px;
+  font-weight: 400;
+}
+
+.invite-text strong {
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.invite-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.invite-actions form {
+  margin: 0;
+}
+
+.accept-button,
+.decline-button {
+  position: relative;
+  overflow: hidden;
+  padding: 10px 20px;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.accept-button {
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.accept-button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.accept-button:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.accept-button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.decline-button {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: white;
+  opacity: 0.85;
+}
+
+.decline-button:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .invite-card {
+    padding: 20px 16px;
+  }
+
+  .invite-actions {
+    flex-direction: column;
+  }
+
+  .accept-button,
+  .decline-button {
+    width: 100%;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+      <h1>Invites</h1>
+      <div class="header-subtitle">Join other people's trees</div>
+    </div>
+
+    <!-- Invites Section -->
+    ${
+      invites.length > 0
+        ? `
+    <ul class="invites-list">
+      ${invites
+        .map(
+          (i) => `
+        <li class="invite-card">
+          <div class="invite-text">
+            <strong>${i.userInviting.username}${i.userInviting.isRemote && i.userInviting.homeLand ? "@" + i.userInviting.homeLand : ""}</strong>
+            invited you to
+            <strong>${i.rootId.name}${i.userInviting.isRemote && i.userInviting.homeLand ? " on " + i.userInviting.homeLand : ""}</strong>
+          </div>
+
+          <div class="invite-actions">
+            <form
+              method="POST"
+              action="/api/v1/user/${userId}/invites/${i._id}${tokenQS}"
+            >
+              <input type="hidden" name="accept" value="true" />
+              <button type="submit" class="accept-button">Accept</button>
+            </form>
+
+            <form
+              method="POST"
+              action="/api/v1/user/${userId}/invites/${i._id}${tokenQS}"
+            >
+              <input type="hidden" name="accept" value="false" />
+              <button type="submit" class="decline-button">Decline</button>
+            </form>
+          </div>
+        </li>
+      `,
+        )
+        .join("")}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📬</div>
+      <div class="empty-state-text">No pending invites</div>
+    </div>
+    `
+    }
+  </div>
+
+  <script>
+    // Intersection Observer for lazy loading animations
+    const observerOptions = {
+      root: null,
+      rootMargin: '50px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          // Add a small stagger delay based on order
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, index * 50); // 50ms stagger between items
+          
+          // Stop observing once animated
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe all invite cards
+    document.querySelectorAll('.invite-card').forEach(card => {
+      observer.observe(card);
+    });
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 10. Deleted Branches Page - GET /user/:userId/deleted
+// ═══════════════════════════════════════════════════════════════════
+export function renderDeletedBranches({ userId, user, deleted, token }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${user.username} — Deleted Branches</title>
+  <style>
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
+
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header h1 a {
+  color: white;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Glass Deleted List */
+.deleted-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.deleted-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  
+  /* Start hidden for lazy loading */
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* When item becomes visible */
+.deleted-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.deleted-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.deleted-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.deleted-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.deleted-info {
+  margin-bottom: 16px;
+}
+
+.deleted-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.deleted-name a {
+  color: white;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.deleted-name a:hover {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+}
+
+.deleted-id {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  letter-spacing: -0.3px;
+}
+
+/* Revival Forms */
+.revival-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.revive-as-root-form button {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 24px;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s;
+  font-family: inherit;
+  width: 100%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.revive-as-root-form button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.revive-as-root-form button:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.revive-as-root-form button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.revive-into-branch-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.revive-into-branch-form input[type="text"] {
+  flex: 1;
+  min-width: 180px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.revive-into-branch-form input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+}
+
+.revive-into-branch-form input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.revive-into-branch-form button {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  opacity: 0.85;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.revive-into-branch-form button:hover {
+  background: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .deleted-card {
+    padding: 20px 16px;
+  }
+
+  .deleted-name {
+    font-size: 16px;
+  }
+
+  .revive-as-root-form button {
+    width: 100%;
+  }
+
+  .revive-into-branch-form {
+    flex-direction: column;
+  }
+
+  .revive-into-branch-form input[type="text"] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .revive-into-branch-form button {
+    width: 100%;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
+
+    <!-- Header Section -->
+    <div class="header">
+      <h1>
+        Deleted Branches for
+        <a href="/api/v1/user/${userId}${tokenQS}">${user.username}</a>
+      </h1>
+      <div class="header-subtitle">
+        Recover deleted trees and branches as new trees or merge them into existing ones.
+      </div>
+    </div>
+
+    <!-- Deleted Items List -->
+    ${
+      deleted.length > 0
+        ? `
+    <ul class="deleted-list">
+      ${deleted
+        .map(
+          ({ _id, name }) => `
+        <li class="deleted-card">
+          <div class="deleted-info">
+            <div class="deleted-name">
+              <a href="/api/v1/root/${_id}${tokenQS}">
+                ${name || "Untitled"}
+              </a>
+            </div>
+            <div class="deleted-id">${_id}</div>
+          </div>
+
+          <div class="revival-section">
+            <!-- Revive as Root -->
+            <form
+              method="POST"
+              action="/api/v1/user/${userId}/deleted/${_id}/reviveAsRoot?token=${token}&html"
+              class="revive-as-root-form"
+            >
+              <button type="submit">Revive as Root</button>
+            </form>
+
+            <!-- Revive into Branch -->
+            <form
+              method="POST"
+              action="/api/v1/user/${userId}/deleted/${_id}/revive?token=${token}&html"
+              class="revive-into-branch-form"
+            >
+              <input
+                type="text"
+                name="targetParentId"
+                placeholder="Target parent node ID"
+                required
+              />
+              <button type="submit">Revive into Branch</button>
+            </form>
+          </div>
+        </li>
+      `,
+        )
+        .join("")}
+    </ul>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">🗑️</div>
+      <div class="empty-state-text">No deleted branches</div>
+      <div class="empty-state-subtext">
+        Deleted branches will appear here and can be revived
+      </div>
+    </div>
+    `
+    }
+  </div>
+
+  <script>
+    // Intersection Observer for lazy loading animations
+    const observerOptions = {
+      root: null,
+      rootMargin: '50px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          // Add a small stagger delay based on order
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, index * 50); // 50ms stagger between items
+          
+          // Stop observing once animated
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe all deleted cards
+    document.querySelectorAll('.deleted-card').forEach(card => {
+      observer.observe(card);
+    });
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 11a. API Key Created Page - POST /user/:userId/api-keys
+// ═══════════════════════════════════════════════════════════════════
+export function renderApiKeyCreated({ userId, safeName, rawKey, token }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+  const esc = (str = "") =>
+    String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <title>API Key Created</title>
+  <style>
+:root {
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #736fe6; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh; padding: 20px; color: #1a1a1a;
+  position: relative; overflow-x: hidden;
+}
+body::before, body::after {
+  content: ''; position: fixed; border-radius: 50%; opacity: 0.08;
+  animation: float 20s infinite ease-in-out; pointer-events: none;
+}
+body::before { width: 600px; height: 600px; background: white; top: -300px; right: -200px; }
+body::after { width: 400px; height: 400px; background: white; bottom: -200px; left: -100px; }
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.container { max-width: 600px; margin: 0 auto; position: relative; z-index: 1; }
+.back-nav { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; animation: fadeInUp 0.5s ease-out; }
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
+  background: rgba(115,111,230,var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%); color: white; text-decoration: none;
+  border-radius: 980px; font-weight: 600; font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28); position: relative; overflow: hidden;
+}
+.back-link::before {
+  content: ""; position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
+}
+.back-link:hover { background: rgba(115,111,230,var(--glass-alpha-hover)); transform: translateY(-1px); }
+.back-link:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+.card {
+  position: relative;
+  background: rgba(115,111,230,var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 20px; padding: 40px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white; animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+.card-title {
+  font-size: 22px; font-weight: 700; margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+.card-name {
+  font-size: 14px; color: rgba(255,255,255,0.6); margin-bottom: 20px;
+}
+.warning {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; margin-bottom: 20px;
+  background: rgba(255,179,71,0.15); border: 1px solid rgba(255,179,71,0.3);
+  border-radius: 10px; font-size: 13px; font-weight: 500;
+  color: rgba(255,220,150,0.95); line-height: 1.5;
+}
+.key-block {
+  position: relative;
+  background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px; padding: 16px 60px 16px 16px;
+  font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 14px; color: rgba(255,255,255,0.95);
+  word-break: break-all; line-height: 1.6;
+  margin-bottom: 24px;
+}
+.copy-btn {
+  position: absolute; top: 10px; right: 10px;
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px; padding: 8px 14px;
+  color: white; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+  backdrop-filter: blur(10px);
+}
+.copy-btn:hover {
+  background: rgba(255,255,255,0.25); transform: translateY(-1px);
+}
+.copy-btn.copied {
+  background: rgba(72,187,120,0.3); border-color: rgba(72,187,120,0.4);
+}
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .card { padding: 28px 20px; }
+  .back-nav { flex-direction: column; }
+  .back-link { width: 100%; justify-content: center; }
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">&lt;- Back to Profile</a>
+      <a href="/api/v1/user/${userId}/api-keys${tokenQS}" class="back-link">API Keys</a>
+    </div>
+
+    <div class="card">
+      <div class="card-title">API Key Created</div>
+      <div class="card-name">${esc(safeName)}</div>
+
+      <div class="warning">
+        This key will only be shown once. Copy it now and store it securely.
+      </div>
+
+      <div class="key-block" id="keyBlock">
+        ${esc(rawKey)}
+        <button class="copy-btn" id="copyBtn" onclick="copyKey()">📋</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function copyKey() {
+      var block = document.getElementById("keyBlock");
+      var btn = document.getElementById("copyBtn");
+      var key = block.textContent.replace(btn.textContent, "").trim();
+      navigator.clipboard.writeText(key).then(function() {
+        var btn = document.getElementById("copyBtn");
+        btn.textContent = "\u2705";
+        btn.classList.add("copied");
+        setTimeout(function() {
+          btn.textContent = "\uD83D\uDCCB";
+          btn.classList.remove("copied");
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 11b. API Keys List Page - GET /user/:userId/api-keys
+// ═══════════════════════════════════════════════════════════════════
+export function renderApiKeysList({ userId, user, apiKeys, token, errorParam }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${user.username} — API Keys</title>
+  <style>
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Back Navigation */
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-1px);
+  animation: waterDrift 2.2s ease-in-out infinite alternate;
+}
+
+.back-link:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+@keyframes waterDrift {
+  0% { transform: translateY(-1px); }
+  100% { transform: translateY(1px); }
+}
+
+/* Glass Header Section */
+.header {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.header:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.header-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Create Form Card */
+.create-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.create-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.create-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.create-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.create-form input {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  font-size: 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: inherit;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.create-form input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.create-form input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.create-form button {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.create-form button::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.create-form button:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.create-form button:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.create-hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* API Keys List */
+.keys-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.key-card {
+  position: relative;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: white;
+  overflow: hidden;
+  
+  /* Start hidden for lazy loading */
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* Active keys get green glass tint */
+.key-card.active {
+  background: rgba(76, 175, 80, 0.2);
+  border-color: rgba(76, 175, 80, 0.35);
+}
+
+.key-card.active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at top right,
+    rgba(76, 175, 80, 0.15),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* When item becomes visible */
+.key-card.visible {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.key-card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.key-card:hover {
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.key-card.active:hover {
+  background: rgba(76, 175, 80, 0.28);
+  box-shadow: 0 12px 32px rgba(76, 175, 80, 0.15);
+}
+
+.key-card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.key-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.key-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.meta-item {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 980px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.badge.active {
+  background: rgba(76, 175, 80, 0.25);
+  color: white;
+  border-color: rgba(76, 175, 80, 0.4);
+}
+
+.badge.revoked {
+  background: rgba(239, 68, 68, 0.25);
+  color: white;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.key-actions {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.revoke-button {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 980px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.25);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+
+.revoke-button:hover {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Empty State */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+.empty-state-text {
+  font-size: 20px;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .header,
+  .create-card {
+    padding: 24px 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .create-form {
+    flex-direction: column;
+  }
+
+  .create-form input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .create-form button {
+    width: 100%;
+  }
+
+  .key-card {
+    padding: 20px 16px;
+  }
+
+  .back-nav {
+    flex-direction: column;
+  }
+
+  .back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state {
+    padding: 40px 24px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 700px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Back Navigation -->
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+        ← Back to Profile
+      </a>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+      <h1>API Keys</h1>
+      <div class="header-subtitle">
+        Manage programmatic access to your account
+      </div>
+    </div>
+
+    <!-- Create API Key -->
+    <div class="create-card">
+      <form class="create-form" method="POST" action="/api/v1/user/${
+        userId
+      }/api-keys?token=${token}&html">
+        <input type="text" name="name" placeholder="Key name (optional)" />
+        <button type="submit">Create Key</button>
+      </form>
+      <div class="create-hint">
+        You'll only see the key once after creation.
+      </div>
+    </div>
+
+    <!-- API Keys List -->
+    ${
+      apiKeys.length > 0
+        ? `
+    <div class="keys-list">
+      ${apiKeys
+        .map(
+          (k) => `
+        <div class="key-card${!k.revoked ? " active" : ""}">
+          <div class="key-name">${k.name || "Untitled Key"}</div>
+          
+          <div class="key-meta">
+            <div class="meta-item">
+              Created ${new Date(k.createdAt).toLocaleDateString()}
+            </div>
+            <div class="meta-item">
+              Used ${k.usageCount} ${k.usageCount === 1 ? "time" : "times"}
+            </div>
+            <div class="meta-item">
+              <span class="badge ${k.revoked ? "revoked" : "active"}">
+                ${k.revoked ? "Revoked" : "Active"}
+              </span>
+            </div>
+          </div>
+
+          ${
+            !k.revoked
+              ? `
+          <div class="key-actions">
+            <button class="revoke-button" data-key-id="${k._id}">
+              Revoke Key
+            </button>
+          </div>
+          `
+              : ""
+          }
+        </div>
+      `,
+        )
+        .join("")}
+    </div>
+    `
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">🔑</div>
+      <div class="empty-state-text">No API keys yet</div>
+      <div class="empty-state-subtext">
+        Create one above to get started
+      </div>
+    </div>
+    `
+    }
+  </div>
+
+  <script>
+    // Intersection Observer for lazy loading animations
+    const observerOptions = {
+      root: null,
+      rootMargin: '50px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, index * 50);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // Observe all key cards
+    document.querySelectorAll('.key-card').forEach(card => {
+      observer.observe(card);
+    });
+
+    // Revoke button handler
+    document.addEventListener("click", async (e) => {
+      if (!e.target.classList.contains("revoke-button")) return;
+
+      const keyId = e.target.dataset.keyId;
+
+      if (!confirm("Revoke this API key? This cannot be undone.")) return;
+
+      const token = new URLSearchParams(window.location.search).get("token") || "";
+      const qs = token ? "?token=" + encodeURIComponent(token) : "";
+
+      try {
+        const res = await fetch(
+          "/api/v1/user/${userId}/api-keys/" + keyId + qs,
+          { method: "DELETE" }
+        );
+
+        const data = await res.json();
+        if (!data.message) throw new Error("Revoke failed");
+
+        location.reload();
+      } catch (err) {
+        alert("Failed to revoke API key");
+      }
+    });
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 12. Share Token Page - GET /user/:userId/shareToken
+// ═══════════════════════════════════════════════════════════════════
+export function renderShareToken({ userId, user, token, tokenQS }) {
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Share Token — @${user.username}</title>
+  <style>
+:root {
+  --glass-water-rgb: 115, 111, 230;
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* Animated background */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px;
+  height: 600px;
+  background: white;
+  top: -300px;
+  right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px;
+  height: 400px;
+  background: white;
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30px) rotate(5deg);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container {
+  max-width: 600px;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glass Card */
+.card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 24px;
+  padding: 48px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.card:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  display: inline-block;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.username {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+/* Description */
+.description {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  margin-bottom: 28px;
+  font-size: 15px;
+  text-align: center;
+}
+
+/* Welcome Box */
+.welcome-box {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 24px;
+  border-radius: 16px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.welcome-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.welcome-text {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+/* Token Section */
+.token-section {
+  margin-bottom: 28px;
+}
+
+.token-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.token-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: all 0.3s;
+}
+
+.token-display:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.token-text {
+  flex: 1;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 14px;
+  color: white;
+  word-break: break-all;
+  font-weight: 500;
+}
+
+.btn-copy {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 980px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.btn-copy:hover {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Form Section */
+.form-section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 24px;
+}
+
+.form-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 16px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+input {
+  flex: 1;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 15px;
+  font-family: 'SF Mono', Monaco, monospace;
+  transition: all 0.3s;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: white;
+  font-weight: 500;
+}
+
+input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+}
+
+.btn-submit {
+  padding: 14px 28px;
+  border-radius: 980px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-submit::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    120% 60% at 0% 0%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-30%) translateY(-10%);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.btn-submit:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.btn-submit:hover::before {
+  opacity: 1;
+  transform: translateX(30%) translateY(10%);
+}
+
+/* Info Box */
+.info-box {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 14px 18px;
+  border-radius: 12px;
+  border-left: 3px solid rgba(255, 255, 255, 0.5);
+  margin-bottom: 24px;
+}
+
+.info-box-content {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.6;
+}
+
+/* Back Links */
+.back-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 980px;
+  transition: all 0.3s;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.back-link:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 40px;
+  }
+
+  .card {
+    padding: 32px 24px;
+  }
+
+  h1 {
+    font-size: 28px;
+  }
+
+  .icon {
+    font-size: 56px;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+
+  .btn-submit {
+    width: 100%;
+  }
+
+  .token-display {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-copy {
+    width: 100%;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    max-width: 500px;
+  }
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <!-- Header -->
+      <div class="header">
+        <div class="icon">🔐</div>
+        <h1>Share Token</h1>
+        <div class="username">@${user.username}</div>
+      </div>
+
+      ${
+        token
+          ? `
+          <!-- Existing Token View -->
+          <div class="description">
+            Share read-only access to your content.
+          </div>
+
+          <div class="token-section">
+            <div class="token-label">Your Token</div>
+            <div class="token-display">
+              <div class="token-text" id="tokenText">${token}</div>
+              <button class="btn-copy" onclick="copyToken()">Copy</button>
+            </div>
+          </div>
+
+          <div class="info-box">
+            <div class="info-box-content">
+              Change your token anytime to revoke shared URL access.
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-title">Update Token</div>
+            <form method="POST" action="/api/v1/user/${userId}/shareToken${tokenQS}">
+              <div class="form-row">
+                <input
+                  name="htmlShareToken"
+                  placeholder="Enter new token"
+                  required
+                />
+                <button type="submit" class="btn-submit">Update</button>
+              </div>
+            </form>
+          </div>
+        `
+          : `
+          <!-- First Time View -->
+          <div class="welcome-box">
+            <div class="welcome-title">Create a Share Token</div>
+            <div class="welcome-text">
+              Share read-only access to your trees and notes. Change it anytime to revoke old links.
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-title">Choose Your Token</div>
+            <form method="POST" action="/api/v1/user/${userId}/shareToken${tokenQS}">
+              <div class="form-row">
+                <input
+                  name="htmlShareToken"
+                  placeholder="Enter a unique token"
+                  required
+                />
+                <button type="submit" class="btn-submit">Create</button>
+              </div>
+            </form>
+          </div>
+        `
+      }
+
+      <div class="back-links">
+        <a class="back-link" href="/api/v1/user/${userId}${tokenQS}">
+          ← Back to Profile
+        </a>
+        <a class="back-link" target="_top" href="/">
+          ← Back to ${new URL(getLandUrl()).hostname}
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function copyToken() {
+      const tokenText = document.getElementById('tokenText').textContent;
+      navigator.clipboard.writeText(tokenText).then(() => {
+        const btn = document.querySelector('.btn-copy');
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Copied';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
+      `);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 13. Energy Page - GET /user/:userId/energy
+// ═══════════════════════════════════════════════════════════════════
+export function renderEnergy({ userId, user, energyAmount, additionalEnergy, profileType, planExpiresAt, llmConnections, mainAssignment, rawIdeaAssignment, activeConn, hasLlm, connectionCount, isBasic, qs }) {
+    return (`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#667eea">
+<title>Energy · @${user.username}</title>
+<style>
+  :root {
+    --glass-water-rgb: 115, 111, 230;
+    --glass-alpha: 0.28;
+    --glass-alpha-hover: 0.38;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    background: #736fe6;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+      "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 20px;
+    color: white;
+    position: relative;
+    overflow-x: hidden;
+    touch-action: manipulation;
+  }
+
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    border-radius: 50%;
+    opacity: 0.08;
+    animation: float 20s infinite ease-in-out;
+    pointer-events: none;
+  }
+
+  body::before {
+    width: 600px; height: 600px;
+    background: white; top: -300px; right: -200px;
+    animation-delay: -5s;
+  }
+
+  body::after {
+    width: 400px; height: 400px;
+    background: white; bottom: -200px; left: -100px;
+    animation-delay: -10s;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-30px) rotate(5deg); }
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* =========================================================
+     GLASS BUTTONS
+     ========================================================= */
+  .back-link,
+  .glass-btn {
+    position: relative;
+    overflow: hidden;
+    padding: 10px 20px;
+    border-radius: 980px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    color: white;
+    text-decoration: none;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.3s ease;
+  }
+  .glass-card > * {
+    position: relative;
+    z-index: 1;
+  }
+  .back-link::before,
+  .glass-btn::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.35), transparent 60%),
+      linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.25), transparent 70%);
+    opacity: 0;
+    transform: translateX(-30%) translateY(-10%);
+    transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+
+  .back-link:hover,
+  .glass-btn:hover {
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+    transform: translateY(-2px);
+  }
+
+  .back-link:hover::before,
+  .glass-btn:hover::before {
+    opacity: 1;
+    transform: translateX(30%) translateY(10%);
+  }
+
+  .back-link:active,
+  .glass-btn:active {
+    background: rgba(var(--glass-water-rgb), 0.45);
+    transform: translateY(0);
+  }
+
+  /* =========================================================
+     GLASS CARDS
+     ========================================================= */
+  .glass-card {
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    margin-bottom: 24px;
+    animation: fadeInUp 0.6s ease-out both;
+    position: relative;
+    overflow: visible;
+  }
+
+  .glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
+    pointer-events: none;
+  }
+
+  .glass-card h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 16px;
+    letter-spacing: -0.3px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .back-nav {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    animation: fadeInUp 0.5s ease-out;
+  }
+
+  /* =========================================================
+     ENERGY STATUS
+     ========================================================= */
+  .energy-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+  }
+
+  .energy-stat {
+    padding: 18px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 14px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .energy-stat::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+    pointer-events: none;
+  }
+
+  .energy-stat-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 6px;
+  }
+
+  .energy-stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .energy-stat-sub {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 4px;
+  }
+
+  .energy-stat.plan-basic {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .energy-stat.plan-standard {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.2), rgba(37, 99, 235, 0.2));
+    border-color: rgba(96, 165, 250, 0.3);
+  }
+
+  .energy-stat.plan-premium {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(124, 58, 237, 0.2));
+    border-color: rgba(168, 85, 247, 0.3);
+  }
+
+  .energy-stat.plan-god {
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(245, 158, 11, 0.2));
+    border-color: rgba(250, 204, 21, 0.3);
+  }
+
+  /* =========================================================
+     PLAN CARDS
+     ========================================================= */
+  .plan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  .plan-box {
+    padding: 24px 20px;
+    border-radius: 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .plan-box::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    transition: all 0.3s;
+  }
+
+  .plan-box[data-plan="basic"] {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.18);
+  }
+  .plan-box[data-plan="basic"]::before {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent);
+  }
+
+  .plan-box[data-plan="standard"] {
+    background: rgba(96, 165, 250, 0.08);
+    border: 2px solid rgba(96, 165, 250, 0.25);
+  }
+  .plan-box[data-plan="standard"]::before {
+    background: linear-gradient(180deg, rgba(96, 165, 250, 0.1), transparent);
+  }
+
+  .plan-box[data-plan="premium"] {
+    background: rgba(168, 85, 247, 0.08);
+    border: 2px solid rgba(168, 85, 247, 0.25);
+  }
+  .plan-box[data-plan="premium"]::before {
+    background: linear-gradient(180deg, rgba(168, 85, 247, 0.1), transparent);
+  }
+
+  .plan-box:hover:not(.disabled) {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
+  }
+
+  .plan-box[data-plan="standard"]:hover:not(.disabled) {
+    background: rgba(96, 165, 250, 0.16);
+    border-color: rgba(96, 165, 250, 0.4);
+  }
+
+  .plan-box[data-plan="premium"]:hover:not(.disabled) {
+    background: rgba(168, 85, 247, 0.16);
+    border-color: rgba(168, 85, 247, 0.4);
+  }
+
+  .plan-box.selected {
+    transform: translateY(-4px);
+    box-shadow: 0 0 0 3px rgba(72, 187, 178, 0.6), 0 8px 28px rgba(0, 0, 0, 0.15), 0 0 30px rgba(72, 187, 178, 0.15);
+  }
+
+  .plan-box[data-plan="standard"].selected {
+    border-color: rgba(72, 187, 178, 0.9);
+    background: rgba(96, 165, 250, 0.18);
+  }
+
+  .plan-box[data-plan="premium"].selected {
+    border-color: rgba(72, 187, 178, 0.9);
+    background: rgba(168, 85, 247, 0.18);
+  }
+
+  .plan-box.disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+ .plan-box.current-plan {
+    border-color: rgba(255, 255, 255, 0.6);
+    border-width: 3px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 20px rgba(255, 255, 255, 0.08);
+  }
+
+  .plan-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 6px;
+  }
+
+  .plan-price {
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 4px;
+  }
+
+  .plan-period {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .plan-current-tag {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 4px 12px;
+    border-radius: 980px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+  }
+
+  .plan-features {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .plan-feature {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  .plan-feature.dim { color: rgba(255, 255, 255, 0.4); }
+
+  .plan-feature.highlight {
+    color: rgba(72, 187, 178, 0.95);
+    font-weight: 600;
+  }
+
+  .plan-renew-note {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.55);
+    font-style: italic;
+  }
+
+  /* =========================================================
+     ENERGY BUY
+     ========================================================= */
+  .energy-btns {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .energy-buy-btn {
+    padding: 12px 20px;
+    border-radius: 980px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .energy-buy-btn::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.35), transparent 60%),
+      linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.25), transparent 70%);
+    opacity: 0;
+    transform: translateX(-30%) translateY(-10%);
+    transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+
+  .energy-buy-btn:hover {
+    background: rgba(var(--glass-water-rgb), var(--glass-alpha-hover));
+    transform: translateY(-2px);
+  }
+
+  .energy-buy-btn:hover::before {
+    opacity: 1;
+    transform: translateX(30%) translateY(10%);
+  }
+
+  .energy-buy-btn:active {
+    background: rgba(var(--glass-water-rgb), 0.45);
+    transform: translateY(0);
+  }
+
+  /* =========================================================
+     CHECKOUT
+     ========================================================= */
+  .checkout-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .checkout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    transition: background 0.2s;
+  }
+
+  .checkout-row:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .checkout-row-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .checkout-row-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .checkout-row-icon.plan-icon {
+    background: rgba(168, 85, 247, 0.2);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+
+  .checkout-row-icon.energy-icon {
+    background: rgba(250, 204, 21, 0.2);
+    border: 1px solid rgba(250, 204, 21, 0.3);
+  }
+
+  .checkout-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .checkout-row-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+  }
+
+  .checkout-row-desc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .checkout-row-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .checkout-row-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+  }
+
+  .checkout-remove {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(239, 68, 68, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    line-height: 1;
+  }
+
+  .checkout-remove:hover {
+    background: rgba(239, 68, 68, 0.35);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: white;
+  }
+
+  .checkout-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 4px 0;
+  }
+
+  .checkout-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, rgba(72, 187, 178, 0.2), rgba(56, 163, 155, 0.15));
+    border: 1px solid rgba(72, 187, 178, 0.35);
+    border-radius: 14px;
+  }
+
+  .checkout-total-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+  }
+
+  .checkout-total-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .checkout-btn {
+    width: 100%;
+    padding: 18px;
+    border-radius: 980px;
+    border: 1px solid rgba(72, 187, 178, 0.5);
+    background: linear-gradient(135deg, rgba(72, 187, 178, 0.4), rgba(56, 163, 155, 0.35));
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    color: white;
+    font-size: 17px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+      0 0 20px rgba(72, 187, 178, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+    letter-spacing: -0.2px;
+  }
+
+  .checkout-btn::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.35), transparent 60%),
+      linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.25), transparent 70%);
+    opacity: 0;
+    transform: translateX(-30%) translateY(-10%);
+    transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+
+  .checkout-btn:hover {
+    background: linear-gradient(135deg, rgba(72, 187, 178, 0.55), rgba(56, 163, 155, 0.5));
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18),
+      0 0 30px rgba(72, 187, 178, 0.2);
+  }
+
+  .checkout-btn:hover::before {
+    opacity: 1;
+    transform: translateX(30%) translateY(10%);
+  }
+
+  .checkout-btn:active { transform: translateY(0); }
+
+  .checkout-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .checkout-btn:disabled:hover {
+    background: linear-gradient(135deg, rgba(72, 187, 178, 0.4), rgba(56, 163, 155, 0.35));
+    transform: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .checkout-legal {
+    text-align: center;
+    margin-top: 14px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.45);
+    line-height: 1.5;
+  }
+
+  .checkout-legal-link {
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+
+  .checkout-legal-link:hover { color: white; }
+
+  .checkout-note {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.45);
+    font-style: italic;
+  }
+
+  .checkout-empty {
+    text-align: center;
+    padding: 28px 20px;
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+    font-size: 14px;
+    border: 2px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+  }
+
+  /* =========================================================
+     LLM SECTION
+     ========================================================= */
+  .llm-section-wrapper {
+    position: relative;
+  }
+
+  .llm-section-wrapper.locked .llm-section-content {
+    opacity: 0.2;
+    pointer-events: none;
+    filter: blur(2px);
+  }
+
+  .llm-upgrade-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    border-radius: inherit;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .llm-section-wrapper.locked .llm-upgrade-overlay {
+    display: flex;
+  }
+
+  .llm-upgrade-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .llm-upgrade-sub {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .llm-sub {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+
+  .llm-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+  }
+
+  .llm-toggle-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .glass-toggle {
+    position: relative;
+    width: 54px;
+    height: 28px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(18px);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    flex-shrink: 0;
+  }
+
+  .glass-toggle.active {
+    background: rgba(72, 187, 178, 0.45);
+    box-shadow: 0 0 16px rgba(72, 187, 178, 0.35);
+  }
+
+  .glass-toggle-knob {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .glass-toggle.active .glass-toggle-knob {
+    left: 28px;
+  }
+
+  .llm-connected-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: rgba(72, 187, 120, 0.15);
+    border: 1px solid rgba(72, 187, 120, 0.3);
+    border-radius: 10px;
+    margin-bottom: 16px;
+  }
+
+  .llm-connected-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(72, 187, 120, 0.9);
+    box-shadow: 0 0 8px rgba(72, 187, 120, 0.5);
+    flex-shrink: 0;
+  }
+
+  .llm-connected-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(72, 187, 120, 0.9);
+  }
+
+  .llm-connected-detail {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-left: auto;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 300px;
+  }
+
+  .llm-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: opacity 0.3s;
+  }
+
+  .llm-fields.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  .llm-field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .llm-field-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .llm-input {
+    padding: 14px 16px;
+    font-size: 15px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all 0.2s;
+    width: 100%;
+  }
+
+  .llm-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+
+  .llm-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+  }
+
+  /* Custom dropdown (replaces native <select> to avoid iframe glitch on mobile) */
+  .custom-select {
+    position: relative;
+    width: 100%;
+  }
+  .custom-select-trigger {
+    padding: 8px 10px;
+    font-size: 15px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    transition: border-color 0.2s, background 0.2s;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .custom-select-trigger::after {
+    content: "▾";
+    font-size: 12px;
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+  .custom-select.open .custom-select-trigger {
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.25);
+  }
+  .custom-select.open .custom-select-trigger::after { content: "▴"; }
+  .custom-select-options {
+    display: none;
+    position: absolute;
+    left: 0; right: 0;
+    bottom: calc(100% + 4px);
+    background: rgba(30, 20, 50, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 100;
+    max-height: 220px;
+    overflow-y: auto;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+  }
+  .custom-select.open .custom-select-options { display: block; }
+  .custom-select-option {
+    padding: 10px 12px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .custom-select-option:hover,
+  .custom-select-option:focus { background: rgba(255, 255, 255, 0.12); }
+  .custom-select-option.selected {
+    background: rgba(72, 187, 178, 0.2);
+    color: white;
+    font-weight: 600;
+  }
+
+  .llm-btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+  }
+
+  .llm-save-btn,
+  .llm-disconnect-btn {
+    padding: 14px 24px;
+    border-radius: 980px;
+    border: 1px solid;
+    color: white;
+    font-weight: 600;
+    font-size: 15px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    background: none;
+  }
+
+  .llm-save-btn {
+    flex: 1;
+    border-color: rgba(72, 187, 178, 0.4);
+    background: rgba(72, 187, 178, 0.3);
+  }
+
+  .llm-save-btn:hover {
+    background: rgba(72, 187, 178, 0.45);
+    transform: translateY(-2px);
+  }
+
+  .llm-disconnect-btn {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.25);
+  }
+
+  .llm-disconnect-btn:hover {
+    background: rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
+  }
+
+  .llm-status {
+    margin-top: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    display: none;
+  }
+
+  /* =========================================================
+     MODAL (Terms / Privacy)
+     ========================================================= */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal-container {
+    width: 100%;
+    max-width: 720px;
+    height: 85vh;
+    height: 85dvh;
+    background: rgba(var(--glass-water-rgb), 0.35);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+  }
+
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    line-height: 1;
+  }
+
+  .modal-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .modal-body {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .modal-body iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+
+  /* =========================================================
+     RESPONSIVE
+     ========================================================= */
+  @media (max-width: 640px) {
+    body { padding: 16px; }
+    .container { max-width: 100%; }
+    .glass-card { padding: 20px; }
+    .back-nav { flex-direction: column; }
+    .back-link { width: 100%; justify-content: center; }
+    .energy-grid { grid-template-columns: 1fr; }
+    .plan-grid { grid-template-columns: 1fr; }
+    .energy-btns { flex-direction: column; }
+    .energy-buy-btn { width: 100%; }
+    .llm-btn-row { flex-direction: column; }
+    .llm-save-btn, .llm-disconnect-btn { width: 100%; text-align: center; }
+    .llm-connected-detail { max-width: 140px; }
+    .modal-container { height: 90vh; height: 90dvh; border-radius: 16px; }
+    .modal-overlay { padding: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="back-nav">
+    <a href="/api/v1/user/${userId}${qs}" class="back-link">← Back to Profile</a>
+  </div>
+
+  <!-- Energy Status -->
+  <div class="glass-card" style="animation-delay: 0.1s;">
+    <h2>⚡ Energy</h2>
+    <div class="energy-grid">
+      <div class="energy-stat">
+        <div class="energy-stat-label">Plan Energy</div>
+        <div class="energy-stat-value">${energyAmount}</div>
+        <div class="energy-stat-sub">Resets every 24 hours</div>
+      </div>
+      <div class="energy-stat plan-${profileType}">
+        <div class="energy-stat-label">Current Plan</div>
+        <div class="energy-stat-value" style="font-size: 22px; text-transform: capitalize;">${profileType}</div>
+        ${!isBasic && planExpiresAt ? '<div class="energy-stat-sub">Expires ' + new Date(planExpiresAt).toLocaleDateString() + "</div>" : ""}
+      </div>
+      <div class="energy-stat">
+        <div class="energy-stat-label">Additional Energy</div>
+        <div class="energy-stat-value">${additionalEnergy}</div>
+        <div class="energy-stat-sub">Used after plan energy</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plans -->
+  <div class="glass-card" style="animation-delay: 0.15s;">
+    <h2>📋 Plans</h2>
+    <div class="plan-grid">
+      <div class="plan-box disabled" data-plan="basic">
+        <div class="plan-name">Basic</div>
+        <div class="plan-price">Free</div>
+        <div class="plan-period">350 daily energy</div>
+        <div class="plan-features">
+          <div class="plan-feature">No file uploads</div>
+          <div class="plan-feature dim">Limited access</div>
+        </div>
+        ${profileType === "basic" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
+      </div>
+      <div class="plan-box" data-plan="standard">
+        <div class="plan-name">Standard</div>
+        <div class="plan-price">$20</div>
+        <div class="plan-period">per 30 days</div>
+        <div class="plan-features">
+          <div class="plan-feature">1,500 daily energy</div>
+          <div class="plan-feature">File uploads</div>
+        </div>
+        ${profileType === "standard" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
+      </div>
+      <div class="plan-box" data-plan="premium">
+        <div class="plan-name">Premium</div>
+        <div class="plan-price">$100</div>
+        <div class="plan-period">per 30 days</div>
+        <div class="plan-features">
+          <div class="plan-feature">8,000 daily energy</div>
+          <div class="plan-feature">Full access</div>
+          <div class="plan-feature highlight">Offline LLM processing</div>
+        </div>
+        ${profileType === "premium" || profileType === "god" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
+      </div>
+    </div>
+    <div class="plan-renew-note" id="planNote" style="display:none;"></div>
+  </div>
+
+  <!-- Buy Energy -->
+  <div class="glass-card" style="animation-delay: 0.2s;">
+    <h2>🔥 Additional Energy</h2>
+    <div style="font-size: 14px; color: rgba(255,255,255,0.55); margin-bottom: 16px;">Reserve energy — only used when your plan energy runs out.</div>
+    <div class="energy-btns" id="energyBtns">
+      <button class="energy-buy-btn" data-amount="100">+100</button>
+      <button class="energy-buy-btn" data-amount="500">+500</button>
+      <button class="energy-buy-btn" data-amount="1000">+1000</button>
+      <button class="energy-buy-btn" id="customEnergyBtn">+Custom</button>
+    </div>
+    <div id="energyAdded" style="margin-top: 14px; font-size: 14px; color: rgba(255,255,255,0.6); display: none;">
+      Added: <strong id="energyAddedVal" style="color: white;"></strong>
+      <span style="margin-left: 8px; cursor: pointer; opacity: 0.6;" onclick="resetEnergy()">✕ Clear</span>
+    </div>
+  </div>
+
+  <!-- Checkout -->
+  <div class="glass-card" style="animation-delay: 0.25s;">
+    <h2>💳 Checkout</h2>
+    <div id="checkoutContent">
+      <div class="checkout-empty">Select a plan or add energy to continue</div>
+    </div>
+  </div>
+
+  <!-- Custom LLM -->
+  <div class="glass-card" style="animation-delay: 0.3s;">
+    <h2>🤖 Custom LLM Endpoints <span style="opacity:0.5;font-size:0.7em">(${connectionCount}/15)</span></h2>
+    <div class="llm-section-wrapper">
+      <div class="llm-section-content">
+        <div class="llm-sub">Connect your own OpenAI API-compatible LLMs. Assign them to different areas below.</div>
+
+        ${
+          connectionCount > 0
+            ? '<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">' +
+              '<div style="flex:1;min-width:180px;">' +
+              '<label class="llm-field-label" style="margin-bottom:4px;display:block;">Profile (Chat)</label>' +
+              '<div class="custom-select" id="llmAssignMain" data-slot="main">' +
+              '<div class="custom-select-trigger">' +
+              (mainAssignment
+                ? llmConnections
+                    .filter(function (c) {
+                      return c._id === mainAssignment;
+                    })
+                    .map(function (c) {
+                      return c.name + " (" + c.model + ")";
+                    })[0] || "None selected"
+                : "None selected") +
+              "</div>" +
+              '<div class="custom-select-options">' +
+              '<div class="custom-select-option' +
+              (!mainAssignment ? " selected" : "") +
+              '" data-value="">None</div>' +
+              llmConnections
+                .map(function (c) {
+                  return (
+                    '<div class="custom-select-option' +
+                    (mainAssignment === c._id ? " selected" : "") +
+                    '" data-value="' +
+                    c._id +
+                    '">' +
+                    c.name +
+                    " (" +
+                    c.model +
+                    ")</div>"
+                  );
+                })
+                .join("") +
+              "</div>" +
+              "</div>" +
+              "</div>" +
+              '<div style="flex:1;min-width:180px;">' +
+              '<label class="llm-field-label" style="margin-bottom:4px;display:block;">Raw Ideas</label>' +
+              '<div class="custom-select" id="llmAssignRawIdea" data-slot="rawIdea">' +
+              '<div class="custom-select-trigger">' +
+              (rawIdeaAssignment
+                ? llmConnections
+                    .filter(function (c) {
+                      return c._id === rawIdeaAssignment;
+                    })
+                    .map(function (c) {
+                      return c.name + " (" + c.model + ")";
+                    })[0] || "Uses main"
+                : "Uses main") +
+              "</div>" +
+              '<div class="custom-select-options">' +
+              '<div class="custom-select-option' +
+              (!rawIdeaAssignment ? " selected" : "") +
+              '" data-value="">Uses main</div>' +
+              llmConnections
+                .map(function (c) {
+                  return (
+                    '<div class="custom-select-option' +
+                    (rawIdeaAssignment === c._id ? " selected" : "") +
+                    '" data-value="' +
+                    c._id +
+                    '">' +
+                    c.name +
+                    " (" +
+                    c.model +
+                    ")</div>"
+                  );
+                })
+                .join("") +
+              "</div>" +
+              "</div>" +
+              "</div>" +
+              "</div>"
+            : ""
+        }
+
+        <div id="llmConnectionsList">
+          ${
+            connectionCount === 0
+              ? '<div class="llm-empty-state" style="text-align:center;padding:18px 0;opacity:0.5;">No connections yet</div>'
+              : llmConnections
+                  .map(function (c) {
+                    return (
+                      '<div class="llm-conn-card" data-id="' +
+                      c._id +
+                      '" style="border:1px solid var(--glass-border-light);border-radius:10px;padding:12px 14px;margin-bottom:8px;background:rgba(255,255,255,0.03);">' +
+                      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+                      '<div style="flex:1;min-width:0;">' +
+                      '<div style="font-weight:600;font-size:0.95em;">' +
+                      c.name +
+                      "</div>" +
+                      '<div style="font-size:0.8em;opacity:0.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+                      c.model +
+                      " · " +
+                      c.baseUrl +
+                      "</div>" +
+                      "</div>" +
+                      '<div style="display:flex;gap:6px;flex-shrink:0;">' +
+                      '<button class="llm-save-btn" style="font-size:0.75em;padding:4px 10px;" onclick="editConnection(\'' +
+                      c._id +
+                      "')\">Edit</button>" +
+                      '<button class="llm-disconnect-btn" style="font-size:0.75em;padding:4px 10px;" onclick="deleteConnection(\'' +
+                      c._id +
+                      "')\">Delete</button>" +
+                      "</div>" +
+                      "</div>" +
+                      "</div>"
+                    );
+                  })
+                  .join("")
+          }
+        </div>
+
+        <div id="llmAddSection" style="margin-top:12px;">
+          <button class="llm-save-btn" id="llmAddToggle" onclick="toggleAddForm()" style="width:100%;">+ Add Connection</button>
+          <div class="llm-fields" id="llmAddForm" style="display:none;margin-top:10px;">
+            <div class="llm-field-row">
+              <label class="llm-field-label">Name</label>
+              <input type="text" class="llm-input" id="llmName" placeholder="e.g. Groq, OpenRouter" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">Endpoint URL</label>
+              <input type="text" class="llm-input" id="llmBaseUrl" placeholder="https://api.groq.com/openai/v1/chat/completions" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">API Key</label>
+              <input type="password" class="llm-input" id="llmApiKey" placeholder="gsk_abc123..." />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">Model</label>
+              <input type="text" class="llm-input" id="llmModel" placeholder="openai/gpt-oss-120b" />
+            </div>
+            <div class="llm-btn-row">
+              <button class="llm-save-btn" onclick="addConnection()">Save Connection</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="llmEditSection" style="display:none;margin-top:12px;">
+          <div style="font-weight:600;margin-bottom:8px;">Edit Connection</div>
+          <input type="hidden" id="llmEditId" />
+          <div class="llm-fields">
+            <div class="llm-field-row">
+              <label class="llm-field-label">Name</label>
+              <input type="text" class="llm-input" id="llmEditName" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">Endpoint URL</label>
+              <input type="text" class="llm-input" id="llmEditBaseUrl" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">API Key</label>
+              <input type="password" class="llm-input" id="llmEditApiKey" placeholder="••••••••  (leave blank to keep)" />
+            </div>
+            <div class="llm-field-row">
+              <label class="llm-field-label">Model</label>
+              <input type="text" class="llm-input" id="llmEditModel" />
+            </div>
+            <div class="llm-btn-row">
+              <button class="llm-save-btn" onclick="updateConnection()">Update</button>
+              <button class="llm-disconnect-btn" onclick="cancelEdit()">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="llm-status" id="llmStatus"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Terms Modal -->
+<div class="modal-overlay" id="termsModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <span class="modal-title">Terms of Service</span>
+      <span class="modal-close" onclick="closeModal('terms')">✕</span>
+    </div>
+    <div class="modal-body">
+      <iframe src="/terms" title="Terms of Service"></iframe>
+    </div>
+  </div>
+</div>
+
+<!-- Privacy Modal -->
+<div class="modal-overlay" id="privacyModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <span class="modal-title">Privacy Policy</span>
+      <span class="modal-close" onclick="closeModal('privacy')">✕</span>
+    </div>
+    <div class="modal-body">
+      <iframe src="/privacy" title="Privacy Policy"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+var userId = "${userId}";
+var currentPlan = "${profileType === "god" ? "premium" : profileType}";
+var PLAN_PRICE = { basic: 0, standard: 20, premium: 100 };
+var PLAN_ORDER = ["basic", "standard", "premium"];
+var ENERGY_RATE = 0.01;
+
+var state = {
+  energyAdded: 0,
+  selectedPlan: null
+};
+
+// =====================
+// MODAL
+// =====================
+function openModal(type) {
+  var id = type === "terms" ? "termsModal" : "privacyModal";
+  document.getElementById(id).classList.add("show");
+  document.body.style.overflow = "hidden";
+}
+
+function closeModal(type) {
+  var id = type === "terms" ? "termsModal" : "privacyModal";
+  document.getElementById(id).classList.remove("show");
+  document.body.style.overflow = "";
+}
+
+document.querySelectorAll(".modal-overlay").forEach(function(overlay) {
+  overlay.addEventListener("click", function(e) {
+    if (e.target === overlay) {
+      overlay.classList.remove("show");
+      document.body.style.overflow = "";
+    }
+  });
+});
+
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") {
+    document.querySelectorAll(".modal-overlay.show").forEach(function(m) {
+      m.classList.remove("show");
+    });
+    document.body.style.overflow = "";
+  }
+});
+
+// =====================
+// URL STATE
+// =====================
+function readURL() {
+  var p = new URLSearchParams(location.search);
+  if (p.get("energy")) state.energyAdded = parseInt(p.get("energy")) || 0;
+  if (p.get("plan") && p.get("plan") !== currentPlan) {
+    state.selectedPlan = p.get("plan");
+  }
+}
+
+function writeURL() {
+  var p = new URLSearchParams(location.search);
+  p.delete("energy");
+  p.delete("plan");
+  if (!p.has("html")) p.set("html", "");
+  if (state.energyAdded > 0) p.set("energy", state.energyAdded);
+  if (state.selectedPlan) p.set("plan", state.selectedPlan);
+  history.replaceState(null, "", "?" + p.toString());
+}
+
+// =====================
+// PLAN LOGIC
+// =====================
+function canSelectPlan(plan) {
+  if (plan === "basic") return false;
+  var cur = PLAN_ORDER.indexOf(currentPlan);
+  var next = PLAN_ORDER.indexOf(plan);
+  return next >= cur;
+}
+
+function renderPlans() {
+  document.querySelectorAll(".plan-box").forEach(function(box) {
+    var plan = box.dataset.plan;
+    var isSelected = state.selectedPlan === plan;
+    var isCurrent = plan === currentPlan && !state.selectedPlan;
+
+    box.classList.toggle("selected", isSelected);
+    box.classList.toggle("current-plan", isCurrent);
+    box.classList.toggle("disabled", !canSelectPlan(plan));
+  });
+
+  var note = document.getElementById("planNote");
+  if (state.selectedPlan) {
+    if (state.selectedPlan === currentPlan) {
+      note.textContent = "Renewing " + state.selectedPlan + " for 30 more days";
+    } else {
+      note.textContent = "Upgrading to " + state.selectedPlan + " for 30 days";
+    }
+    note.style.display = "block";
+  } else {
+    note.style.display = "none";
+  }
+}
+
+// =====================
+// ENERGY
+// =====================
+function renderEnergy() {
+  var el = document.getElementById("energyAdded");
+  var val = document.getElementById("energyAddedVal");
+  if (state.energyAdded > 0) {
+    el.style.display = "block";
+    val.textContent = "+" + state.energyAdded + " ($" + (state.energyAdded * ENERGY_RATE).toFixed(2) + ")";
+  } else {
+    el.style.display = "none";
+  }
+}
+
+function resetEnergy() {
+  state.energyAdded = 0;
+  writeURL();
+  renderEnergy();
+  renderCheckout();
+}
+
+function removePlan() {
+  state.selectedPlan = null;
+  writeURL();
+  renderPlans();
+  renderCheckout();
+}
+
+// =====================
+// CHECKOUT
+// =====================
+function renderCheckout() {
+  var container = document.getElementById("checkoutContent");
+  var energyCost = state.energyAdded * ENERGY_RATE;
+  var planCost = state.selectedPlan ? (PLAN_PRICE[state.selectedPlan] || 0) : 0;
+  var total = energyCost + planCost;
+
+  if (total <= 0) {
+    container.innerHTML = '<div class="checkout-empty">Select a plan or add energy to continue</div>';
+    return;
+  }
+
+  var rows = "";
+
+  if (state.selectedPlan) {
+    var label = state.selectedPlan === currentPlan
+      ? "Renew " + state.selectedPlan
+      : "Upgrade to " + state.selectedPlan;
+    var desc = state.selectedPlan === currentPlan
+      ? "+30 days added to remaining time"
+      : "30-day plan starts immediately";
+
+    rows +=
+      '<div class="checkout-row">' +
+        '<div class="checkout-row-left">' +
+          '<div class="checkout-row-icon plan-icon">📋</div>' +
+          '<div class="checkout-row-info">' +
+            '<div class="checkout-row-label">' + label + '</div>' +
+            '<div class="checkout-row-desc">' + desc + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="checkout-row-right">' +
+          '<div class="checkout-row-value">$' + planCost.toFixed(2) + '</div>' +
+          '<span class="checkout-remove" onclick="removePlan()">✕</span>' +
+        '</div>' +
+      '</div>';
+  }
+
+  if (state.energyAdded > 0) {
+    rows +=
+      '<div class="checkout-row">' +
+        '<div class="checkout-row-left">' +
+          '<div class="checkout-row-icon energy-icon">🔥</div>' +
+          '<div class="checkout-row-info">' +
+            '<div class="checkout-row-label">+' + state.energyAdded + ' Additional Energy</div>' +
+            '<div class="checkout-row-desc">Reserve — used after plan energy</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="checkout-row-right">' +
+          '<div class="checkout-row-value">$' + energyCost.toFixed(2) + '</div>' +
+          '<span class="checkout-remove" onclick="resetEnergy()">✕</span>' +
+        '</div>' +
+      '</div>';
+  }
+
+  container.innerHTML =
+    '<div class="checkout-summary">' +
+      rows +
+      '<div class="checkout-divider"></div>' +
+      '<div class="checkout-total">' +
+        '<div class="checkout-total-label">Total</div>' +
+        '<div class="checkout-total-value">$' + total.toFixed(2) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<button class="checkout-btn" onclick="handleCheckout()">Pay with Stripe</button>' +
+    '<div class="checkout-legal">' +
+      'By purchasing, you agree to our ' +
+      '<span class="checkout-legal-link" onclick="openModal(&#39;terms&#39;)">Terms of Service</span>' +
+      ' and ' +
+      '<span class="checkout-legal-link" onclick="openModal(&#39;privacy&#39;)">Privacy Policy</span>.' +
+    '</div>' +
+    '<div class="checkout-note">No recurring charges · No refunds · Renew manually</div>';
+}
+
+// =====================
+// STRIPE CHECKOUT
+// =====================
+async function handleCheckout() {
+  var btn = document.querySelector(".checkout-btn");
+  btn.disabled = true;
+  btn.textContent = "Processing…";
+
+  try {
+    var body = {
+      userId: userId,
+      energyAmount: state.energyAdded > 0 ? state.energyAdded : 0,
+      plan: state.selectedPlan || null,
+      currentPlan: currentPlan,
+    };
+
+    var res = await fetch("/api/v1/user/" + userId + "/purchase", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    var data = await res.json();
+
+    if (data.url) {
+      if (window.top !== window.self) {
+        window.top.location.href = data.url;
+      } else {
+        window.location.href = data.url;
+      }
+    } else if (data.error) {
+      alert(data.error);
+      btn.disabled = false;
+      btn.textContent = "Pay with Stripe";
+    }
+  } catch (err) {
+    alert("Something went wrong. Please try again.");
+    btn.disabled = false;
+    btn.textContent = "Pay with Stripe";
+  }
+}
+
+// =====================
+// CUSTOM LLM
+// =====================
+var llmConnections = ${JSON.stringify(llmConnections)};
+
+function showLlmStatus(msg, ok) {
+  var el = document.getElementById("llmStatus");
+  el.style.display = "block";
+  el.textContent = msg;
+  el.style.color = ok ? "rgba(72, 187, 120, 0.9)" : "rgba(255, 107, 107, 0.9)";
+  if (ok) setTimeout(function() { el.style.display = "none"; }, 3000);
+}
+
+function toggleAddForm() {
+  var form = document.getElementById("llmAddForm");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+  document.getElementById("llmEditSection").style.display = "none";
+}
+
+async function addConnection() {
+  var name = document.getElementById("llmName").value.trim();
+  var baseUrl = document.getElementById("llmBaseUrl").value.trim();
+  var apiKey = document.getElementById("llmApiKey").value.trim();
+  var model = document.getElementById("llmModel").value.trim();
+
+  if (!name || !baseUrl || !apiKey || !model) {
+    showLlmStatus("All fields are required", false);
+    return;
+  }
+
+  try {
+    var res = await fetch("/api/v1/user/" + userId + "/custom-llm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name, baseUrl: baseUrl, apiKey: apiKey, model: model }),
+    });
+    if (res.ok) {
+      showLlmStatus("✓ Connection added", true);
+      setTimeout(function() { location.reload(); }, 1000);
+    } else {
+      var data = await res.json().catch(function() { return {}; });
+      showLlmStatus("✕ " + (data.error || "Failed to save"), false);
+    }
+  } catch (err) {
+    showLlmStatus("✕ Network error", false);
+  }
+}
+
+function editConnection(connId) {
+  var conn = llmConnections.find(function(c) { return c._id === connId; });
+  if (!conn) return;
+  document.getElementById("llmEditId").value = connId;
+  document.getElementById("llmEditName").value = conn.name;
+  document.getElementById("llmEditBaseUrl").value = conn.baseUrl;
+  document.getElementById("llmEditApiKey").value = "";
+  document.getElementById("llmEditModel").value = conn.model;
+  document.getElementById("llmEditSection").style.display = "block";
+  document.getElementById("llmAddForm").style.display = "none";
+}
+
+function cancelEdit() {
+  document.getElementById("llmEditSection").style.display = "none";
+}
+
+async function updateConnection() {
+  var connId = document.getElementById("llmEditId").value;
+  var name = document.getElementById("llmEditName").value.trim();
+  var baseUrl = document.getElementById("llmEditBaseUrl").value.trim();
+  var apiKey = document.getElementById("llmEditApiKey").value.trim();
+  var model = document.getElementById("llmEditModel").value.trim();
+
+  if (!baseUrl || !model) {
+    showLlmStatus("Endpoint URL and Model are required", false);
+    return;
+  }
+
+  var payload = { baseUrl: baseUrl, model: model };
+  if (name) payload.name = name;
+  if (apiKey) payload.apiKey = apiKey;
+
+  try {
+    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/" + connId, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      showLlmStatus("✓ Connection updated", true);
+      setTimeout(function() { location.reload(); }, 1000);
+    } else {
+      var data = await res.json().catch(function() { return {}; });
+      showLlmStatus("✕ " + (data.error || "Failed to update"), false);
+    }
+  } catch (err) {
+    showLlmStatus("✕ Network error", false);
+  }
+}
+
+async function deleteConnection(connId) {
+  if (!confirm("Delete this connection? This cannot be undone.")) return;
+  try {
+    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/" + connId, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      showLlmStatus("✓ Deleted", true);
+      setTimeout(function() { location.reload(); }, 1000);
+    } else {
+      showLlmStatus("✕ Failed to delete", false);
+    }
+  } catch (err) {
+    showLlmStatus("✕ Network error", false);
+  }
+}
+
+async function assignSlot(slot, connId) {
+  try {
+    var res = await fetch("/api/v1/user/" + userId + "/llm-assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot: slot, connectionId: connId || null }),
+    });
+    if (res.ok) {
+      var label = slot === "main" ? "Chat" : "Raw Ideas";
+      showLlmStatus(connId ? "✓ Assigned to " + label : "✓ " + label + " → default LLM", true);
+    } else {
+      showLlmStatus("✕ Failed to assign", false);
+    }
+  } catch (err) {
+    showLlmStatus("✕ Network error", false);
+  }
+}
+
+// =====================
+// CUSTOM DROPDOWNS
+// =====================
+(function() {
+  document.querySelectorAll(".custom-select").forEach(function(sel) {
+    var trigger = sel.querySelector(".custom-select-trigger");
+    trigger.addEventListener("click", function(e) {
+      e.stopPropagation();
+      var wasOpen = sel.classList.contains("open");
+      // close all others
+      document.querySelectorAll(".custom-select.open").forEach(function(s) { s.classList.remove("open"); });
+      if (!wasOpen) sel.classList.add("open");
+    });
+    sel.querySelectorAll(".custom-select-option").forEach(function(opt) {
+      opt.addEventListener("click", function(e) {
+        e.stopPropagation();
+        sel.querySelectorAll(".custom-select-option").forEach(function(o) { o.classList.remove("selected"); });
+        opt.classList.add("selected");
+        trigger.textContent = opt.textContent;
+        sel.classList.remove("open");
+        var val = opt.getAttribute("data-value");
+        var slot = sel.getAttribute("data-slot");
+        if (slot) assignSlot(slot, val);
+      });
+    });
+  });
+  document.addEventListener("click", function() {
+    document.querySelectorAll(".custom-select.open").forEach(function(s) { s.classList.remove("open"); });
+  });
+})();
+
+// =====================
+// EVENTS
+// =====================
+document.querySelectorAll(".plan-box").forEach(function(box) {
+  box.onclick = function() {
+    var plan = box.dataset.plan;
+    if (!canSelectPlan(plan)) return;
+
+    if (state.selectedPlan === plan) {
+      state.selectedPlan = null;
+    } else {
+      state.selectedPlan = plan;
+    }
+
+    writeURL();
+    renderPlans();
+    renderCheckout();
+  };
+});
+
+document.querySelectorAll(".energy-buy-btn:not(#customEnergyBtn)").forEach(function(btn) {
+  btn.onclick = function() {
+    state.energyAdded += parseInt(btn.dataset.amount);
+    writeURL();
+    renderEnergy();
+    renderCheckout();
+  };
+});
+
+document.getElementById("customEnergyBtn").onclick = function() {
+  var val = parseInt(prompt("Enter energy amount:"));
+  if (!val || val <= 0) return;
+  state.energyAdded += val;
+  writeURL();
+  renderEnergy();
+  renderCheckout();
+};
+
+// =====================
+// INIT
+// =====================
+readURL();
+renderPlans();
+renderEnergy();
+renderCheckout();
+</script>
+</body>
+</html>`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 14. AI Chats Page - GET /user/:userId/chats
+// ═══════════════════════════════════════════════════════════════════
+export function renderChats({ userId, chats, sessions, username, token, sessionId }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+  const esc = (str = "") =>
+    String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  const truncate = (str, len = 200) => {
+    if (!str) return "";
+    const clean = esc(str);
+    return clean.length > len ? clean.slice(0, len) + "…" : clean;
+  };
+
+  const linkifyNodeIds = (html) =>
+    html.replace(
+      /Placed on node ([0-9a-f-]{36})/g,
+      (_, id) =>
+        `Placed on node <a class="node-link" href="/api/v1/root/${id}${token ? `?token=${token}&html` : "?html"}">${id}</a>`,
+    );
+
+  const formatTime = (d) => (d ? new Date(d).toLocaleString() : "—");
+
+  const formatDuration = (start, end) => {
+    if (!start || !end) return null;
+    const ms = new Date(end) - new Date(start);
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${(ms / 60000).toFixed(1)}m`;
+  };
+
+  const formatContent = (str) => {
+    if (!str) return "";
+    const s = String(str).trim();
+    if (
+      (s.startsWith("{") && s.endsWith("}")) ||
+      (s.startsWith("[") && s.endsWith("]"))
+    ) {
+      try {
+        const parsed = JSON.parse(s);
+        const pretty = JSON.stringify(parsed, null, 2);
+        return `<span class="chain-json">${esc(pretty)}</span>`;
+      } catch (_) {}
+    }
+    return esc(s);
+  };
+
+    const modeLabel = (path) => {
+      if (!path) return "unknown";
+
+      if (path === "translator") return "🔄 Translator";
+      if (path.startsWith("tree:orchestrator:plan:")) {
+        const num = path.split(":")[3];
+        return `📋 Plan Step ${num}`;
+      }
+
+      const parts = path.split(":");
+      const labels = {
+        home: "🏠 Home",
+        tree: "🌳 Tree",
+        rawIdea: "📥 Raw Idea",
+      };
+      const subLabels = {
+        default: "Default",
+        chat: "💬 Chat",
+        structure: "🏗️ Structure",
+        edit: "✏️ Edit",
+        be: "Be",
+        reflect: "Reflect",
+        navigate: "🧭 Navigate",
+        understand: "Understand",
+        getContext: "📖 Context",
+        respond: "💬 Respond",
+        notes: "📝 Notes",
+        start: "Start",
+        chooseRoot: "Choose Root",
+        complete: "Placed",
+        stuck: "Stuck",
+      };
+      const big = labels[parts[0]] || parts[0];
+      const sub = subLabels[parts[1]] || parts[1] || "";
+      return sub ? `${big} ${sub}` : big;
+    };
+
+    const sourceLabel = (src) => {
+      const map = {
+        user: "👤 User",
+        api: "🔌 API",
+        orchestrator: "⚙️ Chain",
+        background: "🕐 Background",
+        script: "📜 Script",
+        system: "🔧 System",
+      };
+      return map[src] || src;
+    };
+
+    const actionLabel = (action) => {
+      const map = {
+        create: "Created",
+        editStatus: "Status",
+        editValue: "Values",
+        prestige: "Prestige",
+        trade: "Trade",
+        delete: "Deleted",
+        invite: "Invite",
+        editSchedule: "Schedule",
+        editGoal: "Goal",
+        transaction: "Transaction",
+        note: "Note",
+        updateParent: "Moved",
+        editScript: "Script",
+        executeScript: "Ran script",
+        updateChildNode: "Child",
+        editNameNode: "Renamed",
+        rawIdea: "Raw idea",
+        branchLifecycle: "Branch",
+        purchase: "Purchase",
+        understanding: "Understanding",
+      };
+      return map[action] || action;
+    };
+
+    const actionColor = (action) => {
+      switch (action) {
+        case "create":
+          return "#48bb78";
+        case "delete":
+        case "branchLifecycle":
+          return "#c85050";
+        case "editStatus":
+        case "editValue":
+        case "editGoal":
+        case "editSchedule":
+        case "editNameNode":
+        case "editScript":
+          return "#5082dc";
+        case "executeScript":
+          return "#38bdd2";
+        case "prestige":
+          return "#c8aa32";
+        case "note":
+        case "rawIdea":
+          return "#9b64dc";
+        case "invite":
+          return "#d264a0";
+        case "transaction":
+        case "trade":
+          return "#dc8c3c";
+        case "purchase":
+          return "#34be82";
+        case "updateParent":
+        case "updateChildNode":
+          return "#3caab4";
+        case "understanding":
+          return "#6464d2";
+        default:
+          return "#736fe6";
+      }
+    };
+
+    // ── Tree context helpers ───────────────────────────────
+
+    const renderTreeContext = (tc) => {
+      if (!tc) return "";
+      const parts = [];
+
+      const nodeId = tc.targetNodeId?._id || tc.targetNodeId;
+      const nodeName = tc.targetNodeId?.name || tc.targetNodeName;
+      if (nodeId && nodeName && typeof nodeId === "string") {
+        parts.push(
+          `<a href="/api/v1/node/${nodeId}${tokenQS}" class="tree-target-link">🎯 ${esc(nodeName)}</a>`,
+        );
+      } else if (nodeName) {
+        parts.push(`<span class="tree-target-name">🎯 ${esc(nodeName)}</span>`);
+      } else if (tc.targetPath) {
+        const pathParts = tc.targetPath.split(" / ");
+        const last = pathParts[pathParts.length - 1];
+        parts.push(`<span class="tree-target-name">🎯 ${esc(last)}</span>`);
+      }
+
+      if (tc.planStepIndex != null && tc.planTotalSteps != null) {
+        parts.push(
+          `<span class="badge badge-step">${tc.planStepIndex}/${tc.planTotalSteps}</span>`,
+        );
+      }
+
+      if (tc.stepResult) {
+        const resultClasses = {
+          success: "badge-done",
+          failed: "badge-stopped",
+          skipped: "badge-skipped",
+          pending: "badge-pending",
+        };
+        const resultIcons = {
+          success: "✓",
+          failed: "✗",
+          skipped: "⊘",
+          pending: "⏳",
+        };
+        parts.push(
+          `<span class="badge ${resultClasses[tc.stepResult] || "badge-pending"}">${resultIcons[tc.stepResult] || ""} ${tc.stepResult}</span>`,
+        );
+      }
+
+      if (parts.length === 0) return "";
+      return `<div class="tree-context-bar">${parts.join("")}</div>`;
+    };
+
+    const renderDirective = (tc) => {
+      if (!tc?.directive) return "";
+      return `<div class="tree-directive">${esc(tc.directive)}</div>`;
+    };
+
+    const getTargetName = (tc) => {
+      if (!tc) return null;
+      return tc.targetNodeId?.name || tc.targetNodeName || null;
+    };
+
+    const sessionGroups = sessions;
+
+    // ── Chain grouping ─────────────────────────────────────
+
+    const groupIntoChains = (chats) => {
+      // Group by rootChatId for proper chain separation
+      const chainMap = new Map();
+      const chainOrder = [];
+
+      for (const chat of chats) {
+        const key = chat.rootChatId || chat._id;
+        if (!chainMap.has(key)) {
+          chainMap.set(key, { root: null, steps: [] });
+          chainOrder.push(key);
+        }
+        const chain = chainMap.get(key);
+        if (chat.chainIndex === 0 || chat._id === key) {
+          chain.root = chat;
+        } else {
+          chain.steps.push(chat);
+        }
+      }
+
+      // Sort steps within each chain by chainIndex
+      return chainOrder
+        .map((key) => {
+          const chain = chainMap.get(key);
+          chain.steps.sort((a, b) => a.chainIndex - b.chainIndex);
+          return chain;
+        })
+        .filter((c) => c.root);
+    };
+
+    // ── Phase grouping ─────────────────────────────────────
+
+    const groupStepsIntoPhases = (steps) => {
+      const phases = [];
+      let currentPlan = null;
+      for (const step of steps) {
+        const mode = step.aiContext?.path || "";
+        if (mode === "translator") {
+          currentPlan = null;
+          phases.push({ type: "translate", step });
+        } else if (mode.startsWith("tree:orchestrator:plan:")) {
+          currentPlan = { type: "plan", marker: step, substeps: [] };
+          phases.push(currentPlan);
+        } else if (mode === "tree:respond") {
+          currentPlan = null;
+          phases.push({ type: "respond", step });
+        } else if (currentPlan) {
+          currentPlan.substeps.push(step);
+        } else {
+          phases.push({ type: "step", step });
+        }
+      }
+      return phases;
+    };
+
+    // ── Model badge helper ─────────────────────────────────
+
+    const renderModelBadge = (chat) => {
+      const connName = chat.llmProvider?.connectionId?.name;
+      const model = connName || chat.llmProvider?.model;
+      if (!model) return "";
+      return `<span class="chain-model">${esc(model)}</span>`;
+    };
+
+    // ── Render substep ─────────────────────────────────────
+
+    const renderSubstep = (chat) => {
+      const duration = formatDuration(
+        chat.startMessage?.time,
+        chat.endMessage?.time,
+      );
+      const stopped = chat.endMessage?.stopped;
+      const tc = chat.treeContext;
+
+      const dotClass = stopped
+        ? "chain-dot-stopped"
+        : tc?.stepResult === "failed"
+          ? "chain-dot-stopped"
+          : tc?.stepResult === "skipped"
+            ? "chain-dot-skipped"
+            : chat.endMessage?.time
+              ? "chain-dot-done"
+              : "chain-dot-pending";
+
+      const targetName = getTargetName(tc);
+      const inputFull = formatContent(chat.startMessage?.content);
+      const outputFull = formatContent(chat.endMessage?.content);
+
+      return `
+      <details class="chain-substep">
+        <summary class="chain-substep-summary">
+          <span class="chain-dot ${dotClass}"></span>
+          <span class="chain-step-mode">${modeLabel(chat.aiContext?.path)}</span>
+          ${targetName ? `<span class="chain-step-target">${esc(targetName)}</span>` : ""}
+          ${tc?.stepResult === "failed" ? `<span class="chain-step-failed">FAILED</span>` : ""}
+          ${tc?.resultDetail && tc.stepResult === "failed" ? `<span class="chain-step-fail-reason">${truncate(tc.resultDetail, 60)}</span>` : ""}
+          ${renderModelBadge(chat)}
+          ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
+        </summary>
+        <div class="chain-step-body">
+          ${renderTreeContext(tc)}
+          ${renderDirective(tc)}
+          <div class="chain-step-input"><span class="chain-io-label chain-io-in">IN</span>${inputFull}</div>
+          ${outputFull ? `<div class="chain-step-output"><span class="chain-io-label chain-io-out">OUT</span>${outputFull}</div>` : ""}
+        </div>
+      </details>`;
+    };
+
+    // ── Render phases ──────────────────────────────────────
+
+    const renderPhases = (steps) => {
+      const phases = groupStepsIntoPhases(steps);
+      if (phases.length === 0) return "";
+
+      const phaseHtml = phases
+        .map((phase) => {
+          if (phase.type === "translate") {
+            const s = phase.step;
+            const tc = s.treeContext;
+            const duration = formatDuration(
+              s.startMessage?.time,
+              s.endMessage?.time,
+            );
+            const outputFull = formatContent(s.endMessage?.content);
+            return `
+          <details class="chain-phase chain-phase-translate">
+            <summary class="chain-phase-summary">
+              <span class="chain-phase-icon">🔄</span>
+              <span class="chain-phase-label">Translator</span>
+              ${tc?.planTotalSteps ? `<span class="chain-step-counter">${tc.planTotalSteps}-step plan</span>` : ""}
+              ${tc?.directive ? `<span class="chain-plan-summary-text">${truncate(tc.directive, 80)}</span>` : ""}
+              ${renderModelBadge(s)}
+              ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
+            </summary>
+            ${outputFull ? `<div class="chain-step-body"><div class="chain-step-output"><span class="chain-io-label chain-io-out">PLAN</span>${outputFull}</div></div>` : ""}
+          </details>`;
+          }
+
+          if (phase.type === "plan") {
+            const m = phase.marker;
+            const tc = m.treeContext;
+            const targetName = getTargetName(tc);
+            const hasSubsteps = phase.substeps.length > 0;
+
+            // Count results from substeps that have execution modes
+            const counts = { success: 0, failed: 0, skipped: 0 };
+            for (const sub of phase.substeps) {
+              const r = sub.treeContext?.stepResult;
+              if (r && counts[r] !== undefined) counts[r]++;
+            }
+            const countBadges = [
+              counts.success > 0
+                ? `<span class="badge badge-done">${counts.success} ✓</span>`
+                : "",
+              counts.failed > 0
+                ? `<span class="badge badge-stopped">${counts.failed} ✗</span>`
+                : "",
+              counts.skipped > 0
+                ? `<span class="badge badge-skipped">${counts.skipped} ⊘</span>`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("");
+
+            // Use directive from treeContext if available, otherwise fall back to input
+            const directiveText = tc?.directive || "";
+            const inputFull = directiveText
+              ? esc(directiveText)
+              : formatContent(m.startMessage?.content);
+
+            return `
+          <div class="chain-phase chain-phase-plan">
+            <div class="chain-phase-header">
+              <span class="chain-phase-icon">📋</span>
+              <span class="chain-phase-label">${modeLabel(m.aiContext?.path)}</span>
+              ${targetName ? `<span class="chain-step-target">${esc(targetName)}</span>` : ""}
+              ${
+                tc?.planStepIndex != null && tc?.planTotalSteps != null
+                  ? `<span class="chain-step-counter">Step ${tc.planStepIndex} of ${tc.planTotalSteps}</span>`
+                  : ""
+              }
+              ${countBadges}
+              ${renderModelBadge(m)}
+            </div>
+            <div class="chain-plan-directive">${inputFull}</div>
+            ${hasSubsteps ? `<div class="chain-substeps">${phase.substeps.map(renderSubstep).join("")}</div>` : ""}
+          </div>`;
+          }
+
+          if (phase.type === "respond") {
+            const s = phase.step;
+            const tc = s.treeContext;
+            const duration = formatDuration(
+              s.startMessage?.time,
+              s.endMessage?.time,
+            );
+            const inputFull = formatContent(s.startMessage?.content);
+            const outputFull = formatContent(s.endMessage?.content);
+            return `
+          <details class="chain-phase chain-phase-respond">
+            <summary class="chain-phase-summary">
+              <span class="chain-phase-icon">💬</span>
+              <span class="chain-phase-label">${modeLabel(s.aiContext?.path)}</span>
+              ${renderModelBadge(s)}
+              ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
+            </summary>
+            <div class="chain-step-body">
+              ${renderTreeContext(tc)}
+              ${inputFull ? `<div class="chain-step-input"><span class="chain-io-label chain-io-in">IN</span>${inputFull}</div>` : ""}
+              ${outputFull ? `<div class="chain-step-output"><span class="chain-io-label chain-io-out">OUT</span>${outputFull}</div>` : ""}
+            </div>
+          </details>`;
+          }
+
+          return renderSubstep(phase.step);
+        })
+        .join("");
+
+      const summaryParts = phases
+        .map((p) => {
+          if (p.type === "translate") {
+            const tc = p.step.treeContext;
+            return tc?.planTotalSteps ? `🔄 ${tc.planTotalSteps}-step` : "🔄";
+          }
+          if (p.type === "plan") {
+            const tc = p.marker.treeContext;
+            const targetName = getTargetName(tc);
+            const sub = p.substeps
+              .map((s) => {
+                const stc = s.treeContext;
+                const icon =
+                  stc?.stepResult === "failed"
+                    ? "❌ "
+                    : stc?.stepResult === "skipped"
+                      ? "⊘ "
+                      : stc?.stepResult === "success"
+                        ? "✓ "
+                        : "";
+                return `${icon}${modeLabel(s.aiContext?.path)}`;
+              })
+              .join(" → ");
+            const label = targetName ? `📋 ${esc(targetName)}` : "📋";
+            return sub ? `${label}: ${sub}` : label;
+          }
+          if (p.type === "respond") return "💬";
+          return modeLabel(p.step?.aiContext?.path);
+        })
+        .join("  ");
+
+      return `
+      <details class="chain-dropdown">
+        <summary class="chain-summary">
+          ${phases.length} phase${phases.length !== 1 ? "s" : ""}
+          <span class="chain-modes">${summaryParts}</span>
+        </summary>
+        <div class="chain-phases">${phaseHtml}</div>
+      </details>`;
+    };
+
+    // ── Render chain ───────────────────────────────────────
+
+    const renderChain = (chain) => {
+      const chat = chain.root;
+      const steps = chain.steps;
+      const duration = formatDuration(
+        chat.startMessage?.time,
+        chat.endMessage?.time,
+      );
+      const stopped = chat.endMessage?.stopped;
+      const contribs = chat.contributions || [];
+      const hasContribs = contribs.length > 0;
+      const hasSteps = steps.length > 0;
+
+      const modelName =
+        chat.llmProvider?.connectionId?.name ||
+        chat.llmProvider?.model ||
+        "unknown";
+
+      const tc = chat.treeContext;
+      const treeNodeId = tc?.targetNodeId?._id || tc?.targetNodeId;
+      const treeNodeName = tc?.targetNodeId?.name || tc?.targetNodeName;
+      const treeLink =
+        treeNodeId && treeNodeName
+          ? `<a href="/api/v1/node/${treeNodeId}${tokenQS}" class="tree-target-link">🌳 ${esc(treeNodeName)}</a>`
+          : treeNodeName
+            ? `<span class="tree-target-name">🌳 ${esc(treeNodeName)}</span>`
+            : "";
+
+      const statusBadge = stopped
+        ? `<span class="badge badge-stopped">Stopped</span>`
+        : chat.endMessage?.time
+          ? `<span class="badge badge-done">Done</span>`
+          : `<span class="badge badge-pending">Pending</span>`;
+
+      const endContent = chat.endMessage?.content || "";
+      const wasNoLlm = endContent.startsWith("No LLM connection");
+      const wasError = endContent.startsWith("Error:");
+      const chatEnergyUsed =
+        wasError || wasNoLlm || chat.llmProvider?.isCustom === false ? 2 : 0;
+      const energyBadge =
+        chatEnergyUsed > 0
+          ? `<span class="badge badge-energy">⚡${chatEnergyUsed}</span>`
+          : "";
+
+      const contribRows = contribs
+        .map((c) => {
+          const nId = c.nodeId?._id || c.nodeId;
+          const nName = c.nodeId?.name || nId || "—";
+          const nodeRef = nId
+            ? `<a href="/api/v1/node/${nId}${tokenQS}">${esc(nName)}</a>`
+            : `<span style="opacity:0.5">—</span>`;
+          const aiBadge = c.wasAi
+            ? `<span class="mini-badge mini-ai">AI</span>`
+            : "";
+          const cEnergyBadge =
+            c.energyUsed > 0
+              ? `<span class="mini-badge mini-energy">⚡${c.energyUsed}</span>`
+              : "";
+          const understandingLink =
+            c.action === "understanding" &&
+            c.understandingMeta?.understandingRunId &&
+            c.understandingMeta?.rootNodeId
+              ? ` <a class="understanding-link" href="/api/v1/root/${c.understandingMeta.rootNodeId}/understandings/run/${c.understandingMeta.understandingRunId}${tokenQS}">🧠 View run →</a>`
+              : "";
+          const color = actionColor(c.action);
+          return `
+        <tr class="contrib-row">
+          <td><span class="action-dot" style="background:${color}"></span>${esc(actionLabel(c.action))}${understandingLink}</td>
+          <td>${nodeRef}</td>
+          <td>${aiBadge}${cEnergyBadge}</td>
+          <td class="contrib-time">${formatTime(c.date)}</td>
+        </tr>`;
+        })
+        .join("");
+
+      const stepsHtml = hasSteps ? renderPhases(steps) : "";
+
+      return `
+      <li class="note-card">
+        <div class="chat-header">
+          <div class="chat-header-left">
+            <span class="chat-mode">${modeLabel(chat.aiContext?.path)}</span>
+            ${treeLink}
+            <span class="chat-model">${esc(modelName)}</span>
+          </div>
+          <div class="chat-badges">
+            ${energyBadge}
+            ${statusBadge}
+            ${duration ? `<span class="badge badge-duration">${duration}</span>` : ""}
+            <span class="badge badge-source">${sourceLabel(chat.startMessage?.source)}</span>
+          </div>
+        </div>
+
+        <div class="note-content">
+          <div class="chat-message chat-user">
+            <span class="msg-label">You</span>
+            <div class="msg-text msg-clamp">${esc(chat.startMessage?.content || "")}</div>
+            ${(chat.startMessage?.content || "").length > 300 ? `<button class="expand-btn" onclick="toggleExpand(this)">Show more</button>` : ""}
+          </div>
+          ${
+            chat.endMessage?.content
+              ? `
+          <div class="chat-message chat-ai">
+            <span class="msg-label">AI</span>
+            <div class="msg-text msg-clamp">${linkifyNodeIds(esc(chat.endMessage.content))}</div>
+            ${chat.endMessage.content.length > 300 ? `<button class="expand-btn" onclick="toggleExpand(this)">Show more</button>` : ""}
+          </div>`
+              : ""
+          }
+        </div>
+
+        ${stepsHtml}
+
+        ${
+          hasContribs
+            ? `
+        <details class="contrib-dropdown">
+          <summary class="contrib-summary">
+            ${contribs.length} contribution${contribs.length !== 1 ? "s" : ""} during this chat
+          </summary>
+          <div class="contrib-table-wrap">
+            <table class="contrib-table">
+              <thead><tr><th>Action</th><th>Node</th><th></th><th>Time</th></tr></thead>
+              <tbody>${contribRows}</tbody>
+            </table>
+          </div>
+        </details>`
+            : ""
+        }
+
+        <div class="note-meta">
+          ${formatTime(chat.startMessage?.time)}
+          <span class="meta-separator">·</span>
+          <code class="contribution-id">${esc(chat._id)}</code>
+        </div>
+      </li>`;
+    };
+
+    const renderedSections = sessionGroups
+      .map((group) => {
+        const chatCount = group.chatCount;
+        const sessionTime = formatTime(group.startTime);
+        const shortId = group.sessionId.slice(0, 8);
+        const chains = groupIntoChains(group.chats);
+        const chatCards = chains.map(renderChain).join("");
+
+        return `
+      <div class="session-group">
+        <div class="session-pane">
+          <div class="session-pane-header">
+            <div class="session-header-left">
+              <span class="session-id">${esc(shortId)}</span>
+              <span class="session-info">${chatCount} chat${chatCount !== 1 ? "s" : ""}</span>
+            </div>
+            <span class="session-time">${sessionTime}</span>
+          </div>
+          <ul class="notes-list">${chatCards}</ul>
+        </div>
+      </div>`;
+      })
+      .join("");
+
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${esc(username)} — AI Chats</title>
+  <style>
+:root {
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { background: #736fe6; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh; min-height: 100dvh;
+  padding: 20px; color: #1a1a1a;
+  position: relative; overflow-x: hidden; touch-action: manipulation;
+}
+
+body::before, body::after {
+  content: ''; position: fixed; border-radius: 50%; opacity: 0.08;
+  animation: float 20s infinite ease-in-out; pointer-events: none;
+}
+body::before { width: 600px; height: 600px; background: white; top: -300px; right: -200px; animation-delay: -5s; }
+body::after { width: 400px; height: 400px; background: white; bottom: -200px; left: -100px; animation-delay: -10s; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.container { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+
+/* ── Glass Back Nav ─────────────────────────────── */
+.back-nav { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; animation: fadeInUp 0.5s ease-out; }
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
+  background: rgba(115,111,230,var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%); color: white; text-decoration: none;
+  border-radius: 980px; font-weight: 600; font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28); position: relative; overflow: hidden;
+}
+.back-link::before {
+  content: ""; position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
+}
+.back-link:hover { background: rgba(115,111,230,var(--glass-alpha-hover)); transform: translateY(-1px); }
+.back-link:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Glass Header ───────────────────────────────── */
+.header {
+  position: relative; overflow: hidden;
+  background: rgba(115,111,230,var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px; padding: 32px; margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28); color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+.header::before {
+  content: ""; position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
+}
+.header:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+.header h1 {
+  font-size: 28px; font-weight: 600; color: white; margin-bottom: 8px;
+  line-height: 1.3; letter-spacing: -0.5px; text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.header h1 a { color: white; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.3); transition: all 0.2s; }
+.header h1 a:hover { border-bottom-color: white; text-shadow: 0 0 12px rgba(255,255,255,0.8); }
+.message-count {
+  display: inline-block; padding: 6px 14px; background: rgba(255,255,255,0.25); color: white;
+  border-radius: 980px; font-size: 14px; font-weight: 600; margin-left: 12px; border: 1px solid rgba(255,255,255,0.3);
+}
+.header-subtitle { font-size: 14px; color: rgba(255,255,255,0.9); margin-bottom: 8px; font-weight: 400; line-height: 1.5; }
+
+/* ── Session Pane ───────────────────────────────── */
+.session-group { margin-bottom: 20px; animation: fadeInUp 0.6s ease-out both; }
+.session-pane {
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px; overflow: hidden; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.session-pane-header {
+  display: flex; align-items: center; justify-content: space-between; padding: 14px 20px;
+  background: rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.session-header-left { display: flex; align-items: center; gap: 10px; }
+.session-id {
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,0.55); background: rgba(255,255,255,0.1); padding: 3px 8px;
+  border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);
+}
+.session-info { font-size: 13px; color: rgba(255,255,255,0.7); font-weight: 600; }
+.session-time { font-size: 12px; color: rgba(255,255,255,0.4); font-weight: 500; }
+
+/* ── Glass Cards ────────────────────────────────── */
+.notes-list { list-style: none; display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.note-card {
+  --card-rgb: 115, 111, 230; position: relative;
+  background: rgba(var(--card-rgb), var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%); border-radius: 16px; padding: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28); transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  color: white; overflow: hidden; opacity: 0; transform: translateY(30px);
+}
+.note-card.visible { animation: fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) forwards; }
+.note-card::before {
+  content: ""; position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
+}
+.note-card:hover { background: rgba(var(--card-rgb), var(--glass-alpha-hover)); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+.note-card:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Chat Header ────────────────────────────────── */
+.chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+.chat-header-left { display: flex; align-items: center; gap: 8px; }
+.chat-mode {
+  font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.1);
+  padding: 3px 10px; border-radius: 980px; border: 1px solid rgba(255,255,255,0.15);
+}
+.chat-model {
+  font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.45);
+  font-family: 'SF Mono', 'Fira Code', monospace; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; max-width: 200px;
+}
+.chat-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ── Messages ───────────────────────────────────── */
+.note-content { margin-bottom: 16px; display: flex; flex-direction: column; gap: 14px; }
+.chat-message { display: flex; gap: 10px; align-items: flex-start; }
+.msg-label {
+  flex-shrink: 0; font-weight: 700; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 3px 10px; border-radius: 980px; margin-top: 3px;
+}
+.chat-user .msg-label { background: rgba(255,255,255,0.2); color: white; }
+.chat-ai .msg-label   { background: rgba(100,220,255,0.25); color: white; }
+.msg-text { color: rgba(255,255,255,0.95); word-wrap: break-word; min-width: 0; font-size: 15px; line-height: 1.65; font-weight: 400; }
+.msg-clamp {
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+  overflow: hidden; max-height: calc(1.65em * 4);
+  transition: max-height 0.3s ease;
+}
+.msg-clamp.expanded { -webkit-line-clamp: unset; max-height: none; overflow: visible; }
+.expand-btn {
+  background: none; border: none; color: rgba(100,220,255,0.9); cursor: pointer;
+  font-size: 12px; font-weight: 600; padding: 2px 0; margin-top: 2px;
+  transition: color 0.2s;
+}
+.expand-btn:hover { color: rgba(100,220,255,1); text-decoration: underline; }
+.node-link { color: #7effc0; text-decoration: none; background: rgba(50,220,120,0.15); padding: 1px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+.node-link:hover { background: rgba(50,220,120,0.3); }
+.understanding-link {
+  color: rgba(100,100,210,0.9); text-decoration: none; font-size: 11px; font-weight: 500;
+  margin-left: 4px; transition: color 0.2s;
+}
+.understanding-link:hover { color: rgba(130,130,255,1); text-decoration: underline; }
+.chat-user .msg-text { font-weight: 500; }
+
+/* ── Chain: outer dropdown ──────────────────────── */
+.chain-dropdown { margin-bottom: 12px; }
+.chain-summary {
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,0.85); padding: 8px 14px;
+  background: rgba(255,255,255,0.1); border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  transition: all 0.2s; list-style: none;
+  display: flex; align-items: center; gap: 8px;
+}
+.chain-summary::-webkit-details-marker { display: none; }
+.chain-summary::before { content: "▶"; font-size: 10px; transition: transform 0.15s; display: inline-block; }
+details[open] > .chain-summary::before { transform: rotate(90deg); }
+.chain-summary:hover { background: rgba(255,255,255,0.18); }
+.chain-modes { font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chain-phases { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Chain: phase containers ────────────────────── */
+.chain-phase { border-radius: 10px; overflow: hidden; }
+.chain-phase-header {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600;
+  flex-wrap: wrap;
+}
+.chain-phase-icon { font-size: 14px; }
+.chain-phase-label { color: rgba(255,255,255,0.85); }
+.chain-phase-translate { background: rgba(100,100,220,0.12); border: 1px solid rgba(100,100,220,0.2); }
+.chain-phase-plan { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); }
+.chain-phase-respond { background: rgba(72,187,120,0.1); border: 1px solid rgba(72,187,120,0.2); }
+.chain-plan-directive { padding: 6px 12px 10px; font-size: 12px; color: rgba(255,255,255,0.6); line-height: 1.5; white-space: pre-wrap; }
+
+/* ── Chain: clickable summary for translate/substep details ── */
+.chain-phase-summary, .chain-substep-summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px; font-weight: 600;
+  flex-wrap: wrap;
+}
+.chain-phase-summary::-webkit-details-marker,
+.chain-substep-summary::-webkit-details-marker { display: none; }
+.chain-phase-summary::before,
+.chain-substep-summary::before {
+  content: "▶"; font-size: 8px; color: rgba(255,255,255,0.35);
+  transition: transform 0.15s; display: inline-block;
+}
+details[open] > .chain-phase-summary::before,
+details[open] > .chain-substep-summary::before { transform: rotate(90deg); }
+.chain-phase-summary:hover, .chain-substep-summary:hover { background: rgba(255,255,255,0.05); }
+
+/* ── Chain: substeps inside plan ────────────────── */
+.chain-substeps { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 8px; }
+.chain-substep { border-radius: 6px; background: rgba(255,255,255,0.04); }
+.chain-substep:hover { background: rgba(255,255,255,0.07); }
+
+/* ── Chain: status dot ──────────────────────────── */
+.chain-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.3);
+}
+.chain-dot-done    { background: rgba(72,187,120,0.8); border-color: rgba(72,187,120,0.4); }
+.chain-dot-stopped { background: rgba(200,80,80,0.8); border-color: rgba(200,80,80,0.4); }
+.chain-dot-pending { background: rgba(255,200,50,0.8); border-color: rgba(255,200,50,0.4); }
+.chain-dot-skipped { background: rgba(160,160,160,0.6); border-color: rgba(160,160,160,0.3); }
+
+.chain-step-mode {
+  font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.12); padding: 2px 8px; border-radius: 6px;
+}
+.chain-step-duration { font-size: 10px; color: rgba(255,255,255,0.45); }
+.chain-model {
+  font-size: 10px; font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255,255,255,0.4); margin-left: auto; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 150px;
+}
+
+/* ── Chain: expanded body ───────────────────────── */
+.chain-step-body { padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+
+.chain-io-label {
+  display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+  padding: 1px 6px; border-radius: 4px; margin-right: 8px; vertical-align: middle;
+}
+.chain-io-in  { background: rgba(100,220,255,0.2); color: rgba(100,220,255,0.9); }
+.chain-io-out { background: rgba(72,187,120,0.2); color: rgba(72,187,120,0.9); }
+
+.chain-step-input {
+  font-size: 12px; color: rgba(255,255,255,0.8); line-height: 1.6;
+  word-break: break-word; white-space: pre-wrap;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.chain-step-output {
+  font-size: 12px; color: rgba(255,255,255,0.65); line-height: 1.6;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);
+  word-break: break-word; white-space: pre-wrap;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.chain-json { color: rgba(255,255,255,0.8); }
+
+/* ── Tree Context ───────────────────────────────── */
+.tree-context-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 12px; margin-bottom: 6px;
+  background: rgba(255,255,255,0.06); border-radius: 6px;
+  font-size: 12px;
+}
+.tree-target-link {
+  color: rgba(100,220,255,0.95); text-decoration: none;
+  border-bottom: 1px solid rgba(100,220,255,0.3);
+  font-weight: 600; font-size: 12px;
+  transition: all 0.2s;
+}
+.tree-target-link:hover {
+  border-bottom-color: rgba(100,220,255,0.8);
+  text-shadow: 0 0 8px rgba(100,220,255,0.5);
+}
+.tree-target-name {
+  color: rgba(255,255,255,0.8); font-weight: 600; font-size: 12px;
+}
+.tree-directive {
+  padding: 4px 12px 8px; font-size: 11px; color: rgba(255,255,255,0.55);
+  line-height: 1.5; font-style: italic;
+  border-left: 2px solid rgba(255,255,255,0.15);
+  margin: 0 12px 8px;
+}
+.chain-step-counter {
+  font-size: 10px; color: rgba(255,255,255,0.5); font-weight: 500;
+  background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 4px;
+}
+.chain-step-target {
+  font-size: 10px; color: rgba(100,220,255,0.7); font-weight: 500;
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chain-step-failed {
+  font-size: 9px; font-weight: 700; color: rgba(200,80,80,0.9);
+  background: rgba(200,80,80,0.15); padding: 1px 6px; border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.chain-step-fail-reason {
+  font-size: 10px; color: rgba(200,80,80,0.7); font-weight: 400;
+  font-style: italic; max-width: 200px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.badge-step {
+  background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7);
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px;
+}
+.badge-skipped {
+  background: rgba(160,160,160,0.25); color: rgba(255,255,255,0.7);
+}
+.chain-plan-summary-text {
+  font-size: 11px; color: rgba(255,255,255,0.45); font-weight: 400;
+  font-style: italic; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 300px;
+}
+
+/* ── Contribution Dropdown ──────────────────────── */
+.contrib-dropdown { margin-bottom: 12px; }
+.contrib-summary {
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,0.85); padding: 8px 14px;
+  background: rgba(255,255,255,0.1); border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  transition: all 0.2s; list-style: none;
+  display: flex; align-items: center; gap: 6px;
+}
+.contrib-summary::-webkit-details-marker { display: none; }
+.contrib-summary::before { content: "▶"; font-size: 10px; transition: transform 0.2s; display: inline-block; }
+details[open] .contrib-summary::before { transform: rotate(90deg); }
+.contrib-summary:hover { background: rgba(255,255,255,0.18); }
+.contrib-table-wrap { margin-top: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.contrib-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.contrib-table thead th {
+  text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: rgba(255,255,255,0.55); padding: 6px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+.contrib-row td {
+  padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.88); vertical-align: middle; white-space: nowrap;
+}
+.contrib-row:last-child td { border-bottom: none; }
+.contrib-row a { color: white; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.3); transition: all 0.2s; }
+.contrib-row a:hover { border-bottom-color: white; text-shadow: 0 0 12px rgba(255,255,255,0.8); }
+.contrib-time { font-size: 11px; color: rgba(255,255,255,0.5); }
+.action-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+/* ── Mini Badges ────────────────────────────────── */
+.mini-badge {
+  display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 980px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.2px; margin-right: 3px;
+}
+.mini-ai    { background: rgba(255,200,50,0.35); color: #fff; }
+.mini-energy { background: rgba(100,220,255,0.3); color: #fff; }
+
+/* ── Badges ─────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 980px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.3px; border: 1px solid rgba(255,255,255,0.2);
+}
+.badge-done     { background: rgba(72,187,120,0.35); color: #fff; }
+.badge-stopped  { background: rgba(200,80,80,0.35); color: #fff; }
+.badge-pending  { background: rgba(255,200,50,0.3); color: #fff; }
+.badge-duration { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
+.badge-source   { background: rgba(100,100,210,0.3); color: #fff; }
+.badge-energy   { background: rgba(100,220,255,0.25); color: #fff; border-color: rgba(100,220,255,0.3); }
+
+/* ── Note Meta ──────────────────────────────────── */
+.note-meta {
+  padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2);
+  font-size: 12px; color: rgba(255,255,255,0.85); line-height: 1.8;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+}
+.meta-separator { color: rgba(255,255,255,0.5); }
+.contribution-id {
+  background: rgba(255,255,255,0.12); padding: 2px 6px; border-radius: 4px;
+  font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace;
+  color: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* ── Empty State ────────────────────────────────── */
+.empty-state {
+  position: relative; overflow: hidden;
+  background: rgba(115,111,230,var(--glass-alpha)); backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px; padding: 60px 40px; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28); color: white;
+}
+.empty-state::before {
+  content: ""; position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0; transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); pointer-events: none;
+}
+.empty-state:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+.empty-state-icon { font-size: 64px; margin-bottom: 16px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2)); }
+.empty-state-text { font-size: 20px; color: white; margin-bottom: 8px; font-weight: 600; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.empty-state-subtext { font-size: 14px; color: rgba(255,255,255,0.85); }
+
+/* ── Responsive ─────────────────────────────────── */
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .header { padding: 24px 20px; }
+  .header h1 { font-size: 24px; }
+  .message-count { display: block; margin-left: 0; margin-top: 8px; width: fit-content; }
+  .note-card { padding: 20px 16px; }
+  .back-nav { flex-direction: column; }
+  .back-link { width: 100%; justify-content: center; }
+  .empty-state { padding: 40px 24px; }
+  .chat-header { flex-direction: column; align-items: flex-start; }
+  .contrib-row td { font-size: 12px; padding: 5px 6px; }
+  .session-pane-header { flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 16px; }
+  .notes-list { padding: 12px; gap: 12px; }
+  .chat-model { max-width: 140px; }
+  .msg-text { font-size: 14px; }
+  .chain-plan-directive { font-size: 11px; }
+  .chain-step-target { max-width: 100px; }
+  .chain-plan-summary-text { max-width: 160px; }
+  .chain-step-fail-reason { max-width: 120px; }
+}
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container { max-width: 700px; }
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
+    </div>
+
+    <div class="header">
+      <h1>
+        AI Chats for
+        <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
+        ${chats.length > 0 ? `<span class="message-count">${chats.length}</span>` : ""}
+      </h1>
+      <div class="header-subtitle">Last 10 AI conversation sessions. Phases = thought process. Contributions = actions made on tree during conversation.</div>
+    </div>
+
+    ${
+      sessionGroups.length
+        ? renderedSections
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">💬</div>
+      <div class="empty-state-text">No AI chats yet</div>
+      <div class="empty-state-subtext">AI conversations and their actions will appear here</div>
+    </div>`
+    }
+  </div>
+
+  <script>
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry, index) {
+        if (entry.isIntersecting) {
+          setTimeout(function() { entry.target.classList.add('visible'); }, index * 50);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { root: null, rootMargin: '50px', threshold: 0.1 });
+    document.querySelectorAll('.note-card').forEach(function(card) { observer.observe(card); });
+
+    function toggleExpand(btn) {
+      var text = btn.previousElementSibling;
+      if (!text) return;
+      var expanded = text.classList.toggle('expanded');
+      btn.textContent = expanded ? 'Show less' : 'Show more';
+    }
+  </script>
+</body>
+</html>
+`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 15. Notifications Page - GET /user/:userId/notifications
+// ═══════════════════════════════════════════════════════════════════
+export function renderNotifications({ userId, notifications, total, username, token }) {
+  const tokenQS = token ? `?token=${token}&html` : `?html`;
+
+  const esc = (str = "") =>
+    String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    const items = notifications
+      .map((n) => {
+        const icon = n.type === "dream-thought" ? "💭" : "📋";
+        const typeLabel = n.type === "dream-thought" ? "Thought" : "Summary";
+        const colorClass =
+          n.type === "dream-thought" ? "glass-purple" : "glass-indigo";
+        const date = new Date(n.createdAt).toLocaleString();
+
+        return `
+      <li class="note-card ${colorClass}">
+        <div class="note-content">
+          <div class="contribution-action">
+            <span style="font-size:20px;margin-right:6px">${icon}</span>
+            ${esc(n.title)}
+            <span class="badge badge-type">${typeLabel}</span>
+          </div>
+          <div style="margin-top:10px;font-size:14px;color:rgba(255,255,255,0.9);line-height:1.6;white-space:pre-wrap">${esc(n.content)}</div>
+        </div>
+        <div class="note-meta">
+          ${date}
+        </div>
+      </li>`;
+      })
+      .join("");
+
+    return (`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>${esc(username)} - Notifications</title>
+  <style>
+:root {
+  --glass-alpha: 0.28;
+  --glass-alpha-hover: 0.38;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: #736fe6;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 20px;
+  color: #1a1a1a;
+  position: relative;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  opacity: 0.08;
+  animation: float 20s infinite ease-in-out;
+  pointer-events: none;
+}
+
+body::before {
+  width: 600px; height: 600px;
+  background: white;
+  top: -300px; right: -200px;
+  animation-delay: -5s;
+}
+
+body::after {
+  width: 400px; height: 400px;
+  background: white;
+  bottom: -200px; left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Glass Back Nav ─────────────────────────────── */
+
+.back-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  color: white;
+  text-decoration: none;
+  border-radius: 980px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.back-link::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.back-link:hover {
+  background: rgba(115, 111, 230, var(--glass-alpha-hover));
+  transform: translateY(-1px);
+}
+
+.back-link:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Glass Header ───────────────────────────────── */
+
+.header {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.header::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.header:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.header h1 {
+  font-size: 28px; font-weight: 600; color: white;
+  margin-bottom: 8px; line-height: 1.3; letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.header h1 a {
+  color: white; text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  transition: all 0.2s;
+}
+
+.header h1 a:hover {
+  border-bottom-color: white;
+  text-shadow: 0 0 12px rgba(255,255,255,0.8);
+}
+
+.message-count {
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.25);
+  color: white; border-radius: 980px;
+  font-size: 14px; font-weight: 600;
+  margin-left: 12px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.header-subtitle {
+  font-size: 14px; color: rgba(255,255,255,0.9);
+  margin-bottom: 16px; font-weight: 400; line-height: 1.5;
+}
+
+/* ── Glass Cards ────────────────────────────────── */
+
+.notes-list {
+  list-style: none;
+  display: flex; flex-direction: column; gap: 16px;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.note-card {
+  --card-rgb: 115, 111, 230;
+  position: relative;
+  background: rgba(var(--card-rgb), var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  color: white; overflow: hidden;
+}
+
+.note-card:nth-child(1) { animation-delay: 0.25s; }
+.note-card:nth-child(2) { animation-delay: 0.3s; }
+.note-card:nth-child(3) { animation-delay: 0.35s; }
+.note-card:nth-child(4) { animation-delay: 0.4s; }
+.note-card:nth-child(5) { animation-delay: 0.45s; }
+.note-card:nth-child(n+6) { animation-delay: 0.5s; }
+
+.note-card::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.note-card:hover {
+  background: rgba(var(--card-rgb), var(--glass-alpha-hover));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+}
+
+.note-card:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+/* ── Color Variants ─────────────────────────────── */
+
+.glass-default  { --card-rgb: 115, 111, 230; }
+.glass-purple   { --card-rgb: 155, 100, 220; }
+.glass-indigo   { --card-rgb: 100, 100, 210; }
+
+/* ── Card Inner ─────────────────────────────────── */
+
+.note-content {
+  margin-bottom: 12px;
+}
+
+.contribution-action {
+  font-size: 15px; line-height: 1.6;
+  color: white; font-weight: 600;
+  word-wrap: break-word;
+}
+
+/* ── Note Meta ──────────────────────────────────── */
+
+.note-meta {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  font-size: 12px; color: rgba(255,255,255,0.85);
+  line-height: 1.8;
+  display: flex; flex-wrap: wrap;
+  align-items: center; gap: 6px;
+}
+
+/* ── Badges ─────────────────────────────────────── */
+
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 980px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.badge-type {
+  background: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+/* ── Empty State ────────────────────────────────── */
+
+.empty-state {
+  position: relative; overflow: hidden;
+  background: rgba(115, 111, 230, var(--glass-alpha));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 60px 40px; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: white;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute; inset: -40%;
+  background: radial-gradient(120% 60% at 0% 0%, rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+}
+
+.empty-state:hover::before { opacity: 1; transform: translateX(30%) translateY(10%); }
+
+.empty-state-icon {
+  font-size: 64px; margin-bottom: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+}
+
+.empty-state-text {
+  font-size: 20px; color: white;
+  margin-bottom: 8px; font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.empty-state-subtext {
+  font-size: 14px; color: rgba(255,255,255,0.85);
+}
+
+/* ── Responsive ─────────────────────────────────── */
+
+@media (max-width: 640px) {
+  body { padding: 16px; }
+  .header { padding: 24px 20px; }
+  .header h1 { font-size: 24px; }
+  .message-count { display: block; margin-left: 0; margin-top: 8px; width: fit-content; }
+  .note-card { padding: 20px 16px; }
+  .back-nav { flex-direction: column; }
+  .back-link { width: 100%; justify-content: center; }
+  .empty-state { padding: 40px 24px; }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container { max-width: 700px; }
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="back-nav">
+      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">← Back to Profile</a>
+    </div>
+
+    <div class="header">
+      <h1>
+        Notifications for
+        <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
+        ${notifications.length > 0 ? `<span class="message-count">${total}</span>` : ""}
+      </h1>
+      <div class="header-subtitle">Dream summaries and thoughts from your trees</div>
+    </div>
+
+    ${
+      items.length
+        ? `<ul class="notes-list">${items}</ul>`
+        : `
+    <div class="empty-state">
+      <div class="empty-state-icon">🔔</div>
+      <div class="empty-state-text">No notifications yet</div>
+      <div class="empty-state-subtext">Dreams will generate summaries and thoughts automatically</div>
+    </div>`
+    }
+  </div>
+</body>
+</html>`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Exported HTML helper functions (used by user.js for inline rendering)
+// ═══════════════════════════════════════════════════════════════════
+export { escapeHtml, renderMedia };
