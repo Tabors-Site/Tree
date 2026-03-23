@@ -15,7 +15,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 import authenticate, { authenticateOrPublic } from "../../middleware/authenticate.js";
 import { createCanopyLlmProxyClient } from "../../canopy/llmProxy.js";
-import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
+// orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
 import { getOrchestrator } from "../../core/orchestratorRegistry.js";
 import {
   setRootId,
@@ -162,10 +162,9 @@ async function runTreeOrchestration(opts, res) {
         ...orchestrateFlags,
       };
 
-      const customOrch = getOrchestrator("tree");
-      const result = customOrch
-        ? await customOrch.handle(orchArgs)
-        : await orchestrateTreeRequest(orchArgs);
+      const orch = getOrchestrator("tree");
+      if (!orch) throw new Error("No tree orchestrator installed.");
+      const result = await orch.handle(orchArgs);
 
       clearTimeout(timer);
       if (timedOut) return;

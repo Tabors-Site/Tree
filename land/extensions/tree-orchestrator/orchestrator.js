@@ -11,18 +11,18 @@ import {
   resetConversation,
   getClientForUser,
   resolveRootLlmForMode,
-} from "../ws/conversation.js";
+} from "../../ws/conversation.js";
 import { classify, translateDestructive } from "./translator.js";
-import { trackChainStep, setAiContributionContext } from "../ws/aiChatTracker.js";
-import { isActiveNavigator } from "../ws/sessionRegistry.js";
+import { trackChainStep, setAiContributionContext } from "../../ws/aiChatTracker.js";
+import { isActiveNavigator } from "../../ws/sessionRegistry.js";
 
 import {
   getContextForAi,
   getNavigationContext,
   buildDeepTreeSummary,
-} from "../core/tree/treeFetch.js";
+} from "../../core/tree/treeFetch.js";
 import mongoose from "mongoose";
-import Node from "../db/models/node.js";
+import Node from "../../db/models/node.js";
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
 // ─────────────────────────────────────────────────────────────────────────

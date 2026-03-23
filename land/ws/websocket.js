@@ -22,7 +22,7 @@ let useEnergy = async () => ({ energyUsed: 0 });
 try { ({ useEnergy } = await import("../extensions/energy/core.js")); } catch {}
 import { getNodeName } from "../core/tree/treeDataFetching.js";
 import Node from "../db/models/node.js";
-import { orchestrateTreeRequest } from "../orchestrators/tree.js";
+// orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
 import { getOrchestrator } from "../core/orchestratorRegistry.js";
 import { enqueue } from "./requestQueue.js";
 import {
@@ -57,7 +57,7 @@ import {
   setAiContributionContext,
   clearAiContributionContext,
 } from "./aiChatTracker.js";
-import { clearMemory } from "../orchestrators/tree.js";
+const clearMemory = () => {}; // provided by tree-orchestrator extension if installed
 import { getAIChats } from "../core/llms/aichat.js";
 import {
   registerSession,
@@ -630,13 +630,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                       : "tree-chat",
               };
 
-              // Check for custom orchestrator (extension can replace the tree orchestrator)
-              const customOrch = getOrchestrator("tree");
-              if (customOrch) {
-                response = await customOrch.handle(orchArgs);
-              } else {
-                response = await orchestrateTreeRequest(orchArgs);
+              // Orchestrator loaded from extension registry
+              const orch = getOrchestrator("tree");
+              if (!orch) {
+                throw new Error("No tree orchestrator installed. Install the tree-orchestrator extension.");
               }
+              response = await orch.handle(orchArgs);
             } else {
               response = await processMessage(visitorId, message, {
                 username,

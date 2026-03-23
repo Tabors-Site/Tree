@@ -120,6 +120,9 @@ const register = async (req, res) => {
         throw err;
       }
 
+      // afterRegister hook (fire-and-forget)
+      hooks.run("afterRegister", { user, email }).catch(() => {});
+
       const token = jwt.sign(
         { userId: user._id, username: user.username },
         JWT_SECRET,

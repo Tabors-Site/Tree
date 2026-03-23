@@ -17,7 +17,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 import GatewayChannel from "./model.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
-import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
+import { getOrchestrator } from "../../core/orchestratorRegistry.js";
+let orchestrateTreeRequest;
+try { ({ orchestrateTreeRequest } = await import("../tree-orchestrator/orchestrator.js")); } catch { orchestrateTreeRequest = async () => { throw new Error("No tree orchestrator installed"); }; }
 import {
   setRootId,
   getClientForUser,

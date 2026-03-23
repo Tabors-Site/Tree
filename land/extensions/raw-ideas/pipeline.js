@@ -5,7 +5,9 @@ import { OrchestratorRuntime, parseJsonSafe } from "../../orchestrators/runtime.
 import { SESSION_TYPES, updateSessionMeta } from "../../ws/sessionRegistry.js";
 import { setRootId, getClientForUser } from "../../ws/conversation.js";
 import { trackChainStep } from "../../ws/aiChatTracker.js";
-import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
+import { getOrchestrator } from "../../core/orchestratorRegistry.js";
+let orchestrateTreeRequest;
+try { ({ orchestrateTreeRequest } = await import("../tree-orchestrator/orchestrator.js")); } catch { orchestrateTreeRequest = async () => { throw new Error("No tree orchestrator installed"); }; }
 import {
   getRootNodesForUser,
   buildDeepTreeSummary,

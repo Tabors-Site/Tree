@@ -200,18 +200,26 @@ async function convertRawIdeaToNote({
   }
 
   // 5️⃣ Create note from raw idea
+  const { hooks } = await import("../../core/hooks.js");
+  const hookData = { nodeId, version: 0, content: rawIdea.content, userId, contentType: rawIdea.contentType };
+  const hookResult = await hooks.run("beforeNote", hookData);
+  if (hookResult.cancelled) throw new Error(hookResult.reason || "Note creation cancelled");
+
   const newNote = new Note({
     contentType: rawIdea.contentType,
     content: rawIdea.content,
     userId,
     nodeId,
-    version: 0,
+    version: hookData.version,
     tagged: rawIdea.tagged || [],
     isReflection: false,
     createdAt: rawIdea.createdAt,
   });
 
   await newNote.save();
+
+  // afterNote (fire-and-forget)
+  hooks.run("afterNote", { note: newNote, nodeId, userId }).catch(() => {});
 
   await logContribution({
     userId,
