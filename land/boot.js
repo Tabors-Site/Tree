@@ -136,15 +136,65 @@ async function pickExtensions(directoryUrl) {
     output: process.stdout,
   });
 
-  console.log(`\n  ${extensions.length} extensions available. Select which to install:\n`);
+  // Categorize extensions
+  const REQUIRED = ["tree-orchestrator"]; // must have for chat/place/query
+  const CORE_AI = ["understanding", "dreams", "raw-ideas"];
+  const DATA = ["values", "schedules", "prestige", "transactions", "energy", "billing"];
+  const TOOLS = ["scripts", "solana", "gateway", "api-keys", "user-llm"];
+  const CONTENT = ["blog", "book", "email", "html-rendering"];
+  const SYSTEM = ["user-queries", "deleted-revive", "console"];
+
+  const categories = [
+    { title: "Required (chat/place/query need this)", names: REQUIRED, defaultYes: true, force: true },
+    { title: "AI Intelligence (recommended)", names: CORE_AI, defaultYes: true },
+    { title: "Data and Tracking", names: DATA, defaultYes: false },
+    { title: "Tools and Integrations", names: TOOLS, defaultYes: false },
+    { title: "Content and Rendering", names: CONTENT, defaultYes: false },
+    { title: "System Utilities", names: SYSTEM, defaultYes: true },
+  ];
+
+  const extMap = {};
+  for (const ext of extensions) extMap[ext.name] = ext;
 
   const selected = [];
-  for (const ext of extensions) {
-    const answer = await rl.question(
-      `  [${selected.length}/${extensions.length}] ${ext.name} v${ext.version} . ${ext.description || ""} (Y/n): `
-    );
-    if (!answer.trim() || answer.toLowerCase().startsWith("y")) {
-      selected.push(ext);
+
+  for (const cat of categories) {
+    const available = cat.names.filter(n => extMap[n]);
+    if (!available.length) continue;
+
+    console.log(`\n  ${cat.title}:`);
+
+    if (cat.force) {
+      for (const name of available) {
+        console.log(`    ${name} v${extMap[name].version} (auto-installed)`);
+        selected.push(extMap[name]);
+      }
+      continue;
+    }
+
+    for (const name of available) {
+      const ext = extMap[name];
+      const hint = cat.defaultYes ? "(Y/n)" : "(y/N)";
+      const answer = await rl.question(
+        `    ${name} v${ext.version} . ${ext.description || ""} ${hint}: `
+      );
+      const yes = cat.defaultYes
+        ? (!answer.trim() || answer.toLowerCase().startsWith("y"))
+        : (answer.toLowerCase().startsWith("y"));
+      if (yes) selected.push(ext);
+    }
+  }
+
+  // Catch any extensions not in categories
+  const categorized = new Set([...REQUIRED, ...CORE_AI, ...DATA, ...TOOLS, ...CONTENT, ...SYSTEM]);
+  const uncategorized = extensions.filter(e => !categorized.has(e.name));
+  if (uncategorized.length) {
+    console.log(`\n  Other:`);
+    for (const ext of uncategorized) {
+      const answer = await rl.question(
+        `    ${ext.name} v${ext.version} . ${ext.description || ""} (y/N): `
+      );
+      if (answer.toLowerCase().startsWith("y")) selected.push(ext);
     }
   }
 
