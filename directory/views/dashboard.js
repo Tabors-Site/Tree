@@ -554,6 +554,11 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
         <input type="text" id="ext-search" placeholder="Search extensions..." onkeydown="if(event.key==='Enter')searchExtensions()" />
         <button onclick="searchExtensions()">Search</button>
       </div>
+      <div class="search-row" style="margin-top: 8px;">
+        <input type="text" id="route-check" placeholder="Check route availability, e.g. /root/:rootId/calendar" onkeydown="if(event.key==='Enter')checkRoute()" />
+        <button onclick="checkRoute()">Check</button>
+      </div>
+      <div id="route-result" style="margin-bottom: 16px; font-size: 14px;"></div>
       <div id="ext-grid" class="ext-grid">
         ${extensionCards}
       </div>
@@ -685,6 +690,25 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
         }).join("");
       } catch (err) {
         console.error("Search failed:", err);
+      }
+    }
+    async function checkRoute() {
+      var path = document.getElementById("route-check").value.trim();
+      var el = document.getElementById("route-result");
+      if (!path) { el.innerHTML = ""; return; }
+      try {
+        var res = await fetch("/extensions/routes/check?path=" + encodeURIComponent(path));
+        var data = await res.json();
+        if (data.available) {
+          el.innerHTML = '<span style="color: #10b981;">Available.</span> No extension claims this route.';
+        } else {
+          el.innerHTML = '<span style="color: #ef4444;">Claimed</span> by: ' +
+            data.claims.map(function(c) {
+              return '<strong>' + escapeHtml(c.extension) + '</strong> v' + escapeHtml(c.version) + ' (' + escapeHtml(c.command) + ')';
+            }).join(", ");
+        }
+      } catch (err) {
+        el.innerHTML = '<span style="color: #ef4444;">Check failed.</span>';
       }
     }
   </script>
