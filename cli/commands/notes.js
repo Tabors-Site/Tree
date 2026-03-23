@@ -260,6 +260,51 @@ module.exports = (program) => {
   } // end values extension
 
   program
+    .command("download [noteId]")
+    .description("Download a note to a local file. Text notes save as .txt, file notes save with original name.")
+    .option("-o, --output [path]", "Output file path (default: auto-named in current directory)")
+    .action(async (noteId, opts) => {
+      if (!noteId) return console.log(chalk.yellow("Usage: download <noteId or #>"));
+      const cfg = requireAuth();
+      if (!cfg.activeRootId)
+        return console.log(chalk.yellow("No tree selected."));
+      const api = getApi(cfg);
+      const fs = require("fs");
+      const path = require("path");
+      try {
+        const nodeId = currentNodeId(cfg);
+        const data = await api.getNotes(nodeId, { limit: 100 });
+        const notes = data.notes || data || [];
+
+        let note;
+        const num = parseInt(noteId, 10);
+        if (!isNaN(num) && num > 0 && num <= notes.length) {
+          note = notes[num - 1];
+        } else {
+          note = notes.find(n => n._id === noteId || n._id?.startsWith(noteId));
+        }
+        if (!note) return console.log(chalk.red("Note not found"));
+
+        if (note.contentType === "file") {
+          const url = `${api.baseUrl || ""}/uploads/${note.content}`;
+          const res = await fetch(url, { headers: { "x-api-key": api.apiKey } });
+          if (!res.ok) return console.log(chalk.red("Failed to download file"));
+          const outPath = opts.output || note.content;
+          const buffer = Buffer.from(await res.arrayBuffer());
+          fs.writeFileSync(outPath, buffer);
+          console.log(chalk.green(`Downloaded: ${outPath} (${buffer.length} bytes)`));
+        } else {
+          const content = note.content || "";
+          const outPath = opts.output || `note-${(note._id || "unknown").slice(0, 8)}.txt`;
+          fs.writeFileSync(outPath, content, "utf8");
+          console.log(chalk.green(`Saved: ${outPath} (${content.length} chars)`));
+        }
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
     .command("cat [type] [idOrNumber...]")
     .description("View full content: cat note <id/#>, cat idea <id/#>")
     .action(async (type, parts) => {
