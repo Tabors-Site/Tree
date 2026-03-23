@@ -26,10 +26,18 @@ export async function init(core) {
   // }, "my-extension");
 
   return {
-    // router,    // Express router, mounted at /api/v1
-    // tools,     // MCP tool definitions for AI
-    // modes,     // Custom AI conversation modes [{key, handler}]
-    // modeTools, // Inject tools into existing conversation modes
-    // jobs,      // Background jobs with start/stop
+    // router,       // Express router, mounted at /api/v1
+    // tools,        // MCP tool definitions for AI
+    // modes,        // Custom AI conversation modes [{key, handler}]
+    // modeTools,    // Inject tools into existing conversation modes
+    // jobs,         // Background jobs with start/stop
+    // orchestrator, // Replace the conversation orchestrator for a bigMode:
+    // orchestrator: {
+    //   bigMode: "tree",  // which bigMode to intercept
+    //   async handle({ visitorId, message, socket, userId, sessionId, ...ctx }) {
+    //     // Full control over chat/place/query flow
+    //     // Use core.conversation.processMessage() for LLM calls
+    //   },
+    // },
   };
 }

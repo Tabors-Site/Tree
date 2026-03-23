@@ -23,6 +23,7 @@ try { ({ useEnergy } = await import("../extensions/energy/core.js")); } catch {}
 import { getNodeName } from "../core/tree/treeDataFetching.js";
 import Node from "../db/models/node.js";
 import { orchestrateTreeRequest } from "../orchestrators/tree.js";
+import { getOrchestrator } from "../core/orchestratorRegistry.js";
 import { enqueue } from "./requestQueue.js";
 import {
   switchMode,
@@ -610,7 +611,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             let response;
 
             if (bigMode === "tree") {
-              response = await orchestrateTreeRequest({
+              const orchArgs = {
                 visitorId,
                 message,
                 socket,
@@ -627,7 +628,15 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
                     : safeChatMode === "query"
                       ? "ws-tree-query"
                       : "tree-chat",
-              });
+              };
+
+              // Check for custom orchestrator (extension can replace the tree orchestrator)
+              const customOrch = getOrchestrator("tree");
+              if (customOrch) {
+                response = await customOrch.handle(orchArgs);
+              } else {
+                response = await orchestrateTreeRequest(orchArgs);
+              }
             } else {
               response = await processMessage(visitorId, message, {
                 username,

@@ -3,6 +3,7 @@ import User from "../../db/models/user.js";
 import authenticate from "../../middleware/authenticate.js";
 import { notFoundPage } from "../../middleware/notFoundPage.js";
 import { setHtmlShareToken } from "../../core/tree/user.js";
+import { getUserMeta } from "../../core/tree/userMetadata.js";
 import { renderShareToken } from "../../routes/api/html/user.js";
 
 const router = express.Router();

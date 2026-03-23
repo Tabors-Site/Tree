@@ -78,7 +78,9 @@
       "Bash(echo \"=== Node schema fields ===\" node -e \"import\\(''''./land/db/models/node.js''''\\).then\\(m => { console.log\\(Object.keys\\(m.default.schema.paths\\).filter\\(k => !k.startsWith\\(''''__''''\\)\\).sort\\(\\).join\\('''', ''''\\)\\); }\\);\" 2)",
       "Bash(1 __NEW_LINE_c3a9c18e6b1d0abd__ echo \"\" echo \"=== User schema fields ===\" node -e \"import\\(''''./land/db/models/user.js''''\\).then\\(m => { console.log\\(Object.keys\\(m.default.schema.paths\\).filter\\(k => !k.startsWith\\(''''__''''\\)\\).sort\\(\\).join\\('''', ''''\\)\\); }\\);\" 2)",
       "Bash(1 __NEW_LINE_c3a9c18e6b1d0abd__ echo \"\" echo \"=== Extensions ===\" ls -d land/extensions/*/)",
-      "Bash(echo \"doesn''''t exist\" echo echo '=== Other stale docs ===' find /home/tabor/github/Tree -maxdepth 1 -name *.md)"
+      "Bash(echo \"doesn''''t exist\" echo echo '=== Other stale docs ===' find /home/tabor/github/Tree -maxdepth 1 -name *.md)",
+      "Bash(wc -l /home/tabor/github/Tree/land/orchestrators/*.js /home/tabor/github/Tree/land/ws/conversation.js /home/tabor/github/Tree/land/ws/websocket.js)",
+      "Bash(echo \"=== Extension orchestrator usage ===\" grep -rn \"OrchestratorRuntime\\\\|orchestrateTreeRequest\\\\|orchestrate\" /home/tabor/github/Tree/land/extensions/ --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -86,7 +88,8 @@
       "/home/tabor/github/Tree/s/u\\.htmlShareToken/u.metadata?.html?.shareToken",
       "/home/tabor/github/Tree/s/shareToken: user\\.htmlShareToken || null/shareToken: getUserMeta(user, \"html\")?.shareToken || null",
       "/home/tabor/github/Tree/Deleted: core/gateway/ (4 files), routes/api",
-      "/home/tabor/github/Tree/s/rootMeta\\.metadata?\\.visibility?\\.level/rootMeta.visibility"
+      "/home/tabor/github/Tree/s/rootMeta\\.metadata?\\.visibility?\\.level/rootMeta.visibility",
+      "/home/tabor/github/Tree/land/routes/api/html"
     ]
   }
 }

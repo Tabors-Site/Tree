@@ -5,6 +5,7 @@
 
 import { hooks as hooksModule } from "./hooks.js";
 import { registerMode } from "../ws/modes/registry.js";
+import { registerOrchestrator, getOrchestrator } from "./orchestratorRegistry.js";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
 import Contribution from "../db/models/contribution.js";
@@ -146,6 +147,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     // --- Hook system ---
     hooks: hooksModule,
     modes: { registerMode },
+    orchestrators: { register: registerOrchestrator, get: getOrchestrator },
   };
 
   // Apply overrides (lands can swap any service)

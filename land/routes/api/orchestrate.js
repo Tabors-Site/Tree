@@ -16,6 +16,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 import authenticate, { authenticateOrPublic } from "../../middleware/authenticate.js";
 import { createCanopyLlmProxyClient } from "../../canopy/llmProxy.js";
 import { orchestrateTreeRequest } from "../../orchestrators/tree.js";
+import { getOrchestrator } from "../../core/orchestratorRegistry.js";
 import {
   setRootId,
   getClientForUser,
@@ -147,7 +148,7 @@ async function runTreeOrchestration(opts, res) {
       await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
       setRootId(visitorId, rootId);
 
-      const result = await orchestrateTreeRequest({
+      const orchArgs = {
         visitorId,
         message: message.trim(),
         socket: nullSocket,
@@ -159,7 +160,12 @@ async function runTreeOrchestration(opts, res) {
         rootChatId: aiChat?._id || null,
         sourceType: `tree-${mode}`,
         ...orchestrateFlags,
-      });
+      };
+
+      const customOrch = getOrchestrator("tree");
+      const result = customOrch
+        ? await customOrch.handle(orchArgs)
+        : await orchestrateTreeRequest(orchArgs);
 
       clearTimeout(timer);
       if (timedOut) return;

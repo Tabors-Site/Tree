@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices, NOOP_ENERGY } from "../core/services.js";
 import { setExtensionToolResolver, registerMode } from "../ws/modes/registry.js";
 import { hooks } from "../core/hooks.js";
+import { registerOrchestrator } from "../core/orchestratorRegistry.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
 function toImportURL(filePath) {
@@ -527,6 +528,12 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
             registerMode(modeDef.key, modeDef.handler, manifest.name);
           }
         }
+      }
+
+      // Register custom orchestrator (extensions can replace the conversation orchestrator)
+      if (instance.orchestrator && typeof instance.orchestrator.handle === "function") {
+        const bigMode = instance.orchestrator.bigMode || "tree";
+        registerOrchestrator(bigMode, instance.orchestrator, manifest.name);
       }
 
       // Register jobs (extensions can provide startable/stoppable jobs)

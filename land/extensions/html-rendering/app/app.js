@@ -51,7 +51,7 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       }
     }
 
-    const { getUserMeta } = await import("../../core/tree/userMetadata.js");
+    const { getUserMeta } = await import("../../../core/tree/userMetadata.js");
     const htmlShareToken = getUserMeta(user, "html")?.shareToken || "";
     const { username } = user;
     const hasLlm =
