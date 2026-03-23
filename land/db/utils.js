@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import Contribution from "./models/contribution.js";
 import Node from "./models/node.js";
 import { getAiContributionContext } from "../ws/aiChatTracker.js";
@@ -23,7 +24,7 @@ async function findNodeById(nodeId) {
     }
     return node;
   } catch (error) {
-    console.error("Error finding node by UUID:", error);
+    log.error("DB", "Error finding node by UUID:", error);
     throw error;
   }
 }
@@ -105,7 +106,7 @@ const logContribution = async (params) => {
 
     await newContribution.save();
   } catch (error) {
-    console.error("Error logging contribution:", error);
+    log.error("DB", "Error logging contribution:", error);
     throw new Error(error.message || "Internal server error");
   }
 };

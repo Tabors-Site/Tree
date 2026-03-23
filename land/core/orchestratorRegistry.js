@@ -1,3 +1,4 @@
+import log from "./log.js";
 /**
  * Orchestrator Registry
  *
@@ -25,21 +26,21 @@ const registry = new Map();
 
 export function registerOrchestrator(bigMode, handler, extName = "unknown") {
   if (!bigMode || !handler) {
-    console.warn(`[Orchestrators] Invalid registration from ${extName}`);
+    log.warn("Orchestrators", `Invalid registration from ${extName}`);
     return false;
   }
   if (!handler.handle || typeof handler.handle !== "function") {
-    console.warn(`[Orchestrators] "${bigMode}" from ${extName} missing handle(). Skipped.`);
+    log.warn("Orchestrators", `"${bigMode}" from ${extName} missing handle(). Skipped.`);
     return false;
   }
   if (registry.has(bigMode)) {
-    console.warn(`[Orchestrators] "${bigMode}" already registered by "${registry.get(bigMode)._extName}". ${extName} cannot override.`);
+    log.warn("Orchestrators", `"${bigMode}" already registered by "${registry.get(bigMode)._extName}". ${extName} cannot override.`);
     return false;
   }
 
   handler._extName = extName;
   registry.set(bigMode, handler);
-  console.log(`[Orchestrators] Registered: ${bigMode} (${extName})`);
+  log.verbose("Orchestrators", `Registered: ${bigMode} (${extName})`);
   return true;
 }
 

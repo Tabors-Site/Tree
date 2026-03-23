@@ -1,3 +1,4 @@
+import log from "../log.js";
 import path from "path";
 import fs from "fs";
 import Note from "../../db/models/notes.js";
@@ -399,7 +400,7 @@ async function getNotes({ nodeId, version, limit, startDate, endDate }) {
       notes: notesWithUsername,
     };
   } catch (err) {
-    console.error("Error in getNotes:", err);
+    log.error("Notes", "getNotes:", err);
 
     throw new Error(
       err.message || "Database error occurred while retrieving notes.",
@@ -522,7 +523,7 @@ async function deleteNoteAndFile({
       fs.unlinkSync(filePath);
       fileDeleted = true;
     } else {
-      console.log(`File not found: ${filePath}`);
+      log.warn("Notes", `File not found: ${filePath}`);
     }
 
     // update note fields
@@ -555,7 +556,7 @@ async function deleteNoteAndFile({
         },
       ]);
     } catch (err) {
-      console.error("Storage update failed", {
+      log.error("Notes", "Storage update failed", {
         fileOwnerId,
         fileSizeKB,
         noteId,

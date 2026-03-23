@@ -1,3 +1,4 @@
+import log from "../log.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
 import Contribution from "../../db/models/contribution.js";
@@ -56,7 +57,7 @@ async function getRootDetails(req, res) {
       contributors: node.contributors,
     });
   } catch (error) {
-    console.error("Error fetching node details:", error);
+    log.error("Tree", "Error fetching node details:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 }
@@ -106,7 +107,7 @@ async function getTree(req, res) {
 
     return res.json(filtered ?? {});
   } catch (error) {
-    console.error("Error fetching tree:", error);
+    log.error("Tree", "Error fetching tree:", error);
     res.status(500).json({ message: "Server error" });
   }
 }
@@ -172,7 +173,7 @@ async function getNodeForAi(nodeId) {
 
     return result;
   } catch (error) {
-    console.error("Error fetching AI node:", error);
+    log.error("Tree", "Error fetching AI node:", error);
     throw new Error("Server error while fetching node");
   }
 }
@@ -249,7 +250,7 @@ async function getTreeForAi(rootId, filter = null) {
       tree,
     });
   } catch (error) {
-    console.error("Error fetching AI tree:", error);
+    log.error("Tree", "Error fetching AI tree:", error);
     throw new Error("Server error while fetching tree for AI");
   }
 }
@@ -294,7 +295,7 @@ async function getParents(req, res) {
     const parentNodes = await getParentsRecursive(childId);
     res.json(parentNodes);
   } catch (error) {
-    console.error("Error fetching parents:", error);
+    log.error("Tree", "Error fetching parents:", error);
     res.status(500).json({ message: "Server error" });
   }
 }
@@ -320,7 +321,7 @@ async function getRootNodes(req, res) {
     const roots = await getRootNodesForUser(req.userId);
     res.json({ roots });
   } catch (error) {
-    console.error("Error fetching root nodes:", error);
+    log.error("Tree", "Error fetching root nodes:", error);
     res.status(500).json({ message: "Server error" });
   }
 }
@@ -434,7 +435,7 @@ async function getAllData(req, res) {
 
     return res.json(result);
   } catch (error) {
-    console.error("Error fetching node details:", error);
+    log.error("Tree", "Error fetching node details:", error);
     res.status(500).json({ message: "Server error" });
   }
 }

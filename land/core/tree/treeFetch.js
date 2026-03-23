@@ -1,3 +1,4 @@
+import log from "../log.js";
 import mongoose from "mongoose";
 import Node from "../../db/models/node.js";
 import Note from "../../db/models/notes.js";
@@ -277,7 +278,7 @@ export async function buildDeepTreeSummary(
         }
       }
     } catch (err) {
-      console.warn("⚠️ Failed to load understanding encodings:", err.message);
+      log.warn("Tree", "Failed to load understanding encodings:", err.message);
     }
   }
 
