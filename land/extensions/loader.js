@@ -734,7 +734,7 @@ export async function runExtensionMigrations() {
         if (migration.version > currentVersion && migration.version <= targetVersion) {
           console.log(`[Extensions] ${name}: running migration v${migration.version}`);
           try {
-            await migration.up();
+            await migration.up(coreServices);
             ran++;
           } catch (err) {
             console.error(`[Extensions] ${name}: migration v${migration.version} FAILED:`, err.message);
