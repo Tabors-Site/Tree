@@ -5,6 +5,7 @@ import Node from "../../db/models/node.js";
 import Note from "../../db/models/notes.js";
 import User from "../../db/models/user.js";
 import { logContribution } from "../../db/utils.js";
+import { createNote } from "../../core/tree/notes.js";
 import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
 let useEnergy = async () => ({ energyUsed: 0 });
 try { ({ useEnergy } = await import("../energy/core.js")); } catch {}
@@ -193,34 +194,23 @@ async function convertRawIdeaToNote({
     throw new Error("You do not own this raw idea");
   }
 
-  // 2️⃣ Load node
-  const node = await Node.findById(nodeId);
-  if (!node) {
-    throw new Error("Node not found");
-  }
-
-  // 5️⃣ Create note from raw idea
-  const { hooks } = await import("../../core/hooks.js");
-  const hookData = { nodeId, version: 0, content: rawIdea.content, userId, contentType: rawIdea.contentType };
-  const hookResult = await hooks.run("beforeNote", hookData);
-  if (hookResult.cancelled) throw new Error(hookResult.reason || "Note creation cancelled");
-
-  const newNote = new Note({
+  // 2️⃣ Create note via core (handles hooks, energy, tags, storage, contribution)
+  const result = await createNote({
     contentType: rawIdea.contentType,
     content: rawIdea.content,
     userId,
     nodeId,
-    version: hookData.version,
-    tagged: rawIdea.tagged || [],
+    version: 0,
     isReflection: false,
-    createdAt: rawIdea.createdAt,
+    file: rawIdea.contentType === "file" ? { filename: rawIdea.content, size: 0 } : null,
+    wasAi,
+    aiChatId,
+    sessionId,
   });
 
-  await newNote.save();
+  if (result.error) throw new Error(result.error);
 
-  // afterNote (fire-and-forget)
-  hooks.run("afterNote", { note: newNote, nodeId, userId }).catch(() => {});
-
+  // 3️⃣ Log raw idea placement contribution
   await logContribution({
     userId,
     nodeId,
@@ -233,29 +223,17 @@ async function convertRawIdeaToNote({
       action: "placed",
       rawIdeaId: rawIdeaId.toString(),
       targetNodeId: nodeId,
-      noteId: newNote._id.toString(),
-    },
-  });
-  await logContribution({
-    userId,
-    nodeId,
-    wasAi,
-    aiChatId,
-    sessionId,
-    action: "note",
-    nodeVersion: 0,
-    noteAction: {
-      action: "add",
-      noteId: newNote._id.toString(),
+      noteId: result.Note._id.toString(),
     },
   });
 
+  // 4️⃣ Mark raw idea as done
   rawIdea.status = "deleted";
   await rawIdea.save();
 
   return {
     message: "Raw idea converted to note",
-    note: newNote,
+    note: result.Note,
   };
 }
 
