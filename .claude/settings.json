@@ -54,7 +54,9 @@
       "Bash(grep -n \"wallet\\\\|solana\\\\|sol\" /home/tabor/github/Tree/cli/commands/*.js)",
       "Bash(grep -rn \"body:\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
       "Bash(grep -h process.env. /home/tabor/github/Tree/land/extensions/**/*.js)",
-      "Bash(grep -rn \"wallet\" /home/tabor/github/Tree/cli/commands/*.js)"
+      "Bash(grep -rn \"wallet\" /home/tabor/github/Tree/cli/commands/*.js)",
+      "Bash(echo \"=== Old schema refs across ALL extensions ===\" grep -rn \"node\\\\.versions\\\\|node\\\\.prestige\\\\|\\\\.versions\\\\[\" /home/tabor/github/Tree/land/extensions/ --include=\"*.js\")",
+      "Read(//home/tabor/github/Tree/=== version\\\\.values\\\\.set/**)"
     ]
   }
 }

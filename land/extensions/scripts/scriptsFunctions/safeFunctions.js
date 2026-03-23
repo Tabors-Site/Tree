@@ -1,11 +1,16 @@
 import axios from "axios";
 import { getLandUrl } from "../../../canopy/identity.js";
 
-import { setValueForNode, setGoalForNode } from "../../values/core.js";
-
 import { editStatus } from "../../../core/tree/statuses.js";
-import { addPrestige } from "../../prestige/core.js";
-import { updateSchedule } from "../../schedules/core.js";
+
+// Optional extension imports (no-op if extension not installed)
+let setValueForNode = async () => { throw new Error("Values extension not installed"); };
+let setGoalForNode = async () => { throw new Error("Values extension not installed"); };
+let addPrestige = async () => { throw new Error("Prestige extension not installed"); };
+let updateSchedule = async () => { throw new Error("Schedules extension not installed"); };
+try { ({ setValueForNode, setGoalForNode } = await import("../../values/core.js")); } catch {}
+try { ({ addPrestige } = await import("../../prestige/core.js")); } catch {}
+try { ({ updateSchedule } = await import("../../schedules/core.js")); } catch {}
 
 async function getApi(url) {
   const blockedHosts = [
