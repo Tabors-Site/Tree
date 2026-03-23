@@ -51,7 +51,13 @@ async function migrate() {
       changed = true;
     }
 
-    // profileType and planExpiresAt stay on schema (core auth fields)
+    // profileType stays on schema (core auth)
+    // planExpiresAt moves to metadata.billing
+    if (user.planExpiresAt) {
+      if (!metadata.billing) metadata.billing = {};
+      metadata.billing.planExpiresAt = user.planExpiresAt;
+      changed = true;
+    }
 
     // Energy
     if (user.availableEnergy || user.additionalEnergy || user.storageUsage) {
@@ -86,6 +92,7 @@ async function migrate() {
           $set: { metadata },
           $unset: {
             apiKeys: "",
+            planExpiresAt: "",
             availableEnergy: "",
             additionalEnergy: "",
             storageUsage: "",

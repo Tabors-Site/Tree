@@ -61,16 +61,12 @@ const UserSchema = new mongoose.Schema({
     default: [],
   },
 
-  // Access level (core auth, not billing)
+  // Access level (core auth)
   profileType: {
     type: String,
     enum: ["basic", "standard", "premium", "god"],
     default: "basic",
     required: true,
-  },
-  planExpiresAt: {
-    type: Date,
-    default: null,
   },
 
   // Canopy (distributed network) fields
@@ -146,6 +142,11 @@ function metaSet(doc, extKey, field, value) {
   }
   if (doc.markModified) doc.markModified("metadata");
 }
+
+// Billing
+UserSchema.virtual("planExpiresAt")
+  .get(function () { return metaGet(this, "billing", "planExpiresAt", null); })
+  .set(function (v) { metaSet(this, "billing", "planExpiresAt", v); });
 
 // Energy
 UserSchema.virtual("availableEnergy")
