@@ -13,7 +13,7 @@ export default {
 
   provides: {
     routes: "./routes.js",
-    tools: false,
+    tools: "./tools.js",
     jobs: false,
 
     energyActions: {

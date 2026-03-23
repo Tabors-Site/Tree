@@ -1,4 +1,5 @@
 import router from "./routes.js";
+import getTools from "./tools.js";
 
 export async function init(core) {
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
@@ -8,5 +9,5 @@ export async function init(core) {
     if (Object.keys(goals).length > 0) context.goals = goals;
   }, "values");
 
-  return { router };
+  return { router, tools: getTools() };
 }

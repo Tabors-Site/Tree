@@ -92,7 +92,9 @@
       "Bash(timeout 20 PORT=39999 MONGODB_URI=\"mongodb://localhost:27017/tree-test-vm2\" LAND_DOMAIN=localhost JWT_SECRET=test CUSTOM_LLM_API_SECRET_KEY=test node land/server.js)",
       "Bash(echo \"=== Files using processMessage directly \\(should use runChat\\) ===\" grep -rln \"processMessage\" /home/tabor/github/Tree/land/ --include=\"*.js\")",
       "Bash(echo \"=== Who calls processMessage directly ===\" grep -rn \"processMessage\\\\b\" /home/tabor/github/Tree/land/extensions/ --include=\"*.js\")",
-      "Read(//^async function|^export async function|^function /{fname=$0} /processMessage/**)"
+      "Read(//^async function|^export async function|^function /{fname=$0} /processMessage/**)",
+      "Bash(echo '=== KERNEL FILES ===' echo '--- core/ ---' ls land/core/*.js land/core/tree/*.js land/core/llms/*.js)",
+      "Bash(sort echo:*)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

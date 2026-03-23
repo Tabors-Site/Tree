@@ -25,7 +25,7 @@ if (!fs.existsSync(uploadsFolder)) {
   fs.mkdirSync(uploadsFolder);
 }
 
-import { setValueForNode, setGoalForNode } from "../extensions/values/core.js";
+// Values tools moved to extensions/values/tools.js
 
 import {
   getContributionsByUser,
@@ -576,119 +576,7 @@ function getMcpServer() {
     }
   );*/
 
-  server.tool(
-    "edit-node-version-value",
-    "Calls setValueForNode() to update a node value.",
-    {
-      nodeId: z.string().describe("The unique ID of the node to edit."),
-      key: z
-        .string()
-        .describe("The key of the value you want to modify on the node."),
-      value: z
-        .number()
-        .describe("The numeric value to assign to the given key."),
-      prestige: z.number().describe("Prestige value in largest node version."),
-      userId: z
-        .string()
-        .describe(
-          "The ID of the user performing the edit. Used for contribution logging.",
-        ),
-      aiChatId: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("Injected by server. Ignore."),
-      sessionId: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("Injected by server. Ignore."),
-    },
-    {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    async ({ nodeId, key, value, prestige, userId, aiChatId, sessionId }) => {
-      const result = await setValueForNode({
-        nodeId,
-        key,
-        value,
-        userId,
-        wasAi: true,
-        aiChatId,
-        sessionId,
-      });
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
-  );
-
-  server.tool(
-    "edit-node-version-goal",
-    "Calls setGoalForNode() to update a nodes goal. A goal represents the number a value needs to reach, and should always copy an exisiting value key.",
-    {
-      nodeId: z.string().describe("The unique ID of the node to edit."),
-      key: z
-        .string()
-        .describe(
-          "The key of the goal you want to modify on the node. It always matches an existing value in the nodes verion.",
-        ),
-      goal: z
-        .number()
-        .describe(
-          "The numeric goal value to assign to the given key. What the corresponding value needs to reach.",
-        ),
-      prestige: z
-        .number()
-        .describe("Prestige value representing the node version."),
-      userId: z
-        .string()
-        .describe("The ID of the user performing the goal edit (for logging)."),
-      aiChatId: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("Injected by server. Ignore."),
-      sessionId: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("Injected by server. Ignore."),
-    },
-    {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    async ({ nodeId, key, goal, prestige, userId, aiChatId, sessionId }) => {
-      try {
-        const result = await setGoalForNode({
-          nodeId,
-          key,
-          goal,
-          userId,
-          wasAi: true,
-          aiChatId,
-          sessionId,
-        });
-
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [
-            { type: "text", text: `❌ Failed to update goal: ${err.message}` },
-          ],
-        };
-      }
-    },
-  );
+  // edit-node-version-value and edit-node-version-goal moved to extensions/values/tools.js
 
   server.tool(
     "edit-node-or-branch-status",
