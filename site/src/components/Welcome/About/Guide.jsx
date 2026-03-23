@@ -149,6 +149,50 @@ const Guide = () => {
         </Section>
 
         {/* ══════════════════════════════════════════════════════════════ */}
+        {/* 5.5 AI ENTRY POINTS */}
+        {/* ══════════════════════════════════════════════════════════════ */}
+        <Section title="Building with AI">
+          <P>
+            Two core functions handle all AI interaction. Extensions never manage MCP
+            connections, sessions, or AIChat records manually.
+          </P>
+          <P>
+            <strong>runChat</strong>: single message, persistent session. Use for user-facing
+            chat in any mode. Sessions persist per zone. Same tree keeps the same conversation.
+            Switch trees and the conversation starts fresh.
+          </P>
+          <Code>{`const { answer } = await core.llm.runChat({
+  userId, username,
+  message: "show me land status",
+  mode: "land:manager",
+});`}</Code>
+          <P>
+            <strong>runPipeline</strong>: multi-step chain with managed lifecycle. Use for
+            background jobs like dream cycles, understanding runs, cleanup passes. Each step
+            switches mode, calls the LLM, and tracks the chain. Locks prevent concurrent runs.
+          </P>
+          <Code>{`const result = await core.llm.runPipeline({
+  userId, username, rootId,
+  description: "Dream cycle",
+  lockNamespace: "dream",
+  steps: async (pipeline) => {
+    const { parsed } = await pipeline.step("tree:analyze", {
+      prompt: "Find cleanup opportunities",
+    });
+    await pipeline.step("tree:structure", {
+      prompt: "Execute plan",
+    });
+    return { summary: "Done" };
+  },
+});`}</Code>
+          <P>
+            Both handle automatically: MCP connection, mode switching, AIChat creation and
+            finalization, abort/cancellation, session persistence, chain tracking, per-node
+            tool restrictions, error cleanup. The internal LLM metadata never leaks to clients.
+          </P>
+        </Section>
+
+        {/* ══════════════════════════════════════════════════════════════ */}
         {/* 6. LLM SYSTEM */}
         {/* ══════════════════════════════════════════════════════════════ */}
         <Section title="LLM System">

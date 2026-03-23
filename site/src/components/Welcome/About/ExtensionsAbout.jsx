@@ -317,6 +317,56 @@ core.hooks.register("enrichContext", async ({ context, node, meta }) => {
           </div>
         </div>
 
+        {/* ── AI ENTRY POINTS ── */}
+        <div className="ext-section">
+          <div className="ext-section-title">
+            <span className="ext-section-icon">💬</span> Two AI Entry Points
+          </div>
+          <div className="ext-section-text">
+            Every extension uses one of two core functions for AI. No manual MCP connections,
+            no session management, no AIChat tracking. One call handles everything.
+          </div>
+
+          <div className="ext-section-text" style={{ marginTop: 16 }}>
+            <strong>runChat</strong> . Single message, persistent session. For user-facing chat.
+          </div>
+          <div className="ext-code-block">{`const { answer } = await core.llm.runChat({
+  userId, username,
+  message: "show me land status",
+  mode: "land:manager",
+  rootId: null,     // for tree modes
+  signal: null,     // AbortController for cancellation
+});`}</div>
+          <div className="ext-section-text" style={{ marginTop: 4 }}>
+            Sessions persist per zone. Same tree = same conversation.
+            Different tree = fresh session. Land and home persist across calls.
+          </div>
+
+          <div className="ext-section-text" style={{ marginTop: 16 }}>
+            <strong>runPipeline</strong> . Multi-step chain with managed lifecycle. For background jobs.
+          </div>
+          <div className="ext-code-block">{`const result = await core.llm.runPipeline({
+  userId, username, rootId,
+  description: "Dream cycle for MyTree",
+  lockNamespace: "dream",  // prevents concurrent runs
+  steps: async (pipeline) => {
+    // Each step switches mode, calls LLM, tracks chain
+    const { parsed } = await pipeline.step("tree:analyze", {
+      prompt: "Analyze this tree for cleanup",
+    });
+    await pipeline.step("tree:structure", {
+      prompt: "Execute: " + JSON.stringify(parsed),
+    });
+    return { summary: "Cleaned 3 branches" };
+  },
+});`}</div>
+          <div className="ext-section-text" style={{ marginTop: 4 }}>
+            Handles: lock, session, MCP, LLM resolution, AIChat chain tracking,
+            abort signal propagation, cleanup. Every step is indexed and traceable.
+            Per-node tool restrictions apply automatically.
+          </div>
+        </div>
+
         {/* ── ORCHESTRATOR ── */}
         <div className="ext-section">
           <div className="ext-section-title">

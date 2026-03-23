@@ -73,10 +73,11 @@ const LandingPage = () => {
             <div className="lp-card">
               <h3>Extensions</h3>
               <p>
-                Packaged units of LLM complexity. An understanding run, a script sandbox,
-                a wallet integration, a custom AI orchestrator. Each one is a folder with a manifest.
-                Install it, restart, and both human and agent gain new capabilities.
-                Replace how the AI thinks, classifies, and places content.
+                Packaged units of LLM complexity. Two core functions handle all AI:
+                runChat for conversations, runPipeline for multi-step chains.
+                No MCP wiring, no session management, no boilerplate.
+                Build an understanding run, a custom orchestrator, a dream cycle.
+                One call. The kernel handles the rest.
               </p>
             </div>
             <div className="lp-card">
