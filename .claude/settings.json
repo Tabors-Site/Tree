@@ -75,7 +75,8 @@
       "/home/tabor/github/Tree",
       "/home/tabor/github/Tree/s/node\\.llmAssignments = { placement: null };/\\/\\/ llmDefault is null by default, no need to set",
       "/home/tabor/github/Tree/s/u\\.htmlShareToken/u.metadata?.html?.shareToken",
-      "/home/tabor/github/Tree/s/shareToken: user\\.htmlShareToken || null/shareToken: getUserMeta(user, \"html\")?.shareToken || null"
+      "/home/tabor/github/Tree/s/shareToken: user\\.htmlShareToken || null/shareToken: getUserMeta(user, \"html\")?.shareToken || null",
+      "/home/tabor/github/Tree/Deleted: core/gateway/ (4 files), routes/api"
     ]
   }
 }

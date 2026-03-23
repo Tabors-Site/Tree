@@ -171,11 +171,95 @@ async function migrate() {
     );
   }
 
-  console.log("\nMigration complete:");
-  console.log(`  Migrated: ${migrated}`);
-  console.log(`  Skipped (no versions): ${skipped}`);
-  console.log(`  Errors: ${errors}`);
-  console.log(`  Set default status: ${noVersions}`);
+  // ── Phase 2: Move visibility, dreamTime, lastDreamAt to metadata ──
+  console.log("\nPhase 2: Moving visibility, dreamTime, lastDreamAt to metadata...");
+
+  // Visibility -> metadata.visibility.level
+  const visNodes = await nodesCollection.countDocuments({
+    visibility: { $exists: true, $ne: null },
+  });
+  if (visNodes > 0) {
+    const visCursor = nodesCollection.find({ visibility: { $exists: true, $ne: null } });
+    let visCount = 0;
+    for await (const node of visCursor) {
+      const meta = node.metadata || {};
+      meta.visibility = { level: node.visibility || "private" };
+      await nodesCollection.updateOne(
+        { _id: node._id },
+        { $set: { metadata: meta }, $unset: { visibility: "" } },
+      );
+      visCount++;
+    }
+    console.log(`  Moved visibility for ${visCount} nodes`);
+  }
+
+  // dreamTime + lastDreamAt -> metadata.dreams
+  const dreamNodes = await nodesCollection.countDocuments({
+    $or: [
+      { dreamTime: { $exists: true, $ne: null } },
+      { lastDreamAt: { $exists: true, $ne: null } },
+    ],
+  });
+  if (dreamNodes > 0) {
+    const dreamCursor = nodesCollection.find({
+      $or: [
+        { dreamTime: { $exists: true, $ne: null } },
+        { lastDreamAt: { $exists: true, $ne: null } },
+      ],
+    });
+    let dreamCount = 0;
+    for await (const node of dreamCursor) {
+      const meta = node.metadata || {};
+      if (!meta.dreams) meta.dreams = {};
+      if (node.dreamTime) meta.dreams.dreamTime = node.dreamTime;
+      if (node.lastDreamAt) meta.dreams.lastDreamAt = node.lastDreamAt;
+      await nodesCollection.updateOne(
+        { _id: node._id },
+        { $set: { metadata: meta }, $unset: { dreamTime: "", lastDreamAt: "" } },
+      );
+      dreamCount++;
+    }
+    console.log(`  Moved dreamTime/lastDreamAt for ${dreamCount} nodes`);
+  }
+
+  // LLM assignments: default -> llmDefault, rest -> metadata.llm.slots
+  const llmNodes = await nodesCollection.countDocuments({
+    llmAssignments: { $exists: true, $ne: null },
+  });
+  if (llmNodes > 0) {
+    const llmCursor = nodesCollection.find({ llmAssignments: { $exists: true, $ne: null } });
+    let llmCount = 0;
+    for await (const node of llmCursor) {
+      const assignments = node.llmAssignments || {};
+      const $set = {};
+      if (assignments.default) {
+        $set.llmDefault = assignments.default;
+      }
+      const slots = {};
+      for (const [key, val] of Object.entries(assignments)) {
+        if (key !== "default" && val) slots[key] = val;
+      }
+      if (Object.keys(slots).length > 0) {
+        const meta = node.metadata || {};
+        if (!meta.llm) meta.llm = {};
+        meta.llm.slots = slots;
+        $set.metadata = meta;
+      }
+      await nodesCollection.updateOne(
+        { _id: node._id },
+        { $set, $unset: { llmAssignments: "" } },
+      );
+      llmCount++;
+    }
+    console.log(`  Moved llmAssignments for ${llmCount} nodes`);
+  }
+
+  console.log("\nNode migration complete:");
+  console.log(`  Phase 1 (versions): ${migrated} migrated, ${skipped} skipped, ${errors} errors`);
+  console.log(`  Phase 1 (default status): ${noVersions}`);
+  console.log(`  Phase 2 (visibility): ${visNodes}`);
+  console.log(`  Phase 2 (dreams): ${dreamNodes}`);
+  console.log(`  Phase 2 (llmAssignments): ${llmNodes}`);
 
   await mongoose.disconnect();
   console.log("Disconnected.");

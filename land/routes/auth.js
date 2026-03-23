@@ -5,8 +5,6 @@ import {
   logout,
 } from "../core/users.js";
 import authenticate from "../middleware/authenticate.js";
-import User from "../db/models/user.js";
-import CustomLlmConnection from "../db/models/customLlmConnection.js";
 
 import {
   renderLoginPage,
@@ -45,69 +43,7 @@ authApiRouter.post("/register", registerLimiter, register);
 authApiRouter.post("/login", loginLimiter, login);
 authApiRouter.post("/logout", authenticate, logout);
 
-authApiRouter.post(
-  "/setHTMLShareToken",
-  authenticate,
-  loginLimiter,
-  async (req, res) => {
-    try {
-      const user = await User.findById(req.userId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-      let { htmlShareToken } = req.body;
-      if (typeof htmlShareToken !== "string") return res.status(400).json({ message: "htmlShareToken must be a string" });
-      htmlShareToken = htmlShareToken.trim();
-      if (htmlShareToken.length > 128 || htmlShareToken.length < 1) return res.status(400).json({ message: "htmlShareToken must be 1 to 128 characters" });
-      if (!/^[A-Za-z0-9\-_.~]+$/.test(htmlShareToken)) return res.status(400).json({ message: "htmlShareToken may only contain URL-safe characters" });
-      const { setUserMeta } = await import("../core/tree/userMetadata.js");
-      setUserMeta(user, "html", { shareToken: htmlShareToken });
-      await user.save();
-      return res.json({ htmlShareToken });
-    } catch (err) {
-      console.error("[setHtmlShareToken]", err);
-      res.status(500).json({ message: "Failed to set html share token" });
-    }
-  },
-);
-
-authApiRouter.post(
-  "/verify-token",
-  authenticate,
-  async (req, res, next) => {
-    try {
-      const user = await User.findById(req.userId).select("metadata").lean().exec();
-      req.HTMLShareToken = user?.metadata?.html?.shareToken ?? null;
-      next();
-    } catch (err) {
-      console.error("[getHtmlShareToken]", err);
-      res.status(500).json({ message: "Failed to fetch HTML share token" });
-    }
-  },
-  async (req, res) => {
-    let hasLlm = false;
-    try {
-      const user = await User.findById(req.userId)
-        .select("llmDefault metadata")
-        .lean();
-      if (user?.llmAssignments?.main) {
-        hasLlm = true;
-      } else {
-        const connCount = await CustomLlmConnection.countDocuments({
-          userId: req.userId,
-        });
-        hasLlm = connCount > 0;
-      }
-    } catch (err) {
-      console.error("verify-token LLM check error:", err.message);
-    }
-    res.json({
-      userId: req.userId,
-      username: req.username,
-      HTMLShareToken: req.HTMLShareToken,
-      hasLlm,
-    });
-  },
-);
-
+// setHTMLShareToken and verify-token moved to html-rendering extension
 // Email routes (forgot-password, reset-password, verify) moved to email extension
 
 // HTML pages + their POST handlers (mounted at / by routesHandler.js)
