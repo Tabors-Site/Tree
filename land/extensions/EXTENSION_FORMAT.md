@@ -88,6 +88,27 @@ export async function init(core) {
 }
 ```
 
+## Running AI Conversations (runChat)
+
+Use `core.llm.runChat()` to run AI conversations from your extension. One call. No boilerplate.
+
+```js
+const { answer } = await core.llm.runChat({
+  userId,
+  username,
+  message: "analyze this data",
+  mode: "tree:structure",   // any registered mode
+  rootId: "...",            // optional, for tree modes
+  signal: abortController.signal, // optional, for cancellation
+});
+```
+
+`runChat` handles: MCP connection, mode switching, AIChat record creation, processMessage execution, AIChat finalization, abort handling, and session persistence.
+
+Sessions persist within the same zone. `tree:{rootId}:{userId}` gives each tree its own conversation. Switching trees starts fresh. Land and home zones persist across calls.
+
+Never use `processMessage` directly. Use `runChat`.
+
 ## Custom Orchestrator
 
 Extensions can replace the entire conversation orchestrator for a bigMode (tree, home, rawIdea). The orchestrator controls how chat/place/query messages are classified, planned, and executed.

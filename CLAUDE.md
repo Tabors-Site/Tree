@@ -146,6 +146,26 @@ Navigation determines what the AI can do. No mode switching. Just `cd`.
 
 The tree-orchestrator and land-manager are both extensions. They register orchestrators and modes. Replace either with your own implementation.
 
+## runChat (core conversation utility)
+
+Extensions and routes use `runChat()` for AI conversations. One call handles everything:
+
+```js
+const { answer } = await core.llm.runChat({
+  userId, username,
+  message: "install the blog extension",
+  mode: "land:manager",
+  rootId: null,     // for tree modes
+  signal: null,     // AbortController signal for cancellation
+});
+```
+
+Handles automatically: MCP connection, mode switching, AIChat tracking, abort/cancellation, session persistence, error finalization.
+
+Session identity: `land:{userId}`, `home:{userId}`, `tree:{rootId}:{userId}`. Same zone = same conversation. Different tree = new session. Zone switch = new session.
+
+`processMessage` returns `{ success, content, _internal }`. Internal fields never reach the client.
+
 ## Tool Resolution (3 layers)
 
 ```

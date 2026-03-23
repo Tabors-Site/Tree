@@ -987,8 +987,13 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const JWT_SECRET = process.env.JWT_SECRET;
   if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
 
-  // Reuse session per user+mode (persistent conversation within same zone)
-  const visitorId = `${mode}:${userId}`;
+  // Session identity: zone + context + user
+  // land:{userId}          - land zone (persistent across land chats)
+  // home:{userId}          - home zone (persistent across home chats)
+  // tree:{rootId}:{userId} - tree zone (new session per tree, persistent within tree)
+  const bigMode = mode.split(":")[0];
+  const contextKey = bigMode === "tree" && rootId ? rootId : bigMode;
+  const visitorId = `${contextKey}:${userId}`;
 
   // Abort controller for cancellation (Ctrl+C, timeout, etc.)
   const abort = signal ? { signal } : new AbortController();
