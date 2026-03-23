@@ -14,7 +14,7 @@ import {
   resolveRootLlmForMode,
 } from "../../ws/conversation.js";
 import { classify, translateDestructive } from "./translator.js";
-import { trackChainStep, setAiContributionContext } from "../../ws/aiChatTracker.js";
+import { setAiContributionContext } from "../../ws/aiChatTracker.js";
 import { isActiveNavigator } from "../../ws/sessionRegistry.js";
 
 import {
@@ -24,6 +24,7 @@ import {
 } from "../../core/tree/treeFetch.js";
 import mongoose from "mongoose";
 import Node from "../../db/models/node.js";
+import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
@@ -232,9 +233,9 @@ function emitModeResult(socket, modeKey, result) {
  * Execute a plan (array of steps) produced by either the translator or librarian.
  *
  * Returns:
- *   { type: "completed", stepSummaries, lastTargetNodeId, lastTargetPath, chainIndex }
- *   { type: "confirm", response, chainIndex }  — destructive step paused for confirmation
- *   { type: "respond", response, chainIndex }   — early exit (ambiguity, not found)
+ *   { type: "completed", stepSummaries, lastTargetNodeId, lastTargetPath }
+ *   { type: "confirm", response }  — destructive step paused for confirmation
+ *   { type: "respond", response }   — early exit (ambiguity, not found)
  *   null — signal aborted
  */
 async function executePlanSteps({
@@ -246,16 +247,13 @@ async function executePlanSteps({
   username,
   userId,
   rootId,
-  sessionId,
   modesUsed,
-  chainIndex,
   initialTargetNodeId,
   initialTargetPath,
   stepSummaries,
   responseHint,
   includeMemoryOnFirstStep,
-  llmProvider,
-  rootChatId,
+  rt,
 }) {
   const meta = { username, userId, rootId };
   let lastTargetNodeId = initialTargetNodeId || rootId;
@@ -279,14 +277,9 @@ async function executePlanSteps({
     const isOnlyStep = plan.length === 1 && stepSummaries.length === 0;
 
     // Emit plan step marker
-    trackChainStep({
-      userId,
-      sessionId,
-      rootChatId,
-      chainIndex: chainIndex++,
-      modeKey: `tree:orchestrator:plan:${stepNum}`,
+    rt.trackStep(`tree:orchestrator:plan:${stepNum}`, {
       input: `Step ${stepNum}: ${op.intent}${op.targetHint ? ` → ${op.targetHint}` : ""}\n${op.directive}`,
-      llmProvider,
+      llmProvider: rt.llmProvider,
       treeContext: {
         targetNodeId: op.targetNodeId || lastTargetNodeId,
         targetPath: lastTargetPath,
@@ -361,35 +354,19 @@ async function executePlanSteps({
       emitModeResult(socket, "tree:navigate", navResult);
 
       modesUsed.push("tree:navigate");
-      trackChainStep({
-        userId,
-        sessionId,
-        rootChatId,
-        chainIndex: chainIndex++,
-        modeKey: "tree:navigate",
+      rt.trackStep("tree:navigate", {
         input: navDirective,
         output: navResult,
         startTime: navStart,
         endTime: navEnd,
-        llmProvider: navResult?._llmProvider || llmProvider,
+        llmProvider: navResult?._llmProvider || rt.llmProvider,
         treeContext: {
-          targetNodeId:
-            navResult?.action === "found"
-              ? navResult.targetNodeId
-              : lastTargetNodeId,
-          targetPath:
-            navResult?.action === "found"
-              ? navResult.targetPath
-              : lastTargetPath,
+          targetNodeId: navResult?.action === "found" ? navResult.targetNodeId : lastTargetNodeId,
+          targetPath: navResult?.action === "found" ? navResult.targetPath : lastTargetPath,
           planStepIndex: stepNum,
           planTotalSteps: plan.length,
           directive: navDirective,
-          stepResult:
-            navResult?.action === "found"
-              ? "success"
-              : navResult?.action === "ambiguous"
-                ? "pending"
-                : "failed",
+          stepResult: navResult?.action === "found" ? "success" : navResult?.action === "ambiguous" ? "pending" : "failed",
           resultDetail: navResult?.reason || navResult?.summary || null,
         },
       });
@@ -399,7 +376,7 @@ async function executePlanSteps({
         targetPath = navResult.targetPath;
 
         // Only navigate if this session controls the iframe
-        if (isActiveNavigator(userId, sessionId)) {
+        if (isActiveNavigator(userId, rt.sessionId)) {
           socket.emit("navigate", {
             url: `/api/v1/node/${targetNodeId}?html`,
             replace: false,
@@ -471,7 +448,7 @@ async function executePlanSteps({
               "Ask the user to clarify which node they mean. List the options clearly.",
             stepSummaries,
           });
-          return { type: "respond", response, chainIndex };
+          return { type: "respond", response };
         }
       } else if (navResult?.action === "not_found") {
         if (i === 0 && stepSummaries.length === 0) {
@@ -487,7 +464,7 @@ async function executePlanSteps({
               "Let the user know the node wasn't found. Suggest alternatives if possible.",
             stepSummaries,
           });
-          return { type: "respond", response, chainIndex };
+          return { type: "respond", response };
         } else {
           stepSummaries.push(
             buildStepSummary({
@@ -524,7 +501,6 @@ async function executePlanSteps({
           stepSummaries,
           lastTargetNodeId: targetNodeId,
           lastTargetPath: targetPath,
-          chainIndex,
           navigateOnly: {
             success: true,
             answer: navSummary,
@@ -739,17 +715,12 @@ async function executePlanSteps({
       emitModeResult(socket, "tree:getContext", ctxResult);
 
       const ctxEnd = new Date();
-      trackChainStep({
-        userId,
-        sessionId,
-        rootChatId,
-        chainIndex: chainIndex++,
-        modeKey: "tree:getContext",
+      rt.trackStep("tree:getContext", {
         input: `getContextForAi(${targetNodeId}, ${intent.intent})`,
         output: ctxResult,
         startTime: ctxStart,
         endTime: ctxEnd,
-        llmProvider,
+        llmProvider: rt.llmProvider,
         treeContext: {
           targetNodeId,
           targetPath,
@@ -779,9 +750,9 @@ async function executePlanSteps({
         stepSummaries: [...stepSummaries],
         stepNum,
         responseHint,
-        sessionId,
+        sessionId: rt.sessionId,
         modesUsed: [...modesUsed],
-        chainIndex,
+        chainIndex: rt.chainIndex,
       });
 
       const response = await runRespond({
@@ -800,7 +771,7 @@ async function executePlanSteps({
           "Clearly describe the destructive action and ask for explicit confirmation.",
         stepSummaries,
       });
-      return { type: "confirm", response, chainIndex };
+      return { type: "confirm", response };
     }
 
     // ══════════════════════════════════════════════════════
@@ -857,17 +828,12 @@ async function executePlanSteps({
       emitModeResult(socket, executionMode, execResult);
 
       modesUsed.push(executionMode);
-      trackChainStep({
-        userId,
-        sessionId,
-        rootChatId,
-        chainIndex: chainIndex++,
-        modeKey: executionMode,
+      rt.trackStep(executionMode, {
         input: intent.directive,
         output: execResult,
         startTime: execStart,
         endTime: execEnd,
-        llmProvider: execResult?._llmProvider || llmProvider,
+        llmProvider: execResult?._llmProvider || rt.llmProvider,
         treeContext: {
           targetNodeId,
           targetPath,
@@ -926,7 +892,6 @@ async function executePlanSteps({
     stepSummaries,
     lastTargetNodeId,
     lastTargetPath,
-    chainIndex,
   };
 }
 
@@ -950,22 +915,32 @@ export async function orchestrateTreeRequest({
 
   const rootId = rootIdParam ?? getRootId(visitorId);
 
-  // Resolve base llmProvider for tracking (processMessage auto-resolves per-mode)
+  // Create an attached runtime (reuses the websocket's session, MCP, AIChat)
+  const rt = new OrchestratorRuntime({
+    rootId,
+    userId,
+    username,
+    visitorId,
+    sessionType: "tree-chat",
+    description: message,
+    modeKeyForLlm: "tree:librarian",
+    slot,
+  });
+
+  // Resolve LLM provider for tracking
   let llmProvider = { isCustom: false, model: null, connectionId: null };
   try {
-    const modeConnectionId = await resolveRootLlmForMode(
-      rootId,
-      "tree:librarian",
-    );
+    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:librarian");
     const clientInfo = await getClientForUser(userId, slot, modeConnectionId);
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
       connectionId: clientInfo.connectionId || null,
     };
-  } catch (e) {
-    /* use default */
-  }
+  } catch (e) { /* use default */ }
+
+  // Attach to the existing websocket session
+  rt.attach({ sessionId, mainChatId: rootChatId, llmProvider, signal, chainIndex: 1 });
 
   // Ensure AI contribution context is set so MCP tool calls get aiChatId/sessionId
   if (rootChatId) {
@@ -974,7 +949,6 @@ export async function orchestrateTreeRequest({
 
   const meta = { username, userId, rootId, slot, llmProvider };
   const modesUsed = []; // Track full chain for AIChat
-  let chainIndex = 1; // 0 = user message (created in websocket.js)
 
   // ────────────────────────────────────────────────────────
   // QUERY FAST PATH — skip classifier, go straight to context gather + respond
@@ -989,11 +963,8 @@ export async function orchestrateTreeRequest({
       username,
       userId,
       rootId,
-      sessionId,
       modesUsed,
-      chainIndex,
-      llmProvider,
-      rootChatId,
+      rt,
       slot,
     });
   }
@@ -1013,7 +984,7 @@ export async function orchestrateTreeRequest({
         socket,
         signal,
         ...meta,
-        rootChatId,
+        rt,
         skipRespond,
       });
     } else if (isDenial(message)) {
@@ -1109,12 +1080,7 @@ export async function orchestrateTreeRequest({
 
   // Track classification step (after override so logs reflect actual intent used)
   modesUsed.push("classifier");
-  trackChainStep({
-    userId,
-    sessionId,
-    rootChatId,
-    chainIndex: chainIndex++,
-    modeKey: "classifier",
+  rt.trackStep("classifier", {
     input: message,
     output: (({ llmProvider: _, ...rest }) => rest)(classification),
     startTime: classifyStart,
@@ -1173,12 +1139,7 @@ export async function orchestrateTreeRequest({
       sessionId,
     });
 
-    trackChainStep({
-      userId,
-      sessionId,
-      rootChatId,
-      chainIndex: chainIndex++,
-      modeKey: "short-memory:defer",
+    rt.trackStep("short-memory:defer", {
       input: message,
       output: {
         deferReason: deferDecision.reason,
@@ -1236,14 +1197,11 @@ export async function orchestrateTreeRequest({
       username,
       userId,
       rootId,
-      sessionId,
       treeSummary,
       classification,
       modesUsed,
-      chainIndex,
       skipRespond,
-      llmProvider,
-      rootChatId,
+      rt,
     });
   }
 
@@ -1300,12 +1258,7 @@ export async function orchestrateTreeRequest({
   });
 
   modesUsed.push("translator");
-  trackChainStep({
-    userId,
-    sessionId,
-    rootChatId,
-    chainIndex: chainIndex++,
-    modeKey: "translator",
+  rt.trackStep("translator", {
     input: message,
     output: translation,
     startTime: translatorStart,
@@ -1326,16 +1279,13 @@ export async function orchestrateTreeRequest({
     username,
     userId,
     rootId,
-    sessionId,
     modesUsed,
-    chainIndex,
     initialTargetNodeId: rootId,
     initialTargetPath: null,
     stepSummaries: [],
     responseHint,
     includeMemoryOnFirstStep: true,
-    llmProvider,
-    rootChatId,
+    rt,
   });
 
   if (!planResult) return null;
@@ -1355,7 +1305,6 @@ export async function orchestrateTreeRequest({
 
   // Normal completion — respond with accumulated results
   const { stepSummaries, lastTargetNodeId, lastTargetPath } = planResult;
-  chainIndex = planResult.chainIndex;
 
   const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
 
@@ -1398,12 +1347,7 @@ export async function orchestrateTreeRequest({
 
   const respondEnd = new Date();
 
-  trackChainStep({
-    userId,
-    sessionId,
-    rootChatId,
-    chainIndex: chainIndex++,
-    modeKey: "tree:respond",
+  rt.trackStep("tree:respond", {
     input: responseHint || "Respond to the user",
     output: response?.answer || null,
     startTime: respondStart,
@@ -1441,11 +1385,8 @@ async function runQueryFlow({
   username,
   userId,
   rootId,
-  sessionId,
   modesUsed,
-  chainIndex,
-  llmProvider,
-  rootChatId,
+  rt,
   slot,
 }) {
   const meta = { username, userId, rootId, slot };
@@ -1487,17 +1428,12 @@ async function runQueryFlow({
   emitModeResult(socket, "tree:librarian", libResult);
 
   modesUsed.push("tree:librarian");
-  trackChainStep({
-    userId,
-    sessionId,
-    rootChatId,
-    chainIndex: chainIndex++,
-    modeKey: "tree:librarian",
+  rt.trackStep("tree:librarian", {
     input: message,
     output: libResult,
     startTime: libStart,
     endTime: libEnd,
-    llmProvider: libResult?._llmProvider || llmProvider,
+    llmProvider: libResult?._llmProvider || rt.llmProvider,
     treeContext: {
       targetNodeId: rootId,
       directive: "query context gathering",
@@ -1525,17 +1461,12 @@ async function runQueryFlow({
   });
 
   const respondEnd = new Date();
-  trackChainStep({
-    userId,
-    sessionId,
-    rootChatId,
-    chainIndex: chainIndex++,
-    modeKey: "tree:respond",
+  rt.trackStep("tree:respond", {
     input: responseHint,
     output: response?.answer || null,
     startTime: respondStart,
     endTime: respondEnd,
-    llmProvider: response?.llmProvider || llmProvider,
+    llmProvider: response?.llmProvider || rt.llmProvider,
     treeContext: {
       targetNodeId: rootId,
       directive: responseHint,
@@ -1571,14 +1502,11 @@ async function runLibrarianFlow({
   username,
   userId,
   rootId,
-  sessionId,
   treeSummary,
   classification,
   modesUsed,
-  chainIndex,
   skipRespond = false,
-  llmProvider,
-  rootChatId,
+  rt,
 }) {
   const meta = { username, userId, rootId };
   const isQuery = classification.intent === "query";
@@ -1624,17 +1552,12 @@ async function runLibrarianFlow({
     );
 
     modesUsed.push("tree:librarian");
-    trackChainStep({
-      userId,
-      sessionId,
-      rootChatId,
-      chainIndex: chainIndex++,
-      modeKey: "tree:librarian",
+    rt.trackStep("tree:librarian", {
       input: message,
       output: libPlan,
       startTime: libStart,
       endTime: libEnd,
-      llmProvider: libPlan?._llmProvider || llmProvider,
+      llmProvider: libPlan?._llmProvider || rt.llmProvider,
       treeContext: {
         targetNodeId: rootId,
         directive: classification.summary,
@@ -1675,17 +1598,12 @@ async function runLibrarianFlow({
   }
 
   modesUsed.push("tree:librarian");
-  trackChainStep({
-    userId,
-    sessionId,
-    rootChatId,
-    chainIndex: chainIndex++,
-    modeKey: "tree:librarian",
+  rt.trackStep("tree:librarian", {
     input: message,
     output: libPlan,
     startTime: libStart,
     endTime: libEnd,
-    llmProvider: libPlan?._llmProvider || llmProvider,
+    llmProvider: libPlan?._llmProvider || rt.llmProvider,
     treeContext: {
       targetNodeId: rootId,
       directive: classification.summary,
@@ -1730,17 +1648,12 @@ async function runLibrarianFlow({
     });
 
     const respondEnd = new Date();
-    trackChainStep({
-      userId,
-      sessionId,
-      rootChatId,
-      chainIndex: chainIndex++,
-      modeKey: "tree:respond",
+    rt.trackStep("tree:respond", {
       input: responseHint || "Respond to the user",
       output: response?.answer || null,
       startTime: respondStart,
       endTime: respondEnd,
-      llmProvider: response?.llmProvider || llmProvider,
+      llmProvider: response?.llmProvider || rt.llmProvider,
       treeContext: {
         targetNodeId: rootId,
         directive: responseHint || "Respond to the user",
@@ -1765,16 +1678,13 @@ async function runLibrarianFlow({
     username,
     userId,
     rootId,
-    sessionId,
     modesUsed,
-    chainIndex,
     initialTargetNodeId: rootId,
     initialTargetPath: null,
     stepSummaries: [],
     responseHint,
     includeMemoryOnFirstStep: false, // librarian already had context
-    llmProvider,
-    rootChatId,
+    rt,
   });
 
   if (!planResult) return null;
@@ -1793,7 +1703,6 @@ async function runLibrarianFlow({
 
   // ── RESPOND ──
   const { stepSummaries, lastTargetNodeId, lastTargetPath } = planResult;
-  chainIndex = planResult.chainIndex;
 
   const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
 
@@ -1836,17 +1745,12 @@ async function runLibrarianFlow({
   });
 
   const respondEnd = new Date();
-  trackChainStep({
-    userId,
-    sessionId,
-    rootChatId,
-    chainIndex: chainIndex++,
-    modeKey: "tree:respond",
+  rt.trackStep("tree:respond", {
     input: responseHint || "Respond to the user",
     output: response?.answer || null,
     startTime: respondStart,
     endTime: respondEnd,
-    llmProvider: response?.llmProvider || llmProvider,
+    llmProvider: response?.llmProvider || rt.llmProvider,
     treeContext: {
       targetNodeId: lastTargetNodeId,
       targetPath: lastTargetPath,
@@ -1877,15 +1781,17 @@ async function executePendingOperation({
   username,
   userId,
   rootId,
-  llmProvider,
-  rootChatId,
+  rt,
   skipRespond = false,
 }) {
   const meta = { username, userId, rootId };
   const modesUsed = pending.modesUsed || [];
   const stepSummaries = pending.stepSummaries || [];
-  let chainIndex = pending.chainIndex || 1;
-  const sessionId = pending.sessionId;
+
+  // Restore rt's chainIndex from the pending state
+  if (pending.chainIndex) {
+    rt.chainIndex = pending.chainIndex;
+  }
 
   emitStatus(socket, "execute", "Executing confirmed operation…");
 
@@ -1943,17 +1849,12 @@ async function executePendingOperation({
 
   emitModeResult(socket, executionMode, execResult);
   modesUsed.push(executionMode);
-  trackChainStep({
-    userId,
-    sessionId,
-    rootChatId,
-    chainIndex: chainIndex++,
-    modeKey: executionMode,
+  rt.trackStep(executionMode, {
     input: pending.directive || pending.originalMessage,
     output: execResult,
     startTime: execStart,
     endTime: execEnd,
-    llmProvider: execResult?._llmProvider || llmProvider,
+    llmProvider: execResult?._llmProvider || rt.llmProvider,
     treeContext: {
       targetNodeId: pending.targetNodeId,
       targetPath: pending.targetPath,
@@ -2001,15 +1902,13 @@ async function executePendingOperation({
       username,
       userId,
       rootId,
-      sessionId,
       modesUsed,
-      chainIndex,
       initialTargetNodeId: pending.targetNodeId,
       initialTargetPath: pending.targetPath,
       stepSummaries,
       responseHint,
       includeMemoryOnFirstStep: false,
-      rootChatId,
+      rt,
     });
 
     if (!planResult) return null;
@@ -2023,8 +1922,6 @@ async function executePendingOperation({
       }
       return r;
     }
-
-    chainIndex = planResult.chainIndex;
   }
 
   // ── RESPOND ──

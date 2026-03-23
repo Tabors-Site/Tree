@@ -93,8 +93,26 @@ export class OrchestratorRuntime {
   }
 
   /**
+   * Attach to an existing session (for real-time orchestrators called from websocket).
+   * Skips session creation, MCP connection, and AIChat creation.
+   * Uses the provided visitorId, sessionId, and mainChatId.
+   * cleanup() becomes a no-op (caller owns the lifecycle).
+   */
+  attach({ sessionId, mainChatId, llmProvider, signal, chainIndex = 1 }) {
+    this.sessionId = sessionId;
+    this.mainChatId = mainChatId;
+    this.llmProvider = llmProvider;
+    this.chainIndex = chainIndex;
+    this._attached = true;
+    if (signal) {
+      this.abort = { signal };
+    }
+    return true;
+  }
+
+  /**
    * Initialize session, LLM, AIChat, JWT, and MCP connection.
-   * Returns false if lock could not be acquired.
+   * For background pipelines. Returns false if lock could not be acquired.
    */
   async init(startMessage) {
     // Acquire lock if configured
@@ -214,6 +232,28 @@ export class OrchestratorRuntime {
   }
 
   /**
+   * Track a completed step without running processMessage.
+   * For orchestrators that call processMessage themselves but want chain tracking.
+   */
+  trackStep(modeKey, { input, output, startTime, endTime, llmProvider: stepLlm, treeContext }) {
+    const resolvedTreeContext = typeof treeContext === "function" ? treeContext(output) : treeContext;
+    trackChainStep({
+      userId: this.userId,
+      sessionId: this.sessionId,
+      rootChatId: this.mainChatId,
+      chainIndex: this.chainIndex++,
+      modeKey,
+      source: this.source,
+      input,
+      output,
+      startTime,
+      endTime,
+      llmProvider: stepLlm || this.llmProvider,
+      ...(resolvedTreeContext ? { treeContext: resolvedTreeContext } : {}),
+    });
+  }
+
+  /**
    * Set the final result that will be passed to finalizeAIChat on cleanup.
    */
   setResult(content, modeKey) {
@@ -229,9 +269,10 @@ export class OrchestratorRuntime {
 
   /**
    * Tear down everything: finalize AIChat, end session, close MCP, release lock.
-   * Call this in a finally block.
+   * Call this in a finally block. No-op in attached mode (caller owns lifecycle).
    */
   async cleanup() {
+    if (this._attached) return;
     if (this.mainChatId) {
       await finalizeAIChat({ chatId: this.mainChatId, ...this._finalizeArgs }).catch((e) =>
         log.error("Orchestrator", `Failed to finalize pipeline chat:`, e.message),
