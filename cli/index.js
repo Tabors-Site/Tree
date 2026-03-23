@@ -162,6 +162,33 @@ require("./commands/extensions")(program);
 require("./commands/dynamic")(program);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ERROR HANDLING (catch unknown commands, missing args)
+// ─────────────────────────────────────────────────────────────────────────────
+program.showHelpAfterError(true);
+program.configureOutput({
+  outputError(str, write) {
+    // Clean up Commander's default error messages
+    const cleaned = str.replace("error: ", "").trim();
+    write(chalk.red(cleaned) + "\n");
+  },
+});
+
+// Catch unknown top-level commands
+program.on("command:*", (operands) => {
+  const unknown = operands[0];
+  console.log(chalk.red(`Unknown command: ${unknown}`));
+
+  // Suggest closest match
+  const allCmds = program.commands.map(c => c.name());
+  const suggestions = allCmds.filter(c => c.includes(unknown) || unknown.includes(c));
+  if (suggestions.length) {
+    console.log(chalk.dim(`Did you mean: ${suggestions.join(", ")}?`));
+  }
+  console.log(chalk.dim("Run 'treeos help' for all commands."));
+  process.exit(1);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SHELL (interactive REPL)
 // ─────────────────────────────────────────────────────────────────────────────
 // Split a shell-like line respecting quoted strings
