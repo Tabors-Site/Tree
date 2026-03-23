@@ -267,14 +267,7 @@ async function editNote({
 
   let energyUsed = 0;
 
-  if (deltaChars > 0) {
-    const energyResult = await useEnergy({
-      userId,
-      action: "note",
-      payload: deltaChars,
-    });
-    energyUsed = energyResult.energyUsed;
-  }
+  // Energy metering handled by energy extension hooks if installed
 
   // ── TAG EXTRACTION ──────────────────────────────
   let finalContent = newContent;
@@ -484,13 +477,7 @@ async function deleteNoteAndFile({
   }
   let energyUsed = null;
 
-  if (note.contentType === "text") {
-    const energyResult = await useEnergy({
-      userId,
-      action: "removeNote",
-    });
-    energyUsed = energyResult.energyUsed;
-  }
+  // Energy metering handled by energy extension hooks if installed
   const fileOwnerId = note.userId?.toString();
 
   const { nodeId, version } = note; // original nodeId for logging
