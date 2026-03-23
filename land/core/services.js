@@ -55,13 +55,8 @@ const authStrategies = [];
 // doesn't have the real implementation loaded.
 // ---------------------------------------------------------------------------
 
-const NOOP_ENERGY = {
-  useEnergy: async () => ({ energyUsed: 0, remaining: Infinity }),
-  calculateEnergyCost: () => 0,
-  registerAction: () => {},
-  DAILY_LIMITS: {},
-  EnergyError: class extends Error { constructor(m) { super(m); this.name = "EnergyError"; } },
-};
+// Energy is an extension. If loaded, it registers itself on core.energy during init().
+// Extensions that need energy check: if (core.energy) core.energy.useEnergy(...);
 
 const NOOP_CONTRIBUTIONS = {
   logContribution: async () => null,
@@ -88,11 +83,10 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
   const hasWebsocket = typeof emitNavigate === "function";
 
   // Energy starts as no-op. If energy extension loads, it replaces via setCoreService().
-  let energyService = NOOP_ENERGY;
+  // energy: set by energy extension during init() if loaded. null otherwise.
 
   const core = {
     // --- Optional services (no-op stubs if not available) ---
-    energy: energyService,
 
     // --- Always-available services ---
     contributions: { logContribution },
@@ -158,4 +152,4 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
   return core;
 }
 
-export { NOOP_ENERGY, NOOP_CONTRIBUTIONS, NOOP_WEBSOCKET, authStrategies };
+export { NOOP_CONTRIBUTIONS, NOOP_WEBSOCKET, authStrategies };

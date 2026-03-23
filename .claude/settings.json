@@ -126,7 +126,10 @@
       "Bash(node -e \"import\\(''''./land/extensions/html-rendering/renderers.js''''\\)\")",
       "Bash(echo \"=== 1. Energy in kernel: should be ZERO ===\" grep -rn \"useEnergy\\\\|calculateFileEnergy\\\\|maybeResetEnergy\" land/core/ land/ws/ land/middleware/ land/orchestrators/ land/db/models/ --include=\"*.js\")",
       "Bash(grep -rn 'export.*getUserMeta\\\\|import.*getUserMeta' land/extensions/html-rendering/html/*.js)",
-      "Bash(echo \"Clean\" __NEW_LINE_0d7e26889bde3710__ echo \"\" echo \"=== Final: any useEnergy/calculateFileEnergy in kernel? ===\" grep -rn \"useEnergy\\\\|calculateFileEnergy\\\\|maybeResetEnergy\" land/core/ land/ws/ land/middleware/ land/orchestrators/ land/db/models/ --include=\"*.js\")"
+      "Bash(echo \"Clean\" __NEW_LINE_0d7e26889bde3710__ echo \"\" echo \"=== Final: any useEnergy/calculateFileEnergy in kernel? ===\" grep -rn \"useEnergy\\\\|calculateFileEnergy\\\\|maybeResetEnergy\" land/core/ land/ws/ land/middleware/ land/orchestrators/ land/db/models/ --include=\"*.js\")",
+      "Bash(sed -i 's/core\\\\.energy === NOOP_ENERGY/!core.energy/g' land/extensions/loader.js)",
+      "Bash(sed -i 's/coreServices\\\\.energy !== NOOP_ENERGY/coreServices.energy/g' land/extensions/loader.js)",
+      "Bash(sed -i '/import.*NOOP_ENERGY/d' land/extensions/loader.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -6,7 +6,6 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
-import { buildCoreServices, NOOP_ENERGY } from "../core/services.js";
 import { setExtensionToolResolver, registerMode } from "../ws/modes/registry.js";
 import { hooks } from "../core/hooks.js";
 import { registerOrchestrator } from "../core/orchestratorRegistry.js";
@@ -233,7 +232,7 @@ function applyOptionalStubs(manifest, core) {
   if (!manifest.optional?.services) return;
 
   for (const svc of manifest.optional.services) {
-    if (svc === "energy" && core.energy === NOOP_ENERGY) {
+    if (svc === "energy" && !core.energy) {
       continue;
     }
     if (!core[svc]) {
@@ -608,7 +607,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Register energy actions from manifest
-      if (manifest.provides?.energyActions && coreServices.energy !== NOOP_ENERGY) {
+      if (manifest.provides?.energyActions && coreServices.energy) {
         const { registerAction } = await import("./energy/core.js");
         for (const [action, config] of Object.entries(manifest.provides.energyActions)) {
           if (typeof config === "object" && config.costFn) {
