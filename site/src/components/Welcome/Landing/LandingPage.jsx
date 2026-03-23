@@ -208,7 +208,9 @@ const LandingPage = () => {
               { name: "prestige", desc: "Node versioning" },
               { name: "schedules", desc: "Dates and calendar" },
             ]} />
-            <ExtGroup title="Finance" items={[
+            <ExtGroup title="Data" items={[
+              { name: "values", desc: "Numeric values and goals" },
+              { name: "transactions", desc: "Value trades between nodes" },
               { name: "energy", desc: "Usage metering", href: "/about/energy" },
               { name: "billing", desc: "Stripe subscriptions" },
               { name: "solana", desc: "On-chain wallets" },
@@ -223,7 +225,6 @@ const LandingPage = () => {
               { name: "user-queries", desc: "Notes, tags, chats" },
               { name: "deleted-revive", desc: "Soft delete and recovery" },
               { name: "visibility", desc: "Public/private trees" },
-              { name: "transaction-policy", desc: "Trade approval rules" },
             ]} />
           </div>
 

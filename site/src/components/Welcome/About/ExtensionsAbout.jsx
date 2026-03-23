@@ -16,9 +16,9 @@ const ExtensionsAbout = () => {
           <h2 className="ext-title">Extensions</h2>
           <p className="ext-subtitle">
             TreeOS is modular and extensible. The core protocol defines
-            nodes, notes, values, types, and AI interaction modes. These
-            are the foundation, but they're designed to be built on.
-            Everything beyond the core is an extension that can be installed,
+            nodes, notes, types, status, and AI interaction modes. These
+            are the kernel. Everything else, values, schedules, versioning,
+            scripts, understanding, is an extension that can be installed,
             disabled, removed, or replaced independently.
           </p>
         </div>
@@ -55,10 +55,10 @@ const ExtensionsAbout = () => {
             integrates with the system.
           </div>
           <div className="ext-section-text" style={{ marginTop: 12 }}>
-            TreeOS works the same way. A fresh land has nodes, notes, values,
-            and AI chat. You install extensions for scripts, understanding runs,
-            billing, Solana wallets, blog posts. Each extension registers its
-            routes, models, energy costs, and CLI commands.
+            TreeOS works the same way. A fresh land has nodes, notes, types,
+            and AI chat. You install extensions for values, scripts, understanding
+            runs, billing, Solana wallets, blog posts. Each extension registers its
+            routes, models, hooks, energy costs, and CLI commands.
           </div>
         </div>
 
@@ -167,10 +167,12 @@ const ExtensionsAbout = () => {
               { name: "scripts", desc: "Sandboxed JavaScript on nodes with value/goal mutation" },
               { name: "prestige", desc: "Node versioning system with archived history" },
               { name: "schedules", desc: "Date scheduling and calendar views for nodes" },
+              { name: "values", desc: "Numeric values and goals on nodes with tree-wide accumulation" },
               { name: "energy", desc: "Daily energy budget with tier-based limits" },
               { name: "billing", desc: "Stripe subscription tiers and energy purchases" },
               { name: "raw-ideas", desc: "Unstructured capture with auto-placement pipeline" },
               { name: "dreams", desc: "Daily background maintenance: cleanup, drain, understand" },
+              { name: "transactions", desc: "Value transactions between nodes with approval policies" },
               { name: "blog", desc: "Land-level blog for posts and updates" },
               { name: "book", desc: "Export tree notes as shareable documents" },
               { name: "solana", desc: "On-chain wallets and token operations per node" },
@@ -179,7 +181,6 @@ const ExtensionsAbout = () => {
               { name: "user-queries", desc: "Notes, tags, contributions, chats, notifications" },
               { name: "deleted-revive", desc: "Soft delete with branch recovery" },
               { name: "visibility", desc: "Public/private tree toggle and share tokens" },
-              { name: "transaction-policy", desc: "Per-tree trade approval rules" },
               { name: "html-rendering", desc: "Server-rendered HTML pages via ?html parameter" },
             ].map((ext) => (
               <div key={ext.name} className="ext-grid-item">
@@ -247,6 +248,73 @@ const ExtensionsAbout = () => {
     exports: { myFunction },
   };
 }`}</div>
+        </div>
+
+        {/* ── HOOKS ── */}
+        <div className="ext-section">
+          <div className="ext-section-title">
+            <span className="ext-section-icon">🪝</span> Lifecycle Hooks
+          </div>
+          <div className="ext-section-text">
+            Extensions can register hooks to modify or react to core operations
+            without core knowing about them. This is how extensions integrate
+            deeply without coupling. Hooks are registered during <code>init(core)</code>.
+          </div>
+          <div className="ext-section-text" style={{ marginTop: 12 }}>
+            <strong>Before hooks</strong> run before the operation. They can modify
+            the data (e.g. set a version number) or cancel it (return false or throw).
+            <strong> After hooks</strong> run in parallel after the operation completes.
+            They cannot block or cancel.
+            <strong> enrichContext</strong> runs during AI context building and lets
+            extensions inject their data so the agent sees it.
+          </div>
+          <div className="ext-code-block">{`// In your extension's init(core):
+core.hooks.register("beforeNote", async (data) => {
+  // Modify the note before it saves
+  // e.g. prestige tags the version number
+  data.version = getCurrentPrestigeLevel(data.nodeId);
+}, "my-extension");
+
+core.hooks.register("enrichContext", async ({ context, node, meta }) => {
+  // Add your extension's data to AI context
+  // so agents see it without core knowing about you
+  if (meta.myData) context.myData = meta.myData;
+}, "my-extension");`}</div>
+
+          <div className="ext-section-text" style={{ marginTop: 16 }}>
+            Available hooks:
+          </div>
+          <div className="ext-file-list">
+            <div className="ext-file-item">
+              <code>beforeNote</code> . before note creation. Modify version, content, or cancel.
+            </div>
+            <div className="ext-file-item">
+              <code>afterNote</code> . after note saved. React (e.g. flag node as dirty).
+            </div>
+            <div className="ext-file-item">
+              <code>beforeContribution</code> . before audit log. Modify nodeVersion.
+            </div>
+            <div className="ext-file-item">
+              <code>afterNodeCreate</code> . after node created. Initialize extension data.
+            </div>
+            <div className="ext-file-item">
+              <code>beforeStatusChange</code> . before status write. Validate or cancel.
+            </div>
+            <div className="ext-file-item">
+              <code>afterStatusChange</code> . after status saved. React (e.g. clear schedule).
+            </div>
+            <div className="ext-file-item">
+              <code>beforeNodeDelete</code> . before soft delete. Cleanup extension data.
+            </div>
+            <div className="ext-file-item">
+              <code>enrichContext</code> . during AI context build. Inject extension data.
+            </div>
+          </div>
+          <div className="ext-section-text" style={{ marginTop: 12 }}>
+            All handlers have a 5 second timeout. One handler per extension per hook.
+            Before hooks that throw cancel the operation. After hooks run in parallel
+            and never block.
+          </div>
         </div>
 
         {/* ── API ENDPOINTS ── */}
