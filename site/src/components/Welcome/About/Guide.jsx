@@ -66,9 +66,10 @@ const Guide = () => {
             tree mode. The AI's tools, context, and behavior change automatically.
           </P>
           <P>
-            <strong>Land</strong> (<code>/</code>): The root. Manage extensions, config, users,
-            peers. The AI becomes a land operator with system-level tools. Install packages, read
-            system nodes, run diagnostics. Requires god-tier access.
+            <strong>Land</strong> (<code>/</code>): The root. The land-manager extension gives the AI
+            system-level tools: read config, list users, check peers, view extension status, and
+            execute shell commands. The AI becomes a land operator. Install packages, manage
+            extensions, run diagnostics, all through chat. Requires god-tier access.
           </P>
           <P>
             <strong>Home</strong> (<code>~</code>): Your personal space. Raw ideas, notes across
@@ -231,6 +232,38 @@ const Guide = () => {
           <P>
             TreeOS is model-agnostic. Any OpenAI-compatible endpoint works (Ollama, vLLM,
             OpenRouter, Anthropic, OpenAI, local models).
+          </P>
+        </Section>
+
+        {/* ══════════════════════════════════════════════════════════════ */}
+        {/* 6.5 KERNEL CONFIG */}
+        {/* ══════════════════════════════════════════════════════════════ */}
+        <Section title="Kernel Config">
+          <P>
+            Every kernel tunable is configurable from the land's .config node. No code editing.
+            Set a value with the CLI and it applies on next boot.
+          </P>
+          <Code>{`treeos config set maxToolIterations 25
+treeos config set llmTimeout 900        # seconds
+treeos config set noteMaxChars 10000
+treeos config set carryMessages 6`}</Code>
+          <P>Available kernel config keys:</P>
+          <ul style={{ color: "rgba(255,255,255,0.7)", lineHeight: 2, paddingLeft: 20 }}>
+            <li><code>llmTimeout</code> . seconds per LLM API call (default: 900)</li>
+            <li><code>llmMaxRetries</code> . retry count on 429/500 errors (default: 3)</li>
+            <li><code>maxToolIterations</code> . max tool calls per message (default: 15)</li>
+            <li><code>maxConversationMessages</code> . context window size (default: 30)</li>
+            <li><code>noteMaxChars</code> . max characters per note (default: 5000)</li>
+            <li><code>treeSummaryMaxDepth</code> . how deep the AI sees the tree (default: 4)</li>
+            <li><code>treeSummaryMaxNodes</code> . how many nodes the AI sees (default: 60)</li>
+            <li><code>carryMessages</code> . messages carried across mode switches (default: 4)</li>
+            <li><code>sessionTTL</code> . scoped session idle timeout in seconds (default: 900)</li>
+            <li><code>staleSessionTimeout</code> . stale session cleanup in seconds (default: 1800)</li>
+          </ul>
+          <P>
+            Extensions read their own config keys via <code>core.config.get("myExtension.timeout")</code>.
+            Any key can be stored in the .config node. The kernel only processes the keys above.
+            Everything else is available for extensions to read.
           </P>
         </Section>
 

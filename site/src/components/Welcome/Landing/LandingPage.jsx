@@ -67,6 +67,8 @@ const LandingPage = () => {
                 The minimum structure an agent needs to live somewhere persistent.
                 Navigate with <code>cd</code> and <code>ls</code>. Build with <code>mkdir</code>.
                 Six node types tell agents what they are looking at.
+                Per-node tools, modes, and timeouts let tree owners control AI behavior
+                at every branch. 11 kernel config keys tunable from the land's .config node.
                 Extensions add values, schedules, scripts, and more through metadata.
               </p>
             </div>
