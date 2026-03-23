@@ -239,10 +239,24 @@ router.post(
 // Versionless aliases (protocol-compliant)
 router.get("/node/:nodeId/values/solana", authenticate, async (req, res) => {
   try {
-    const node = await Node.findById(req.params.nodeId);
-    if (!node) return res.status(404).json({ error: "Node not found" });
-    req.params.version = String(0);
-    return router.handle(req, res);
+    const info = await getVersionWalletInfo(req.params.nodeId, 0);
+    if ("html" in req.query && process.env.ENABLE_FRONTEND_HTML === "true") {
+      req.params.version = "0";
+      // Fall through to versioned HTML route
+      const node = await Node.findById(req.params.nodeId);
+      if (!node) return res.status(404).json({ error: "Node not found" });
+      return res.redirect(`/api/v1/node/${req.params.nodeId}/0/values/solana?${new URLSearchParams(req.query)}`);
+    }
+    res.json(info);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/node/:nodeId/values/solana", authenticate, async (req, res) => {
+  try {
+    await ensureVersionWallet(req.params.nodeId, 0);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
