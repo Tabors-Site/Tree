@@ -146,7 +146,7 @@ export async function updateScript({
     aiChatId,
     sessionId,
     action: "editScript",
-    nodeVersion: node.prestige.toString(),
+    nodeVersion: "0",
     editScript: {
       scriptId: targetScript._id,
       scriptName: targetScript.name,
@@ -236,7 +236,7 @@ export async function executeScript({
       aiChatId,
       sessionId,
       action: "executeScript",
-      nodeVersion: node.prestige.toString(),
+      nodeVersion: "0",
       executeScript: {
         scriptId,
         scriptName,
@@ -253,7 +253,7 @@ export async function executeScript({
       aiChatId,
       sessionId,
       action: "executeScript",
-      nodeVersion: node.prestige.toString(),
+      nodeVersion: "0",
       executeScript: {
         scriptId,
         scriptName,

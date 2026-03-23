@@ -138,41 +138,26 @@ router.get("/node/:nodeId/scripts/help", urlAuth, async (req, res) => {
           { property: "node._id", description: "Node ID (UUID)" },
           { property: "node.name", description: "Node name" },
           { property: "node.type", description: "Node type (nullable)" },
-          {
-            property: "node.prestige",
-            description: "Highest version index (current generation)",
-          },
+          { property: "node.status", description: "Node status (active, completed, trimmed)" },
         ],
-        version: [
+        metadata: [
           {
-            property: "node.versions[i].values",
+            property: "metadata.values",
             description: "Object mapping string keys to numeric values",
             example: '{ "health": 100, "gold": 50 }',
           },
           {
-            property: "node.versions[i].goals",
+            property: "metadata.goals",
             description: "Object mapping string keys to numeric goals",
             example: '{ "health": 200, "gold": 100 }',
           },
           {
-            property: "node.versions[i].schedule",
+            property: "metadata.schedule",
             description: "Timestamp (ISO string) for scheduled execution",
           },
           {
-            property: "node.versions[i].prestige",
-            description: "Version number (generation index)",
-          },
-          {
-            property: "node.versions[i].reeffectTime",
+            property: "metadata.reeffectTime",
             description: "Repeat interval in hours for recurring scripts",
-          },
-          {
-            property: "node.versions[i].status",
-            description: 'Status: "active", "completed", or "trimmed"',
-          },
-          {
-            property: "node.versions[i].dateCreated",
-            description: "Creation timestamp for this version",
           },
         ],
         other: [
@@ -201,12 +186,12 @@ router.get("/node/:nodeId/scripts/help", urlAuth, async (req, res) => {
           description: "Fetches data from API with GET. Returns a promise.",
         },
         {
-          name: "setValueForNode(nodeId, key, value, version)",
-          description: "Sets a value in node.versions[version].values[key]",
+          name: "setValueForNode(nodeId, key, value)",
+          description: "Sets a value in metadata.values[key]",
         },
         {
-          name: "setGoalForNode(nodeId, key, goal, version)",
-          description: "Sets a goal in node.versions[version].goals[key]",
+          name: "setGoalForNode(nodeId, key, goal)",
+          description: "Sets a goal in metadata.goals[key]",
         },
         {
           name: "editStatusForNode(nodeId, status, version, isInherited)",
@@ -223,19 +208,19 @@ router.get("/node/:nodeId/scripts/help", urlAuth, async (req, res) => {
         },
       ],
       exampleScript: `// This script tapers a value over time
-let waitTime = node.versions[node.prestige].values.waitTime;
+let waitTime = metadata.values.waitTime;
 const newWaitTime = waitTime * 1.05;
 
-// Create a new version (prestige)
-addPrestigeForNode(node._id);
+// Update the value
+setValueForNode(node._id, "waitTime", newWaitTime);
 
 // Schedule the script to run again after waitTime hours
 const now = new Date();
 const newSchedule = new Date(now.getTime() + waitTime * 3600 * 1000);
-updateScheduleForNode(node._id, node.prestige + 1, newSchedule, 0);
+updateScheduleForNode(node._id, newSchedule, 0);
 
 // Update the waitTime value in the new version
-setValueForNode(node._id, "waitTime", newWaitTime, node.prestige + 1);`,
+setValueForNode(node._id, "waitTime", newWaitTime, 0 + 1);`,
       importantNote:
         "The node object does not auto-update during script execution. Be careful using it after transactions unless you manually refresh it.",
     };

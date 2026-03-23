@@ -2,12 +2,16 @@ import mongoose from "mongoose";
 import Node from "../../db/models/node.js";
 import Note from "../../db/models/notes.js";
 import User from "../../db/models/user.js";
+import { hooks } from "../hooks.js";
 
+// Legacy version resolution. Without prestige extension, always returns 0.
 export async function resolveVersion(nodeId, version) {
   if (version === "latest") {
-    const node = await Node.findById(nodeId).select("prestige").lean();
+    // Check if prestige extension stores current version in metadata
+    const node = await Node.findById(nodeId).select("metadata").lean();
     if (!node) throw new Error("Node not found");
-    return node.prestige;
+    const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+    return meta.prestige?.current || 0;
   }
   return Number(version);
 }
@@ -163,7 +167,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
   }
 
   const rootNode = await Node.findById(rootId)
-    .select("_id name children versions")
+    .select("_id name children status")
     .lean()
     .exec();
 
@@ -173,25 +177,9 @@ export async function getActiveLeafExecutionFrontier(rootId) {
 
   const leaves = [];
 
-  // ---- helpers ----
-
-  function getCurrentVersion(node) {
-    if (!Array.isArray(node.versions) || node.versions.length === 0) {
-      return null;
-    }
-    return node.versions.reduce((latest, v) =>
-      v.prestige > latest.prestige ? v : latest,
-    );
-  }
-
-  function isActive(node) {
-    return getCurrentVersion(node)?.status === "active";
-  }
-
   // ---- TRUE DFS (post-order) ----
   async function traverse(node, depth, path) {
-    const currentVersion = getCurrentVersion(node);
-    if (!currentVersion || currentVersion.status !== "active") {
+    if ((node.status || "active") !== "active") {
       return false;
     }
 
@@ -201,7 +189,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
 
     if (childrenIds.length > 0) {
       const children = await Node.find({ _id: { $in: childrenIds } })
-        .select("_id name children versions")
+        .select("_id name children status")
         .lean()
         .exec();
 
@@ -222,18 +210,13 @@ export async function getActiveLeafExecutionFrontier(rootId) {
       }
     }
 
-    // ✅ Leaf = no active descendants
     if (!foundDeeperActive) {
       leaves.push({
         nodeId: node._id.toString(),
         name: node.name,
         path,
         depth,
-
-        // 🔑 version context
-        versionPrestige: currentVersion.prestige,
-        versionStatus: currentVersion.status,
-
+        status: node.status || "active",
         next: false,
       });
     }
@@ -310,7 +293,7 @@ export async function buildDeepTreeSummary(
     });
 
     const indent = "  ".repeat(depth);
-    const values = ctx.version?.values;
+    const values = ctx.values;
     const valueStr =
       values && Object.keys(values).length > 0
         ? ` (${Object.entries(values)
@@ -609,69 +592,37 @@ export async function getContextForAi(nodeId, options = {}) {
   const node = await Node.findById(nodeId).lean().exec();
   if (!node) throw new Error(`Node ${nodeId} not found`);
 
-  const currentPrestige = node.prestige || 0;
-  const currentVersion = node.versions?.[currentPrestige] || null;
+  const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
 
   // ---- Base context ----
   const context = {
     id: node._id.toString(),
     name: node.name,
+    status: node.status || "active",
     isRoot: !!node.rootOwner && node.rootOwner !== "SYSTEM",
-    prestige: currentPrestige,
-    totalVersions: node.versions?.length || 0,
+    dateCreated: node.dateCreated,
   };
 
   if (node.type) {
     context.type = node.type;
   }
 
-  // ---- Current version data ----
-  if (currentVersion) {
-    context.version = {
-      status: currentVersion.status,
-      dateCreated: currentVersion.dateCreated,
-    };
+  // Let extensions enrich the context with their data
+  // (values, goals, schedule, prestige, etc.)
+  await hooks.run("enrichContext", { context, node, meta });
 
-    if (currentVersion.schedule) {
-      context.version.schedule = currentVersion.schedule;
-    }
-
-    if (includeValues) {
-      const values =
-        currentVersion.values instanceof Map
-          ? Object.fromEntries(currentVersion.values)
-          : currentVersion.values || {};
-
-      const goals =
-        currentVersion.goals instanceof Map
-          ? Object.fromEntries(currentVersion.goals)
-          : currentVersion.goals || {};
-
-      // Only include if there's actual data
-      if (Object.keys(values).length > 0) {
-        context.version.values = values;
-      }
-      if (Object.keys(goals).length > 0) {
-        context.version.goals = goals;
-      }
-    }
-  }
-
-  // ---- Notes (current version only) ----
+  // ---- Notes ----
   if (includeNotes) {
     const noteCount = await Note.countDocuments({
       nodeId: node._id,
-      version: currentPrestige,
       contentType: "text",
     });
 
     context.noteCount = noteCount;
 
     if (noteCount > 0) {
-      // Just the most recent 3 as preview
       const recentNotes = await Note.find({
         nodeId: node._id,
-        version: currentPrestige,
         contentType: "text",
       })
         .sort({ _id: -1 })

@@ -7,6 +7,8 @@ land/node_modules
 land/uploads
 land/.land/
 land/.env
+land/extensions/.disabled
+.land/
 
 site/node_modules
 site/dist/

@@ -1,10 +1,12 @@
 import Node from "../../db/models/node.js";
 import { logContribution } from "../../db/utils.js";
-import { useEnergy } from "../energy/core.js";
+import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+
+let useEnergy = async () => ({ energyUsed: 0 });
+try { ({ useEnergy } = await import("../energy/core.js")); } catch {}
 
 async function updateSchedule({
   nodeId,
-  versionIndex,
   newSchedule,
   reeffectTime,
   userId,
@@ -12,10 +14,8 @@ async function updateSchedule({
   aiChatId = null,
   sessionId = null,
 }) {
-  if (!nodeId || versionIndex === undefined || reeffectTime === undefined) {
-    const error = new Error(
-      "nodeId, versionIndex, and reeffectTime are required.",
-    );
+  if (!nodeId || reeffectTime === undefined) {
+    const error = new Error("nodeId and reeffectTime are required.");
     error.status = 400;
     throw error;
   }
@@ -34,12 +34,6 @@ async function updateSchedule({
   }
   if (node.isSystem) throw new Error("Cannot modify system nodes");
 
-  if (versionIndex < 0 || versionIndex >= node.versions.length) {
-    const error = new Error("Invalid version index.");
-    error.status = 400;
-    throw error;
-  }
-
   let formattedDate = null;
 
   if (newSchedule !== undefined && newSchedule !== "" && newSchedule !== null) {
@@ -54,12 +48,9 @@ async function updateSchedule({
     userId,
     action: "editSchedule",
   });
-  node.versions[versionIndex].schedule = formattedDate;
 
-  node.versions[versionIndex].schedule = formattedDate;
-
-  node.versions[versionIndex].reeffectTime = reeffectTime;
-
+  setExtMeta(node, "schedule", formattedDate);
+  setExtMeta(node, "reeffectTime", reeffectTime);
   await node.save();
 
   const scheduleEdited = { date: formattedDate, reeffectTime };
@@ -71,7 +62,6 @@ async function updateSchedule({
     aiChatId,
     sessionId,
     action: "editSchedule",
-    nodeVersion: versionIndex,
     scheduleEdited,
     energyUsed,
   });
@@ -112,16 +102,16 @@ async function getCalendar({ rootNodeId, startDate, endDate }) {
     visited.add(nodeId);
 
     const node = await Node.findById(nodeId)
-      .select("name prestige versions children")
+      .select("name metadata children")
       .lean();
 
     if (!node) return;
 
-    const versionIndex = node.prestige;
-    const version = node.versions?.[versionIndex];
+    const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+    const schedule = meta.schedule;
 
-    if (version?.schedule) {
-      const scheduleDate = new Date(version.schedule);
+    if (schedule) {
+      const scheduleDate = new Date(schedule);
 
       const inRange =
         (!start || scheduleDate >= start) && (!end || scheduleDate <= end);
@@ -130,9 +120,8 @@ async function getCalendar({ rootNodeId, startDate, endDate }) {
         results.push({
           nodeId: node._id.toString(),
           name: node.name ?? "(Untitled)",
-          versionIndex,
           schedule: scheduleDate,
-          reeffectTime: version.reeffectTime ?? null,
+          reeffectTime: meta.reeffectTime ?? null,
         });
       }
     }

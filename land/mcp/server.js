@@ -23,7 +23,7 @@ if (!fs.existsSync(uploadsFolder)) {
   fs.mkdirSync(uploadsFolder);
 }
 
-import { setValueForNode, setGoalForNode } from "../core/tree/values.js";
+import { setValueForNode, setGoalForNode } from "../extensions/values/core.js";
 
 import {
   getContributionsByUser,
@@ -71,24 +71,21 @@ import { getTreeForAi, getNodeForAi } from "../core/tree/treeDataFetching.js"; /
 import { resolveTreeAccess } from "../core/authenticate.js";
 import { getAiContributionContext } from "../ws/aiChatTracker.js";
 
+// Legacy prestige resolution. Without prestige extension, always returns 0.
 async function resolvePrestige({ nodeId, prestige }) {
-  // If a valid prestige is explicitly provided, use it as-is
   if (typeof prestige === "number" && prestige >= 0) {
     return prestige;
   }
-
-  // Otherwise, fetch the node and use its latest prestige
-  const node = await getNodeForAi(nodeId);
-
-  if (!node) {
-    throw new Error(`Node not found: ${nodeId}`);
+  // Check metadata for prestige extension data
+  const Node = mongoose.models.Node;
+  if (Node) {
+    const node = await Node.findById(nodeId).select("metadata").lean();
+    if (node) {
+      const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+      return meta.prestige?.current || 0;
+    }
   }
-
-  if (typeof node.prestige !== "number") {
-    throw new Error(`Node prestige missing for node ${nodeId}`);
-  }
-
-  return node.prestige;
+  return 0;
 }
 
 const TimeWindowSchema = {
@@ -524,10 +521,9 @@ function getMcpServer() {
         if (imageBase64.length < 100) {
           throw new Error("imageBase64 too short — likely truncated");
         }
-        const version =
-          typeof prestige === "number"
+        const version = typeof prestige === "number"
             ? prestige
-            : await getLatestPrestigeForNode(nodeId);
+            : await resolvePrestige({ nodeId });
 
         const type = await fileTypeFromBuffer(buffer);
 
@@ -613,15 +609,10 @@ function getMcpServer() {
       openWorldHint: false,
     },
     async ({ nodeId, key, value, prestige, userId, aiChatId, sessionId }) => {
-      const version = await resolvePrestige({
-        nodeId,
-        prestige,
-      });
       const result = await setValueForNode({
         nodeId,
         key,
         value,
-        version,
         userId,
         wasAi: true,
         aiChatId,
@@ -673,16 +664,11 @@ function getMcpServer() {
       openWorldHint: false,
     },
     async ({ nodeId, key, goal, prestige, userId, aiChatId, sessionId }) => {
-      const version = await resolvePrestige({
-        nodeId,
-        prestige,
-      });
       try {
         const result = await setGoalForNode({
           nodeId,
           key,
           goal,
-          version,
           userId,
           wasAi: true,
           aiChatId,
@@ -751,13 +737,10 @@ function getMcpServer() {
       aiChatId,
       sessionId,
     }) => {
-      const version = await resolvePrestige({ nodeId, prestige });
-
       try {
         const result = await editStatus({
           nodeId,
           status,
-          version,
           isInherited,
           userId,
           wasAi: true,
@@ -807,10 +790,7 @@ function getMcpServer() {
       openWorldHint: false,
     },
     async ({ content, userId, nodeId, prestige, aiChatId, sessionId }) => {
-      const version = await resolvePrestige({
-        nodeId,
-        prestige,
-      });
+      const version = await resolvePrestige({ nodeId, prestige });
       try {
         const result = await createNote({
           contentType: "text",
@@ -818,7 +798,7 @@ function getMcpServer() {
           userId,
           nodeId,
           version,
-          isReflection: true, // 🔥 Always included, always true, backend safe
+          isReflection: true,
           wasAi: true,
           aiChatId,
           sessionId,
@@ -946,12 +926,10 @@ function getMcpServer() {
       openWorldHint: false,
     },
     async ({ nodeId, prestige, limit, startDate, endDate }) => {
-      const version = await resolvePrestige({ nodeId, prestige });
-
       try {
         const result = await getNotes({
           nodeId,
-          version,
+          version: typeof prestige === "number" ? prestige : undefined,
           limit,
           startDate,
           endDate,

@@ -16,10 +16,7 @@ function filterTreeByStatus(node, filters) {
     filters.trimmed !== undefined ||
     filters.completed !== undefined;
 
-  const currentVersion = node.versions?.find(
-    (v) => v.prestige === node.prestige,
-  );
-  const status = currentVersion?.status;
+  const status = node.status || "active";
 
   const filteredChildren =
     node.children
@@ -125,33 +122,14 @@ async function getNodeForAi(nodeId) {
     const node = await Node.findById(nodeId).lean().exec();
     if (!node) throw new Error(`Node ${nodeId} not found`);
 
-    // ----- versions + notes -----
-    if (node.versions && node.versions.length > 0) {
-      const versionsWithNotes = [];
-
-      for (let i = 0; i < node.versions.length; i++) {
-        const version = node.versions[i];
-
-        const notes = await Note.find({
-          nodeId: node._id,
-          version: i,
-          contentType: "text",
-        })
-          .populate("userId", "username -_id")
-          .lean()
-          .exec();
-
-        versionsWithNotes.push({
-          ...version,
-          notes: notes.map((n) => ({
-            username: n.userId?.username || "Unknown",
-            content: n.content,
-          })),
-        });
-      }
-
-      node.versions = versionsWithNotes;
-    }
+    // ----- notes (flat, no version indexing) -----
+    const notes = await Note.find({
+      nodeId: node._id,
+      contentType: "text",
+    })
+      .populate("userId", "username -_id")
+      .lean()
+      .exec();
 
     // ----- parent info -----
     const parentNodeId = node.parent ? node.parent.toString() : null;
@@ -169,22 +147,28 @@ async function getNodeForAi(nodeId) {
         )
       : [];
 
+    // ----- values/goals from metadata -----
+    const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+    const values = meta.values || {};
+    const goals = meta.goals || {};
+
     const result = {
       id: node._id.toString(),
       name: node.name,
-
+      status: node.status || "active",
       parentNodeId,
       parentName,
-
       children,
-
-      versions: node.versions || [],
-      scripts: (node.metadata instanceof Map ? node.metadata.get("scripts") : node.metadata?.scripts)?.list || [],
+      notes: notes.map((n) => ({
+        username: n.userId?.username || "Unknown",
+        content: n.content,
+      })),
+      scripts: meta.scripts?.list || [],
     };
 
-    if (node.type) {
-      result.type = node.type;
-    }
+    if (node.type) result.type = node.type;
+    if (Object.keys(values).length > 0) result.values = values;
+    if (Object.keys(goals).length > 0) result.goals = goals;
 
     return result;
   } catch (error) {
@@ -285,31 +269,18 @@ async function getParents(req, res) {
         return parents;
       }
 
-      // only attach notes for the *last* version
-      if (currentNode.versions && currentNode.versions.length > 0) {
-        const lastVersion = currentNode.prestige;
+      // attach recent notes
+      const notes = await Note.find({
+        nodeId: currentNode._id,
+        contentType: "text",
+      })
+        .sort({ createdAt: -1 })
+        .limit(7)
+        .select("content -_id")
+        .lean()
+        .exec();
 
-        const notes = await Note.find({
-          nodeId: currentNode._id,
-          version: lastVersion,
-          contentType: "text",
-        })
-          .sort({ createdAt: -1 }) // newest first
-          .limit(7) // only last 7
-          .select("content -_id")
-          .lean()
-          .exec();
-
-        // flatten into array of strings
-        const noteContents = notes.map((n) => n.content);
-
-        currentNode.versions = [
-          {
-            ...lastVersion,
-            notes: noteContents,
-          },
-        ];
-      }
+      currentNode.notes = notes.map((n) => n.content);
 
       parents.push(currentNode);
 
@@ -354,24 +325,20 @@ async function getRootNodes(req, res) {
   }
 }
 function stripWalletSecrets(node) {
-  if (!node || !Array.isArray(node.versions)) return node;
+  if (!node) return node;
 
-  // Wallet data lives in metadata.solana.wallets now
-  const solMeta = node.metadata instanceof Map
-    ? node.metadata?.get("solana")
-    : node.metadata?.solana;
-  const wallets = solMeta?.wallets || {};
+  // Wallet data lives in metadata.solana.wallets
+  const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+  if (meta.solana?.wallets) {
+    const cleaned = {};
+    for (const [k, w] of Object.entries(meta.solana.wallets)) {
+      cleaned[k] = w?.publicKey ? { publicKey: w.publicKey } : null;
+    }
+    meta.solana = { ...meta.solana, wallets: cleaned };
+    node.metadata = meta;
+  }
 
-  return {
-    ...node,
-    versions: node.versions.map((v, i) => {
-      const wallet = wallets[i];
-      return {
-        ...v,
-        wallet: wallet?.publicKey ? { publicKey: wallet.publicKey } : null,
-      };
-    }),
-  };
+  return node;
 }
 
 async function getAllData(req, res) {
@@ -395,31 +362,19 @@ async function getAllData(req, res) {
       }).exec();
       node.contributions = contributions;
 
-      // versions + notes
-      if (node.versions && node.versions.length > 0) {
-        const versionsWithNotes = [];
-        for (let i = 0; i < node.versions.length; i++) {
-          const version = node.versions[i];
+      // notes (flat, no version indexing)
+      const notes = await Note.find({
+        nodeId: node._id,
+        contentType: "text",
+      })
+        .populate("userId", "username -_id")
+        .lean()
+        .exec();
 
-          const notes = await Note.find({
-            nodeId: node._id,
-            version: i,
-            contentType: "text",
-          })
-            .populate("userId", "username -_id")
-            .lean()
-            .exec();
-
-          versionsWithNotes.push({
-            ...version,
-            notes: notes.map((n) => ({
-              username: n.userId?.username || "Unknown",
-              content: n.content,
-            })),
-          });
-        }
-        node.versions = versionsWithNotes;
-      }
+      node.notes = notes.map((n) => ({
+        username: n.userId?.username || "Unknown",
+        content: n.content,
+      }));
 
       // recurse children
       if (node.children && node.children.length > 0) {
@@ -508,7 +463,7 @@ function removeNullFields(obj) {
 }
 
 const TREE_STRUCTURE_FIELDS =
-  "_id name type prestige children parent versions.prestige versions.status isSystem systemRole";
+  "_id name type status children parent isSystem systemRole";
 
 async function getTreeStructure(rootId, filters = {}) {
   if (!rootId) throw new Error("Root node ID is required");
@@ -562,16 +517,12 @@ async function getTreeStructure(rootId, filters = {}) {
   if (filters.completed !== false) allowedStatuses.push("completed");
 
   const filterAndFlatten = (node, isRoot = false) => {
-    const currentVersion = node.versions?.find(
-      (v) => v.prestige === node.prestige,
-    );
-    const status = currentVersion?.status || "active";
+    const status = node.status || "active";
 
     const children = (node.children || [])
       .map((c) => filterAndFlatten(c, false))
       .filter(Boolean);
 
-    // Always return the root node so callers have a name/id reference
     if (!isRoot && !allowedStatuses.includes(status) && children.length === 0) {
       return null;
     }
@@ -580,7 +531,6 @@ async function getTreeStructure(rootId, filters = {}) {
       _id: node._id,
       name: node.name,
       type: node.type || null,
-      prestige: node.prestige,
       status,
       parent: node.parent,
       children,

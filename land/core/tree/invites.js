@@ -114,7 +114,7 @@ export async function createInvite({
       nodeId: node.id,
       action: "invite",
       inviteAction,
-      nodeVersion: node.prestige,
+      nodeVersion: "0",
       energyUsed,
     });
 
@@ -154,7 +154,7 @@ export async function createInvite({
       nodeId: node.id,
       action: "invite",
       inviteAction,
-      nodeVersion: node.prestige,
+      nodeVersion: "0",
       energyUsed,
     });
 
@@ -194,7 +194,7 @@ export async function createInvite({
         nodeId: node.id,
         action: "invite",
         inviteAction,
-        nodeVersion: node.prestige,
+        nodeVersion: "0",
         energyUsed,
       });
 
@@ -221,14 +221,14 @@ export async function createInvite({
         nodeId: node.id,
         action: "invite",
         inviteAction,
-        nodeVersion: node.prestige,
+        nodeVersion: "0",
         energyUsed,
       });
       await logContribution({
         userId: userInvitingId,
         nodeId: node.id,
         action: "branchLifecycle",
-        nodeVersion: node.prestige.toString(),
+        nodeVersion: "0",
         branchLifecycle: {
           action: "retired",
           fromParentId: null,
@@ -270,7 +270,7 @@ export async function createInvite({
         nodeId: node.id,
         action: "invite",
         inviteAction,
-        nodeVersion: node.prestige,
+        nodeVersion: "0",
         energyUsed,
       });
 
@@ -366,7 +366,7 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
     nodeId: node.id,
     action: "invite",
     inviteAction,
-    nodeVersion: node.prestige,
+    nodeVersion: "0",
     energyUsed,
   });
 

@@ -8,7 +8,9 @@ import { sendRemoteInvite } from "../../core/tree/remoteInvites.js";
 // Schedules: dynamic import, stub if extension not installed
 let getCalendar = async () => ({ nodes: [] });
 try { ({ getCalendar } = await import("../../extensions/schedules/core.js")); } catch {}
-import { getGlobalValuesTreeAndFlat } from "../../core/tree/values.js";
+// Values: dynamic import, stub if extension not installed
+let getGlobalValuesTreeAndFlat = async () => ({ flat: {}, tree: {} });
+try { ({ getGlobalValuesTreeAndFlat } = await import("../../extensions/values/core.js")); } catch {}
 
 import Node from "../../db/models/node.js";
 import mongoose from "mongoose";

@@ -1053,7 +1053,7 @@ export function dashboardJS() {
         function place(node, depth, xL, xR, pid) {
           var x = (xL + xR) / 2;
           var isLeaf = !node.children || !node.children.length;
-          nodes.push({ id: node.id, name: node.name, status: node.status || "active", prestige: node.prestige || 0, x: x, depth: depth, pid: pid, isLeaf: isLeaf });
+          nodes.push({ id: node.id, name: node.name, status: node.status || "active", prestige: 0 || 0, x: x, depth: depth, pid: pid, isLeaf: isLeaf });
           if (!isLeaf) {
             var tw = vtreeWidth(node);
             var cur = xL;

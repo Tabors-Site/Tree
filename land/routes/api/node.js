@@ -151,7 +151,6 @@ const editStatusHandler = async (req, res) => {
     const result = await editStatus({
       nodeId,
       status,
-      version: Number(version),
       isInherited,
       userId,
     });
@@ -223,18 +222,6 @@ router.get("/node/:nodeId", urlAuth, async (req, res) => {
 
     if (!node) return res.status(404).json({ error: "Node not found" });
 
-    // Strip sensitive wallet info
-    if (Array.isArray(node.versions)) {
-      node.versions = node.versions.map((v) => ({
-        ...v,
-        wallet: v.wallet
-          ? {
-              publicKey: v.wallet.publicKey ?? null,
-            }
-          : null,
-      }));
-    }
-
     const queryString = filterQuery(req);
     const qs = queryString ? `?${queryString}` : "";
 
@@ -278,22 +265,20 @@ router.get("/node/:nodeId/:version", urlAuth, async (req, res) => {
 
     if (!node) return res.status(404).json({ error: "Node not found" });
 
-    // Strip sensitive wallet info
-    if (Array.isArray(node.versions)) {
-      node.versions = node.versions.map((v) => ({
-        ...v,
-        wallet: v.wallet
-          ? {
-              publicKey: v.wallet.publicKey ?? null,
-            }
-          : null,
-      }));
-    }
+    // Flat schema: version 0 = current state
+    const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+    const prestigeData = meta.prestige || { current: 0, history: [] };
 
-    if (isNaN(v) || v < 0 || v >= node.versions.length)
-      return res.status(400).json({ error: "Invalid version index" });
-
-    const data = node.versions[v];
+    const data = (v === (prestigeData.current || 0))
+      ? {
+          status: node.status || "active",
+          values: meta.values || {},
+          goals: meta.goals || {},
+          schedule: meta.schedule || null,
+          reeffectTime: meta.reeffectTime || 0,
+          dateCreated: node.dateCreated,
+        }
+      : (prestigeData.history?.find(h => h.version === v) || { status: "completed" });
 
     const ALL_STATUSES = ["active", "completed", "trimmed"];
     const STATUS_LABELS = {
@@ -302,7 +287,7 @@ router.get("/node/:nodeId/:version", urlAuth, async (req, res) => {
       trimmed: "Trim",
     };
 
-    const showPrestige = v === node.prestige;
+    const showPrestige = v === (prestigeData.current || 0);
 
     const wantHtml = req.query.html !== undefined;
 

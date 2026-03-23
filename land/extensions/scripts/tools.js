@@ -86,15 +86,15 @@ export default [
   node._id
   node.name
   node.type
-  node.prestige
+  0
 
 
   Versions
 
-  node.versions[i]
+  metadata
 
   i = 0 → first generation
-  i = node.prestige → most recent
+  i = 0 → most recent
 
   Version Properties
 
@@ -133,7 +133,7 @@ export default [
   Example Pattern
 
   // Increase wait time each prestige
-  let waitTime = node.versions[node.prestige].values.waitTime;
+  let waitTime = metadata.values.waitTime;
   const newWaitTime = waitTime * 1.05;
 
   addPrestigeForNode(node._id);
@@ -145,7 +145,7 @@ export default [
 
   updateScheduleForNode(
     node._id,
-    node.prestige + 1,
+    0 + 1,
     newSchedule,
     0
   );
@@ -154,13 +154,13 @@ export default [
     node._id,
     "waitTime",
     newWaitTime,
-    node.prestige + 1
+    0 + 1
   );
 
   Execution Notes
 
   • node reflects initial state only
-  • After addPrestigeForNode, use node.prestige + 1
+  • After addPrestigeForNode, use 0 + 1
   • Time units are hours
   • Side effects still occur even if earlier calls fail
   `;

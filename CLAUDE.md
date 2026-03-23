@@ -59,8 +59,10 @@ Both layers use the same core functions, but the MCP path adds AI-specific track
 ### Tree Structure
 
 - **Root Node** → has rootOwner (User), contributors, dreamTime, llmAssignments
-- **Node** → parent/children hierarchy, versions (prestige), values, status (active/completed/trimmed/divider), scripts (vm2)
+- **Node** → parent/children hierarchy, status (active/completed/trimmed), type, metadata (Map for extension data)
+- **Extension data** → values/goals in metadata.values/goals (values ext), schedule in metadata.schedule (schedules ext), prestige history in metadata.prestige (prestige ext), scripts in metadata.scripts (scripts ext)
 - **Contribution** → audit trail for all changes (create/edit/delete/prestige/transaction/understanding)
+- **Hook system** → 8 lifecycle hooks (beforeNote, afterNote, beforeContribution, afterNodeCreate, beforeStatusChange, afterStatusChange, beforeNodeDelete, enrichContext). Extensions register via core.hooks.register(). Core fires hooks at lifecycle points. Prestige uses hooks to tag versions on notes and contributions without core knowing about it.
 
 ### LLM Assignment System (per-mode routing)
 

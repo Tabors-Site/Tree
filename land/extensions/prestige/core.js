@@ -3,7 +3,10 @@ import {
   findNodeById,
   handleSchedule,
 } from "../../db/utils.js";
-import { useEnergy } from "../energy/core.js";
+import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+
+let useEnergy = async () => ({ energyUsed: 0 });
+try { ({ useEnergy } = await import("../energy/core.js")); } catch {}
 
 async function addPrestige({
   nodeId,
@@ -20,7 +23,10 @@ async function addPrestige({
     userId,
     action: "prestige",
   });
-  const targetNodeIndex = node.prestige;
+
+  const prestigeData = getExtMeta(node, "prestige");
+  const currentLevel = prestigeData.current || 0;
+
   await addPrestigeToNode(node);
 
   await logContribution({
@@ -30,7 +36,7 @@ async function addPrestige({
     aiChatId,
     sessionId,
     action: "prestige",
-    nodeVersion: targetNodeIndex,
+    nodeVersion: currentLevel,
     energyUsed,
   });
 
@@ -38,45 +44,50 @@ async function addPrestige({
 }
 
 async function addPrestigeToNode(node) {
-  const currentVersion = node.versions.find(
-    (v) => v.prestige === node.prestige,
-  );
-  if (!currentVersion)
-    throw new Error("No version found for current prestige level");
+  const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+  const prestigeData = meta.prestige || { current: 0, history: [] };
+  const currentLevel = prestigeData.current || 0;
 
-  currentVersion.status = "completed";
-
-  const valuesMap =
-    currentVersion.values instanceof Map
-      ? currentVersion.values
-      : new Map(Object.entries(currentVersion.values));
-
-  const newValues = new Map();
-  for (const key of valuesMap.keys()) {
-    newValues.set(key, 0);
-  }
-  const goalsMap =
-    currentVersion.goals instanceof Map
-      ? currentVersion.goals
-      : new Map(Object.entries(currentVersion.goals || {}));
-
-  const newGoals = new Map();
-  for (const [key, goal] of goalsMap.entries()) {
-    newGoals.set(key, goal);
-  }
-
-  const newVersion = {
-    prestige: node.prestige + 1,
-    values: newValues,
-    goals: newGoals,
-    status: "active",
-    dateCreated: new Date().toISOString(),
-    schedule: await handleSchedule(currentVersion),
-    reeffectTime: currentVersion.reeffectTime,
+  // Snapshot current state into history
+  const snapshot = {
+    version: currentLevel,
+    status: node.status,
+    values: { ...(meta.values || {}) },
+    goals: { ...(meta.goals || {}) },
+    schedule: meta.schedule || null,
+    reeffectTime: meta.reeffectTime || 0,
+    archivedAt: new Date().toISOString(),
   };
 
-  node.prestige++;
-  node.versions.push(newVersion);
+  if (!prestigeData.history) prestigeData.history = [];
+  prestigeData.history.push(snapshot);
+
+  // Mark current as completed
+  node.status = "completed";
+
+  // Reset values to 0, keep goals
+  const values = meta.values || {};
+  const newValues = {};
+  for (const key of Object.keys(values)) {
+    newValues[key] = 0;
+  }
+
+  // Increment prestige level
+  prestigeData.current = currentLevel + 1;
+
+  // Handle schedule carry-forward
+  const scheduleData = meta.schedule ? { schedule: new Date(meta.schedule), reeffectTime: meta.reeffectTime || 0 } : null;
+  const newSchedule = scheduleData ? await handleSchedule(scheduleData) : null;
+
+  // Write all metadata updates
+  setExtMeta(node, "prestige", prestigeData);
+  setExtMeta(node, "values", newValues);
+  // goals carry forward as-is
+  if (newSchedule) setExtMeta(node, "schedule", newSchedule);
+
+  // Set status to active for new version
+  node.status = "active";
+
   await node.save();
 }
 

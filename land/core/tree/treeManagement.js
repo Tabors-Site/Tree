@@ -4,6 +4,7 @@ import User from "../../db/models/user.js";
 import { createNote } from "./notes.js";
 import { resolveTreeAccess } from "../authenticate.js";
 import { isDescendant } from "./treeFetch.js";
+import { hooks } from "../hooks.js";
 // Energy: dynamic import, no-op if extension not installed
 let useEnergy = async () => ({ energyUsed: 0 });
 try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
@@ -68,25 +69,23 @@ export async function createNewNode(
   values = values && typeof values === "object" ? values : {};
   goals = goals && typeof goals === "object" ? goals : {};
 
+  const metadata = new Map();
+  // Store values/goals in metadata if provided (values extension reads from here)
+  if (Object.keys(values).length > 0) metadata.set("values", values);
+  if (Object.keys(goals).length > 0) metadata.set("goals", goals);
+  // Store schedule in metadata if provided (schedules extension reads from here)
+  if (schedule) metadata.set("schedule", new Date(schedule));
+  if (reeffectTime) metadata.set("reeffectTime", reeffectTime);
+
   const newNode = new Node({
     name,
     type,
-    prestige: 0,
-    versions: [
-      {
-        prestige: 0,
-        values,
-        status: "active",
-        dateCreated: new Date(),
-        schedule: schedule ? new Date(schedule) : null,
-        reeffectTime: reeffectTime || 0,
-        goals,
-      },
-    ],
+    status: "active",
     children: [],
     parent: isRoot ? getLandRootId() : (parentNodeID || null),
     rootOwner: isRoot ? user._id : null,
     contributors: [],
+    metadata,
   });
 
   await newNode.save();
@@ -116,7 +115,7 @@ export async function createNewNode(
       aiChatId,
       sessionId,
       action: "updateChildNode",
-      nodeVersion: parentNode.prestige.toString(),
+      nodeVersion: "0",
       updateChildNode: {
         action: "added",
         childId: newNode._id.toString(),
@@ -148,6 +147,9 @@ export async function createNewNode(
       sessionId,
     });
   }
+
+  // afterNodeCreate (fire-and-forget)
+  hooks.run("afterNodeCreate", { node: newNode, userId: user._id }).catch(() => {});
 
   return newNode;
 }
@@ -244,6 +246,9 @@ export async function deleteNodeBranch(
   if (nodeToDelete.parent === "deleted") {
     throw new Error("Node has already been deleted");
   }
+  // beforeNodeDelete hook
+  await hooks.run("beforeNodeDelete", { node: nodeToDelete, userId });
+
   const { energyUsed } = await useEnergy({
     userId,
     action: "branchLifecycle",
@@ -270,7 +275,7 @@ export async function deleteNodeBranch(
         aiChatId,
         sessionId,
         action: "updateChildNode",
-        nodeVersion: node.prestige.toString(),
+        nodeVersion: "0",
         updateChildNode: {
           action: "removed",
           childId: nodeId.toString(),
@@ -285,7 +290,7 @@ export async function deleteNodeBranch(
     aiChatId,
     sessionId,
     action: "branchLifecycle",
-    nodeVersion: nodeToDelete.prestige.toString(),
+    nodeVersion: "0",
     branchLifecycle: {
       action: "retired",
       fromParentId: oldParent?.toString() ?? null,
@@ -427,6 +432,9 @@ export async function editNodeName({
   if (newName.startsWith(".")) {
     throw new Error("Node names cannot start with a dot");
   }
+  if (newType.startsWith("/")) {
+        throw new Error("Node Names cannot start with a /");
+      }
   if (newName.startsWith("@")) {
     throw new Error("Node names cannot start with @");
   }
@@ -451,7 +459,7 @@ export async function editNodeName({
     wasAi,
     aiChatId,
     sessionId,
-    nodeVersion: node.prestige.toString(),
+    nodeVersion: "0",
     editNameNode: {
       oldName,
       newName,

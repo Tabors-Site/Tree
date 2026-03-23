@@ -104,7 +104,7 @@ export function renderRootOverview({
     >
 
 
-      <a href="/api/v1/node/${node._id}/${node.prestige}${queryString}">
+      <a href="/api/v1/node/${node._id}/${0}${queryString}">
         ${escapeHtml(node.name)}
       </a>
   `;
@@ -349,7 +349,7 @@ ${ownerConnections.length === 0
         <li class="tree-node root-entry"
             data-node-id="${allData._id}"
             style="border-left: 4px solid ${rootNameColor}; padding-left: 6px; margin: 6px 0;">
-          <a href="/api/v1/node/${allData._id}/${allData.prestige}${queryString}">
+          <a href="/api/v1/node/${allData._id}/0${queryString}">
             ${escapeHtml(allData.name)}
           </a>
           ${childrenInner}
@@ -1425,7 +1425,7 @@ transition:
     <!-- Tree Card (root + children unified) -->
     <div class="content-card">
       <div class="section-header">
-        <h2>Tree: <a href="/api/v1/node/${allData._id}/${allData.prestige}${queryString}">${escapeHtml(allData.name)}</a></h2>
+        <h2>Tree: <a href="/api/v1/node/${allData._id}/0${queryString}">${escapeHtml(allData.name)}</a></h2>
       </div>
       <div id="filterButtons"></div>
       ${treeHtml}
@@ -2472,7 +2472,7 @@ export function renderCalendar({ rootId, queryString, month, year, byDay }) {
           \`;
 
           (byHour[h] || []).forEach(item => {
-            html += \`<a class="node-item" href="/api/v1/node/\${item.nodeId}/\${item.versionIndex}${queryString}">\${item.name}</a>\`;
+            html += \`<a class="node-item" href="/api/v1/node/\${item.nodeId}/\0${queryString}">\${item.name}</a>\`;
           });
 
           html += '</div></div>';
@@ -2532,7 +2532,7 @@ export function renderCalendar({ rootId, queryString, month, year, byDay }) {
 
             if (items.length > 0) {
               items.slice(0, 3).forEach(item => {
-                html += \`<a class="node-item" href="/api/v1/node/\${item.nodeId}/\${item.versionIndex}${queryString}" onclick="event.stopPropagation()">\${item.name}</a>\`;
+                html += \`<a class="node-item" href="/api/v1/node/\${item.nodeId}/\0${queryString}" onclick="event.stopPropagation()">\${item.name}</a>\`;
               });
 
               if (items.length > 3) {
@@ -2570,7 +2570,7 @@ export function renderCalendar({ rootId, queryString, month, year, byDay }) {
           \`;
 
           items.slice(0, 3).forEach(item => {
-            html += \`<a class="node-item" href="/api/v1/node/\${item.nodeId}/\${item.versionIndex}${queryString}" onclick="event.stopPropagation()">\${item.name}</a>\`;
+            html += \`<a class="node-item" href="/api/v1/node/\${item.nodeId}/\0${queryString}" onclick="event.stopPropagation()">\${item.name}</a>\`;
           });
 
           if (items.length > 3) {

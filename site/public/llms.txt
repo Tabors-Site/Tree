@@ -91,7 +91,7 @@ Authentication via `x-api-key` header or Bearer token.
 - `GET /api/v1/protocol` . land capabilities, extensions, CLI commands
 
 ### Core Endpoints
-- Node CRUD, notes, values, transactions, contributions
+- Node CRUD (flat schema: status on node, extension data in metadata), notes, contributions
 - AI modes: chat, place, query
 - Canopy federation: peering, proxy, discovery
 - Gateway channel management

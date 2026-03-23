@@ -1,8 +1,8 @@
 import {
   logContribution,
   findNodeById,
-  handleSchedule,
 } from "../../db/utils.js";
+import { hooks } from "../hooks.js";
 // Energy: dynamic import, no-op if extension not installed
 let useEnergy = async () => ({ energyUsed: 0 });
 try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch {}
@@ -10,7 +10,6 @@ try { ({ useEnergy } = await import("../../extensions/energy/core.js")); } catch
 async function editStatus({
   nodeId,
   status,
-  version,
   isInherited,
   userId,
   wasAi = false,
@@ -21,8 +20,6 @@ async function editStatus({
   if (!node) throw new Error("Node not found");
   if (node.isSystem) throw new Error("Cannot modify system nodes");
 
-  const targetVersion = node.versions.find((v) => v.prestige === version);
-  if (!targetVersion) throw new Error("Version not found");
   const VALID_STATUSES = ["active", "trimmed", "completed"];
   if (!VALID_STATUSES.includes(status)) {
     throw new Error("Invalid Status");
@@ -36,9 +33,15 @@ async function editStatus({
     action: "editStatus",
   });
 
-  // Update status
-  targetVersion.status = status;
+  const beforeData = { node, status, userId };
+  const hookResult = await hooks.run("beforeStatusChange", beforeData);
+  if (hookResult.cancelled) return { error: hookResult.reason || "Status change cancelled by extension" };
+
+  node.status = status;
   await node.save();
+
+  // afterStatusChange (fire-and-forget)
+  hooks.run("afterStatusChange", { node, status, userId }).catch(() => {});
 
   await logContribution({
     userId,
@@ -48,16 +51,14 @@ async function editStatus({
     sessionId,
     action: "editStatus",
     statusEdited: status,
-    nodeVersion: version,
+    nodeVersion: "0",
     energyUsed,
   });
 
-  // Cascade if inherited
   if (isInherited) {
     await updateNodeStatusRecursively(
       node,
       status,
-      version,
       userId,
       wasAi,
       aiChatId,
@@ -66,7 +67,7 @@ async function editStatus({
   }
 
   return {
-    message: `Status updated to ${status} for node version ${version}${
+    message: `Status updated to ${status}${
       isInherited ? " and its children" : ""
     }`,
   };
@@ -75,57 +76,44 @@ async function editStatus({
 async function updateNodeStatusRecursively(
   node,
   status,
-  version,
   userId,
   wasAi,
   aiChatId = null,
   sessionId = null,
 ) {
   if (status === "divider") {
-    const targetVersionIndex = node.versions.findIndex(
-      (v) => v.prestige === version,
-    );
-    if (targetVersionIndex !== -1) {
-      node.versions[targetVersionIndex].status = status;
-      await node.save();
-    }
+    node.status = status;
+    await node.save();
     return;
   }
 
   if (["active", "trimmed", "completed"].includes(status)) {
     for (const childId of node.children) {
       const childNode = await findNodeById(childId);
-      const targetChildVersionIndex = childNode.versions.findIndex(
-        (v) => v.prestige === childNode.prestige,
+      if (!childNode) continue;
+
+      childNode.status = status;
+      await childNode.save();
+
+      await logContribution({
+        userId,
+        nodeId: childNode._id,
+        wasAi,
+        aiChatId,
+        sessionId,
+        action: "editStatus",
+        statusEdited: status,
+        nodeVersion: "0",
+      });
+
+      await updateNodeStatusRecursively(
+        childNode,
+        status,
+        userId,
+        wasAi,
+        aiChatId,
+        sessionId,
       );
-
-      if (targetChildVersionIndex !== -1) {
-        childNode.versions[targetChildVersionIndex].status = status;
-        await childNode.save();
-
-        await logContribution({
-          userId,
-          nodeId: childNode._id,
-          wasAi,
-          aiChatId,
-          sessionId,
-          action: "editStatus",
-          statusEdited: status,
-          nodeVersion: targetChildVersionIndex,
-        });
-
-        await updateNodeStatusRecursively(
-          childNode,
-          status,
-          version,
-          userId,
-          wasAi,
-          aiChatId,
-          sessionId,
-        );
-      } else {
-        console.warn(`Version not found for child node ${childNode._id}`);
-      }
     }
   }
 }

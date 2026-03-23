@@ -3,6 +3,7 @@
 // Services the host land doesn't have get no-op stubs so extensions always
 // have a safe interface to call.
 
+import { hooks as hooksModule } from "./hooks.js";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
 import Contribution from "../db/models/contribution.js";
@@ -130,6 +131,9 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     // --- Middleware ---
     middleware: { resolveTreeAccess },
+
+    // --- Hook system ---
+    hooks: hooksModule,
   };
 
   // Apply overrides (lands can swap any service)

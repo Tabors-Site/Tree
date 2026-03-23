@@ -1765,7 +1765,7 @@ html, body {
       ${!isPublicAccess ? `<form
         id="renameForm"
         method="POST"
-        action="/api/v1/node/${nodeId}/${node.prestige}/editName${qs}"
+        action="/api/v1/node/${nodeId}/${0}/editName${qs}"
         style="display:none;align-items:center;gap:8px;margin-bottom:12px;"
       >
         <input
@@ -1795,8 +1795,8 @@ html, body {
           <div class="meta-value">${node.type ?? "None"}</div>
         </div>
         <div class="meta-item">
-          <div class="meta-label">Prestige Level</div>
-          <div class="meta-value">${node.prestige}</div>
+          <div class="meta-label">Status</div>
+          <div class="meta-value">${node.status || "active"}</div>
         </div>
       </div>
     </div>
@@ -1828,29 +1828,28 @@ html, body {
       </form>
     </div>` : ""}
 
-    <!-- Versions Section -->
-    <div class="versions-section">
-      <h2>Versions</h2>
-      <ul class="versions-list">
-        ${[...node.versions]
-          .reverse()
-          .map(
-            (_, i, arr) =>
-              `<li><a href="/api/v1/node/${nodeId}/${arr.length - 1 - i}${qs}">Version ${arr.length - 1 - i}</a></li>`,
-          )
-          .join("")}
-      </ul>
-      ${!isPublicAccess ? `<form
-        method="POST"
-        action="/api/v1/node/${nodeId}/${node.prestige}/prestige${qs}"
-        onsubmit="return confirm('This will complete the current version and create a new prestige level. Continue?')"
-        style="margin-top: 16px;"
-      >
-        <button type="submit" class="primary-button">
-          Add New Version
-        </button>
-      </form>` : ""}
-    </div>
+    <!-- Versions Section (prestige extension) -->
+    ${(() => {
+      const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+      const prestige = meta.prestige || { current: 0, history: [] };
+      const history = prestige.history || [];
+      if (history.length === 0 && prestige.current === 0) return "";
+      return `<div class="versions-section">
+        <h2>Versions</h2>
+        <ul class="versions-list">
+          ${[...Array(prestige.current + 1)].map((_, i) =>
+            `<li><a href="/api/v1/node/${nodeId}/${i}${qs}">Version ${i}${i === prestige.current ? " (current)" : ""}</a></li>`
+          ).reverse().join("")}
+        </ul>
+        ${!isPublicAccess ? `<form
+          method="POST"
+          action="/api/v1/node/${nodeId}/prestige${qs}"
+          onsubmit="return confirm('This will complete the current version and create a new prestige level. Continue?')"
+          style="margin-top: 16px;">
+          <button type="submit" class="primary-button">Add New Version</button>
+        </form>` : ""}
+      </div>`;
+    })()}
 
     <!-- Parent Section -->
     <div class="hierarchy-section">
@@ -4551,7 +4550,7 @@ html, body {
 
       <div class="section-description">
         Access version data using index <code>i</code>. Use <code>0</code> for the first version,
-        or <code>node.prestige</code> for the latest version.
+        or <code>0</code> for the latest version.
       </div>
 
       <table>

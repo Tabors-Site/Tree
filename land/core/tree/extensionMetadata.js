@@ -43,3 +43,4 @@ export function mergeExtMeta(node, extName, partial) {
   const existing = getExtMeta(node, extName);
   setExtMeta(node, extName, { ...existing, ...partial });
 }
+

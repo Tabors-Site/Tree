@@ -241,7 +241,7 @@ router.get("/node/:nodeId/values/solana", authenticate, async (req, res) => {
   try {
     const node = await Node.findById(req.params.nodeId);
     if (!node) return res.status(404).json({ error: "Node not found" });
-    req.params.version = String(node.prestige);
+    req.params.version = String(0);
     return router.handle(req, res);
   } catch (err) {
     res.status(500).json({ error: err.message });

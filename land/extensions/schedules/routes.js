@@ -9,7 +9,7 @@ async function useLatest(req, res, next) {
   try {
     const node = await Node.findById(req.params.nodeId).select("prestige").lean();
     if (!node) return res.status(404).json({ error: "Node not found" });
-    req.params.version = String(node.prestige);
+    req.params.version = String(0);
     next();
   } catch (err) {
     res.status(500).json({ error: err.message });

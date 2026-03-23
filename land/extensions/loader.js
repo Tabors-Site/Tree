@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices, NOOP_ENERGY } from "../core/services.js";
 import { setExtensionToolResolver } from "../ws/modes/registry.js";
+import { hooks } from "../core/hooks.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
 function toImportURL(filePath) {
@@ -203,6 +204,11 @@ function buildScopedCore(manifest, fullCore) {
     if (fullCore.middleware[name]) {
       scoped.middleware[name] = fullCore.middleware[name];
     }
+  }
+
+  // Hooks: always available (core infrastructure, not a declared service)
+  if (fullCore.hooks) {
+    scoped.hooks = fullCore.hooks;
   }
 
   return scoped;

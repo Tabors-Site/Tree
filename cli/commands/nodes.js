@@ -145,25 +145,25 @@ module.exports = (program) => {
         const nodeId = currentNodeId(cfg);
         const data = await api.getNode(nodeId);
         const node = data.node || data;
-        const ver = node.versions?.[node.prestige] || {};
+        // Flat schema: status on node, values/goals/schedule in metadata
+        const meta = node.metadata || {};
+        const values = meta.values || node.values || {};
+        const goals = meta.goals || node.goals || {};
 
         console.log(chalk.bold(node.name));
         console.log(chalk.dim("ID:       ") + node._id);
         console.log(chalk.dim("Type:     ") + (node.type || "none"));
-        console.log(chalk.dim("Status:   ") + (ver.status || "active"));
-        console.log(chalk.dim("Prestige: ") + (node.prestige || 0));
+        console.log(chalk.dim("Status:   ") + (node.status || "active"));
 
-        if (ver.schedule) {
-          console.log(chalk.dim("Schedule: ") + new Date(ver.schedule).toLocaleString());
-          if (ver.reeffectTime) console.log(chalk.dim("Reeffect: ") + ver.reeffectTime + "h");
+        if (meta.schedule) {
+          console.log(chalk.dim("Schedule: ") + new Date(meta.schedule).toLocaleString());
+          if (meta.reeffectTime) console.log(chalk.dim("Reeffect: ") + meta.reeffectTime + "h");
         }
-
-        const values = ver.values instanceof Object ? ver.values : {};
         const valKeys = Object.keys(values);
         if (valKeys.length > 0) {
           console.log(chalk.dim("\nValues:"));
           for (const k of valKeys) {
-            const goal = ver.goals?.[k];
+            const goal = goals?.[k];
             const line = `  ${k}: ${values[k]}` + (goal !== undefined ? ` / ${goal}` : "");
             console.log(line);
           }

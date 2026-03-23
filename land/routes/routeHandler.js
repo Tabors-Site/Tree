@@ -6,7 +6,6 @@ import { authApiRouter } from "./auth.js";
 import user from "./api/user.js";
 
 import contributions from "./api/contributions.js";
-import values from "./api/values.js";
 
 import orchestrate from "./api/orchestrate.js";
 import gatewayWebhooks from "./api/gatewayWebhooks.js";
@@ -72,7 +71,7 @@ export default async function registerURLRoutes(app) {
   // understanding routes loaded via extension system
   app.use("/api/v1", note);
   app.use("/api/v1", contributions);
-  app.use("/api/v1", values);
+  // values routes loaded via extension system
   app.use("/api/v1", node);
   app.use("/api/v1", orchestrate);
   app.use("/api/v1", gatewayWebhooks);

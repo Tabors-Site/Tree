@@ -7,6 +7,7 @@ import crypto from "crypto";
 
 import Contribution from "../../db/models/contribution.js";
 import { logContribution } from "../../db/utils.js";
+import { hooks } from "../hooks.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
 // Energy: dynamic import, no-op if extension not installed
@@ -141,6 +142,13 @@ async function createNote({
     finalContent = rewrittenContent;
   }
 
+  // ── HOOKS ────────────────────────────────────────
+  const hookData = { nodeId, version, content: finalContent, userId, contentType };
+  const hookResult = await hooks.run("beforeNote", hookData);
+  if (hookResult.cancelled) return { error: hookResult.reason || "Note creation cancelled by extension" };
+  // Extensions may have modified version (e.g. prestige sets it to current level)
+  version = hookData.version;
+
   // ── SAVE ────────────────────────────────────────
   const newNote = new Note({
     contentType,
@@ -153,6 +161,9 @@ async function createNote({
   });
 
   await newNote.save();
+
+  // afterNote hook (fire-and-forget)
+  hooks.run("afterNote", { note: newNote, nodeId, userId }).catch(() => {});
 
   // ── STORAGE ─────────────────────────────────────
   if (contentType === "file" && file?.size) {
@@ -336,15 +347,15 @@ async function getNotes({ nodeId, version, limit, startDate, endDate }) {
       throw new Error("Missing required parameter: nodeId");
     }
 
-    if (typeof version !== "number" || isNaN(version)) {
-      throw new Error("Invalid or missing version: must be a number");
-    }
-
     if (limit !== undefined && (typeof limit !== "number" || limit <= 0)) {
       throw new Error("Invalid limit: must be a positive number");
     }
 
-    const query = { nodeId, version };
+    const query = { nodeId };
+    // Only filter by version if explicitly provided (prestige extension sets this)
+    if (version !== undefined && version !== null) {
+      query.version = version;
+    }
 
     if (startDate || endDate) {
       query.createdAt = {};
@@ -669,11 +680,7 @@ async function collectSubtreeNodeIds(rootId) {
   return ids;
 }
 function nodeMatchesStatus(node, filters) {
-  const currentVersion = node.versions?.find(
-    (v) => v.prestige === node.prestige,
-  );
-
-  const status = currentVersion?.status;
+  const status = node.status || "active";
   if (!status) return false;
 
   // ✅ DEFAULTS (only when no filters provided)

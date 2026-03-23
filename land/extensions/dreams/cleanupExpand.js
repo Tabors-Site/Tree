@@ -37,7 +37,7 @@ async function findExpansionCandidates(rootId) {
 
     const notes = await Note.find({
       nodeId: node._id,
-      version: String(node.prestige ?? 0),
+      version: String(0 ?? 0),
       contentType: "text",
     })
       .select("_id content userId")
@@ -51,7 +51,7 @@ async function findExpansionCandidates(rootId) {
           nodeId: node._id,
           nodeName: node.name,
           nodeType: node.type || null,
-          prestige: node.prestige ?? 0,
+          prestige: 0 ?? 0,
           children: node.children || [],
           notes,
           totalLength,

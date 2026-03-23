@@ -76,7 +76,7 @@ const ApiAccessSection = () => {
             <div className="toc-group-label">Node</div>
             <TocLink to="node">🔷 Node Endpoints</TocLink>
             <TocLink to="scripts">⚙️ Scripts</TocLink>
-            <TocLink to="version">📋 Node Version Endpoints</TocLink>
+            <TocLink to="version">📋 Node Operations</TocLink>
             <TocLink to="transactions">🤝 Transactions</TocLink>
             <TocLink to="solana">💎 Solana Wallet</TocLink>
           </div>
@@ -1050,7 +1050,7 @@ rawIdea  — Used for raw idea auto-placement`}</div>
               <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/root/:rootId/all</span>
             </div>
-            <div className="ep-desc">Full tree dump including all versions, notes, contributions, and scripts for every node.</div>
+            <div className="ep-desc">Full tree dump including notes, contributions, metadata, and scripts for every node.</div>
           </div>
 
           {/* ── Global Values ────── */}
@@ -1494,9 +1494,8 @@ dream-thought  - Nightly dream thought`}</div>
           </div>
           <div className="section-text">
             Structure and hierarchy management. Nodes are the building blocks of
-            every tree. All endpoints below operate on the latest version by default.
-            Versioned paths (e.g. /node/:nodeId/:version/notes) are also supported
-            for accessing specific prestige versions.
+            every tree. Node state (status, type) lives directly on the node.
+            Extension data (values, goals, schedule) lives in the node's metadata map.
           </div>
 
           <div className="sub-title">Node Management</div>
@@ -1506,7 +1505,7 @@ dream-thought  - Nightly dream thought`}</div>
               <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/node/:nodeId</span>
             </div>
-            <div className="ep-desc">Node metadata including all versions.</div>
+            <div className="ep-desc">Node metadata including status, type, children, and extension data.</div>
           </div>
 
           <div className="endpoint">
@@ -1514,7 +1513,7 @@ dream-thought  - Nightly dream thought`}</div>
               <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/node/:nodeId/:version</span>
             </div>
-            <div className="ep-desc">A specific version with its values, goals, notes, and contributions.</div>
+            <div className="ep-desc">A specific version (prestige extension). Returns current state for version 0, historical snapshot for older versions.</div>
           </div>
 
           <div className="endpoint">
@@ -1638,11 +1637,12 @@ updateScheduleForNode(datetime | null)`}</div>
         {/* ═══════════════════════════════════════════════════════════════ */}
         <div className="section" id="version">
           <div className="section-title">
-            <span className="section-icon">📋</span> Node Version Endpoints
+            <span className="section-icon">📋</span> Node Operations
           </div>
           <div className="section-text">
-            Version-scoped operations for status, schedule, prestige, notes,
-            values, goals, and contributions.
+            Status, schedule, prestige, notes, values, goals, and contributions.
+            Status lives on the node. Values, goals, schedule, and prestige are managed by extensions
+            and stored in node metadata.
           </div>
 
           {/* ── Status & Schedule ── */}

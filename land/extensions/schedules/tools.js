@@ -15,11 +15,11 @@ async function resolvePrestige({ nodeId, prestige }) {
     throw new Error(`Node not found: ${nodeId}`);
   }
 
-  if (typeof node.prestige !== "number") {
+  if (typeof 0 !== "number") {
     throw new Error(`Node prestige missing for node ${nodeId}`);
   }
 
-  return node.prestige;
+  return 0;
 }
 
 export default [

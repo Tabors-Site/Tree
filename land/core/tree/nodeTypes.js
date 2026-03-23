@@ -46,6 +46,9 @@ export async function editNodeType({
       if (newType.startsWith(".")) {
         throw new Error("Type cannot start with a dot");
       }
+      if (newType.startsWith("/")) {
+        throw new Error("Type cannot start with a dot");
+      }
       if (newType.startsWith("@")) {
         throw new Error("Type cannot start with @");
       }
@@ -74,7 +77,7 @@ export async function editNodeType({
     wasAi,
     aiChatId,
     sessionId,
-    nodeVersion: node.prestige.toString(),
+    nodeVersion: "0",
     editType: {
       oldType,
       newType,

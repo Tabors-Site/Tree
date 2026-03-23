@@ -30,6 +30,18 @@ function resolveEndpoint(endpoint, args, cfg) {
     resolved = resolved.replace(":version", "latest");
   }
 
+  // Replace :rootId with active root
+  if (resolved.includes(":rootId")) {
+    if (!cfg.activeRootId) throw new Error("Not in a tree. Navigate to a tree first.");
+    resolved = resolved.replace(":rootId", cfg.activeRootId);
+  }
+
+  // Replace :userId with logged-in user
+  if (resolved.includes(":userId")) {
+    if (!cfg.userId) throw new Error("Not logged in.");
+    resolved = resolved.replace(":userId", cfg.userId);
+  }
+
   // Replace remaining params with positional args
   const paramPattern = /:([a-zA-Z]+)/g;
   let match;

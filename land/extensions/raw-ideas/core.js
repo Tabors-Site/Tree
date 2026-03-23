@@ -203,7 +203,7 @@ async function convertRawIdeaToNote({
     content: rawIdea.content,
     userId,
     nodeId,
-    version: node.prestige,
+    version: 0,
     tagged: rawIdea.tagged || [],
     isReflection: false,
     createdAt: rawIdea.createdAt,
@@ -218,7 +218,7 @@ async function convertRawIdeaToNote({
     aiChatId,
     sessionId,
     action: "rawIdea",
-    nodeVersion: node.prestige,
+    nodeVersion: 0,
     rawIdeaAction: {
       action: "placed",
       rawIdeaId: rawIdeaId.toString(),
@@ -233,7 +233,7 @@ async function convertRawIdeaToNote({
     aiChatId,
     sessionId,
     action: "note",
-    nodeVersion: node.prestige,
+    nodeVersion: 0,
     noteAction: {
       action: "add",
       noteId: newNote._id.toString(),

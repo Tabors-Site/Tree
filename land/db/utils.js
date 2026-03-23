@@ -1,6 +1,7 @@
 import Contribution from "./models/contribution.js";
 import Node from "./models/node.js";
 import { getAiContributionContext } from "../ws/aiChatTracker.js";
+import { hooks } from "../core/hooks.js";
 
 async function handleSchedule(nodeVersion) {
   if (nodeVersion.schedule === null) {
@@ -82,6 +83,14 @@ const logContribution = async ({
   if (!validActions.includes(action)) {
     throw new Error("Invalid action type");
   }
+
+  // Let extensions modify contribution data (e.g. prestige sets nodeVersion)
+  const hookData = { nodeId, nodeVersion, action, userId };
+  const hookResult = await hooks.run("beforeContribution", hookData);
+  if (hookResult.cancelled) {
+    throw new Error(`Contribution cancelled: ${hookResult.reason || "extension"}`);
+  }
+  nodeVersion = hookData.nodeVersion;
 
   if (!userId || !nodeId || !action || nodeVersion === undefined) {
     throw new Error("Missing required fields");

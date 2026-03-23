@@ -8,20 +8,8 @@ const NodeSchema = new mongoose.Schema({
   },
   name: { type: String, required: true },
   type: { type: String, default: null },
-  prestige: { type: Number, default: 0 },
-  versions: [
-    {
-      _id: false,
-      prestige: { type: Number, required: true },
-      values: { type: Map, of: Number, default: {} },
-      status: { type: String, default: "active" },
-      dateCreated: { type: Date, default: Date.now },
-      schedule: { type: Date, default: null },
-      reeffectTime: { type: Number, default: 0 },
-      goals: { type: Map, of: Number, default: {} },
-
-    },
-  ],
+  status: { type: String, default: "active" },
+  dateCreated: { type: Date, default: Date.now },
   llmAssignments: {
     default: { type: String, default: null }, // tree-wide fallback. connectionId, or "none" to disable LLM
     placement: { type: String, ref: "CustomLlmConnection", default: null },

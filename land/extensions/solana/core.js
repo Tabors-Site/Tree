@@ -97,7 +97,7 @@ export async function ensureVersionWallet(nodeId, versionIndex) {
   const node = await Node.findById(nodeId);
   if (!node) throw new Error("Node not found");
 
-  const version = node.versions[versionIndex];
+  const version = { values: {} };
   if (!version) throw new Error("Version not found");
 
   const existing = getWallet(node, versionIndex);
@@ -144,7 +144,6 @@ async function getVersionKeypair(node, versionIndex) {
 export async function syncVersionSOLBalance(node, versionIndex) {
   requireSolana();
   const wallet = getWallet(node, versionIndex);
-  const version = node?.versions?.[versionIndex];
 
   if (!wallet?.publicKey) {
     return null;
@@ -153,8 +152,11 @@ export async function syncVersionSOLBalance(node, versionIndex) {
   const pubkey = new PublicKey(wallet.publicKey);
   const lamports = await connection.getBalance(pubkey);
 
-  version.values.set("_auto__sol", lamports);
-  node.markModified("versions");
+  // Store SOL balance in metadata.values
+  const { getExtMeta, setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+  const values = getExtMeta(node, "values") || {};
+  values._auto__sol = lamports;
+  setExtMeta(node, "values", values);
   await node.save();
 
   return lamports;
@@ -172,15 +174,18 @@ export async function getVersionWalletInfo(nodeId, versionIndex) {
 
   const node = await Node.findById(nodeId);
   const wallet = getWallet(node, versionIndex);
-  const version = node?.versions?.[versionIndex];
 
   if (!wallet?.publicKey) {
     return { exists: false };
   }
 
+  // Read values from metadata
+  const { getExtMeta } = await import("../../core/tree/extensionMetadata.js");
+  const values = getExtMeta(node, "values") || {};
+
   const tokens = [];
 
-  for (const [key, value] of version.values.entries()) {
+  for (const [key, value] of Object.entries(values)) {
     if (
       key.startsWith("_auto__sol_") &&
       !key.endsWith("_usd") &&
@@ -189,7 +194,7 @@ export async function getVersionWalletInfo(nodeId, versionIndex) {
     ) {
       const mint = key.replace("_auto__sol_", "");
       const uiAmount = value;
-      const usd = version.values.get(`_auto__sol_${mint}_usd`) ?? null;
+      const usd = values[`_auto__sol_${mint}_usd`] ?? null;
 
       tokens.push({
         mint,
@@ -202,7 +207,7 @@ export async function getVersionWalletInfo(nodeId, versionIndex) {
   return {
     exists: true,
     publicKey: wallet.publicKey,
-    solBalance: version.values.get("_auto__sol") ?? 0,
+    solBalance: values._auto__sol ?? 0,
     tokens,
   };
 }
@@ -226,7 +231,7 @@ async function resolveDestinationPublicKey({ toAddress, toNodeId }) {
     const node = await Node.findById(toNodeId);
     if (!node) throw new Error("Destination node not found");
 
-    const versionIndex = node.prestige;
+    const versionIndex = 0;
 
     // Ensure destination wallet exists
     await ensureVersionWallet(toNodeId, versionIndex);
@@ -391,7 +396,7 @@ export async function sendSPLTokenFromVersion({
   await syncVersionSOLBalance(node, versionIndex);
   await syncVersionTokenHoldings(node, versionIndex);
 
-  node.markModified("versions");
+  node.markModified("metadata");
   await node.save();
 
   return {
@@ -426,8 +431,10 @@ async function fetchHoldings(address) {
 export async function syncVersionTokenHoldings(node, versionIndex) {
   requireSolana();
   const wallet = getWallet(node, versionIndex);
-  const version = node?.versions?.[versionIndex];
   if (!wallet?.publicKey) return null;
+
+  const { getExtMeta, setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+  const values = getExtMeta(node, "values") || {};
 
   const pubkey = wallet.publicKey;
   const holdings = await fetchHoldings(pubkey);
@@ -461,9 +468,9 @@ export async function syncVersionTokenHoldings(node, versionIndex) {
     seenKeys.add(`${baseKey}_dec`);
 
     // balance
-    version.values.set(baseKey, totalUi);
+    values[baseKey] = totalUi;
     // decimals
-    version.values.set(`${baseKey}_dec`, decimals);
+    values[`${baseKey}_dec`] = decimals;
   }
 
   /* ---------------------------------- */
@@ -484,27 +491,24 @@ export async function syncVersionTokenHoldings(node, versionIndex) {
     const uiAmount = balances[mint].uiAmount;
     const usdValue = uiAmount * price;
 
-    version.values.set(
-      `_auto__sol_${mint}_usd`,
-      Number(usdValue.toFixed(6)), // keep deterministic
-    );
+    values[`_auto__sol_${mint}_usd`] = Number(usdValue.toFixed(6));
   }
 
   /* ---------------------------------- */
   /* 3. Cleanup stale entries            */
   /* ---------------------------------- */
 
-  for (const key of version.values.keys()) {
+  for (const key of Object.keys(values)) {
     if (
       key.startsWith("_auto__sol_") &&
       key !== "_auto__sol" &&
       !seenKeys.has(key)
     ) {
-      version.values.delete(key);
+      delete values[key];
     }
   }
 
-  node.markModified("versions");
+  setExtMeta(node, "values", values);
   await node.save();
 
   return {
@@ -584,7 +588,8 @@ export async function swapFromVersion({
   }
 
   const node = await Node.findById(nodeId);
-  const version = node.versions[versionIndex];
+  const { getExtMeta } = await import("../../core/tree/extensionMetadata.js");
+  const values = getExtMeta(node, "values") || {};
   const signer = await getVersionKeypair(node, versionIndex);
   const taker = signer.publicKey.toBase58();
 
@@ -592,10 +597,10 @@ export async function swapFromVersion({
   /* 1. Resolve raw amount           */
   /* ------------------------------ */
 
-  const decimals = getStoredDecimals(version, inputMint);
+  const decimals = getStoredDecimals(values, inputMint);
   const amountRaw = uiToRaw(amountUi, decimals);
 
-  const availableUi = getAvailableUiBalance(version, inputMint);
+  const availableUi = getAvailableUiBalance(values, inputMint);
 
   if (amountUi > availableUi) {
     throw new Error("Insufficient balance");
@@ -656,13 +661,13 @@ export async function swapFromVersion({
   };
 }
 
-function getAvailableUiBalance(version, mint) {
+function getAvailableUiBalance(values, mint) {
   if (isSolMint(mint)) {
-    const lamports = version.values.get("_auto__sol") ?? 0;
+    const lamports = values["_auto__sol"] ?? 0;
     return lamports / 1e9;
   }
 
-  return version.values.get(`_auto__sol_${mint}`) ?? 0;
+  return values[`_auto__sol_${mint}`] ?? 0;
 }
 
 async function fetchPrices(mints) {
@@ -691,10 +696,10 @@ function isSolMint(mint) {
   return mint === SOL_MINT;
 }
 
-function getStoredDecimals(version, mint) {
+function getStoredDecimals(values, mint) {
   if (isSolMint(mint)) return SOL_DECIMALS;
 
-  const dec = version.values?.get(`_auto__sol_${mint}_dec`);
+  const dec = values?.[`_auto__sol_${mint}_dec`];
   if (typeof dec !== "number") {
     throw new Error(`Missing decimals for token ${mint}`);
   }
