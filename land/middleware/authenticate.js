@@ -2,12 +2,12 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import bcrypt from "bcrypt";
 import User from "../db/models/user.js";
 import { resolveTreeAccess } from "../core/authenticate.js";
 import { resolvePublicRoot, isPublic } from "../core/tree/publicAccess.js";
 import { verifyCanopyToken, getLandIdentity } from "../canopy/identity.js";
 import { getPeerByDomain } from "../canopy/peers.js";
+import { authStrategies } from "../core/services.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,48 +16,6 @@ dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;
-
-/* ===========================
-    API KEY BRUTE-FORCE PROTECTION
-============================ */
-const failedAttempts = new Map();
-const FAIL_WINDOW_MS = 5 * 60 * 1000;
-const MAX_FAILURES = 10;
-
-function getClientIp(req) {
-  return req.ip || req.connection?.remoteAddress || "unknown";
-}
-
-function checkApiKeyRateLimit(ip) {
-  const entry = failedAttempts.get(ip);
-  if (!entry) return true;
-  if (Date.now() - entry.start > FAIL_WINDOW_MS) {
-    failedAttempts.delete(ip);
-    return true;
-  }
-  return entry.count < MAX_FAILURES;
-}
-
-function recordApiKeyFailure(ip) {
-  const entry = failedAttempts.get(ip);
-  if (!entry || Date.now() - entry.start > FAIL_WINDOW_MS) {
-    failedAttempts.set(ip, { start: Date.now(), count: 1 });
-  } else {
-    entry.count += 1;
-  }
-}
-
-function clearApiKeyFailures(ip) {
-  failedAttempts.delete(ip);
-}
-
-// Clean up stale entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of failedAttempts) {
-    if (now - entry.start > FAIL_WINDOW_MS * 2) failedAttempts.delete(ip);
-  }
-}, 10 * 60 * 1000);
 
 export default async function authenticate(req, res, next) {
   try {
@@ -149,62 +107,30 @@ export default async function authenticate(req, res, next) {
       return next();
     }
 
-    const apiKey =
-      req.headers["x-api-key"] ||
-      (authHeader?.startsWith("ApiKey ")
-        ? authHeader.slice(7).trim()
-        : null);
-
-    if (!apiKey) {
-      return res.status(401).json({
-        message: "Missing credentials",
-      });
-    }
-
-    // Brute-force protection
-    const clientIp = getClientIp(req);
-    if (!checkApiKeyRateLimit(clientIp)) {
-      return res.status(429).json({
-        message: "Too many failed attempts. Try again later.",
-      });
-    }
-
-    // Use key prefix for indexed lookup instead of scanning all users
-    const prefix = apiKey.slice(0, 8);
-    const candidates = await User.find({
-      "metadata.apiKeys.keyPrefix": prefix,
-      "metadata.apiKeys.revoked": { $ne: true },
-    });
-
-    for (const user of candidates) {
-      const keys = user.apiKeys || [];
-      for (const key of keys) {
-        if (key.revoked) continue;
-        if (key.keyPrefix && key.keyPrefix !== prefix) continue;
-
-        const match = await bcrypt.compare(apiKey, key.keyHash);
-        if (!match) continue;
-
-        clearApiKeyFailures(clientIp);
-        req.userId = user._id;
-        req.username = user.username;
-        req.authType = "apiKey";
-        req.apiKeyId = key._id;
-
-        // usage tracking
-        key.usageCount = (key.usageCount || 0) + 1;
-        key.lastUsedAt = new Date();
-        user.apiKeys = keys;
-        await user.save();
-
-        await attachTreeAccess(req);
-        return next();
+    /* ===========================
+        2. EXTENSION AUTH STRATEGIES (api-keys, etc.)
+    ============================ */
+    for (const { name, handler } of authStrategies) {
+      try {
+        const result = await handler(req);
+        if (result) {
+          req.userId = result.userId;
+          req.username = result.username;
+          req.authType = name;
+          if (result.extra) Object.assign(req, result.extra);
+          await attachTreeAccess(req);
+          return next();
+        }
+      } catch (strategyErr) {
+        // Strategy-specific errors (rate limit, etc.)
+        if (strategyErr.status) {
+          return res.status(strategyErr.status).json({ message: strategyErr.message });
+        }
       }
     }
 
-    recordApiKeyFailure(clientIp);
     return res.status(401).json({
-      message: "Invalid API key",
+      message: "Missing or invalid credentials",
     });
   } catch (err) {
     console.error("Auth error:", err);
@@ -262,7 +188,7 @@ export async function authenticateOrPublic(req, res, next) {
         req.isPublicAccess = true;
         req.publicRootId = rootInfo.rootId;
         req.publicRootOwner = rootInfo.rootOwner;
-        req.publicLlmAssignments = rootInfo.llmAssignments;
+        req.publicLlmDefault = rootInfo.llmDefault;
         req.userId = null;
         return next();
       }

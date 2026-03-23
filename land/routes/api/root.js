@@ -66,7 +66,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
       .populate("rootOwner", "username _id profileType planExpiresAt")
       .populate("contributors", "username _id isRemote homeLand")
       .select(
-        "rootOwner contributors metadata llmAssignments dreamTime lastDreamAt visibility",
+        "rootOwner contributors metadata llmDefault dreamTime lastDreamAt visibility",
       )
       .lean()
       .exec();
@@ -84,7 +84,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     const isOwner =
       rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();
     const queryAvailable = isPublicAccess
-      ? !!((rootMeta?.llmAssignments?.default && rootMeta.llmAssignments.default !== "none") || req.canopyVisitor)
+      ? !!((rootMeta?.llmDefault && rootMeta.llmDefault !== "none") || req.canopyVisitor)
       : false;
 
     // JSON MODE
@@ -169,7 +169,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
     }
 
     const root = await Node.findById(rootId)
-      .select("name rootOwner visibility llmAssignments contributors")
+      .select("name rootOwner visibility llmDefault metadata contributors")
       .populate("rootOwner", "username")
       .lean();
 
@@ -185,7 +185,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
       return res.status(403).json({ error: "This tree is not public." });
     }
 
-    const treeHasLlm = !!(root.llmAssignments?.default && root.llmAssignments.default !== "none");
+    const treeHasLlm = !!(root.llmDefault && root.llmDefault !== "none");
     const queryAvailable = treeHasLlm || (isOwner || isContributor);
 
     return res.send(
@@ -477,9 +477,16 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
       if (!conn) return res.status(404).json({ error: "Connection not found" });
     }
 
-    await Node.findByIdAndUpdate(rootId, {
-      $set: { [`llmAssignments.${slot}`]: connectionId || null },
-    });
+    // "default" slot goes to llmDefault field, extension slots go to metadata.llm.slots
+    if (slot === "default") {
+      await Node.findByIdAndUpdate(rootId, {
+        $set: { llmDefault: connectionId || null },
+      });
+    } else {
+      await Node.findByIdAndUpdate(rootId, {
+        $set: { [`metadata.llm.slots.${slot}`]: connectionId || null },
+      });
+    }
 
     // Bust client cache for owner so changes take effect immediately
     const { clearUserClientCache } = await import("../../ws/conversation.js");

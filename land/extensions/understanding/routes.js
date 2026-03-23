@@ -52,7 +52,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
 
     // Check LLM access — tree owner needs an LLM or root must have one assigned
     const hasUserLlm = await userHasLlm(userId);
-    const hasRootLlm = !!(rootNode.llmAssignments?.default && rootNode.llmAssignments.default !== "none");
+    const hasRootLlm = !!(rootNode.llmDefault && rootNode.llmDefault !== "none");
     if (!hasUserLlm && !hasRootLlm) {
       return res
         .status(403)
@@ -615,8 +615,8 @@ router.post("/root/:nodeId/understandings/run/:runId/orchestrate", authenticate,
   const username = req.username;
   const fromSite = req.body?.source === "user";
 
-  const rootNode = await Node.findById(nodeId).select("llmAssignments").lean();
-  const hasRootLlm = !!(rootNode?.llmAssignments?.default && rootNode.llmAssignments.default !== "none");
+  const rootNode = await Node.findById(nodeId).select("llmDefault metadata").lean();
+  const hasRootLlm = !!(rootNode?.llmDefault && rootNode.llmDefault !== "none");
   if (!hasRootLlm && !(await userHasLlm(userId))) {
     return res.status(403).json({ success: false, error: "No LLM connection. Visit /setup to set one up." });
   }

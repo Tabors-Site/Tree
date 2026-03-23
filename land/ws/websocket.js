@@ -524,12 +524,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             const activeRootId = getRootId(visitorId);
             if (activeRootId) {
               const rootNode = await Node.findById(activeRootId)
-                .select("rootOwner llmAssignments")
+                .select("rootOwner llmDefault metadata")
                 .lean();
               if (
                 rootNode &&
                 rootNode.rootOwner.toString() !== socket.userId.toString() &&
-                rootNode.llmAssignments?.default && rootNode.llmAssignments.default !== "none"
+                rootNode.llmDefault && rootNode.llmDefault !== "none"
               ) {
                 hasLlmAccess = true;
               }
@@ -570,9 +570,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           let rootLlmOverride = null;
           if (trackingRootId) {
             const rn = await Node.findById(trackingRootId)
-              .select("llmAssignments")
+              .select("llmDefault metadata")
               .lean();
-            rootLlmOverride = (rn?.llmAssignments?.default && rn.llmAssignments.default !== "none") ? rn.llmAssignments.default : null;
+            rootLlmOverride = (rn?.llmDefault && rn.llmDefault !== "none") ? rn.llmDefault : null;
           }
           const clientInfo = await getClientForUser(
             socket.userId,

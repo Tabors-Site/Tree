@@ -247,7 +247,7 @@ export async function updateCustomLlmConnection(
   connectionId,
   { name, baseUrl, apiKey, model },
 ) {
-  var user = await User.findById(userId).select("llmAssignments").lean();
+  var user = await User.findById(userId).select("llmDefault metadata").lean();
 
   if (!user) throw new Error("User not found");
 
@@ -308,7 +308,7 @@ export async function deleteCustomLlmConnection(userId, connectionId) {
   if (!conn) throw new Error("Connection not found");
 
   // If deleted connection was assigned to any user slot, clear those assignments
-  var user = await User.findById(userId).select("llmAssignments").lean();
+  var user = await User.findById(userId).select("llmDefault metadata").lean();
   if (user && user.llmAssignments) {
     var unset = {};
     for (var s of VALID_SLOTS) {

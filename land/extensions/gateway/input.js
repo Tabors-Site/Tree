@@ -162,7 +162,7 @@ export async function processGatewayMessage(
     .select("rootOwner llmAssignments")
     .lean();
   var hasUserLlm = await userHasLlm(channel.userId);
-  var hasRootLlm = !!(rootCheck?.llmAssignments?.default && rootCheck.llmAssignments.default !== "none");
+  var hasRootLlm = !!(rootCheck?.llmDefault && rootCheck.llmDefault !== "none");
   if (!hasUserLlm && !hasRootLlm) {
     return { error: "No LLM connection configured" };
   }

@@ -41,11 +41,11 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
     }
 
     if (revokeOld) {
-      user.apiKeys.forEach((k) => (k.revoked = true));
+      user.apiKeys = user.apiKeys.map((k) => ({ ...k, revoked: true }));
     }
 
-    const { rawKey, keyHash } = await generateApiKey();
-    user.apiKeys.push({ keyHash, name: safeName });
+    const { rawKey, keyHash, keyPrefix } = await generateApiKey();
+    user.apiKeys = [...user.apiKeys, { keyHash, keyPrefix, name: safeName }];
     await user.save();
 
     const token = req.query.token ?? "";

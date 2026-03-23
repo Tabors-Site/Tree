@@ -41,6 +41,12 @@ import { OrchestratorRuntime } from "../orchestrators/runtime.js";
 import { acquireLock, releaseLock, isLocked } from "../orchestrators/locks.js";
 
 // ---------------------------------------------------------------------------
+// Auth strategy registry (extensions register additional auth methods)
+// ---------------------------------------------------------------------------
+
+const authStrategies = [];
+
+// ---------------------------------------------------------------------------
 // No-op stubs for optional services
 // Extensions that declare a service as optional get these if the host land
 // doesn't have the real implementation loaded.
@@ -93,7 +99,11 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     // --- Always-available services ---
     contributions: { logContribution },
-    auth: { resolveTreeAccess },
+    auth: {
+      resolveTreeAccess,
+      registerStrategy: (name, handler) => authStrategies.push({ name, handler }),
+      getStrategies: () => authStrategies,
+    },
 
     session: {
       createSession, endSession, registerSession,
@@ -148,4 +158,4 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
   return core;
 }
 
-export { NOOP_ENERGY, NOOP_CONTRIBUTIONS, NOOP_WEBSOCKET };
+export { NOOP_ENERGY, NOOP_CONTRIBUTIONS, NOOP_WEBSOCKET, authStrategies };

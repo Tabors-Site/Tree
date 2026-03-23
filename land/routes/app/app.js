@@ -29,7 +29,7 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
     }
 
     const user = await User.findById(req.userId).select(
-      "htmlShareToken username roots llmAssignments",
+      "htmlShareToken username roots metadata",
     );
 
     if (!user) {

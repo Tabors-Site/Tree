@@ -133,8 +133,8 @@ const register = async (req, res) => {
         throw err;
       }
 
-      const { rawKey, keyHash } = await generateApiKey();
-      user.apiKeys.push({ keyHash, name: "treeos-cli" });
+      const { rawKey, keyHash, keyPrefix } = await generateApiKey();
+      user.apiKeys = [...user.apiKeys, { keyHash, keyPrefix, name: "treeos-cli" }];
       await user.save();
 
       const token = jwt.sign(
@@ -658,16 +658,13 @@ if (containsHtml(safeName)) {
     }
 
     if (revokeOld) {
-      user.apiKeys.forEach((k) => (k.revoked = true));
+      user.apiKeys = user.apiKeys.map((k) => ({ ...k, revoked: true }));
     }
 
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
 
-    user.apiKeys.push({
-      keyHash,
-      keyPrefix,
-      name: safeName,
-    });
+    const keys = [...user.apiKeys, { keyHash, keyPrefix, name: safeName }];
+    user.apiKeys = keys;
 
     await user.save();
 

@@ -271,21 +271,24 @@ export async function resolveRootLlmForMode(rootId, modeKey) {
   if (!rootId) return null;
   try {
     const rootNode = await Node.findById(rootId)
-      .select("llmAssignments")
+      .select("llmDefault metadata")
       .lean();
-    if (!rootNode?.llmAssignments) return null;
+    if (!rootNode) return null;
+
+    const { getLlmAssignments } = await import("../core/llms/llmHelpers.js");
+    const assignments = getLlmAssignments(rootNode);
 
     // "none" means LLM is explicitly off for this tree
-    if (rootNode.llmAssignments.default === "none") return null;
+    if (assignments.default === "none") return null;
 
     const assignmentKey = MODE_TO_ASSIGNMENT[modeKey];
     if (assignmentKey) {
-      const modeOverride = rootNode.llmAssignments[assignmentKey];
+      const modeOverride = assignments[assignmentKey];
       if (modeOverride) return modeOverride;
     }
 
     // Fallback to tree default
-    return rootNode.llmAssignments.default || null;
+    return assignments.default || null;
   } catch {
     return null;
   }
@@ -309,8 +312,10 @@ export function clearUserClientCache(userId) {
  */
 export async function userHasLlm(userId) {
   if (!userId) return false;
-  var user = await User.findById(userId).select("llmAssignments").lean();
-  if (user?.llmAssignments?.main) return true;
+  var user = await User.findById(userId).select("metadata").lean();
+  var userMeta = user?.metadata || {};
+  var userLlm = userMeta?.userLlm?.assignments || {};
+  if (userLlm.main) return true;
   var count = await CustomLlmConnection.countDocuments({ userId });
   return count > 0;
 }

@@ -21,7 +21,7 @@ router.get("/setup", authenticateLite, async (req, res) => {
     }
 
     const user = await User.findById(req.userId)
-      .select("username roots llmAssignments")
+      .select("username roots metadata")
       .lean();
     if (!user) {
       return res.redirect("/login?redirect=/setup");

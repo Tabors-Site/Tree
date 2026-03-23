@@ -37,9 +37,9 @@ export async function runShortTermDrain() {
     // Process each tree sequentially to avoid overloading LLM
     for (const rootId of rootIds) {
       // Skip if owner has no LLM and root has no LLM assigned
-      const rootNode = await Node.findById(rootId).select("rootOwner llmAssignments").lean();
+      const rootNode = await Node.findById(rootId).select("rootOwner llmDefault metadata").lean();
       if (rootNode) {
-        const hasRootLlm = !!(rootNode.llmAssignments?.default && rootNode.llmAssignments.default !== "none");
+        const hasRootLlm = !!(rootNode.llmDefault && rootNode.llmDefault !== "none");
         const ownerId = rootNode.rootOwner?.toString();
         if (!hasRootLlm && (!ownerId || !await userHasLlm(ownerId))) {
           console.log(`🧠 Skipping drain for tree ${rootId} — owner has no LLM connection`);

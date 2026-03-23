@@ -10,16 +10,8 @@ const NodeSchema = new mongoose.Schema({
   type: { type: String, default: null },
   status: { type: String, default: "active" },
   dateCreated: { type: Date, default: Date.now },
-  llmAssignments: {
-    default: { type: String, default: null }, // tree-wide fallback. connectionId, or "none" to disable LLM
-    placement: { type: String, ref: "CustomLlmConnection", default: null },
-    understanding: { type: String, ref: "CustomLlmConnection", default: null },
-    respond: { type: String, ref: "CustomLlmConnection", default: null },
-    notes: { type: String, ref: "CustomLlmConnection", default: null },
-    cleanup: { type: String, ref: "CustomLlmConnection", default: null },
-    drain: { type: String, ref: "CustomLlmConnection", default: null },
-    notification: { type: String, ref: "CustomLlmConnection", default: null },
-  },
+  // Core LLM assignment: tree-wide default. Extension slots live in metadata.
+  llmDefault: { type: String, default: null },
   children: [{ type: String, ref: "Node" }],
   parent: { type: String, ref: "Node", default: null },
 
@@ -46,6 +38,38 @@ const NodeSchema = new mongoose.Schema({
   },
   metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
 });
+
+// Virtual: reconstructs llmAssignments from llmDefault + metadata.llm.slots
+// Extensions register slots in metadata.llm.slots (e.g. understanding, cleanup, drain)
+// Core only stores the default. This virtual lets existing code read llmAssignments unchanged.
+NodeSchema.virtual("llmAssignments")
+  .get(function () {
+    const meta = this.metadata instanceof Map ? this.metadata.get("llm") : this.metadata?.llm;
+    const slots = meta?.slots || {};
+    return { default: this.llmDefault, ...slots };
+  })
+  .set(function (v) {
+    if (v.default !== undefined) this.llmDefault = v.default;
+    // Store non-default slots in metadata
+    const slots = {};
+    for (const [key, val] of Object.entries(v)) {
+      if (key !== "default") slots[key] = val;
+    }
+    if (Object.keys(slots).length > 0) {
+      if (!this.metadata) this.metadata = new Map();
+      const existing = this.metadata instanceof Map ? this.metadata.get("llm") || {} : this.metadata?.llm || {};
+      existing.slots = { ...existing.slots, ...slots };
+      if (this.metadata instanceof Map) {
+        this.metadata.set("llm", existing);
+      } else {
+        this.metadata.llm = existing;
+      }
+      if (this.markModified) this.markModified("metadata");
+    }
+  });
+
+NodeSchema.set("toJSON", { virtuals: true });
+NodeSchema.set("toObject", { virtuals: true });
 
 NodeSchema.methods.addContributor = function (userId, removerId) {
   if (!this.rootOwner)

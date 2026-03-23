@@ -1,5 +1,4 @@
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,6 +9,7 @@ import { errorHtml } from "./notFoundPage.js";
 import { verifyCanopyToken, getLandIdentity } from "../canopy/identity.js";
 import { getPeerByDomain, registerPeer } from "../canopy/peers.js";
 import { lookupLandByDomain } from "../canopy/directory.js";
+import { authStrategies } from "../core/services.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,7 +93,7 @@ export default async function urlAuth(req, res, next) {
           req.isPublicAccess = true;
           req.publicRootId = rootInfo.rootId;
           req.publicRootOwner = rootInfo.rootOwner;
-          req.publicLlmAssignments = rootInfo.llmAssignments;
+          req.publicLlmDefault = rootInfo.llmDefault;
           req.userId = null;
           req.canopyVisitor = { userId: payload.sub, homeLand: payload.iss };
           req.isHtmlShare = false;
@@ -105,41 +105,24 @@ export default async function urlAuth(req, res, next) {
     }
 
     /* ===========================
-        1️⃣ API KEY AUTH
+        1️⃣ EXTENSION AUTH STRATEGIES (api-keys, etc.)
     ============================ */
-    const apiKey =
-      req.headers["x-api-key"] ||
-      (authHeader?.startsWith("ApiKey ")
-        ? authHeader.slice(7).trim()
-        : null);
-
-    if (apiKey) {
-      const users = await User.find({ "metadata.apiKeys.revoked": false });
-
-      for (const user of users) {
-        const keys = user.apiKeys || [];
-        for (const key of keys) {
-          if (key.revoked) continue;
-
-          const match = await bcrypt.compare(apiKey, key.keyHash);
-          if (!match) continue;
-
-          req.userId = user._id;
-          req.username = user.username;
-          req.authType = "apiKey";
-          req.apiKeyId = key._id;
+    for (const { name, handler } of authStrategies) {
+      try {
+        const result = await handler(req);
+        if (result) {
+          req.userId = result.userId;
+          req.username = result.username;
+          req.authType = name;
           req.isHtmlShare = false;
-
-          key.usageCount = (key.usageCount || 0) + 1;
-          key.lastUsedAt = new Date();
-          user.apiKeys = keys;
-          await user.save();
-
+          if (result.extra) Object.assign(req, result.extra);
           return next();
         }
+      } catch (strategyErr) {
+        if (strategyErr.status) {
+          return res.status(strategyErr.status).json({ message: strategyErr.message });
+        }
       }
-
-      return res.status(401).json({ message: "Invalid API key" });
     }
 
     /* ===========================
@@ -183,7 +166,7 @@ export default async function urlAuth(req, res, next) {
           req.isPublicAccess = true;
           req.publicRootId = rootInfo.rootId;
           req.publicRootOwner = rootInfo.rootOwner;
-          req.publicLlmAssignments = rootInfo.llmAssignments;
+          req.publicLlmDefault = rootInfo.llmDefault;
           req.userId = null;
           req.isHtmlShare = false;
           return next();

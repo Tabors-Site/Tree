@@ -269,10 +269,10 @@ async function checkTreeAccess(rootId, userId, res) {
 
 async function checkLlmAccess(rootId, userId, res) {
   const rootCheck = await Node.findById(rootId)
-    .select("rootOwner llmAssignments")
+    .select("rootOwner llmDefault metadata")
     .lean();
   const hasUserLlm = await userHasLlm(userId);
-  const hasRootLlm = !!(rootCheck?.llmAssignments?.default && rootCheck.llmAssignments.default !== "none");
+  const hasRootLlm = !!(rootCheck?.llmDefault && rootCheck.llmDefault !== "none");
   if (!hasUserLlm && !hasRootLlm) {
     res.status(403).json({
       success: false,
@@ -342,7 +342,7 @@ async function handleQuery(req, res) {
   if (!validateMessage(message, res)) return;
 
   const rootCheck = await Node.findById(rootId)
-    .select("rootOwner llmAssignments visibility")
+    .select("rootOwner llmDefault metadata visibility")
     .lean();
 
   if (!rootCheck) {
@@ -355,7 +355,7 @@ async function handleQuery(req, res) {
   let isPublicQuery = false;
   let clientOverride = null;
 
-  const treeHasLlm = rootCheck.llmAssignments?.default !== "none";
+  const treeHasLlm = rootCheck.llmDefault !== "none";
 
   if (isPublicAccess) {
     if (rootCheck.visibility !== "public") {

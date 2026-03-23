@@ -57,7 +57,7 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
     // Auto-assign as profile chat if none is set
     try {
       const user = await User.findById(req.params.userId)
-        .select("llmAssignments")
+        .select("llmDefault metadata")
         .lean();
       if (!user?.llmAssignments?.main) {
         await assignConnection(req.params.userId, "main", result._id);

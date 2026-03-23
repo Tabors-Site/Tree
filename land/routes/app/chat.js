@@ -38,7 +38,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     }
 
     const user = await User.findById(req.userId).select(
-      "username roots llmAssignments",
+      "username roots metadata",
     );
     if (!user) {
       return notFoundPage(req, res, "This user doesn't exist.");

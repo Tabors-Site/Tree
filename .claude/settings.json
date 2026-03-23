@@ -66,7 +66,8 @@
       "Bash(sed -i 's|await import\\(\"\"../../core/gateway/gatewayDispatch.js\"\"\\)|await import\\(\"\"../../extensions/gateway/dispatch.js\"\"\\)|g' /home/tabor/github/Tree/land/routes/api/root.js)"
     ],
     "additionalDirectories": [
-      "/home/tabor/github/Tree"
+      "/home/tabor/github/Tree",
+      "/home/tabor/github/Tree/s/node\\.llmAssignments = { placement: null };/\\/\\/ llmDefault is null by default, no need to set"
     ]
   }
 }

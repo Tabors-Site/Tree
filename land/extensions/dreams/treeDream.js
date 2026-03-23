@@ -62,8 +62,8 @@ async function runTreeDream(rootNode) {
   const username = user.username;
 
   // Skip if no LLM available (root assignment or user connection)
-  const rootFull = await Node.findById(rootId).select("llmAssignments").lean();
-  const treeLlmOff = !rootFull?.llmAssignments?.default || rootFull.llmAssignments.default === "none";
+  const rootFull = await Node.findById(rootId).select("llmDefault metadata").lean();
+  const treeLlmOff = !rootFull?.llmDefault || rootFull.llmDefault === "none";
   if (treeLlmOff && !(await userHasLlm(userId))) {
     console.log(`💤 Skipping "${rootNode.name}" — owner has no LLM connection`);
     releaseLock("dream", rootId);

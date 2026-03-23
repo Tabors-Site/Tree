@@ -77,7 +77,7 @@ authApiRouter.post(
     let hasLlm = false;
     try {
       const user = await User.findById(req.userId)
-        .select("llmAssignments")
+        .select("llmDefault metadata")
         .lean();
       if (user?.llmAssignments?.main) {
         hasLlm = true;

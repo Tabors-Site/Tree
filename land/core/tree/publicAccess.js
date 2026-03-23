@@ -35,7 +35,7 @@ export async function resolvePublicRoot(nodeId) {
     rootId: node._id.toString(),
     visibility: node.visibility || "private",
     rootOwner: node.rootOwner,
-    llmAssignments: node.llmAssignments || {},
+    llmDefault: node.llmDefault || null,
   };
 }
 

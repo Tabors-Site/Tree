@@ -295,7 +295,10 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
     ];
 
     function buildSlotHtml(slot) {
-      const current = rootMeta.llmAssignments?.[slot.key] || null;
+      // Read from llmDefault for "default" slot, metadata.llm.slots for extension slots
+      const current = slot.key === "default"
+        ? (rootMeta.llmDefault || null)
+        : (rootMeta.metadata?.llm?.slots?.[slot.key] || (rootMeta.metadata instanceof Map ? rootMeta.metadata.get("llm")?.slots?.[slot.key] : null) || null);
       const optHtml = ownerConnections.map(function(c) {
         return '<div class="custom-select-option' + (current === c._id ? ' selected' : '') + '" data-value="' + c._id + '">'
           + escapeHtml(c.name) + ' (' + escapeHtml(c.model) + ')</div>';
