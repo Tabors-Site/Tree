@@ -140,9 +140,9 @@ module.exports = (program) => {
       // Skip if a hardcoded command already handles this
       if (existing.has(cmdName)) continue;
 
-      // Extract arg names from the command pattern
-      const argMatches = decl.command.match(/<[^>]+>/g) || [];
-      const argNames = argMatches.map((a) => a.replace(/[<>]/g, ""));
+      // Extract arg names from the command pattern (both <required> and [optional])
+      const argMatches = decl.command.match(/[<\[][^>\]]+[>\]]/g) || [];
+      const argNames = argMatches.map((a) => a.replace(/[<>\[\]\.]/g, ""));
 
       program
         .command(decl.command)
