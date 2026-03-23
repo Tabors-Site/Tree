@@ -1,6 +1,11 @@
-import { errorHtml } from "../routes/api/html/notFound.js";
+import { getExtension } from "../extensions/loader.js";
 
-export { errorHtml };
+export function errorHtml(status, title, message) {
+  const htmlExt = getExtension("html-rendering");
+  const render = htmlExt?.exports?.errorHtml;
+  if (render) return render(status, title, message);
+  return `<h1>${status} ${title}</h1><p>${message}</p>`;
+}
 
 export function notFoundPage(
   req,

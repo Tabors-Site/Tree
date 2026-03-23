@@ -2,6 +2,8 @@ import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
+import { getExtension } from "../loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 import {
   getDeletedBranchesForUser,
 } from "../../core/tree/treeFetch.js";
@@ -27,10 +29,8 @@ export default function createRouter(core) {
       const user = await User.findById(userId).lean();
       const token = req.query.token ?? "";
 
-      let renderDeletedBranches;
-      try {
-        renderDeletedBranches = (await import("../../routes/api/html/user.js")).renderDeletedBranches;
-      } catch {
+      const renderDeletedBranches = html().renderDeletedBranches;
+      if (!renderDeletedBranches) {
         return res.json({ userId, deleted });
       }
 

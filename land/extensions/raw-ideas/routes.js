@@ -285,7 +285,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
         );
       }
       return res.send(
-        renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+        html().renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }),
       );
     }
 

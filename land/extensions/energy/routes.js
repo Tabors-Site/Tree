@@ -4,7 +4,8 @@ import User from "../../db/models/user.js";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
 import { getConnectionsForUser } from "../../core/llms/customLLM.js";
-import { renderEnergy } from "../../routes/api/html/user.js";
+import { getExtension } from "../loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 import { getEnergy, getUserMeta } from "../../core/tree/userMetadata.js";
 
 const router = express.Router();
@@ -60,7 +61,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     }
 
     return res.send(
-      renderEnergy({
+      html().renderEnergy({
         userId,
         user,
         energyAmount,

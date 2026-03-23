@@ -10087,11 +10087,87 @@ export function renderEnergy({ userId, user, energyAmount, additionalEnergy, pro
         </div>
 
         <div class="llm-status" id="llmStatus"></div>
+
+        <!-- Failover Stack -->
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);">
+          <div style="font-weight:600;margin-bottom:8px;">Failover Stack</div>
+          <div class="llm-sub" style="margin-bottom:10px;">If your default LLM fails (rate limit, timeout), the system tries these backups in order.</div>
+          <div id="failoverStack" style="min-height:30px;">
+            <div style="opacity:0.4;font-size:0.85rem;">Loading...</div>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <select id="failoverSelect" class="llm-input" style="flex:1;">
+              <option value="">Select a backup connection...</option>
+              ${llmConnections.map(c => '<option value="' + c._id + '">' + c.name + ' (' + c.model + ')</option>').join("")}
+            </select>
+            <button class="llm-save-btn" onclick="pushFailover()" style="white-space:nowrap;">Add Backup</button>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
 
 </div>
+
+<script>
+function loadFailoverStack() {
+  fetch("/api/v1/user/${userId}/llm-failover${qs}", { headers: { "Authorization": "Bearer " + document.cookie.replace(/.*token=([^;]*).*/, "$1") } })
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById("failoverStack");
+      const stack = data.stack || [];
+      if (stack.length === 0) {
+        el.innerHTML = '<div style="opacity:0.4;font-size:0.85rem;">No backups configured. Add connections above to build your failover stack.</div>';
+        return;
+      }
+      const conns = ${JSON.stringify(llmConnections.map(c => ({ id: c._id, name: c.name, model: c.model })))};
+      el.innerHTML = stack.map((id, i) => {
+        const c = conns.find(x => x.id === id);
+        const label = c ? c.name + " (" + c.model + ")" : id;
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<span style="opacity:0.4;font-size:0.8rem;width:20px;">' + (i+1) + '.</span>' +
+          '<span style="flex:1;">' + label + '</span>' +
+          '<button onclick="removeFailover(\\''+id+'\\','+i+')" style="background:none;border:none;color:rgba(255,100,100,0.7);cursor:pointer;font-size:0.8rem;">remove</button>' +
+        '</div>';
+      }).join("");
+    })
+    .catch(() => {
+      document.getElementById("failoverStack").innerHTML = '<div style="color:rgba(255,100,100,0.7);">Failed to load</div>';
+    });
+}
+
+function pushFailover() {
+  const select = document.getElementById("failoverSelect");
+  const connectionId = select.value;
+  if (!connectionId) return;
+  fetch("/api/v1/user/${userId}/llm-failover${qs}", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + document.cookie.replace(/.*token=([^;]*).*/, "$1") },
+    body: JSON.stringify({ connectionId })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) return alert(data.error);
+      select.value = "";
+      loadFailoverStack();
+    });
+}
+
+function removeFailover(connId, index) {
+  fetch("/api/v1/user/${userId}/llm-failover/" + encodeURIComponent(connId) + "${qs}", {
+    method: "DELETE",
+    headers: { "Authorization": "Bearer " + document.cookie.replace(/.*token=([^;]*).*/, "$1") },
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) return alert(data.error);
+      loadFailoverStack();
+    });
+}
+
+loadFailoverStack();
+</script>
 
 <!-- Terms Modal -->
 <div class="modal-overlay" id="termsModal">

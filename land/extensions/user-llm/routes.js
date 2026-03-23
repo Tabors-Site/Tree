@@ -133,18 +133,51 @@ router.post("/user/:userId/llm-failover", authenticate, async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    // Validate connection exists and belongs to user
+    const CustomLlmConnection = (await import("./model.js")).default;
+    const conn = await CustomLlmConnection.findOne({ _id: connectionId, userId: req.userId }).lean();
+    if (!conn) return res.status(404).json({ error: "Connection not found or not yours" });
+
+    // Can't add your current default (it's already the primary)
+    if (user.llmDefault === connectionId) {
+      return res.status(400).json({ error: "That is already your default connection. Failover is for backups." });
+    }
+
     const { getUserMeta, setUserMeta } = await import("../../core/tree/userMetadata.js");
     const llmMeta = getUserMeta(user, "llm") || {};
     const stack = llmMeta.failoverStack || [];
 
-    if (stack.includes(connectionId)) return res.status(400).json({ error: "Already in stack" });
+    if (stack.includes(connectionId)) return res.status(400).json({ error: "Already in failover stack" });
+    if (stack.length >= 10) return res.status(400).json({ error: "Failover stack full (max 10)" });
     stack.push(connectionId);
 
     llmMeta.failoverStack = stack;
     setUserMeta(user, "llm", llmMeta);
     await user.save();
 
-    res.json({ stack });
+    res.json({ stack, added: conn.name || connectionId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/user/:userId/llm-failover/:connectionId", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const { getUserMeta, setUserMeta } = await import("../../core/tree/userMetadata.js");
+    const llmMeta = getUserMeta(user, "llm") || {};
+    const stack = llmMeta.failoverStack || [];
+    const idx = stack.indexOf(req.params.connectionId);
+    if (idx === -1) return res.status(404).json({ error: "Not in stack" });
+    stack.splice(idx, 1);
+
+    llmMeta.failoverStack = stack;
+    setUserMeta(user, "llm", llmMeta);
+    await user.save();
+
+    res.json({ removed: req.params.connectionId, stack });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

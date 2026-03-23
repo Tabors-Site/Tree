@@ -4,11 +4,8 @@ import urlAuth from "../../middleware/urlAuth.js";
 import { findNodeById } from "../../db/utils.js";
 import authenticate from "../../middleware/authenticate.js";
 import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, getNodeGoals } from "./core.js";
-
-let renderValues;
-try {
-  ({ renderValues } = await import("../../routes/api/html/values.js"));
-} catch {}
+import { getExtension } from "../loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
 
@@ -57,6 +54,7 @@ router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
     const allKeys = Array.from(new Set([...Object.keys(values), ...Object.keys(goals)])).sort();
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+    const renderValues = html().renderValues;
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true" || !renderValues) {
       return res.json({ nodeId, values, goals });
     }
