@@ -148,29 +148,93 @@ module.exports = (program) => {
 
   ext
     .command("search [query...]")
-    .description("Search the extension registry (no login required)")
-    .action(async (parts) => {
+    .description("Search the extension registry. No login required.")
+    .option("-l, --limit [n]", "Max results (default 50)")
+    .option("-t, --tag [tag]", "Filter by tag")
+    .action(async (parts, opts) => {
       const query = parts ? parts.join(" ") : "";
       try {
-        // Search doesn't require auth, hits directory directly
-        const cfg = load();
-        let dirUrl;
-        if (cfg.apiKey) {
-          try {
-            const api = getApi();
-            const data = await api.searchRegistry(query);
-            return printSearchResults(data, query);
-          } catch {}
-        }
-        // Fallback: hit directory directly
-        dirUrl = "https://dir.treeos.ai";
-        const qs = query ? `?q=${encodeURIComponent(query)}` : "";
+        const dirUrl = "https://dir.treeos.ai";
+        const params = new URLSearchParams();
+        if (query) params.set("q", query);
+        if (opts.limit) params.set("limit", opts.limit);
+        if (opts.tag) params.set("tag", opts.tag);
+        const qs = params.toString() ? `?${params}` : "";
         const res = await fetch(`${dirUrl}/extensions${qs}`, {
           headers: { "Content-Type": "application/json" },
         });
         if (!res.ok) throw new Error(`Registry unavailable (${res.status})`);
         const data = await res.json();
-        printSearchResults(data, query);
+        const exts = data.extensions || data || [];
+        if (!exts.length) return console.log(chalk.dim("  (no results)"));
+        for (const ext of exts) {
+          const tags = (ext.tags || []).slice(0, 3).map(t => chalk.dim(`#${t}`)).join(" ");
+          const dl = ext.downloads ? chalk.dim(` ${ext.downloads} dl`) : "";
+          console.log(`  ${chalk.cyan(ext.name)} ${chalk.dim("v" + ext.version)}${dl}${tags ? "  " + tags : ""}`);
+          if (ext.description) console.log(`    ${chalk.dim(ext.description)}`);
+        }
+        console.log(chalk.dim(`\n  ${exts.length} result(s)`));
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("view [name...]")
+    .description("View full details of a registry extension (files, manifest, readme)")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext view <name> [version]"));
+      const name = parts[0];
+      const version = parts[1] || null;
+      try {
+        const dirUrl = "https://dir.treeos.ai";
+        const vPath = version ? `/${version}` : "";
+        const res = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}${vPath}`);
+        if (!res.ok) return console.log(chalk.red(`"${name}" not found in registry.`));
+        const data = await res.json();
+        const ext = version ? data : data.latest;
+        if (!ext) return console.log(chalk.red("Not found."));
+
+        console.log(chalk.bold(ext.name) + " " + chalk.dim("v" + ext.version));
+        if (ext.description) console.log(ext.description);
+        console.log(chalk.dim(`by ${ext.authorName || ext.authorDomain || "unknown"}, ${ext.downloads || 0} downloads`));
+        console.log();
+
+        const m = ext.manifest || {};
+        if (m.needs) {
+          console.log(chalk.bold("Requires:"));
+          if (m.needs.models?.length) console.log(`  models: ${m.needs.models.join(", ")}`);
+          if (m.needs.services?.length) console.log(`  services: ${m.needs.services.join(", ")}`);
+          if (m.needs.extensions?.length) console.log(`  extensions: ${m.needs.extensions.join(", ")}`);
+        }
+        if (m.provides?.cli?.length) {
+          console.log(chalk.bold("\nCLI Commands:"));
+          for (const cmd of m.provides.cli) {
+            console.log(`  ${chalk.cyan(cmd.command)} ${chalk.dim(cmd.description || "")}`);
+          }
+        }
+        if (ext.files?.length) {
+          console.log(chalk.bold("\nFiles:"));
+          for (const f of ext.files) {
+            const lines = (f.content || "").split("\n").length;
+            console.log(`  ${chalk.dim(f.path)} (${lines} lines)`);
+          }
+        }
+        if (ext.readme) {
+          console.log(chalk.bold("\nReadme:"));
+          console.log(chalk.dim(ext.readme.slice(0, 500)));
+          if (ext.readme.length > 500) console.log(chalk.dim("  ..."));
+        }
+
+        // Show versions if available
+        if (data.versions?.length > 1) {
+          console.log(chalk.bold("\nVersions:"));
+          for (const v of data.versions.slice(0, 10)) {
+            console.log(`  ${chalk.dim(v.version)}  ${chalk.dim(v.publishedAt ? new Date(v.publishedAt).toLocaleDateString() : "")}`);
+          }
+        }
+
+        console.log(chalk.dim(`\ntreeos ext install ${name}`));
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
       }
