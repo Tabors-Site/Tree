@@ -173,6 +173,42 @@
   line-height: 1.7;
 }
 
+.lp-section-sub-wide {
+  max-width: 800px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ── POSITIONING (FAQ) ── */
+
+.lp-positioning {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.lp-pos-item h4 {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.8);
+  font-style: italic;
+  margin-bottom: 12px;
+}
+
+.lp-pos-item p {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.7;
+}
+
+@media (max-width: 640px) {
+  .lp-positioning {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
 /* ── 3-CARD LAYOUT ── */
 .lp-cards-3 {
   display: grid;

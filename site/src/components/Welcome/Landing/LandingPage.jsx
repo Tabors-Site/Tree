@@ -23,9 +23,9 @@ const LandingPage = () => {
           <h1 className="lp-title">TreeOS</h1>
           <p className="lp-subtitle">An Operating System for Context</p>
           <p className="lp-tagline">
-            Persistent, structured memory that AI can navigate.
-            Not another chat window. A filesystem for knowledge
-            that compounds over time.
+            A public orchestration system where people build, share, and run
+            LLM complexity on a federated network. Not another chat window.
+            Infrastructure where AI agents live, persist, and compound intelligence.
           </p>
           <div className="lp-hero-ctas">
             <button className="lp-btn lp-btn-primary" onClick={scrollToInstall}>Get Started</button>
@@ -37,38 +37,52 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ── WHAT IS TREEOS ── */}
+      {/* ── THE GAP ── */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">What is TreeOS?</h2>
-          <p className="lp-section-sub">
-            A self-hosted system where you and AI build hierarchical
-            knowledge structures. Trees replace flat conversations with
-            navigable, persistent context.
+          <h2 className="lp-section-title">The Problem</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Every useful pattern for making AI agents smarter is locked inside private codebases.
+            Memory compression, tool pipelines, orchestration chains. Every AI product runs the
+            agent on their infrastructure, behind their API, inside their product. You use their
+            agent in their house. Nobody is building the public orchestration layer.
           </p>
+          <p className="lp-section-sub lp-section-sub-wide">
+            TreeOS says: here is the kernel. Run your own house. Your agent lives with you. Connect to
+            other houses through an open protocol. Share what you build. Install what others build.
+            The intelligence compounds across the network.
+          </p>
+        </div>
+      </section>
+
+      {/* ── WHAT IS TREEOS ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Core Concepts</h2>
           <div className="lp-cards-3">
             <div className="lp-card">
-              <h3>Trees</h3>
+              <h3>The Kernel</h3>
               <p>
-                Nodes with notes, trackable values, and children. Navigate
-                with <code>cd</code> and <code>ls</code>. Build with <code>mkdir</code>.
-                Not flat files. Not chat logs. Structure that persists.
+                Trees, nodes, notes, and the AI conversation loop. The minimum
+                structure an agent needs to live somewhere persistent.
+                Navigate with <code>cd</code> and <code>ls</code>. Build with <code>mkdir</code>.
+                Six node types tell agents what they are looking at.
               </p>
             </div>
             <div className="lp-card">
-              <h3>AI Modes</h3>
+              <h3>Extensions</h3>
               <p>
-                Three strict modes. <strong>Chat</strong> reads and writes.
-                <strong> Place</strong> adds content without conversation.
-                <strong> Query</strong> reads only, changes nothing.
+                Packaged units of LLM complexity. An understanding run, a script sandbox,
+                a wallet integration, a dream cycle. Each one is a folder with a manifest.
+                Install it, restart, and both human and agent gain new capabilities.
               </p>
             </div>
             <div className="lp-card">
-              <h3>Node Types</h3>
+              <h3>Lands</h3>
               <p>
-                goal, plan, task, knowledge, resource, identity.
-                Six core types. Custom types valid. Free-form strings
-                that tell agents what they're looking at.
+                Sovereign instances of TreeOS. You run yours. Someone else runs theirs.
+                Each land chooses its own extensions, manages its own trees, runs its own AI.
+                No central authority. Your land, your packages, your call.
               </p>
             </div>
           </div>
@@ -134,7 +148,7 @@ const LandingPage = () => {
       {/* ── HOW IT WORKS ── */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">How It Works</h2>
+          <h2 className="lp-section-title">Get Running</h2>
           <div className="lp-steps">
             <div className="lp-step">
               <div className="lp-step-num">1</div>
@@ -177,8 +191,9 @@ const LandingPage = () => {
         <div className="lp-container">
           <h2 className="lp-section-title">Extensions</h2>
           <p className="lp-section-sub">
-            Core protocol: nodes, notes, values, types, AI modes.
-            Everything else is a package you install, disable, or build.
+            npm let developers stop rewriting the same JavaScript functions. TreeOS does
+            the same thing for agent orchestration. Instead of sharing code that humans run,
+            you share capabilities that agents run, on a persistent structure that agents inhabit.
           </p>
 
           <div className="lp-ext-groups">
@@ -218,35 +233,36 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ── FOR OPERATORS / FOR USERS ── */}
+      {/* ── FOR DIFFERENT AUDIENCES ── */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">Two Ways In</h2>
-          <div className="lp-split">
-            <div className="lp-split-card">
-              <h3>Run Your Own Land</h3>
+          <h2 className="lp-section-title">Who Is This For?</h2>
+          <div className="lp-cards-3">
+            <div className="lp-card">
+              <h3>Developers</h3>
               <p>
-                Self-host. Pick extensions from the registry.
-                Your data, your models, your rules.
+                A modular runtime for persistent AI agents with a federated extension
+                system. The kernel manages tree-structured data and an MCP-based AI loop.
+                Extensions register their own tools, routes, models, and jobs.
               </p>
-              <div className="lp-terminal-mini">
-                <div className="lp-term-line">npm install -g treeos</div>
-                <div className="lp-term-line">treeos land</div>
-              </div>
-              <a href="/about/land" className="lp-split-link">Land setup guide</a>
             </div>
-            <div className="lp-split-card">
-              <h3>Join a Land</h3>
+            <div className="lp-card">
+              <h3>AI Builders</h3>
               <p>
-                Connect to an existing land. Register, bring your own
-                LLM or use the tree owner's. Start building.
+                Every orchestration pattern you build dies in your repo.
+                TreeOS makes orchestration composable and shareable. Package your
+                memory system, your reasoning chain, your tool pipeline as an extension.
+                Publish it. Now every agent on the network can use it.
               </p>
-              <div className="lp-terminal-mini">
-                <div className="lp-term-line">npm install -g treeos</div>
-                <div className="lp-term-line">treeos connect https://treeos.ai</div>
-                <div className="lp-term-line">treeos register</div>
-              </div>
-              <a href="/about/gettingstarted" className="lp-split-link">Getting started</a>
+            </div>
+            <div className="lp-card">
+              <h3>Everyone Else</h3>
+              <p>
+                The internet was built for documents.
+                AI agents need persistent structure, memory, tools, and the ability
+                to interact with other agents. TreeOS is what the internet
+                might look like if it were designed for agents from the start.
+              </p>
             </div>
           </div>
         </div>
@@ -255,10 +271,12 @@ const LandingPage = () => {
       {/* ── FEDERATION ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Network</h2>
+          <h2 className="lp-section-title">The Network</h2>
           <p className="lp-section-sub">
-            Lands connect through the Canopy protocol. The directory handles
-            discovery, public tree indexing, and the extension registry.
+            The Canopy Protocol is how lands discover and peer with each other.
+            Lands advertise their loaded extensions. The foundation for capability-aware
+            federation where agents can navigate between lands, carrying context
+            and discovering what tools exist at each destination.
           </p>
           <div className="lp-cards-4">
             <div className="lp-card lp-card-sm">
@@ -276,6 +294,32 @@ const LandingPage = () => {
             <div className="lp-card lp-card-sm">
               <h4>Registry</h4>
               <p>Publish and pull extensions. Shared package library.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── POSITIONING ── */}
+      <section className="lp-section">
+        <div className="lp-container">
+          <div className="lp-positioning">
+            <div className="lp-pos-item">
+              <h4>"Why not just use ChatGPT?"</h4>
+              <p>
+                Those are products where you visit an AI in someone else's house.
+                TreeOS is infrastructure where the AI lives in yours. The agent persists.
+                It accumulates context. It gains capabilities through extensions you choose.
+                It federates through an open protocol. It is not a chat product. It is the
+                layer beneath chat products.
+              </p>
+            </div>
+            <div className="lp-pos-item">
+              <h4>"Why not just self-host a model?"</h4>
+              <p>
+                A model is a brain with no body. TreeOS is the body. The persistent structure,
+                the memory, the tools, the network. It is model-agnostic. The kernel runs an AI
+                conversation loop via MCP. What model powers it is your choice on your land.
+              </p>
             </div>
           </div>
         </div>
