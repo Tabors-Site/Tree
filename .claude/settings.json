@@ -99,7 +99,9 @@
       "Bash(head -20 echo \"\" grep -rn \"const.*=.*60\\\\|MAX_\\\\|LIMIT_\\\\|DEFAULT_\" /home/tabor/github/Tree/land/orchestrators/ --include=\"*.js\")",
       "Bash(head -10 echo \"\" grep -rn \"MAX_\\\\|LIMIT_\\\\|DEFAULT_MODEL\\\\|DEFAULT_\" /home/tabor/github/Tree/land/core/ --include=\"*.js\")",
       "Bash(head -5 grep -rn \"toolNames\\\\|land-status\\\\|land-ext\" /home/tabor/github/Tree/land/extensions/land-manager/*.js)",
-      "WebFetch(domain:treeos.ai)"
+      "WebFetch(domain:treeos.ai)",
+      "Bash(echo \"=== dreamTime/lastDreamAt on node directly ===\" grep -rn \"\\\\.dreamTime\\\\b\\\\|\\\\.lastDreamAt\\\\b\" /home/tabor/github/Tree/land/ --include=\"*.js\")",
+      "Bash(echo \"=== Fields that moved to metadata but might still be accessed directly ===\" grep -rn \"node\\\\.\\\\\\(dreamTime\\\\|lastDreamAt\\\\|llmAssignments\\\\\\)\\\\b\\\\|root\\\\.\\\\\\(dreamTime\\\\|lastDreamAt\\\\|llmAssignments\\\\\\)\\\\b\" /home/tabor/github/Tree/land/ --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -242,10 +242,10 @@ async function runTreeDream(rootNode) {
 
 export async function runTreeDreamJob() {
   try {
-    // Find all root nodes with a dreamTime configured
+    // Find all root nodes with a dreamTime configured (stored in metadata.dreams.dreamTime)
     const rootNodes = await Node.find({
       rootOwner: { $nin: [null, "SYSTEM"] },
-      dreamTime: { $ne: null },
+      "metadata.dreams.dreamTime": { $ne: null },
     })
       .select("_id name rootOwner children metadata")
       .lean();
