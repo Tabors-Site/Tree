@@ -11,11 +11,19 @@ import ShortMemory from "./model.js";
 import { orchestrateReorganize } from "./cleanupReorganize.js";
 import { orchestrateExpand } from "./cleanupExpand.js";
 import { drainTree } from "./shortTermDrain.js";
-import { findOrCreateUnderstandingRun } from "../understanding/core.js";
-import { orchestrateUnderstanding } from "../understanding/pipeline.js";
+// Dynamic imports: understanding is a separate extension
+let findOrCreateUnderstandingRun, orchestrateUnderstanding;
+try {
+  ({ findOrCreateUnderstandingRun } = await import("../understanding/core.js"));
+  ({ orchestrateUnderstanding } = await import("../understanding/pipeline.js"));
+} catch {
+  findOrCreateUnderstandingRun = async () => null;
+  orchestrateUnderstanding = async () => {};
+}
 import { orchestrateDreamNotify } from "./dreamNotify.js";
 import { userHasLlm } from "../../ws/conversation.js";
 import { acquireLock, releaseLock } from "../../orchestrators/locks.js";
+import { setExtMeta } from "../../core/tree/extensionMetadata.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -213,7 +221,13 @@ async function runTreeDream(rootNode) {
     // MARK COMPLETE
     // ════════════════════════════════════════════════════════════════
 
-    await Node.findByIdAndUpdate(rootId, { lastDreamAt: new Date() });
+    const rootDoc = await Node.findById(rootId);
+    if (rootDoc) {
+      const dreamMeta = rootDoc.metadata?.get?.("dreams") || rootDoc.metadata?.dreams || {};
+      dreamMeta.lastDreamAt = new Date();
+      setExtMeta(rootDoc, "dreams", dreamMeta);
+      await rootDoc.save();
+    }
  log.verbose("Dreams", ` Dream complete for "${rootNode.name}"`);
   } catch (err) {
  log.error("Dreams", ` Dream failed for "${rootNode.name}":`, err.message);

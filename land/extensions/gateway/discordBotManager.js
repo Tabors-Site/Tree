@@ -3,8 +3,8 @@
 // One bot client per unique bot token. Multiple channels can share a bot.
 
 import log from "../../core/log.js";
-import { processGatewayMessage } from "./gatewayInput.js";
-import { getChannelWithSecrets } from "./gateway.js";
+import { processGatewayMessage } from "./input.js";
+import { getChannelWithSecrets } from "./core.js";
 
 var Client, GatewayIntentBits;
 var discordLoaded = false;
