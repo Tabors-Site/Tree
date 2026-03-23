@@ -1,3 +1,4 @@
+import log from "./log.js";
 /**
  * Core Hook System
  *
@@ -84,11 +85,11 @@ function withTimeout(promise, ms, label) {
  */
 function register(hookName, handler, extName = "unknown") {
   if (!VALID_HOOKS.includes(hookName)) {
-    console.warn(`[Hooks] Unknown hook "${hookName}" registered by ${extName}. Ignored.`);
+    log.warn("Hooks", `Unknown hook "${hookName}" registered by ${extName}. Ignored.`);
     return;
   }
   if (typeof handler !== "function") {
-    console.warn(`[Hooks] Hook "${hookName}" from ${extName} is not a function. Ignored.`);
+    log.warn("Hooks", `Hook "${hookName}" from ${extName} is not a function. Ignored.`);
     return;
   }
 
@@ -102,7 +103,7 @@ function register(hookName, handler, extName = "unknown") {
   }
 
   if (handlers.length >= MAX_HANDLERS_PER_HOOK) {
-    console.error(`[Hooks] "${hookName}" at capacity (${MAX_HANDLERS_PER_HOOK}). Rejected ${extName}.`);
+    log.error("Hooks", `"${hookName}" at capacity (${MAX_HANDLERS_PER_HOOK}). Rejected ${extName}.`);
     return;
   }
 
@@ -139,7 +140,7 @@ async function run(hookName, data) {
     await Promise.allSettled(
       handlers.map(({ extName, handler }) =>
         withTimeout(handler(data), HOOK_TIMEOUT_MS, `${hookName}:${extName}`)
-          .catch(err => console.warn(`[Hooks] ${hookName} from "${extName}" failed:`, err.message))
+          .catch(err => log.warn("Hooks", `${hookName} from "${extName}" failed:`, err.message))
       )
     );
     return { cancelled: false };
@@ -154,11 +155,11 @@ async function run(hookName, data) {
       }
     } catch (err) {
       if (isBefore) {
-        console.error(`[Hooks] ${hookName} from "${extName}" threw, cancelling:`, err.message);
+        log.error("Hooks", `${hookName} from "${extName}" threw, cancelling:`, err.message);
         return { cancelled: true, reason: err.message };
       }
       // enrichContext: log and continue
-      console.warn(`[Hooks] ${hookName} from "${extName}" failed:`, err.message);
+      log.warn("Hooks", `${hookName} from "${extName}" failed:`, err.message);
     }
   }
 

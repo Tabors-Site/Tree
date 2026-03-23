@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import { getLandInfoPayload, signCanopyToken } from "./identity.js";
 import Node from "../db/models/node.js";
 
@@ -68,10 +69,10 @@ export async function registerWithDirectory() {
     if (data.success) {
       console.log(`[Land] Registered with directory at ${DIRECTORY_URL}`);
     } else {
-      console.error(`[Land] Directory registration failed: ${data.error}`);
+      log.error("Canopy", `[Land] Directory registration failed: ${data.error}`);
     }
   } catch (err) {
-    console.error(`[Land] Could not reach directory at ${DIRECTORY_URL}: ${err.message}`);
+    log.error("Canopy", `[Land] Could not reach directory at ${DIRECTORY_URL}: ${err.message}`);
   }
 }
 

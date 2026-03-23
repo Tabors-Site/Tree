@@ -180,8 +180,8 @@ const ExtensionsAbout = () => {
               { name: "user-llm", desc: "Custom LLM connections and per-user model routing" },
               { name: "user-queries", desc: "Notes, tags, contributions, chats, notifications" },
               { name: "deleted-revive", desc: "Soft delete with branch recovery" },
-              { name: "visibility", desc: "Public/private tree toggle and share tokens" },
-              { name: "html-rendering", desc: "Server-rendered HTML pages via ?html parameter" },
+              { name: "html-rendering", desc: "Server-rendered HTML pages, share tokens" },
+              { name: "tree-orchestrator", desc: "Built-in chat/place/query conversation AI" },
             ].map((ext) => (
               <div key={ext.name} className="ext-grid-item">
                 <div className="ext-grid-name">{ext.name}</div>

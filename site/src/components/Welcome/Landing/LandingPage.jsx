@@ -226,7 +226,7 @@ const LandingPage = () => {
               { name: "user-llm", desc: "Custom model connections" },
               { name: "user-queries", desc: "Notes, tags, chats" },
               { name: "deleted-revive", desc: "Soft delete and recovery" },
-              { name: "visibility", desc: "Public/private trees" },
+              { name: "tree-orchestrator", desc: "Built-in chat/place/query AI" },
             ]} />
           </div>
 

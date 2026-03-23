@@ -26,7 +26,7 @@ Every land serves its capabilities at `GET /api/v1/protocol`.
 
 Everything beyond the core protocol is a modular extension. Install, disable, remove, or build your own.
 
-22 built-in extensions: understanding (tree compression), dreams (background maintenance), scripts (sandboxed JS), energy (usage metering), billing (Stripe), prestige (versioning), values (numeric values and goals), schedules, raw-ideas (auto-placement), blog, book (note exports), solana (on-chain wallets), api-keys, user-llm (custom model connections), user-queries, deleted-revive, visibility, transactions (value trading), gateway (external channels), email (forgot password, email), html-rendering.
+22 built-in extensions: tree-orchestrator (chat/place/query AI, replaceable), understanding (tree compression), dreams (background maintenance), scripts (sandboxed JS), energy (usage metering), billing (Stripe), prestige (versioning), values (numeric values and goals), schedules, raw-ideas (auto-placement), blog, book (note exports), solana (on-chain wallets), api-keys, user-llm (custom model connections), user-queries, deleted-revive, transactions (value trading), gateway (external channels), email (forgot password, email), html-rendering, console (structured logging).
 
 Extensions declare dependencies in a manifest and only receive the services they request. The extension registry at dir.treeos.ai allows publishing and pulling packages.
 

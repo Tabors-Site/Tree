@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import CanopyEvent from "../db/models/canopyEvent.js";
 import { signCanopyToken } from "./identity.js";
 import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
@@ -159,11 +160,11 @@ export function startOutboxJob() {
         );
       }
     } catch (err) {
-      console.error("[Canopy] Outbox error:", err.message);
+      log.error("Canopy", "Outbox error:", err.message);
     }
   }, OUTBOX_INTERVAL_MS);
 
-  console.log("[Canopy] Outbox job started (every 60s)");
+  log.verbose("Canopy", "Outbox job started (every 60s)");
 }
 
 /**

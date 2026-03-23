@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import { z } from "zod";
 import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fileTypeFromBuffer } from "file-type";
@@ -2147,7 +2148,7 @@ async function handleMcpRequest(req, res) {
         return;
       }
 
-      console.log(`→ Tool: ${toolName}`);
+      log.debug("MCP", `Tool: ${toolName}`);
       console.log("→ Args:");
       console.log(JSON.stringify(args, null, 2));
 
@@ -2220,7 +2221,7 @@ async function handleMcpRequest(req, res) {
 
       await transport.handleRequest(req, res, req.body);
     } else {
-      console.log(`→ Method: ${method}`);
+      log.debug("MCP", `Method: ${method}`);
       const requestArgs = req.body?.params?.arguments ?? {};
       if (!req.userId) {
         res.setHeader("Content-Type", "text/event-stream");
@@ -2293,7 +2294,7 @@ async function handleMcpRequest(req, res) {
       await transport.handleRequest(req, res, req.body);
     }
   } catch (err) {
-    console.error("[MCP] Error:", err);
+    log.error("MCP", "[MCP] Error:", err);
     if (!res.headersSent) {
       res.status(500).json({
         jsonrpc: "2.0",

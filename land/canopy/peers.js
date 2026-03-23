@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import LandPeer from "../db/models/landPeer.js";
 import { getLandIdentity, getLandInfoPayload } from "./identity.js";
 import { isCompatibleVersion } from "./protocol.js";
@@ -114,7 +115,7 @@ export async function blockPeer(domain) {
         { contributors: { $in: ghostIds } },
         { $pullAll: { contributors: ghostIds } }
       );
-      console.log(`[Canopy] Blocked ${domain}: removed ${ghostIds.length} ghost users from all trees`);
+      log.verbose("Canopy", `Blocked ${domain}: removed ${ghostIds.length} ghost users from all trees`);
     }
   }
 
@@ -175,7 +176,7 @@ export async function pingPeer(peer) {
         const newUrl = info.newDomain.startsWith("http") ? info.newDomain : "https://" + info.newDomain;
         const redirectHost = new URL(newUrl).hostname;
         if (isPrivateHost(redirectHost)) {
-          console.warn(`[Canopy] Peer ${peer.domain} redirect to private address ${info.newDomain} REJECTED`);
+          log.warn("Canopy", `Peer ${peer.domain} redirect to private address ${info.newDomain} REJECTED`);
           throw new Error("private address");
         }
         const verifyRes = await fetch(
@@ -186,15 +187,15 @@ export async function pingPeer(peer) {
           const newInfo = await verifyRes.json();
           // Only accept redirect if the new domain has the same landId and publicKey
           if (newInfo.landId === peer.landId && newInfo.publicKey === peer.publicKey) {
-            console.log(`[Canopy] Peer ${peer.domain} verified redirect to ${info.newDomain}`);
+            log.verbose("Canopy", `Peer ${peer.domain} verified redirect to ${info.newDomain}`);
             peer.domain = info.newDomain;
             peer.baseUrl = newInfo.baseUrl || peer.baseUrl;
           } else {
-            console.warn(`[Canopy] Peer ${peer.domain} redirect to ${info.newDomain} REJECTED: identity mismatch`);
+            log.warn("Canopy", `Peer ${peer.domain} redirect to ${info.newDomain} REJECTED: identity mismatch`);
           }
         }
       } catch {
-        console.warn(`[Canopy] Could not verify redirect for ${peer.domain} to ${info.newDomain}`);
+        log.warn("Canopy", `Could not verify redirect for ${peer.domain} to ${info.newDomain}`);
       }
     }
 
@@ -208,7 +209,7 @@ export async function pingPeer(peer) {
     // SECURITY: Never update publicKey from heartbeat. Keys are only set during
     // initial peering. To rotate keys, the peer must re-peer.
     if (info.publicKey && info.publicKey !== peer.publicKey) {
-      console.warn(`[Canopy] ALERT: Peer ${peer.domain} is serving a different public key. Possible compromise or key rotation. Re-peer to accept the new key.`);
+      log.warn("Canopy", `ALERT: Peer ${peer.domain} is serving a different public key. Possible compromise or key rotation. Re-peer to accept the new key.`);
     }
 
     // Update uptime history for today
@@ -253,7 +254,7 @@ export async function pingPeer(peer) {
         (Date.now() - peer.firstFailureAt.getTime()) / (1000 * 60 * 60 * 24);
       if (daysSinceFirst >= DEAD_THRESHOLD_DAYS) {
         peer.status = "dead";
-        console.log(`[Canopy] Peer ${peer.domain} marked as dead (${DEAD_THRESHOLD_DAYS}+ days unreachable)`);
+        log.verbose("Canopy", `Peer ${peer.domain} marked as dead (${DEAD_THRESHOLD_DAYS}+ days unreachable)`);
       } else {
         peer.status = "unreachable";
       }
@@ -298,11 +299,11 @@ export function startHeartbeatJob() {
         );
       }
     } catch (err) {
-      console.error("[Canopy] Heartbeat error:", err.message);
+      log.error("Canopy", "Heartbeat error:", err.message);
     }
   }, HEARTBEAT_INTERVAL_MS);
 
-  console.log("[Canopy] Heartbeat job started (every 5 min)");
+  log.verbose("Canopy", "Heartbeat job started (every 5 min)");
 }
 
 /**
