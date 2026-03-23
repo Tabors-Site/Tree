@@ -92,17 +92,33 @@ export function getDefaultMode(bigMode) {
 
 /**
  * Resolve the OpenAI-compatible tools array for a mode.
- * Includes any additional tools injected by loaded extensions.
+ * Merges three layers:
+ *   1. Mode's base toolNames[]
+ *   2. Extension-injected tools (via loader)
+ *   3. Tree-specific tools (from root node metadata.tools.allowed[])
  */
-export function getToolsForMode(modeKey) {
+export function getToolsForMode(modeKey, treeToolConfig = null) {
   const mode = ALL_MODES[modeKey];
   if (!mode) return [];
 
-  // Merge base tools with extension-injected tools
+  // Layer 1: mode base tools
   let toolNames = [...mode.toolNames];
+
+  // Layer 2: extension-injected tools
   const extTools = _getExtToolsFn(modeKey);
   if (extTools.length > 0) {
     toolNames = [...new Set([...toolNames, ...extTools])];
+  }
+
+  // Layer 3: tree-specific tools from root node metadata
+  // treeToolConfig = { allowed: ["execute-shell", "my-tool"], blocked: ["delete-node-branch"] }
+  if (treeToolConfig) {
+    if (Array.isArray(treeToolConfig.allowed)) {
+      toolNames = [...new Set([...toolNames, ...treeToolConfig.allowed])];
+    }
+    if (Array.isArray(treeToolConfig.blocked)) {
+      toolNames = toolNames.filter(t => !treeToolConfig.blocked.includes(t));
+    }
   }
 
   return resolveTools(toolNames);

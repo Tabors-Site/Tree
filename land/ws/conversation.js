@@ -557,8 +557,16 @@ export async function processMessage(visitorId, message, ctx) {
 
   session.messages.push({ role: "user", content: message });
 
-  // Get tools for current mode
-  const tools = getToolsForMode(session.modeKey);
+  // Get tools for current mode (with per-tree tool config if in a tree)
+  let treeToolConfig = null;
+  if (session.rootId) {
+    try {
+      const rootNode = await Node.findById(session.rootId).select("metadata").lean();
+      const meta = rootNode?.metadata instanceof Map ? Object.fromEntries(rootNode.metadata) : (rootNode?.metadata || {});
+      if (meta.tools) treeToolConfig = meta.tools;
+    } catch {}
+  }
+  const tools = getToolsForMode(session.modeKey, treeToolConfig);
 
   // Tool calling loop
   let response;
