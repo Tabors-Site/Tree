@@ -36,6 +36,15 @@ const DEFAULT_MODEL = process.env.AI_MODEL || "qwen3.5:27b";
 const MAX_MESSAGES = 30;
 const MAX_TOOL_ITERATIONS = 15;
 
+// LLM call timeout (ms). Configurable via land config "llmTimeout".
+// Default 5 minutes. Extensions can override per-mode via registerModeTimeout().
+let LLM_TIMEOUT_MS = 5 * 60 * 1000;
+const MODE_TIMEOUTS = {}; // modeKey -> ms
+
+export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
+export function registerModeTimeout(modeKey, ms) { MODE_TIMEOUTS[modeKey] = ms; }
+function getTimeoutForMode(modeKey) { return MODE_TIMEOUTS[modeKey] || LLM_TIMEOUT_MS; }
+
 // ─────────────────────────────────────────────────────────────────────────
 // ENCRYPTION HELPERS (must match whatever you use when saving)
 // ─────────────────────────────────────────────────────────p────────────────
@@ -102,7 +111,7 @@ async function resolveConnection(connectionId, cacheKey) {
       baseURL: baseURL,
       apiKey: apiKey,
       maxRetries: 3,
-      timeout: 60_000,
+      timeout: LLM_TIMEOUT_MS,
       defaultHeaders: {
         "HTTP-Referer": getLandUrl(),
         "X-OpenRouter-Title": "TreeOS",

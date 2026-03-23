@@ -28,6 +28,17 @@ export function onListen() {
     await ensureLandRoot();
     await initLandConfig();
 
+    // Apply land config to kernel settings
+    try {
+      const { getLandConfigValue } = await import("./core/landConfig.js");
+      const llmTimeout = getLandConfigValue("llmTimeout");
+      if (llmTimeout) {
+        const { setLlmTimeout } = await import("./ws/conversation.js");
+        setLlmTimeout(Number(llmTimeout) * 1000); // config is in seconds
+      }
+    } catch {}
+
+
     // Ensure .extensions system node exists (for lands created before this feature)
     const Node = (await import("./db/models/node.js")).default;
     const extNode = await Node.findOne({ systemRole: "extensions" });
