@@ -88,11 +88,30 @@ const Guide = () => {
             an extension. The built-in tree-orchestrator handles it. Replace it with your own.
           </P>
           <P>
-            Each tree can customize what tools the AI has access to. Set
-            <code> metadata.tools.allowed</code> on the root node to add tools
-            (like shell access for a DevOps tree) or <code>metadata.tools.blocked</code> to
-            remove them (like blocking deletes on a reference tree). Three layers
-            merge: mode base tools, extension tools, tree config.
+            Each node can customize what the AI can do and how it thinks. This is the
+          per-node customization system. Three layers, from simple to advanced:
+          </P>
+          <P>
+            <strong>Per-node tools</strong> (what the AI CAN do): set
+            <code> metadata.tools.allowed</code> to add tools (like shell access on a DevOps branch)
+            or <code>metadata.tools.blocked</code> to remove them (like blocking deletes on a
+            reference branch). Tools inherit from parent to child. A block on the root applies to
+            the whole tree. A child can add tools its parent does not have. CLI:
+            <code> tools</code>, <code>tools-allow</code>, <code>tools-block</code>.
+          </P>
+          <P>
+            <strong>Per-node modes</strong> (how the AI THINKS): set
+            <code> metadata.modes.respond</code> to use a custom response mode at that node.
+            Each intent (navigate, structure, edit, notes, librarian, respond) can be overridden
+            independently. A "legal" branch can use a formal response mode. A "creative" branch
+            can use a freeform mode. The kernel resolves: node override, then default, then
+            fallback. CLI: <code>modes</code>, <code>mode-set</code>, <code>mode-clear</code>.
+          </P>
+          <P>
+            <strong>Custom orchestrators</strong> (the entire FLOW): an extension registers
+            a custom orchestrator that replaces how chat/place/query works. Build a completely
+            different intent classification, placement strategy, or multi-agent flow. The
+            built-in tree-orchestrator is itself an extension that can be swapped.
           </P>
         </Section>
 

@@ -166,18 +166,33 @@ Session identity: `land:{userId}`, `home:{userId}`, `tree:{rootId}:{userId}`. Sa
 
 `processMessage` returns `{ success, content, _internal }`. Internal fields never reach the client.
 
-## Tool Resolution (3 layers)
+## Per-Node Customization (3 layers)
 
+### Tools (what the AI CAN do)
 ```
 1. Mode base tools (what the mode defines)
 2. Extension tools (what extensions inject via loader)
-3. Tree config (metadata.tools.allowed[] / blocked[] on root node)
+3. Node config (metadata.tools.allowed[] / blocked[] on any node)
 ```
 
-Tree owners control what the AI can do per-tree:
-- `metadata.tools.allowed = ["execute-shell"]` adds shell to a DevOps tree
-- `metadata.tools.blocked = ["delete-node-branch"]` makes a tree read-heavy
-- Both can be combined
+Per-node, inherits parent to child:
+- `metadata.tools.allowed = ["execute-shell"]` adds shell to a DevOps branch
+- `metadata.tools.blocked = ["delete-node-branch"]` makes a branch read-heavy
+- CLI: `tools`, `tools-allow`, `tools-block`, `tools-clear`
+
+### Modes (how the AI THINKS)
+```
+Node metadata.modes.{intent} -> default tree:{intent} -> fallback
+```
+
+Per-node mode overrides via `metadata.modes`:
+- `metadata.modes.respond = "custom:formal"` uses formal response at that node
+- `metadata.modes.navigate = "custom:waypoint"` uses custom navigation
+- Kernel `resolveMode(intent, bigMode, nodeMetadata)` handles resolution
+- CLI: `modes`, `mode-set <intent> <modeKey>`, `mode-clear`
+
+### Orchestrators (the entire FLOW)
+Extensions register custom orchestrators via `core.orchestrators.register()`. Replaces the entire chat/place/query conversation flow. The built-in tree-orchestrator is itself an extension.
 
 ## LLM Resolution Chain
 

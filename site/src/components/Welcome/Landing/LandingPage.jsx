@@ -76,7 +76,8 @@ const LandingPage = () => {
                 Packaged units of LLM complexity. Two core functions handle all AI:
                 runChat for conversations, runPipeline for multi-step chains.
                 No MCP wiring, no session management, no boilerplate.
-                Build an understanding run, a custom orchestrator, a dream cycle.
+                Per-node tool and mode overrides let tree owners customize
+                what the AI can do and how it thinks at every branch.
                 One call. The kernel handles the rest.
               </p>
             </div>
@@ -264,10 +265,14 @@ const LandingPage = () => {
               { name: "html-rendering", desc: "Server-rendered pages" },
             ]} />
             <ExtGroup title="System" items={[
+              { name: "tree-orchestrator", desc: "Built-in chat/place/query AI" },
+              { name: "land-manager", desc: "AI land management" },
+              { name: "shell", desc: "Server shell from AI" },
+              { name: "gateway", desc: "External channels (Telegram, Discord)" },
               { name: "user-llm", desc: "Custom model connections" },
               { name: "user-queries", desc: "Notes, tags, chats" },
               { name: "deleted-revive", desc: "Soft delete and recovery" },
-              { name: "tree-orchestrator", desc: "Built-in chat/place/query AI" },
+              { name: "email", desc: "Email, password reset" },
             ]} />
           </div>
 
