@@ -235,32 +235,29 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
 // ── Mode → llmAssignments key mapping ────────────────────────────────────
 // Groups related modes under a single assignment key.
 // Resolution: mode-specific → placement fallback → user default
+// Extensions can register additional mappings via registerModeAssignment().
 const MODE_TO_ASSIGNMENT = {
-  // placement covers the core tree orchestration modes
+  // Core tree orchestration modes (kernel)
   "tree:librarian": "placement",
   "tree:navigate": "placement",
   "tree:structure": "placement",
   "tree:edit": "placement",
   "tree:be": "placement",
   "tree:getContext": "placement",
-  // respond gets its own key
   "tree:respond": "respond",
-  // notes gets its own key
   "tree:notes": "notes",
-  // understanding modes
-  "tree:understand": "understanding",
-  "tree:understand-summarize": "understanding",
-  // cleanup modes
-  "tree:cleanup-analyze": "cleanup",
-  "tree:cleanup-expand-scan": "cleanup",
-  // drain modes
-  "tree:drain-cluster": "drain",
-  "tree:drain-scout": "drain",
-  "tree:drain-plan": "drain",
-  // dream notification modes
-  "tree:dream-summary": "notification",
-  "tree:dream-thought": "notification",
+  // Extension modes are registered via registerModeAssignment() during init
 };
+
+/**
+ * Register a mode-to-LLM-slot mapping. Extensions call this during init
+ * to assign their custom modes to LLM slots.
+ * @param {string} modeKey - e.g. "custom:formal"
+ * @param {string} slotName - e.g. "respond" or a custom slot name
+ */
+export function registerModeAssignment(modeKey, slotName) {
+  MODE_TO_ASSIGNMENT[modeKey] = slotName;
+}
 
 /**
  * Resolve the LLM connectionId for a given mode on a tree.

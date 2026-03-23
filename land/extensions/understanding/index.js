@@ -10,9 +10,13 @@ export async function init(core) {
   const understanding = await import("./core.js");
   const orchestrator = await import("./pipeline.js");
 
-  // Register understanding modes
+  // Register understanding modes + LLM slot mappings
   core.modes.registerMode("tree:understand", understand, "understanding");
   core.modes.registerMode("tree:understand-summarize", understandSummarize, "understanding");
+  if (core.llm?.registerModeAssignment) {
+    core.llm.registerModeAssignment("tree:understand", "understanding");
+    core.llm.registerModeAssignment("tree:understand-summarize", "understanding");
+  }
 
   return {
     models: { UnderstandingRun, UnderstandingNode },
