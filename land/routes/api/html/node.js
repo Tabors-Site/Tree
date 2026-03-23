@@ -1833,7 +1833,6 @@ html, body {
       const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
       const prestige = meta.prestige || { current: 0, history: [] };
       const history = prestige.history || [];
-      if (history.length === 0 && prestige.current === 0) return "";
       return `<div class="versions-section">
         <h2>Versions</h2>
         <ul class="versions-list">
