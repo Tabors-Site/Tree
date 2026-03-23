@@ -92,6 +92,30 @@ export function getDefaultMode(bigMode) {
 }
 
 /**
+ * Resolve the mode key for an intent at a specific node.
+ * Checks node metadata.modes for per-node overrides, walks up to root,
+ * then falls back to the default mode for the bigMode.
+ *
+ * @param {string} intent - e.g. "navigate", "structure", "respond", "librarian"
+ * @param {string} bigMode - e.g. "tree", "home", "land"
+ * @param {object|null} nodeMetadata - current node's metadata (or null)
+ * @returns {string} resolved mode key (e.g. "tree:navigate" or "custom:smart-nav")
+ */
+export function resolveMode(intent, bigMode, nodeMetadata = null) {
+  // Layer 1: per-node override
+  const meta = nodeMetadata instanceof Map ? Object.fromEntries(nodeMetadata) : (nodeMetadata || {});
+  const nodeMode = meta.modes?.[intent];
+  if (nodeMode && ALL_MODES[nodeMode]) return nodeMode;
+
+  // Layer 2: default mapping (bigMode:intent)
+  const defaultKey = `${bigMode}:${intent}`;
+  if (ALL_MODES[defaultKey]) return defaultKey;
+
+  // Layer 3: bigMode default
+  return DEFAULT_MODES[bigMode] || defaultKey;
+}
+
+/**
  * Resolve the OpenAI-compatible tools array for a mode.
  * Merges three layers:
  *   1. Mode's base toolNames[]
