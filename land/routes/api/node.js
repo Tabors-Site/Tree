@@ -534,11 +534,53 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
 router.get("/node/:nodeId/tools", async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const node = await Node.findById(nodeId).select("metadata").lean();
-    if (!node) return res.status(404).json({ error: "Node not found" });
 
-    const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
-    res.json({ nodeId, tools: meta.tools || null });
+    // Walk from this node to root, collect tool config at each level
+    const chain = [];
+    const allAllowed = new Set();
+    const allBlocked = new Set();
+    let cursor = nodeId;
+    const visited = new Set();
+
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      const n = await Node.findById(cursor).select("name metadata parent isSystem").lean();
+      if (!n || n.isSystem) break;
+
+      const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
+      const nodeTools = meta.tools || null;
+
+      if (nodeTools) {
+        chain.push({
+          nodeId: n._id,
+          name: n.name,
+          allowed: nodeTools.allowed || [],
+          blocked: nodeTools.blocked || [],
+        });
+        if (nodeTools.allowed) for (const t of nodeTools.allowed) allAllowed.add(t);
+        if (nodeTools.blocked) for (const t of nodeTools.blocked) allBlocked.add(t);
+      }
+
+      cursor = n.parent;
+    }
+
+    // Get base mode tools (from default tree mode)
+    let baseTools = [];
+    try {
+      const { getToolsForMode } = await import("../../ws/modes/registry.js");
+      baseTools = getToolsForMode("tree:respond").map(t => t.function?.name || t.name).filter(Boolean);
+    } catch {}
+
+    // Merge: base + allowed - blocked
+    const effective = [...new Set([...baseTools, ...allAllowed])].filter(t => !allBlocked.has(t));
+
+    res.json({
+      nodeId,
+      effective,
+      added: [...allAllowed],
+      blocked: [...allBlocked],
+      chain: chain.reverse(), // root first
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
