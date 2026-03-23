@@ -1,4 +1,3 @@
-// core/energy/useEnergy.js
 import log from "../../core/log.js";
 import fs from "fs";
 import User from "../../db/models/user.js";
@@ -6,27 +5,17 @@ import { assignConnection } from "../../core/llms/customLLM.js";
 import Node from "../../db/models/node.js";
 import { getEnergy, setEnergy, getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
 
-/* ================================
- * CONSTANTS (HALF-COST VERSION)
- * ================================ */
-
-// text
 const TEXT_NOTE_CHARS_PER_ENERGY = 1000;
 const TEXT_NOTE_MIN = 1;
 const TEXT_NOTE_MAX = 5;
 
-// file energy
-const FILE_MIN_COST = 5; // ⬅ was 10
+const FILE_MIN_COST = 5;
+const FILE_BASE_RATE = 1.5;
+const FILE_MID_RATE = 3;
 
-// soft → hard scaling (halved)
-const FILE_BASE_RATE = 1.5; // was 3
-const FILE_MID_RATE = 3; // was 6
-
-// thresholds
 const SOFT_LIMIT_MB = 100;
 const HARD_LIMIT_MB = 1024;
 
-// daily limits (unchanged)
 export const DAILY_LIMITS = {
   basic: 350,
   standard: 1500,
@@ -34,9 +23,6 @@ export const DAILY_LIMITS = {
   god: 10_000_000_000,
 };
 
-/* ================================
- * FILE ENERGY (progressive)
- * ================================ */
 export function calculateFileEnergy(sizeMB) {
   if (sizeMB <= SOFT_LIMIT_MB) {
     return Math.max(FILE_MIN_COST, Math.ceil(sizeMB * FILE_BASE_RATE));
@@ -48,22 +34,16 @@ export function calculateFileEnergy(sizeMB) {
     return Math.ceil(base + extra);
   }
 
-  // 💀 over 1 GB → still brutal, but halved
   const base =
     SOFT_LIMIT_MB * FILE_BASE_RATE +
     (HARD_LIMIT_MB - SOFT_LIMIT_MB) * FILE_MID_RATE;
 
   const overGB = sizeMB - HARD_LIMIT_MB;
 
-  return Math.ceil(base + Math.pow(overGB / 50, 2) * 50); // was *100
+  return Math.ceil(base + Math.pow(overGB / 50, 2) * 50);
 }
 
-/* ================================
- * MAIN ENERGY COST DISPATCHER
- * ================================ */
-
 const BASE_ACTION_COSTS = {
-  // 1 energy — small edits (~1 KB contribution record each)
   editStatus: 1,
   editValue: 1,
   removeNote: 1,
@@ -77,32 +57,22 @@ const BASE_ACTION_COSTS = {
   invite: 1,
   delete: 1,
 
-  // 2 energy — heavier operations
   prestige: 2,
   executeScript: 2,
   transaction: 2,
 
-  // 2 energy — failed/missing LLM penalty
   chatError: 2,
   proxyLlm: 2,
 
-  // 3 energy — node creation (3-5 KB stored)
   create: 3,
 };
 
 const CONTENT_ACTIONS = new Set(["note", "rawIdea", "editScript"]);
 
-/* 🔥 NEW — actions that scale with payload count */
 const VARIABLE_ACTIONS = new Set(["understanding"]);
 
-/* Extension-registered custom actions: name -> costFn(payload) => number */
 const customActions = new Map();
 
-/**
- * Register a custom energy action (used by extensions).
- * @param {string}   action  - action name, e.g. "my-ext-action"
- * @param {function} costFn  - (payload) => number (energy cost)
- */
 export function registerAction(action, costFn) {
   if (typeof costFn !== "function") {
     throw new Error(`registerAction: costFn must be a function for "${action}"`);
@@ -111,7 +81,6 @@ export function registerAction(action, costFn) {
 }
 
 export function calculateEnergyCost(action, payload) {
-  /* ---------- FILES ---------- */
   if (payload?.type === "file") {
     const sizeMB = payload.sizeMB;
 
@@ -122,8 +91,6 @@ export function calculateEnergyCost(action, payload) {
     return calculateFileEnergy(sizeMB);
   }
 
-  /* ---------- TEXT ---------- */
-  /* ---------- TEXT (notes, rawIdea, editScript) ---------- */
   if (CONTENT_ACTIONS.has(action)) {
     let length = 0;
 
@@ -146,18 +113,15 @@ export function calculateEnergyCost(action, payload) {
     );
   }
 
-  /* ---------- VARIABLE COUNT (understanding: 2 per node) ---------- */
   if (VARIABLE_ACTIONS.has(action)) {
     const amount = typeof payload === "number" ? payload : 1;
     return Math.max(2, amount * 2);
   }
 
-  /* ---------- EXTENSION-REGISTERED ---------- */
   if (customActions.has(action)) {
     return customActions.get(action)(payload);
   }
 
-  /* ---------- FIXED ---------- */
   const cost = BASE_ACTION_COSTS[action];
   if (!cost) {
     throw new Error(`Unknown energy action: ${action}`);
@@ -166,9 +130,6 @@ export function calculateEnergyCost(action, payload) {
   return cost;
 }
 
-/* ================================
- * DAILY RESET
- * ================================ */
 export function maybeResetEnergy(user) {
   const energy = getEnergy(user);
   if (!energy.available) return false;
@@ -191,7 +152,6 @@ export function maybeResetEnergy(user) {
     energy.available.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
     energy.available.lastResetAt = new Date();
     setEnergy(user, energy);
-    // Clear all LLM assignments on downgrade (user slots + root nodes)
     assignConnection(user._id, "main", null);
     assignConnection(user._id, "rawIdea", null);
     Node.updateMany(
@@ -224,7 +184,6 @@ export function maybeResetEnergy(user) {
   return true;
 }
 
-// core/errors/EnergyError.js
 export class EnergyError extends Error {
   constructor(message, meta = {}) {
     super(message);

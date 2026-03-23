@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import User from "../../db/models/user.js";
 import { validatePurchase } from "./core/validatePurchase.js";
 import { getLandUrl } from "../../canopy/identity.js";
+import { getUserMeta } from "../../core/tree/userMetadata.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
@@ -11,10 +12,6 @@ export async function createPurchaseSession(req, res) {
   try {
     const { userId, plan, energyAmount } = req.body;
 
-    /* ===============================
-       LOAD USER
-    =============================== */
-
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
@@ -22,19 +19,11 @@ export async function createPurchaseSession(req, res) {
 
     const token = getUserMeta(user, "html")?.shareToken || "";
 
-    /* ===============================
-       PRE-VALIDATE BEFORE STRIPE
-    =============================== */
-
     try {
       validatePurchase(user, { plan, energyAmount });
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
-
-    /* ===============================
-       PRICE CALCULATION (UNCHANGED)
-    =============================== */
 
     let totalCents = 0;
 

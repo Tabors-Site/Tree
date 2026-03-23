@@ -22,20 +22,12 @@ import treeLibrarian from "./tree/librarian.js";
 // ─────────────────────────────────────────────────────────────────────────
 // BIG MODES
 // ─────────────────────────────────────────────────────────────────────────
-// Core bigModes (always available)
+// Three zones. That's it. Sub-modes live within these.
 export const BIG_MODES = {
   LAND: "land",
   HOME: "home",
   TREE: "tree",
 };
-
-/**
- * Register a custom bigMode from an extension.
- * e.g. raw-ideas extension registers RAW_IDEA.
- */
-export function registerBigMode(key, value) {
-  BIG_MODES[key] = value;
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODE DEFINITIONS

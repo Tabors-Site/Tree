@@ -3,8 +3,7 @@ import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import { findNodeById } from "../../db/utils.js";
 import authenticate from "../../middleware/authenticate.js";
-import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat } from "./core.js";
-import { getNodeValues, getNodeGoals } from "./core.js";
+import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, getNodeGoals } from "./core.js";
 
 let renderValues;
 try {
@@ -13,7 +12,6 @@ try {
 
 const router = express.Router();
 
-// SET VALUE (versionless, protocol-compliant)
 router.post("/node/:nodeId/value", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -30,7 +28,6 @@ router.post("/node/:nodeId/value", authenticate, async (req, res) => {
   }
 });
 
-// SET GOAL (versionless, protocol-compliant)
 router.post("/node/:nodeId/goal", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -47,7 +44,6 @@ router.post("/node/:nodeId/goal", authenticate, async (req, res) => {
   }
 });
 
-// GET VALUES (versionless, protocol-compliant)
 router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
@@ -88,7 +84,6 @@ router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
   }
 });
 
-// GLOBAL VALUES TREE
 router.get("/root/:rootId/values", urlAuth, async (req, res) => {
   try {
     const result = await getGlobalValuesTreeAndFlat(req.params.rootId);

@@ -1,7 +1,6 @@
 import { findNodeById, logContribution } from "../../db/utils.js";
 import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
 
-// Energy: dynamic import, no-op if extension not installed
 let useEnergy = async () => ({ energyUsed: 0 });
 try { ({ useEnergy } = await import("../energy/core.js")); } catch {}
 
@@ -25,7 +24,6 @@ function assertUserWritableKey(rawKey) {
 function findExistingKey(obj, incomingKey) {
   if (!obj) return null;
   const lower = incomingKey.toLowerCase();
-  // Support both Map and plain object
   const keys = obj instanceof Map ? obj.keys() : Object.keys(obj);
   for (const existingKey of keys) {
     if (existingKey.toLowerCase() === lower) return existingKey;
@@ -35,7 +33,6 @@ function findExistingKey(obj, incomingKey) {
 
 const truncate6 = (n) => Math.trunc(n * 1e6) / 1e6;
 
-// Read values/goals from metadata
 function getNodeValues(node) {
   return { ...getExtMeta(node, "values") };
 }

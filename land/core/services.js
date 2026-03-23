@@ -4,7 +4,7 @@
 // have a safe interface to call.
 
 import { hooks as hooksModule } from "./hooks.js";
-import { registerMode, registerBigMode } from "../ws/modes/registry.js";
+import { registerMode } from "../ws/modes/registry.js";
 import { registerOrchestrator, getOrchestrator } from "./orchestratorRegistry.js";
 import User from "../db/models/user.js";
 import Node from "../db/models/node.js";
@@ -146,7 +146,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     // --- Hook system ---
     hooks: hooksModule,
-    modes: { registerMode, registerBigMode },
+    modes: { registerMode },
     orchestrators: { register: registerOrchestrator, get: getOrchestrator },
   };
 

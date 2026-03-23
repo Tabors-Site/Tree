@@ -48,7 +48,6 @@ async function addPrestigeToNode(node) {
   const prestigeData = meta.prestige || { current: 0, history: [] };
   const currentLevel = prestigeData.current || 0;
 
-  // Snapshot current state into history
   const snapshot = {
     version: currentLevel,
     status: node.status,
@@ -62,30 +61,23 @@ async function addPrestigeToNode(node) {
   if (!prestigeData.history) prestigeData.history = [];
   prestigeData.history.push(snapshot);
 
-  // Mark current as completed
   node.status = "completed";
 
-  // Reset values to 0, keep goals
   const values = meta.values || {};
   const newValues = {};
   for (const key of Object.keys(values)) {
     newValues[key] = 0;
   }
 
-  // Increment prestige level
   prestigeData.current = currentLevel + 1;
 
-  // Handle schedule carry-forward
   const scheduleData = meta.schedule ? { schedule: new Date(meta.schedule), reeffectTime: meta.reeffectTime || 0 } : null;
   const newSchedule = scheduleData ? await handleSchedule(scheduleData) : null;
 
-  // Write all metadata updates
   setExtMeta(node, "prestige", prestigeData);
   setExtMeta(node, "values", newValues);
-  // goals carry forward as-is
   if (newSchedule) setExtMeta(node, "schedule", newSchedule);
 
-  // Set status to active for new version
   node.status = "active";
 
   await node.save();

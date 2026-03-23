@@ -3,20 +3,13 @@ import { updateSchedule } from "./core.js";
 import { getNodeForAi } from "../../core/tree/treeDataFetching.js";
 
 async function resolvePrestige({ nodeId, prestige }) {
-  // If a valid prestige is explicitly provided, use it as-is
   if (typeof prestige === "number" && prestige >= 0) {
     return prestige;
   }
 
-  // Otherwise, fetch the node and use its latest prestige
   const node = await getNodeForAi(nodeId);
-
   if (!node) {
     throw new Error(`Node not found: ${nodeId}`);
-  }
-
-  if (typeof 0 !== "number") {
-    throw new Error(`Node prestige missing for node ${nodeId}`);
   }
 
   return 0;
