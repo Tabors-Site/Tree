@@ -609,15 +609,90 @@ Convention: namespace key matches your manifest name. Same rules as node metadat
 
 ## Inter-Extension Communication
 
-Use `getExtension(name)` from the loader:
+Extensions never import each other's files directly. They communicate through declared exports and the `getExtension()` API. This keeps extensions fully decoupled. If the other extension isn't installed, the call safely returns null.
+
+### Exposing functions
+
+Return an `exports` object from `init()`:
+
+```js
+export async function init(core) {
+  return {
+    router,
+    exports: {
+      myFunction,
+      myOtherFunction,
+    },
+  };
+}
+```
+
+### Consuming another extension
 
 ```js
 import { getExtension } from "../loader.js";
 
-const understanding = getExtension("understanding");
-if (understanding) {
-  await understanding.someExportedFunction();
+// Get another extension's exports (null if not installed)
+const gateway = getExtension("gateway");
+if (gateway?.exports?.dispatchNotifications) {
+  await gateway.exports.dispatchNotifications(rootId, notifications);
 }
+```
+
+### Using the orchestrator registry
+
+For the tree orchestrator (or any custom orchestrator), use the core registry:
+
+```js
+import { getOrchestrator } from "../../core/orchestratorRegistry.js";
+
+const treeOrch = getOrchestrator("tree");
+if (treeOrch) {
+  const result = await treeOrch.handle({ visitorId, message, socket, ... });
+}
+```
+
+### Wiring optional services
+
+For services like energy that may or may not be installed, use a setter pattern:
+
+```js
+// core.js
+let useEnergy = async () => ({ energyUsed: 0 });
+export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
+
+// index.js
+import { setEnergyService } from "./core.js";
+export async function init(core) {
+  if (core.energy) setEnergyService(core.energy);
+  // ...
+}
+```
+
+### HTML page registration
+
+If html-rendering is installed, extensions can register their own server-rendered pages:
+
+```js
+const htmlExt = getExtension("html-rendering");
+if (htmlExt?.exports?.registerPage) {
+  htmlExt.exports.registerPage("get", "/my-dashboard", authenticate, (req, res) => {
+    res.send("<h1>Dashboard</h1>");
+  });
+}
+```
+
+### Manifest declarations
+
+Declare your dependencies so the registry and loader know about them:
+
+```js
+needs: {
+  extensions: ["values@^1.0.0"],     // required, with semver constraint
+},
+optional: {
+  extensions: ["html-rendering"],     // used if available, skipped if not
+},
 ```
 
 ## Security Model

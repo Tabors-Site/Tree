@@ -6,7 +6,6 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import registerRoutes from "./routes/app/routesHandler.js";
 import registerURLRoutes from "./routes/routeHandler.js";
 import { initWebSocketServer } from "./ws/websocket.js";
 import { notFoundPage } from "./middleware/notFoundPage.js";
@@ -43,7 +42,6 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(securityHeaders);
 
-await registerRoutes(app);
 await registerURLRoutes(app);
 app.use((req, res) => notFoundPage(req, res));
 

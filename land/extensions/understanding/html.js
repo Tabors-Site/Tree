@@ -2,8 +2,8 @@
 /* HTML renderers for understanding pages           */
 /* ─────────────────────────────────────────────── */
 
-import { baseStyles } from "./baseStyles.js";
-import { esc, rainbow } from "./utils.js";
+import { baseStyles } from "../html-rendering/html/baseStyles.js";
+import { esc, rainbow } from "../html-rendering/html/utils.js";
 
 /* =========================================================
    1. renderUnderstandingRun

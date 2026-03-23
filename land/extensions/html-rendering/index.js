@@ -1,8 +1,16 @@
 import crypto from "crypto";
 import router, { pageRouter } from "./routes.js";
+import appRouter from "./app/app.js";
+import chatRouter from "./app/chat.js";
+import setupRouter from "./app/setup.js";
 import { renderLoginPage, renderRegisterPage, renderForgotPasswordPage } from "./pages.js";
 import * as renderers from "./renderers.js";
 import { resolveHtmlShareAccess } from "./shareAuth.js";
+
+// Mount app page routers onto the pageRouter so the loader wires them at /
+pageRouter.use("/", appRouter);
+pageRouter.use("/", chatRouter);
+pageRouter.use("/", setupRouter);
 
 function generateShareToken() {
   return crypto.randomBytes(16).toString("base64url");

@@ -26,7 +26,6 @@ async function editStatus({
   if (status === "completed") {
     isInherited = true;
   }
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
   const beforeData = { node, status, userId };
   const hookResult = await hooks.run("beforeStatusChange", beforeData);
@@ -47,7 +46,6 @@ async function editStatus({
     action: "editStatus",
     statusEdited: status,
     nodeVersion: "0",
-    energyUsed,
   });
 
   if (isInherited) {

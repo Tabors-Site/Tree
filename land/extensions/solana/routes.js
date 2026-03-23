@@ -10,8 +10,7 @@ import {
   sendSOLFromVersion,
   swapFromVersion,
 } from "./core.js";
-import { getExtension } from "../loader.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
+import { renderSolanaNoWallet, renderSolanaWallet } from "./html.js";
 
 const router = express.Router();
 
@@ -67,12 +66,12 @@ router.get(
 
       if (!walletInfo.exists) {
         return res.send(
-          html().renderSolanaNoWallet({ nodeId, parsedVersion, queryString, token }),
+          renderSolanaNoWallet({ nodeId, parsedVersion, queryString, token }),
         );
       }
 
       return res.send(
-        html().renderSolanaWallet({
+        renderSolanaWallet({
           nodeId,
           parsedVersion,
           queryString,

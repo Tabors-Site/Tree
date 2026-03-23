@@ -1,12 +1,17 @@
 import {
   logContribution,
   findNodeById,
-  handleSchedule,
 } from "../../db/utils.js";
 import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
 
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
+
+function calculateNextSchedule(scheduleData) {
+  if (scheduleData.schedule === null) return null;
+  const current = new Date(scheduleData.schedule);
+  return new Date(current.getTime() + scheduleData.reeffectTime * 60 * 60 * 1000).toISOString();
+}
 
 async function addPrestige({
   nodeId,
@@ -72,7 +77,7 @@ async function addPrestigeToNode(node) {
   prestigeData.current = currentLevel + 1;
 
   const scheduleData = meta.schedule ? { schedule: new Date(meta.schedule), reeffectTime: meta.reeffectTime || 0 } : null;
-  const newSchedule = scheduleData ? await handleSchedule(scheduleData) : null;
+  const newSchedule = scheduleData ? calculateNextSchedule(scheduleData) : null;
 
   setExtMeta(node, "prestige", prestigeData);
   setExtMeta(node, "values", newValues);

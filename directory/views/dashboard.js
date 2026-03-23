@@ -85,7 +85,8 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
             <div class="ext-meta">
               <span class="ext-author">${escapeHtml(ext.authorName || ext.authorDomain || "unknown")}</span>
               <span class="separator"></span>
-              <span class="ext-downloads">${ext.downloads || 0} downloads</span>
+              <span class="ext-downloads">${ext.downloads || 0} dl</span>
+              ${ext.totalLines ? `<span class="separator"></span><span class="ext-downloads">${ext.totalLines.toLocaleString()} lines</span>` : ""}
             </div>
             ${tagHtml ? `<div class="ext-tags">${tagHtml}</div>` : ""}
           </a>

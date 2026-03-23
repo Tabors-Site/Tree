@@ -257,6 +257,9 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
       existing.manifest = manifest;
       existing.files = files;
       existing.checksum = computeChecksum(files);
+      existing.fileCount = files.length;
+      existing.totalBytes = files.reduce((sum, f) => sum + (f.content?.length || 0), 0);
+      existing.totalLines = files.reduce((sum, f) => sum + (f.content?.split("\n").length || 0), 0);
       existing.description = manifest.description || existing.description;
       existing.readme = readme || existing.readme;
       existing.tags = tags || existing.tags;
@@ -280,6 +283,9 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
       manifest,
       files,
       checksum,
+      fileCount: files.length,
+      totalBytes: files.reduce((sum, f) => sum + (f.content?.length || 0), 0),
+      totalLines: files.reduce((sum, f) => sum + (f.content?.split("\n").length || 0), 0),
       readme: readme || "",
       tags: tags || [],
       repoUrl: repoUrl || null,

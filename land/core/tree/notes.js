@@ -123,7 +123,6 @@ async function createNote({
     payload = (content || "").length;
   }
 
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
 
   // ── TAG EXTRACTION ──────────────────────────────
@@ -183,10 +182,9 @@ async function createNote({
       noteId: newNote._id.toString(),
       content: contentType === "text" ? finalContent || "" : null,
     },
-    energyUsed,
   });
 
-  return { message: "Note created successfully", Note: newNote, energyUsed };
+  return { message: "Note created successfully", Note: newNote };
 }
 
 // services/editNote.js
@@ -259,21 +257,8 @@ async function editNote({
   await assertNoteTextWithinLimit(newContent, userId);
 
   if (oldContent === newContent) {
-    return {
-      message: "No changes",
-      Note: note,
-      energyUsed: 0,
-    };
+    return { message: "No changes", Note: note };
   }
-
-  // ── ENERGY — charge on net growth using same formula as create ──
-  const oldChars = oldContent.length;
-  const newChars = newContent.length;
-  const deltaChars = Math.max(0, newChars - oldChars);
-
-  let energyUsed = 0;
-
-  // Energy metering handled by energy extension hooks if installed
 
   // ── TAG EXTRACTION ──────────────────────────────
   let finalContent = newContent;
@@ -323,10 +308,9 @@ async function editNote({
       noteId: note._id.toString(),
       content: finalContent || "",
     },
-    energyUsed,
   });
 
-  return { message: "Note updated successfully", Note: note, energyUsed };
+  return { message: "Note updated successfully", Note: note };
 }
 
 async function getNotes({ nodeId, version, limit, startDate, endDate }) {
@@ -485,9 +469,6 @@ async function deleteNoteAndFile({
       "Only the note author or the tree owner can delete this note",
     );
   }
-  let energyUsed = null;
-
-  // Energy metering handled by energy extension hooks if installed
   const fileOwnerId = note.userId?.toString();
 
   const { nodeId, version } = note; // original nodeId for logging
@@ -549,7 +530,6 @@ async function deleteNoteAndFile({
       noteId: noteId.toString(),
       fileDeleted: fileDeleted || undefined,
     },
-    energyUsed,
   });
 
   return {

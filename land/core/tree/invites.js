@@ -69,7 +69,6 @@ export async function createInvite({
 
   // EXACT OLD OWNER CHECK (no optional chaining)
   const isOwner = node.rootOwner._id.toString() === userInvitingId;
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
   const invite = new Invite({
     userInviting: userInvitingId,
@@ -111,7 +110,6 @@ export async function createInvite({
       action: "invite",
       inviteAction,
       nodeVersion: "0",
-      energyUsed,
     });
 
     await invite.save();
@@ -151,7 +149,6 @@ export async function createInvite({
       action: "invite",
       inviteAction,
       nodeVersion: "0",
-      energyUsed,
     });
 
     return { message: "Ownership transferred and invite logged" };
@@ -191,7 +188,6 @@ export async function createInvite({
         action: "invite",
         inviteAction,
         nodeVersion: "0",
-        energyUsed,
       });
 
       return { message: "Contributor removed by owner and invite logged" };
@@ -218,7 +214,6 @@ export async function createInvite({
         action: "invite",
         inviteAction,
         nodeVersion: "0",
-        energyUsed,
       });
       await logContribution({
         userId: userInvitingId,
@@ -267,7 +262,6 @@ export async function createInvite({
         action: "invite",
         inviteAction,
         nodeVersion: "0",
-        energyUsed,
       });
 
       return { message: "Contributor removed themselves and invite logged" };
@@ -336,7 +330,6 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
 
   const node = await Node.findById(invite.rootId);
   if (!node) throw new Error("Node not found");
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
   const inviteAction = { receivingId: userId };
 
@@ -361,7 +354,6 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
     action: "invite",
     inviteAction,
     nodeVersion: "0",
-    energyUsed,
   });
 
   return {

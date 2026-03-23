@@ -59,7 +59,6 @@ export async function createNewNode(
   }
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
 
   values = values && typeof values === "object" ? values : {};
@@ -127,7 +126,6 @@ export async function createNewNode(
     sessionId,
     action: "create",
     nodeVersion: "0",
-    energyUsed,
   });
 
   if (note?.trim()) {
@@ -245,7 +243,6 @@ export async function deleteNodeBranch(
   // beforeNodeDelete hook
   await hooks.run("beforeNodeDelete", { node: nodeToDelete, userId });
 
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
   nodeToDelete.rootOwner = userId;
   const oldParent = nodeToDelete.parent;
@@ -289,7 +286,6 @@ export async function deleteNodeBranch(
       action: "retired",
       fromParentId: oldParent?.toString() ?? null,
     },
-    energyUsed,
   });
   return nodeToDelete;
 }
@@ -338,7 +334,6 @@ export async function updateParentRelationship(
       );
     }
   }
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
 
   // Remove from old parent
@@ -380,7 +375,6 @@ export async function updateParentRelationship(
       oldParentId: oldParentId ? oldParentId.toString() : null,
       newParentId: nodeNewParentId.toString(),
     },
-    energyUsed,
   });
 
   // Add to new parent
@@ -435,7 +429,6 @@ export async function editNodeName({
     throw new Error("Node not found");
   }
   if (node.systemRole) throw new Error("Cannot modify system nodes");
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
 
   const oldName = node.name;
@@ -454,7 +447,6 @@ export async function editNodeName({
       oldName,
       newName,
     },
-    energyUsed,
   });
 
   return { node, oldName, newName };
@@ -494,7 +486,6 @@ export async function reviveNodeBranch({
   if (await isDescendant(deletedNodeId, targetParentId)) {
     throw new Error("Cannot revive a node into its own descendant");
   }
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
 
   deletedNode.parent = targetParentId;
@@ -528,7 +519,6 @@ export async function reviveNodeBranch({
 
       toParentId: targetParentId.toString(),
     },
-    energyUsed,
   });
 
   return {
@@ -556,7 +546,6 @@ export async function reviveNodeBranchAsRoot({
   if (!deletedNode.rootOwner) {
     throw new Error("Deleted node has no root owner and cannot be revived");
   }
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
 
   deletedNode.parent = getLandRootId();
@@ -584,7 +573,6 @@ export async function reviveNodeBranchAsRoot({
     branchLifecycle: {
       action: "revivedAsRoot",
     },
-    energyUsed,
   });
 
   return {

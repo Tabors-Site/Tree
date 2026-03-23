@@ -405,6 +405,9 @@ export function renderExtensionPage({ ext, versions }) {
         <span>v<strong>${escapeHtml(ext.version)}</strong></span>
         <span>by <strong>${escapeHtml(ext.authorName || ext.authorDomain || "unknown")}</strong></span>
         <span><strong>${ext.downloads || 0}</strong> downloads</span>
+        ${ext.fileCount ? `<span><strong>${ext.fileCount}</strong> files</span>` : ""}
+        ${ext.totalLines ? `<span><strong>${ext.totalLines.toLocaleString()}</strong> lines</span>` : ""}
+        ${ext.totalBytes ? `<span><strong>${(ext.totalBytes / 1024).toFixed(1)}</strong> KB</span>` : ""}
         <span>published ${timeAgo(ext.publishedAt)}</span>
         ${ext.repoUrl ? `<span><a href="${escapeHtml(ext.repoUrl)}" target="_blank" rel="noopener" style="color: var(--accent);">repo</a></span>` : ""}
       </div>

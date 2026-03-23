@@ -59,7 +59,6 @@ export async function editNodeType({
   }
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 
-  const energyUsed = 0; // Energy metered by extension hooks if installed
 
 
   const oldType = node.type;
@@ -78,7 +77,6 @@ export async function editNodeType({
       oldType,
       newType,
     },
-    energyUsed,
   });
 
   return { node, oldType, newType };

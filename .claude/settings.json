@@ -141,7 +141,14 @@
       "Bash(sed -i 's/isSystem systemRole/systemRole/g' land/core/tree/treeDataFetching.js)",
       "Bash(sed -i 's/node\\\\.isSystem/node.systemRole/g' land/extensions/scripts/core.js)",
       "Bash(sed -i 's/{ isSystem: true }/{ systemRole: { $ne: null } }/g' land/extensions/land-manager/tools.js)",
-      "Bash(sed -i 's/this\\\\.isSystem/this.systemRole/g' land/db/models/node.js)"
+      "Bash(sed -i 's/this\\\\.isSystem/this.systemRole/g' land/db/models/node.js)",
+      "Bash(grep -rn \"pageRouter\\\\|app.use.*pageRouter\" /home/tabor/github/Tree/land --include=*.js)",
+      "Bash(grep -rn \"function html\\\\|getExtension.*html-rendering\" /home/tabor/github/Tree/land/extensions --include=*.js)",
+      "Bash(sed -i '/const energyUsed = 0;.*Energy metered/d' \"$f\")",
+      "Bash(sed -i '/^[[:space:]]*energyUsed,$/d' \"$f\")",
+      "Bash(sed -i '/^[[:space:]]*energyUsed$/d' \"$f\")",
+      "Bash(grep -r from.*extensions /home/tabor/github/Tree/land/core --include=*.js)",
+      "Bash(grep -r \"energyUsed.*null\\\\|energyUsed.*0\" /home/tabor/github/Tree/land --include=*.js --exclude-dir=node_modules)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

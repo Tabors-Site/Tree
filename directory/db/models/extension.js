@@ -30,6 +30,11 @@ const ExtensionSchema = new mongoose.Schema({
   // Integrity
   checksum: { type: String, default: null },
 
+  // Size stats (computed on publish)
+  totalLines: { type: Number, default: 0 },
+  totalBytes: { type: Number, default: 0 },
+  fileCount: { type: Number, default: 0 },
+
   // Metadata
   publishedAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },

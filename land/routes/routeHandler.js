@@ -2,7 +2,7 @@ import me from "./api/me.js";
 import note from "./api/notes.js";
 import node from "./api/node.js";
 import root from "./api/root.js";
-import { authApiRouter } from "./auth.js";
+import { authApiRouter, authPageRouter } from "./auth.js";
 import user from "./api/user.js";
 
 import contributions from "./api/contributions.js";
@@ -54,6 +54,9 @@ export default async function registerURLRoutes(app) {
   });
 
   app.use(apiLimiter);
+
+  // Auth page routes (login, register, etc.)
+  app.use("/", authPageRouter);
 
   // Load extensions (manifests discovered, deps validated, routes wired)
   await loadExtensions(app, mcpServerInstance, { getConfigValue: getLandConfigValue });

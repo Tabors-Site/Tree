@@ -16,8 +16,7 @@ import Node from "../../db/models/node.js";
 import { userHasLlm } from "../../ws/conversation.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
 import { getSessionsForUser, endSession, SESSION_TYPES } from "../../ws/sessionRegistry.js";
-import { getExtension } from "../loader.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
+import { renderUnderstandingRun, renderUnderstandingNode, renderUnderstandingsList, renderRunNodeView, buildRunCards, buildRunNodeInputsHtml } from "./html.js";
 
 function buildQueryString(req) {
   const allowedParams = ["token", "html"];
@@ -245,7 +244,7 @@ router.get(
       const createdDate = new Date(run.createdAt).toLocaleString();
 
       return res.send(
-        html().renderUnderstandingRun({
+        renderUnderstandingRun({
           run,
           qs,
           nodes,
@@ -366,7 +365,7 @@ router.get(
       const realNodeUrl = `/api/v1/node/${data.realNode.id}${qs}`;
 
       return res.send(
-        html().renderUnderstandingNode({
+        renderUnderstandingNode({
           data,
           nodeId,
           qs,
@@ -413,14 +412,14 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
       return res.json(data);
     }
 
-    const runCards = html().buildRunCards({
+    const runCards = buildRunCards({
       understandings: data.understandings,
       nodeId,
       queryString,
     });
 
     return res.send(
-      html().renderUnderstandingsList({
+      renderUnderstandingsList({
         data,
         nodeId,
         queryString,
@@ -566,7 +565,7 @@ router.get(
       const backTreeUrl = `/api/v1/root/${nodeId}${qs}`;
       const backRunUrl = `/api/v1/root/${nodeId}/understandings/run/${runId}${qs}`;
 
-      const { inputsHtml, inputsSectionTitle } = html().buildRunNodeInputsHtml({
+      const { inputsHtml, inputsSectionTitle } = buildRunNodeInputsHtml({
         isLeaf,
         isCompleted,
         chats,
@@ -577,7 +576,7 @@ router.get(
       });
 
       return res.send(
-        html().renderRunNodeView({
+        renderRunNodeView({
           data,
           nodeId,
           runId,

@@ -19,6 +19,7 @@ export async function init(core) {
     try { await useEnergy({ userId: data.userId, action: "branchLifecycle" }); } catch {}
   }, "energy");
 
+
   // Replace the no-op energy service with the real one
   core.energy = { useEnergy, maybeResetEnergy, DAILY_LIMITS };
 

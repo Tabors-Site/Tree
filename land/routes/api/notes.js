@@ -296,7 +296,6 @@ router.put(
       return res.json({
         _id: result.Note._id,
         message: result.message,
-        energyUsed: result.energyUsed,
       });
     } catch (err) {
       const status =
