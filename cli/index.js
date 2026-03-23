@@ -307,12 +307,10 @@ const startShell = module.exports.startShell = async () => {
       process.exit(0);
     });
 
-    // Global flag: when true, a command is handling SIGINT (e.g. AI chat abort)
-    global._treeosHandlingSigint = false;
-
     rl.on("SIGINT", () => {
-      if (global._treeosHandlingSigint) {
-        // A command is handling Ctrl+C (e.g. aborting an AI chat)
+      // If an AI request is in-flight, abort it instead of exiting
+      if (global._treeosInFlight) {
+        global._treeosInFlight.abort();
         return;
       }
       if (rl.line.length > 0) {

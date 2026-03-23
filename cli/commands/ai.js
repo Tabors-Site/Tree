@@ -40,32 +40,26 @@ module.exports = (program) => {
       const cfg = requireAuth();
       const api = getApi(cfg);
 
-      // Ctrl+C aborts the request but stays in the shell
-      const abort = new AbortController();
-      global._treeosHandlingSigint = true;
-      const onSigint = () => {
-        abort.abort();
-        console.log(chalk.dim("\nCancelled."));
-      };
-      process.on("SIGINT", onSigint);
-
       try {
+        global._treeosInFlight = new AbortController();
         if (!cfg.activeRootId || cfg.isSystemRoot) {
           console.log(chalk.dim("Land Manager…"));
-          const data = await api.post("/land/chat", { message }, { signal: abort.signal });
+          const data = await api.post("/land/chat", { message }, { signal: global._treeosInFlight.signal });
           console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
         } else {
           console.log(chalk.dim("Thinking…"));
           const nodeId = currentNodeId(cfg);
-          const data = await api.chat(nodeId, message, { signal: abort.signal });
+          const data = await api.chat(nodeId, message, { signal: global._treeosInFlight.signal });
           console.log(chalk.bold("\nTree:") + " " + (data.answer || "No response."));
         }
       } catch (e) {
-        if (e.name === "AbortError") return;
+        if (e.name === "AbortError") {
+          console.log(chalk.dim("Cancelled."));
+          return;
+        }
         console.error(chalk.red(e.message));
       } finally {
-        process.removeListener("SIGINT", onSigint);
-        global._treeosHandlingSigint = false;
+        global._treeosInFlight = null;
       }
     });
 
