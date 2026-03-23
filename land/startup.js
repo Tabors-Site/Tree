@@ -84,11 +84,19 @@ let siteProcess = null;
 function printReady() {
   const apiUrl = getLandUrl();
 
+  // Check loaded extensions for feature-specific messages
+  let hasHtml = false;
+  try {
+    const { getLoadedExtensionNames } = await import("./extensions/loader.js");
+    const loaded = getLoadedExtensionNames();
+    hasHtml = loaded.includes("html-rendering");
+  } catch {}
+
   console.log("");
   log.info("Land", "Land node online.");
   log.info("Land", `API:  ${apiUrl}`);
 
-  if (process.env.ENABLE_FRONTEND_HTML === "true") {
+  if (hasHtml) {
     log.info("Land", `HTML: ${apiUrl}/login`);
   }
 
@@ -101,6 +109,7 @@ function printReady() {
 
   console.log("");
   log.info("Land", "Quick start:");
+  console.log("  npm install -g treeos");
   console.log(`  treeos connect ${apiUrl}`);
   console.log("  treeos register");
   console.log("  treeos start");
