@@ -232,9 +232,10 @@ async function runTreeOrchestration(opts, res) {
             : { success: false, error: msg, answer: msg };
           return res.status(403).json(body);
         }
+        const msg = err.message || "Something went wrong.";
         const body = mode === "place"
-          ? { success: false, error: "Something went wrong." }
-          : { success: false, answer: "Something went wrong." };
+          ? { success: false, error: msg }
+          : { success: false, answer: msg };
         return res.status(500).json(body);
       }
     } finally {

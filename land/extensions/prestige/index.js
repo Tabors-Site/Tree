@@ -2,7 +2,7 @@ import router from "./routes.js";
 import tools from "./tools.js";
 import { getExtMeta } from "../../core/tree/extensionMetadata.js";
 import Node from "../../db/models/node.js";
-import { setEnergyService } from "./core.js";
+import { setEnergyService, addPrestige } from "./core.js";
 
 export async function init(core) {
   setEnergyService(core.energy);
@@ -32,5 +32,9 @@ export async function init(core) {
     }
   }, "prestige");
 
-  return { router, tools };
+  return {
+    router,
+    tools,
+    exports: { addPrestige },
+  };
 }

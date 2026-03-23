@@ -1,6 +1,6 @@
 import router from "./routes.js";
 import getTools from "./tools.js";
-import { setEnergyService } from "./core.js";
+import { setEnergyService, setValueForNode, setGoalForNode } from "./core.js";
 
 export async function init(core) {
   setEnergyService(core.energy);
@@ -11,5 +11,9 @@ export async function init(core) {
     if (Object.keys(goals).length > 0) context.goals = goals;
   }, "values");
 
-  return { router, tools: getTools() };
+  return {
+    router,
+    tools: getTools(),
+    exports: { setValueForNode, setGoalForNode },
+  };
 }

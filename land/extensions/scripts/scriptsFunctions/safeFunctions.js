@@ -3,14 +3,18 @@ import { getLandUrl } from "../../../canopy/identity.js";
 
 import { editStatus } from "../../../core/tree/statuses.js";
 
-// Optional extension imports (no-op if extension not installed)
+// Optional extension functions (wired via setExtensions() from init)
 let setValueForNode = async () => { throw new Error("Values extension not installed"); };
 let setGoalForNode = async () => { throw new Error("Values extension not installed"); };
 let addPrestige = async () => { throw new Error("Prestige extension not installed"); };
 let updateSchedule = async () => { throw new Error("Schedules extension not installed"); };
-try { ({ setValueForNode, setGoalForNode } = await import("../../values/core.js")); } catch {}
-try { ({ addPrestige } = await import("../../prestige/core.js")); } catch {}
-try { ({ updateSchedule } = await import("../../schedules/core.js")); } catch {}
+
+export function setExtensions({ values, prestige, schedules }) {
+  if (values?.setValueForNode) setValueForNode = values.setValueForNode;
+  if (values?.setGoalForNode) setGoalForNode = values.setGoalForNode;
+  if (prestige?.addPrestige) addPrestige = prestige.addPrestige;
+  if (schedules?.updateSchedule) updateSchedule = schedules.updateSchedule;
+}
 
 async function getApi(url) {
   const blockedHosts = [

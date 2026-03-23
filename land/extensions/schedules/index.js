@@ -1,6 +1,6 @@
 import router from "./routes.js";
 import tools from "./tools.js";
-import { setEnergyService } from "./core.js";
+import { setEnergyService, updateSchedule } from "./core.js";
 
 export async function init(core) {
   setEnergyService(core.energy);
@@ -9,5 +9,9 @@ export async function init(core) {
     if (meta.reeffectTime) context.reeffectTime = meta.reeffectTime;
   }, "schedules");
 
-  return { router, tools };
+  return {
+    router,
+    tools,
+    exports: { updateSchedule },
+  };
 }

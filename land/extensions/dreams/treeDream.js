@@ -167,26 +167,31 @@ async function runTreeDream(rootNode) {
     // ════════════════════════════════════════════════════════════════
 
     try {
-    log.verbose("Dreams", ` Starting understanding run for "${rootNode.name}"`);
+      const understandingExt = getExtension("understanding");
+      if (!understandingExt?.exports) {
+        log.verbose("Dreams", ` Understanding extension not loaded, skipping`);
+      } else {
+        log.verbose("Dreams", ` Starting understanding run for "${rootNode.name}"`);
 
-      const run = await findOrCreateUnderstandingRun(
-        rootId,
-        userId,
-        NAV_PERSPECTIVE,
-        true,
-      );
+        const run = await understandingExt.exports.findOrCreateUnderstandingRun(
+          rootId,
+          userId,
+          NAV_PERSPECTIVE,
+          true,
+        );
 
-      await orchestrateUnderstanding({
-        rootId,
-        userId,
-        username,
-        runId: run.understandingRunId,
-        source: "background",
-      });
+        await understandingExt.exports.orchestrateUnderstanding({
+          rootId,
+          userId,
+          username,
+          runId: run.understandingRunId,
+          source: "background",
+        });
 
-    log.verbose("Dreams", ` Understanding run complete`);
+        log.verbose("Dreams", ` Understanding run complete`);
+      }
     } catch (err) {
-    log.error("Dreams", ` Dream understanding failed:`, err.message);
+      log.error("Dreams", ` Dream understanding failed:`, err.message);
     }
 
     // ════════════════════════════════════════════════════════════════
