@@ -492,6 +492,58 @@ router.post(
   },
 );
 
+// ── Per-node tool configuration ──
+router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    // Accept arrays (JSON) or comma-separated strings (HTML form)
+    let { allowed, blocked } = req.body;
+    if (req.body.allowedRaw) allowed = req.body.allowedRaw.split(",").map(s => s.trim()).filter(Boolean);
+    if (req.body.blockedRaw) blocked = req.body.blockedRaw.split(",").map(s => s.trim()).filter(Boolean);
+
+    const node = await Node.findById(nodeId);
+    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (node.isSystem) return res.status(400).json({ error: "Cannot modify system nodes" });
+
+    const { getExtMeta, setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+
+    const toolConfig = {};
+    if (Array.isArray(allowed)) toolConfig.allowed = allowed.filter(t => typeof t === "string");
+    if (Array.isArray(blocked)) toolConfig.blocked = blocked.filter(t => typeof t === "string");
+
+    // Clear if both empty
+    if (!toolConfig.allowed?.length && !toolConfig.blocked?.length) {
+      setExtMeta(node, "tools", null);
+    } else {
+      setExtMeta(node, "tools", toolConfig);
+    }
+
+    await node.save();
+
+    if ("html" in req.query) {
+      return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
+    }
+
+    res.json({ success: true, tools: toolConfig });
+  } catch (err) {
+    log.error("API", "editTools error:", err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get("/node/:nodeId/tools", async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const node = await Node.findById(nodeId).select("metadata").lean();
+    if (!node) return res.status(404).json({ error: "Node not found" });
+
+    const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+    res.json({ nodeId, tools: meta.tools || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Schedule routes moved to extensions/schedules
 // Script routes moved to extensions/scripts
 

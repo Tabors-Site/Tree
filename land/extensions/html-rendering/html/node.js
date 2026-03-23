@@ -1828,6 +1828,31 @@ html, body {
       </form>
     </div>` : ""}
 
+    <!-- AI Tools Config -->
+    ${!isPublicAccess ? (() => {
+      const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+      const tools = meta.tools || {};
+      const allowed = (tools.allowed || []).join(", ");
+      const blocked = (tools.blocked || []).join(", ");
+      return `<div class="hierarchy-section">
+        <h2>AI Tools</h2>
+        <p style="color:rgba(255,255,255,0.5);font-size:0.85rem;margin-bottom:12px;">
+          Control what the AI can do at this node. Inherits up the tree.
+        </p>
+        <form method="POST" action="/api/v1/node/${nodeId}/tools${qs}">
+          <div style="margin-bottom:8px;">
+            <label style="display:block;font-size:0.8rem;color:rgba(255,255,255,0.6);margin-bottom:4px;">Allowed (comma-separated tool names to add)</label>
+            <input type="text" name="allowedRaw" value="${allowed}" placeholder="execute-shell, web-search" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:white;font-size:0.9rem;" />
+          </div>
+          <div style="margin-bottom:8px;">
+            <label style="display:block;font-size:0.8rem;color:rgba(255,255,255,0.6);margin-bottom:4px;">Blocked (comma-separated tool names to remove)</label>
+            <input type="text" name="blockedRaw" value="${blocked}" placeholder="delete-node-branch" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:white;font-size:0.9rem;" />
+          </div>
+          <button type="submit" class="primary-button" style="padding:8px 16px;">Save Tools</button>
+        </form>
+      </div>`;
+    })() : ""}
+
     <!-- Versions Section (prestige extension) -->
     ${(() => {
       const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
