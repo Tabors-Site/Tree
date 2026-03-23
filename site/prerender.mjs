@@ -28,6 +28,7 @@ const STATIC_ROUTES = [
   "/privacy",
   "/terms",
   "/blog",
+  "/guide",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -37,6 +38,10 @@ const PAGE_META = {
   "/": {
     title: "TreeOS . An Operating System for Context",
     description: "Persistent, structured memory that AI can navigate. Self-hosted, modular, federated. Build living trees of knowledge.",
+  },
+  "/guide": {
+    title: "TreeOS Guide . Everything You Need to Know",
+    description: "Complete guide to TreeOS from simple to advanced. The kernel, extensions, AI modes, hooks, federation, and building your own.",
   },
   "/about": {
     title: "About - TreeOS",
