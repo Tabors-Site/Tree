@@ -427,6 +427,46 @@ export function renderExtensionPage({ ext, versions }) {
       </div>
     </div>` : ""}
 
+    ${provides.cli && provides.cli.length ? `
+    <!-- CLI Commands -->
+    <div class="glass-card" style="animation-delay: 0.08s;">
+      <h2>CLI Commands</h2>
+      <table class="data-table">
+        <thead><tr><th>Command</th><th>Method</th><th>Description</th></tr></thead>
+        <tbody>
+          ${provides.cli.map(cmd => {
+            if (cmd.subcommands) {
+              const base = cmd.command.split(" ")[0];
+              const rows = [`<tr><td><code>${escapeHtml(base)}</code></td><td>${escapeHtml(cmd.method || "GET")}</td><td>${escapeHtml(cmd.description)}</td></tr>`];
+              for (const [action, sub] of Object.entries(cmd.subcommands)) {
+                rows.push(`<tr><td><code>${escapeHtml(base)} ${escapeHtml(action)}</code></td><td>${escapeHtml(sub.method || "POST")}</td><td>${escapeHtml(sub.description || "")}</td></tr>`);
+              }
+              return rows.join("");
+            }
+            return `<tr><td><code>${escapeHtml(cmd.command)}</code></td><td>${escapeHtml(cmd.method || "GET")}</td><td>${escapeHtml(cmd.description)}</td></tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>` : ""}
+
+    ${provides.env && provides.env.length ? `
+    <!-- Environment Variables -->
+    <div class="glass-card" style="animation-delay: 0.09s;">
+      <h2>Environment Variables</h2>
+      <table class="data-table">
+        <thead><tr><th>Key</th><th>Required</th><th>Description</th></tr></thead>
+        <tbody>
+          ${provides.env.map(e =>
+            `<tr>
+              <td><code>${escapeHtml(e.key)}</code>${e.secret ? ' <span class="ext-tag">secret</span>' : ""}${e.autoGenerate ? ' <span class="ext-tag">auto</span>' : ""}</td>
+              <td>${e.required ? "Yes" : "No"}</td>
+              <td>${escapeHtml(e.description || "")}${e.default ? ` (default: <code>${escapeHtml(e.default)}</code>)` : ""}</td>
+            </tr>`
+          ).join("")}
+        </tbody>
+      </table>
+    </div>` : ""}
+
     ${ext.readme ? `
     <!-- Readme -->
     <div class="glass-card" style="animation-delay: 0.1s;">
