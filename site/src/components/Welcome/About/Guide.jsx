@@ -67,9 +67,10 @@ const Guide = () => {
           </P>
           <P>
             <strong>Land</strong> (<code>/</code>): The root. The land-manager extension gives the AI
-            system-level tools: read config, list users, check peers, view extension status, and
-            execute shell commands. The AI becomes a land operator. Install packages, manage
-            extensions, run diagnostics, all through chat. Requires god-tier access.
+            system-level tools: read config, list users, check peers, view extension status.
+            Add the shell extension for server command execution.
+            The AI becomes a land operator. Manage extensions, run diagnostics, all
+            through chat. Requires god-tier access.
           </P>
           <P>
             <strong>Home</strong> (<code>~</code>): Your personal space. Raw ideas, notes across
