@@ -203,7 +203,7 @@ function resolveExtensionEnv(manifest) {
   }
 
   if (generated.length > 0) {
-    log.verbose("Extensions", ${manifest.name}: auto-generated ${generated.join(", ")}`);
+    log.verbose("Extensions", `${manifest.name}: auto-generated ${generated.join(", ")}`);
   }
 
   return missing.length > 0 ? { ok: false, missing } : { ok: true };
@@ -368,7 +368,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   const disabled = getDisabledExtensions(opts.getConfigValue);
   const enabled = manifests.filter(({ manifest }) => {
     if (disabled.has(manifest.name)) {
-      log.verbose("Extensions", Disabled: ${manifest.name} (DISABLED_EXTENSIONS)`);
+      log.verbose("Extensions", `Disabled: ${manifest.name} (DISABLED_EXTENSIONS)`);
       return false;
     }
     return true;
@@ -558,7 +558,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (instance.tools?.length) parts.push(`${instance.tools.length} tools`);
       if (instance.jobs?.length) parts.push(`${instance.jobs.length} jobs`);
       if (instance.modeTools?.length) parts.push(`${instance.modeTools.length} mode injections`);
-      log.verbose("Extensions", Loaded: ${parts.join(" | ")}`);
+      log.verbose("Extensions", `Loaded: ${parts.join(" | ")}`);
 
     } catch (err) {
       log.error("Extensions", `Failed to load "${manifest.name}":`, err.message);
@@ -789,7 +789,7 @@ export async function uninstallExtension(name) {
   // Remove from loaded map if currently loaded
   loaded.delete(name);
 
-  log.verbose("Extensions", Uninstalled: ${name}`);
+  log.verbose("Extensions", `Uninstalled: ${name}`);
   return { found: true };
 }
 
@@ -833,7 +833,7 @@ export async function installExtensionFiles(name, files) {
     filesWritten++;
   }
 
-  log.verbose("Extensions", Installed: ${name} (${filesWritten} files)`);
+  log.verbose("Extensions", `Installed: ${name} (${filesWritten} files)`);
   return { filesWritten };
 }
 
@@ -962,7 +962,7 @@ export async function runExtensionMigrations() {
       let ran = 0;
       for (const migration of migrations) {
         if (migration.version > currentVersion && migration.version <= targetVersion) {
-          log.verbose("Extensions", ${name}: running migration v${migration.version}`);
+          log.verbose("Extensions", `${name}: running migration v${migration.version}`);
           try {
             await migration.up(coreServices);
             ran++;
@@ -978,7 +978,7 @@ export async function runExtensionMigrations() {
         await Node.findByIdAndUpdate(extNode._id, {
           $set: { "versions.0.values.schemaVersion": targetVersion },
         });
-        log.verbose("Extensions", ${name}: schema updated to v${targetVersion} (${ran} migration(s))`);
+        log.verbose("Extensions", `${name}: schema updated to v${targetVersion} (${ran} migration(s))`);
       }
     } catch (err) {
       log.error("Extensions", `${name}: failed to load migrations:`, err.message);
@@ -994,7 +994,7 @@ export function startExtensionJobs() {
     try {
       if (typeof job.start === "function") {
         job.start();
-        log.verbose("Extensions", Job started: ${job.name} (${job.extensionName})`);
+        log.verbose("Extensions", `Job started: ${job.name} (${job.extensionName})`);
       }
     } catch (err) {
       log.error("Extensions", `Job failed to start: ${job.name}:`, err.message);
