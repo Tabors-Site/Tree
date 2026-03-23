@@ -147,6 +147,46 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ── THREE ZONES ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Three Zones</h2>
+          <p className="lp-section-sub">
+            Where you are determines what the AI can do. Navigate to change context.
+            No mode switching. Just <code>cd</code>.
+          </p>
+          <div className="lp-cards-3">
+            <div className="lp-card">
+              <h3>Land <code>/</code></h3>
+              <p>
+                The root. Manage extensions, configuration, users, peers.
+                The AI becomes a land operator. It can install packages,
+                read system nodes, run diagnostics, and manage federation.
+                God-tier access required.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3>Home <code>~</code></h3>
+              <p>
+                Your personal space. Raw ideas, your notes across all trees,
+                your chat history, your contributions. The AI helps you
+                organize and reflect on your work across the whole land.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3>Tree <code>/MyTree</code></h3>
+              <p>
+                Inside a tree. The AI reads the branch, classifies your intent,
+                and acts. <strong>Chat</strong> reads and writes.
+                <strong> Place</strong> adds content silently.
+                <strong> Query</strong> reads only, changes nothing.
+                The orchestrator is an extension. Replace it with your own.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── HOW IT WORKS ── */}
       <section className="lp-section">
         <div className="lp-container">

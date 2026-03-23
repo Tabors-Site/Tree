@@ -67,7 +67,8 @@ land/
 │   ├── user-llm/      # Custom LLM connection management
 │   ├── user-queries/  # User-level data access
 │   ├── deleted-revive/ # Soft delete and recovery
-│   ├── visibility/    # Share tokens and public access UI
+│   ├── shell/         # Execute shell commands from AI (god-tier)
+│   ├── land-manager/  # Autonomous land management agent
 │   ├── transactions/  # Value trading between nodes
 │   ├── email/         # Email, forgot password
 │   ├── html-rendering/ # Server-rendered HTML pages
@@ -132,6 +133,18 @@ An extension can provide:
 - **Env vars** (with auto-generation)
 
 See `extensions/EXTENSION_FORMAT.md` for full documentation.
+
+## Three Zones (Position-Based AI)
+
+Navigation determines what the AI can do. No mode switching. Just `cd`.
+
+| Position | Zone | AI Behavior | Orchestrator |
+|----------|------|------------|-------------|
+| `/` (land root) | Land | System management: extensions, config, users, peers. God-tier only. | land-manager extension |
+| `~` (user home) | Home | Personal: raw ideas, notes, chat history, contributions. | home:default mode |
+| `/MyTree` (inside tree) | Tree | Chat/place/query on the branch. Full orchestration. | tree-orchestrator extension |
+
+The tree-orchestrator and land-manager are both extensions. They register orchestrators and modes. Replace either with your own implementation.
 
 ## LLM Resolution Chain
 

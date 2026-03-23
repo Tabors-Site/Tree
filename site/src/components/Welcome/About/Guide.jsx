@@ -58,17 +58,33 @@ const Guide = () => {
         {/* ══════════════════════════════════════════════════════════════ */}
         {/* 3. AI MODES */}
         {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="AI Modes">
+        <Section title="Three Zones">
           <P>
-            Three strict behavioral contracts. Every land must support them.
+            Where you are determines what the AI can do. There is no mode switching
+            menu. Navigation is mode switching. <code>cd /</code> puts you in land management.
+            <code>cd ~</code> puts you in personal home. <code>cd MyTree</code> puts you in
+            tree mode. The AI's tools, context, and behavior change automatically.
+          </P>
+          <P>
+            <strong>Land</strong> (<code>/</code>): The root. Manage extensions, config, users,
+            peers. The AI becomes a land operator with system-level tools. Install packages, read
+            system nodes, run diagnostics. Requires god-tier access.
+          </P>
+          <P>
+            <strong>Home</strong> (<code>~</code>): Your personal space. Raw ideas, notes across
+            all trees, chat history, contributions. The AI helps you organize and reflect.
+          </P>
+          <P>
+            <strong>Tree</strong> (<code>/MyTree</code>): Inside a tree. Three strict behavioral
+            contracts apply:
           </P>
           <ul style={{ color: "rgba(255,255,255,0.7)", lineHeight: 2, paddingLeft: 20 }}>
-            <li><strong>Chat</strong> reads and writes. Full conversation. The agent can create, edit, delete, navigate.</li>
-            <li><strong>Place</strong> writes only. Content goes into the tree silently. No conversational response.</li>
-            <li><strong>Query</strong> reads only. The agent answers questions but changes nothing.</li>
+            <li><strong>Chat</strong> reads and writes. Full conversation. Create, edit, delete, navigate.</li>
+            <li><strong>Place</strong> writes only. Content placed silently. No conversational response.</li>
+            <li><strong>Query</strong> reads only. Answers questions. Changes nothing.</li>
           </ul>
           <P>
-            How these modes work internally (the orchestrator, classifier, placement strategy) is
+            How tree mode works internally (the orchestrator, classifier, placement strategy) is
             an extension. The built-in tree-orchestrator handles it. Replace it with your own.
           </P>
         </Section>
