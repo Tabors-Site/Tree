@@ -473,6 +473,9 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Wire MCP tools and register in tool resolver
       if (instance.tools && mcpServer) {
         const { registerToolDef } = await import("../ws/tools.js");
+        const { zodToJsonSchema } = await import("zod-to-json-schema");
+        const { z } = await import("zod");
+
         for (const tool of instance.tools) {
           mcpServer.tool(
             tool.name,
@@ -481,14 +484,25 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
             tool.annotations || {},
             tool.handler
           );
-          // Also register in the tool definition map so resolveTools() can find it
-          // Build OpenAI-compatible tool def from the Zod schema
+
+          // Convert Zod schema to JSON Schema for OpenAI function calling format
+          let jsonSchema;
+          try {
+            // tool.schema is { key: z.string(), ... } - wrap in z.object first
+            const zodObj = z.object(tool.schema);
+            jsonSchema = zodToJsonSchema(zodObj);
+            delete jsonSchema.$schema; // OpenAI doesn't want this
+          } catch {
+            // Fallback: already JSON Schema or plain object
+            jsonSchema = tool.schema;
+          }
+
           registerToolDef(tool.name, {
             type: "function",
             function: {
               name: tool.name,
               description: tool.description,
-              parameters: tool.schema,
+              parameters: jsonSchema,
             },
           });
         }

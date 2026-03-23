@@ -4,10 +4,10 @@ import router from "./routes.js";
 
 export async function init(core) {
   // Register a custom mode for land management conversations
-  core.modes.registerMode("home:land-manager", {
+  core.modes.registerMode("land:manager", {
     emoji: "🏗️",
     label: "Land Manager",
-    bigMode: "home",
+    bigMode: "land",
     toolNames: [
       "land-status",
       "land-config-read",

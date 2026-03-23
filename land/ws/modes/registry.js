@@ -23,6 +23,7 @@ import treeLibrarian from "./tree/librarian.js";
 // BIG MODES
 // ─────────────────────────────────────────────────────────────────────────
 export const BIG_MODES = {
+  LAND: "land",
   HOME: "home",
   TREE: "tree",
   RAW_IDEA: "rawIdea",

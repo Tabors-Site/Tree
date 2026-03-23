@@ -100,9 +100,9 @@ router.post("/land/chat", authenticate, async (req, res) => {
 
     // Switch to land-manager mode if not already
     const currentMode = getCurrentMode(visitorId);
-    if (currentMode !== "home:land-manager") {
+    if (currentMode !== "land:manager") {
       try {
-        switchMode(visitorId, "home:land-manager", { username: user.username, userId: req.userId });
+        switchMode(visitorId, "land:manager", { username: user.username, userId: req.userId });
       } catch {}
     }
 
