@@ -93,26 +93,58 @@ router.post("/land/chat", authenticate, async (req, res) => {
       { expiresIn: "5m" }
     );
 
-    // Connect MCP if needed
+    // AIChat tracking
+    const { startAIChat, finalizeAIChat, setAiContributionContext } = await import("../../ws/aiChatTracker.js");
+    const { getClientForUser } = await import("../../ws/conversation.js");
+
+    // Connect MCP
     try {
       await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
     } catch {}
 
-    // Switch to land-manager mode if not already
+    // Switch to land-manager mode
     const currentMode = getCurrentMode(visitorId);
     if (currentMode !== "land:manager") {
       try {
         switchMode(visitorId, "land:manager", { username: user.username, userId: req.userId });
-      } catch {}
+      } catch (err) {
+        log.warn("LandManager", `Mode switch failed: ${err.message}`);
+      }
     }
 
-    // Run the message through processMessage with land-manager tools
+    // Create AIChat record
+    let aiChat;
+    try {
+      const clientInfo = await getClientForUser(req.userId, visitorId) || {};
+      aiChat = await startAIChat({
+        userId: req.userId,
+        message,
+        modeKey: "land:manager",
+        llmInfo: {
+          isCustom: clientInfo.isCustom || false,
+          model: clientInfo.model || "unknown",
+          connectionId: clientInfo.connectionId || null,
+        },
+      });
+      if (aiChat) setAiContributionContext(visitorId, null, aiChat._id);
+    } catch (err) {
+      log.warn("LandManager", `AIChat create failed: ${err.message}`);
+    }
+
+    // Run the message
     const result = await processMessage(visitorId, message, {
       username: user.username,
       userId: req.userId,
     });
 
     const answer = result?.content || result?.choices?.[0]?.message?.content || JSON.stringify(result);
+
+    // Finalize AIChat
+    if (aiChat) {
+      try {
+        await finalizeAIChat({ chatId: aiChat._id, content: answer, stopped: false, modeKey: "land:manager" });
+      } catch {}
+    }
 
     // Cleanup
     try { closeMCPClient(visitorId); } catch {}

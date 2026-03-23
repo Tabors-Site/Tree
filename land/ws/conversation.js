@@ -1,5 +1,6 @@
 // ws/conversation.js
 // Mode-aware conversation state management and chat processing
+import log from "../core/log.js";
 
 import OpenAI from "openai";
 import dotenv from "dotenv";
