@@ -294,7 +294,7 @@ export function startHeartbeatJob() {
     try {
       const results = await runHeartbeat();
       if (results.total > 0) {
-        console.log(
+        log.verbose("Canopy",
           `[Canopy] Heartbeat: ${results.alive}/${results.total} peers alive`
         );
       }

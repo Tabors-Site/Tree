@@ -155,7 +155,7 @@ export function startOutboxJob() {
     try {
       const results = await processOutbox();
       if (results.processed > 0) {
-        console.log(
+        log.verbose("Canopy",
           `[Canopy] Outbox: ${results.sent} sent, ${results.failed} failed out of ${results.processed}`
         );
       }

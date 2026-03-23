@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 // orchestrators/runtime.js
 // Shared lifecycle for background orchestrator pipelines.
 // Wraps session, MCP, AIChat, LLM resolution, and cleanup into a single class.
@@ -232,7 +233,7 @@ export class OrchestratorRuntime {
   async cleanup() {
     if (this.mainChatId) {
       await finalizeAIChat({ chatId: this.mainChatId, ...this._finalizeArgs }).catch((e) =>
-        console.error(`Failed to finalize pipeline chat:`, e.message),
+        log.error("Orchestrator", `Failed to finalize pipeline chat:`, e.message),
       );
     }
     clearAiContributionContext(this.visitorId);

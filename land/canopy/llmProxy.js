@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import { signCanopyToken } from "./identity.js";
 import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
 
@@ -40,7 +41,7 @@ export function createCanopyLlmProxyClient({ userId, homeLand, slot }) {
             opts.signal.addEventListener("abort", () => controller.abort());
           }
 
-          console.log("[Canopy] LLM proxy call to %s for user %s (slot: %s)", homeLand, userId, slot || "main");
+          log.debug("Canopy", "LLM proxy call to %s for user %s (slot: %s)", homeLand, userId, slot || "main");
 
           try {
             const res = await fetch(baseUrl + "/canopy/llm/proxy", {

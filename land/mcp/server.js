@@ -2045,7 +2045,7 @@ function formatSseResponse(jsonData) {
 async function handleMcpRequest(req, res) {
   try {
     const requestId = Math.random().toString(36).substring(7);
-    console.log(`\n[${requestId}] ===== MCP IN =====`);
+    log.debug("MCP", `[${requestId}] ===== MCP IN =====`);
 
     const method = req.body?.method;
     const toolName = req.body?.params?.name;
@@ -2122,7 +2122,7 @@ async function handleMcpRequest(req, res) {
       // Check completed cache
       const cached = completedCalls.get(callKey);
       if (cached && now - cached.timestamp < CACHE_MS) {
-        console.log(`♻️ Returning cached response for: ${toolName}`);
+        log.debug("MCP", `Returning cached response for: ${toolName}`);
         res.setHeader("Content-Type", "text/event-stream");
         return res.end(formatSseResponse(cached.response));
       }*/
@@ -2132,7 +2132,7 @@ async function handleMcpRequest(req, res) {
 
       const pending = pendingCalls.get(callKey);
       if (pending) {
-        console.log(`⏳ Waiting for in-flight request: ${toolName}`);
+        log.debug("MCP", `Waiting for in-flight request: ${toolName}`);
         try {
           const response = await pending;
           res.end(formatSseResponse(response));
@@ -2149,8 +2149,8 @@ async function handleMcpRequest(req, res) {
       }
 
       log.debug("MCP", `Tool: ${toolName}`);
-      console.log("→ Args:");
-      console.log(JSON.stringify(args, null, 2));
+      log.debug("MCP", "Args:");
+      log.debug("MCP", JSON.stringify(args, null, 2));
 
       // Create promise for this request
       const requestPromise = new Promise((resolve, reject) => {
@@ -2169,7 +2169,7 @@ async function handleMcpRequest(req, res) {
           const rawBody = Buffer.concat(chunks).toString("utf8");
 
           if (rawBody) {
-            console.log("\n===== MCP OUT =====");
+            log.debug("MCP", "===== MCP OUT =====");
 
             try {
               // Parse SSE format
@@ -2183,12 +2183,12 @@ async function handleMcpRequest(req, res) {
               if (typeof content === "string") {
                 try {
                   const inner = JSON.parse(content);
-                  console.log(JSON.stringify(inner, null, 2));
+                  log.debug("MCP", JSON.stringify(inner, null, 2));
                 } catch {
-                  console.log(content.replace(/\\n/g, "\n"));
+                  log.debug("MCP", content.replace(/\\n/g, "\n"));
                 }
               } else {
-                console.log(JSON.stringify(parsed, null, 2));
+                log.debug("MCP", JSON.stringify(parsed, null, 2));
               }
 
               // Cache the parsed response
@@ -2208,7 +2208,7 @@ async function handleMcpRequest(req, res) {
 
               resolve(parsed);
             } catch (err) {
-              console.log(rawBody);
+              log.debug("MCP", rawBody);
               reject(err);
             }
           }

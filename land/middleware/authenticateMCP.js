@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
@@ -29,7 +30,7 @@ export default function authenticateMCP(req, res, next) {
 
     next();
   } catch (err) {
-    console.error("[authenticateMCP] invalid token:", err.message);
+    log.error("MCP", "invalid token:", err.message);
     return res.status(401).json({ error: "Invalid token" });
   }
 }

@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import authenticate, { authenticateOrPublic } from "../../middleware/authenticate.js";
 import User from "../../db/models/user.js";
@@ -273,7 +274,7 @@ router.post("/land/extensions/install", authenticate, async (req, res) => {
       note: "Restart the land to load the extension.",
     });
   } catch (err) {
-    console.error("Extension install error:", err);
+    log.error("API", "Extension install error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -339,7 +340,7 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
       registry: dirData,
     });
   } catch (err) {
-    console.error("Extension publish error:", err);
+    log.error("API", "Extension publish error:", err);
     res.status(500).json({ error: err.message });
   }
 });

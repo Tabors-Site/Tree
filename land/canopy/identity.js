@@ -83,7 +83,7 @@ export function getLandIdentity() {
     fs.writeFileSync(publicKeyPath, publicKey, { mode: 0o644 });
     fs.writeFileSync(idPath, landId, { mode: 0o644 });
 
-    console.log("[Land] Generated new keypair for this land node");
+    log.verbose("Land", "Generated new keypair for this land node");
   }
 
   landIdentity = {

@@ -1,3 +1,4 @@
+import log from "../core/log.js";
 import { verifyCanopyToken, getLandIdentity } from "./identity.js";
 import { getPeerByDomain, registerPeer } from "./peers.js";
 import { lookupLandByDomain } from "./directory.js";
@@ -176,7 +177,7 @@ export async function authenticateCanopy(req, res, next) {
 
     next();
   } catch (err) {
-    console.error("[Canopy] Auth error:", err.message);
+    log.error("Canopy", "Auth error:", err.message);
     return res.status(500).json({
       success: false,
       error: "Internal canopy authentication error",

@@ -688,7 +688,7 @@ router.post("/canopy/notify", authenticateCanopy, async (req, res) => {
 
     // For now, just log it. Notification delivery will use existing
     // notification infrastructure.
-    console.log(
+    log.verbose("Canopy",
       `[Canopy] Notification for ${user.username}: ${notificationType}`
     );
 

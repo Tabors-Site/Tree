@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import { getContributions } from "../../core/tree/contributions.js";
@@ -70,7 +71,7 @@ router.get(
         }),
       );
     } catch (err) {
-      console.error(err);
+      log.error("API", err);
       res.status(500).json({ error: err.message });
     }
   },

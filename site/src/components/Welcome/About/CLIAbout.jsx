@@ -227,13 +227,15 @@ const CLIAbout = () => {
             Manage land extensions. Install from the registry, disable, enable, or remove.
           </div>
           <CmdRow cmd="ext list" desc="List all loaded extensions with status" />
-          <CmdRow cmd="ext info <name>" desc="Show manifest details for an extension" />
-          <CmdRow cmd="ext search [query]" desc="Search the extension registry" />
-          <CmdRow cmd="ext install <name> [version]" desc="Install an extension from the registry" />
+          <CmdRow cmd="ext info <name>" desc="Show manifest details for a local extension" />
+          <CmdRow cmd="ext search [query]" desc="Search the registry. -l limit, -t tag" />
+          <CmdRow cmd="ext view <name> [version]" desc="Full registry details: manifest, files, readme, versions" />
+          <CmdRow cmd="ext install <name> [version]" desc="Install from registry (auto-pulls dependencies)" />
+          <CmdRow cmd="ext update <name>" desc="Update to latest version from registry" />
           <CmdRow cmd="ext publish <name>" desc="Publish a local extension to the registry" />
-          <CmdRow cmd="ext disable <name>" desc="Disable an extension (takes effect on restart)" />
+          <CmdRow cmd="ext disable <name>" desc="Disable an extension (warns about dependents)" />
           <CmdRow cmd="ext enable <name>" desc="Re-enable a disabled extension" />
-          <CmdRow cmd="ext uninstall <name>" desc="Remove extension directory (data kept in database)" />
+          <CmdRow cmd="ext uninstall <name>" desc="Remove extension (blocks if dependents exist, -f to force)" />
         </div>
 
         {/* ── LLM CONNECTIONS ── */}

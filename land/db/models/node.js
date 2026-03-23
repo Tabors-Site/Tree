@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 
@@ -119,7 +120,7 @@ NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
       }
     }
   } catch (error) {
-    console.error(
+    log.error("DB",
       `Error in deleteWithChildrenBottomUp for node ${this._id}:`,
       error
     );

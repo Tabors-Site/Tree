@@ -81,7 +81,7 @@ export async function registerWithDirectory() {
  */
 export function startDirectoryRegistration() {
   if (!DIRECTORY_URL) {
-    console.log("[Land] No DIRECTORY_URL set, skipping directory registration");
+    log.verbose("Land", "No DIRECTORY_URL set, skipping directory registration");
     return;
   }
 
