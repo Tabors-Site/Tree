@@ -12,6 +12,9 @@ export async function init(core) {
   return {
     router,
     tools,
+    modeTools: [
+      { modeKey: "tree:edit", toolNames: ["edit-node-version-schedule"] },
+    ],
     exports: { updateSchedule, getCalendar },
   };
 }

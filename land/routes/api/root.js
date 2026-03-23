@@ -11,7 +11,7 @@ function html() { return getExtension("html-rendering")?.exports || {}; }
 
 import Node from "../../db/models/node.js";
 import mongoose from "mongoose";
-import { getConnectionsForUser, ROOT_LLM_SLOTS } from "../../core/llms/customLLM.js";
+import { getConnectionsForUser, isValidRootLlmSlot, getAllRootLlmSlots } from "../../core/llms/customLLM.js";
 import { getNodeAIChats } from "../../core/llms/aichat.js";
 import { buildPathString } from "../../core/tree/treeFetch.js";
 
@@ -438,9 +438,9 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     const { rootId } = req.params;
     const { slot, connectionId } = req.body;
 
-    if (!ROOT_LLM_SLOTS.includes(slot)) {
+    if (!isValidRootLlmSlot(slot)) {
       return res.status(400).json({
-        error: `Invalid slot. Must be one of: ${ROOT_LLM_SLOTS.join(", ")}`,
+        error: `Invalid slot. Must be one of: ${getAllRootLlmSlots().join(", ")}`,
       });
     }
 

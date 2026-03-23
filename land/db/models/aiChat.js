@@ -57,11 +57,11 @@ const AIChatSchema = new mongoose.Schema({
     // "api"  = external API call
     // "orchestrator" = orchestrator generated this call
     // "script" = automated trigger from note/script
+    // Free-form string. Core sources: user, api, orchestrator, background, system.
+    // Extensions register their own (script, gateway, etc.)
     source: {
       type: String,
-      enum: ["user", "api", "orchestrator", "background", "script", "system", "gateway"],
       default: "user",
-      required: true,
     },
 
     time: {

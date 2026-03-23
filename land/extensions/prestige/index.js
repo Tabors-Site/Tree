@@ -35,6 +35,9 @@ export async function init(core) {
   return {
     router,
     tools,
+    modeTools: [
+      { modeKey: "tree:edit", toolNames: ["add-node-prestige"] },
+    ],
     exports: { addPrestige },
   };
 }

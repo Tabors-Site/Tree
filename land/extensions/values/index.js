@@ -14,6 +14,9 @@ export async function init(core) {
   return {
     router,
     tools: getTools(),
+    modeTools: [
+      { modeKey: "tree:edit", toolNames: ["edit-node-version-value", "edit-node-version-goal"] },
+    ],
     exports: { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat },
   };
 }

@@ -223,10 +223,10 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
       return res.status(400).json({ error: "index.js is required in files" });
     }
 
-    // Size limit: 500KB total
+    // Size limit: 3MB total (large extensions like html-rendering have big template files)
     const totalSize = files.reduce((sum, f) => sum + (f.content?.length || 0), 0);
-    if (totalSize > 500000) {
-      return res.status(400).json({ error: "Total file size exceeds 500KB limit" });
+    if (totalSize > 3000000) {
+      return res.status(400).json({ error: "Total file size exceeds 3MB limit" });
     }
 
     // Check if this version already exists

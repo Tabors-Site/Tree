@@ -43,7 +43,7 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(securityHeaders);
 
-registerRoutes(app);
+await registerRoutes(app);
 await registerURLRoutes(app);
 app.use((req, res) => notFoundPage(req, res));
 

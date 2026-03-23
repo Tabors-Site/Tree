@@ -109,7 +109,10 @@
       "Bash(sed -i 's/setEnergyService\\(core\\\\.energy\\);/if \\(core.energy\\) setEnergyService\\(core.energy\\);/' \"$f\")",
       "Bash(echo \"Fixed: $f\")",
       "Bash(echo \"=== CLI help - failover commands? ===\" grep -n \"failover\" /home/tabor/github/Tree/cli/commands/*.js)",
-      "Bash(ls land/extensions/html-rendering/*.md)"
+      "Bash(ls land/extensions/html-rendering/*.md)",
+      "Read(//home/tabor/github/Tree/=== TODO/FIXME/**)",
+      "Read(//home/tabor/github/Tree/=== Potential memory leaks \\(Maps/**)",
+      "Bash(find land/extensions/html-rendering/ -name \"*.js\" -exec wc -c {} +)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

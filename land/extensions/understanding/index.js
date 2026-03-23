@@ -8,7 +8,7 @@ import understandSummarize from "./modes/understandSummarize.js";
 
 export async function init(core) {
   const understanding = await import("./core.js");
-  understanding.if (core.energy) setEnergyService(core.energy);
+  if (core.energy) understanding.setEnergyService(core.energy);
   const orchestrator = await import("./pipeline.js");
 
   // Register understanding modes + LLM slot mappings
@@ -17,6 +17,7 @@ export async function init(core) {
   if (core.llm?.registerModeAssignment) {
     core.llm.registerModeAssignment("tree:understand", "understanding");
     core.llm.registerModeAssignment("tree:understand-summarize", "understanding");
+    core.llm.registerRootLlmSlot?.("understanding");
   }
 
   return {

@@ -729,14 +729,7 @@ export async function getContextForAi(nodeId, options = {}) {
     }
   }
 
-  // ---- Scripts ----
-  const scriptsMeta = (node.metadata instanceof Map ? node.metadata.get("scripts") : node.metadata?.scripts)?.list || [];
-  if (includeScripts && scriptsMeta.length > 0) {
-    context.scripts = scriptsMeta.map((s) => ({
-      id: s._id,
-      name: s.name,
-    }));
-  }
+  // Scripts injected by scripts extension via enrichContext hook
 
   // ---- Directives (future) ----
   if (includeDirectives && node.directives?.length > 0) {

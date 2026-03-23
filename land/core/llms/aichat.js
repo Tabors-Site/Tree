@@ -241,6 +241,11 @@ async function getNodeAIChats({
       sessionId: { $in: targetSessionIds },
     })
       .populate({
+        path: "userId",
+        select: "username",
+        model: "User",
+      })
+      .populate({
         path: "contributions",
         select:
           "_id action nodeId nodeVersion wasAi energyUsed date understandingMeta",

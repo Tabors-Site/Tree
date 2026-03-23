@@ -33,7 +33,8 @@ import LandPeer from "../db/models/landPeer.js";
 import Node from "../db/models/node.js";
 import Invite from "../db/models/invite.js";
 import authenticate from "../middleware/authenticate.js";
-import { renderCanopyAdmin, renderCanopyInvites, renderCanopyDirectory } from "./api/html/canopy.js";
+import { getExtension } from "../extensions/loader.js";
+function html() { return getExtension("html-rendering")?.exports || {}; }
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
 import { isPrivateHost } from "../canopy/security.js";
 
@@ -1108,7 +1109,7 @@ router.get("/canopy/admin", authenticate, requireAdmin, async (req, res) => {
     const failedEvents = await getFailedEvents();
     const land = getLandInfoPayload();
 
-    const html = renderCanopyAdmin({ land, peers, pendingEvents, failedEvents });
+    const html = html().renderCanopyAdmin({ land, peers, pendingEvents, failedEvents });
     res.send(html);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1162,7 +1163,7 @@ router.get("/canopy/admin/invites", authenticate, requireAdmin, async (req, res)
       isOwner: t.rootOwner === req.userId,
     }));
 
-    const html = renderCanopyInvites({ invites, remoteUsers, localTrees });
+    const html = html().renderCanopyInvites({ invites, remoteUsers, localTrees });
     res.send(html);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1180,7 +1181,7 @@ router.get("/canopy/admin/directory", authenticate, requireAdmin, async (req, re
 
   try {
     const hasDirectory = !!process.env.DIRECTORY_URL;
-    const html = renderCanopyDirectory({ hasDirectory });
+    const html = html().renderCanopyDirectory({ hasDirectory });
     res.send(html);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

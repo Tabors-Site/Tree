@@ -30,6 +30,9 @@ export async function init(core) {
     core.llm.registerModeAssignment("tree:drain-plan", "drain");
     core.llm.registerModeAssignment("tree:dream-summary", "notification");
     core.llm.registerModeAssignment("tree:dream-thought", "notification");
+    core.llm.registerRootLlmSlot?.("cleanup");
+    core.llm.registerRootLlmSlot?.("drain");
+    core.llm.registerRootLlmSlot?.("notification");
   }
 
   return {

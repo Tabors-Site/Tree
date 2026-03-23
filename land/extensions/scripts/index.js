@@ -14,5 +14,13 @@ export async function init(core) {
     schedules: getExtension("schedules")?.exports,
   });
 
+  // Inject script list into AI context
+  core.hooks.register("enrichContext", async ({ context, node, meta }) => {
+    const scripts = meta.scripts?.list || [];
+    if (scripts.length > 0) {
+      context.scripts = scripts.map(s => ({ id: s._id, name: s.name }));
+    }
+  }, "scripts");
+
   return { router, tools };
 }

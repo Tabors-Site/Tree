@@ -1,9 +1,5 @@
 import { authPageRouter } from "../auth.js";
-
-//cant use app directly
-import appe from "./app.js";
-import chat from "./chat.js";
-import setup from "./setup.js";
+import { getExtension } from "../../extensions/loader.js";
 
 import rateLimit from "express-rate-limit";
 
@@ -21,11 +17,26 @@ const limiter = rateLimit({
   },
 });
 
-export default function registerRoutes(app) {
+export default async function registerRoutes(app) {
   app.use(limiter);
 
   app.use("/", authPageRouter);
-  app.use("/", appe);
-  app.use("/", chat);
-  app.use("/", setup);
+
+  // Page routes from html-rendering extension (only if installed)
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.pageRouter) {
+    app.use("/", htmlExt.pageRouter);
+  }
+
+  // App routes (chat, setup, etc.) are dynamic so they don't crash if html-rendering is missing
+  try {
+    const appe = (await import("./app.js")).default;
+    const chat = (await import("./chat.js")).default;
+    const setup = (await import("./setup.js")).default;
+    app.use("/", appe);
+    app.use("/", chat);
+    app.use("/", setup);
+  } catch {
+    // html-rendering not installed, skip page routes
+  }
 }

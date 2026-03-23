@@ -38,6 +38,7 @@ import {
 } from "../ws/conversation.js";
 
 import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
+import { registerRootLlmSlot } from "./llms/customLLM.js";
 import { emitNavigate, emitToUser } from "../ws/websocket.js";
 import { OrchestratorRuntime } from "../orchestrators/runtime.js";
 import { acquireLock, releaseLock, isLocked } from "../orchestrators/locks.js";
@@ -128,6 +129,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       setCurrentNodeId, getCurrentNodeId, getCurrentMode,
       clearSession: clearConversationSession,
       resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
+      registerRootLlmSlot,
     },
 
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },

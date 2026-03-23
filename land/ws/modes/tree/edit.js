@@ -12,11 +12,8 @@ export default {
   toolNames: [
     "edit-node-name",
     "edit-node-type",
-    "edit-node-version-value",
-    "edit-node-version-goal",
     "edit-node-or-branch-status",
-    "edit-node-version-schedule",
-    "add-node-prestige",
+    // Extension tools (values, schedules, prestige) injected by loader via modeTools
   ],
 
 buildSystemPrompt({ username, rootId, targetNodeId }) {
@@ -33,20 +30,17 @@ Workflow: Read context, call tool(s), return JSON summary.
 TOOLS:
 - edit-node-name: rename
 - edit-node-type: set semantic type (goal, plan, task, knowledge, resource, identity, or custom)
-- edit-node-version-value: set/update numeric values
-- edit-node-version-goal: set target for a value (key must match existing value)
 - edit-node-or-branch-status: change status (only cascade to children when explicitly asked)
-- edit-node-version-schedule: update schedule
-- add-node-prestige: increment version (only when explicitly asked)
+- Plus any extension tools available in this mode (values, schedules, prestige, etc.)
 
-Multiple tool calls in one pass are fine.
+Multiple tool calls in one pass are fine. Use whatever tools are available.
 
 OUTPUT (strict JSON after tools complete):
 {
   "action": "edited",
   "nodeId": string,
   "nodeName": string,
-  "edits": [{ "field": "name"|"type"|"value"|"goal"|"status"|"schedule"|"prestige", "key"?: string, "newValue": any }],
+  "edits": [{ "field": string, "key"?: string, "newValue": any }],
   "summary": string
 }
 `.trim();

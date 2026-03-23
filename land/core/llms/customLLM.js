@@ -179,8 +179,12 @@ function validateInputs(baseUrl, apiKey, model, requireApiKey) {
 
 const VALID_SLOTS = ["main", "rawIdea"];
 
-// Root-level LLM assignment slots (shared with Node schema and deletion cleanup)
-export const ROOT_LLM_SLOTS = ["default", "placement", "understanding", "respond", "notes", "cleanup", "drain", "notification"];
+// Core LLM slots. Extensions register additional slots via registerModeAssignment().
+const CORE_ROOT_SLOTS = new Set(["default", "placement", "respond", "notes"]);
+const _extSlots = new Set();
+export function registerRootLlmSlot(slot) { _extSlots.add(slot); }
+export function isValidRootLlmSlot(slot) { return CORE_ROOT_SLOTS.has(slot) || _extSlots.has(slot); }
+export function getAllRootLlmSlots() { return [...CORE_ROOT_SLOTS, ..._extSlots]; }
 
 // ─────────────────────────────────────────────────────────────────────────
 // PUBLIC API
@@ -330,7 +334,7 @@ export async function deleteCustomLlmConnection(userId, connectionId) {
     { $set: { llmDefault: null } },
   );
   // Clear extension slots on nodes
-  for (const slot of ROOT_LLM_SLOTS) {
+  for (const slot of getAllRootLlmSlots()) {
     if (slot === "default") continue;
     await Node.updateMany(
       { [`metadata.llm.slots.${slot}`]: connectionId },

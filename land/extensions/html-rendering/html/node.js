@@ -525,7 +525,7 @@ const renderChain = (chain, tokenQS, token) => {
 
         <div class="note-content">
           <div class="chat-message chat-user">
-            <span class="msg-label">You</span>
+            <span class="msg-label">${chat.userId?._id ? `<a href="/api/v1/user/${chat.userId._id}${tokenQS}" class="msg-user-link">${esc(chat.userId.username || "User")}</a>` : esc("User")}</span>
             <div class="msg-text msg-clamp">${esc(chat.startMessage?.content || "")}</div>
             ${(chat.startMessage?.content || "").length > 300 ? `<button class="expand-btn" onclick="toggleExpand(this)">Show more</button>` : ""}
           </div>
@@ -754,6 +754,8 @@ body::after { width: 400px; height: 400px; background: white; bottom: -200px; le
 }
 .chat-user .msg-label { background: rgba(255,255,255,0.2); color: white; }
 .chat-ai .msg-label   { background: rgba(100,220,255,0.25); color: white; }
+.msg-user-link { color: inherit; text-decoration: none; }
+.msg-user-link:hover { text-decoration: underline; }
 .msg-text { color: rgba(255,255,255,0.95); word-wrap: break-word; min-width: 0; font-size: 15px; line-height: 1.65; font-weight: 400; }
 .msg-clamp {
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
