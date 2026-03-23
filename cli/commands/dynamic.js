@@ -158,13 +158,23 @@ module.exports = (program) => {
             const endpoint = resolveEndpoint(decl.endpoint, args, cfg);
             const method = (decl.method || "GET").toUpperCase();
 
+            // Build request body from manifest's body field mapping
+            let body = {};
+            if (decl.body && Array.isArray(decl.body)) {
+              for (let i = 0; i < decl.body.length; i++) {
+                if (args[i] !== undefined) {
+                  body[decl.body[i]] = args[i];
+                }
+              }
+            }
+
             let data;
             if (method === "GET") {
               data = await api.get(endpoint);
             } else if (method === "POST") {
-              data = await api.post(endpoint, {});
+              data = await api.post(endpoint, body);
             } else if (method === "PUT") {
-              data = await api.put(endpoint, {});
+              data = await api.put(endpoint, body);
             } else if (method === "DELETE") {
               data = await api.del(endpoint);
             } else {
