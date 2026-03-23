@@ -210,11 +210,80 @@ router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+// ── Per-node tool configuration ──
+// Must be before /node/:nodeId/:version to avoid :version capturing "tools"
+router.get("/node/:nodeId/tools", async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const chain = [];
+    const allAllowed = new Set();
+    const allBlocked = new Set();
+    let cursor = nodeId;
+    const visited = new Set();
+
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      const n = await Node.findById(cursor).select("name metadata parent isSystem").lean();
+      if (!n || n.isSystem) break;
+      const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
+      const nodeTools = meta.tools || null;
+      if (nodeTools) {
+        chain.push({ nodeId: n._id, name: n.name, allowed: nodeTools.allowed || [], blocked: nodeTools.blocked || [] });
+        if (nodeTools.allowed) for (const t of nodeTools.allowed) allAllowed.add(t);
+        if (nodeTools.blocked) for (const t of nodeTools.blocked) allBlocked.add(t);
+      }
+      cursor = n.parent;
+    }
+
+    let baseTools = [];
+    try {
+      const { getAllToolNamesForBigMode } = await import("../../ws/modes/registry.js");
+      baseTools = getAllToolNamesForBigMode("tree");
+    } catch {}
+
+    const effective = [...new Set([...baseTools, ...allAllowed])].filter(t => !allBlocked.has(t)).sort();
+
+    res.json({ nodeId, baseTools, hasConfig: allAllowed.size > 0 || allBlocked.size > 0, added: [...allAllowed], blocked: [...allBlocked], effective, chain: chain.reverse() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    let { allowed, blocked } = req.body;
+    if (req.body.allowedRaw) allowed = req.body.allowedRaw.split(",").map(s => s.trim()).filter(Boolean);
+    if (req.body.blockedRaw) blocked = req.body.blockedRaw.split(",").map(s => s.trim()).filter(Boolean);
+
+    const node = await Node.findById(nodeId);
+    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (node.isSystem) return res.status(400).json({ error: "Cannot modify system nodes" });
+
+    const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+    const toolConfig = {};
+    if (Array.isArray(allowed)) toolConfig.allowed = allowed.filter(t => typeof t === "string");
+    if (Array.isArray(blocked)) toolConfig.blocked = blocked.filter(t => typeof t === "string");
+
+    if (!toolConfig.allowed?.length && !toolConfig.blocked?.length) {
+      setExtMeta(node, "tools", null);
+    } else {
+      setExtMeta(node, "tools", toolConfig);
+    }
+    await node.save();
+
+    if ("html" in req.query) return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
+    res.json({ success: true, tools: toolConfig });
+  } catch (err) {
+    log.error("API", "editTools error:", err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // -----------------------------------------------------------------------------
 // GET /api/v1/node/:nodeId
-// Returns the node + all versions (no notes)
+// Returns the node (flat schema, no versions)
 // Supports JSON or ?html mode
-// Shows full node data, parent + children clickable
 // -----------------------------------------------------------------------------
 router.get("/node/:nodeId", urlAuth, async (req, res) => {
   try {
@@ -492,99 +561,9 @@ router.post(
   },
 );
 
-// ── Per-node tool configuration ──
-router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
-  try {
-    const { nodeId } = req.params;
-    // Accept arrays (JSON) or comma-separated strings (HTML form)
-    let { allowed, blocked } = req.body;
-    if (req.body.allowedRaw) allowed = req.body.allowedRaw.split(",").map(s => s.trim()).filter(Boolean);
-    if (req.body.blockedRaw) blocked = req.body.blockedRaw.split(",").map(s => s.trim()).filter(Boolean);
-
-    const node = await Node.findById(nodeId);
-    if (!node) return res.status(404).json({ error: "Node not found" });
-    if (node.isSystem) return res.status(400).json({ error: "Cannot modify system nodes" });
-
-    const { getExtMeta, setExtMeta } = await import("../../core/tree/extensionMetadata.js");
-
-    const toolConfig = {};
-    if (Array.isArray(allowed)) toolConfig.allowed = allowed.filter(t => typeof t === "string");
-    if (Array.isArray(blocked)) toolConfig.blocked = blocked.filter(t => typeof t === "string");
-
-    // Clear if both empty
-    if (!toolConfig.allowed?.length && !toolConfig.blocked?.length) {
-      setExtMeta(node, "tools", null);
-    } else {
-      setExtMeta(node, "tools", toolConfig);
-    }
-
-    await node.save();
-
-    if ("html" in req.query) {
-      return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
-    }
-
-    res.json({ success: true, tools: toolConfig });
-  } catch (err) {
-    log.error("API", "editTools error:", err.message);
-    res.status(400).json({ error: err.message });
-  }
-});
-
-router.get("/node/:nodeId/tools", async (req, res) => {
-  try {
-    const { nodeId } = req.params;
-
-    // Walk from this node to root, collect tool config at each level
-    const chain = [];
-    const allAllowed = new Set();
-    const allBlocked = new Set();
-    let cursor = nodeId;
-    const visited = new Set();
-
-    while (cursor && !visited.has(cursor)) {
-      visited.add(cursor);
-      const n = await Node.findById(cursor).select("name metadata parent isSystem").lean();
-      if (!n || n.isSystem) break;
-
-      const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
-      const nodeTools = meta.tools || null;
-
-      if (nodeTools) {
-        chain.push({
-          nodeId: n._id,
-          name: n.name,
-          allowed: nodeTools.allowed || [],
-          blocked: nodeTools.blocked || [],
-        });
-        if (nodeTools.allowed) for (const t of nodeTools.allowed) allAllowed.add(t);
-        if (nodeTools.blocked) for (const t of nodeTools.blocked) allBlocked.add(t);
-      }
-
-      cursor = n.parent;
-    }
-
-    // Get all registered tools (core + extension)
-    let baseTools = [];
-    try {
-      const TOOL_DEFS = (await import("../../ws/tools.js")).default;
-      baseTools = Object.keys(TOOL_DEFS);
-    } catch {}
-
-    // Merge: base + allowed - blocked
-    const effective = [...new Set([...baseTools, ...allAllowed])].filter(t => !allBlocked.has(t));
-
-    res.json({
-      nodeId,
-      effective,
-      added: [...allAllowed],
-      blocked: [...allBlocked],
-      chain: chain.reverse(), // root first
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Schedule routes moved to extensions/schedules
+// Script routes moved to extensions/scripts
+// Tool config routes moved above /node/:nodeId to avoid :version capture
 
 // Schedule routes moved to extensions/schedules
 // Script routes moved to extensions/scripts

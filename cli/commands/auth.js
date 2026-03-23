@@ -285,7 +285,7 @@ module.exports = (program) => {
     .option("--key <apiKey>", "Authenticate with an API key")
     .option("--browser", "Open login page in browser instead")
     .option("--username <username>", "Username (non-interactive)")
-    .option("--password <password>", "Password (non-interactive)")
+    .option("--password <password>", "Password (non-interactive, wrap in single quotes if it has special chars)")
     .action(async (opts) => {
       const cfg = load();
       const landUrl = (cfg.landUrl || "https://treeOS.ai").replace(/\/+$/, "");

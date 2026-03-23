@@ -228,6 +228,26 @@ if (clean.match(/^(\/api\/v1)?\/user\//)) return BIG_MODES.HOME;
 }
 
 /**
+ * Get all unique tool names available across all modes for a bigMode.
+ * Used by node pages to show what tools the AI can use.
+ */
+export function getAllToolNamesForBigMode(bigMode) {
+  const names = new Set();
+  for (const [key, mode] of Object.entries(ALL_MODES)) {
+    if (key.startsWith(bigMode + ":")) {
+      for (const t of mode.toolNames) names.add(t);
+    }
+  }
+  // Add extension-injected tools across all modes of this bigMode
+  for (const [key] of Object.entries(ALL_MODES)) {
+    if (key.startsWith(bigMode + ":")) {
+      for (const t of _getExtToolsFn(key)) names.add(t);
+    }
+  }
+  return [...names].sort();
+}
+
+/**
  * Number of recent messages to carry across a mode switch.
  */
 export const CARRY_MESSAGES = 4;
