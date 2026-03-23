@@ -36,11 +36,21 @@ app.use(cookieParser());
 app.post("/billing/webhook", express.raw({ type: "application/json" }), stripeWebhook);
 app.options("*", cors());
 app.use(express.static("public"));
-app.use(express.json({ limit: "1000mb" }));
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(securityHeaders);
+
+// Health check (no auth, used by load balancers / uptime monitors)
+app.get("/health", async (_req, res) => {
+  const mongoose = (await import("mongoose")).default;
+  res.json({
+    ok: true,
+    uptime: Math.floor(process.uptime()),
+    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+  });
+});
 
 await registerURLRoutes(app);
 app.use((req, res) => notFoundPage(req, res));
@@ -50,3 +60,16 @@ export const wsServer = initWebSocketServer(server);
 
 const PORT = process.env.PORT || 80;
 server.listen(PORT, "0.0.0.0", () => onListen());
+
+// Graceful shutdown
+async function shutdown(signal) {
+  console.log(`\n[KERNEL] ${signal} received. Shutting down...`);
+  server.close(() => {
+    import("mongoose").then(m => m.default.connection.close()).catch(() => {});
+    console.log("[KERNEL] Server closed.");
+    process.exit(0);
+  });
+  setTimeout(() => { console.log("[KERNEL] Forced exit."); process.exit(1); }, 10000);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

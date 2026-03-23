@@ -256,7 +256,7 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
   let fileSizeKB = 0;
 
   if (rawIdea.contentType === "file" && rawIdea.content) {
-    const filePath = path.join(process.cwd(), "uploads", rawIdea.content);
+    const filePath = path.join(uploadsFolder, rawIdea.content);
 
     if (fs.existsSync(filePath)) {
       const stats = fs.statSync(filePath);

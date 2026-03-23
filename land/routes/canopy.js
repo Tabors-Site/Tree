@@ -33,6 +33,7 @@ import LandPeer from "../db/models/landPeer.js";
 import Node from "../db/models/node.js";
 import Invite from "../db/models/invite.js";
 import authenticate from "../middleware/authenticate.js";
+import { getExtension } from "../extensions/loader.js";
 import { renderCanopyAdmin, renderCanopyInvites, renderCanopyDirectory } from "../canopy/html.js";
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
 import { isPrivateHost } from "../canopy/security.js";
@@ -628,16 +629,18 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
       });
     }
 
-    // Deduct energy before running the LLM call
-    const { useEnergy } = await import("../extensions/energy/core.js");
-    try {
-      await useEnergy({ userId: user._id.toString(), action: "proxyLlm" });
-    } catch (energyErr) {
-      return res.status(422).json({
-        success: false,
-        error: "insufficient_energy",
-        message: energyErr.message,
-      });
+    // Deduct energy before running the LLM call (skip if energy extension not installed)
+    const energySvc = getExtension("energy")?.exports;
+    if (energySvc?.useEnergy) {
+      try {
+        await energySvc.useEnergy({ userId: user._id.toString(), action: "proxyLlm" });
+      } catch (energyErr) {
+        return res.status(422).json({
+          success: false,
+          error: "insufficient_energy",
+          message: energyErr.message,
+        });
+      }
     }
 
     // Run the LLM call

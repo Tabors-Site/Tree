@@ -3871,12 +3871,9 @@ export function renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, h
   const tokenQS = token ? `?token=${token}&html` : `?html`;
   const fileDeleted = rawIdea.content === "File was deleted";
   const fileUrl = fileDeleted ? "" : `/api/v1/uploads/${rawIdea.content}`;
-  const filePath = fileDeleted
-    ? ""
-    : path.join(process.cwd(), "uploads", rawIdea.content);
   const mimeType = fileDeleted
     ? ""
-    : mime.lookup(filePath) || "application/octet-stream";
+    : mime.lookup(rawIdea.content) || "application/octet-stream";
   const mediaHtml = fileDeleted ? "" : renderMedia(fileUrl, mimeType);
   const fileName = fileDeleted ? "File was deleted" : rawIdea.content;
       return (`

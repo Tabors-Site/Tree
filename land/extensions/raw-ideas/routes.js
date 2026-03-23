@@ -3,6 +3,8 @@ import express from "express";
 import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
+const __riDir = path.dirname(fileURLToPath(import.meta.url));
 import multer from "multer";
 import authenticate from "../../middleware/authenticate.js";
 import urlAuth from "../../middleware/urlAuth.js";
@@ -27,7 +29,7 @@ function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
 
-const uploadsFolder = path.join(process.cwd(), "uploads");
+const uploadsFolder = path.join(__riDir, "../../uploads");
 if (!fs.existsSync(uploadsFolder)) fs.mkdirSync(uploadsFolder);
 
 const storage = multer.diskStorage({
@@ -293,7 +295,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
       return res.json({ text: rawIdea.content });
     }
     if (rawIdea.contentType === "file") {
-      const filePath = path.join(process.cwd(), "uploads", rawIdea.content);
+      const filePath = path.join(uploadsFolder, rawIdea.content);
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: "File not found" });
       }

@@ -45,7 +45,9 @@ async function useLatest(req, res, next) {
   }
 }
 
-const uploadsFolder = path.join(process.cwd(), "uploads");
+import { fileURLToPath } from "url";
+const __notesDir = path.dirname(fileURLToPath(import.meta.url));
+const uploadsFolder = path.join(__notesDir, "../../uploads");
 
 if (!fs.existsSync(uploadsFolder)) {
   fs.mkdirSync(uploadsFolder);

@@ -17,7 +17,10 @@ import authenticateMCP from "../middleware/authenticateMCP.js";
 
 import express from "express";
 import path from "path";
+import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { notFoundPage } from "../middleware/notFoundPage.js";
 
 import { loadExtensions, getLoadedExtensionNames, getLoadedManifests } from "../extensions/loader.js";
@@ -64,7 +67,7 @@ export default async function registerURLRoutes(app) {
   app.post("/mcp", authenticateMCP, handleMcpRequest);
 
   // Serve uploaded files
-  app.use("/api/v1/uploads", express.static(path.join(process.cwd(), "uploads")));
+  app.use("/api/v1/uploads", express.static(path.join(__dirname, "../uploads")));
 
   app.use("/api/v1", me);
   app.use("/api/v1", authApiRouter);

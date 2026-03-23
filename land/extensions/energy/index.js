@@ -1,5 +1,5 @@
 import router from "./routes.js";
-import { maybeResetEnergy, useEnergy, DAILY_LIMITS } from "./core.js";
+import { maybeResetEnergy, useEnergy, registerAction, DAILY_LIMITS } from "./core.js";
 
 export async function init(core) {
   // Register lifecycle hooks for energy metering
@@ -21,7 +21,7 @@ export async function init(core) {
 
 
   // Replace the no-op energy service with the real one
-  core.energy = { useEnergy, maybeResetEnergy, DAILY_LIMITS };
+  core.energy = { useEnergy, maybeResetEnergy, registerAction, DAILY_LIMITS };
 
   return {
     router,

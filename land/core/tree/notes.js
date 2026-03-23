@@ -115,16 +115,6 @@ async function createNote({
     await assertNoteTextWithinLimit(content || "", userId);
   }
 
-  // ── ENERGY ──────────────────────────────────────
-  let payload;
-  if (contentType === "file") {
-    payload = { type: "file", sizeMB: Math.ceil(file.size / (1024 * 1024)) };
-  } else {
-    payload = (content || "").length;
-  }
-
-
-
   // ── TAG EXTRACTION ──────────────────────────────
   const isReflectionBool = isReflection === "true" || isReflection === true;
   let taggedUserIds = [];

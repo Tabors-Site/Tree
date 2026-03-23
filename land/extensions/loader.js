@@ -608,13 +608,12 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Register energy actions from manifest
-      if (manifest.provides?.energyActions && coreServices.energy) {
-        const { registerAction } = await import("./energy/core.js");
+      if (manifest.provides?.energyActions && coreServices.energy?.registerAction) {
         for (const [action, config] of Object.entries(manifest.provides.energyActions)) {
           if (typeof config === "object" && config.costFn) {
-            registerAction(action, config.costFn);
+            coreServices.energy.registerAction(action, config.costFn);
           } else if (typeof config === "object" && typeof config.cost === "number") {
-            registerAction(action, () => config.cost);
+            coreServices.energy.registerAction(action, () => config.cost);
           }
         }
       }
