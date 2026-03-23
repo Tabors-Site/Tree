@@ -16,6 +16,8 @@ import canopy from "./canopy.js";
 import { handleMcpRequest, mcpServerInstance } from "../mcp/server.js";
 import authenticateMCP from "../middleware/authenticateMCP.js";
 
+import express from "express";
+import path from "path";
 import rateLimit from "express-rate-limit";
 import { notFoundPage } from "../middleware/notFoundPage.js";
 
@@ -58,6 +60,9 @@ export default async function registerURLRoutes(app) {
   await loadExtensions(app, mcpServerInstance, { getConfigValue: getLandConfigValue });
 
   app.post("/mcp", authenticateMCP, handleMcpRequest);
+
+  // Serve uploaded files
+  app.use("/api/v1/uploads", express.static(path.join(process.cwd(), "uploads")));
 
   app.use("/api/v1", me);
   app.use("/api/v1", authApiRouter);
