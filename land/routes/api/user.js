@@ -4,7 +4,7 @@ import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
 
 import User from "../../db/models/user.js";
-import { getEnergy, getUserMeta } from "../../core/tree/userMetadata.js";
+import { getUserMeta } from "../../core/tree/userMetadata.js";
 
 // Energy: dynamic import, no-op if extension not installed
 import { getExtension } from "../../extensions/loader.js";
@@ -53,7 +53,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 
     const roots = user.roots || [];
     const profileType = user.profileType || "basic";
-    const energyData = getEnergy(user);
+    const energyData = getUserMeta(user, "energy");
     const energy = energyData.available;
     const extraEnergy = energyData.additional;
 

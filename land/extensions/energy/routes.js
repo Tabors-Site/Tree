@@ -6,7 +6,7 @@ import authenticate from "../../middleware/authenticate.js";
 import { getConnectionsForUser } from "../../core/llms/customLLM.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
-import { getEnergy, getUserMeta } from "../../core/tree/userMetadata.js";
+import { getUserMeta } from "../../core/tree/userMetadata.js";
 
 const router = express.Router();
 
@@ -30,7 +30,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const energy = getEnergy(user);
+    const energy = getUserMeta(user, "energy");
     const energyAmount = energy.available?.amount ?? 0;
     const additionalEnergy = energy.additional?.amount ?? 0;
     const profileType = (user.profileType || "basic").toLowerCase();

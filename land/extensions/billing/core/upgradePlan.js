@@ -1,4 +1,4 @@
-import { getEnergy, setEnergy, getUserMeta } from "../../../core/tree/userMetadata.js";
+import { getUserMeta, setUserMeta } from "../../../core/tree/userMetadata.js";
 
 let DAILY_LIMITS = {};
 export function setEnergyService(energy) { DAILY_LIMITS = energy.DAILY_LIMITS || {}; }
@@ -36,7 +36,7 @@ export function upgradeUserPlan(user, newPlan) {
 
   energy.available.amount = DAILY_LIMITS[newPlan] ?? DAILY_LIMITS.basic;
   energy.available.lastResetAt = new Date();
-  setEnergy(user, energy);
+  setUserMeta(user, "energy", energy);
 
   return user;
 }

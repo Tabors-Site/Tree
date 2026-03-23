@@ -1,7 +1,7 @@
 import express from "express";
 import authenticate from "../../middleware/authenticate.js";
 import User from "../../db/models/user.js";
-import { getEnergy, getUserMeta } from "../../core/tree/userMetadata.js";
+import { getUserMeta } from "../../core/tree/userMetadata.js";
 
 const router = express.Router();
 
@@ -12,7 +12,7 @@ router.get("/me", authenticate, async (req, res) => {
   if (!user)
     return res.status(404).json({ success: false, error: "User not found" });
 
-  const energy = getEnergy(user);
+  const energy = getUserMeta(user, "energy");
   const available = energy.available?.amount ?? 0;
   const additional = energy.additional?.amount ?? 0;
 

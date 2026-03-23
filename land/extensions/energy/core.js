@@ -3,7 +3,7 @@ import fs from "fs";
 import User from "../../db/models/user.js";
 import { assignConnection } from "../../core/llms/customLLM.js";
 import Node from "../../db/models/node.js";
-import { getEnergy, setEnergy, getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
+import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
 
 const TEXT_NOTE_CHARS_PER_ENERGY = 1000;
 const TEXT_NOTE_MIN = 1;
@@ -131,7 +131,7 @@ export function calculateEnergyCost(action, payload) {
 }
 
 export function maybeResetEnergy(user) {
-  const energy = getEnergy(user);
+  const energy = getUserMeta(user, "energy");
   if (!energy.available) return false;
 
   const now = Date.now();
@@ -151,7 +151,7 @@ export function maybeResetEnergy(user) {
 
     energy.available.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
     energy.available.lastResetAt = new Date();
-    setEnergy(user, energy);
+    setUserMeta(user, "energy", energy);
     assignConnection(user._id, "main", null);
     assignConnection(user._id, "rawIdea", null);
     Node.updateMany(
@@ -179,7 +179,7 @@ export function maybeResetEnergy(user) {
 
   energy.available.amount = limit;
   energy.available.lastResetAt = new Date();
-  setEnergy(user, energy);
+  setUserMeta(user, "energy", energy);
 
   return true;
 }
@@ -245,7 +245,7 @@ export async function useEnergy({
 
   const cost = calculateEnergyCost(action, payload);
 
-  const energy = getEnergy(user);
+  const energy = getUserMeta(user, "energy");
   const baseEnergy = energy.available.amount || 0;
   const extraEnergy = energy.additional?.amount || 0;
   const totalEnergy = baseEnergy + extraEnergy;
@@ -277,7 +277,7 @@ export async function useEnergy({
     remainingCost = 0;
   }
 
-  setEnergy(user, energy);
+  setUserMeta(user, "energy", energy);
   await user.save();
 
   return {

@@ -2,7 +2,7 @@ import log from "../../core/log.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import User from "../../db/models/user.js";
-import { getApiKeys, setApiKeys } from "../../core/tree/userMetadata.js";
+import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
 
 const MAX_API_KEYS_PER_USER = 10;
 
@@ -41,7 +41,7 @@ export const createApiKey = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    let keys = getApiKeys(user);
+    let keys = getUserMeta(user, "apiKeys") || [];
 
     if (revokeOld) {
       keys = keys.map((k) => ({ ...k, revoked: true }));
@@ -53,7 +53,7 @@ export const createApiKey = async (req, res) => {
 
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
     keys = [...keys, { _id: crypto.randomUUID(), keyHash, keyPrefix, name: safeName, createdAt: new Date() }];
-    setApiKeys(user, keys);
+    setUserMeta(user, "apiKeys", keys);
     await user.save();
 
     return res.status(201).json({
@@ -74,7 +74,7 @@ export const listApiKeys = async (req, res) => {
     }
 
     return res.json(
-      getApiKeys(user).map((k) => ({
+      getUserMeta(user, "apiKeys") || [].map((k) => ({
         id: k._id,
         name: k.name,
         createdAt: k.createdAt,
@@ -98,11 +98,11 @@ export const deleteApiKey = async (req, res) => {
 
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: "User not found" });
-    const keys = getApiKeys(user);
+    const keys = getUserMeta(user, "apiKeys") || [];
     const key = keys.find((k) => k._id === keyId);
     if (!key) return res.status(404).json({ message: "API key not found" });
     key.revoked = true;
-    setApiKeys(user, keys);
+    setUserMeta(user, "apiKeys", keys);
     await user.save();
 
     return res.json({ message: "API key revoked" });
@@ -150,7 +150,7 @@ export async function apiKeyAuthStrategy(req) {
   });
 
   for (const user of candidates) {
-    const keys = getApiKeys(user);
+    const keys = getUserMeta(user, "apiKeys") || [];
     for (const key of keys) {
       if (key.revoked) continue;
       if (key.keyPrefix && key.keyPrefix !== prefix) continue;
@@ -162,7 +162,7 @@ export async function apiKeyAuthStrategy(req) {
 
       key.usageCount = (key.usageCount || 0) + 1;
       key.lastUsedAt = new Date();
-      setApiKeys(user, keys);
+      setUserMeta(user, "apiKeys", keys);
       await user.save();
 
       return { userId: user._id, username: user.username, extra: { apiKeyId: key._id } };

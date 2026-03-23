@@ -752,12 +752,15 @@ export function registerToolDef(name, schema) {
   extensionToolDefs[name] = schema;
 }
 
+const _warnedTools = new Set();
 export function resolveTools(toolNames) {
   return toolNames.map((name) => {
-    // Check core tools first, then extension tools
     const def = TOOL_DEFS[name] || extensionToolDefs[name];
     if (!def) {
-      log.warn("Tools", `Unknown tool: ${name} (skipped)`);
+      if (!_warnedTools.has(name)) {
+        _warnedTools.add(name);
+        log.warn("Tools", `Unknown tool: ${name} (skipped)`);
+      }
       return null;
     }
     return def;
