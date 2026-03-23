@@ -34,7 +34,7 @@ import {
   processMessage, switchMode, setRootId, getRootId, runChat, runPipeline,
   setCurrentNodeId, getCurrentNodeId, getCurrentMode,
   clearSession as clearConversationSession,
-  resetConversation, injectContext, registerModeAssignment, registerModeTimeout,
+  resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
 } from "../ws/conversation.js";
 
 import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
@@ -127,7 +127,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       processMessage, switchMode, setRootId, getRootId, runChat, runPipeline,
       setCurrentNodeId, getCurrentNodeId, getCurrentMode,
       clearSession: clearConversationSession,
-      resetConversation, injectContext, registerModeAssignment, registerModeTimeout,
+      resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
     },
 
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },

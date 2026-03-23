@@ -51,7 +51,10 @@ export function setKernelConfig(key, value) {
 }
 export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
 export function setLlmMaxRetries(n) { LLM_MAX_RETRIES = n; }
+const MODE_RETRIES = {};
 export function registerModeTimeout(modeKey, ms) { MODE_TIMEOUTS[modeKey] = ms; }
+export function registerModeRetries(modeKey, n) { MODE_RETRIES[modeKey] = n; }
+function getRetriesForMode(modeKey) { return MODE_RETRIES[modeKey] ?? LLM_MAX_RETRIES; }
 function getTimeoutForMode(modeKey, nodeMetadata = null) {
   // Per-node override
   const meta = nodeMetadata instanceof Map ? Object.fromEntries(nodeMetadata) : (nodeMetadata || {});
