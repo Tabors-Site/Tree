@@ -173,20 +173,21 @@ program.configureOutput({
   },
 });
 
-// Catch unknown top-level commands
+// Catch unknown top-level commands (don't exit in shell mode)
 program.on("command:*", (operands) => {
   const unknown = operands[0];
   console.log(chalk.red(`Unknown command: ${unknown}`));
 
-  // Suggest closest match
   const allCmds = program.commands.map(c => c.name());
   const suggestions = allCmds.filter(c => c.includes(unknown) || unknown.includes(c));
   if (suggestions.length) {
     console.log(chalk.dim(`Did you mean: ${suggestions.join(", ")}?`));
   }
-  console.log(chalk.dim("Run 'treeos help' for all commands."));
-  process.exit(1);
+  console.log(chalk.dim("Type 'help' for all commands."));
 });
+
+// Don't exit on errors in shell mode
+program.exitOverride();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHELL (interactive REPL)
@@ -333,5 +334,10 @@ program
 // Parse — skip auto-parse when running interactively inside shell
 // ─────────────────────────────────────────────────────────────────────────────
 if (process.argv[2] !== "_shell_internal") {
-  program.parseAsync(process.argv);
+  program.parseAsync(process.argv).catch((e) => {
+    if (!e.code?.startsWith("commander.")) {
+      console.error(chalk.red(e.message));
+    }
+    process.exit(1);
+  });
 }
