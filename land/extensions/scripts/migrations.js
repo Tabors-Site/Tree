@@ -8,11 +8,12 @@ export default [
     version: 1,
     description: "Move scripts from node.scripts to metadata.scripts",
     async up(core) {
-      const Node = core.models.Node;
+      const collection = core.models.Node.collection;
 
-      const nodes = await Node.find({
-        "scripts.0": { $exists: true },
-      });
+      const nodes = await collection.find(
+        { "scripts.0": { $exists: true } },
+        { projection: { _id: 1, scripts: 1, metadata: 1 } }
+      ).toArray();
 
       let migrated = 0;
 
@@ -23,18 +24,13 @@ export default [
           script: s.script,
         }));
 
-        if (!node.metadata) node.metadata = new Map();
+        const metadata = node.metadata || {};
+        metadata.scripts = { list };
 
-        if (node.metadata instanceof Map) {
-          node.metadata.set("scripts", { list });
-        } else {
-          node.metadata.scripts = { list };
-        }
-
-        node.scripts = [];
-        node.markModified("metadata");
-        node.markModified("scripts");
-        await node.save();
+        await collection.updateOne(
+          { _id: node._id },
+          { $set: { metadata }, $unset: { scripts: "" } }
+        );
         migrated++;
       }
 
