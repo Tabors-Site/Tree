@@ -93,6 +93,49 @@ router.get("/", async (req, res) => {
 });
 
 /**
+ * GET /extensions/routes/check?path=/root/:rootId/calendar
+ * Check if a route path is claimed by any published extension.
+ * Returns the extension name if claimed, null if available.
+ */
+router.get("/routes/check", async (req, res) => {
+  try {
+    const { path: routePath } = req.query;
+    if (!routePath) {
+      return res.status(400).json({ error: "path query parameter required" });
+    }
+
+    // Search all extensions for this route in their manifest cli declarations or provides.routes
+    const extensions = await Extension.find({}).lean();
+
+    const claims = [];
+    for (const ext of extensions) {
+      const cliRoutes = ext.manifest?.provides?.cli || [];
+      for (const cmd of cliRoutes) {
+        if (cmd.endpoint === routePath) {
+          claims.push({ extension: ext.name, version: ext.version, command: cmd.command });
+        }
+        // Check subcommand endpoints too
+        if (cmd.subcommands) {
+          for (const [action, sub] of Object.entries(cmd.subcommands)) {
+            if (sub.endpoint === routePath) {
+              claims.push({ extension: ext.name, version: ext.version, command: `${cmd.command.split(" ")[0]} ${action}` });
+            }
+          }
+        }
+      }
+    }
+
+    res.json({
+      path: routePath,
+      available: claims.length === 0,
+      claims,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /extensions/:name
  * Get all versions of an extension.
  */

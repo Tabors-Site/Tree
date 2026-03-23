@@ -340,6 +340,9 @@ function topologicalSort(manifests) {
  * @returns {Map} loaded extensions
  */
 export async function loadExtensions(app, mcpServer, opts = {}) {
+  // Track route ownership for collision detection
+  const routeOwnership = new Map();
+
   // Build core services (initially with empty loadedExtensions)
   coreServices = buildCoreServices({
     loadedExtensions: loaded,
@@ -424,9 +427,35 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         continue;
       }
 
-      // Wire routes
+      // Wire routes (with collision detection)
       if (instance.router) {
-        app.use("/api/v1", instance.router);
+        // Extract route paths from the router's stack
+        const routePaths = [];
+        if (instance.router.stack) {
+          for (const layer of instance.router.stack) {
+            if (layer.route?.path) {
+              routePaths.push(layer.route.path);
+            }
+          }
+        }
+
+        // Check for collisions with already-registered extension routes
+        let hasCollision = false;
+        for (const rpath of routePaths) {
+          if (routeOwnership.has(rpath)) {
+            const owner = routeOwnership.get(rpath);
+            console.error(`[Extensions] Route collision: "${rpath}" claimed by both "${owner}" and "${manifest.name}". Skipping "${manifest.name}" routes.`);
+            hasCollision = true;
+            break;
+          }
+        }
+
+        if (!hasCollision) {
+          for (const rpath of routePaths) {
+            routeOwnership.set(rpath, manifest.name);
+          }
+          app.use("/api/v1", instance.router);
+        }
       }
 
       // Wire MCP tools

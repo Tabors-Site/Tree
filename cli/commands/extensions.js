@@ -338,9 +338,8 @@ module.exports = (program) => {
         console.log(chalk.green(`Uninstalled: ${name}`));
         console.log(chalk.dim("Restart the land to apply."));
         await refreshProtocolCache();
-        } catch (err) {
-          console.error(chalk.red("Error:"), err.message);
-        }
-      });
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
     });
 };
