@@ -78,11 +78,16 @@ router.post("/land/chat", authenticate, async (req, res) => {
 
     const { runChat } = await import("../../ws/conversation.js");
 
+    // Abort when client disconnects (Ctrl+C)
+    const abort = new AbortController();
+    res.on("close", () => { if (!res.writableEnded) abort.abort(); });
+
     const { answer, aiChatId } = await runChat({
       userId: req.userId,
       username: user.username,
       message,
       mode: "land:manager",
+      signal: abort.signal,
     });
 
     res.json({ success: true, answer, aiChatId });

@@ -1106,13 +1106,14 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
     throw err;
   }
 
-  const answer = result?.content || "No response.";
+  const stopped = abortSignal.aborted;
+  const answer = stopped ? null : (result?.content || result?.answer || "No response.");
 
   // 6. Finalize AIChat
   if (aiChat) {
     try {
       const internal = result?._internal || {};
-      await finalizeAIChat({ chatId: aiChat._id, content: answer, stopped: false, modeKey: internal.modeKey || mode });
+      await finalizeAIChat({ chatId: aiChat._id, content: stopped ? null : answer, stopped, modeKey: internal.modeKey || mode });
     } catch {}
   }
 
