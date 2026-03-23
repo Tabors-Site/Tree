@@ -446,4 +446,71 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+
+  // ── Per-node mode overrides ──
+  program
+    .command("modes")
+    .description("Show mode overrides and available modes at the current node")
+    .action(async () => {
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const data = await api.get(`/node/${nodeId}/modes`);
+
+        const modes = data.modes || {};
+        const keys = Object.keys(modes);
+
+        if (keys.length === 0) {
+          console.log(chalk.dim("No mode overrides. Using defaults."));
+        } else {
+          console.log(chalk.bold("Mode overrides:"));
+          for (const [intent, modeKey] of Object.entries(modes)) {
+            console.log(`  ${chalk.cyan(intent)} -> ${chalk.green(modeKey)}`);
+          }
+        }
+
+        if (data.availableModes?.length) {
+          console.log(chalk.bold("\nAvailable modes:"));
+          for (const m of data.availableModes) {
+            console.log(`  ${chalk.dim(m)}`);
+          }
+        }
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("mode-set <intent> <modeKey>")
+    .description("Override mode for an intent at this node (e.g. mode-set respond custom:formal)")
+    .action(async (intent, modeKey) => {
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        await api.post(`/node/${nodeId}/modes`, { intent, modeKey });
+        console.log(chalk.green(`✓ ${intent} -> ${modeKey}`));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("mode-clear [intent]")
+    .description("Clear mode override(s) at this node. Omit intent to clear all.")
+    .action(async (intent) => {
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        await api.post(`/node/${nodeId}/modes`, { intent: intent || null, clear: true });
+        console.log(chalk.green(intent ? `✓ Cleared ${intent} override` : "✓ All mode overrides cleared"));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
 };

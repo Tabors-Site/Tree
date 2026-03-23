@@ -25,6 +25,25 @@ import {
 import mongoose from "mongoose";
 import Node from "../../db/models/node.js";
 import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
+import { resolveMode } from "../../ws/modes/registry.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// MODE RESOLUTION HELPER
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve mode key for an intent at a node. Checks per-node overrides.
+ * Falls back to default tree:{intent} mode.
+ */
+async function resolveModeForNode(intent, nodeId) {
+  if (!nodeId) return `tree:${intent}`;
+  try {
+    const node = await Node.findById(nodeId).select("metadata").lean();
+    return resolveMode(intent, "tree", node?.metadata);
+  } catch {
+    return `tree:${intent}`;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
@@ -324,7 +343,8 @@ async function executePlanSteps({
         isOnlyStep ? "Finding node…" : `Step ${stepNum}: Finding node…`,
       );
 
-      switchMode(visitorId, "tree:navigate", {
+      const navMode = await resolveModeForNode("navigate", lastTargetNodeId);
+      switchMode(visitorId, navMode, {
         ...meta,
         currentNodeId: getCurrentNodeId(visitorId) || rootId,
         clearHistory: true,
@@ -778,13 +798,9 @@ async function executePlanSteps({
     // E) EXECUTE MUTATION
     // ══════════════════════════════════════════════════════
 
-    const mutationModes = {
-      structure: "tree:structure",
-      edit: "tree:edit",
-      notes: "tree:notes",
-    };
-
-    const executionMode = mutationModes[intent.intent];
+    const mutationIntents = ["structure", "edit", "notes"];
+    const isMutation = mutationIntents.includes(intent.intent);
+    const executionMode = isMutation ? await resolveModeForNode(intent.intent, targetNodeId) : null;
     let execResult = null;
 
     if (executionMode) {
@@ -1408,7 +1424,8 @@ async function runQueryFlow({
   // ── LIBRARIAN: navigate and gather context (no plan needed) ──
   emitStatus(socket, "navigate", "Reading tree...");
 
-  switchMode(visitorId, "tree:librarian", {
+  const queryLibMode = await resolveModeForNode("librarian", getCurrentNodeId(visitorId) || rootId);
+  switchMode(visitorId, queryLibMode, {
     ...meta,
     treeSummary: treeSummary || "",
     intent: "query",
@@ -1518,7 +1535,8 @@ async function runLibrarianFlow({
     isQuery ? "Reading tree…" : "Walking the tree…",
   );
 
-  switchMode(visitorId, "tree:librarian", {
+  const libMode = await resolveModeForNode("librarian", getCurrentNodeId(visitorId) || rootId);
+  switchMode(visitorId, libMode, {
     ...meta,
     treeSummary: treeSummary || "",
     intent: classification.intent,
@@ -1795,13 +1813,10 @@ async function executePendingOperation({
 
   emitStatus(socket, "execute", "Executing confirmed operation…");
 
-  const mutationModes = {
-    structure: "tree:structure",
-    edit: "tree:edit",
-    notes: "tree:notes",
-  };
-
-  const executionMode = mutationModes[pending.action];
+  const pendingMutationIntents = ["structure", "edit", "notes"];
+  const executionMode = pendingMutationIntents.includes(pending.action)
+    ? await resolveModeForNode(pending.action, pending.targetNodeId)
+    : null;
   if (!executionMode) {
     return await runRespond({
       visitorId,
@@ -1995,7 +2010,8 @@ async function runRespond({
     };
   }
 
-  switchMode(visitorId, "tree:respond", {
+  const respondMode = await resolveModeForNode("respond", getCurrentNodeId(visitorId) || rootId);
+  switchMode(visitorId, respondMode, {
     username,
     userId,
     rootId,

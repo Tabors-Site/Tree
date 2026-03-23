@@ -210,6 +210,70 @@ router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+// ── Per-node mode overrides ──
+// Must be before /node/:nodeId/:version to avoid :version capturing "modes"
+router.get("/node/:nodeId/modes", async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const node = await Node.findById(nodeId).select("name metadata").lean();
+    if (!node) return res.status(404).json({ error: "Node not found" });
+    const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+    const modes = meta.modes || {};
+
+    // List available modes from registry
+    let availableModes = [];
+    try {
+      const { getSubModes } = await import("../../ws/modes/registry.js");
+      availableModes = getSubModes("tree").map(m => m.key);
+    } catch {}
+
+    res.json({ nodeId, name: node.name, modes, availableModes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { intent, modeKey, clear } = req.body;
+
+    const node = await Node.findById(nodeId);
+    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (node.isSystem) return res.status(400).json({ error: "Cannot modify system nodes" });
+
+    const { getExtMeta, setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+
+    if (clear) {
+      // Clear all mode overrides or a specific one
+      const modes = getExtMeta(node, "modes") || {};
+      if (intent) {
+        delete modes[intent];
+      }
+      setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : null);
+    } else {
+      if (!intent || !modeKey) return res.status(400).json({ error: "intent and modeKey required" });
+
+      // Validate mode exists
+      try {
+        const { getMode } = await import("../../ws/modes/registry.js");
+        if (!getMode(modeKey)) return res.status(400).json({ error: `Mode "${modeKey}" not registered` });
+      } catch {}
+
+      const modes = getExtMeta(node, "modes") || {};
+      modes[intent] = modeKey;
+      setExtMeta(node, "modes", modes);
+    }
+
+    await node.save();
+    if ("html" in req.query) return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
+    res.json({ success: true, modes: getExtMeta(node, "modes") || {} });
+  } catch (err) {
+    log.error("API", "editModes error:", err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ── Per-node tool configuration ──
 // Must be before /node/:nodeId/:version to avoid :version capturing "tools"
 router.get("/node/:nodeId/tools", async (req, res) => {
