@@ -51,14 +51,15 @@ function assertNonNegativeTradeMap(input, label) {
   throw new Error(`${label} values must be an object or Map`);
 }
 
-function assertValidVersionIndex(index, node, label) {
-  if (!Number.isInteger(index) || index < 0) {
-    throw new Error(`${label} version index must be an integer ≥ 0`);
-  }
+// Read node values from metadata (flat schema)
+function getNodeValues(node) {
+  return { ...getExtMeta(node, "values") };
+}
 
-  if (!node.versions || !node.versions[index]) {
-    throw new Error(`${label} version index does not exist`);
-  }
+// Write node values to metadata and save
+async function setNodeValues(node, values) {
+  setExtMeta(node, "values", values);
+  await node.save();
 }
 
 function hasTradeValues(input) {
@@ -135,9 +136,6 @@ const validateTransactionSides = ({ sideA, sideB }) => {
 export const createTransaction = async ({
   sideA,
   sideB,
-  versionAIndex,
-  versionBIndex: inputVersionBIndex,
-
   valuesA,
   valuesB,
   userId,
@@ -148,20 +146,9 @@ export const createTransaction = async ({
 
   let nodeA = null;
   let nodeB = null;
-  let versionBIndex = inputVersionBIndex;
 
   const hasA = hasTradeValues(valuesA);
   const hasB = hasTradeValues(valuesB);
-
-  if (!hasA && !hasB) {
-    throw new Error("Transaction must include values on at least one side");
-  }
-  if (sideA.kind !== "NODE" && versionAIndex != null) {
-    throw new Error("versionAIndex must not be provided unless sideA is NODE");
-  }
-  if (sideB.kind !== "NODE" && versionBIndex != null) {
-    throw new Error("versionBIndex must not be provided unless sideB is NODE");
-  }
 
   if (!hasA && !hasB) {
     throw new Error("Transaction must trade at least one value");
@@ -177,31 +164,15 @@ export const createTransaction = async ({
     if (!nodeB) throw new Error("Node B not found");
   }
 
-  // Default sideB version to node.prestige (latest) if not provided
-  if (sideB.kind === "NODE") {
-    if (versionBIndex == null) {
-      if (!Number.isInteger(nodeB.prestige) || nodeB.prestige < 0) {
-        throw new Error("Node B prestige must be an integer ≥ 0");
-      }
-      versionBIndex = nodeB.prestige;
-    }
-
-    assertValidVersionIndex(versionBIndex, nodeB, "Side B");
-  }
   if (
     sideA.kind === "NODE" &&
     sideB.kind === "NODE" &&
-    String(sideA.nodeId) === String(sideB.nodeId) &&
-    versionAIndex === versionBIndex
+    String(sideA.nodeId) === String(sideB.nodeId)
   ) {
-    throw new Error(
-      "Transactions between the same node and same version are not allowed",
-    );
+    throw new Error("Transactions between the same node are not allowed");
   }
 
   if (sideA.kind === "NODE") {
-    assertValidVersionIndex(versionAIndex, nodeA, "Side A");
-
     await resolveTreeAccess(sideA.nodeId, userId);
   }
 
@@ -221,8 +192,8 @@ export const createTransaction = async ({
   const transaction = await Transaction.create({
     sideA,
     sideB,
-    versionAIndex,
-    versionBIndex,
+    versionAIndex: 0,
+    versionBIndex: 0,
     valuesTraded: {
       sideA: valuesA,
       sideB: valuesB,
@@ -236,14 +207,14 @@ export const createTransaction = async ({
       nodeId: nodeA._id,
       action: "transaction",
       tradeId: transaction._id,
-      nodeVersion: versionAIndex,
+      nodeVersion: "0",
       transactionMeta: {
         event: "created",
         side: "A",
         role: "proposer",
         counterpartyNodeId: nodeB?._id ?? null,
-        versionSelf: versionAIndex,
-        versionCounterparty: versionBIndex ?? null,
+        versionSelf: "0",
+        versionCounterparty: "0",
         actorUserId: userId,
       },
       energyUsed,
@@ -256,14 +227,14 @@ export const createTransaction = async ({
       nodeId: nodeB._id,
       action: "transaction",
       tradeId: transaction._id,
-      nodeVersion: versionBIndex,
+      nodeVersion: "0",
       transactionMeta: {
         event: "created",
         side: "B",
         role: "counterparty",
         counterpartyNodeId: nodeA?._id ?? null,
-        versionSelf: versionBIndex,
-        versionCounterparty: versionAIndex,
+        versionSelf: "0",
+        versionCounterparty: "0",
         actorUserId: userId,
       },
       energyUsed,
@@ -321,15 +292,7 @@ export async function getTransactions({
     const selfSide = isA ? "A" : "B";
     const otherSide = isA ? "B" : "A";
 
-    const selfVersion = selfSide === "A" ? tx.versionAIndex : tx.versionBIndex;
-
-    if (
-      tx.status === "accepted" &&
-      version !== undefined &&
-      selfVersion !== version
-    ) {
-      continue;
-    }
+    const selfVersion = 0;
 
     const counterpartyNodeId = tx[`side${otherSide}`]?.nodeId ?? null;
 
@@ -352,9 +315,8 @@ export async function getTransactions({
       perspective: isA ? "nodeA" : "nodeB",
       canApprove,
       canDeny: canApprove,
-      versionSelf: selfVersion,
-      versionCounterparty:
-        otherSide === "A" ? tx.versionAIndex : tx.versionBIndex,
+      versionSelf: 0,
+      versionCounterparty: 0,
       valuesSent: tx.valuesTraded[`side${selfSide}`] ?? {},
       valuesReceived: tx.valuesTraded[`side${otherSide}`] ?? {},
       counterparty,
@@ -380,7 +342,7 @@ export async function executeTransaction(transaction, userId) {
     throw new Error("Transaction is not accepted");
   }
 
-  const { sideA, sideB, versionAIndex, versionBIndex, valuesTraded } =
+  const { sideA, sideB, valuesTraded } =
     transaction;
 
   // 1) Normalize traded values
@@ -412,31 +374,19 @@ export async function executeTransaction(transaction, userId) {
   }
 
   // 3) Validate versions
-  if (nodeA) {
-    if (!nodeA.versions?.[versionAIndex]) {
-      throw new Error("Invalid versionAIndex");
-    }
-  }
-
-  if (nodeB) {
-    if (!nodeB.versions?.[versionBIndex]) {
-      throw new Error("Invalid versionBIndex");
-    }
-  }
-
   // 4) Pre-check balances
   if (nodeA && nodeB) {
-    const vA = nodeA.versions[versionAIndex];
-    const vB = nodeB.versions[versionBIndex];
+    const vA = getNodeValues(nodeA);
+    const vB = getNodeValues(nodeB);
 
     for (const [k, v] of Object.entries(sideAObj)) {
-      if ((vA.values.get(k) || 0) < v) {
+      if ((vA[k] || 0) < v) {
         throw new Error(`Insufficient ${k} for node A`);
       }
     }
 
     for (const [k, v] of Object.entries(sideBObj)) {
-      if ((vB.values.get(k) || 0) < v) {
+      if ((vB[k] || 0) < v) {
         throw new Error(`Insufficient ${k} for node B`);
       }
     }
@@ -449,14 +399,14 @@ export async function executeTransaction(transaction, userId) {
       nodeId: nodeA._id,
       action: "transaction",
       tradeId: transaction._id,
-      nodeVersion: versionAIndex,
+      nodeVersion: "0",
       transactionMeta: {
         event: "execution_started",
         side: "A",
         role: "sender",
         counterpartyNodeId: nodeB?._id ?? null,
-        versionSelf: versionAIndex,
-        versionCounterparty: versionBIndex ?? null,
+        versionSelf: "0",
+        versionCounterparty: "0",
         actorUserId: userId,
       },
     });
@@ -468,14 +418,14 @@ export async function executeTransaction(transaction, userId) {
       nodeId: nodeB._id,
       action: "transaction",
       tradeId: transaction._id,
-      nodeVersion: versionBIndex,
+      nodeVersion: "0",
       transactionMeta: {
         event: "execution_started",
         side: "B",
         role: "receiver",
         counterpartyNodeId: nodeA?._id ?? null,
-        versionSelf: versionBIndex,
-        versionCounterparty: versionAIndex ?? null,
+        versionSelf: "0",
+        versionCounterparty: "0",
         actorUserId: userId,
       },
     });
@@ -485,44 +435,39 @@ export async function executeTransaction(transaction, userId) {
   try {
     // NODE ↔ NODE
     if (nodeA && nodeB) {
-      const vA = nodeA.versions[versionAIndex];
-      const vB = nodeB.versions[versionBIndex];
+      const vA = getNodeValues(nodeA);
+      const vB = getNodeValues(nodeB);
 
       for (const [k, v] of Object.entries(sideAObj)) {
-        vA.values.set(k, (vA.values.get(k) || 0) - v);
-        vB.values.set(k, (vB.values.get(k) || 0) + v);
+        vA[k] = (vA[k] || 0) - v;
+        vB[k] = (vB[k] || 0) + v;
       }
 
       for (const [k, v] of Object.entries(sideBObj)) {
-        vB.values.set(k, (vB.values.get(k) || 0) - v);
-        vA.values.set(k, (vA.values.get(k) || 0) + v);
+        vB[k] = (vB[k] || 0) - v;
+        vA[k] = (vA[k] || 0) + v;
       }
 
-      nodeA.markModified(`versions.${versionAIndex}.values`);
-      nodeB.markModified(`versions.${versionBIndex}.values`);
-
-      await nodeA.save();
-      await nodeB.save();
+      await setNodeValues(nodeA, vA);
+      await setNodeValues(nodeB, vB);
     }
 
     // NODE ↔ OUTSIDE (A sends)
     if (nodeA && !nodeB) {
-      const vA = nodeA.versions[versionAIndex];
+      const vA = getNodeValues(nodeA);
       for (const [k, v] of Object.entries(sideAObj)) {
-        vA.values.set(k, (vA.values.get(k) || 0) - v);
+        vA[k] = (vA[k] || 0) - v;
       }
-      nodeA.markModified(`versions.${versionAIndex}.values`);
-      await nodeA.save();
+      await setNodeValues(nodeA, vA);
     }
 
     // NODE ↔ OUTSIDE (B receives)
     if (!nodeA && nodeB) {
-      const vB = nodeB.versions[versionBIndex];
+      const vB = getNodeValues(nodeB);
       for (const [k, v] of Object.entries(sideBObj)) {
-        vB.values.set(k, (vB.values.get(k) || 0) + v);
+        vB[k] = (vB[k] || 0) + v;
       }
-      nodeB.markModified(`versions.${versionBIndex}.values`);
-      await nodeB.save();
+      await setNodeValues(nodeB, vB);
     }
 
     transaction.executedAt = new Date();
@@ -537,14 +482,14 @@ export async function executeTransaction(transaction, userId) {
         nodeId: nodeA._id,
         action: "transaction",
         tradeId: transaction._id,
-        nodeVersion: versionAIndex,
+        nodeVersion: "0",
         transactionMeta: {
           event: "failed",
           side: "A",
           role: "sender",
           counterpartyNodeId: nodeB?._id ?? null,
-          versionSelf: versionAIndex,
-          versionCounterparty: versionBIndex ?? null,
+          versionSelf: "0",
+          versionCounterparty: "0",
           valuesSent: sideAObj,
           valuesReceived: sideBObj ?? {},
           failureReason: err.message,
@@ -559,14 +504,14 @@ export async function executeTransaction(transaction, userId) {
         nodeId: nodeB._id,
         action: "transaction",
         tradeId: transaction._id,
-        nodeVersion: versionBIndex,
+        nodeVersion: "0",
         transactionMeta: {
           event: "failed",
           side: "B",
           role: "receiver",
           counterpartyNodeId: nodeA?._id ?? null,
-          versionSelf: versionBIndex,
-          versionCounterparty: versionAIndex ?? null,
+          versionSelf: "0",
+          versionCounterparty: "0",
           valuesSent: sideBObj ?? {},
           valuesReceived: sideAObj ?? {},
           failureReason: err.message,
@@ -585,14 +530,14 @@ export async function executeTransaction(transaction, userId) {
       nodeId: nodeA._id,
       action: "transaction",
       tradeId: transaction._id,
-      nodeVersion: versionAIndex,
+      nodeVersion: "0",
       transactionMeta: {
         event: "succeeded",
         side: "A",
         role: "sender",
         counterpartyNodeId: nodeB?._id ?? null,
-        versionSelf: versionAIndex,
-        versionCounterparty: versionBIndex ?? null,
+        versionSelf: "0",
+        versionCounterparty: "0",
         valuesSent: sideAObj,
         valuesReceived: sideBObj ?? {},
         actorUserId: userId,
@@ -606,14 +551,14 @@ export async function executeTransaction(transaction, userId) {
       nodeId: nodeB._id,
       action: "transaction",
       tradeId: transaction._id,
-      nodeVersion: versionBIndex,
+      nodeVersion: "0",
       transactionMeta: {
         event: "succeeded",
         side: "B",
         role: "receiver",
         counterpartyNodeId: nodeA?._id ?? null,
-        versionSelf: versionBIndex,
-        versionCounterparty: versionAIndex ?? null,
+        versionSelf: "0",
+        versionCounterparty: "0",
         valuesSent: sideBObj ?? {},
         valuesReceived: sideAObj ?? {},
         actorUserId: userId,
@@ -701,7 +646,7 @@ export async function buildApprovalGroups({ sideA, sideB }, userId) {
 
 export async function applyApproval(transactionId, userId) {
   const transaction = await Transaction.findById(transactionId);
-  const { sideA, sideB, versionAIndex, versionBIndex, valuesTraded } =
+  const { sideA, sideB, valuesTraded } =
     transaction;
 
   if (!transaction) {
@@ -737,7 +682,7 @@ export async function applyApproval(transactionId, userId) {
       nodeId: group.side === "A" ? sideA.nodeId : sideB.nodeId,
       action: "transaction",
       tradeId: transaction._id,
-      nodeVersion: group.side === "A" ? versionAIndex : versionBIndex,
+      nodeVersion: "0",
       transactionMeta: {
         event: "approved",
         side: group.side,
@@ -746,8 +691,8 @@ export async function applyApproval(transactionId, userId) {
           group.side === "A"
             ? (sideB?.nodeId ?? null)
             : (sideA?.nodeId ?? null),
-        versionSelf: group.side === "A" ? versionAIndex : versionBIndex,
-        versionCounterparty: group.side === "A" ? versionBIndex : versionAIndex,
+        versionSelf: "0",
+        versionCounterparty: "0",
         actorUserId: userId,
       },
     });
@@ -827,14 +772,14 @@ export async function denyTransaction(transactionId, userId) {
         nodeId: tx.sideA.nodeId,
         action: "transaction",
         tradeId: tx._id,
-        nodeVersion: tx.versionAIndex,
+        nodeVersion: "0",
         transactionMeta: {
           event: "denied",
           side: "A",
           role: "denier",
           counterpartyNodeId: tx.sideB?.nodeId ?? null,
-          versionSelf: tx.versionAIndex,
-          versionCounterparty: tx.versionBIndex ?? null,
+          versionSelf: "0",
+          versionCounterparty: "0",
           actorUserId: userId,
         },
       });
@@ -846,14 +791,14 @@ export async function denyTransaction(transactionId, userId) {
         nodeId: tx.sideB.nodeId,
         action: "transaction",
         tradeId: tx._id,
-        nodeVersion: tx.versionBIndex,
+        nodeVersion: "0",
         transactionMeta: {
           event: "denied",
           side: "B",
           role: "denier",
           counterpartyNodeId: tx.sideA?.nodeId ?? null,
-          versionSelf: tx.versionBIndex,
-          versionCounterparty: tx.versionAIndex ?? null,
+          versionSelf: "0",
+          versionCounterparty: "0",
           actorUserId: userId,
         },
       });
@@ -877,7 +822,7 @@ export async function denyTransaction(transactionId, userId) {
 }
 
 async function logResolution(transaction, outcome, actorUserId) {
-  const { sideA, sideB, versionAIndex, versionBIndex } = transaction;
+  const { sideA, sideB } = transaction;
   if (transaction.executedAt) return;
 
   const event =
@@ -889,14 +834,14 @@ async function logResolution(transaction, outcome, actorUserId) {
       nodeId: sideA.nodeId,
       action: "transaction",
       tradeId: transaction._id,
-      nodeVersion: versionAIndex,
+      nodeVersion: "0",
       transactionMeta: {
         event,
         side: "A",
         role: "system",
         counterpartyNodeId: sideB?.nodeId ?? null,
-        versionSelf: versionAIndex,
-        versionCounterparty: versionBIndex ?? null,
+        versionSelf: "0",
+        versionCounterparty: "0",
         actorUserId,
       },
     });
@@ -908,14 +853,14 @@ async function logResolution(transaction, outcome, actorUserId) {
       nodeId: sideB.nodeId,
       action: "transaction",
       tradeId: transaction._id,
-      nodeVersion: versionBIndex,
+      nodeVersion: "0",
       transactionMeta: {
         event,
         side: "B",
         role: "system",
         counterpartyNodeId: sideA?.nodeId ?? null,
-        versionSelf: versionBIndex,
-        versionCounterparty: versionAIndex ?? null,
+        versionSelf: "0",
+        versionCounterparty: "0",
         actorUserId,
       },
     });
