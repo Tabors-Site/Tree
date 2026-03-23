@@ -24,30 +24,30 @@ export default {
   }) {
     const isLibrarianFlow = !!librarianContext;
 
-    // Build context sections
+    // Build context sections. Keep it lean. Avoid redundancy.
     const sections = [];
 
     if (conversationMemory) {
       sections.push(`PRIOR CONVERSATION:\n${conversationMemory}`);
     }
 
-    if (librarianContext) {
+    if (isLibrarianFlow) {
+      // Librarian flows (place/query): context from librarian is sufficient
       const ctx = typeof librarianContext === "string"
         ? librarianContext
-        : (librarianContext.responseHint || librarianContext.summary || JSON.stringify(librarianContext));
-      sections.push(`TREE CONTEXT:\n${ctx}`);
-    }
-
-    if (stepSummaries) {
-      sections.push(`WHAT HAPPENED:\n${stepSummaries}`);
-    }
-
-    if (nodeContext) {
-      sections.push(`NODE:\n${nodeContext}`);
-    }
-
-    if (operationContext && !isLibrarianFlow) {
-      sections.push(`OPERATION:\n${operationContext}`);
+        : (librarianContext.responseHint || librarianContext.summary || "");
+      if (ctx) sections.push(`CONTEXT:\n${ctx}`);
+    } else {
+      // Destructive/structural flows: show what happened
+      if (stepSummaries) {
+        sections.push(`WHAT HAPPENED:\n${stepSummaries}`);
+      }
+      if (operationContext) {
+        sections.push(`DETAILS:\n${operationContext}`);
+      }
+      if (nodeContext) {
+        sections.push(`NODE:\n${nodeContext}`);
+      }
     }
 
     if (responseHint) {
@@ -55,7 +55,7 @@ export default {
     }
 
     if (confirmNeeded) {
-      sections.push(`CONFIRMATION NEEDED: Present what will happen and ask if the user wants to proceed. Do NOT say you will do it.`);
+      sections.push(`CONFIRMATION NEEDED: Present what will happen and ask if the user wants to proceed.`);
     }
 
     return `You are ${username}'s tree assistant. Respond using only the context below. No tools.
