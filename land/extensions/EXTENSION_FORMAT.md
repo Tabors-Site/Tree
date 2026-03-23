@@ -117,7 +117,52 @@ provides: {
 }
 ```
 
-Endpoints can use `:nodeId` (resolved from current position), `:version` (resolved to latest), and positional args.
+Endpoint placeholders are resolved automatically by the CLI:
+- `:nodeId` resolves from the current position in the tree
+- `:rootId` resolves from the active tree
+- `:userId` resolves from the logged in user
+- `:version` resolves to "latest"
+- Remaining `:param` placeholders are filled by positional `<args>` in order
+
+## Hooks
+
+Extensions can register hooks to react to or modify core operations without touching core code.
+Hooks are always available via `core.hooks` (no need to declare in `needs`).
+
+```js
+export async function init(core) {
+  core.hooks.register("enrichContext", async ({ context, node, meta }) => {
+    const myData = meta["my-extension"] || {};
+    if (Object.keys(myData).length > 0) context.myData = myData;
+  }, "my-extension");
+}
+```
+
+### Available hooks
+
+| Hook | Data shape | Type | Purpose |
+|------|-----------|------|---------|
+| `beforeNote` | `{ nodeId, version, content, userId, contentType }` | before | Modify note data before save. Prestige uses this to tag version. |
+| `afterNote` | `{ note, nodeId, userId }` | after | React after note saved. Understanding uses this to flag dirty nodes. |
+| `beforeContribution` | `{ nodeId, nodeVersion, action, userId }` | before | Modify contribution metadata. Prestige uses this to tag nodeVersion. |
+| `afterNodeCreate` | `{ node, userId }` | after | Initialize extension data on new nodes. |
+| `beforeStatusChange` | `{ node, status, userId }` | before | Validate or intercept status changes. |
+| `afterStatusChange` | `{ node, status, userId }` | after | React after status saved. |
+| `beforeNodeDelete` | `{ node, userId }` | before | Clean up extension data before deletion. |
+| `enrichContext` | `{ context, node, meta }` | enrich | Inject extension data into AI context. |
+
+### Hook types
+
+- **before**: Runs sequentially. Can modify the data object. Return `false` to cancel the operation. If a handler throws, the operation is also cancelled. The caller receives `{ cancelled: true, reason: "..." }`.
+- **after**: Runs in parallel, fire-and-forget. Errors are logged but never block the operation.
+- **enrich**: Runs sequentially (extensions may read each other's additions). Mutate `context` directly.
+
+### Constraints
+
+- One handler per extension per hook. A second `register()` call replaces the previous handler.
+- All handlers have a 5 second timeout. Hanging handlers are killed and logged.
+- Max 100 handlers per hook.
+- Hooks auto-unregister when an extension is disabled via `hooks.unregister(extName)`.
 
 ## Schema Migrations
 
@@ -238,3 +283,14 @@ if (understanding) {
   await understanding.someExportedFunction();
 }
 ```
+
+## Security Model
+
+Extensions run in the same Node.js process as core. There is no sandbox or import restriction.
+
+- Manifests declare dependencies for documentation and scoped injection via `buildScopedCore`, but **do not enforce access boundaries**. Any extension can `import` any file on disk.
+- The `needs` and `optional` fields determine what is injected into `core` during `init()`, not what the extension can access.
+- Extensions have full read/write access to the database via Mongoose models.
+- Extensions can register routes, tools, hooks, and jobs that run with full system privileges.
+
+**For land operators:** Review all third party extension code before installing. Use `DISABLED_EXTENSIONS` to disable problematic extensions without removing their files. Disabling an extension prevents it from loading, unregisters its hooks, and removes its routes, tools, and jobs.

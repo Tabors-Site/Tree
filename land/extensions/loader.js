@@ -332,6 +332,24 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Initialize
       const instance = await extModule.init(scopedCore);
 
+      // Validate init() return
+      if (!instance || typeof instance !== "object") {
+        console.warn(`[Extensions] "${manifest.name}": init() must return an object. Got ${typeof instance}. Skipped.`);
+        continue;
+      }
+      if (instance.router && typeof instance.router.use !== "function") {
+        console.warn(`[Extensions] "${manifest.name}": router is not a valid Express router. Skipped.`);
+        continue;
+      }
+      if (instance.tools !== undefined && !Array.isArray(instance.tools)) {
+        console.warn(`[Extensions] "${manifest.name}": tools must be an array. Skipped.`);
+        continue;
+      }
+      if (instance.jobs !== undefined && !Array.isArray(instance.jobs)) {
+        console.warn(`[Extensions] "${manifest.name}": jobs must be an array. Skipped.`);
+        continue;
+      }
+
       // Wire routes
       if (instance.router) {
         app.use("/api/v1", instance.router);
@@ -432,6 +450,57 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 // Discovery
 // ---------------------------------------------------------------------------
 
+/**
+ * Validate a manifest object. Returns an array of error strings (empty = valid).
+ */
+function validateManifest(manifest, dirName) {
+  const errors = [];
+  if (!manifest || typeof manifest !== "object") {
+    return [`${dirName}: manifest is not an object`];
+  }
+  if (!manifest.name || typeof manifest.name !== "string") {
+    errors.push(`${dirName}: missing or invalid "name"`);
+  } else if (!/^[a-z][a-z0-9-]*$/.test(manifest.name)) {
+    errors.push(`${dirName}: name "${manifest.name}" must be lowercase alphanumeric with hyphens`);
+  }
+  if (!manifest.version || typeof manifest.version !== "string") {
+    errors.push(`${dirName}: missing or invalid "version"`);
+  }
+  if (!manifest.description || typeof manifest.description !== "string") {
+    errors.push(`${dirName}: missing or invalid "description"`);
+  }
+  // Validate needs
+  if (manifest.needs) {
+    if (manifest.needs.services && !Array.isArray(manifest.needs.services)) {
+      errors.push(`${dirName}: needs.services must be an array`);
+    }
+    if (manifest.needs.models && !Array.isArray(manifest.needs.models)) {
+      errors.push(`${dirName}: needs.models must be an array`);
+    }
+    if (manifest.needs.extensions && !Array.isArray(manifest.needs.extensions)) {
+      errors.push(`${dirName}: needs.extensions must be an array`);
+    }
+  }
+  // Validate provides.cli
+  if (manifest.provides?.cli) {
+    if (!Array.isArray(manifest.provides.cli)) {
+      errors.push(`${dirName}: provides.cli must be an array`);
+    } else {
+      for (const cmd of manifest.provides.cli) {
+        if (!cmd.command || !cmd.description || !cmd.method || !cmd.endpoint) {
+          errors.push(`${dirName}: CLI command missing required fields (command, description, method, endpoint)`);
+          break;
+        }
+      }
+    }
+  }
+  // Validate provides.routes
+  if (manifest.provides?.routes !== undefined && manifest.provides.routes !== false && typeof manifest.provides.routes !== "string") {
+    errors.push(`${dirName}: provides.routes must be false or a file path string`);
+  }
+  return errors;
+}
+
 async function discoverManifests() {
   const results = [];
 
@@ -441,12 +510,23 @@ async function discoverManifests() {
 
   for (const entry of entries) {
     try {
+      // Skip template and hidden directories
+      if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+
       if (entry.isDirectory()) {
         const manifestPath = path.join(__dirname, entry.name, "manifest.js");
         const indexPath = path.join(__dirname, entry.name, "index.js");
 
         if (fs.existsSync(manifestPath) && fs.existsSync(indexPath)) {
           const { default: manifest } = await import(toImportURL(manifestPath));
+
+          const errors = validateManifest(manifest, entry.name);
+          if (errors.length > 0) {
+            for (const err of errors) console.error(`[Extensions] Manifest validation: ${err}`);
+            console.warn(`[Extensions] Skipping "${entry.name}" due to invalid manifest`);
+            continue;
+          }
+
           results.push({
             manifest,
             dir: path.join(__dirname, entry.name),
