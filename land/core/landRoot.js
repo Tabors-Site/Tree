@@ -81,7 +81,6 @@ export async function ensureLandRoot() {
       ["ENABLE_FRONTEND_HTML", process.env.ENABLE_FRONTEND_HTML || ""],
       ["DIRECTORY_URL", process.env.DIRECTORY_URL || ""],
       ["REQUIRE_EMAIL", process.env.REQUIRE_EMAIL || "true"],
-      ["AI_MODEL_DEFAULT", null],
     ]),
   });
   await configNode.save();

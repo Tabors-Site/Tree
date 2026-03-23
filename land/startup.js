@@ -2,7 +2,7 @@ import mongoose from "./db/config.js";
 import { getLandIdentity, getLandUrl } from "./canopy/identity.js";
 import { ensureLandRoot } from "./core/landRoot.js";
 import { initLandConfig } from "./core/landConfig.js";
-import { startExtensionJobs, getLoadedManifests, runExtensionMigrations } from "./extensions/loader.js";
+import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames } from "./extensions/loader.js";
 import { syncExtensionsToTree } from "./core/landRoot.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
 import { startOutboxJob } from "./canopy/events.js";
@@ -85,12 +85,8 @@ function printReady() {
   const apiUrl = getLandUrl();
 
   // Check loaded extensions for feature-specific messages
-  let hasHtml = false;
-  try {
-    const { getLoadedExtensionNames } = await import("./extensions/loader.js");
-    const loaded = getLoadedExtensionNames();
-    hasHtml = loaded.includes("html-rendering");
-  } catch {}
+  const loaded = getLoadedExtensionNames();
+  const hasHtml = loaded.includes("html-rendering");
 
   console.log("");
   log.info("Land", "Land node online.");

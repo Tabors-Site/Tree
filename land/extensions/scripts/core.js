@@ -1,4 +1,4 @@
-import { VM } from "vm2";
+import vm from "node:vm";
 import { v4 as uuidv4 } from "uuid";
 import Node from "../../db/models/node.js";
 import { logContribution } from "../../db/utils.js";
@@ -199,13 +199,12 @@ export async function executeScript({
   const safeFns = makeSafeFunctions(userId);
   const logs = [];
 
-  const vm = new VM({
-    timeout: 3000,
-    sandbox: {
-      node: sandboxNode,
-      ...safeFns,
-      console: {
-        log: (...args) => {
+  const sandbox = {
+    node: sandboxNode,
+    ...safeFns,
+    console: {
+      log: (...args) => {
+        if (logs.length < 200) {
           logs.push(
             args
               .map((a) =>
@@ -213,22 +212,34 @@ export async function executeScript({
               )
               .join(" "),
           );
-        },
+        }
       },
     },
-  });
+    // Async support: expose Promise so async/await works in the sandbox
+    Promise,
+    setTimeout: (fn, ms) => setTimeout(fn, Math.min(ms, 3000)),
+  };
+
+  const context = vm.createContext(sandbox);
 
   const wrappedScript = `
     (async () => {
       ${scriptObj.script}
     })()
   `;
-  if (logs.length > 200) {
-    logs.length = 200;
-  }
+
+  const SCRIPT_TIMEOUT_MS = 5000;
 
   try {
-    await vm.run(wrappedScript);
+    const script = new vm.Script(wrappedScript, { filename: `script:${scriptObj.name}` });
+    const resultPromise = script.runInContext(context, { timeout: SCRIPT_TIMEOUT_MS });
+    // The script returns a Promise (async IIFE). Race it against a timeout.
+    await Promise.race([
+      resultPromise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Script timed out (5s)")), SCRIPT_TIMEOUT_MS)
+      ),
+    ]);
 
     await logContribution({
       userId,
