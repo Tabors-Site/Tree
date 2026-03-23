@@ -164,6 +164,51 @@ export async function init(core) {
 - Max 100 handlers per hook.
 - Hooks auto-unregister when an extension is disabled via `hooks.unregister(extName)`.
 
+## Environment Variables
+
+Extensions can declare environment variables they need. The loader checks these before calling `init()`. Missing required vars cause the extension to be skipped with a clear message.
+
+```js
+provides: {
+  env: [
+    // Required, user must provide. Extension won't load without it.
+    { key: "STRIPE_SECRET_KEY", required: true, secret: true,
+      description: "Stripe secret key for payment processing" },
+
+    // Required but auto-generated if missing. Appended to .env on first boot.
+    { key: "MY_ENCRYPTION_KEY", required: true, secret: true, autoGenerate: true,
+      description: "Internal encryption key" },
+
+    // Optional with a default value. Set in process.env if missing.
+    { key: "MY_API_URL", required: false,
+      description: "API endpoint", default: "https://api.example.com" },
+
+    // Optional, no default. Extension handles the missing value itself.
+    { key: "MY_OPTIONAL_KEY", required: false,
+      description: "Extra feature key" },
+  ],
+}
+```
+
+### Fields
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `key` | string | (required) | The env var name |
+| `required` | boolean | `true` | If true and missing, extension is skipped |
+| `secret` | boolean | `false` | Marks the value as sensitive (for documentation) |
+| `autoGenerate` | boolean | `false` | If true, a 32-byte hex key is generated and appended to .env |
+| `default` | string | none | Default value if env var is not set |
+| `description` | string | none | Shown in skip messages and .env comments |
+
+### Behavior
+
+- Checked before `init()` is called. If a required var is missing, the extension is skipped entirely.
+- `autoGenerate` keys are written to `.env` so they persist across restarts.
+- `default` values are set in `process.env` at load time but not written to `.env`.
+- Extensions that need external credentials (Stripe keys, wallet master keys) should use `required: true` without `autoGenerate`. The user must provide these.
+- Internal cryptographic keys (encryption, signing) should use `autoGenerate: true`.
+
 ## Schema Migrations
 
 Extensions can declare schema versions and provide migration scripts:

@@ -42,7 +42,19 @@
       "Bash(grep -r \"visibility\\\\|public\\\\|private\" /home/tabor/github/Tree/cli/commands/*.js)",
       "Bash(for f:*)",
       "Bash(do sed:*)",
-      "Bash(ls /home/tabor/github/Tree/*.md)"
+      "Bash(ls /home/tabor/github/Tree/*.md)",
+      "Read(//home/tabor/.treeos/**)",
+      "Bash(git ls-files:*)",
+      "Bash(git commit:*)",
+      "Bash(grep -h \"\\\\.command\\(\" /home/tabor/github/Tree/cli/commands/*.js)",
+      "Bash(ls /home/tabor/github/Tree/site/src/components/Welcome/About/*.jsx)",
+      "Bash(xargs -I{} basename {} .jsx)",
+      "Bash(npm test:*)",
+      "Bash(grep -v \"^--$\")",
+      "Bash(grep -n \"wallet\\\\|solana\\\\|sol\" /home/tabor/github/Tree/cli/commands/*.js)",
+      "Bash(grep -rn \"body:\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep -h process.env. /home/tabor/github/Tree/land/extensions/**/*.js)",
+      "Bash(grep -rn \"wallet\" /home/tabor/github/Tree/cli/commands/*.js)"
     ]
   }
 }

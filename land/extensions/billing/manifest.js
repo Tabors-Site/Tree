@@ -12,6 +12,10 @@ export default {
   },
 
   provides: {
+    env: [
+      { key: "STRIPE_SECRET_KEY", required: true, secret: true, description: "Stripe secret key for payment processing" },
+      { key: "STRIPE_WEBHOOK_SECRET", required: true, secret: true, description: "Stripe webhook signing secret" },
+    ],
     models: {},
     routes: "./purchase.js",
     tools: false,

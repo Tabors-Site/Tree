@@ -195,6 +195,10 @@ treeos search "fitness"
 
 The core protocol is documented in [PROTOCOL.md](PROTOCOL.md). Extensions are documented in [EXTENSIONS.md](EXTENSIONS.md). Every land serves its capabilities at `GET /api/v1/protocol`.
 
+## Contributing
+
+Contributing guide is in progress. For now: fork, branch, PR. Extension development is documented in `land/extensions/EXTENSION_FORMAT.md`.
+
 ## License
 
 AGPL-3.0. See [LICENSE](LICENSE) for details.

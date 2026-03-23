@@ -2,12 +2,18 @@
   "name": "treeos-land",
   "version": "2.0.0",
   "private": true,
+  "type": "module",
+  "license": "AGPL-3.0",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "land": "cd land && node boot.js",
     "start": "cd land && node boot.js",
     "dev": "cd land && SITE_DEV=true node boot.js",
     "build": "cd site && npm run build",
     "dev:site": "cd site && npm run dev",
-    "install:all": "cd land && npm install && cd ../site && npm install && cd ../cli && npm install"
+    "install:all": "cd land && npm install && cd ../site && npm install && cd ../cli && npm install",
+    "test": "node --test test/core.test.js"
   }
 }
