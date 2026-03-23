@@ -1002,9 +1002,17 @@ export function sessionCount() {
  *     nodeId: null,  // optional, for per-node context
  *   });
  */
-export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null }) {
+export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null }) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
+  }
+
+  // Auto-abort on client disconnect if Express res object is provided
+  let _autoAbort = null;
+  if (res && !signal) {
+    _autoAbort = new AbortController();
+    signal = _autoAbort.signal;
+    res.on("close", () => { if (!res.writableEnded) _autoAbort.abort(); });
   }
 
   const jwt = (await import("jsonwebtoken")).default;
