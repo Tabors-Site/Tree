@@ -1,7 +1,7 @@
 export default {
   name: "dreams",
   version: "1.0.0",
-  description: "Background tree maintenance: cleanup, drain, understanding pipelines",
+  description: "Background tree maintenance. Runs cleanup, short term drain, and understanding on a daily schedule.",
 
   needs: {
     services: ["llm", "session", "aiChat", "orchestrator"],

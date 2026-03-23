@@ -1,7 +1,7 @@
 export default {
   name: "land-manager",
   version: "1.0.0",
-  description: "Autonomous land management agent. Lives in system nodes. Manages extensions, config, peers, and land health.",
+  description: "Autonomous land management agent for extensions, config, peers, and health monitoring",
 
   needs: {
     models: ["Node", "User"],

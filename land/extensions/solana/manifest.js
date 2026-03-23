@@ -1,7 +1,7 @@
 export default {
   name: "solana",
   version: "1.1.0",
-  description: "Solana wallet, token holdings, Jupiter swaps per node version",
+  description: "Solana wallets, token holdings, and Jupiter swaps per node",
 
   needs: {
     models: ["Node"],

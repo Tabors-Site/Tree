@@ -1,7 +1,7 @@
 export default {
   name: "deleted-revive",
   version: "1.0.0",
-  description: "Soft delete with parent='deleted' and revive as branch or new root",
+  description: "Soft delete branches and revive them later as a branch or new root",
 
   needs: {
     models: ["Node"],

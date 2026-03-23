@@ -1,7 +1,7 @@
 export default {
   name: "book",
   version: "1.0.0",
-  description: "Book view, share links, filtered note compilation per node",
+  description: "Compile notes into shareable documents per node",
 
   needs: {
     models: ["Node"],

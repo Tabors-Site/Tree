@@ -1,7 +1,7 @@
 export default {
   name: "prestige",
   version: "1.0.0",
-  description: "Node versioning system with generation cycling",
+  description: "Node versioning. Complete a version and start a new generation.",
 
   needs: {
     models: ["Node", "Contribution"],

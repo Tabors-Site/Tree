@@ -1,7 +1,7 @@
 export default {
   name: "console",
   version: "1.0.0",
-  description: "Formatted log output with severity filtering. Levels: 1 (info), 2 (verbose), 3 (debug).",
+  description: "Formatted log output with three severity levels for clean server monitoring",
 
   needs: {},
 

@@ -65,23 +65,30 @@ treeos ext publish my-extension    # Share with the network
 
 | Extension | What it does |
 |-----------|-------------|
-| understanding | Bottom-up tree compression with LLM summarization |
-| scripts | Sandboxed JavaScript on nodes with value/goal mutation |
-| prestige | Node versioning system |
-| schedules | Date scheduling and calendar views |
-| energy | Daily energy budget with tier-based limits |
-| billing | Stripe subscription tiers |
-| raw-ideas | Unstructured capture with auto-placement |
-| dreams | Daily background maintenance (cleanup, drain, understand) |
-| blog | Land-level blog |
-| book | Export tree notes as shareable documents |
-| solana | On-chain wallets and token operations |
-| api-keys | User API keys for programmatic access |
-| email | Email verification, password reset |
-| user-llm | Custom LLM connections and per-user model routing |
-| gateway | External channels (Telegram, Discord) |
-| html-rendering | Server-rendered pages and share token auth |
-| console | Formatted log output with severity levels |
+| understanding | Bottom up tree compression. Summarizes node layers with LLM for navigational context. |
+| scripts | Sandboxed JavaScript execution on nodes with safe functions for values, goals, and status |
+| prestige | Node versioning. Complete a version and start a new generation. |
+| schedules | Date scheduling and calendar views for nodes |
+| energy | Daily energy budget with tier based limits and per action costs |
+| billing | Stripe subscription tiers and energy purchases |
+| raw-ideas | Quick capture of unstructured ideas with automatic tree placement |
+| dreams | Background tree maintenance. Runs cleanup, short term drain, and understanding on a schedule. |
+| blog | Publish blog posts on your land |
+| book | Compile notes into shareable documents per node |
+| solana | Solana wallets, token holdings, and Jupiter swaps per node |
+| api-keys | User API keys for programmatic access to the tree API |
+| email | Email verification for registration and password reset |
+| user-llm | Custom LLM connections with per user and per tree model assignment |
+| gateway | External channel integration for Telegram, Discord, and web widgets |
+| html-rendering | Server rendered HTML pages with share token authentication |
+| console | Formatted log output with three severity levels for clean server monitoring |
+| tree-orchestrator | Core conversation orchestrator for chat, place, and query |
+| land-manager | Autonomous land management agent for health monitoring |
+| shell | Execute shell commands from AI conversation |
+| transactions | Value transactions between nodes with approval policies |
+| deleted-revive | Soft delete branches and revive them later |
+| values | Numeric values and goals on nodes with tree wide accumulation |
+| user-queries | User level data access for notes, tags, contributions, and notifications |
 
 ### Building an extension
 

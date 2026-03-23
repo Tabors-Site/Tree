@@ -1,7 +1,7 @@
 export default {
   name: "understanding",
   version: "1.0.0",
-  description: "Bottom-up tree compression with LLM summarization",
+  description: "Bottom up tree compression. Summarizes node layers with LLM for navigational context.",
 
   // Required: won't load without these
   needs: {

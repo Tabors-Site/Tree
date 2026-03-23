@@ -1,7 +1,7 @@
 export default {
   name: "schedules",
   version: "1.0.0",
-  description: "Cron and ISO date scheduling for node versions",
+  description: "Date scheduling and calendar views for nodes",
 
   needs: {
     models: ["Node"],

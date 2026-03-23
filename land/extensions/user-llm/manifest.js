@@ -1,7 +1,7 @@
 export default {
   name: "user-llm",
   version: "1.0.0",
-  description: "Custom LLM connections, user/root level LLM assignment",
+  description: "Custom LLM connections with per user and per tree model assignment",
 
   needs: {
     models: ["User", "Node"],

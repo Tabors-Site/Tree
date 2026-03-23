@@ -1,7 +1,7 @@
 export default {
   name: "raw-ideas",
   version: "1.0.0",
-  description: "Quick capture and auto-placement of unstructured ideas into trees",
+  description: "Quick capture of unstructured ideas with automatic tree placement",
 
   needs: {
     services: ["llm", "session", "aiChat", "orchestrator"],

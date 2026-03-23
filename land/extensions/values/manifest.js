@@ -1,7 +1,7 @@
 export default {
   name: "values",
   version: "1.0.0",
-  description: "Numeric values and goals on nodes with tree-wide accumulation",
+  description: "Numeric values and goals on nodes with tree wide accumulation",
 
   needs: {
     models: ["Node", "Contribution"],

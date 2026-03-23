@@ -1,7 +1,7 @@
 export default {
   name: "scripts",
   version: "1.1.0",
-  description: "VM2 sandboxed scripts per node with scheduling and safe functions",
+  description: "Sandboxed JavaScript execution on nodes with safe functions for values, goals, and status",
 
   needs: {
     models: ["Node"],

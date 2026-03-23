@@ -1,7 +1,7 @@
 export default {
   name: "html-rendering",
   version: "1.0.0",
-  description: "Server-rendered HTML pages, share token auth for ?html endpoints",
+  description: "Server rendered HTML pages with share token authentication",
 
   needs: {
     models: ["User", "Node"],

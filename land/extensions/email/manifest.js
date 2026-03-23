@@ -1,7 +1,7 @@
 export default {
   name: "email",
   version: "1.0.0",
-  description: "Email verification for registration, password reset, forgot password",
+  description: "Email verification for registration and password reset",
 
   needs: {
     services: ["auth"],

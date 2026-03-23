@@ -1,7 +1,7 @@
 export default {
   name: "gateway",
   version: "1.0.0",
-  description: "External channel integration: Telegram, Discord, web widgets. Agents receive input and send output through gateway channels.",
+  description: "External channel integration for Telegram, Discord, and web widgets",
 
   needs: {
     models: ["Node", "User"],

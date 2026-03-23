@@ -1,7 +1,7 @@
 export default {
   name: "api-keys",
   version: "1.0.0",
-  description: "User-generated API keys for programmatic tree access",
+  description: "User API keys for programmatic access to the tree API",
 
   needs: {
     services: ["auth"],

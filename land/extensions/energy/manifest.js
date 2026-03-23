@@ -1,7 +1,7 @@
 export default {
   name: "energy",
   version: "1.0.0",
-  description: "Daily energy budget system with tier-based limits and per-action costs",
+  description: "Daily energy budget with tier based limits and per action costs",
 
   needs: {
     models: ["User"],

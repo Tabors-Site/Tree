@@ -1,7 +1,7 @@
 export default {
   name: "blog",
   version: "1.0.0",
-  description: "Land-level blog for posts and updates",
+  description: "Publish blog posts on your land",
 
   needs: {
     models: ["User"],
