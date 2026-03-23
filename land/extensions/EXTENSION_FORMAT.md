@@ -88,6 +88,35 @@ export async function init(core) {
 }
 ```
 
+## Custom Orchestrator
+
+Extensions can replace the entire conversation orchestrator for a bigMode (tree, home, rawIdea). The orchestrator controls how chat/place/query messages are classified, planned, and executed.
+
+```js
+export async function init(core) {
+  return {
+    orchestrator: {
+      bigMode: "tree",
+      async handle({ visitorId, message, socket, userId, sessionId, rootId, ...ctx }) {
+        // Full control over the conversation flow
+        // Use core utilities:
+        //   core.conversation.processMessage() - run LLM with tools
+        //   core.conversation.switchMode() - change active mode
+        //   core.orchestrator.OrchestratorRuntime - session lifecycle for background work
+        //   core.orchestrator.acquireLock/releaseLock - concurrency
+        // Return { response, navigatedTo, ... }
+      },
+      // Optional: custom classifier
+      async classify({ message, treeContext, userId }) {
+        return { intent: "place", confidence: 0.95, responseHint: "..." };
+      },
+    },
+  };
+}
+```
+
+If no extension registers an orchestrator, the built-in one runs. Only one orchestrator per bigMode. First registered wins.
+
 ## Available Core Services
 
 | Service | Key | Always Available |

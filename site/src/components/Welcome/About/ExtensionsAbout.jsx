@@ -317,6 +317,36 @@ core.hooks.register("enrichContext", async ({ context, node, meta }) => {
           </div>
         </div>
 
+        {/* ── ORCHESTRATOR ── */}
+        <div className="ext-section">
+          <div className="ext-section-title">
+            <span className="ext-section-icon">🧠</span> Custom Orchestrator
+          </div>
+          <div className="ext-section-text">
+            Extensions can replace the entire conversation orchestrator. The orchestrator
+            controls how chat, place, and query messages are classified, planned, and executed.
+            If no extension registers one, the built-in orchestrator runs.
+          </div>
+          <div className="ext-code-block">{`// In your extension's init(core):
+return {
+  orchestrator: {
+    bigMode: "tree",
+    async handle({ visitorId, message, socket, userId, ...ctx }) {
+      // Full control over the AI conversation flow
+      // Use core.conversation.processMessage() for LLM calls
+      // Use core.orchestrator.OrchestratorRuntime for background jobs
+      // Return { response, navigatedTo, ... }
+    },
+  },
+};`}</div>
+          <div className="ext-section-text" style={{ marginTop: 12 }}>
+            This is how you build a completely custom AI experience.
+            A food tracker that knows about nutrition. A code review agent
+            with specialized intent classification. A debate system with
+            multi-agent orchestration. All without touching core.
+          </div>
+        </div>
+
         {/* ── API ENDPOINTS ── */}
         <div className="ext-section">
           <div className="ext-section-title">

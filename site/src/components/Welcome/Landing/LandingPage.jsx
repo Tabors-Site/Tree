@@ -74,8 +74,9 @@ const LandingPage = () => {
               <h3>Extensions</h3>
               <p>
                 Packaged units of LLM complexity. An understanding run, a script sandbox,
-                a wallet integration, a dream cycle. Each one is a folder with a manifest.
+                a wallet integration, a custom AI orchestrator. Each one is a folder with a manifest.
                 Install it, restart, and both human and agent gain new capabilities.
+                Replace how the AI thinks, classifies, and places content.
               </p>
             </div>
             <div className="lp-card">

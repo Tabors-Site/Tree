@@ -146,6 +146,10 @@ router.get("/user/verify/:token", async (req, res) => {
     if (user.markModified) user.markModified("metadata");
     await user.save();
 
+    // Fire afterRegister so other extensions (html-rendering, etc.) can initialize
+    const { hooks } = await import("../../core/hooks.js");
+    hooks.run("afterRegister", { user, email: tempUser.email }).catch(() => {});
+
     const authToken = jwt.sign(
       { userId: user._id, username: user.username },
       JWT_SECRET,
