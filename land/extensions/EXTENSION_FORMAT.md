@@ -52,31 +52,54 @@ export default {
 ## Init Function (index.js)
 
 ```js
+import { z } from "zod";
+
 export async function init(core) {
-  // core.models.Node, core.models.User, etc.
-  // core.llm.getClientForUser(), core.session.createSession(), etc.
-  // core.energy.useEnergy() (real or no-op stub)
+  // Register hooks
+  core.hooks.register("enrichContext", async ({ context, meta }) => {
+    if (meta.myData) context.myData = meta.myData;
+  }, "my-extension");
+
+  // Register modes
+  core.modes.registerMode("tree:my-mode", myModeConfig, "my-extension");
+
+  // Register LLM slot mapping (optional)
+  if (core.llm?.registerModeAssignment) {
+    core.llm.registerModeAssignment("tree:my-mode", "my-slot");
+  }
+
+  // Register energy service (optional, no-ops if energy not loaded)
+  if (core.energy) setEnergyService(core.energy);
 
   return {
-    // Optional: Express router
+    // Express router (mounted at /api/v1)
     router: myRouter,
 
-    // Optional: MCP tools array
+    // Page router (mounted at /, for HTML pages)
+    pageRouter: myPageRouter,
+
+    // MCP tools (registered on the MCP server, available to AI)
     tools: [
       {
         name: "my-tool",
         description: "What it does",
-        schema: { type: "object", properties: { ... } },
-        handler: async (params) => { ... },
+        schema: {
+          nodeId: z.string().describe("Target node ID"),
+          userId: z.string().describe("Injected by server. Ignore."),
+        },
+        annotations: { readOnlyHint: false, destructiveHint: false },
+        handler: async ({ nodeId, userId }) => {
+          return { content: [{ type: "text", text: "Done" }] };
+        },
       },
     ],
 
-    // Optional: inject tools into existing modes
+    // Inject tools into existing modes (so AI can use them in those modes)
     modeTools: [
       { modeKey: "tree:librarian", toolNames: ["my-tool"] },
     ],
 
-    // Optional: background jobs
+    // Background jobs
     jobs: [
       {
         name: "my-job",
@@ -84,9 +107,24 @@ export async function init(core) {
         stop: () => { /* clear interval */ },
       },
     ],
+
+    // Exports (accessible by other extensions via getExtension("my-extension").exports)
+    exports: {
+      myFunction: someExportedFunction,
+    },
+
+    // Custom orchestrator (replaces the conversation flow for a bigMode)
+    orchestrator: {
+      bigMode: "tree",
+      async handle({ visitorId, message, socket, userId, sessionId, rootId, ...ctx }) {
+        // Full control over conversation flow
+      },
+    },
   };
 }
 ```
+
+**Note on manifest `provides` fields:** The manifest's `provides.tools`, `provides.jobs`, `provides.orchestrator`, and `provides.modes` are metadata only. The loader uses them for display and route collision detection. What actually loads is determined by the init() return value.
 
 ## Running AI Conversations (runChat)
 
@@ -97,17 +135,77 @@ const { answer } = await core.llm.runChat({
   userId,
   username,
   message: "analyze this data",
-  mode: "tree:structure",   // any registered mode
+  mode: "tree:structure",
   rootId: "...",            // optional, for tree modes
-  signal: abortController.signal, // optional, for cancellation
+  res,                      // optional, Express response for auto-abort on disconnect
 });
 ```
 
-`runChat` handles: MCP connection, mode switching, AIChat record creation, processMessage execution, AIChat finalization, abort handling, and session persistence.
+Handles automatically: MCP connection, mode switching, AIChat tracking, abort on client disconnect, session persistence, error finalization. Pass `res` for HTTP routes.
 
-Sessions persist within the same zone. `tree:{rootId}:{userId}` gives each tree its own conversation. Switching trees starts fresh. Land and home zones persist across calls.
+Sessions persist within the same zone. `tree:{rootId}:{userId}` gives each tree its own conversation. Switching trees starts fresh.
 
-Never use `processMessage` directly. Use `runChat`.
+## Running Multi-Step Pipelines (OrchestratorRuntime)
+
+For background jobs and multi-step AI pipelines (dreams, understanding, cleanup), use `OrchestratorRuntime`:
+
+```js
+import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
+
+const rt = new OrchestratorRuntime({
+  rootId, userId, username,
+  visitorId: `my-pipeline:${userId}:${Date.now()}`,
+  sessionType: "my-pipeline",
+  description: "Processing tree",
+  modeKeyForLlm: "tree:my-mode",
+  lockNamespace: "my-pipeline",  // optional, prevents concurrent runs
+});
+
+const ok = await rt.init("Starting pipeline");
+if (!ok) return; // lock held by another run
+
+try {
+  // Each step: switches mode, calls LLM, tracks the chain
+  const { parsed } = await rt.runStep("tree:analyze", {
+    prompt: "Find issues in this tree",
+  });
+
+  await rt.runStep("tree:structure", {
+    prompt: `Fix these issues: ${JSON.stringify(parsed)}`,
+  });
+
+  rt.setResult("Pipeline complete", "my-pipeline:done");
+} catch (err) {
+  rt.setError(err.message, "my-pipeline:error");
+} finally {
+  await rt.cleanup(); // finalize AIChat, close MCP, release lock
+}
+```
+
+### OrchestratorRuntime API
+
+| Method | Purpose |
+|--------|---------|
+| `init(startMessage)` | Create session, resolve LLM, connect MCP. Returns false if lock held. |
+| `attach({ sessionId, mainChatId, llmProvider, signal, connectMcp })` | Reuse existing session (for real-time orchestrators or chain steps). |
+| `runStep(modeKey, { prompt, modeCtx, input, treeContext })` | Switch mode, call LLM, track chain step. Returns `{ parsed, raw, llmProvider }`. |
+| `trackStep(modeKey, { input, output, startTime, endTime })` | Track a chain step without calling the LLM (for orchestrators that call processMessage themselves). |
+| `setResult(content, modeKey)` | Mark pipeline as successful. |
+| `setError(message, modeKey)` | Mark pipeline as failed/stopped. |
+| `cleanup()` | Finalize AIChat, close MCP, end session, release lock. |
+| `.aborted` | Boolean, true if abort signal fired. |
+| `.signal` | The AbortSignal for passing to processMessage. |
+| `.chainIndex` | Current chain step index (auto-increments). |
+
+### When to use what
+
+| Need | Use |
+|------|-----|
+| Single message, user-facing | `core.llm.runChat()` |
+| Multi-step background pipeline | `OrchestratorRuntime` with `init()` + `runStep()` + `cleanup()` |
+| Real-time interactive orchestrator | `OrchestratorRuntime` with `attach()` + `trackStep()` |
+
+Never use `processMessage` directly unless building a custom real-time orchestrator.
 
 ## Custom Orchestrator
 

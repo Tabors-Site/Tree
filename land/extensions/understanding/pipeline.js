@@ -3,6 +3,7 @@
 // uses LLM for summarization only (no tool calling), commits results.
 
 import log from "../../core/log.js";
+import { switchMode, processMessage } from "../../ws/conversation.js";
 import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 import { emitNavigate, emitToUser } from "../../ws/websocket.js";
 import {
