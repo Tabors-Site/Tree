@@ -61,6 +61,9 @@ const UserSchema = new mongoose.Schema({
     default: [],
   },
 
+  // Core LLM connection (set during register/setup). Extension slots in metadata.
+  llmDefault: { type: String, ref: "CustomLlmConnection", default: null },
+
   // Access level (core auth)
   profileType: {
     type: String,
@@ -166,10 +169,22 @@ UserSchema.virtual("apiKeys")
   .get(function () { return metaGet(this, "apiKeys", null, []); })
   .set(function (v) { metaSet(this, "apiKeys", null, v); });
 
-// LLM Assignments
+// LLM Assignments: main is core (llmDefault), extension slots in metadata
 UserSchema.virtual("llmAssignments")
-  .get(function () { return metaGet(this, "userLlm", "assignments", { main: null, rawIdea: null }); })
-  .set(function (v) { metaSet(this, "userLlm", "assignments", v); });
+  .get(function () {
+    const extSlots = metaGet(this, "userLlm", "slots", {});
+    return { main: this.llmDefault, ...extSlots };
+  })
+  .set(function (v) {
+    if (v.main !== undefined) this.llmDefault = v.main;
+    const slots = {};
+    for (const [key, val] of Object.entries(v)) {
+      if (key !== "main") slots[key] = val;
+    }
+    if (Object.keys(slots).length > 0) {
+      metaSet(this, "userLlm", "slots", slots);
+    }
+  });
 
 // Raw Ideas
 UserSchema.virtual("rawIdeaAutoPlace")
