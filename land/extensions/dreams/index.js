@@ -5,7 +5,24 @@ import {
 } from "./treeDream.js";
 import router from "./routes.js";
 
+import cleanupAnalyze from "./modes/cleanupAnalyze.js";
+import cleanupExpandScan from "./modes/cleanupExpandScan.js";
+import drainCluster from "./modes/drainCluster.js";
+import drainScout from "./modes/drainScout.js";
+import drainPlan from "./modes/drainPlan.js";
+import dreamSummary from "./modes/dreamSummary.js";
+import dreamThought from "./modes/dreamThought.js";
+
 export async function init(core) {
+  // Register dream/cleanup/drain modes
+  core.modes.registerMode("tree:cleanup-analyze", cleanupAnalyze, "dreams");
+  core.modes.registerMode("tree:cleanup-expand-scan", cleanupExpandScan, "dreams");
+  core.modes.registerMode("tree:drain-cluster", drainCluster, "dreams");
+  core.modes.registerMode("tree:drain-scout", drainScout, "dreams");
+  core.modes.registerMode("tree:drain-plan", drainPlan, "dreams");
+  core.modes.registerMode("tree:dream-summary", dreamSummary, "dreams");
+  core.modes.registerMode("tree:dream-thought", dreamThought, "dreams");
+
   return {
     router,
     jobs: [
@@ -13,7 +30,6 @@ export async function init(core) {
         name: "tree-dream",
         start: () => {
           startTreeDreamJob({ intervalMs: 30 * 60 * 1000 });
-          // Run immediately on boot to catch any missed dreams
           runTreeDreamJob();
         },
         stop: () => stopTreeDreamJob(),

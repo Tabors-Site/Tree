@@ -3,9 +3,16 @@ import UnderstandingNode from "./understandingNode.js";
 import router from "./routes.js";
 import tools from "./tools.js";
 
+import understand from "./modes/understand.js";
+import understandSummarize from "./modes/understandSummarize.js";
+
 export async function init(core) {
   const understanding = await import("./core.js");
   const orchestrator = await import("./pipeline.js");
+
+  // Register understanding modes
+  core.modes.registerMode("tree:understand", understand, "understanding");
+  core.modes.registerMode("tree:understand-summarize", understandSummarize, "understanding");
 
   return {
     models: { UnderstandingRun, UnderstandingNode },

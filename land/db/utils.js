@@ -27,62 +27,28 @@ async function findNodeById(nodeId) {
     throw error;
   }
 }
-const logContribution = async ({
-  userId,
-  nodeId,
-  wasAi = false,
-  aiChatId = null,
-  sessionId = null,
-  action,
-  statusEdited,
-  valueEdited,
-  scheduleEdited,
-  inviteAction,
-  noteAction,
-  rawIdeaAction,
-  updateParent,
-  energyUsed = null,
-
-  executeScript,
-  editScript,
-  updateChildNode,
-  editNameNode,
-  editType,
-  goalEdited,
-  tradeId,
-  nodeVersion,
-  branchLifecycle,
-  transactionMeta,
-  purchaseMeta,
-  understandingMeta,
-}) => {
-  const validActions = [
-    "create",
-    "editStatus",
-    "editValue",
-    "prestige",
-    "trade",
-    "delete",
-    "invite",
-    "editSchedule",
-    "editGoal",
-    "transaction",
-    "note",
-    "updateParent",
-    "executeScript",
-    "editScript",
-    "updateChildNode",
-    "editNameNode",
-    "editType",
-    "rawIdea",
-    "branchLifecycle",
-    "purchase",
-    "understanding",
-  ];
-
-  if (!validActions.includes(action)) {
-    throw new Error("Invalid action type");
-  }
+const logContribution = async (params) => {
+  const {
+    userId,
+    nodeId,
+    wasAi = false,
+    aiChatId: inputAiChatId = null,
+    sessionId: inputSessionId = null,
+    action,
+    nodeVersion,
+    energyUsed = null,
+    // Core action data
+    statusEdited,
+    editNameNode,
+    editType,
+    noteAction,
+    updateChildNode,
+    updateParent,
+    branchLifecycle,
+    inviteAction,
+    // Everything else goes to extensionData
+    ...rest
+  } = params;
 
   // Let extensions modify contribution data (e.g. prestige sets nodeVersion)
   const hookData = { nodeId, nodeVersion, action, userId };
@@ -90,66 +56,28 @@ const logContribution = async ({
   if (hookResult.cancelled) {
     throw new Error(`Contribution cancelled: ${hookResult.reason || "extension"}`);
   }
-  nodeVersion = hookData.nodeVersion;
+  const finalNodeVersion = hookData.nodeVersion ?? nodeVersion;
 
-  if (!userId || !nodeId || !action || nodeVersion === undefined) {
+  if (!userId || !nodeId || !action || finalNodeVersion === undefined) {
     throw new Error("Missing required fields");
   }
 
-  if (action === "transaction") {
-    if (!transactionMeta) {
-      throw new Error("transactionMeta is required for transaction actions");
-    }
+  let aiChatId = inputAiChatId;
+  let sessionId = inputSessionId;
 
-    const requiredTransactionFields = [
-      "event",
-      "side",
-      "role",
-      "versionSelf",
-      "actorUserId",
-    ];
-
-    for (const field of requiredTransactionFields) {
-      if (transactionMeta[field] === undefined) {
-        throw new Error(`transactionMeta.${field} is required`);
-      }
-    }
-  }
-
-  if (action === "purchase") {
-    if (!purchaseMeta) {
-      throw new Error("purchaseMeta is required for purchase actions");
-    }
-
-    if (!purchaseMeta.stripeSessionId) {
-      throw new Error("purchaseMeta.stripeSessionId is required");
-    }
-  }
-  // =====================================================
-  if (action === "understanding") {
-    if (!understandingMeta) {
-      throw new Error(
-        "understandingMeta is required for understanding actions",
-      );
-    }
-
-    if (!understandingMeta.stage) {
-      throw new Error("understandingMeta.stage is required");
-    }
-
-    if (!understandingMeta.understandingRunId) {
-      throw new Error("understandingMeta.understandingRunId is required");
-    }
-  }
-
-  // If this is an AI contribution but aiChatId wasn't explicitly provided
-  // (e.g. MCP tool args get stripped by Zod schema validation), look it up
-  // from the in-memory context map keyed by userId.
   if (wasAi && !aiChatId) {
     const ctx = getAiContributionContext(userId);
     aiChatId = ctx.aiChatId;
     sessionId = ctx.sessionId;
   }
+
+  // Build extension data from remaining params
+  const extKeys = Object.keys(rest).filter(k =>
+    !["wasRemote", "homeLand"].includes(k) && rest[k] !== undefined && rest[k] !== null
+  );
+  const extensionData = extKeys.length > 0
+    ? Object.fromEntries(extKeys.map(k => [k, rest[k]]))
+    : null;
 
   try {
     const newContribution = new Contribution({
@@ -160,26 +88,18 @@ const logContribution = async ({
       aiChatId,
       sessionId,
       energyUsed,
-
+      nodeVersion: finalNodeVersion,
       statusEdited,
-      valueEdited,
-      tradeId,
-      nodeVersion,
-      goalEdited,
-      scheduleEdited,
-      inviteAction,
-      noteAction,
-      rawIdeaAction,
-      updateParent,
-      executeScript,
-      editScript,
-      updateChildNode,
       editNameNode,
       editType,
+      noteAction,
+      updateChildNode,
+      updateParent,
       branchLifecycle,
-      transactionMeta,
-      purchaseMeta,
-      understandingMeta,
+      inviteAction,
+      wasRemote: rest.wasRemote || false,
+      homeLand: rest.homeLand || null,
+      extensionData,
       date: new Date(),
     });
 

@@ -2,427 +2,98 @@ import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 
 const ContributionSchema = new mongoose.Schema({
-  _id: {
-    type: String,
-    default: uuidv4,
-  },
-  userId: {
-    type: String,
-    ref: "User",
-    required: true,
-  },
-  nodeId: {
-    type: String,
-    ref: "Node",
-  },
-  wasAi: {
-    type: Boolean,
-    default: false,
-  },
-  aiChatId: {
-    type: String,
-    ref: "AIChat",
-    default: null,
-  },
-  sessionId: {
-    type: String,
-    default: null,
-    index: true,
+  _id: { type: String, default: uuidv4 },
+  userId: { type: String, ref: "User", required: true },
+  nodeId: { type: String, ref: "Node" },
+  wasAi: { type: Boolean, default: false },
+  aiChatId: { type: String, ref: "AIChat", default: null },
+  sessionId: { type: String, default: null, index: true },
+
+  // Action type. Core types are validated. Extensions can register custom types.
+  action: { type: String, required: true },
+
+  // Energy cost (if energy extension is installed)
+  energyUsed: { type: Number, min: 0 },
+
+  // Node version at time of action (prestige extension sets this via hook)
+  nodeVersion: { type: String, required: true },
+
+  // Date
+  date: { type: Date, default: Date.now },
+
+  // ── Core action data (protocol-level operations) ──
+
+  // editStatus
+  statusEdited: { type: String, enum: ["completed", "active", "trimmed", "divider"] },
+
+  // editNameNode
+  editNameNode: {
+    type: { oldName: String, newName: String, _id: false },
   },
 
-  action: {
-    type: String,
-    enum: [
-      "create",
-      "editStatus",
-      "editValue",
-      "prestige",
-      "trade",
-      "delete",
-      "invite",
-      "editSchedule",
-      "editGoal",
-      "transaction",
-      "note",
-      "updateParent",
-      "editScript",
-      "executeScript",
-      "updateChildNode",
-      "editNameNode",
-      "editType",
-      "rawIdea",
-      "branchLifecycle",
-      "understanding",
-
-      "purchase",
-    ],
-    required: true,
-  },
-  energyUsed: {
-    type: Number,
-    //required: true,
-    min: 0,
-  },
-  statusEdited: {
-    type: String,
-    enum: ["completed", "active", "trimmed", "divider"],
-  },
-  valueEdited: {
-    type: Map,
-    of: Number,
-  },
-  tradeId: {
-    type: String,
-    ref: "Transaction",
+  // editType
+  editType: {
+    type: { oldType: String, newType: String, _id: false },
   },
 
-  inviteAction: {
-    type: {
-      action: {
-        type: String,
-        enum: [
-          "invite",
-          "acceptInvite",
-          "denyInvite",
-          "removeContributor",
-          "switchOwner",
-        ],
-      },
-      receivingId: {
-        type: String,
-        ref: "User",
-      },
-      _id: false,
-    },
-  },
-
-  scheduleEdited: {
-    type: {
-      date: {
-        type: Date,
-      },
-      reeffectTime: {
-        type: Number,
-      },
-      _id: false,
-    },
-  },
-
-  goalEdited: {
-    type: Map,
-    of: Number,
-  },
-
+  // note (add/remove/edit)
   noteAction: {
     type: {
-      action: { type: String, enum: ["add", "remove", "edit"], default: null },
-      noteId: { type: String, ref: "Note", default: null },
-      content: { type: String, default: null },
+      action: { type: String, enum: ["add", "remove", "edit"] },
+      noteId: { type: String, ref: "Note" },
+      content: String,
       _id: false,
     },
   },
 
-  updateParent: {
-    type: {
-      oldParentId: { type: String, ref: "Node", default: null },
-      newParentId: { type: String, ref: "Node", default: null },
-      _id: false,
-    },
-  },
-  rawIdeaAction: {
-    type: {
-      action: {
-        type: String,
-        enum: ["add", "delete", "placed", "aiStarted", "aiFailed"],
-        required: true,
-      },
-      rawIdeaId: {
-        type: String,
-        ref: "RawIdea",
-        required: true,
-      },
-      targetNodeId: {
-        type: String,
-        ref: "Node",
-        default: null,
-      },
-      noteId: {
-        type: String,
-        ref: "Note",
-        default: null,
-      },
-      _id: false,
-    },
-  },
-
-  editScript: {
-    type: {
-      scriptName: { type: String, default: null },
-      scriptId: {
-        type: String,
-        required: true,
-      },
-      contents: { type: String, default: null },
-      _id: false,
-    },
-  },
-  executeScript: {
-    type: {
-      scriptId: {
-        type: String,
-        required: true,
-      },
-      scriptName: { type: String, default: null },
-      logs: {
-        type: [String],
-        default: [],
-      },
-      success: {
-        type: Boolean,
-        default: null,
-      },
-      error: {
-        type: String,
-        default: null,
-      },
-      _id: false,
-    },
-  },
-
+  // updateChildNode
   updateChildNode: {
     type: {
-      action: { type: String, enum: ["added", "removed"], default: null },
-      childId: { type: String, ref: "Node", default: null },
+      action: { type: String, enum: ["added", "removed"] },
+      childId: { type: String, ref: "Node" },
       _id: false,
     },
   },
 
-  editNameNode: {
+  // updateParent
+  updateParent: {
     type: {
-      oldName: { type: String, default: null },
-      newName: { type: String, default: null },
+      oldParentId: { type: String, ref: "Node" },
+      newParentId: { type: String, ref: "Node" },
       _id: false,
     },
   },
 
-  editType: {
-    type: {
-      oldType: { type: String, default: null },
-      newType: { type: String, default: null },
-      _id: false,
-    },
-  },
-
-  nodeVersion: {
-    type: String,
-    required: true,
-  },
-  date: {
-    type: Date,
-    default: Date.now,
-  },
+  // branchLifecycle (retire/revive)
   branchLifecycle: {
     type: {
-      action: {
-        type: String,
-        enum: ["retired", "revived", "revivedAsRoot"],
-        required: true,
-      },
-      fromParentId: {
-        type: String,
-        ref: "Node",
-      },
-      toParentId: {
-        type: String,
-        ref: "Node",
-      },
+      action: { type: String, enum: ["retired", "revived", "revivedAsRoot"] },
+      fromParentId: { type: String, ref: "Node" },
+      toParentId: { type: String, ref: "Node" },
       _id: false,
     },
   },
-  transactionMeta: {
+
+  // inviteAction
+  inviteAction: {
     type: {
-      /** What happened globally */
-      event: {
-        type: String,
-        enum: [
-          // lifecycle
-          "created",
-          "approved",
-          "denied",
-          "execution_started",
-          "succeeded",
-          "failed",
-
-          // ✅ policy / system resolution
-          "accepted_by_policy",
-          "rejected_by_policy",
-        ],
-        required: true,
-      },
-
-      /** This contribution’s point of view */
-      side: {
-        type: String,
-        enum: ["A", "B"],
-        required: true,
-      },
-
-      /** How this node participated in the event */
-      role: {
-        type: String,
-        enum: [
-          // human roles
-          "proposer",
-          "approver",
-          "denier",
-          "sender",
-          "receiver",
-          "counterparty",
-
-          // ✅ system-generated
-          "system",
-        ],
-        required: true,
-      },
-
-      /** The other node (if any) */
-      counterpartyNodeId: {
-        type: String,
-        ref: "Node",
-        default: null,
-      },
-
-      /** Versions involved */
-      versionSelf: {
-        type: Number,
-        required: true,
-        min: 0,
-      },
-
-      versionCounterparty: {
-        type: Number,
-        min: 0,
-        default: null,
-      },
-
-      /** Value deltas from THIS node’s perspective */
-      valuesSent: {
-        type: Map,
-        of: Number,
-      },
-
-      valuesReceived: {
-        type: Map,
-        of: Number,
-      },
-
-      /** Failure diagnostics (only for failed) */
-      failureReason: {
-        type: String,
-      },
-
-      /** Who caused this event (important for approvals / denials) */
-      actorUserId: {
-        type: String,
-        ref: "User",
-        required: true,
-      },
-
+      action: { type: String, enum: ["invite", "acceptInvite", "denyInvite", "removeContributor", "switchOwner"] },
+      receivingId: { type: String, ref: "User" },
       _id: false,
     },
   },
-  purchaseMeta: {
-    type: {
-      /* ===============================
-        STRIPE IDENTITY (IDEMPOTENCY)
-      =============================== */
 
-      stripeSessionId: {
-        type: String,
-      },
+  // Canopy federation
+  wasRemote: { type: Boolean, default: false },
+  homeLand: { type: String, default: null },
 
-      paymentIntentId: {
-        type: String,
-        default: null,
-      },
-
-      stripeEventId: {
-        type: String,
-        default: null,
-      },
-
-      /* ===============================
-        PURCHASE SNAPSHOT
-      =============================== */
-
-      plan: {
-        type: String,
-        enum: ["basic", "standard", "premium", null],
-        default: null,
-      },
-
-      energyAmount: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-
-      totalCents: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-
-      currency: {
-        type: String,
-        default: "usd",
-      },
-
-      _id: false,
-    },
-  },
-  // Canopy (distributed network) fields
-  wasRemote: {
-    type: Boolean,
-    default: false,
-  },
-  homeLand: {
-    type: String,
-    default: null,
-  },
-
-  understandingMeta: {
-    type: {
-      stage: {
-        type: String,
-        enum: ["createRun", "processStep"],
-        required: true,
-      },
-
-      understandingRunId: {
-        type: String,
-        ref: "UnderstandingRun",
-        required: true,
-      },
-
-      // optional depending on stage
-      understandingNodeId: {
-        type: String,
-        ref: "UnderstandingNode",
-      },
-      rootNodeId: { type: String, ref: "Node" },
-
-      nodeCount: { type: Number }, // for createRun
-      layer: { type: Number }, // for processStep
-      mode: { type: String, enum: ["leaf", "merge"] },
-
-      perspective: { type: String },
-    },
-
-    _id: false,
-  },
+  // ── Extension data (Mixed, any extension can attach metadata) ──
+  // Extension-specific action data goes here instead of hardcoded fields.
+  // e.g. { values: { strength: 10 }, goals: { strength: 20 } }
+  // e.g. { script: { scriptId: "...", logs: [...] } }
+  // e.g. { transaction: { event: "created", side: "A", ... } }
+  extensionData: { type: mongoose.Schema.Types.Mixed, default: null },
 });
 
 const Contribution = mongoose.model("Contribution", ContributionSchema);
-
 export default Contribution;

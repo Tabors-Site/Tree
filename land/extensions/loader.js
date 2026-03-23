@@ -275,6 +275,11 @@ function buildScopedCore(manifest, fullCore) {
     scoped.hooks = fullCore.hooks;
   }
 
+  // Modes: always available (extensions register their own AI modes)
+  if (fullCore.modes) {
+    scoped.modes = fullCore.modes;
+  }
+
   return scoped;
 }
 

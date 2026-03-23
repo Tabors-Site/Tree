@@ -5,30 +5,17 @@ import { resolveTools } from "../tools.js";
 
 // ── HOME sub-modes ──────────────────────────────────────────────────────
 import homeDefault from "./home/default.js";
-import homeRawIdeaPlacement from "./home/raw-idea-placement.js";
 import homeReflect from "./home/reflect.js";
 
-// ── RAW IDEA sub-modes ───────────────────────────────────────────────────
-import rawIdeaChooseRoot from "./rawIdea/chooseRoot.js";
-
-// ── TREE sub-modes ──────────────────────────────────────────────────────
+// ── TREE sub-modes (core only, extension modes registered via init()) ───
 import treeStructure from "./tree/structure.js";
 import treeEdit from "./tree/edit.js";
 import treeBe from "./tree/be.js";
 import treeNavigate from "./tree/navigate.js";
-import treeUnderstand from "./tree/understand.js";
-import treeUnderstandSummarize from "./tree/understandSummarize.js";
 import treeGetContext from "./tree/getContext.js";
 import treeEditNotes from "./tree/notes.js";
 import treeRespond from "./tree/respond.js";
 import treeLibrarian from "./tree/librarian.js";
-import treeDrainCluster from "./tree/drainCluster.js";
-import treeDrainScout from "./tree/drainScout.js";
-import treeDrainPlan from "./tree/drainPlan.js";
-import treeCleanupAnalyze from "./tree/cleanupAnalyze.js";
-import treeCleanupExpandScan from "./tree/cleanupExpandScan.js";
-import treeDreamSummary from "./tree/dreamSummary.js";
-import treeDreamThought from "./tree/dreamThought.js";
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -45,33 +32,21 @@ export const BIG_MODES = {
 // Each mode exports: { name, emoji, label, bigMode, toolNames[], buildSystemPrompt(ctx) }
 // ─────────────────────────────────────────────────────────────────────────
 const ALL_MODES = {
-  // HOME
+  // HOME (core)
   "home:default": homeDefault,
-  "home:raw-idea-placement": homeRawIdeaPlacement,
   "home:reflect": homeReflect,
 
-  // RAW IDEA
-  "rawIdea:chooseRoot": rawIdeaChooseRoot,
-
-  // TREE
-  "tree:navigate": treeNavigate, // 👈 ADD THIS
-
+  // TREE (core)
+  "tree:navigate": treeNavigate,
   "tree:structure": treeStructure,
   "tree:edit": treeEdit,
   "tree:be": treeBe,
-  "tree:understand": treeUnderstand,
-  "tree:understand-summarize": treeUnderstandSummarize,
   "tree:getContext": treeGetContext,
   "tree:notes": treeEditNotes,
   "tree:respond": treeRespond,
   "tree:librarian": treeLibrarian,
-  "tree:drain-cluster": treeDrainCluster,
-  "tree:drain-scout": treeDrainScout,
-  "tree:drain-plan": treeDrainPlan,
-  "tree:cleanup-analyze": treeCleanupAnalyze,
-  "tree:cleanup-expand-scan": treeCleanupExpandScan,
-  "tree:dream-summary": treeDreamSummary,
-  "tree:dream-thought": treeDreamThought,
+
+  // Extension modes registered dynamically via registerMode()
 };
 
 // ─────────────────────────────────────────────────────────────────────────

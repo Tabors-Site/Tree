@@ -5,9 +5,16 @@ import {
   runRawIdeaAutoPlace,
 } from "./autoPlaceJob.js";
 
+import chooseRoot from "./modes/chooseRoot.js";
+import rawIdeaPlacement from "./modes/raw-idea-placement.js";
+
 let stopFn = null;
 
 export async function init(core) {
+  // Register raw-idea modes
+  core.modes.registerMode("rawIdea:chooseRoot", chooseRoot, "raw-ideas");
+  core.modes.registerMode("home:raw-idea-placement", rawIdeaPlacement, "raw-ideas");
+
   return {
     router,
     tools,
@@ -16,9 +23,7 @@ export async function init(core) {
         name: "raw-idea-auto-place",
         start: () => {
           startRawIdeaAutoPlaceJob({ intervalMs: 15 * 60 * 1000 });
-          stopFn = () => {
-            // Job file manages its own timer internally
-          };
+          stopFn = () => {};
         },
         stop: () => stopFn?.(),
       },
