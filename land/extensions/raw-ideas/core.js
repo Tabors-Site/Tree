@@ -5,7 +5,8 @@ import Node from "../../db/models/node.js";
 import Note from "../../db/models/notes.js";
 import User from "../../db/models/user.js";
 import { logContribution } from "../../db/utils.js";
-import { useEnergy } from "../energy/core.js";
+let useEnergy = async () => ({ energyUsed: 0 });
+try { ({ useEnergy } = await import("../energy/core.js")); } catch {}
 
 import { fileURLToPath } from "url";
 
