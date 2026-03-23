@@ -395,7 +395,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Store
-      loaded.set(manifest.name, { manifest, instance });
+      loaded.set(manifest.name, { manifest, instance, dir });
 
       // Build log line
       const parts = [manifest.name, `v${manifest.version}`];
@@ -724,7 +724,7 @@ export async function runExtensionMigrations() {
 
     try {
       const entry = loaded.get(name);
-      const resolved = path.resolve(entry ? path.dirname(entry.manifest.name || "") : __dirname, name, migrationsPath);
+      const resolved = path.resolve(entry?.dir || path.join(__dirname, name), migrationsPath);
       const migrationsModule = await import(toImportURL(resolved));
       const migrations = migrationsModule.default || migrationsModule.migrations || [];
 
