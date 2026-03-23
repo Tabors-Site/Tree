@@ -7,19 +7,24 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { getClientForUser, resolveRootLlmForMode } from "../../ws/conversation.js";
+import { parseJsonSafe } from "../../orchestrators/helpers.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Robust JSON parser for LLM output -- handles markdown fences, <think> tags, prose wrapping
-function parseLlmJson(text) {
-  if (!text || typeof text !== "string") return null;
-  var cleaned = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
-  cleaned = cleaned.replace(/^<think>[\s\S]*?<\/think>\s*/i, "");
-  try { return JSON.parse(cleaned); } catch {}
-  var match = cleaned.match(/\{[\s\S]*\}/);
-  if (match) { try { return JSON.parse(match[0]); } catch {} }
-  return null;
+/**
+ * Resolve LLM client and provider metadata for a mode.
+ * Shared by classify() and translateDestructive().
+ */
+async function getLlmForMode(userId, rootId, modeKey, slot) {
+  const overrideId = rootId ? await resolveRootLlmForMode(rootId, modeKey) : null;
+  const { client, model, isCustom, connectionId, noLlm } = await getClientForUser(userId, slot, overrideId);
+  if (noLlm) throw new Error("NO_LLM");
+  return {
+    client,
+    model,
+    llmProvider: { isCustom, model, connectionId: connectionId || null },
+  };
 }
 
 // Load constitution once at startup
@@ -409,10 +414,7 @@ export async function classify({
   slot,
   rootId,
 }) {
-  const overrideId = rootId ? await resolveRootLlmForMode(rootId, "tree:librarian") : null;
-  const { client: openai, model, isCustom, connectionId, noLlm } = await getClientForUser(userId, slot, overrideId);
-  if (noLlm) throw new Error("NO_LLM");
-  const _llmProvider = { isCustom, model, connectionId: connectionId || null };
+  const { client: openai, model, llmProvider: _llmProvider } = await getLlmForMode(userId, rootId, "tree:librarian", slot);
 
   let contextBlock = "";
   if (conversationMemory) {
@@ -441,7 +443,7 @@ export async function classify({
   if (!raw) throw new Error("Empty classifier response");
 
   try {
-    const result = parseLlmJson(raw);
+    const result = parseJsonSafe(raw);
     if (!result) throw new Error("No parseable JSON found");
 
     // Validate and default fields
@@ -509,10 +511,7 @@ export async function translateDestructive({
   slot,
   rootId,
 }) {
-  const overrideId = rootId ? await resolveRootLlmForMode(rootId, "tree:structure") : null;
-  const { client: openai, model, isCustom, connectionId, noLlm } = await getClientForUser(userId, slot, overrideId);
-  if (noLlm) throw new Error("NO_LLM");
-  const _llmProvider = { isCustom, model, connectionId: connectionId || null };
+  const { client: openai, model, llmProvider: _llmProvider } = await getLlmForMode(userId, rootId, "tree:structure", slot);
 
   // Build context block
   let contextBlock = "";
@@ -542,7 +541,7 @@ export async function translateDestructive({
   if (!raw) throw new Error("Empty translator response");
 
   try {
-    const result = parseLlmJson(raw);
+    const result = parseJsonSafe(raw);
     if (!result) throw new Error("No parseable JSON found");
 
     // Validate structure

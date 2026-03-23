@@ -4,13 +4,43 @@
 
 /**
  * Safely extract and parse JSON from LLM text output.
- * Handles raw objects, JSON embedded in markdown, and malformed responses.
+ * Handles raw objects, markdown fences, <think> tags, and malformed responses.
  */
 export function parseJsonSafe(text) {
   try {
     if (typeof text === "object" && text !== null) return text;
-    const match = text.match(/\{[\s\S]*\}/);
-    return match ? JSON.parse(match[0]) : null;
+    if (typeof text !== "string") return null;
+
+    let cleaned = text;
+
+    // Strip <think>...</think> blocks (deepseek, qwen reasoning traces)
+    cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "");
+
+    // Strip markdown fences (```json ... ``` or ``` ... ```)
+    cleaned = cleaned.replace(/^```(?:json|javascript|js)?\s*\n?/gim, "").replace(/\n?```\s*$/gm, "");
+
+    // Strip leading/trailing prose around JSON (some models add explanations)
+    cleaned = cleaned.trim();
+
+    // Strip BOM and zero-width characters
+    cleaned = cleaned.replace(/^\uFEFF/, "").replace(/[\u200B-\u200D\uFEFF]/g, "");
+
+    // Fix common LLM JSON mistakes
+    cleaned = cleaned.replace(/,\s*([}\]])/g, "$1");  // trailing commas
+    cleaned = cleaned.replace(/'/g, '"');                // single quotes -> double (only in JSON context)
+
+    // Try direct parse
+    try { return JSON.parse(cleaned); } catch {}
+
+    // Extract first JSON object
+    const objMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (objMatch) { try { return JSON.parse(objMatch[0]); } catch {} }
+
+    // Extract first JSON array
+    const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (arrMatch) { try { return JSON.parse(arrMatch[0]); } catch {} }
+
+    return null;
   } catch {
     return null;
   }

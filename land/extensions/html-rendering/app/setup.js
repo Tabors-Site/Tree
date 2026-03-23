@@ -2,6 +2,7 @@
 // First-time onboarding: connect LLM + create first tree.
 // Skips steps already completed, redirects to /chat when done.
 
+import log from "../../../core/log.js";
 import express from "express";
 import authenticateLite from "../../../middleware/authenticateLite.js";
 import User from "../../../db/models/user.js";
@@ -42,7 +43,7 @@ router.get("/setup", authenticateLite, async (req, res) => {
 
     return res.send(renderSetup({ userId, username, needsLlm, needsTree }));
   } catch (err) {
-    console.error("Setup page error:", err);
+    log.error("HTML", "Setup page error:", err.message);
     return res.status(500).send("Something went wrong");
   }
 });

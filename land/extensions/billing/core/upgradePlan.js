@@ -1,6 +1,6 @@
-let DAILY_LIMITS = {};
-try { ({ DAILY_LIMITS } = await import("../../energy/core.js")); } catch {}
 import { getEnergy, setEnergy, getUserMeta } from "../../../core/tree/userMetadata.js";
+import { optionalEnergy } from "../../../core/services.js";
+const { DAILY_LIMITS } = await optionalEnergy();
 
 const PLAN_DAILY_VALUE = {
   basic: 0,

@@ -48,10 +48,15 @@ const Guide = () => {
             one default LLM connection, and a metadata map for extension data.
           </P>
           <P>
-            The kernel provides: the node/user/note/contribution models, the WebSocket server,
-            the MCP-based AI conversation loop, the hook system, the mode registry, the
-            orchestrator registry, and the extension loader. If you strip every extension, the
-            kernel still boots.
+            Three layers. The <strong>kernel</strong> is the data contract: Node/User schemas,
+            the API protocol (chat/place/query), hooks, mode registry, orchestrator registry,
+            extension loader, federation. Cannot change without forking.
+            The <strong>core</strong> ships with every land: the AI conversation loop,
+            WebSocket server, MCP bridge, OrchestratorRuntime, built-in tree modes,
+            parseJsonSafe. Replaceable by extensions.
+            <strong>Extensions</strong> are everything else: values, schedules, scripts,
+            dreams, orchestrators. Install what you need. If you strip every extension,
+            the kernel still boots.
           </P>
         </Section>
 

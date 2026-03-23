@@ -4,8 +4,8 @@ import Node from "../../db/models/node.js";
 import Contribution from "../../db/models/contribution.js";
 import { getNotes } from "../../core/tree/notes.js";
 import { logContribution } from "../../db/utils.js";
-let useEnergy = async () => ({ energyUsed: 0 });
-try { ({ useEnergy } = await import("../energy/core.js")); } catch {}
+import { optionalEnergy } from "../../core/services.js";
+const { useEnergy } = await optionalEnergy();
 function containsHtml(str) {
   return /<[a-zA-Z\/][^>]*>/.test(str);
 }

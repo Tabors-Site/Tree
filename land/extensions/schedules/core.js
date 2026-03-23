@@ -2,8 +2,8 @@ import Node from "../../db/models/node.js";
 import { logContribution } from "../../db/utils.js";
 import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
 
-let useEnergy = async () => ({ energyUsed: 0 });
-try { ({ useEnergy } = await import("../energy/core.js")); } catch {}
+import { optionalEnergy } from "../../core/services.js";
+const { useEnergy } = await optionalEnergy();
 
 async function updateSchedule({
   nodeId,

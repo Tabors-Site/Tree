@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import crypto from "crypto";
 import authenticate from "../../middleware/authenticate.js";
@@ -46,7 +47,7 @@ router.post("/setHTMLShareToken", authenticate, limiter, async (req, res) => {
 
     return res.json({ htmlShareToken });
   } catch (err) {
-    console.error("[setHtmlShareToken]", err);
+    log.error("HTML", "setHtmlShareToken error:", err.message);
     res.status(500).json({ message: "Failed to set html share token" });
   }
 });
@@ -77,7 +78,7 @@ router.post("/verify-token", authenticate, async (req, res) => {
         }
       }
     } catch (err) {
-      console.error("verify-token LLM check error:", err.message);
+      log.error("HTML", "verify-token LLM check error:", err.message);
     }
 
     res.json({
@@ -87,7 +88,7 @@ router.post("/verify-token", authenticate, async (req, res) => {
       hasLlm,
     });
   } catch (err) {
-    console.error("[verify-token]", err);
+    log.error("HTML", "verify-token error:", err.message);
     res.status(500).json({ message: "Failed to verify token" });
   }
 });

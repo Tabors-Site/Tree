@@ -4,9 +4,9 @@ import Contribution from "../../db/models/contribution.js";
 import Transaction from "./model.js";
 import { logContribution } from "../../db/utils.js";
 import { resolveTreeAccess } from "../../core/authenticate.js";
-let useEnergy = async () => ({ energyUsed: 0 });
-try { ({ useEnergy } = await import("../energy/core.js")); } catch {}
 import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+import { optionalEnergy } from "../../core/services.js";
+const { useEnergy } = await optionalEnergy();
 
 function getPolicy(node) {
   // Read from metadata first, fall back to schema field for migration period

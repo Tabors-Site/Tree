@@ -243,6 +243,122 @@ function emitModeResult(socket, modeKey, result) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// SHARED: RESOLVE LLM PROVIDER
+// ─────────────────────────────────────────────────────────────────────────
+
+async function resolveLlmProvider(userId, rootId, modeKey, slot) {
+  try {
+    const modeConnectionId = await resolveRootLlmForMode(rootId, modeKey);
+    const clientInfo = await getClientForUser(userId, slot, modeConnectionId);
+    return {
+      isCustom: clientInfo.isCustom,
+      model: clientInfo.model,
+      connectionId: clientInfo.connectionId || null,
+    };
+  } catch {
+    return { isCustom: false, model: null, connectionId: null };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SHARED: RESPOND TO PLAN COMPLETION
+// Takes a completed plan result and generates the final user-facing response.
+// Used by destructive path, librarian flow, and pending operation resume.
+// ─────────────────────────────────────────────────────────────────────────
+
+async function respondToCompletion({
+  planResult,
+  visitorId,
+  socket,
+  signal,
+  meta,
+  message,
+  responseHint,
+  modesUsed,
+  confidence,
+  skipRespond,
+  rt,
+  librarianContext,
+}) {
+  if (!planResult) return null;
+
+  // Early exits: confirm or respond (ambiguity/not found)
+  if (planResult.type === "confirm" || planResult.type === "respond") {
+    const r = planResult.response;
+    if (r) {
+      r.modesUsed = modesUsed;
+      r.confidence = confidence;
+    }
+    return r;
+  }
+
+  if (planResult.navigateOnly) return planResult.navigateOnly;
+
+  const { stepSummaries, lastTargetNodeId, lastTargetPath } = planResult;
+  const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
+
+  if (skipRespond) {
+    return {
+      success: !anyFailed,
+      answer: null,
+      modeKey: "tree:orchestrator",
+      modesUsed,
+      confidence,
+      stepSummaries,
+      lastTargetNodeId,
+      lastTargetPath,
+    };
+  }
+
+  const operationContext =
+    stepSummaries.length > 0 ? formatStepSummaries(stepSummaries) : null;
+  const structuredResults =
+    stepSummaries.length > 0 ? JSON.stringify(stepSummaries, null, 2) : null;
+
+  const finalResponseHint = anyFailed
+    ? `${responseHint ? responseHint + " " : ""}IMPORTANT: Some operations failed. Report what succeeded and what failed honestly.`
+    : responseHint;
+
+  modesUsed.push("tree:respond");
+  const respondStart = new Date();
+
+  const response = await runRespond({
+    visitorId,
+    socket,
+    signal,
+    ...meta,
+    nodeContext: null,
+    operationContext: structuredResults || operationContext,
+    originalMessage: message,
+    responseHint: finalResponseHint,
+    librarianContext: librarianContext || null,
+    stepSummaries,
+  });
+
+  const respondEnd = new Date();
+  rt.trackStep("tree:respond", {
+    input: responseHint || "Respond to the user",
+    output: response?.answer || null,
+    startTime: respondStart,
+    endTime: respondEnd,
+    llmProvider: response?.llmProvider || rt.llmProvider,
+    treeContext: {
+      targetNodeId: lastTargetNodeId,
+      targetPath: lastTargetPath,
+      directive: responseHint || "Respond to the user",
+      stepResult: anyFailed ? "failed" : "success",
+    },
+  });
+
+  if (response) {
+    response.modesUsed = modesUsed;
+    response.confidence = confidence;
+    response.stepSummaries = stepSummaries;
+  }
+  return response;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // SHARED PLAN EXECUTION LOOP
 // Used by both destructive path and librarian flow.
 // Each step: navigate → context/scout → destructive check → execute → summarize
@@ -943,17 +1059,7 @@ export async function orchestrateTreeRequest({
     slot,
   });
 
-  // Resolve LLM provider for tracking
-  let llmProvider = { isCustom: false, model: null, connectionId: null };
-  try {
-    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:librarian");
-    const clientInfo = await getClientForUser(userId, slot, modeConnectionId);
-    llmProvider = {
-      isCustom: clientInfo.isCustom,
-      model: clientInfo.model,
-      connectionId: clientInfo.connectionId || null,
-    };
-  } catch (e) { /* use default */ }
+  const llmProvider = await resolveLlmProvider(userId, rootId, "tree:librarian", slot);
 
   // Attach to the existing websocket session
   rt.attach({ sessionId, mainChatId: rootChatId, llmProvider, signal, chainIndex: 1 });
@@ -1304,87 +1410,11 @@ export async function orchestrateTreeRequest({
     rt,
   });
 
-  if (!planResult) return null;
-
-  // Early exits: confirm or respond (ambiguity/not found)
-  if (planResult.type === "confirm" || planResult.type === "respond") {
-    const r = planResult.response;
-    if (r) {
-      r.modesUsed = modesUsed;
-      r.confidence = confidence;
-    }
-    return r;
-  }
-
-  // Navigate-only shortcut
-  if (planResult.navigateOnly) return planResult.navigateOnly;
-
-  // Normal completion — respond with accumulated results
-  const { stepSummaries, lastTargetNodeId, lastTargetPath } = planResult;
-
-  const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
-
-  if (skipRespond) {
-    return {
-      success: !anyFailed,
-      answer: null,
-      modeKey: "tree:orchestrator",
-      modesUsed,
-      confidence,
-      stepSummaries,
-      lastTargetNodeId,
-      lastTargetPath,
-    };
-  }
-
-  const operationContext =
-    stepSummaries.length > 0 ? formatStepSummaries(stepSummaries) : null;
-  const structuredResults =
-    stepSummaries.length > 0 ? JSON.stringify(stepSummaries, null, 2) : null;
-
-  const finalResponseHint = anyFailed
-    ? `${responseHint ? responseHint + " " : ""}IMPORTANT: Some operations failed. Report what succeeded and what failed honestly. Do NOT claim success for failed operations.`
-    : responseHint;
-
-  modesUsed.push("tree:respond");
-  const respondStart = new Date();
-
-  const response = await runRespond({
-    visitorId,
-    socket,
-    signal,
-    ...meta,
-    nodeContext: null,
-    operationContext: structuredResults || operationContext,
-    originalMessage: message,
-    responseHint: finalResponseHint,
-    stepSummaries,
+  return await respondToCompletion({
+    planResult,
+    visitorId, socket, signal, meta, message,
+    responseHint, modesUsed, confidence, skipRespond, rt,
   });
-
-  const respondEnd = new Date();
-
-  rt.trackStep("tree:respond", {
-    input: responseHint || "Respond to the user",
-    output: response?.answer || null,
-    startTime: respondStart,
-    endTime: respondEnd,
-    llmProvider: response?.llmProvider || llmProvider,
-    treeContext: {
-      targetNodeId: lastTargetNodeId,
-      targetPath: lastTargetPath,
-      planStepIndex: plan.length,
-      planTotalSteps: plan.length,
-      directive: responseHint || "Respond to the user",
-      stepResult: anyFailed ? "failed" : "success",
-    },
-  });
-
-  if (response) {
-    response.modesUsed = modesUsed;
-    response.confidence = confidence;
-    response.stepSummaries = stepSummaries;
-  }
-  return response;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1705,84 +1735,14 @@ async function runLibrarianFlow({
     rt,
   });
 
-  if (!planResult) return null;
-
-  // Early exits (shouldn't happen for librarian since isDestructive=false, but handle gracefully)
-  if (planResult.type === "confirm" || planResult.type === "respond") {
-    const r = planResult.response;
-    if (r) {
-      r.modesUsed = modesUsed;
-      r.confidence = libPlan?.confidence || classification.confidence;
-    }
-    return r;
-  }
-
-  if (planResult.navigateOnly) return planResult.navigateOnly;
-
-  // ── RESPOND ──
-  const { stepSummaries, lastTargetNodeId, lastTargetPath } = planResult;
-
-  const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
-
-  if (skipRespond) {
-    return {
-      success: !anyFailed,
-      answer: null,
-      modeKey: "tree:orchestrator",
-      modesUsed,
-      confidence: libPlan?.confidence || classification.confidence,
-      stepSummaries,
-      lastTargetNodeId,
-      lastTargetPath,
-    };
-  }
-
-  const operationContext =
-    stepSummaries.length > 0 ? formatStepSummaries(stepSummaries) : null;
-  const structuredResults =
-    stepSummaries.length > 0 ? JSON.stringify(stepSummaries, null, 2) : null;
-
-  const finalResponseHint = anyFailed
-    ? `${responseHint ? responseHint + " " : ""}IMPORTANT: Some operations failed. Report what succeeded and what failed honestly.`
-    : responseHint;
-
-  modesUsed.push("tree:respond");
-  const respondStart = new Date();
-
-  const response = await runRespond({
-    visitorId,
-    socket,
-    signal,
-    ...meta,
-    nodeContext: null,
-    operationContext: structuredResults || operationContext,
-    originalMessage: message,
-    responseHint: finalResponseHint,
+  return await respondToCompletion({
+    planResult,
+    visitorId, socket, signal, meta, message,
+    responseHint, modesUsed,
+    confidence: libPlan?.confidence || classification.confidence,
+    skipRespond, rt,
     librarianContext: libPlan,
-    stepSummaries,
   });
-
-  const respondEnd = new Date();
-  rt.trackStep("tree:respond", {
-    input: responseHint || "Respond to the user",
-    output: response?.answer || null,
-    startTime: respondStart,
-    endTime: respondEnd,
-    llmProvider: response?.llmProvider || rt.llmProvider,
-    treeContext: {
-      targetNodeId: lastTargetNodeId,
-      targetPath: lastTargetPath,
-      directive: responseHint || "Respond to the user",
-      stepResult: anyFailed ? "failed" : "success",
-    },
-  });
-
-  if (response) {
-    response.modesUsed = modesUsed;
-    response.confidence = libPlan?.confidence || classification.confidence;
-    response.stepSummaries = stepSummaries;
-  }
-  return response;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1939,37 +1899,12 @@ async function executePendingOperation({
     }
   }
 
-  // ── RESPOND ──
-  if (skipRespond) {
-    const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
-    return {
-      success: !anyFailed,
-      answer: null,
-      modeKey: "tree:orchestrator",
-      modesUsed,
-      stepSummaries,
-    };
-  }
-
-  modesUsed.push("tree:respond");
-
-  const response = await runRespond({
-    visitorId,
-    socket,
-    signal,
-    ...meta,
-    nodeContext: null,
-    operationContext: JSON.stringify(stepSummaries, null, 2),
-    originalMessage: pendingMessage,
-    responseHint,
-    stepSummaries,
+  return await respondToCompletion({
+    planResult: { type: "completed", stepSummaries, lastTargetNodeId: pending.targetNodeId, lastTargetPath: pending.targetPath },
+    visitorId, socket, signal, meta,
+    message: pendingMessage,
+    responseHint, modesUsed, skipRespond, rt,
   });
-
-  if (response) {
-    response.modesUsed = modesUsed;
-    response.stepSummaries = stepSummaries;
-  }
-  return response;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

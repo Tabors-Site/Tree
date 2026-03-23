@@ -6,11 +6,18 @@ We do things fully and properly. never taking lazy route. We are working hard an
 
 Open source operating system for AI agents. Minimal kernel + modular extensions on a federated network.
 
-## CRITICAL: Kernel vs Extensions
+## CRITICAL: Three Layers
 
-**The kernel is locked down. Do not add fields to Node or User schemas. Do not add imports from extensions/ into core/. Do not hardcode extension logic in core files. If you notice anything in core that references extension-specific data or behavior, flag it immediately.**
+### Kernel (cannot change without forking)
+The data contract. Node schema, User schema, Note model, Contribution model. The API protocol (chat/place/query behavioral contracts). The hook system. The mode registry. The orchestrator registry. The extension loader. Federation (Canopy). These define what TreeOS IS. Do not add fields to Node or User schemas. Do not import from extensions/ into kernel files.
 
-Extensions own their data (in `metadata` Map), their routes, their tools, their modes, their orchestrator. Core provides the registries, hooks, and conversation loop. That is all.
+### Core (ships with every land, replaceable)
+The reference implementation. The AI conversation loop (`processMessage`, `runChat`, `runPipeline`). The WebSocket server. The MCP bridge. Session management. `OrchestratorRuntime`. `parseJsonSafe`. The built-in tree modes (navigate, structure, edit, respond, librarian, notes). These ship by default but can be overridden by extensions. A custom orchestrator can replace the entire conversation flow. Custom modes can replace how the AI thinks at any node.
+
+### Extensions (optional, installable, removable)
+Everything else. Values, schedules, prestige, scripts, dreams, understanding, energy, billing, solana, blog, gateway, shell, land-manager, tree-orchestrator. Each is a folder with a manifest. Install what you need. Remove what you don't. Build your own. The kernel boots without any of them.
+
+**The rule: kernel NEVER imports from extensions. Core NEVER imports from extensions. Extensions import from kernel and core. Extensions reach each other through dynamic imports with try/catch.**
 
 ## Tech Stack
 
@@ -23,7 +30,7 @@ Extensions own their data (in `metadata` Map), their routes, their tools, their 
 
 ```
 land/
-├── core/              # Kernel business logic. ZERO extension imports.
+├── core/              # Kernel: business logic, hooks, registries. ZERO extension imports.
 │   ├── hooks.js       # 8 lifecycle hooks (beforeNote, afterNote, etc.)
 │   ├── orchestratorRegistry.js  # Extensions register conversation orchestrators
 │   ├── services.js    # Core services bundle passed to extensions via init(core)
@@ -74,19 +81,19 @@ land/
 │   ├── html-rendering/ # Server-rendered HTML pages
 │   ├── loader.js      # Scans manifests, validates deps, wires routes/tools/modes/hooks/jobs
 │   └── EXTENSION_FORMAT.md  # Full extension developer documentation
-├── orchestrators/     # Core orchestrator utilities (used by extensions)
-│   ├── runtime.js     # OrchestratorRuntime class for background pipelines
+├── orchestrators/     # Core: orchestrator utilities (ships with land, used by extensions)
+│   ├── runtime.js     # OrchestratorRuntime (init/attach/runStep/trackStep/cleanup)
 │   ├── locks.js       # Concurrency locks
-│   └── helpers.js     # parseJsonSafe, nullSocket
-├── ws/                # WebSocket system (kernel)
-│   ├── conversation.js    # processMessage() tool-calling loop, LLM resolution
-│   ├── websocket.js       # Socket.IO server, message handler, orchestrator dispatch
+│   └── helpers.js     # parseJsonSafe (handles fences, think tags, trailing commas, single quotes)
+├── ws/                # Core: WebSocket + AI conversation system
+│   ├── conversation.js    # processMessage(), runChat(), runPipeline(), LLM resolution
+│   ├── websocket.js       # Socket.IO server, message handler, orchestrator dispatch, auto-abort
 │   ├── sessionRegistry.js # Session lifecycle
 │   ├── aiChatTracker.js   # LLM call logging
 │   ├── mcp.js             # MCP connection management
 │   ├── tools.js           # Core MCP tool definitions
-│   └── modes/             # Mode registry + built-in modes (will move to extensions)
-│       └── registry.js    # registerMode(), getMode(), getToolsForMode()
+│   └── modes/             # Kernel: mode registry. Core: built-in tree modes
+│       └── registry.js    # registerMode(), resolveMode(), getToolsForMode(), getAllToolNamesForBigMode()
 ├── mcp/               # MCP server
 ├── routes/            # Core HTTP routes
 ├── canopy/            # Federation protocol
@@ -156,11 +163,11 @@ const { answer } = await core.llm.runChat({
   message: "install the blog extension",
   mode: "land:manager",
   rootId: null,     // for tree modes
-  signal: null,     // AbortController signal for cancellation
+  res,              // Express response object: auto-abort on client disconnect
 });
 ```
 
-Handles automatically: MCP connection, mode switching, AIChat tracking, abort/cancellation, session persistence, error finalization.
+Handles automatically: MCP connection, mode switching, AIChat tracking, abort on client disconnect, session persistence, error finalization. Pass `res` for HTTP routes. Pass `signal` for programmatic abort.
 
 Session identity: `land:{userId}`, `home:{userId}`, `tree:{rootId}:{userId}`. Same zone = same conversation. Different tree = new session. Zone switch = new session.
 

@@ -72,22 +72,6 @@ NodeSchema.methods.transferOwnership = function (newOwnerId, removerId) {
   this.rootOwner = newOwnerId;
 };
 
-/*
-
-// Method to check if the current user is allowed to modify a node (including child nodes)
-NodeSchema.methods.isAllowedToModify = async function (userId) {
-  if (this.rootOwner === userId) return true;
-
-  if (this.contributors.includes(userId)) return true;
-
-  if (this.parent) {
-    const parentNode = await Node.findById(this.parent);
-    return parentNode.isAllowedToModify(userId);
-  }
-
-  return false;
-}; */
-
 NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
   if (this.isSystem) {
     throw new Error("System nodes cannot be deleted");
@@ -112,13 +96,6 @@ NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
     }
 
     await this.deleteOne();
-
-    if (this.parent) {
-      const parentNode = await Node.findById(this.parent);
-      if (parentNode) {
-        await parentNode.save();
-      }
-    }
   } catch (error) {
     log.error("DB",
       `Error in deleteWithChildrenBottomUp for node ${this._id}:`,

@@ -155,6 +155,10 @@ module.exports = (program) => {
         console.log(chalk.dim("Type:     ") + (node.type || "none"));
         console.log(chalk.dim("Status:   ") + (node.status || "active"));
 
+        if (node.llmDefault) {
+          console.log(chalk.dim("LLM:      ") + node.llmDefault);
+        }
+
         if (meta.schedule) {
           console.log(chalk.dim("Schedule: ") + new Date(meta.schedule).toLocaleString());
           if (meta.reeffectTime) console.log(chalk.dim("Reeffect: ") + meta.reeffectTime + "h");
