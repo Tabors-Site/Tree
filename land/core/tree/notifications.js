@@ -2,7 +2,7 @@
 // Shared notification queries used by routesURL and chat.
 
 import mongoose from "mongoose";
-const Notification = mongoose.models.Notification || { find: () => ({ sort: () => ({ limit: () => ({ lean: () => [] }) }) }), countDocuments: () => 0, updateMany: () => ({}) };
+const Notification = mongoose.models.Notification || { find: () => ({ sort: () => ({ skip: () => ({ limit: () => ({ lean: () => [] }) }) }) }), countDocuments: () => 0, updateMany: () => ({}) };
 
 /**
  * Get notifications for a user, optionally filtered by rootId.
