@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import { findNodeById } from "../../db/utils.js";
@@ -82,7 +83,7 @@ router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
       token: req.query.token ?? "",
     }));
   } catch (err) {
-    console.error("Error in /node/:nodeId/values:", err);
+ log.error("Values", "Error in /node/:nodeId/values:", err);
     res.status(500).json({ error: err.message });
   }
 });

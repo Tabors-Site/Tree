@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import User from "../../db/models/user.js";
@@ -60,7 +61,7 @@ export const createApiKey = async (req, res) => {
       message: "Store this key securely. You will not see it again.",
     });
   } catch (err) {
-    console.error("[createApiKey]", err);
+ log.error("Api Keys", "[createApiKey]", err);
     return res.status(500).json({ message: "Failed to create API key" });
   }
 };
@@ -83,7 +84,7 @@ export const listApiKeys = async (req, res) => {
       })),
     );
   } catch (err) {
-    console.error("[listApiKeys]", err);
+ log.error("Api Keys", "[listApiKeys]", err);
     return res.status(500).json({ message: "Failed to list API keys" });
   }
 };
@@ -106,7 +107,7 @@ export const deleteApiKey = async (req, res) => {
 
     return res.json({ message: "API key revoked" });
   } catch (err) {
-    console.error("[deleteApiKey]", err);
+ log.error("Api Keys", "[deleteApiKey]", err);
     return res.status(500).json({ message: "Failed to revoke API key" });
   }
 };

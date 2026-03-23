@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import {
   Keypair,
   Connection,
@@ -336,7 +337,7 @@ export async function sendSOLFromVersion({
     // Surface Solana logs if available
     if (typeof err?.getLogs === "function") {
       const logs = await err.getLogs();
-      console.error("Solana tx logs:", logs);
+ log.error("Solana", "Solana tx logs:", logs);
     }
     throw err;
   }
@@ -481,7 +482,7 @@ export async function syncVersionTokenHoldings(node, versionIndex) {
   try {
     prices = await fetchPrices(seenMints);
   } catch (err) {
-    console.warn("Price fetch failed, skipping USD valuation:", err.message);
+ log.warn("Solana", "Price fetch failed, skipping USD valuation:", err.message);
   }
 
   for (const mint of seenMints) {

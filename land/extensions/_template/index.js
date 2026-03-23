@@ -1,4 +1,11 @@
+import log from "../../core/log.js";
+
 export async function init(core) {
+  // Logging: use log.info/verbose/debug/warn/error instead of console.log
+  // log.info("MyExt", "Job started");
+  // log.verbose("MyExt", "Processing...");
+  // log.debug("MyExt", "Detail...");
+
   // Access declared services via core.*
   // core.models.Node, core.energy.useEnergy(), etc.
 

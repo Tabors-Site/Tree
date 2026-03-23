@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import Stripe from "stripe";
 import User from "../../db/models/user.js";
 import { validatePurchase } from "./core/validatePurchase.js";
@@ -117,7 +118,7 @@ if (plan && energyAmount > 0) {
     res.json({ url: session.url });
 
   } catch (err) {
-    console.error("Stripe session error:", err);
+ log.error("Billing", "Stripe session error:", err);
     res.status(500).json({ error: "Failed to create checkout session" });
   }
 }

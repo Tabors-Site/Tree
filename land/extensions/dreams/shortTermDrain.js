@@ -2,6 +2,7 @@
 // Drains pending ShortMemory items into the tree.
 // Pipeline: cluster -> scout -> plan -> build -> place.
 
+import log from "../../core/log.js";
 import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 import { acquireLock, releaseLock } from "../../orchestrators/locks.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
@@ -31,7 +32,7 @@ async function requeueItems(itemIds, reason) {
     { _id: { $in: itemIds }, drainAttempts: { $gte: MAX_DRAIN_ATTEMPTS } },
     { status: "escalated" },
   );
-  console.log(`Re-queued ${itemIds.length} items: ${reason}`);
+ log.debug("Dreams", `Re-queued ${itemIds.length} items: ${reason}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ async function requeueItems(itemIds, reason) {
  */
 export async function drainTree(rootId) {
   if (!acquireLock("drain", rootId)) {
-    console.log(`Drain already running for tree ${rootId}, skipping`);
+ log.verbose("Dreams", `Drain already running for tree ${rootId}, skipping`);
     return { sessionId: null };
   }
 
@@ -66,7 +67,7 @@ export async function drainTree(rootId) {
 
     rootNode = await Node.findById(rootId).select("rootOwner name").lean();
     if (!rootNode?.rootOwner) {
-      console.error(`Drain: tree ${rootId} has no rootOwner`);
+ log.error("Dreams", `Drain: tree ${rootId} has no rootOwner`);
       releaseLock("drain", rootId);
       return { sessionId: null };
     }
@@ -92,7 +93,7 @@ export async function drainTree(rootId) {
 
   await rt.init(`Draining ${items.length} short-term items for tree "${rootNode.name}"`);
 
-  console.log(`Drain started: ${items.length} items for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
+ log.verbose("Dreams", `Drain started: ${items.length} items for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
 
   try {
     const treeSummary = await buildDeepTreeSummary(rootId).catch(() => "");
@@ -106,13 +107,13 @@ export async function drainTree(rootId) {
     });
 
     if (!manifest?.clusters?.length) {
-      console.error("Drain: cluster analysis returned no clusters");
+ log.error("Dreams", "Drain: cluster analysis returned no clusters");
       await requeueItems(items.map((i) => i._id), "cluster analysis failed");
       rt.setResult("Cluster analysis failed", "drain:complete");
       return { sessionId: rt.sessionId };
     }
 
-    console.log(`Clustered into ${manifest.clusters.length} cluster(s)`);
+ log.debug("Dreams", `Clustered into ${manifest.clusters.length} cluster(s)`);
 
     // Attach full item objects to each cluster
     for (const cluster of manifest.clusters) {
@@ -140,7 +141,7 @@ export async function drainTree(rootId) {
         });
 
         if (!scoutData?.pins?.length) {
-          console.warn(`Scout found no pins for cluster "${cluster.sharedTheme}"`);
+ log.warn("Dreams", `Scout found no pins for cluster "${cluster.sharedTheme}"`);
           await requeueItems(clusterItemIds, "scout found no locations");
           totalRequeued += clusterItemIds.length;
           continue;
@@ -154,7 +155,7 @@ export async function drainTree(rootId) {
         });
 
         if (!plan?.placeSteps?.length) {
-          console.warn(`Plan returned no place steps for cluster "${cluster.sharedTheme}"`);
+ log.warn("Dreams", `Plan returned no place steps for cluster "${cluster.sharedTheme}"`);
           await requeueItems(clusterItemIds, "plan returned no steps");
           totalRequeued += clusterItemIds.length;
           continue;
@@ -162,7 +163,7 @@ export async function drainTree(rootId) {
 
         // CONFIDENCE CHECK
         if ((plan.overallConfidence ?? 1) < MIN_CONFIDENCE) {
-          console.log(`Low confidence (${plan.overallConfidence}) for cluster "${cluster.sharedTheme}", re-queuing`);
+ log.debug("Dreams", `Low confidence (${plan.overallConfidence}) for cluster "${cluster.sharedTheme}", re-queuing`);
           await requeueItems(clusterItemIds, `low confidence: ${plan.overallConfidence}`);
           totalRequeued += clusterItemIds.length;
           continue;
@@ -219,7 +220,7 @@ export async function drainTree(rootId) {
           }
 
           if (!targetNodeId) {
-            console.warn(`Could not resolve target for item ${placeStep.itemId}, skipping`);
+ log.warn("Dreams", `Could not resolve target for item ${placeStep.itemId}, skipping`);
             continue;
           }
 
@@ -256,7 +257,7 @@ export async function drainTree(rootId) {
             });
           }
           totalPlaced += placedIds.length;
-          console.log(`Placed ${placedIds.length}/${cluster.items.length} items for cluster "${cluster.sharedTheme}"`);
+ log.debug("Dreams", `Placed ${placedIds.length}/${cluster.items.length} items for cluster "${cluster.sharedTheme}"`);
         }
 
         // Re-queue unplaced items
@@ -268,16 +269,16 @@ export async function drainTree(rootId) {
           totalRequeued += unplacedIds.length;
         }
       } catch (clusterErr) {
-        console.error(`Cluster "${cluster.sharedTheme}" failed:`, clusterErr.message);
+ log.error("Dreams", `Cluster "${cluster.sharedTheme}" failed:`, clusterErr.message);
         await requeueItems(clusterItemIds, clusterErr.message);
         totalRequeued += clusterItemIds.length;
       }
     }
 
     rt.setResult(`Placed ${totalPlaced}, re-queued ${totalRequeued} of ${items.length} items`, "drain:complete");
-    console.log(`Drain complete: ${totalPlaced} placed, ${totalRequeued} re-queued`);
+ log.verbose("Dreams", `Drain complete: ${totalPlaced} placed, ${totalRequeued} re-queued`);
   } catch (err) {
-    console.error(`Drain orchestration error for tree ${rootId}:`, err.message);
+ log.error("Dreams", `Drain orchestration error for tree ${rootId}:`, err.message);
     rt.setError(err.message, "drain:complete");
   } finally {
     await rt.cleanup();

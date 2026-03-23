@@ -1,4 +1,5 @@
 // core/energy/useEnergy.js
+import log from "../../core/log.js";
 import fs from "fs";
 import User from "../../db/models/user.js";
 import { assignConnection } from "../../core/llms/customLLM.js";
@@ -206,7 +207,7 @@ export function maybeResetEnergy(user) {
         "llmAssignments.notification": null,
       } },
     ).catch(function (e) {
-      console.error("Failed to clear root LLM on downgrade:", e.message);
+ log.error("Energy", "Failed to clear root LLM on downgrade:", e.message);
     });
   }
 

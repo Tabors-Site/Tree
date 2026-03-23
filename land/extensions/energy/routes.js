@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import User from "../../db/models/user.js";
 import urlAuth from "../../middleware/urlAuth.js";
@@ -77,7 +78,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Energy page error:", err);
+ log.error("Energy", "Energy page error:", err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -75,7 +76,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
       ...result,
     });
   } catch (err) {
-    console.error("Error creating understanding run:", err);
+ log.error("Understanding", "Error creating understanding run:", err);
     return res.status(500).json({
       success: false,
       error: err.message,
@@ -268,7 +269,7 @@ router.get(
         }),
       );
     } catch (err) {
-      console.error("Error fetching UnderstandingRun:", err);
+ log.error("Understanding", "Error fetching UnderstandingRun:", err);
       return res.status(500).json({ error: err.message });
     }
   },
@@ -383,7 +384,7 @@ router.get(
         }),
       );
     } catch (err) {
-      console.error("Error fetching UnderstandingNode:", err);
+ log.error("Understanding", "Error fetching UnderstandingNode:", err);
       return res.status(500).json({ error: err.message });
     }
   },
@@ -433,7 +434,7 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Error fetching understandings:", err);
+ log.error("Understanding", "Error fetching understandings:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -599,7 +600,7 @@ router.get(
         }),
       );
     } catch (err) {
-      console.error("Error fetching run node view:", err);
+ log.error("Understanding", "Error fetching run node view:", err);
       return res.status(500).json({ error: err.message });
     }
   },
@@ -628,7 +629,7 @@ router.post("/root/:nodeId/understandings/run/:runId/orchestrate", authenticate,
     }
     return res.json(result);
   } catch (err) {
-    console.error("Understanding orchestration error:", err.message);
+ log.error("Understanding", "Understanding orchestration error:", err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

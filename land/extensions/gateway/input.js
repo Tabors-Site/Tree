@@ -2,6 +2,7 @@
 // Central processor for incoming gateway messages (Telegram, Discord).
 // Mirrors the tree.js API endpoint pattern but with per-channel queue + cancel.
 
+import log from "../../core/log.js";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
@@ -108,7 +109,7 @@ export async function processGatewayMessage(
     var scopeKey = "gw:" + channelId;
     abortSessionsByScope(scopeKey);
 
-    console.log(
+ log.verbose("Gateway", 
       `Gateway: ${lowerTrimmed} command for channel ${channelId}, aborted ${abortCount} in-flight message(s)`,
     );
 
@@ -130,7 +131,7 @@ export async function processGatewayMessage(
         },
       );
     } catch (err) {
-      console.error(
+ log.error("Gateway", 
         "Gateway: failed to finalize AIChats on cancel:",
         err.message,
       );
@@ -221,7 +222,7 @@ export async function processGatewayMessage(
     });
     if (aiChat) setAiContributionContext(visitorId, sessionId, aiChat._id);
   } catch (err) {
-    console.error("Gateway: failed to create AIChat:", err.message);
+ log.error("Gateway", "Gateway: failed to create AIChat:", err.message);
   }
 
   // 10. Enqueue with max concurrent 2
@@ -285,7 +286,7 @@ export async function processGatewayMessage(
             stopped: wasAborted,
             modeKey: orchResult?.modeKey || "tree:orchestrator",
           }).catch((err) =>
-            console.error("Gateway: AIChat finalize failed:", err.message),
+ log.error("Gateway", "Gateway: AIChat finalize failed:", err.message),
           );
         }
 
@@ -298,7 +299,7 @@ export async function processGatewayMessage(
       } catch (err) {
         clearTimeout(timer);
         if (timedOut) return { success: false, answer: "Request timed out." };
-        console.error("Gateway: orchestration error:", err.message);
+ log.error("Gateway", "Gateway: orchestration error:", err.message);
 
         if (aiChat) {
           finalizeAIChat({

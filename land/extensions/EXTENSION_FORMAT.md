@@ -132,6 +132,30 @@ If no extension registers an orchestrator, the built-in one runs. Only one orche
 | Orchestrator | `core.orchestrator.*` | Yes |
 | Energy | `core.energy.*` | No-op stub if extension not loaded |
 
+## Logging
+
+Use the core log module instead of `console.log`. This is the standard for all extensions.
+
+```js
+import log from "../../core/log.js";
+
+log.info("MyExt", "Job started");           // Level 1: always shown. Jobs, lifecycle.
+log.verbose("MyExt", "Processing tree X");   // Level 2: normal operations. Pipeline steps.
+log.debug("MyExt", "Placed item Y on node"); // Level 3: internal details. Individual operations.
+log.warn("MyExt", "Retry failed, skipping"); // Always shown. Recoverable issues.
+log.error("MyExt", "Fatal:", err.message);   // Always shown. Broken operations.
+```
+
+The first argument is the tag (your extension name). The console extension formats output with timestamps and colors. Without it, plain `[Tag] message` goes to stdout.
+
+Severity levels:
+- **info (1)**: Job start/stop, extension lifecycle. Operators always see these.
+- **verbose (2)**: Pipeline progress, session events, mode switches. Default level.
+- **debug (3)**: Individual LLM calls, tool arguments, item-level operations. Only when investigating.
+- **warn/error**: Always shown regardless of level.
+
+Set `LOG_LEVEL=1` in .env for quiet, `LOG_LEVEL=3` for everything. Change at runtime via CLI: `treeos log-level 3`.
+
 ## CLI Declarations
 
 Extensions can declare CLI commands as metadata in the manifest.

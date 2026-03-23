@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import Node from "../../db/models/node.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -49,7 +50,7 @@ router.get("/node/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
       renderScriptDetail({ nodeId, script, contributions, qsWithQ }),
     );
   } catch (err) {
-    console.error("Error fetching script:", err);
+ log.error("Scripts", "Error fetching script:", err);
 
     if (
       err.message === "Node not found" ||
@@ -83,7 +84,7 @@ router.post(
 
       return res.redirect(`/api/v1/node/${nodeId}/script/${scriptId}?${qs}`);
     } catch (err) {
-      console.error("Error editing script:", err);
+ log.error("Scripts", "Error editing script:", err);
       return res.status(500).send("Failed to update script");
     }
   },
@@ -103,13 +104,13 @@ router.post(
       const qs = filterQuery(req);
       return res.redirect(`/api/v1/node/${nodeId}/script/${scriptId}?${qs}`);
     } catch (err) {
-      console.error("Error executing script:", err);
+ log.error("Scripts", "Error executing script:", err);
 
       let qs = "";
       try {
         qs = filterQuery(req);
       } catch (e) {
-        console.error("filterQuery failed:", e);
+ log.error("Scripts", "filterQuery failed:", e);
       }
       const { nodeId, scriptId } = req.params;
 
@@ -238,7 +239,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, 0 + 1);`,
       renderScriptHelp({ nodeId, nodeName: node.name, data, qsWithQ }),
     );
   } catch (err) {
-    console.error("Error loading script help:", err);
+ log.error("Scripts", "Error loading script help:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -266,7 +267,7 @@ router.post("/node/:nodeId/script/create", authenticate, async (req, res) => {
       `/api/v1/node/${nodeId}/script/${result.scriptId}?${qs}`,
     );
   } catch (err) {
-    console.error("Create script error:", err);
+ log.error("Scripts", "Create script error:", err);
     return res.status(500).send("Failed to create script");
   }
 });

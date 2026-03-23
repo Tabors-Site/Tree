@@ -2,6 +2,7 @@
 // Phase 4 of tree dream: generates summary + thought notifications from dream AI chats.
 // Two tool-less LLM calls, then saves Notification documents.
 
+import log from "../../core/log.js";
 import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
 import AIChat from "../../db/models/aiChat.js";
@@ -67,7 +68,7 @@ export async function orchestrateDreamNotify({
   const initialized = await rt.init(`Dream notifications for "${treeName}"`);
   if (!initialized) return;
 
-  console.log(`Dream notifications starting for "${treeName}"`);
+ log.verbose("Dreams", `Dream notifications starting for "${treeName}"`);
 
   try {
     // Fetch dream AI chats
@@ -79,7 +80,7 @@ export async function orchestrateDreamNotify({
       .lean();
 
     if (dreamChats.length === 0) {
-      console.log(`No AI chats found for dream sessions, skipping notifications`);
+ log.debug("Dreams", `No AI chats found for dream sessions, skipping notifications`);
       rt.setResult("No dream activity to summarize", "dream-notify:complete");
       return;
     }
@@ -136,7 +137,7 @@ export async function orchestrateDreamNotify({
 
     if (notifications.length > 0) {
       await Notification.insertMany(notifications);
-      console.log(`Created ${notifications.length} notification(s) for ${recipients.size} user(s)`);
+ log.verbose("Dreams", `Created ${notifications.length} notification(s) for ${recipients.size} user(s)`);
 
       // Dispatch to gateway channels (fire-and-forget)
       const uniqueNotifs = [];
@@ -149,7 +150,7 @@ export async function orchestrateDreamNotify({
       if (uniqueNotifs.length > 0) {
         import("../gateway/dispatch.js")
           .then(({ dispatchNotifications }) => dispatchNotifications(rootId, uniqueNotifs))
-          .catch((err) => console.error(`Gateway dispatch error for root ${rootId}:`, err.message));
+ .catch((err) => log.error("Dreams", `Gateway dispatch error for root ${rootId}:`, err.message));
       }
     }
 
@@ -158,7 +159,7 @@ export async function orchestrateDreamNotify({
       "dream-notify:complete",
     );
   } catch (err) {
-    console.error(`Dream notification error for "${treeName}":`, err.message);
+ log.error("Dreams", `Dream notification error for "${treeName}":`, err.message);
     rt.setError(err.message, "dream-notify:complete");
   } finally {
     await rt.cleanup();

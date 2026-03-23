@@ -3,6 +3,7 @@
 // Librarian: navigates, reads, places — behind the scenes
 // Destructive: translate → navigate → confirm → execute (existing flow)
 
+import log from "../../core/log.js";
 import {
   switchMode,
   processMessage,
@@ -306,7 +307,7 @@ async function executePlanSteps({
       summary: op.directive,
     };
 
-    console.log(
+ log.verbose("Tree Orchestrator", 
       `  📋 Step ${stepNum}: ${intent.intent} → ${intent.targetHint || "(current)"}`,
     );
 
@@ -319,7 +320,7 @@ async function executePlanSteps({
 
     // If librarian already provided a targetNodeId, skip navigation
     if (op.targetNodeId && !op.needsNavigation) {
-      console.log(`  📍 Librarian provided ID: ${op.targetNodeId}`);
+ log.verbose("Tree Orchestrator", ` Librarian provided ID: ${op.targetNodeId}`);
       targetNodeId = op.targetNodeId;
     } else if (intent.targetHint) {
       // ── LLM NAVIGATION — search for a specific node ──
@@ -411,7 +412,7 @@ async function executePlanSteps({
           );
 
         if (isBatchOp && navResult.candidates?.length > 0) {
-          console.log(
+ log.verbose("Tree Orchestrator", 
             `  🔀 Merge operation — collecting ${navResult.candidates.length} ambiguous candidates`,
           );
 
@@ -426,7 +427,7 @@ async function executePlanSteps({
               });
               candidateContexts.push(ctx);
             } catch (err) {
-              console.error(
+ log.error("Tree Orchestrator", 
                 `⚠️ Failed to fetch candidate ${candidate.nodeId}:`,
                 err.message,
               );
@@ -449,7 +450,7 @@ async function executePlanSteps({
             candidates: candidateContexts,
           };
 
-          console.log(
+ log.verbose("Tree Orchestrator", 
             `  📍 Merge target: ${targetPath || targetNodeId} with ${candidateContexts.length} candidates`,
           );
         } else {
@@ -505,7 +506,7 @@ async function executePlanSteps({
       // ── NO TARGET — operate on current position (root or last step's target) ──
       targetNodeId = lastTargetNodeId || getCurrentNodeId(visitorId) || rootId;
       targetPath = lastTargetPath || null;
-      console.log(`  📍 Using current position: ${targetPath || targetNodeId}`);
+ log.verbose("Tree Orchestrator", ` Using current position: ${targetPath || targetNodeId}`);
     }
 
     // ══════════════════════════════════════════════════════
@@ -625,7 +626,7 @@ async function executePlanSteps({
           intent.intent = scoutResult.newIntent;
           intent.directive = scoutResult.newDirective || intent.directive;
 
-          console.log(
+ log.verbose("Tree Orchestrator", 
             `  🔍 Scout adapted: ${op.intent} → ${intent.intent} at ${targetPath || targetNodeId}`,
           );
           emitModeResult(socket, "tree:scout", {
@@ -662,7 +663,7 @@ async function executePlanSteps({
             });
             childContexts.push(childCtx);
           } catch (err) {
-            console.error(
+ log.error("Tree Orchestrator", 
               `⚠️ Deep context failed for "${child.name}":`,
               err.message,
             );
@@ -678,7 +679,7 @@ async function executePlanSteps({
             null,
             2,
           );
-          console.log(
+ log.verbose("Tree Orchestrator", 
             `  🔬 Deep context: fetched details for ${childContexts.length} children`,
           );
         }
@@ -700,7 +701,7 @@ async function executePlanSteps({
             referencedNodes: counterparts,
           };
           nodeContext = JSON.stringify(combined, null, 2);
-          console.log(
+ log.verbose("Tree Orchestrator", 
             `  📦 Move detected — fetched ${counterparts.length} counterpart(s): ${counterparts.map((c) => c.name).join(", ")}`,
           );
         }
@@ -729,7 +730,7 @@ async function executePlanSteps({
             2,
           );
         }
-        console.log(
+ log.verbose("Tree Orchestrator", 
           `  🔀 Injected ${mc.candidates.length} merge candidates into context`,
         );
       }
@@ -902,11 +903,11 @@ async function executePlanSteps({
     stepSummaries.push(stepSummary);
 
     if (stepSummary.failed) {
-      console.log(
+ log.verbose("Tree Orchestrator", 
         `  ❌ Step ${stepNum} FAILED: ${stepSummary.detail || "unknown"}`,
       );
     } else {
-      console.log(
+ log.verbose("Tree Orchestrator", 
         `  ✅ Step ${stepNum} summary: ${stepSummary.detail || stepSummary.action || intent.intent}`,
       );
     }
@@ -1056,9 +1057,9 @@ export async function orchestrateTreeRequest({
       treeSummary = await buildDeepTreeSummary(rootId, {
         includeEncodings: true,
       });
-      console.log("📋 treeSummary for librarian:\n", treeSummary);
+ log.verbose("Tree Orchestrator", " treeSummary for librarian:\n", treeSummary);
     } catch (err) {
-      console.error("⚠️ Pre-fetch tree summary failed:", err.message);
+ log.error("Tree Orchestrator", " Pre-fetch tree summary failed:", err.message);
     }
   }
 
@@ -1081,7 +1082,7 @@ export async function orchestrateTreeRequest({
         "No LLM connection configured. Set one up at /setup or assign one to this tree.",
       );
     }
-    console.error("❌ Classification failed:", err.message);
+ log.error("Tree Orchestrator", " Classification failed:", err.message);
     classification = {
       intent: "query",
       confidence: 0.5,
@@ -1095,7 +1096,7 @@ export async function orchestrateTreeRequest({
 
   const confidence = classification.confidence ?? 0.5;
 
-  console.log(
+ log.verbose("Tree Orchestrator", 
     `🎯 Classified: ${classification.intent} | confidence: ${confidence} | "${classification.summary}"`,
   );
   emitModeResult(socket, "intent", {
@@ -1126,7 +1127,7 @@ export async function orchestrateTreeRequest({
 
   if (classification.intent === "no_fit") {
     const reason = classification.summary || "Idea does not fit this tree.";
-    console.log(`🚫 No fit: ${reason}`);
+ log.verbose("Tree Orchestrator", ` No fit: ${reason}`);
 
     emitStatus(socket, "done", "");
 
@@ -1156,7 +1157,7 @@ export async function orchestrateTreeRequest({
       ? { defer: true, reason: "User explicitly requested deferral" }
       : shouldDeferToMemory(classification);
   if (deferDecision.defer) {
-    console.log(`📝 Deferred to short memory: ${deferDecision.reason}`);
+ log.verbose("Tree Orchestrator", ` Deferred to short memory: ${deferDecision.reason}`);
 
     const ShortMemory = mongoose.models.ShortMemory;
     if (!ShortMemory) throw new Error("Dreams extension required for short memory deferral");
@@ -1265,7 +1266,7 @@ export async function orchestrateTreeRequest({
     });
   } catch (err) {
     if (signal?.aborted) return null;
-    console.error("❌ Destructive translation failed:", err.message);
+ log.error("Tree Orchestrator", " Destructive translation failed:", err.message);
     translation = {
       plan: [
         {
@@ -1287,7 +1288,7 @@ export async function orchestrateTreeRequest({
   const responseHint = translation.responseHint || "";
   const plan = translation.plan;
 
-  console.log(
+ log.verbose("Tree Orchestrator", 
     `🎯 Destructive plan: ${plan.length} step(s) | "${translation.summary}"`,
   );
   emitModeResult(socket, "intent", {
@@ -1456,7 +1457,7 @@ async function runQueryFlow({
         includeEncodings: true,
       });
     } catch (err) {
-      console.error("Query: tree summary failed:", err.message);
+ log.error("Tree Orchestrator", "Query: tree summary failed:", err.message);
     }
   }
 
@@ -1616,7 +1617,7 @@ async function runLibrarianFlow({
     libPlan.action === "error" ||
     (!libPlan.plan && !libPlan.responseHint)
   ) {
-    console.error(
+ log.error("Tree Orchestrator", 
       "❌ Librarian failed:",
       libPlan?.reason || libPlan?.raw || "no response",
     );
@@ -1695,7 +1696,7 @@ async function runLibrarianFlow({
   const responseHint =
     libPlan?.responseHint || classification.responseHint || "";
 
-  console.log(
+ log.verbose("Tree Orchestrator", 
     `📚 Librarian: ${plan.length} step(s) | "${libPlan?.summary || "no summary"}"`,
   );
 
@@ -2362,7 +2363,7 @@ async function scoutExistingStructure({
 
     // Found a matching child — dive deeper
     depth++;
-    console.log(
+ log.verbose("Tree Orchestrator", 
       `  🔍 Scout depth ${depth}: found existing "${match.name}" (${match.id})`,
     );
 
@@ -2521,7 +2522,7 @@ async function fetchMoveCounterparts(directive, navigatedNodeId, rootId) {
         results.push(ctx);
       }
     } catch (err) {
-      console.error(
+ log.error("Tree Orchestrator", 
         `⚠️ Move counterpart lookup failed for "${name}":`,
         err.message,
       );

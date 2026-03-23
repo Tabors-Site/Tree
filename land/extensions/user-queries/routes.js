@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import User from "../../db/models/user.js";
@@ -113,7 +114,7 @@ export default function createRouter(core) {
 
       return res.send(renderUserNotes({ userId, user, notes, processedNotes, query, token }));
     } catch (err) {
-      console.error("Error in /user/:userId/notes:", err);
+ log.error("User Queries", "Error in /user/:userId/notes:", err);
       res.status(400).json({ success: false, error: err.message });
     }
   });
@@ -148,7 +149,7 @@ export default function createRouter(core) {
       const user = await User.findById(userId).lean();
       return res.send(await renderUserTags({ userId, user, notes, getNodeName, token }));
     } catch (err) {
-      console.error("Error in /user/:userId/tags:", err);
+ log.error("User Queries", "Error in /user/:userId/tags:", err);
       res.status(400).json({ success: false, error: err.message });
     }
   });
@@ -176,7 +177,7 @@ export default function createRouter(core) {
       const user = await User.findById(userId).lean();
       return res.send(renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
     } catch (err) {
-      console.error("Error in /user/:userId/contributions:", err);
+ log.error("User Queries", "Error in /user/:userId/contributions:", err);
       res.status(400).json({ error: err.message });
     }
   });
@@ -219,7 +220,7 @@ export default function createRouter(core) {
 
       return res.send(renderChats({ userId, chats: allChats, sessions, username, token, sessionId }));
     } catch (err) {
-      console.error(err);
+ log.error("User Queries", err);
       res.status(500).json({ error: err.message });
     }
   });
@@ -249,7 +250,7 @@ export default function createRouter(core) {
 
       return res.send(renderNotifications({ userId, notifications, total, username, token }));
     } catch (err) {
-      console.error("Notifications route error:", err);
+ log.error("User Queries", "Notifications route error:", err);
       res.status(500).json({ error: err.message });
     }
   });

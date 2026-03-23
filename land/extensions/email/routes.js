@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -168,7 +169,7 @@ router.get("/user/verify/:token", async (req, res) => {
     await tempUser.deleteOne();
     return res.redirect(`${getLandUrl()}/setup`);
   } catch (err) {
-    console.error("[email:verifyEmail]", err);
+ log.error("Email", "[email:verifyEmail]", err);
     res.status(500).json({ message: "Verification failed" });
   }
 });

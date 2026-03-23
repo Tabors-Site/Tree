@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import GatewayChannel from "./model.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
@@ -320,7 +321,7 @@ export async function addGatewayChannel(
   // Register input webhooks/bots after creation
   if (hasInput && channel.enabled) {
     registerInputChannel(channel).catch((err) =>
-      console.error(
+ log.error("Gateway", 
         `Gateway: failed to register input for channel ${channel._id}:`,
         err.message,
       ),
@@ -374,14 +375,14 @@ export async function updateGatewayChannel(userId, channelId, updates) {
   if (hasInput) {
     if (!wasEnabled && channel.enabled) {
       registerInputChannel(channel).catch((err) =>
-        console.error(
+ log.error("Gateway", 
           `Gateway: failed to register input for channel ${channel._id}:`,
           err.message,
         ),
       );
     } else if (wasEnabled && !channel.enabled) {
       unregisterInputChannel(channel).catch((err) =>
-        console.error(
+ log.error("Gateway", 
           `Gateway: failed to unregister input for channel ${channel._id}:`,
           err.message,
         ),
@@ -403,7 +404,7 @@ export async function deleteGatewayChannel(userId, channelId) {
     channel.direction === "input" || channel.direction === "input-output";
   if (hasInput) {
     unregisterInputChannel(channel).catch((err) =>
-      console.error(
+ log.error("Gateway", 
         `Gateway: failed to unregister input for channel ${channel._id}:`,
         err.message,
       ),
@@ -473,7 +474,7 @@ async function registerInputChannel(channel) {
       $set: { "config.metadata.webhookSecret": secretToken },
     });
 
-    console.log(
+ log.verbose("Gateway", 
       `Gateway: Telegram webhook registered for channel ${channel._id}`,
     );
   } else if (channel.type === "discord") {
@@ -485,7 +486,7 @@ async function registerInputChannel(channel) {
       channel.config.metadata.discordChannelId,
       channel.rootId,
     );
-    console.log(`Gateway: Discord bot connected for channel ${channel._id}`);
+ log.verbose("Gateway", `Gateway: Discord bot connected for channel ${channel._id}`);
   }
 }
 
@@ -499,11 +500,11 @@ async function unregisterInputChannel(channel) {
           method: "POST",
         },
       );
-      console.log(
+ log.verbose("Gateway", 
         `Gateway: Telegram webhook removed for channel ${channel._id}`,
       );
     } catch (err) {
-      console.error(
+ log.error("Gateway", 
         `Gateway: failed to remove Telegram webhook for ${channel._id}:`,
         err.message,
       );
@@ -512,11 +513,11 @@ async function unregisterInputChannel(channel) {
     try {
       var { disconnectBot } = await import("./discordBotManager.js");
       await disconnectBot(channel._id);
-      console.log(
+ log.verbose("Gateway", 
         `Gateway: Discord bot disconnected for channel ${channel._id}`,
       );
     } catch (err) {
-      console.error(
+ log.error("Gateway", 
         `Gateway: failed to disconnect Discord bot for ${channel._id}:`,
         err.message,
       );

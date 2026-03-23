@@ -1,6 +1,7 @@
 // orchestrators/pipelines/rawIdea.js
 // Automates raw idea placement: chooseRoot -> delegate to treeOrchestrator -> record result.
 
+import log from "../../core/log.js";
 import { OrchestratorRuntime, parseJsonSafe } from "../../orchestrators/runtime.js";
 import { SESSION_TYPES, updateSessionMeta } from "../../ws/sessionRegistry.js";
 import { setRootId, getClientForUser } from "../../ws/conversation.js";
@@ -48,15 +49,15 @@ export async function orchestrateRawIdeaPlacement({
   // Load and validate raw idea before creating runtime
   const rawIdea = await RawIdea.findById(rawIdeaId);
   if (!rawIdea || rawIdea.userId === "deleted") {
-    console.warn(`Raw idea ${rawIdeaId} not found or already placed`);
+ log.warn("Raw Ideas", `Raw idea ${rawIdeaId} not found or already placed`);
     return withResponse ? { success: false, reason: "Raw idea not found" } : undefined;
   }
   if (rawIdea.userId !== userId) {
-    console.warn(`Raw idea ${rawIdeaId} ownership mismatch`);
+ log.warn("Raw Ideas", `Raw idea ${rawIdeaId} ownership mismatch`);
     return withResponse ? { success: false, reason: "Not authorized" } : undefined;
   }
   if (rawIdea.status && rawIdea.status !== "pending") {
-    console.warn(`Raw idea ${rawIdeaId} already ${rawIdea.status}`);
+ log.warn("Raw Ideas", `Raw idea ${rawIdeaId} already ${rawIdea.status}`);
     return withResponse ? { success: false, reason: `Already ${rawIdea.status}` } : undefined;
   }
 
@@ -114,10 +115,10 @@ export async function orchestrateRawIdeaPlacement({
 
   let chainIndex = rt.chainIndex; // track manually for non-runStep calls
 
-  console.log(`Raw-idea orchestrator started for ${rawIdeaId} (session: ${rt.sessionId})`);
+ log.verbose("Raw Ideas", `Raw-idea orchestrator started for ${rawIdeaId} (session: ${rt.sessionId})`);
 
   const markStuck = async (reason) => {
-    console.log(`Raw idea ${rawIdeaId} stuck: ${reason}`);
+ log.verbose("Raw Ideas", `Raw idea ${rawIdeaId} stuck: ${reason}`);
     rawIdea.status = "stuck";
     await rawIdea.save();
     rt.setResult(reason, "rawIdea:stuck");
@@ -141,7 +142,7 @@ export async function orchestrateRawIdeaPlacement({
       action: "rawIdea",
       nodeVersion: "0",
       rawIdeaAction: { action: "aiFailed", rawIdeaId: rawIdeaId.toString() },
-    }).catch((e) => console.error(`Failed to log aiFailed contribution:`, e.message));
+ }).catch((e) => log.error("Raw Ideas", `Failed to log aiFailed contribution:`, e.message));
   };
 
   try {
@@ -174,7 +175,7 @@ export async function orchestrateRawIdeaPlacement({
       return withResponse ? { success: false, reason: stuckReason } : undefined;
     }
 
-    console.log(`Chosen root: ${parsed.rootName} (${chosenRootId}) confidence=${confidence.toFixed(2)}`);
+ log.debug("Raw Ideas", `Chosen root: ${parsed.rootName} (${chosenRootId}) confidence=${confidence.toFixed(2)}`);
 
     // PHASE 2: Delegate to tree orchestrator
     setRootId(rt.visitorId, chosenRootId);
@@ -221,7 +222,7 @@ export async function orchestrateRawIdeaPlacement({
         "rawIdea:deferred",
       );
 
-      console.log(`Raw idea ${rawIdeaId} deferred to short memory`);
+ log.debug("Raw Ideas", `Raw idea deferred to short memory`);
 
       if (withResponse) {
         return {
@@ -290,7 +291,7 @@ export async function orchestrateRawIdeaPlacement({
       "rawIdea:complete",
     );
 
-    console.log(`Raw idea ${rawIdeaId} placed on node ${targetNodeId}`);
+ log.debug("Raw Ideas", `Raw idea placed on node ${targetNodeId}`);
 
     if (withResponse) {
       return {
@@ -303,7 +304,7 @@ export async function orchestrateRawIdeaPlacement({
       };
     }
   } catch (err) {
-    console.error(`Raw-idea orchestration error for ${rawIdeaId}:`, err.message);
+ log.error("Raw Ideas", `Raw-idea orchestration error for ${rawIdeaId}:`, err.message);
     try {
       rawIdea.status = "stuck";
       await rawIdea.save();
@@ -327,9 +328,9 @@ export async function orchestrateRawIdeaPlacement({
         action: "rawIdea",
         nodeVersion: "0",
         rawIdeaAction: { action: "aiFailed", rawIdeaId: rawIdeaId.toString() },
-      }).catch((e) => console.error(`Failed to log aiFailed contribution:`, e.message));
+ }).catch((e) => log.error("Raw Ideas", `Failed to log aiFailed contribution:`, e.message));
     } catch (saveErr) {
-      console.error(`Failed to mark raw idea as stuck:`, saveErr.message);
+ log.error("Raw Ideas", `Failed to mark raw idea as stuck:`, saveErr.message);
     }
     rt.setError(err.message, "rawIdea:complete");
     if (withResponse) {

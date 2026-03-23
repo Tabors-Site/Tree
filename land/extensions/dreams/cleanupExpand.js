@@ -2,6 +2,7 @@
 // Scans nodes with dense notes and expands them into subtree structure.
 // Pipeline: find candidates -> scan each (tool-less) -> create branches via tree:structure -> delete notes via tree:notes.
 
+import log from "../../core/log.js";
 import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
 import Node from "../../db/models/node.js";
@@ -96,23 +97,23 @@ export async function orchestrateExpand({
 
   const initialized = await rt.init();
   if (!initialized) {
-    console.log(`Cleanup expand already running for tree ${rootId}, skipping`);
+ log.verbose("Dreams", `Cleanup expand already running for tree ${rootId}, skipping`);
     return { success: false, error: "already running", sessionId: null };
   }
 
-  console.log(`Cleanup expand started for tree ${rootId}`);
+ log.verbose("Dreams", `Cleanup expand started for tree ${rootId}`);
 
   try {
     // STEP 1: FIND CANDIDATE NODES
     const candidates = await findExpansionCandidates(rootId);
 
     if (candidates.length === 0) {
-      console.log("No dense notes found, nothing to expand");
+ log.debug("Dreams", "No dense notes found, nothing to expand");
       rt.setResult("No expansion candidates", "cleanup-expand:complete");
       return { success: true, expanded: 0, sessionId: rt.sessionId };
     }
 
-    console.log(`Found ${candidates.length} candidate node(s) with dense notes`);
+ log.verbose("Dreams", `Found ${candidates.length} candidate node(s) with dense notes`);
 
     let totalExpansions = 0;
 
@@ -154,7 +155,7 @@ export async function orchestrateExpand({
       });
 
       if (!scanPlan?.expansions?.length) {
-        console.log(`  "${candidate.nodeName}", notes are fine, no expansion needed`);
+ log.debug("Dreams", `  "${candidate.nodeName}", notes are fine, no expansion needed`);
         continue;
       }
 
@@ -171,7 +172,7 @@ export async function orchestrateExpand({
         });
 
         if (!buildData) {
-          console.warn(`  Failed to create branch for expansion in "${candidate.nodeName}"`);
+ log.warn("Dreams", ` Failed to create branch for expansion in "${candidate.nodeName}"`);
           continue;
         }
 
@@ -204,15 +205,15 @@ export async function orchestrateExpand({
         }
 
         totalExpansions++;
-        console.log(`  Expanded note in "${candidate.nodeName}" -> branch "${expansion.newBranch?.name}"`);
+ log.debug("Dreams", `Expanded note in "${candidate.nodeName}" -> branch "${expansion.newBranch?.name}"`);
       }
     }
 
     rt.setResult(`Expanded ${totalExpansions} note(s) across ${candidates.length} candidate(s)`, "cleanup-expand:complete");
-    console.log(`Cleanup expand complete: ${totalExpansions} expansion(s)`);
+ log.verbose("Dreams", `Cleanup expand complete: ${totalExpansions} expansion(s)`);
     return { success: true, expanded: totalExpansions, sessionId: rt.sessionId };
   } catch (err) {
-    console.error(`Cleanup expand error for tree ${rootId}:`, err.message);
+ log.error("Dreams", `Cleanup expand error for tree ${rootId}:`, err.message);
     rt.setError(err.message, "cleanup-expand:complete");
     return { success: false, error: err.message, sessionId: rt.sessionId };
   } finally {

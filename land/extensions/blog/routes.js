@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import authenticate from "../../middleware/authenticate.js";
 import BlogPost from "./model.js";
@@ -15,7 +16,7 @@ export default function createRouter(core) {
         .lean();
       res.json({ success: true, posts });
     } catch (err) {
-      console.error("Blog list error:", err.message);
+ log.error("Blog", "Blog list error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });
@@ -30,7 +31,7 @@ export default function createRouter(core) {
       if (!post) return res.status(404).json({ error: "Post not found" });
       res.json({ success: true, post });
     } catch (err) {
-      console.error("Blog post error:", err.message);
+ log.error("Blog", "Blog post error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });
@@ -68,7 +69,7 @@ export default function createRouter(core) {
       if (err.code === 11000) {
         return res.status(400).json({ error: "Slug already exists" });
       }
-      console.error("Blog create error:", err.message);
+ log.error("Blog", "Blog create error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });
@@ -100,7 +101,7 @@ export default function createRouter(core) {
       if (err.code === 11000) {
         return res.status(400).json({ error: "Slug already exists" });
       }
-      console.error("Blog update error:", err.message);
+ log.error("Blog", "Blog update error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });
@@ -117,7 +118,7 @@ export default function createRouter(core) {
       if (!post) return res.status(404).json({ error: "Post not found" });
       res.json({ success: true, deleted: req.params.slug });
     } catch (err) {
-      console.error("Blog delete error:", err.message);
+ log.error("Blog", "Blog delete error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });

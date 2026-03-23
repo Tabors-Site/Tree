@@ -4,6 +4,7 @@
 // Pipeline: cleanup (multi-pass) → short-term drain (multi-pass) → understanding run.
 // Triggered by user-configured dreamTime on root nodes.
 
+import log from "../../core/log.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
 import ShortMemory from "./model.js";
@@ -41,13 +42,13 @@ async function runTreeDream(rootNode) {
   const userId = rootNode.rootOwner.toString();
 
   if (!acquireLock("dream", rootId)) {
-    console.log(`💤 Dream already running for "${rootNode.name}", skipping`);
+ log.verbose("Dreams", ` Dream already running for "${rootNode.name}", skipping`);
     return;
   }
 
   // Skip empty trees (no children at all)
   if (!rootNode.children || rootNode.children.length === 0) {
-    console.log(`💤 Skipping "${rootNode.name}" — no children`);
+ log.verbose("Dreams", ` Skipping "${rootNode.name}" — no children`);
     releaseLock("dream", rootId);
     return;
   }
@@ -55,7 +56,7 @@ async function runTreeDream(rootNode) {
   // Resolve username
   const user = await User.findById(userId).select("username").lean();
   if (!user) {
-    console.warn(`⚠️ Dream: no user for tree ${rootId}`);
+ log.warn("Dreams", ` Dream: no user for tree ${rootId}`);
     releaseLock("dream", rootId);
     return;
   }
@@ -65,12 +66,12 @@ async function runTreeDream(rootNode) {
   const rootFull = await Node.findById(rootId).select("llmDefault metadata").lean();
   const treeLlmOff = !rootFull?.llmDefault || rootFull.llmDefault === "none";
   if (treeLlmOff && !(await userHasLlm(userId))) {
-    console.log(`💤 Skipping "${rootNode.name}" — owner has no LLM connection`);
+ log.verbose("Dreams", ` Skipping "${rootNode.name}" — owner has no LLM connection`);
     releaseLock("dream", rootId);
     return;
   }
 
-  console.log(
+ log.verbose("Dreams", 
     `💤 Dream starting for "${rootNode.name}" [${rootId.slice(0, 8)}]`,
   );
 
@@ -82,7 +83,7 @@ async function runTreeDream(rootNode) {
     // ════════════════════════════════════════════════════════════════
 
     for (let pass = 1; pass <= MAX_CLEANUP_PASSES; pass++) {
-      console.log(
+ log.verbose("Dreams", 
         `💤 Cleanup pass ${pass}/${MAX_CLEANUP_PASSES} for "${rootNode.name}"`,
       );
 
@@ -98,7 +99,7 @@ async function runTreeDream(rootNode) {
         if (reorgResult?.sessionId) dreamSessionIds.push(reorgResult.sessionId);
         totalChanges += (reorgResult?.moves || 0) + (reorgResult?.deletes || 0);
       } catch (err) {
-        console.error(
+ log.error("Dreams", 
           `❌ Dream cleanup reorganize pass ${pass} failed:`,
           err.message,
         );
@@ -115,18 +116,18 @@ async function runTreeDream(rootNode) {
           dreamSessionIds.push(expandResult.sessionId);
         totalChanges += expandResult?.expanded || 0;
       } catch (err) {
-        console.error(
+ log.error("Dreams", 
           `❌ Dream cleanup expand pass ${pass} failed:`,
           err.message,
         );
       }
 
       if (totalChanges === 0) {
-        console.log(`💤 Cleanup stable after pass ${pass} — no more changes`);
+ log.verbose("Dreams", ` Cleanup stable after pass ${pass} — no more changes`);
         break;
       }
 
-      console.log(
+ log.verbose("Dreams", 
         `💤 Cleanup pass ${pass}: ${totalChanges} change(s) — continuing`,
       );
     }
@@ -144,11 +145,11 @@ async function runTreeDream(rootNode) {
       });
 
       if (pendingCount === 0) {
-        console.log(`💤 No pending short-term items — drain complete`);
+ log.verbose("Dreams", ` No pending short-term items — drain complete`);
         break;
       }
 
-      console.log(
+ log.verbose("Dreams", 
         `💤 Drain pass ${pass}/${MAX_DRAIN_PASSES}: ${pendingCount} pending item(s)`,
       );
 
@@ -156,7 +157,7 @@ async function runTreeDream(rootNode) {
         const drainResult = await drainTree(rootId);
         if (drainResult?.sessionId) dreamSessionIds.push(drainResult.sessionId);
       } catch (err) {
-        console.error(`❌ Dream drain pass ${pass} failed:`, err.message);
+ log.error("Dreams", ` Dream drain pass ${pass} failed:`, err.message);
         break;
       }
     }
@@ -166,7 +167,7 @@ async function runTreeDream(rootNode) {
     // ════════════════════════════════════════════════════════════════
 
     try {
-      console.log(`💤 Starting understanding run for "${rootNode.name}"`);
+ log.verbose("Dreams", ` Starting understanding run for "${rootNode.name}"`);
 
       const run = await findOrCreateUnderstandingRun(
         rootId,
@@ -183,9 +184,9 @@ async function runTreeDream(rootNode) {
         source: "background",
       });
 
-      console.log(`💤 Understanding run complete`);
+ log.verbose("Dreams", ` Understanding run complete`);
     } catch (err) {
-      console.error(`❌ Dream understanding failed:`, err.message);
+ log.error("Dreams", ` Dream understanding failed:`, err.message);
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -194,7 +195,7 @@ async function runTreeDream(rootNode) {
 
     if (dreamSessionIds.length > 0) {
       try {
-        console.log(`📬 Generating dream notifications for "${rootNode.name}"`);
+ log.verbose("Dreams", ` Generating dream notifications for "${rootNode.name}"`);
         await orchestrateDreamNotify({
           rootId,
           userId,
@@ -204,7 +205,7 @@ async function runTreeDream(rootNode) {
           source: "background",
         });
       } catch (err) {
-        console.error(`❌ Dream notifications failed:`, err.message);
+ log.error("Dreams", ` Dream notifications failed:`, err.message);
       }
     }
 
@@ -213,9 +214,9 @@ async function runTreeDream(rootNode) {
     // ════════════════════════════════════════════════════════════════
 
     await Node.findByIdAndUpdate(rootId, { lastDreamAt: new Date() });
-    console.log(`✅ Dream complete for "${rootNode.name}"`);
+ log.verbose("Dreams", ` Dream complete for "${rootNode.name}"`);
   } catch (err) {
-    console.error(`❌ Dream failed for "${rootNode.name}":`, err.message);
+ log.error("Dreams", ` Dream failed for "${rootNode.name}":`, err.message);
   } finally {
     releaseLock("dream", rootId);
   }
@@ -249,7 +250,7 @@ export async function runTreeDreamJob() {
         .split(":")
         .map(Number);
       if (isNaN(hours) || isNaN(minutes)) {
-        console.warn(
+ log.warn("Dreams", 
           `⚠️ Invalid dreamTime "${rootNode.metadata?.dreams?.dreamTime}" for "${rootNode.name}"`,
         );
         continue;
@@ -260,14 +261,14 @@ export async function runTreeDreamJob() {
       const alreadyDreamedToday =
         rootNode.metadata?.dreams?.lastDreamAt && rootNode.metadata?.dreams?.lastDreamAt >= startOfDay;
       if (currentMinutes >= dreamMinutes && !alreadyDreamedToday) {
-        console.log(
+ log.verbose("Dreams", 
           `💤 Dream time reached for "${rootNode.name}" (${rootNode.metadata?.dreams?.dreamTime})`,
         );
         await runTreeDream(rootNode);
       }
     }
   } catch (err) {
-    console.error("❌ Tree dream job error:", err.message);
+ log.error("Dreams", " Tree dream job error:", err.message);
   }
 }
 
@@ -278,8 +279,7 @@ export async function runTreeDreamJob() {
 export function startTreeDreamJob({ intervalMs = 30 * 60 * 1000 } = {}) {
   if (jobTimer) clearInterval(jobTimer);
   jobTimer = setInterval(runTreeDreamJob, intervalMs);
-  console.log(
-    `💤 Tree dream job started (checking every ${intervalMs / 1000}s)`,
+ log.info("Dreams", `💤 Tree dream job started (checking every ${intervalMs / 1000}s)`,
   );
 }
 
@@ -287,6 +287,6 @@ export function stopTreeDreamJob() {
   if (jobTimer) {
     clearInterval(jobTimer);
     jobTimer = null;
-    console.log("⏹ Tree dream job stopped");
+ log.info("Dreams", "⏹ Tree dream job stopped");
   }
 }

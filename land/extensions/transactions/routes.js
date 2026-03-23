@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -172,7 +173,7 @@ router.get("/node/:nodeId/:version/transactions", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("transactions list error:", err);
+ log.error("Transactions", "transactions list error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -423,7 +424,7 @@ router.post("/root/:nodeId/transaction-policy", authenticate, async (req, res) =
 
     return res.json({ success: true, ...result });
   } catch (err) {
-    console.error("Change policy error:", err);
+ log.error("Transactions", "Change policy error:", err);
     res.status(400).json({ error: err.message });
   }
 });

@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import User from "../../db/models/user.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -59,7 +60,7 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
       .status(201)
       .send(renderApiKeyCreated({ userId, safeName, rawKey, token }));
   } catch (err) {
-    console.error("API key create (html) error:", err);
+ log.error("Api Keys", "API key create (html) error:", err);
     return res.status(500).send("Failed to create API key");
   }
 });
@@ -98,7 +99,7 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
       renderApiKeysList({ userId, user, apiKeys, token, errorParam }),
     );
   } catch (err) {
-    console.error("api keys page error:", err);
+ log.error("Api Keys", "api keys page error:", err);
     res.status(500).json({ error: err.message });
   }
 });

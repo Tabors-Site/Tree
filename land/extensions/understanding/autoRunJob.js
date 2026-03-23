@@ -2,6 +2,7 @@
 // Daily job: creates and runs a navigation-focused understanding pass per tree.
 // Produces per-node encodings that enhance tree summaries for librarian/scout navigation.
 
+import log from "../../core/log.js";
 import Node from "../../db/models/node.js";
 import User from "../../db/models/user.js";
 import { findOrCreateUnderstandingRun } from "./core.js";
@@ -36,25 +37,25 @@ async function processTree(rootNode) {
 
   // Skip tiny trees
   if (!rootNode.children || rootNode.children.length < MIN_TREE_CHILDREN) {
-    console.log(`🧠 Skipping "${rootNode.name}" — too few children (${rootNode.children?.length || 0})`);
+ log.debug("Understanding", `  Skipping "${rootNode.name}" — too few children (${rootNode.children?.length || 0})`);
     return;
   }
 
   // Resolve username
   const user = await User.findById(userId).select("username").lean();
   if (!user) {
-    console.warn(`⚠️ Understanding auto-run: no user for tree ${rootId}`);
+ log.warn("Understanding", ` Understanding auto-run: no user for tree ${rootId}`);
     return;
   }
 
   // Skip if owner has no LLM and root has no LLM assigned
   const hasRootLlm = !!(rootNode.llmDefault && rootNode.llmDefault !== "none");
   if (!hasRootLlm && !await userHasLlm(userId)) {
-    console.log(`🧠 Skipping understanding for "${rootNode.name}" — owner has no LLM connection`);
+ log.debug("Understanding", `  Skipping understanding for "${rootNode.name}" — owner has no LLM connection`);
     return;
   }
 
-  console.log(`🧠 Understanding auto-run: starting for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
+ log.debug("Understanding", `  Understanding auto-run: starting for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
 
   try {
     // Find existing run or create a new one
@@ -74,9 +75,9 @@ async function processTree(rootNode) {
       source: "background",
     });
 
-    console.log(`✅ Understanding auto-run complete for tree "${rootNode.name}"`);
+ log.debug("Understanding", `  Understanding auto-run complete for tree "${rootNode.name}"`);
   } catch (err) {
-    console.error(`❌ Understanding auto-run failed for tree "${rootNode.name}":`, err.message);
+ log.error("Understanding", ` Understanding auto-run failed for tree "${rootNode.name}":`, err.message);
   }
 }
 
@@ -85,7 +86,7 @@ async function processTree(rootNode) {
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function runUnderstandingAutoJob() {
-  console.log("🧠 Understanding auto-run job starting...");
+ log.verbose("Understanding", " Understanding auto-run job starting...");
 
   try {
     // Find all root nodes (trees)
@@ -94,7 +95,7 @@ export async function runUnderstandingAutoJob() {
       .lean();
 
     if (rootNodes.length === 0) {
-      console.log("🧠 No trees found — skipping.");
+ log.verbose("Understanding", " No trees found — skipping.");
       return;
     }
 
@@ -103,10 +104,10 @@ export async function runUnderstandingAutoJob() {
       (node.children?.length || 0) > (best.children?.length || 0) ? node : best,
     );
 
-    console.log(`🧠 Targeting biggest tree: "${biggest.name}" (${biggest.children?.length || 0} children)`);
+ log.debug("Understanding", `  Targeting biggest tree: "${biggest.name}" (${biggest.children?.length || 0} children)`);
     await processTree(biggest);
   } catch (err) {
-    console.error("❌ Understanding auto-run job error:", err.message);
+ log.error("Understanding", " Understanding auto-run job error:", err.message);
   }
 }
 
@@ -117,7 +118,7 @@ export async function runUnderstandingAutoJob() {
 export function startUnderstandingAutoJob({ intervalMs = 24 * 60 * 60 * 1000 } = {}) {
   if (jobTimer) clearInterval(jobTimer);
 
-  console.log(`🧠 Understanding auto-run job started (interval: ${intervalMs / 1000}s)`);
+ log.info("Understanding", ` Understanding auto-run job started (interval: ${intervalMs / 1000}s)`);
   jobTimer = setInterval(runUnderstandingAutoJob, intervalMs);
   return jobTimer;
 }
@@ -126,6 +127,6 @@ export function stopUnderstandingAutoJob() {
   if (jobTimer) {
     clearInterval(jobTimer);
     jobTimer = null;
-    console.log("⏹ Understanding auto-run job stopped");
+ log.info("Understanding", "⏹ Understanding auto-run job stopped");
   }
 }

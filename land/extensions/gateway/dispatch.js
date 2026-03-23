@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import GatewayChannel from "./model.js";
 import crypto from "crypto";
 import dotenv from "dotenv";
@@ -168,7 +169,7 @@ export async function dispatchNotifications(rootId, notifications) {
 
     var secrets = decryptChannelSecrets(channel);
     if (!secrets) {
-      console.error(`Gateway: failed to decrypt secrets for channel ${channel._id}`);
+ log.error("Gateway", `Gateway: failed to decrypt secrets for channel ${channel._id}`);
       await GatewayChannel.findByIdAndUpdate(channel._id, {
         $set: { lastError: "Failed to decrypt channel secrets" },
       });
@@ -177,7 +178,7 @@ export async function dispatchNotifications(rootId, notifications) {
 
     var sender = SENDERS[channel.type];
     if (!sender) {
-      console.error(`Gateway: no sender for channel type "${channel.type}"`);
+ log.error("Gateway", `Gateway: no sender for channel type "${channel.type}"`);
       continue;
     }
 
@@ -194,7 +195,7 @@ export async function dispatchNotifications(rootId, notifications) {
 
         results.push({ channelId: channel._id, type: channel.type, status: "ok" });
       } catch (err) {
-        console.error(`Gateway: dispatch error for channel ${channel._id} (${channel.type}):`, err.message);
+ log.error("Gateway", `Gateway: dispatch error for channel ${channel._id} (${channel.type}):`, err.message);
 
         await GatewayChannel.findByIdAndUpdate(channel._id, {
           $set: { lastError: err.message },
@@ -208,7 +209,7 @@ export async function dispatchNotifications(rootId, notifications) {
   if (results.length > 0) {
     var ok = results.filter((r) => r.status === "ok").length;
     var fail = results.filter((r) => r.status === "error").length;
-    console.log(`Gateway: dispatched ${ok} ok, ${fail} failed for root ${rootId}`);
+ log.verbose("Gateway", `Gateway: dispatched ${ok} ok, ${fail} failed for root ${rootId}`);
   }
 
   return results;

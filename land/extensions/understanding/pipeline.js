@@ -2,6 +2,7 @@
 // Autonomous understanding: creates/resumes a run, loops through all nodes,
 // uses LLM for summarization only (no tool calling), commits results.
 
+import log from "../../core/log.js";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
@@ -156,7 +157,7 @@ export async function orchestrateUnderstanding({
 
   // Prepare incremental run
   const { dirtyCount, totalNodes } = await prepareIncrementalRun(understandingRunId, userId);
-  console.log(`Incremental prep: ${dirtyCount}/${totalNodes} nodes dirty`);
+ log.debug("Understanding", `Incremental prep: ${dirtyCount}/${totalNodes} nodes dirty`);
 
   await UnderstandingRun.findByIdAndUpdate(understandingRunId, { status: "running" });
 
@@ -247,7 +248,7 @@ export async function orchestrateUnderstanding({
     setAiContributionContext(visitorId, sessionId, mainChatId);
   }
 
-  console.log(`Understand orchestrator started for run ${understandingRunId} (${runPerspective}, ${nodeCount} nodes)`);
+ log.verbose("Understanding", `Understand orchestrator started for run ${understandingRunId} (${runPerspective}, ${nodeCount} nodes)`);
 
   try {
     trackChainStep({
@@ -311,7 +312,7 @@ export async function orchestrateUnderstanding({
           lastEmptyNodeId = nodeId;
         }
 
-        console.warn(`Empty summary for node ${nodeId}, attempt ${emptyRetries}/${MAX_EMPTY_RETRIES}`);
+ log.warn("Understanding", `Empty summary for node ${nodeId}, attempt ${emptyRetries}/${MAX_EMPTY_RETRIES}`);
 
         if (emptyRetries >= MAX_EMPTY_RETRIES) {
           await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
@@ -329,7 +330,7 @@ export async function orchestrateUnderstanding({
             sessionId,
           });
           nodesProcessed++;
-          console.warn(`Committed placeholder for stuck node ${nodeId}, moving on`);
+ log.warn("Understanding", `Committed placeholder for stuck node ${nodeId}, moving on`);
           emptyRetries = 0;
           lastEmptyNodeId = null;
         }
@@ -380,7 +381,7 @@ export async function orchestrateUnderstanding({
         llmProvider: result?.llmProvider || llmProvider,
       });
 
-      console.log(`  ${payload.mode} node ${payload.inputs[0]?.nodeName} (${nodesProcessed}/${nodeCount})`);
+ log.debug("Understanding", `  ${payload.mode} node ${payload.inputs[0]?.nodeName} (${nodesProcessed}/${nodeCount})`);
     }
 
     // Finalize
@@ -413,7 +414,7 @@ export async function orchestrateUnderstanding({
       });
     }
 
-    console.log(`Understanding complete for root ${rootId} (${nodesProcessed} nodes processed)`);
+ log.verbose("Understanding", `Understanding complete for root ${rootId} (${nodesProcessed} nodes processed)`);
 
     return {
       success: true,
@@ -424,7 +425,7 @@ export async function orchestrateUnderstanding({
       rootEncoding,
     };
   } catch (err) {
-    console.error(`Understanding orchestration error for root ${rootId}:`, err.message);
+ log.error("Understanding", `Understanding orchestration error for root ${rootId}:`, err.message);
     finalizeArgs = { content: err.message, stopped: abort.signal.aborted, modeKey: "tree:understand" };
 
     trackChainStep({
@@ -450,7 +451,7 @@ export async function orchestrateUnderstanding({
     releaseLock("understand", understandingRunId);
     if (!isChainStep && mainChatId) {
       finalizeAIChat({ chatId: mainChatId, ...finalizeArgs }).catch((e) =>
-        console.error(`Failed to finalize understand session chat:`, e.message),
+ log.error("Understanding", `Failed to finalize understand session chat:`, e.message),
       );
     }
     clearAiContributionContext(visitorId);

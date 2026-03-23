@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import User from "../../db/models/user.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -33,7 +34,7 @@ router.post("/user/:userId/llm-assign", authenticate, async (req, res) => {
     );
     return res.json({ success: true, ...result });
   } catch (err) {
-    console.error("Failed to assign custom LLM:", err.message);
+ log.error("User Llm", "Failed to assign custom LLM:", err.message);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -63,12 +64,12 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
         await assignConnection(req.params.userId, "main", result._id);
       }
     } catch (assignErr) {
-      console.error("Auto-assign main failed:", assignErr.message);
+ log.error("User Llm", "Auto-assign main failed:", assignErr.message);
     }
 
     return res.status(201).json({ success: true, connection: result });
   } catch (err) {
-    console.error("Failed to save custom LLM:", err.message);
+ log.error("User Llm", "Failed to save custom LLM:", err.message);
     const status = err.message.includes("Maximum") ? 400 : 500;
     return res.status(status).json({ error: err.message });
   }
@@ -93,7 +94,7 @@ router.put(
       );
       return res.json({ success: true, connection: result });
     } catch (err) {
-      console.error("Failed to update custom LLM:", err.message);
+ log.error("User Llm", "Failed to update custom LLM:", err.message);
       return res.status(500).json({ error: err.message });
     }
   },
@@ -111,7 +112,7 @@ router.delete(
       );
       return res.json({ success: true, removed: true });
     } catch (err) {
-      console.error("Failed to delete custom LLM:", err.message);
+ log.error("User Llm", "Failed to delete custom LLM:", err.message);
       return res.status(500).json({ error: err.message });
     }
   },

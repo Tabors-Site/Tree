@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import Stripe from "stripe";
 import { processPurchase } from "./core/processPurchase.js";
 import { logContribution } from "../../db/utils.js";
@@ -17,7 +18,7 @@ export async function stripeWebhook(req, res) {
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("Webhook signature failed");
+ log.error("Billing", "Webhook signature failed");
     return res.status(400).send("Webhook Error");
   }
 
@@ -60,11 +61,11 @@ export async function stripeWebhook(req, res) {
         err?.code === 11000 ||
         err?.message?.toLowerCase().includes("duplicate")
       ) {
-        console.log("Duplicate purchase webhook ignored:", session.id);
+ log.verbose("Billing", "Duplicate purchase webhook ignored:", session.id);
         return res.json({ received: true });
       }
 
-      console.error("Contribution logging failed:", err);
+ log.error("Billing", "Contribution logging failed:", err);
       return res.status(500).json({ error: "Contribution logging failed" });
     }
 

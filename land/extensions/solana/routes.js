@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import Node from "../../db/models/node.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -84,7 +85,7 @@ router.get(
         }),
       );
     } catch (err) {
-      console.error("Error in /node/:nodeId/:version/values/solana:", err);
+ log.error("Solana", "Error in /node/:nodeId/:version/values/solana:", err);
       res.status(500).json({ error: err.message });
     }
   },
@@ -174,7 +175,7 @@ router.post(
 
       res.json({ success: true, signature: result.signature, to: result.to });
     } catch (err) {
-      console.error("Send SOL error:", err);
+ log.error("Solana", "Send SOL error:", err);
       res.status(500).json({ error: err.message });
     }
   },
@@ -222,7 +223,7 @@ router.post(
 
       return res.json({ success: true, ...result });
     } catch (err) {
-      console.error("Swap transaction error:", err);
+ log.error("Solana", "Swap transaction error:", err);
 
       if ("html" in req.query) {
         return res.redirect(

@@ -1,3 +1,7 @@
+# Intro
+
+We do things fully and properly. never taking lazy route. We are working hard and organized to build the Kernel and foundational extensions so people can use them around the world for maybe decades to come. We have to be vigilant and never say "eh thats too complex. we willdo this for now." that is a painful attitude and will not serve here.
+
 # TreeOS
 
 Open source operating system for AI agents. Minimal kernel + modular extensions on a federated network.

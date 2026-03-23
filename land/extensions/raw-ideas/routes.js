@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import mongoose from "mongoose";
 import path from "path";
@@ -155,7 +156,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
       }),
     );
   } catch (err) {
-    console.error("Error in /user/:userId/raw-ideas:", err);
+ log.error("Raw Ideas", "Error in /user/:userId/raw-ideas:", err);
     res.status(400).json({ success: false, error: err.message });
   }
 });
@@ -240,7 +241,7 @@ router.post(
       }
       return res.json({ success: true, note: result.note });
     } catch (err) {
-      console.error("raw-idea transfer error:", err);
+ log.error("Raw Ideas", "raw-idea transfer error:", err);
       return res.status(400).json({ success: false, error: err.message });
     }
   },
@@ -335,10 +336,10 @@ router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
     const source = req.body?.source === "user" ? "user" : "api";
     orchestrateRawIdeaPlacement({
       rawIdeaId: result.rawIdea._id, userId: req.userId, username: user?.username || "unknown", source,
-    }).catch((err) => console.error("Raw-idea orchestration failed:", err.message));
+ }).catch((err) => log.error("Raw Ideas", "Raw-idea orchestration failed:", err.message));
     return res.status(202).json({ message: "Orchestration started", rawIdeaId: result.rawIdea._id });
   } catch (err) {
-    console.error("raw-idea create+place error:", err);
+ log.error("Raw Ideas", "raw-idea create+place error:", err);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -370,7 +371,7 @@ router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
     if (!orchResult || !orchResult.success) return res.json({ success: false, error: orchResult?.reason || "Could not process the idea." });
     return res.json({ success: true, answer: orchResult.answer, rootId: orchResult.rootId, rootName: orchResult.rootName, targetNodeId: orchResult.targetNodeId, rawIdeaId: result.rawIdea._id });
   } catch (err) {
-    console.error("raw-idea create+chat error:", err);
+ log.error("Raw Ideas", "raw-idea create+chat error:", err);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -389,10 +390,10 @@ router.post("/user/:userId/raw-ideas/:rawIdeaId/place", authenticate, async (req
     if (alreadyProcessing) return res.status(409).json({ error: "Another idea is already being placed. Please wait for it to finish." });
     const user = await User.findById(req.userId).select("username").lean();
     const source = req.body?.source === "user" ? "user" : "api";
-    orchestrateRawIdeaPlacement({ rawIdeaId, userId: req.userId, username: user?.username || "unknown", source }).catch((err) => console.error("Raw-idea orchestration failed:", err.message));
+ orchestrateRawIdeaPlacement({ rawIdeaId, userId: req.userId, username: user?.username || "unknown", source }).catch((err) => log.error("Raw Ideas", "Raw-idea orchestration failed:", err.message));
     return res.status(202).json({ message: "Orchestration started" });
   } catch (err) {
-    console.error("raw-idea orchestrate error:", err);
+ log.error("Raw Ideas", "raw-idea orchestrate error:", err);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -419,7 +420,7 @@ router.post("/user/:userId/raw-ideas/:rawIdeaId/chat", authenticate, async (req,
     if (!result || !result.success) return res.json({ success: false, error: result?.reason || "Could not process the idea." });
     return res.json({ success: true, answer: result.answer, rootId: result.rootId, rootName: result.rootName, targetNodeId: result.targetNodeId });
   } catch (err) {
-    console.error("raw-idea chat error:", err);
+ log.error("Raw Ideas", "raw-idea chat error:", err);
     return res.status(500).json({ error: err.message });
   }
 });

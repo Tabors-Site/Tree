@@ -2,6 +2,7 @@
 // Translates natural user language into tree operations using the Tree Constitution.
 // Sits between user input and the tree orchestrator.
 
+import log from "../../core/log.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -469,7 +470,7 @@ export async function classify({
     result.llmProvider = _llmProvider;
     return result;
   } catch (err) {
-    console.error("❌ Classifier parse failed:", err.message, "raw:", raw);
+ log.error("Tree Orchestrator", " Classifier parse failed:", err.message, "raw:", raw);
     return {
       intent: "query",
       confidence: 0.5,
@@ -573,7 +574,7 @@ export async function translateDestructive({
     return result;
   } catch (err) {
     // If JSON parse fails, return a safe fallback
-    console.error("❌ Translator parse failed:", err.message, "raw:", raw);
+ log.error("Tree Orchestrator", " Translator parse failed:", err.message, "raw:", raw);
     return {
       plan: [
         {

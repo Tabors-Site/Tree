@@ -2,6 +2,7 @@
 // Periodically picks up the latest pending text raw idea for each premium/god user
 // and fires the raw-idea orchestrator as if they had clicked the Auto-place button.
 
+import log from "../../core/log.js";
 import User from "../../db/models/user.js";
 import RawIdea from "./model.js";
 import AIChat from "../../db/models/aiChat.js";
@@ -56,7 +57,7 @@ async function processUser(user) {
 
   if (!rawIdea) return;
 
-  console.log(
+ log.verbose("Raw Ideas", 
     `⏰ Auto-placing raw idea ${rawIdea._id} for user ${user.username} (${user.profileType})`,
   );
 
@@ -67,7 +68,7 @@ async function processUser(user) {
     username: user.username,
     source: "background",
   }).catch((err) =>
-    console.error(
+ log.error("Raw Ideas", 
       `❌ Auto-place orchestration failed for user ${userId}:`,
       err.message,
     ),
@@ -79,7 +80,7 @@ async function processUser(user) {
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function runRawIdeaAutoPlace() {
-  console.log("⏰ Raw idea auto-place job running…");
+ log.verbose("Raw Ideas", "⏰ Raw idea auto-place job running…");
   try {
     const users = await User.find({
       profileType: { $in: ELIGIBLE_PLANS },
@@ -89,23 +90,23 @@ export async function runRawIdeaAutoPlace() {
       .lean();
 
     if (users.length === 0) {
-      console.log("⏰ No eligible users — skipping.");
+ log.verbose("Raw Ideas", "⏰ No eligible users — skipping.");
       return;
     }
 
-    console.log(`⏰ ${users.length} eligible user(s) to check.`);
+ log.verbose("Raw Ideas", `⏰ ${users.length} eligible user(s) to check.`);
 
     // Sequential so we don't fire 100 orchestrations simultaneously
     for (const user of users) {
       await processUser(user).catch((err) =>
-        console.error(
+ log.error("Raw Ideas", 
           `⚠️ processUser error for ${user._id}:`,
           err.message,
         ),
       );
     }
   } catch (err) {
-    console.error("❌ Raw idea auto-place job error:", err.message);
+ log.error("Raw Ideas", " Raw idea auto-place job error:", err.message);
   }
 }
 
@@ -130,10 +131,10 @@ export async function startRawIdeaAutoPlaceJob({ intervalMs = 15 * 60 * 1000 } =
       { $set: { status: "pending" } },
     );
     if (modifiedCount > 0) {
-      console.log(`⏰ Reset ${modifiedCount} stale processing raw idea(s) → pending`);
+ log.verbose("Raw Ideas", `⏰ Reset ${modifiedCount} stale processing raw idea(s) → pending`);
     }
   } catch (err) {
-    console.error("⚠️ Failed to reset stale processing raw ideas:", err.message);
+ log.error("Raw Ideas", " Failed to reset stale processing raw ideas:", err.message);
   }
 
   // Finalize any AI chats left without an endMessage from a previous server run
@@ -149,14 +150,13 @@ export async function startRawIdeaAutoPlaceJob({ intervalMs = 15 * 60 * 1000 } =
       },
     );
     if (modifiedCount > 0) {
-      console.log(`⏰ Finalized ${modifiedCount} stale pending AI chat(s)`);
+ log.verbose("Raw Ideas", `⏰ Finalized ${modifiedCount} stale pending AI chat(s)`);
     }
   } catch (err) {
-    console.error("⚠️ Failed to finalize stale AI chats:", err.message);
+ log.error("Raw Ideas", " Failed to finalize stale AI chats:", err.message);
   }
 
-  console.log(
-    `⏰ Raw idea auto-place job started (interval: ${intervalMs / 1000}s)`,
+ log.info("Raw Ideas", `⏰ Raw idea auto-place job started (interval: ${intervalMs / 1000}s)`,
   );
 
   // Run once immediately, then on every interval
@@ -170,6 +170,6 @@ export function stopRawIdeaAutoPlaceJob() {
   if (jobTimer) {
     clearInterval(jobTimer);
     jobTimer = null;
-    console.log("⏹ Raw idea auto-place job stopped");
+ log.info("Raw Ideas", "⏹ Raw idea auto-place job stopped");
   }
 }

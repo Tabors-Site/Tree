@@ -2,6 +2,7 @@
 // Webhook receiver endpoints for gateway input channels.
 // No auth middleware — external platforms (Telegram) call these directly.
 
+import log from "../../core/log.js";
 import express from "express";
 import GatewayChannel from "./model.js";
 import { processGatewayMessage } from "./input.js";
@@ -38,7 +39,7 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
     if (expectedSecret) {
       var headerSecret = req.headers["x-telegram-bot-api-secret-token"];
       if (headerSecret !== expectedSecret) {
-        console.error(
+ log.error("Gateway", 
           `Gateway: Telegram webhook secret mismatch for channel ${channelId}`,
         );
         return;
@@ -49,7 +50,7 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
     var expectedChatId = channel.config?.metadata?.chatId;
     var actualChatId = String(update.message.chat.id);
     if (expectedChatId && actualChatId !== expectedChatId) {
-      console.error(
+ log.error("Gateway", 
         `Gateway: Telegram chatId mismatch for channel ${channelId}: expected ${expectedChatId}, got ${actualChatId}`,
       );
       return;
@@ -61,7 +62,7 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
     var senderPlatformId = String(from.id || "");
     var messageText = update.message.text;
 
-    console.log(
+ log.verbose("Gateway", 
       `Gateway: Telegram message on channel ${channelId} from ${senderName}: "${messageText.slice(0, 80)}"`,
     );
 
@@ -77,7 +78,7 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
       await sendTelegramReply(channel, actualChatId, result.reply);
     }
   } catch (err) {
-    console.error(
+ log.error("Gateway", 
       `Gateway: Telegram webhook error for channel ${req.params.channelId}:`,
       err.message,
     );
@@ -111,12 +112,12 @@ async function sendTelegramReply(channel, chatId, text) {
 
     if (!res.ok) {
       var body = await res.text();
-      console.error(
+ log.error("Gateway", 
         `Gateway: Telegram reply failed for channel ${channel._id}: ${body}`,
       );
     }
   } catch (err) {
-    console.error(
+ log.error("Gateway", 
       `Gateway: Telegram reply error for channel ${channel._id}:`,
       err.message,
     );

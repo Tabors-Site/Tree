@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import urlAuth from "../../middleware/urlAuth.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -36,7 +37,7 @@ export default function createRouter(core) {
 
       return res.send(renderDeletedBranches({ userId, user, deleted, token }));
     } catch (err) {
-      console.error("Error in /user/:userId/deleted:", err);
+ log.error("Deleted Revive", "Error in /user/:userId/deleted:", err);
       res.status(500).json({ error: err.message });
     }
   });
@@ -69,7 +70,7 @@ export default function createRouter(core) {
 
       return res.json({ success: true, ...result });
     } catch (err) {
-      console.error("revive branch error:", err);
+ log.error("Deleted Revive", "revive branch error:", err);
       return res.status(400).json({ error: err.message });
     }
   });
@@ -96,7 +97,7 @@ export default function createRouter(core) {
 
       return res.json({ success: true, ...result });
     } catch (err) {
-      console.error("revive root error:", err);
+ log.error("Deleted Revive", "revive root error:", err);
       return res.status(400).json({ error: err.message });
     }
   });

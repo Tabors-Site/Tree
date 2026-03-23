@@ -1,3 +1,4 @@
+import log from "../../core/log.js";
 import express from "express";
 import authenticate from "../../middleware/authenticate.js";
 import { updateSchedule } from "./core.js";
@@ -46,7 +47,7 @@ const editScheduleHandler = async (req, res) => {
 
     res.json({ success: true, ...result });
   } catch (err) {
-    console.error("editSchedule error:", err);
+ log.error("Schedules", "editSchedule error:", err);
     res.status(err.status || 400).json({ error: err.message });
   }
 };
