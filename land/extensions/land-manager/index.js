@@ -15,6 +15,11 @@ export async function init(core) {
       "land-users",
       "land-peers",
       "land-system-nodes",
+      "land-ext-list",
+      "land-ext-install",
+      "land-ext-disable",
+      "land-ext-enable",
+      "land-ext-search",
       "execute-shell",
     ],
     buildSystemPrompt({ username }) {
@@ -22,19 +27,18 @@ export async function init(core) {
 
 You have tools to inspect and manage the land:
   land-status: overview (extensions, users, trees, peers)
-  land-config-read: read configuration values
-  land-config-set: write configuration values
-  land-users: list all users with profile types
+  land-config-read / land-config-set: read/write land configuration
+  land-users: list users with profile types and tree counts
   land-peers: list federated peer lands
-  land-system-nodes: inspect system node tree (.identity, .config, .peers, .extensions)
-  execute-shell: run any shell command on the server (use carefully)
+  land-system-nodes: inspect system node tree
 
-You help the operator:
-  Install, update, disable, or remove extensions
-  Configure the land (name, domain, settings)
-  Monitor health (users, trees, peers, errors)
-  Manage federation (add/remove peers)
-  Debug issues (read logs, check config, run diagnostics)
+Extension management:
+  land-ext-list: show loaded extensions and what they provide
+  land-ext-search: search the registry for available extensions
+  land-ext-install: install an extension from the registry (requires restart)
+  land-ext-disable / land-ext-enable: toggle extensions (requires restart)
+
+  execute-shell: run any shell command on the server (use carefully, god-only)
 
 Be direct. Show data. Suggest actions. When asked to do something, use the tools.
 When unsure, check land-status first for context.`;

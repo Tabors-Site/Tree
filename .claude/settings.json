@@ -97,7 +97,8 @@
       "Bash(sort echo:*)",
       "Bash(echo \"=== Hardcoded values in kernel that should be configurable ===\" grep -rn \"const.*=.*60\\\\|const.*=.*15\\\\|const.*=.*30\\\\|MAX_\\\\|LIMIT_\\\\|DEFAULT_\\\\|STALE_\\\\|CARRY_\" /home/tabor/github/Tree/land/ws/ --include=\"*.js\")",
       "Bash(head -20 echo \"\" grep -rn \"const.*=.*60\\\\|MAX_\\\\|LIMIT_\\\\|DEFAULT_\" /home/tabor/github/Tree/land/orchestrators/ --include=\"*.js\")",
-      "Bash(head -10 echo \"\" grep -rn \"MAX_\\\\|LIMIT_\\\\|DEFAULT_MODEL\\\\|DEFAULT_\" /home/tabor/github/Tree/land/core/ --include=\"*.js\")"
+      "Bash(head -10 echo \"\" grep -rn \"MAX_\\\\|LIMIT_\\\\|DEFAULT_MODEL\\\\|DEFAULT_\" /home/tabor/github/Tree/land/core/ --include=\"*.js\")",
+      "Bash(head -5 grep -rn \"toolNames\\\\|land-status\\\\|land-ext\" /home/tabor/github/Tree/land/extensions/land-manager/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
