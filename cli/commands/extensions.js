@@ -282,23 +282,50 @@ module.exports = (program) => {
     .action(async (parts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext uninstall <name>. This removes code but keeps database data."));
       const name = parts.join("-");
-      const readline = require("readline");
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-      rl.question(chalk.yellow(`Remove extension "${name}"? This deletes the code but keeps your data. (y/N) `), async (answer) => {
+      try {
+        const api = getApi();
+
+        // Check if other extensions depend on this one
+        const protocol = await api.get("/protocol");
+        const allManifests = await api.get("/land/extensions");
+        const dependents = [];
+        if (allManifests?.extensions) {
+          for (const ext of allManifests.extensions) {
+            if (ext.name === name) continue;
+            const deps = ext.needs?.extensions || ext.manifest?.needs?.extensions || [];
+            if (deps.includes(name)) {
+              dependents.push(ext.name);
+            }
+          }
+        }
+
+        if (dependents.length > 0) {
+          console.log(chalk.red(`Cannot uninstall "${name}". These extensions depend on it:`));
+          for (const dep of dependents) {
+            console.log(chalk.red(`  ${dep}`));
+          }
+          console.log(chalk.dim("Uninstall those first, or use --force to remove anyway."));
+          if (!parts.includes("--force") && !parts.includes("-f")) return;
+        }
+
+        const readline = require("readline");
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+        const answer = await new Promise(resolve => {
+          rl.question(chalk.yellow(`Remove "${name}"? Code deleted, database data kept. (y/N) `), resolve);
+        });
         rl.close();
+
         if (answer.toLowerCase() !== "y") {
           console.log(chalk.dim("Cancelled."));
           return;
         }
 
-        try {
-          const api = getApi();
-          const data = await api.uninstallExtension(name);
-          console.log(chalk.green(`Uninstalled: ${name}`));
-          console.log(chalk.dim("Extension directory removed. Database data is untouched."));
-          console.log(chalk.dim("Restart the land to apply."));
-          await refreshProtocolCache();
+        const data = await api.uninstallExtension(name);
+        console.log(chalk.green(`Uninstalled: ${name}`));
+        console.log(chalk.dim("Restart the land to apply."));
+        await refreshProtocolCache();
         } catch (err) {
           console.error(chalk.red("Error:"), err.message);
         }
