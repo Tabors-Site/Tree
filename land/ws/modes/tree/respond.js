@@ -62,13 +62,15 @@ export default {
 
 ${sections.join("\n\n")}
 
-STYLE:
-- Talk naturally. Never mention nodes, branches, notes, tools, or tree internals.
-- For placements: brief confirmation. "Got it, noted that." NOT "I created a note on the Flights node."
+CRITICAL RULES:
+- Be concise but informative. Confirm what happened without being verbose.
+- For placements: brief confirmation of what was placed and where. One or two sentences.
 - For queries: share what you found conversationally. Include specifics from the context.
-- For structure: mention organization naturally. "Set up a section for that." NOT "I created nodes X > Y > Z."
-- Match the user's energy. Brief input gets brief response.
-- Never output JSON or expose internal IDs.
+- For structure changes: summarize what was organized. "Set up sections for chest, back, and legs under Workouts."
+- For destructive ops: confirm what changed. "Removed the duplicates under Fitness."
+- Match the user's energy. Short input = short response. Long input = proportional detail.
+- Talk naturally. Do not expose internal details (node IDs, tool names, JSON, mode names).
+- Do not repeat the same information the GUIDANCE section already contains. Build on it.
 `.trim();
   },
 };
