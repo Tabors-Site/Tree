@@ -266,6 +266,11 @@ treeos config set carryMessages 6`}</Code>
             Any key can be stored in the .config node. The kernel only processes the keys above.
             Everything else is available for extensions to read.
           </P>
+          <P>
+            With the land-manager extension installed, the AI can read and write these config
+            values through chat. A land that manages itself: adjust timeouts, tune context
+            windows, configure extensions, all through natural language at the land root.
+          </P>
         </Section>
 
         {/* ══════════════════════════════════════════════════════════════ */}
