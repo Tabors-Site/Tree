@@ -22,14 +22,14 @@ router.get("/setup", authenticateLite, async (req, res) => {
     }
 
     const user = await User.findById(req.userId)
-      .select("username roots metadata")
+      .select("username roots metadata llmDefault")
       .lean();
     if (!user) {
       return res.redirect("/login?redirect=/setup");
     }
 
     const connCount = await CustomLlmConnection.countDocuments({ userId: req.userId });
-    const hasMainLlm = !!(user.llmAssignments?.main);
+    const hasMainLlm = !!(user.llmDefault);
     const needsLlm = !hasMainLlm && connCount === 0;
     const needsTree = !user.roots || user.roots.length === 0;
 

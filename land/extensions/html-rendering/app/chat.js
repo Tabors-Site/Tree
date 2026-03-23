@@ -47,7 +47,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
     const setupSkipped = req.cookies?.setupSkipped === "1";
     if (!setupSkipped) {
-      const hasMainLlm = !!user.llmAssignments?.main;
+      const hasMainLlm = !!user.llmDefault;
       const hasTree = user.roots && user.roots.length > 0;
       if (!hasMainLlm || !hasTree) {
         const connCount = hasMainLlm
