@@ -732,7 +732,7 @@ async function transferNote({
 
   // Verify target node exists and is in the same tree
   const targetNode = await Node.findById(targetNodeId)
-    .select("_id prestige")
+    .select("_id metadata")
     .lean();
   if (!targetNode) throw new Error("Target node not found");
 
@@ -741,12 +741,13 @@ async function transferNote({
     throw new Error("Cannot transfer notes between different trees");
   }
 
-  // Resolve target version
+  // Resolve target version (prestige extension sets this via metadata, default 0)
   let targetVersion;
   if (typeof prestige === "number" && prestige >= 0) {
     targetVersion = prestige;
   } else {
-    targetVersion = targetNode.prestige ?? 0;
+    const meta = targetNode.metadata instanceof Map ? Object.fromEntries(targetNode.metadata) : (targetNode.metadata || {});
+    targetVersion = meta.prestige?.current ?? 0;
   }
 
   // Save original location for contribution logging

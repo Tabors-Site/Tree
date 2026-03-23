@@ -54,6 +54,83 @@ export function syncDisabledFile(list) {
 // State
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Semver utilities (no external deps)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a dependency string like "understanding" or "understanding@^1.0.0".
+ * Returns { name, constraint } where constraint is null or the version part.
+ */
+function parseDepString(dep) {
+  const atIdx = dep.indexOf("@");
+  if (atIdx <= 0) return { name: dep, constraint: null };
+  return { name: dep.slice(0, atIdx), constraint: dep.slice(atIdx + 1) };
+}
+
+/**
+ * Parse a semver string "1.2.3" into [major, minor, patch].
+ */
+function parseSemver(v) {
+  const match = String(v).match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+/**
+ * Check if version satisfies a constraint.
+ * Supports: "1.2.3" (exact), "^1.2.3" (compatible), ">=1.2.3", ">1.2.3", "1.x", "1.2.x"
+ */
+function semverSatisfies(version, constraint) {
+  const v = parseSemver(version);
+  if (!v) return true; // unparseable version, skip check
+
+  // Wildcard: "1.x" or "1.2.x"
+  if (constraint.includes("x")) {
+    const parts = constraint.split(".");
+    if (parts[0] !== "x" && Number(parts[0]) !== v[0]) return false;
+    if (parts[1] && parts[1] !== "x" && Number(parts[1]) !== v[1]) return false;
+    return true;
+  }
+
+  // >= operator
+  if (constraint.startsWith(">=")) {
+    const c = parseSemver(constraint.slice(2));
+    if (!c) return true;
+    if (v[0] !== c[0]) return v[0] > c[0];
+    if (v[1] !== c[1]) return v[1] > c[1];
+    return v[2] >= c[2];
+  }
+
+  // > operator
+  if (constraint.startsWith(">") && !constraint.startsWith(">=")) {
+    const c = parseSemver(constraint.slice(1));
+    if (!c) return true;
+    if (v[0] !== c[0]) return v[0] > c[0];
+    if (v[1] !== c[1]) return v[1] > c[1];
+    return v[2] > c[2];
+  }
+
+  // ^ operator (compatible: same major, >= minor.patch)
+  if (constraint.startsWith("^")) {
+    const c = parseSemver(constraint.slice(1));
+    if (!c) return true;
+    if (v[0] !== c[0]) return false; // major must match
+    if (v[1] !== c[1]) return v[1] > c[1];
+    return v[2] >= c[2];
+  }
+
+  // Exact match (or = prefix)
+  const exact = constraint.startsWith("=") ? constraint.slice(1) : constraint;
+  const c = parseSemver(exact);
+  if (!c) return true;
+  return v[0] === c[0] && v[1] === c[1] && v[2] === c[2];
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
 const loaded = new Map();       // name -> { manifest, instance }
 let coreServices = null;        // the assembled core bundle
 const modeToolExtensions = [];  // [{ modeKey, toolNames }] from extensions
@@ -131,11 +208,17 @@ function validateNeeds(manifest, core) {
     }
   }
 
-  // Check inter-extension dependencies
+  // Check inter-extension dependencies (supports name or name@constraint)
   if (manifest.needs?.extensions) {
-    for (const ext of manifest.needs.extensions) {
-      if (!loaded.has(ext)) {
-        missing.push(`extension:${ext}`);
+    for (const dep of manifest.needs.extensions) {
+      const { name: depName, constraint } = parseDepString(dep);
+      if (!loaded.has(depName)) {
+        missing.push(`extension:${depName}`);
+      } else if (constraint) {
+        const depManifest = loaded.get(depName)?.manifest;
+        if (depManifest?.version && !semverSatisfies(depManifest.version, constraint)) {
+          missing.push(`extension:${depName} (need ${constraint}, have ${depManifest.version})`);
+        }
       }
     }
   }
@@ -913,9 +996,9 @@ export async function readExtensionFiles(name) {
 /**
  * Resolve the directory service URL from land config or env.
  */
-function getDirectoryUrl() {
+async function getDirectoryUrl() {
   try {
-    const { getLandConfigValue } = require("../core/landConfig.js");
+    const { getLandConfigValue } = await import("../core/landConfig.js");
     return getLandConfigValue("directoryUrl") || process.env.DIRECTORY_URL || "https://dir.treeos.ai";
   } catch {
     return process.env.DIRECTORY_URL || "https://dir.treeos.ai";
@@ -935,6 +1018,67 @@ function computeChecksum(files) {
 }
 
 /**
+ * Install an extension from a git repository URL.
+ * Clones into a temp directory, copies to extensions/, cleans up.
+ *
+ * @param {string} name - extension name
+ * @param {string} repoUrl - git repository URL
+ * @param {string} [version] - git tag/branch to checkout
+ * @returns {{ name, version, filesWritten }}
+ */
+async function installFromRepo(name, repoUrl, version) {
+  const { execSync } = await import("child_process");
+  const extDir = path.join(__dirname, name);
+  const tmpDir = path.join(__dirname, `_tmp_${name}_${Date.now()}`);
+
+  try {
+    // Clone the repo
+    const branch = version ? `--branch ${version} --single-branch` : "";
+    execSync(`git clone --depth 1 ${branch} ${repoUrl} ${tmpDir}`, {
+      stdio: "pipe",
+      timeout: 30000,
+    });
+
+    // Verify it has a manifest
+    if (!fs.existsSync(path.join(tmpDir, "manifest.js"))) {
+      throw new Error("Repository does not contain a manifest.js at root");
+    }
+
+    // Remove .git directory (no need to keep history)
+    const gitDir = path.join(tmpDir, ".git");
+    if (fs.existsSync(gitDir)) {
+      fs.rmSync(gitDir, { recursive: true, force: true });
+    }
+
+    // Move to final location (replace if exists)
+    if (fs.existsSync(extDir)) {
+      fs.rmSync(extDir, { recursive: true, force: true });
+    }
+    fs.renameSync(tmpDir, extDir);
+
+    // Count files
+    let filesWritten = 0;
+    function countFiles(dir) {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules") continue;
+        if (entry.isDirectory()) countFiles(path.join(dir, entry.name));
+        else filesWritten++;
+      }
+    }
+    countFiles(extDir);
+
+    log.info("Extensions", `Installed from git: ${name} (${repoUrl}, ${filesWritten} files)`);
+    return { name, version: version || "latest", filesWritten };
+  } catch (err) {
+    // Clean up temp directory on failure
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+    throw new Error(`Git install failed for ${name}: ${err.message}`);
+  }
+}
+
+/**
  * Install an extension from the registry by name.
  * Fetches metadata + files from the directory service, verifies integrity,
  * and writes files to disk.
@@ -948,7 +1092,7 @@ export async function installExtension(name, version) {
     throw new Error("Invalid extension name");
   }
 
-  const dirUrl = getDirectoryUrl();
+  const dirUrl = await getDirectoryUrl();
 
   // Fetch extension metadata (latest or specific version)
   const metaUrl = version
@@ -972,8 +1116,13 @@ export async function installExtension(name, version) {
     ext = await fullRes.json();
   }
 
+  // If no inline files, try repoUrl (git clone)
+  if ((!ext.files || !ext.files.length) && ext.repoUrl) {
+    return await installFromRepo(ext.name || name, ext.repoUrl, ext.version);
+  }
+
   if (!ext.files || !ext.files.length) {
-    throw new Error("Extension has no files");
+    throw new Error("Extension has no files and no repoUrl");
   }
 
   // Verify integrity if checksum provided

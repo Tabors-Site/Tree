@@ -1,7 +1,17 @@
 import { Router } from "express";
+import crypto from "crypto";
 import Extension from "../db/models/extension.js";
 import Land from "../db/models/land.js";
 import { verifyDirectoryAuth } from "../auth.js";
+
+function computeChecksum(files) {
+  const hash = crypto.createHash("sha256");
+  for (const file of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+    hash.update(file.path);
+    hash.update(file.content);
+  }
+  return hash.digest("hex");
+}
 
 /**
  * Middleware to extract land identity from verified canopy auth payload
@@ -188,6 +198,7 @@ router.get("/:name/:version", async (req, res) => {
       description: ext.description,
       manifest: ext.manifest,
       files: ext.files,
+      checksum: ext.checksum || null,
       repoUrl: ext.repoUrl,
       tarballUrl: ext.tarballUrl,
       readme: ext.readme,
@@ -243,6 +254,7 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
 
       existing.manifest = manifest;
       existing.files = files;
+      existing.checksum = computeChecksum(files);
       existing.description = manifest.description || existing.description;
       existing.readme = readme || existing.readme;
       existing.tags = tags || existing.tags;
@@ -250,10 +262,11 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
       existing.updatedAt = new Date();
       await existing.save();
 
-      return res.json({ published: true, updated: true, name: manifest.name, version: manifest.version });
+      return res.json({ published: true, updated: true, name: manifest.name, version: manifest.version, checksum: existing.checksum });
     }
 
     // Create new
+    const checksum = computeChecksum(files);
     const ext = new Extension({
       name: manifest.name,
       version: manifest.version,
@@ -263,6 +276,7 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
       authorName: req.landName || "",
       manifest,
       files,
+      checksum,
       readme: readme || "",
       tags: tags || [],
       repoUrl: repoUrl || null,
@@ -274,6 +288,7 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
       published: true,
       name: manifest.name,
       version: manifest.version,
+      checksum,
     });
   } catch (err) {
     if (err.code === 11000) {

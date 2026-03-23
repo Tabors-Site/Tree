@@ -1,25 +1,18 @@
-// CustomLlmConnection bridge.
-// If user-llm extension is installed, re-exports from it.
-// If not, provides a minimal stub model.
+import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 
-let mod;
-try {
-  mod = await import("../../extensions/user-llm/model.js");
-} catch {
-  // user-llm extension not installed. Provide stub.
-  const mongoose = (await import("mongoose")).default;
-  const schema = new mongoose.Schema({
-    _id: String,
-    userId: String,
-    name: String,
-    baseUrl: String,
-    model: String,
-  }, { strict: false });
-  try {
-    mod = { default: mongoose.model("CustomLlmConnection") };
-  } catch {
-    mod = { default: mongoose.model("CustomLlmConnection", schema) };
-  }
-}
+const CustomLlmConnectionSchema = new mongoose.Schema(
+  {
+    _id: { type: String, default: uuidv4 },
+    userId: { type: String, ref: "User", required: true, index: true },
+    name: { type: String, required: true, trim: true, maxlength: 100 },
+    baseUrl: { type: String, required: true, trim: true },
+    encryptedApiKey: { type: String, required: true },
+    model: { type: String, required: true, trim: true },
+    lastUsedAt: { type: Date, default: null },
+  },
+  { timestamps: { createdAt: true, updatedAt: true } }
+);
 
-export default mod.default;
+const CustomLlmConnection = mongoose.model("CustomLlmConnection", CustomLlmConnectionSchema);
+export default CustomLlmConnection;

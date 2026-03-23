@@ -24,6 +24,9 @@ const ExtensionSchema = new mongoose.Schema({
     content: { type: String, required: true },
   }],
 
+  // Integrity
+  checksum: { type: String, default: null },
+
   // Metadata
   publishedAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
