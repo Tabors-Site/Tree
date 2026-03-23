@@ -860,17 +860,19 @@ export async function processMessage(visitorId, message, ctx) {
     }
   }
 
-  return {
-    success: true,
-    answer: finalAnswer,
+  // Internal tracking (for AIChat finalization, never sent to client)
+  const _internal = {
     modeKey: session.modeKey,
     rootId: session.rootId,
-    isCustomLLM: isCustom,
-    llmProvider: {
-      isCustom,
-      model: MODEL,
-      connectionId: resolvedConnectionId || null,
-    },
+    isCustom,
+    model: MODEL,
+    connectionId: resolvedConnectionId || null,
+  };
+
+  return {
+    success: true,
+    content: finalAnswer,
+    _internal,
   };
 }
 
@@ -1048,7 +1050,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
     throw err;
   }
 
-  const answer = result?.content || result?.choices?.[0]?.message?.content || JSON.stringify(result);
+  const answer = result?.content || "No response.";
 
   // 6. Finalize AIChat
   if (aiChat) {

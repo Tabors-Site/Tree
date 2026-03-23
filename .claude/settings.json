@@ -89,7 +89,8 @@
       "Bash(grep -n 'log\\\\.\\\\\\(verbose\\\\|info\\\\|warn\\\\|error\\\\|debug\\\\\\).*[^`]${' /home/tabor/github/Tree/land/extensions/loader.js)",
       "Bash(npm audit:*)",
       "Bash(npm uninstall:*)",
-      "Bash(timeout 20 PORT=39999 MONGODB_URI=\"mongodb://localhost:27017/tree-test-vm2\" LAND_DOMAIN=localhost JWT_SECRET=test CUSTOM_LLM_API_SECRET_KEY=test node land/server.js)"
+      "Bash(timeout 20 PORT=39999 MONGODB_URI=\"mongodb://localhost:27017/tree-test-vm2\" LAND_DOMAIN=localhost JWT_SECRET=test CUSTOM_LLM_API_SECRET_KEY=test node land/server.js)",
+      "Bash(echo \"=== Files using processMessage directly \\(should use runChat\\) ===\" grep -rln \"processMessage\" /home/tabor/github/Tree/land/ --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

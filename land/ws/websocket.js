@@ -653,32 +653,30 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             }
 
             if (response && !abort.signal.aborted) {
-              // Strip internal tracking fields before sending to client
-              const {
-                _llmProvider,
-                _raw,
-                llmProvider: _lp,
-                ...publicResponse
-              } = response;
+              // Only send public data to client
               if (safeChatMode === "place") {
                 socket.emit("placeResult", {
-                  success: publicResponse.success,
-                  stepSummaries: publicResponse.stepSummaries || [],
-                  targetPath: publicResponse.lastTargetPath || null,
+                  success: response.success,
+                  stepSummaries: response.stepSummaries || [],
+                  targetPath: response.lastTargetPath || null,
                   generation,
                 });
               } else {
-                socket.emit("chatResponse", { ...publicResponse, generation });
+                socket.emit("chatResponse", {
+                  success: response.success,
+                  answer: response.content || response.answer || null,
+                  generation,
+                });
               }
 
               // ── Finalize AIChat (success) ────────────────────────────
               if (aiChat) {
-                const finalMode = response.modeKey || getCurrentMode(visitorId);
+                const internal = response._internal || {};
                 finalizeAIChat({
                   chatId: aiChat._id,
-                  content: response.answer || null,
+                  content: response.content || response.answer || null,
                   stopped: false,
-                  modeKey: finalMode,
+                  modeKey: internal.modeKey || getCurrentMode(visitorId),
                 }).catch((err) =>
                   log.warn("WS", "AIChat finalize failed:", err.message),
                 );
