@@ -22,7 +22,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const qs = buildQueryString(req);
-    let user = await User.findById(userId).lean().exec();
+    let user = await User.findById(userId).exec();
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }

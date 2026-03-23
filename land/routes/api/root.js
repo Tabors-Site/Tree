@@ -526,7 +526,7 @@ router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
         .json({ error: "Only the root owner can manage the gateway" });
 
     const { getChannelsForRoot } =
-      await import("../../core/gateway/gateway.js");
+      await import("../../extensions/gateway/core.js");
     const channels = await getChannelsForRoot(rootId);
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -580,7 +580,7 @@ router.get("/root/:rootId/gateway/channels", authenticate, async (req, res) => {
     }
 
     const { getChannelsForRoot } =
-      await import("../../core/gateway/gateway.js");
+      await import("../../extensions/gateway/core.js");
     const channels = await getChannelsForRoot(rootId);
     return res.json({ success: true, channels });
   } catch (err) {
@@ -605,7 +605,7 @@ router.post(
       } = req.body;
 
       const { addGatewayChannel } =
-        await import("../../core/gateway/gateway.js");
+        await import("../../extensions/gateway/core.js");
       const channel = await addGatewayChannel(req.userId, rootId, {
         name,
         type,
@@ -638,7 +638,7 @@ router.put(
       const { name, enabled, config, notificationTypes } = req.body;
 
       const { updateGatewayChannel } =
-        await import("../../core/gateway/gateway.js");
+        await import("../../extensions/gateway/core.js");
       const channel = await updateGatewayChannel(req.userId, channelId, {
         name,
         enabled,
@@ -662,7 +662,7 @@ router.delete(
       const { channelId } = req.params;
 
       const { deleteGatewayChannel } =
-        await import("../../core/gateway/gateway.js");
+        await import("../../extensions/gateway/core.js");
       await deleteGatewayChannel(req.userId, channelId);
 
       return res.json({ success: true, removed: true });
@@ -697,7 +697,7 @@ router.post(
       }
 
       const { dispatchTestNotification } =
-        await import("../../core/gateway/gatewayDispatch.js");
+        await import("../../extensions/gateway/dispatch.js");
       var result = await dispatchTestNotification(channelId);
 
       return res.json(result);

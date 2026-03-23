@@ -114,10 +114,11 @@ export default async function urlAuth(req, res, next) {
         : null);
 
     if (apiKey) {
-      const users = await User.find({ "apiKeys.revoked": false });
+      const users = await User.find({ "metadata.apiKeys.revoked": false });
 
       for (const user of users) {
-        for (const key of user.apiKeys) {
+        const keys = user.apiKeys || [];
+        for (const key of keys) {
           if (key.revoked) continue;
 
           const match = await bcrypt.compare(apiKey, key.keyHash);
@@ -129,13 +130,10 @@ export default async function urlAuth(req, res, next) {
           req.apiKeyId = key._id;
           req.isHtmlShare = false;
 
-          await User.updateOne(
-            { _id: user._id, "apiKeys._id": key._id },
-            {
-              $inc: { "apiKeys.$.usageCount": 1 },
-              $set: { "apiKeys.$.lastUsedAt": new Date() },
-            }
-          );
+          key.usageCount = (key.usageCount || 0) + 1;
+          key.lastUsedAt = new Date();
+          user.apiKeys = keys;
+          await user.save();
 
           return next();
         }

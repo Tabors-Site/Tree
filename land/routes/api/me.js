@@ -1,21 +1,20 @@
 import express from "express";
 import authenticate from "../../middleware/authenticate.js";
 import User from "../../db/models/user.js";
+import { getEnergy } from "../../core/tree/userMetadata.js";
 
 const router = express.Router();
 
 router.get("/me", authenticate, async (req, res) => {
   const user = await User.findById(req.userId)
-    .select(
-      "username email profileType planExpiresAt availableEnergy additionalEnergy htmlShareToken storageUsage",
-    )
-    .lean();
+    .select("username email profileType planExpiresAt htmlShareToken metadata");
 
   if (!user)
     return res.status(404).json({ success: false, error: "User not found" });
 
-  const available = user.availableEnergy?.amount ?? 0;
-  const additional = user.additionalEnergy?.amount ?? 0;
+  const energy = getEnergy(user);
+  const available = energy.available?.amount ?? 0;
+  const additional = energy.additional?.amount ?? 0;
 
   res.json({
     success: true,
@@ -25,7 +24,7 @@ router.get("/me", authenticate, async (req, res) => {
     planExpiresAt: user.planExpiresAt,
     email: user.email,
     shareToken: user.htmlShareToken || null,
-    storageUsageMb: user.storageUsage ?? 0,
+    storageUsageMb: energy.storageUsage ?? 0,
     energy: {
       available,
       additional,

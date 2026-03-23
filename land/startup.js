@@ -64,7 +64,7 @@ export function onListen() {
     startDirectoryRegistration();
     console.log("[Land] Canopy API ready");
 
-    import("./core/gateway/discordBotManager.js")
+    import("./extensions/gateway/discordBotManager.js")
       .then(({ startupScan }) => {
         startupScan();
         console.log("[Land] Gateway scan complete");

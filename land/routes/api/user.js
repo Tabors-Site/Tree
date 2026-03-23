@@ -51,7 +51,6 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
 
     const user = await User.findById(userId)
       .populate("roots", "name _id visibility")
-      .lean()
       .exec();
 
     if (!user) {

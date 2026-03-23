@@ -8,7 +8,7 @@ import user from "./api/user.js";
 import contributions from "./api/contributions.js";
 
 import orchestrate from "./api/orchestrate.js";
-import gatewayWebhooks from "./api/gatewayWebhooks.js";
+// gateway webhooks loaded via extension system
 import landConfig from "./api/config.js";
 import canopy from "./canopy.js";
 
@@ -74,7 +74,7 @@ export default async function registerURLRoutes(app) {
   // values routes loaded via extension system
   app.use("/api/v1", node);
   app.use("/api/v1", orchestrate);
-  app.use("/api/v1", gatewayWebhooks);
+  // gateway webhooks loaded via extension system
   app.use("/api/v1", landConfig);
 
   // Canopy protocol stays at /canopy (not versioned with API)
@@ -103,7 +103,7 @@ export default async function registerURLRoutes(app) {
       version: "1.0",
       capabilities: [
         "chat", "place", "query",
-        "canopy", "types", "gateway", "llm-assignments",
+        "canopy", "types", "llm-assignments",
         "transactions", "contributions",
       ],
       nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],

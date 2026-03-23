@@ -29,41 +29,12 @@ const RecentRootSchema = new mongoose.Schema(
   { _id: false },
 );
 
-const ApiKeySchema = new mongoose.Schema(
-  {
-    _id: { type: String, default: uuidv4 },
-    keyHash: { type: String, required: true },
-    keyPrefix: { type: String, index: true },
-    name: { type: String, default: "API Key" },
-    lastUsedAt: { type: Date, default: null },
-    revoked: { type: Boolean, default: false },
-
-    usageCount: { type: Number, default: 0 },
-  },
-  { timestamps: { createdAt: true, updatedAt: false } },
-);
-
 const RemoteRootSchema = new mongoose.Schema(
   {
     rootId: { type: String, required: true },
     rootName: { type: String, required: true, trim: true },
     landDomain: { type: String, required: true },
     lastVisitedAt: { type: Date, default: Date.now },
-  },
-  { _id: false },
-);
-
-const EnergySchema = new mongoose.Schema(
-  {
-    amount: {
-      type: Number,
-      required: true,
-    },
-    lastResetAt: {
-      type: Date,
-      required: true,
-      default: Date.now,
-    },
   },
   { _id: false },
 );
@@ -79,8 +50,6 @@ const UserSchema = new mongoose.Schema({
   resetPasswordToken: { type: String, required: false },
   resetPasswordExpiry: { type: Date, required: false },
 
-  apiKeys: [ApiKeySchema],
-
   roots: [{ type: String, ref: "Node" }],
 
   recentRoots: {
@@ -91,47 +60,17 @@ const UserSchema = new mongoose.Schema({
     type: [RemoteRootSchema],
     default: [],
   },
+
+  // Access level (core auth, not billing)
   profileType: {
     type: String,
     enum: ["basic", "standard", "premium", "god"],
     default: "basic",
     required: true,
   },
-
   planExpiresAt: {
     type: Date,
-    default: null, // null = basic/no paid plan
-  },
-
-  availableEnergy: {
-    type: EnergySchema,
-    required: true,
-    default: () => ({
-      amount: 350, // matches basic daily limit
-      lastResetAt: new Date(),
-    }),
-  },
-
-  additionalEnergy: {
-    type: EnergySchema,
-    required: true,
-    default: () => ({
-      amount: 0,
-      lastResetAt: new Date(),
-    }),
-  },
-  storageUsage: {
-    type: Number, // in MB
-    default: 0,
-  },
-
-  llmAssignments: {
-    main: { type: String, ref: "CustomLlmConnection", default: null },
-    rawIdea: { type: String, ref: "CustomLlmConnection", default: null },
-  },
-  rawIdeaAutoPlace: {
-    type: Boolean,
-    default: true,
+    default: null,
   },
 
   // Canopy (distributed network) fields
@@ -143,6 +82,9 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+
+  // Extension data (same pattern as Node.metadata)
+  metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
 });
 
 // Hash password before saving
@@ -173,6 +115,69 @@ UserSchema.pre("save", async function (next) {
 
   next();
 });
+
+// ── Metadata proxy helpers ──
+// These let existing code use user.profileType, user.apiKeys, etc.
+// without knowing the data lives in metadata. Zero caller changes needed.
+function metaGet(doc, extKey, field, fallback) {
+  const meta = doc.metadata instanceof Map ? doc.metadata.get(extKey) : doc.metadata?.[extKey];
+  if (meta === undefined || meta === null) return fallback;
+  if (field) return meta[field] !== undefined ? meta[field] : fallback;
+  return meta;
+}
+
+function metaSet(doc, extKey, field, value) {
+  if (!doc.metadata) doc.metadata = new Map();
+  let existing;
+  if (doc.metadata instanceof Map) {
+    existing = doc.metadata.get(extKey) || {};
+  } else {
+    existing = doc.metadata[extKey] || {};
+  }
+  if (field) {
+    existing[field] = value;
+  } else {
+    existing = value;
+  }
+  if (doc.metadata instanceof Map) {
+    doc.metadata.set(extKey, existing);
+  } else {
+    doc.metadata[extKey] = existing;
+  }
+  if (doc.markModified) doc.markModified("metadata");
+}
+
+// Energy
+UserSchema.virtual("availableEnergy")
+  .get(function () { return metaGet(this, "energy", "available", { amount: 350, lastResetAt: new Date() }); })
+  .set(function (v) { metaSet(this, "energy", "available", v); });
+
+UserSchema.virtual("additionalEnergy")
+  .get(function () { return metaGet(this, "energy", "additional", { amount: 0, lastResetAt: new Date() }); })
+  .set(function (v) { metaSet(this, "energy", "additional", v); });
+
+UserSchema.virtual("storageUsage")
+  .get(function () { return metaGet(this, "energy", "storageUsage", 0); })
+  .set(function (v) { metaSet(this, "energy", "storageUsage", v); });
+
+// API Keys
+UserSchema.virtual("apiKeys")
+  .get(function () { return metaGet(this, "apiKeys", null, []); })
+  .set(function (v) { metaSet(this, "apiKeys", null, v); });
+
+// LLM Assignments
+UserSchema.virtual("llmAssignments")
+  .get(function () { return metaGet(this, "userLlm", "assignments", { main: null, rawIdea: null }); })
+  .set(function (v) { metaSet(this, "userLlm", "assignments", v); });
+
+// Raw Ideas
+UserSchema.virtual("rawIdeaAutoPlace")
+  .get(function () { return metaGet(this, "rawIdeas", "autoPlace", true); })
+  .set(function (v) { metaSet(this, "rawIdeas", "autoPlace", v); });
+
+// Ensure virtuals show in JSON/Object output
+UserSchema.set("toJSON", { virtuals: true });
+UserSchema.set("toObject", { virtuals: true });
 
 const User = mongoose.model("User", UserSchema);
 export default User;

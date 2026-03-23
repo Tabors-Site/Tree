@@ -345,6 +345,27 @@ class TreeAPI {
   createNote(nodeId, content) {
     return this.post(`/node/${nodeId}/notes`, { content });
   }
+  async uploadNote(nodeId, filePath) {
+    const FormData = require("form-data");
+    const fs = require("fs");
+    const path = require("path");
+    const form = new FormData();
+    form.append("file", fs.createReadStream(filePath), path.basename(filePath));
+    const res = await fetch(getBase() + `/node/${nodeId}/0/notes`, {
+      method: "POST",
+      headers: { "x-api-key": this.apiKey, ...form.getHeaders() },
+      body: form,
+    });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); } catch {
+      throw new Error(`Server returned non-JSON response (HTTP ${res.status})`);
+    }
+    if (!res.ok) {
+      throw new Error(json.error || json.message || `HTTP ${res.status}`);
+    }
+    return json;
+  }
   editNote(nodeId, noteId, content) {
     return this.put(`/node/${nodeId}/notes/${noteId}`, { content });
   }

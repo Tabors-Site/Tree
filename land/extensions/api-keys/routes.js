@@ -69,8 +69,7 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
     const userId = req.params.userId;
 
     const user = await User.findById(req.userId)
-      .select("username apiKeys")
-      .lean();
+      .select("username metadata");
     if (!user) return res.status(404).json({ message: "User not found" });
     const apiKeys = user.apiKeys ?? [];
 

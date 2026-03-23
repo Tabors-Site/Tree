@@ -174,8 +174,9 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
   }
 
   try {
-    var user = await User.findById(userId).select("llmAssignments").lean();
-    var assignments = user && user.llmAssignments;
+    var user = await User.findById(userId).select("metadata").lean();
+    var meta = user?.metadata || {};
+    var assignments = meta?.userLlm?.assignments || { main: null, rawIdea: null };
     var connectionId = (assignments && assignments[slot]) || null;
 
     // Fall back to "main" slot if the specific slot has no assignment

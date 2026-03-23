@@ -172,12 +172,13 @@ export default async function authenticate(req, res, next) {
     // Use key prefix for indexed lookup instead of scanning all users
     const prefix = apiKey.slice(0, 8);
     const candidates = await User.find({
-      "apiKeys.keyPrefix": prefix,
-      "apiKeys.revoked": false,
+      "metadata.apiKeys.keyPrefix": prefix,
+      "metadata.apiKeys.revoked": { $ne: true },
     });
 
     for (const user of candidates) {
-      for (const key of user.apiKeys) {
+      const keys = user.apiKeys || [];
+      for (const key of keys) {
         if (key.revoked) continue;
         if (key.keyPrefix && key.keyPrefix !== prefix) continue;
 
@@ -190,14 +191,11 @@ export default async function authenticate(req, res, next) {
         req.authType = "apiKey";
         req.apiKeyId = key._id;
 
-        // usage tracking (atomic)
-        await User.updateOne(
-          { _id: user._id, "apiKeys._id": key._id },
-          {
-            $inc: { "apiKeys.$.usageCount": 1 },
-            $set: { "apiKeys.$.lastUsedAt": new Date() },
-          }
-        );
+        // usage tracking
+        key.usageCount = (key.usageCount || 0) + 1;
+        key.lastUsedAt = new Date();
+        user.apiKeys = keys;
+        await user.save();
 
         await attachTreeAccess(req);
         return next();

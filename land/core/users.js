@@ -683,7 +683,7 @@ if (containsHtml(safeName)) {
 
 export const listApiKeys = async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("apiKeys").lean();
+    const user = await User.findById(req.userId).select("metadata");
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -713,10 +713,16 @@ export const deleteApiKey = async (req, res) => {
       return res.status(400).json({ message: "Key ID required" });
     }
 
-    const result = await User.updateOne(
-      { _id: req.userId, "apiKeys._id": keyId },
-      { $set: { "apiKeys.$.revoked": true } }
-    );
+    // apiKeys lives in metadata, so use Mongoose virtual + save instead of atomic update
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    const keys = user.apiKeys || [];
+    const key = keys.find(k => k._id === keyId);
+    if (!key) return res.status(404).json({ message: "API key not found" });
+    key.revoked = true;
+    user.apiKeys = keys;
+    await user.save();
+    const result = { matchedCount: 1 };
 
     if (result.matchedCount === 0) {
       return res.status(404).json({ message: "API key not found" });

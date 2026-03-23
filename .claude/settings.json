@@ -56,7 +56,17 @@
       "Bash(grep -h process.env. /home/tabor/github/Tree/land/extensions/**/*.js)",
       "Bash(grep -rn \"wallet\" /home/tabor/github/Tree/cli/commands/*.js)",
       "Bash(echo \"=== Old schema refs across ALL extensions ===\" grep -rn \"node\\\\.versions\\\\|node\\\\.prestige\\\\|\\\\.versions\\\\[\" /home/tabor/github/Tree/land/extensions/ --include=\"*.js\")",
-      "Read(//home/tabor/github/Tree/=== version\\\\.values\\\\.set/**)"
+      "Read(//home/tabor/github/Tree/=== version\\\\.values\\\\.set/**)",
+      "Bash(echo \"=== apiKeys ===\" grep -rn \"\\\\.apiKeys\\\\|apiKeys\" /home/tabor/github/Tree/land/ --include=\"*.js\")",
+      "Read(//home/tabor/github/Tree/=== core/**)",
+      "Read(//home/tabor/github/Tree/=== core/tree/**)",
+      "Bash(grep -n \"apiKeys\\\\._id\\\\|apiKeys\\\\.revoked\\\\|$push.*apiKeys\\\\|$pull.*apiKeys\" /home/tabor/github/Tree/land/core/users.js)",
+      "Bash(echo \"=== core/gateway/ files ===\" ls /home/tabor/github/Tree/land/core/gateway/ echo \"\" echo \"=== Who imports from core/gateway/? ===\" grep -rn \"from.*core/gateway\\\\|from.*gateway\" /home/tabor/github/Tree/land/ --include=\"*.js\")",
+      "Bash(sed -i 's|await import\\(\"\"../../core/gateway/gateway.js\"\"\\)|await import\\(\"\"../../extensions/gateway/core.js\"\"\\)|g' /home/tabor/github/Tree/land/routes/api/root.js)",
+      "Bash(sed -i 's|await import\\(\"\"../../core/gateway/gatewayDispatch.js\"\"\\)|await import\\(\"\"../../extensions/gateway/dispatch.js\"\"\\)|g' /home/tabor/github/Tree/land/routes/api/root.js)"
+    ],
+    "additionalDirectories": [
+      "/home/tabor/github/Tree"
     ]
   }
 }

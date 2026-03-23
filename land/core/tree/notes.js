@@ -168,13 +168,13 @@ async function createNote({
   // ── STORAGE ─────────────────────────────────────
   if (contentType === "file" && file?.size) {
     const sizeKB = Math.ceil(file.size / 1024);
-    await User.findByIdAndUpdate(userId, { $inc: { storageUsage: sizeKB } });
+    await User.findByIdAndUpdate(userId, { $inc: { "metadata.energy.storageUsage": sizeKB } });
   }
 
   if (contentType === "text" && finalContent) {
     const sizeKB = Math.ceil(Buffer.byteLength(finalContent, "utf8") / 1024);
     if (sizeKB > 0) {
-      await User.findByIdAndUpdate(userId, { $inc: { storageUsage: sizeKB } });
+      await User.findByIdAndUpdate(userId, { $inc: { "metadata.energy.storageUsage": sizeKB } });
     }
   }
 
@@ -310,7 +310,7 @@ async function editNote({
   const deltaKB = newSizeKB - oldSizeKB;
 
   if (deltaKB !== 0) {
-    await User.findByIdAndUpdate(userId, { $inc: { storageUsage: deltaKB } });
+    await User.findByIdAndUpdate(userId, { $inc: { "metadata.energy.storageUsage": deltaKB } });
   }
 
   // ── APPLY ───────────────────────────────────────

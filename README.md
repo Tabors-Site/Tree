@@ -47,7 +47,15 @@ treeos mkdir "Workouts"                # Create a branch
 treeos cd Workouts                     # Navigate into it
 treeos place "chest press 4x10"        # Place content
 treeos query "what's my schedule?"     # Ask the tree
+treeos note "learned something new"    # Add a text note
+treeos note ./workout-log.csv          # Upload a file as a note
 ```
+
+## Notes
+
+Notes are the base content unit attached to a node. Each note belongs to the node it was created on.
+
+A note can be plain text or any file type (images, PDFs, CSVs, audio, video). Text notes are searchable and visible to the AI. File notes are stored and served but not parsed by the AI.
 
 ## Project layout
 

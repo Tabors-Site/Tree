@@ -133,7 +133,7 @@ async function createRawIdea({
   if (contentType === "file" && file?.size) {
     const sizeKB = Math.ceil(file.size / 1024);
     await User.findByIdAndUpdate(userId, {
-      $inc: { storageUsage: sizeKB },
+      $inc: { "metadata.energy.storageUsage": sizeKB },
     });
   }
 
@@ -141,7 +141,7 @@ async function createRawIdea({
     const sizeKB = Math.ceil(Buffer.byteLength(finalContent, "utf8") / 1024);
     if (sizeKB > 0) {
       await User.findByIdAndUpdate(userId, {
-        $inc: { storageUsage: sizeKB },
+        $inc: { "metadata.energy.storageUsage": sizeKB },
       });
     }
   }
@@ -300,8 +300,8 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
   await User.findByIdAndUpdate(userId, [
     {
       $set: {
-        storageUsage: {
-          $max: [{ $subtract: ["$storageUsage", fileSizeKB] }, 0],
+        "metadata.energy.storageUsage": {
+          $max: [{ $subtract: ["$metadata.energy.storageUsage", fileSizeKB] }, 0],
         },
       },
     },

@@ -1,4 +1,7 @@
 const chalk = require("chalk");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 const { load, requireAuth, currentNodeId, hasExtension } = require("../config");
 const { getApi } = require("../helpers");
 const { printNotes, printContributions, printBook } = require("../display");
@@ -10,7 +13,7 @@ module.exports = (program) => {
     .command("note [content...]")
     .description("Post a note on the node you are in")
     .action(async (parts) => {
-      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: note <content>"));
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: note <content> or note ./file.pdf"));
       const content = parts.join(" ");
       const cfg = requireAuth();
       if (!cfg.activeRootId)
@@ -18,6 +21,24 @@ module.exports = (program) => {
       const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
+
+        // File upload: path starts with ./ or / or ~/
+        if (content.startsWith("./") || content.startsWith("/") || content.startsWith("~/")) {
+          const filePath = content.startsWith("~/")
+            ? path.join(os.homedir(), content.slice(2))
+            : path.resolve(content);
+          if (!fs.existsSync(filePath)) {
+            return console.log(chalk.red(`File not found: ${filePath}`));
+          }
+          if (fs.statSync(filePath).isDirectory()) {
+            return console.log(chalk.red("Cannot upload a directory. Provide a file path."));
+          }
+          await api.uploadNote(nodeId, filePath);
+          console.log(chalk.green("✓ File uploaded") + "  " + chalk.dim(path.basename(filePath)));
+          return;
+        }
+
+        // Text note
         const data = await api.createNote(nodeId, content);
         console.log(
           chalk.green("✓ Note saved") + "  " + chalk.dim(data._id || ""),
