@@ -974,19 +974,28 @@ export function sessionCount() {
  *     nodeId: null,  // optional, for per-node context
  *   });
  */
-export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null }) {
+export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null }) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
   }
 
   const jwt = (await import("jsonwebtoken")).default;
-  const { connectToMCP, closeMCPClient, MCP_SERVER_URL } = await import("./mcp.js");
+  const { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } = await import("./mcp.js");
   const { startAIChat, finalizeAIChat, setAiContributionContext } = await import("./aiChatTracker.js");
+  const { setSessionAbort, clearSessionAbort } = await import("./sessionRegistry.js");
 
   const JWT_SECRET = process.env.JWT_SECRET;
   if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
 
-  const visitorId = `runChat-${userId}-${Date.now()}`;
+  // Reuse session per user+mode (persistent conversation within same zone)
+  const visitorId = `${mode}:${userId}`;
+
+  // Abort controller for cancellation (Ctrl+C, timeout, etc.)
+  const abort = signal ? { signal } : new AbortController();
+  const abortSignal = signal || abort.signal;
+
+  // Register abort so external callers can cancel via sessionRegistry
+  setSessionAbort(visitorId, abort);
 
   const internalJwt = jwt.sign(
     { userId: userId.toString(), username: username || "unknown", visitorId },
@@ -994,22 +1003,27 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
     { expiresIn: "5m" }
   );
 
-  // 1. Connect MCP
-  try {
-    await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
-  } catch (err) {
-    log.warn("RunChat", `MCP connect failed: ${err.message}`);
+  // 1. Connect MCP (reuse if already connected)
+  if (!getMCPClient(visitorId)) {
+    try {
+      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+    } catch (err) {
+      log.warn("RunChat", `MCP connect failed: ${err.message}`);
+    }
   }
 
   // 2. Set root/node if provided
   if (rootId) setRootId(visitorId, rootId);
   if (nodeId) setCurrentNodeId(visitorId, nodeId);
 
-  // 3. Switch mode
-  try {
-    switchMode(visitorId, mode, { username, userId });
-  } catch (err) {
-    log.warn("RunChat", `Mode switch to ${mode} failed: ${err.message}`);
+  // 3. Switch mode only if different
+  const currentMode = getCurrentMode(visitorId);
+  if (currentMode !== mode) {
+    try {
+      switchMode(visitorId, mode, { username, userId });
+    } catch (err) {
+      log.warn("RunChat", `Mode switch to ${mode} failed: ${err.message}`);
+    }
   }
 
   // 4. Create AIChat record
@@ -1032,21 +1046,21 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
     log.warn("RunChat", `AIChat create failed: ${err.message}`);
   }
 
-  // 5. Run processMessage
+  // 5. Run processMessage with abort signal
   let result;
   try {
     result = await processMessage(visitorId, message, {
       username,
       userId,
       rootId,
+      signal: abortSignal,
     });
   } catch (err) {
-    // Finalize as error
     if (aiChat) {
-      try { await finalizeAIChat({ chatId: aiChat._id, content: `Error: ${err.message}`, stopped: false }); } catch {}
+      const stopped = abortSignal.aborted;
+      try { await finalizeAIChat({ chatId: aiChat._id, content: stopped ? null : `Error: ${err.message}`, stopped }); } catch {}
     }
-    closeMCPClient(visitorId);
-    clearSession(visitorId);
+    clearSessionAbort(visitorId);
     throw err;
   }
 
@@ -1055,12 +1069,13 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   // 6. Finalize AIChat
   if (aiChat) {
     try {
-      await finalizeAIChat({ chatId: aiChat._id, content: answer, stopped: false, modeKey: mode });
+      const internal = result?._internal || {};
+      await finalizeAIChat({ chatId: aiChat._id, content: answer, stopped: false, modeKey: internal.modeKey || mode });
     } catch {}
   }
 
-  // 7. Cleanup
-  try { closeMCPClient(visitorId); } catch {}
+  // 7. Clear abort (keep session + MCP alive for next message in same mode)
+  clearSessionAbort(visitorId);
 
   return {
     answer,
