@@ -188,8 +188,9 @@ export class OrchestratorRuntime {
     });
     const endTime = new Date();
 
-    const stepLlm = result?._llmProvider || this.llmProvider;
-    const parsed = parseJsonSafe(result?.answer || result);
+    const internal = result?._internal || {};
+    const stepLlm = internal.model ? { isCustom: internal.isCustom, model: internal.model, connectionId: internal.connectionId } : this.llmProvider;
+    const parsed = parseJsonSafe(result?.content || result);
 
     // treeContext can be a function receiving parsed result for dynamic stepResult
     const resolvedTreeContext = typeof treeContext === "function" ? treeContext(parsed) : treeContext;

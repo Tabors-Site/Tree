@@ -31,7 +31,7 @@ import {
 
 import {
   getClientForUser, resolveRootLlmForMode, userHasLlm,
-  processMessage, switchMode, setRootId, getRootId, runChat,
+  processMessage, switchMode, setRootId, getRootId, runChat, runPipeline,
   setCurrentNodeId, getCurrentNodeId, getCurrentMode,
   clearSession as clearConversationSession,
   resetConversation, injectContext,
@@ -124,7 +124,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     llm: {
       getClientForUser, resolveRootLlmForMode, userHasLlm,
-      processMessage, switchMode, setRootId, getRootId, runChat,
+      processMessage, switchMode, setRootId, getRootId, runChat, runPipeline,
       setCurrentNodeId, getCurrentNodeId, getCurrentMode,
       clearSession: clearConversationSession,
       resetConversation, injectContext,
