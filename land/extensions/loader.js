@@ -470,8 +470,9 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         app.use("/", instance.pageRouter);
       }
 
-      // Wire MCP tools
+      // Wire MCP tools and register in tool resolver
       if (instance.tools && mcpServer) {
+        const { registerToolDef } = await import("../ws/tools.js");
         for (const tool of instance.tools) {
           mcpServer.tool(
             tool.name,
@@ -480,6 +481,16 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
             tool.annotations || {},
             tool.handler
           );
+          // Also register in the tool definition map so resolveTools() can find it
+          // Build OpenAI-compatible tool def from the Zod schema
+          registerToolDef(tool.name, {
+            type: "function",
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.schema,
+            },
+          });
         }
       }
 

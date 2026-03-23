@@ -741,12 +741,27 @@ const TOOL_DEFS = {
 /**
  * Given an array of tool name strings, return the OpenAI tool definition array.
  */
+// Extension tools registered via loader (MCP tools from extensions)
+const extensionToolDefs = {};
+
+/**
+ * Register an extension tool definition so resolveTools can find it.
+ * Called by the extension loader when wiring MCP tools.
+ */
+export function registerToolDef(name, schema) {
+  extensionToolDefs[name] = schema;
+}
+
 export function resolveTools(toolNames) {
   return toolNames.map((name) => {
-    const def = TOOL_DEFS[name];
-    if (!def) throw new Error(`Unknown tool: ${name}`);
+    // Check core tools first, then extension tools
+    const def = TOOL_DEFS[name] || extensionToolDefs[name];
+    if (!def) {
+      log.warn("Tools", `Unknown tool: ${name} (skipped)`);
+      return null;
+    }
     return def;
-  });
+  }).filter(Boolean);
 }
 
 export default TOOL_DEFS;
