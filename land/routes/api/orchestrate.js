@@ -93,6 +93,11 @@ async function runTreeOrchestration(opts, res) {
   const abort = new AbortController();
   setSessionAbort(sessionId, abort);
 
+  // Abort when client disconnects (Ctrl+C in CLI, browser close)
+  res.on("close", () => {
+    if (!res.writableEnded) abort.abort();
+  });
+
   let timedOut = false;
   let aiChat = null;
 

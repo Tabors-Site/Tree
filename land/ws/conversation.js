@@ -899,6 +899,7 @@ export async function processMessage(visitorId, message, ctx) {
   return {
     success: true,
     content: finalAnswer,
+    answer: finalAnswer,
     _internal,
   };
 }
