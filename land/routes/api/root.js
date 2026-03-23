@@ -266,7 +266,9 @@ router.post("/root/:rootId/visibility", authenticate, async (req, res) => {
       return res.status(403).json({ error: "Only the tree owner can change visibility" });
     }
 
-    await Node.findByIdAndUpdate(rootId, { $set: { visibility } });
+    await Node.findByIdAndUpdate(rootId, {
+      $set: { "metadata.visibility": { level: visibility } },
+    });
 
     // Immediately re-sync with directory so public/private change is reflected
     registerWithDirectory().catch((err) =>
@@ -749,7 +751,7 @@ router.post("/root/:rootId/dream-time", authenticate, async (req, res) => {
     }
 
     await Node.findByIdAndUpdate(rootId, {
-      dreamTime: dreamTime || null,
+      $set: { "metadata.dreams.dreamTime": dreamTime || null },
     });
 
     return res.json({ success: true, dreamTime: dreamTime || null });

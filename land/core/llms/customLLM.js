@@ -285,13 +285,9 @@ export async function updateCustomLlmConnection(
   );
 
   // If this connection is currently assigned to any slot, bust cache
-  if (user.llmAssignments) {
-    for (var s of VALID_SLOTS) {
-      if (user.llmAssignments[s] === connectionId) {
-        clearUserClientCache(userId);
-        break;
-      }
-    }
+  const userSlots = user?.metadata?.userLlm?.slots || {};
+  if (user?.llmDefault === connectionId || Object.values(userSlots).includes(connectionId)) {
+    clearUserClientCache(userId);
   }
 
   return {
@@ -309,26 +305,36 @@ export async function deleteCustomLlmConnection(userId, connectionId) {
   });
   if (!conn) throw new Error("Connection not found");
 
-  // If deleted connection was assigned to any user slot, clear those assignments
+  // If deleted connection was assigned to user's default, clear it
   var user = await User.findById(userId).select("llmDefault metadata").lean();
-  if (user && user.llmAssignments) {
-    var unset = {};
-    for (var s of VALID_SLOTS) {
-      if (user.llmAssignments[s] === connectionId) {
-        unset["llmAssignments." + s] = null;
+  if (user) {
+    const updates = {};
+    if (user.llmDefault === connectionId) {
+      updates.llmDefault = null;
+    }
+    const userSlots = user.metadata?.userLlm?.slots || {};
+    for (const [s, val] of Object.entries(userSlots)) {
+      if (val === connectionId) {
+        updates[`metadata.userLlm.slots.${s}`] = null;
       }
     }
-    if (Object.keys(unset).length > 0) {
-      await User.findByIdAndUpdate(userId, { $set: unset });
+    if (Object.keys(updates).length > 0) {
+      await User.findByIdAndUpdate(userId, { $set: updates });
       clearUserClientCache(userId);
     }
   }
 
-  // If deleted connection was assigned to any root node slot, clear it
+  // If deleted connection was assigned to any root node default, clear it
+  await Node.updateMany(
+    { llmDefault: connectionId },
+    { $set: { llmDefault: null } },
+  );
+  // Clear extension slots on nodes
   for (const slot of ROOT_LLM_SLOTS) {
+    if (slot === "default") continue;
     await Node.updateMany(
-      { [`llmAssignments.${slot}`]: connectionId },
-      { $set: { [`llmAssignments.${slot}`]: null } },
+      { [`metadata.llm.slots.${slot}`]: connectionId },
+      { $set: { [`metadata.llm.slots.${slot}`]: null } },
     );
   }
 
@@ -356,10 +362,16 @@ export async function assignConnection(userId, slot, connectionId) {
     if (!conn) throw new Error("Connection not found");
   }
 
-  var updateKey = "llmAssignments." + slot;
-  await User.findByIdAndUpdate(userId, {
-    $set: { [updateKey]: connectionId || null },
-  });
+  // "main" slot goes to llmDefault, other slots go to metadata.userLlm.slots
+  if (slot === "main") {
+    await User.findByIdAndUpdate(userId, {
+      $set: { llmDefault: connectionId || null },
+    });
+  } else {
+    await User.findByIdAndUpdate(userId, {
+      $set: { [`metadata.userLlm.slots.${slot}`]: connectionId || null },
+    });
+  }
 
   // Bust cache so the new assignment takes effect
   clearUserClientCache(userId);

@@ -142,7 +142,7 @@ function getApi(cfg) {
   const { createProxyApi } = require("./api");
   return cfg.remoteDomain
     ? createProxyApi(cfg.apiKey, cfg.remoteDomain)
-    : new TreeAPI(cfg.apiKey);
+    : new TreeAPI(cfg.apiKey, cfg.jwtToken);
 }
 
 module.exports = { getChildren, flattenTree, findChild, parseDate, termLink, getApi };

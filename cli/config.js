@@ -33,7 +33,7 @@ function save(config) {
 
 function requireAuth() {
   const cfg = load();
-  if (!cfg.apiKey || !cfg.userId) {
+  if ((!cfg.apiKey && !cfg.jwtToken) || !cfg.userId) {
     throw new Error("Not logged in. Run: treeos login or treeos register");
   }
   return cfg;

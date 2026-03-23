@@ -36,9 +36,9 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     const planExpiresAt = billing.planExpiresAt || null;
 
     const llmConnections = await getConnectionsForUser(userId);
-    const userLlm = getUserMeta(user, "userLlm");
-    const mainAssignment = userLlm.assignments?.main || null;
-    const rawIdeaAssignment = userLlm.assignments?.rawIdea || null;
+    const mainAssignment = user.llmDefault || null;
+    const userLlmSlots = getUserMeta(user, "userLlm")?.slots || {};
+    const rawIdeaAssignment = userLlmSlots.rawIdea || null;
     const activeConn = mainAssignment
       ? llmConnections.find((c) => c._id === mainAssignment)
       : null;

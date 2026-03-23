@@ -9,15 +9,22 @@ function getBase() {
 }
 
 class TreeAPI {
-  constructor(apiKey) {
+  constructor(apiKey, jwtToken) {
     this.apiKey = apiKey;
+    this.jwtToken = jwtToken;
+  }
+
+  _authHeaders() {
+    if (this.apiKey) return { "x-api-key": this.apiKey };
+    if (this.jwtToken) return { "Authorization": "Bearer " + this.jwtToken };
+    return {};
   }
 
   async _req(method, path, body) {
     const opts = {
       method,
       headers: {
-        "x-api-key": this.apiKey,
+        ...this._authHeaders(),
         "Content-Type": "application/json",
       },
     };
@@ -47,7 +54,7 @@ class TreeAPI {
     const opts = {
       method,
       headers: {
-        "x-api-key": this.apiKey,
+        ...this._authHeaders(),
         "Content-Type": "application/json",
       },
     };
@@ -353,7 +360,7 @@ class TreeAPI {
     form.append("file", fs.createReadStream(filePath), path.basename(filePath));
     const res = await fetch(getBase() + `/node/${nodeId}/0/notes`, {
       method: "POST",
-      headers: { "x-api-key": this.apiKey, ...form.getHeaders() },
+      headers: { ...this._authHeaders(), ...form.getHeaders() },
       body: form,
     });
     const text = await res.text();

@@ -59,7 +59,7 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
       const user = await User.findById(req.params.userId)
         .select("llmDefault metadata")
         .lean();
-      if (!user?.llmAssignments?.main) {
+      if (!user?.llmDefault) {
         await assignConnection(req.params.userId, "main", result._id);
       }
     } catch (assignErr) {

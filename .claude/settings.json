@@ -69,7 +69,8 @@
       "Bash(echo \"=== htmlShareToken files ===\" grep -rln \"htmlShareToken\" /home/tabor/github/Tree/land/ --include=\"*.js\")",
       "Bash(grep -n \"htmlShareToken\\\\|shareToken\" /home/tabor/github/Tree/land/routes/api/me.js echo \"---\" grep -n \"htmlShareToken\\\\|shareToken\" /home/tabor/github/Tree/land/extensions/visibility/routes.js)",
       "Bash(head -5 echo \"---\" grep -n \"htmlShareToken\\\\|shareToken\" /home/tabor/github/Tree/land/extensions/billing/purchase.js)",
-      "Bash(echo \"=== Remaining htmlShareToken ===\" grep -rn \"user\\\\.htmlShareToken\\\\|\\\\.htmlShareToken\\\\b\" /home/tabor/github/Tree/land/ --include=\"*.js\")"
+      "Bash(echo \"=== Remaining htmlShareToken ===\" grep -rn \"user\\\\.htmlShareToken\\\\|\\\\.htmlShareToken\\\\b\" /home/tabor/github/Tree/land/ --include=\"*.js\")",
+      "Bash(echo \"=== Old field refs in HTML renderers ===\" grep -rn \"\\\\.availableEnergy\\\\|\\\\.additionalEnergy\\\\|\\\\.storageUsage\\\\|\\\\.apiKeys\\\\|\\\\.planExpiresAt\\\\|\\\\.rawIdeaAutoPlace\\\\|\\\\.llmAssignments\\\\|\\\\.htmlShareToken\\\\|\\\\.email\\\\b\\\\|\\\\.visibility\\\\b\\\\|\\\\.dreamTime\\\\|\\\\.lastDreamAt\\\\|\\\\.versions\\\\[\" /home/tabor/github/Tree/land/routes/api/html/ --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

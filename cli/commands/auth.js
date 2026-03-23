@@ -73,7 +73,7 @@ async function saveLogin(cfg, apiKey) {
  */
 async function createCliApiKey(cfg, token, userId, username) {
   try {
-    const keyData = await jwtPost(token, `/user/${userId}/api-keys`, { name: "treeos-cli" });
+    const keyData = await jwtPost(token, `/user/${userId}/api-keys`, { name: "treeos-cli", revokeOld: true });
     return await saveLogin(cfg, keyData.apiKey);
   } catch (e) {
     // api-keys extension not loaded, or key creation failed. Use JWT directly.
