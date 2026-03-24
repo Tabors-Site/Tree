@@ -1,4 +1,5 @@
 import log from "../core/log.js";
+import { getLandConfigValue } from "../core/landConfig.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -113,6 +114,7 @@ export function setExtensionNamesProvider(fn) {
 export function getLandInfoPayload() {
   const identity = getLandIdentity();
   const baseUrl = process.env.LAND_BASE_URL || getLandUrl();
+  const timezone = getLandConfigValue("timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return {
     landId: identity.landId,
@@ -122,6 +124,7 @@ export function getLandInfoPayload() {
     protocolVersion: identity.protocolVersion,
     baseUrl,
     siteUrl: process.env.LAND_SITE_URL || null,
+    timezone,
     capabilities: ["invite", "proxy", "notify", "public-trees", "llm-proxy"],
     extensions: _getExtNames ? _getExtNames() : [],
   };

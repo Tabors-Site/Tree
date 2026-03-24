@@ -2,6 +2,7 @@
 // Central mode registry: defines all modes, their tools, and switching logic
 
 import log from "../../core/log.js";
+import { getLandConfigValue } from "../../core/landConfig.js";
 import { resolveTools } from "../tools.js";
 
 // ── HOME sub-modes ──────────────────────────────────────────────────────
@@ -215,11 +216,32 @@ export function unregisterModes(extName) {
 /**
  * Build the system prompt for a mode, given context.
  * ctx = { username, userId, rootId }
+ * Injects current time (land timezone) into every prompt automatically.
  */
 export function buildPromptForMode(modeKey, ctx) {
   const mode = ALL_MODES[modeKey];
   if (!mode) throw new Error(`Unknown mode: ${modeKey}`);
-  return mode.buildSystemPrompt(ctx);
+  const basePrompt = mode.buildSystemPrompt(ctx);
+
+  // Inject current time using the land's configured timezone
+  const tz = getLandConfigValue("timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  let timeStr;
+  try {
+    timeStr = new Date().toLocaleString("en-US", {
+      timeZone: tz,
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
+  } catch {
+    timeStr = new Date().toISOString();
+  }
+
+  return `${basePrompt}\n\nCurrent time: ${timeStr}`;
 }
 
 /**

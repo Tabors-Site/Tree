@@ -75,23 +75,25 @@ module.exports = (program) => {
       }
     });
 
-  program
-    .command("tags")
-    .alias("mail")
-    .description("List notes where you've been @tagged by other users")
-    .action(async () => {
-      const cfg = requireAuth();
-      const api = getApi(cfg);
-      try {
-        const data = await api.listUserTags(cfg.userId);
-        const tags = data.notes || data || [];
-        if (!Array.isArray(tags) || !tags.length)
-          return console.log(chalk.dim("  (no tags)"));
-        printNotes(tags);
-      } catch (e) {
-        console.error(chalk.red(e.message));
-      }
-    });
+  if (hasExtension(cfg, "user-queries")) {
+    program
+      .command("tags")
+      .alias("mail")
+      .description("List notes where you've been @tagged by other users")
+      .action(async () => {
+        const cfg = requireAuth();
+        const api = getApi(cfg);
+        try {
+          const data = await api.listUserTags(cfg.userId);
+          const tags = data.notes || data || [];
+          if (!Array.isArray(tags) || !tags.length)
+            return console.log(chalk.dim("  (no tags)"));
+          printNotes(tags);
+        } catch (e) {
+          console.error(chalk.red(e.message));
+        }
+      });
+  } // end user-queries gate for tags
 
   program
     .command("rm-note [noteId]")
@@ -136,6 +138,7 @@ module.exports = (program) => {
     });
   } // end book extension
 
+  if (hasExtension(cfg, "user-queries")) {
   program
     .command("contributions")
     .description("List contributions (user at home, node in a tree). -v version")
@@ -160,6 +163,7 @@ module.exports = (program) => {
         console.error(chalk.red(e.message));
       }
     });
+  } // end user-queries gate for contributions
 
   if (hasExtension(cfg, "values")) {
   program
