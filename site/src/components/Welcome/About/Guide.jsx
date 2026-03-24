@@ -151,6 +151,12 @@ const Guide = () => {
             Publish your own: <code>treeos ext publish my-extension</code>.
           </P>
           <P>
+            Extensions that write to metadata should declare a <code>schemaVersion</code> and
+            provide a <code>migrations.js</code> file. When the extension updates its data shape,
+            the loader runs pending migrations at boot. This is what protects user data over
+            years of updates. Never ship a metadata format change without a migration.
+          </P>
+          <P>
             <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.8)" }}>Full extension docs</a>
           </P>
         </Section>

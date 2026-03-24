@@ -366,6 +366,98 @@ Extensions define their own hooks using the `extName:hookName` naming convention
 - Max 100 handlers per hook.
 - Hooks auto-unregister when an extension is disabled via `hooks.unregister(extName)`.
 
+## Data Migrations
+
+Extensions store data in `node.metadata` and `user.metadata`. This data is freeform. No schema validation at the DB layer. This is intentional: it keeps the system flexible.
+
+But over time, extensions change. A v1 extension stores `metadata.myExt = { count: 5 }`. Version 2 restructures to `metadata.myExt = { stats: { count: 5, total: 100 } }`. Existing nodes in the database still have the v1 shape. Without migrations, the extension breaks on old data.
+
+**Every extension that writes to metadata should declare a schema version and provide migrations.** This is not optional for production extensions. It is what protects user data over years of updates.
+
+### Declaring migrations
+
+In `manifest.js`:
+
+```js
+provides: {
+  schemaVersion: 2,          // Current version of your data shape
+  migrations: "./migrations.js",  // Migration functions
+}
+```
+
+In `migrations.js`:
+
+```js
+import Node from "../../db/models/node.js";
+
+export default [
+  {
+    version: 1,
+    async up() {
+      // v0 -> v1: move flat values into nested structure
+      const nodes = await Node.find({ "metadata.myExt": { $exists: true } }).select("metadata");
+      for (const node of nodes) {
+        const old = node.metadata.get("myExt");
+        if (old && !old.stats) {
+          node.metadata.set("myExt", { stats: { count: old.count || 0 } });
+          node.markModified("metadata");
+          await node.save();
+        }
+      }
+    },
+  },
+  {
+    version: 2,
+    async up() {
+      // v1 -> v2: add total field with default
+      const nodes = await Node.find({ "metadata.myExt.stats": { $exists: true } }).select("metadata");
+      for (const node of nodes) {
+        const data = node.metadata.get("myExt");
+        if (data?.stats && data.stats.total === undefined) {
+          data.stats.total = 0;
+          node.metadata.set("myExt", data);
+          node.markModified("metadata");
+          await node.save();
+        }
+      }
+    },
+  },
+];
+```
+
+### How it works
+
+1. The loader reads `schemaVersion` from your manifest (e.g. `2`)
+2. It checks the `.extensions` system node for your extension's stored version (e.g. `1`)
+3. If stored < declared, it loads your `migrations.js` and runs pending migrations in order
+4. After all migrations succeed, it updates the stored version to match
+5. If a migration fails, it stops and logs the error. Your extension still loads but data may be inconsistent.
+
+### Rules
+
+- **Migrations run once.** The stored version tracks what has run. Re-running boot does not re-run old migrations.
+- **Migrations run at boot, before your extension's `init()`.** Your code can assume the data is at the current version.
+- **Never delete migrations.** Someone upgrading from v1 to v5 needs all intermediate migrations.
+- **Test migrations on real data.** A migration that works on 10 nodes might fail on 10,000.
+- **Version 0 is implicit.** If you never declared schemaVersion before, existing data is version 0.
+- **User metadata follows the same pattern.** Use `User.find()` in migrations to update user data.
+
+### When to add a migration
+
+- You renamed a metadata key
+- You restructured nested data
+- You changed value types (string to number, flat to array)
+- You split one key into multiple keys
+- You need to backfill a new required field with defaults
+
+### When you don't need a migration
+
+- You added a new optional key (code handles `undefined` gracefully)
+- You read but don't write to a key
+- Your data shape hasn't changed, just your code logic
+
+This is the most important thing you can do for long-term data integrity. Extensions that don't migrate will break on existing data when they update. Extensions that do migrate will work for decades.
+
 ## Environment Variables
 
 Extensions can declare environment variables they need. The loader checks these before calling `init()`. Missing required vars cause the extension to be skipped with a clear message.

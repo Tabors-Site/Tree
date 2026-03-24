@@ -151,7 +151,8 @@
       "Bash(grep -r \"energyUsed.*null\\\\|energyUsed.*0\" /home/tabor/github/Tree/land --include=*.js --exclude-dir=node_modules)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost/api/v1/uploads/0gn8eelm1.png)",
       "Bash(echo \"=== Rate limiting on API? ===\" grep -rn \"rateLimit\\\\|rate.limit\\\\|throttle\" land/middleware/ land/routes/ --include=\"*.js\")",
-      "Read(//home/tabor/github/Tree/=== Request ID /**)"
+      "Read(//home/tabor/github/Tree/=== Request ID /**)",
+      "Bash(grep -r \"tools.*allow\\\\|tools.*block\\\\|tools.*clear\\\\|mode.*set\\\\|mode.*clear\" /home/tabor/github/Tree/land/routes --include=*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
