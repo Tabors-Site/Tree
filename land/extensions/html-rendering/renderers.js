@@ -9,4 +9,5 @@ export * from "./html/chat.js";
 export * from "./html/contributions.js";
 export * from "./html/root.js";
 export * from "./html/query.js";
+export * from "./html/canopy.js";
 

@@ -6,13 +6,13 @@ import path from "path";
 import mime from "mime-types";
 import { getLandUrl } from "../../../canopy/identity.js";
 import { getUserMeta } from "../../../core/tree/userMetadata.js";
-import { baseStyles, backNavStyles, glassHeaderStyles, glassCardStyles, emptyStateStyles, responsiveBase } from "../../../shared/html/baseStyles.js";
+import { baseStyles, backNavStyles, glassHeaderStyles, glassCardStyles, emptyStateStyles, responsiveBase } from "./baseStyles.js";
 import {
   esc, escapeHtml, truncate, formatTime, formatDuration,
   actionColorClass, actionColorHex, actionLabel,
   renderMedia as _renderMedia,
   groupIntoChains, modeLabel, sourceLabel,
-} from "../../../shared/html/utils.js";
+} from "./utils.js";
 
 // user.js always renders immediately (no lazy loading)
 const renderMedia = (fileUrl, mimeType) => _renderMedia(fileUrl, mimeType, { lazy: false });

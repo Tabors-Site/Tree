@@ -34,7 +34,6 @@ import Node from "../db/models/node.js";
 import Invite from "../db/models/invite.js";
 import authenticate from "../middleware/authenticate.js";
 import { getExtension } from "../extensions/loader.js";
-import { renderCanopyAdmin, renderCanopyInvites, renderCanopyDirectory } from "../canopy/html.js";
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
 import { isPrivateHost } from "../canopy/security.js";
 
@@ -1111,6 +1110,8 @@ router.get("/canopy/admin", authenticate, requireAdmin, async (req, res) => {
     const failedEvents = await getFailedEvents();
     const land = getLandInfoPayload();
 
+    const renderCanopyAdmin = getExtension("html-rendering")?.exports?.renderCanopyAdmin;
+    if (!renderCanopyAdmin) return res.status(404).json({ error: "html-rendering extension not available." });
     const page = renderCanopyAdmin({ land, peers, pendingEvents, failedEvents });
     res.send(page);
   } catch (err) {
@@ -1165,6 +1166,8 @@ router.get("/canopy/admin/invites", authenticate, requireAdmin, async (req, res)
       isOwner: t.rootOwner === req.userId,
     }));
 
+    const renderCanopyInvites = getExtension("html-rendering")?.exports?.renderCanopyInvites;
+    if (!renderCanopyInvites) return res.status(404).json({ error: "html-rendering extension not available." });
     const page = renderCanopyInvites({ invites, remoteUsers, localTrees });
     res.send(page);
   } catch (err) {
@@ -1183,6 +1186,8 @@ router.get("/canopy/admin/directory", authenticate, requireAdmin, async (req, re
 
   try {
     const hasDirectory = !!process.env.DIRECTORY_URL;
+    const renderCanopyDirectory = getExtension("html-rendering")?.exports?.renderCanopyDirectory;
+    if (!renderCanopyDirectory) return res.status(404).json({ error: "html-rendering extension not available." });
     const page = renderCanopyDirectory({ hasDirectory });
     res.send(page);
   } catch (err) {

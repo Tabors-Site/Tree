@@ -2,7 +2,7 @@
 /* HTML renderers for solana wallet pages              */
 /* ------------------------------------------------- */
 
-import { baseStyles } from "../../shared/html/baseStyles.js";
+import { baseStyles } from "../html-rendering/html/baseStyles.js";
 
 export function renderSolanaNoWallet({
   nodeId,

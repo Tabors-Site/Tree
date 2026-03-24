@@ -2,8 +2,8 @@
 /* HTML renderers for root.js pages                   */
 /* ------------------------------------------------- */
 
-import { baseStyles, backNavStyles, responsiveBase } from '../../../shared/html/baseStyles.js';
-import { escapeHtml, rainbow } from '../../../shared/html/utils.js';
+import { baseStyles, backNavStyles, responsiveBase } from './baseStyles.js';
+import { escapeHtml, rainbow } from './utils.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // 1. renderRootOverview

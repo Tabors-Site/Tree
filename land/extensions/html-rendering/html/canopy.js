@@ -2,8 +2,8 @@
 /* HTML renderers for Canopy admin pages              */
 /* ------------------------------------------------- */
 
-import { baseStyles } from "../shared/html/baseStyles.js";
-import { escapeHtml, truncateRaw as truncate, timeAgo } from "../shared/html/utils.js";
+import { baseStyles } from "./baseStyles.js";
+import { escapeHtml, truncateRaw as truncate, timeAgo } from "./utils.js";
 
 function statusColor(status) {
   switch (status) {

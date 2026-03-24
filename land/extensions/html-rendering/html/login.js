@@ -1,5 +1,5 @@
 import { getLandUrl } from "../../../canopy/identity.js";
-import { baseStyles } from "../../../shared/html/baseStyles.js";
+import { baseStyles } from "./baseStyles.js";
 
 export function renderLoginPage(req, res) {
   const redirect = req.query.redirect || "";

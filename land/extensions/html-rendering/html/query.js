@@ -8,7 +8,7 @@
 /* the * reset overlaps, which is not worth the       */
 /* import + override cost.                            */
 
-import { escapeHtml } from "../../../shared/html/utils.js";
+import { escapeHtml } from "./utils.js";
 
 export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailable, isAuthenticated }) {
   return `<!DOCTYPE html>
