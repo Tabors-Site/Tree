@@ -167,7 +167,7 @@ export default function createRouter(core) {
       }
 
       const user = await User.findById(userId).lean();
-      return res.send(html().renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
+      return res.send(await html().renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/contributions:", err);
       res.status(400).json({ error: err.message });

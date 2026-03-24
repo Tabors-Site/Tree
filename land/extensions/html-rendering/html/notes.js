@@ -1184,7 +1184,7 @@ document.getElementById("deleteConfirmBtn").onclick = async function() {
     }
 
     navigatingAway = true;
-    window.location.href = "/api/v1/" + nodeId + "/" + version + "/notes" + qs;
+    window.location.href = "/api/v1/node/" + nodeId + "/notes" + qs;
 
   } catch (err) {
     closeDeleteModal();

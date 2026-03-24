@@ -1570,7 +1570,7 @@ value="${escapeHtml(query)}"
       const qs = token ? "?token=" + encodeURIComponent(token) : "";
 
       try {
-        const url = "/api/v1/" + nodeId + "/" + version + "/notes/" + noteId + qs;
+        const url = "/api/v1/node/" + nodeId + "/notes/" + noteId + qs;
 
         const res = await fetch(url, { method: "DELETE" });
 
