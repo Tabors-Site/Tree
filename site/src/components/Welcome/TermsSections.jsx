@@ -1,6 +1,8 @@
 
 import "./TermsSection.css";
 
+const LAND_NAME = import.meta.env.VITE_LAND_NAME || "TreeOS";
+
 const TermsSection = () => {
   return (
     <div className="terms-docs">
@@ -17,9 +19,9 @@ const TermsSection = () => {
         <div className="tos-section">
           <div className="tos-section-title">1. Overview</div>
           <div className="tos-section-text">
-            Welcome to TreeOS ("Service", "we", "us", or "our"). By accessing or using the Service at {new URL(import.meta.env.VITE_LAND_URL).hostname}, you agree to these Terms of Service ("Terms"). If you do not agree, please do not use the Service.
+            Welcome to {LAND_NAME} ("Service", "we", "us", or "our"). By accessing or using the Service at {new URL(import.meta.env.VITE_LAND_URL).hostname}, you agree to these Terms of Service ("Terms"). If you do not agree, please do not use the Service.
             <br /><br />
-            TreeOS is a web-based platform that provides digital organizational features including trees, notes, and usage-based energy credits. All purchases grant access to features within the Service and do not represent ownership of any real-world asset.
+            {LAND_NAME} is a web-based platform that provides digital organizational features including trees, notes, and usage-based energy credits. All purchases grant access to features within the Service and do not represent ownership of any real-world asset.
             <br /><br />
             You must be at least 18 years old to use the Service.
           </div>
@@ -164,7 +166,7 @@ const TermsSection = () => {
           <div className="tos-section-text">
             If you have questions about these Terms, contact us:
             <br /><br />
-            <strong>TreeOS</strong><br />
+            <strong>{LAND_NAME}</strong><br />
             Email: treeffiency@gmail.com<br />
             Website: {new URL(import.meta.env.VITE_LAND_URL).hostname}
           </div>

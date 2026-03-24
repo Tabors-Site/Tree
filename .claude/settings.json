@@ -167,7 +167,8 @@
       "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo '--- goal strength 50 ---' node cli/index.js goal strength 50 2)",
       "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- complete ---\" node cli/index.js complete 2)",
       "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- rm ---\" node cli/index.js cd .. 2)",
-      "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- calendar ---\" node cli/index.js calendar)"
+      "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- calendar ---\" node cli/index.js calendar)",
+      "Bash(find /home/tabor/github/Tree/land/routes -name *.js -type f)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

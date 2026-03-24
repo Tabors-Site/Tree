@@ -442,11 +442,11 @@ const LandingPage = () => {
               <a href="/ai">AI Architecture</a>
               <a href="/decentralized">The Network</a>
               <a href="/guide">Full Guide</a>
+              <a href="/blog">Blog</a>
             </div>
             <div className="lp-footer-col">
               <h4>Network</h4>
               <a href="https://dir.treeos.ai">Directory</a>
-              <a href="/blog">Blog</a>
             </div>
             <div className="lp-footer-col">
               <h4>Source</h4>

@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import "./PrivacySection.css";
 
+const LAND_NAME = import.meta.env.VITE_LAND_NAME || "TreeOS";
+
 const PrivacySection = () => {
   return (
     <div className="privacy-docs">
@@ -17,7 +19,7 @@ const PrivacySection = () => {
         <div className="prv-section">
           <div className="prv-section-title">1. Introduction</div>
           <div className="prv-section-text">
-            This Privacy Policy explains how TreeOS ("Service", "we", "us", or "our") at {new URL(import.meta.env.VITE_LAND_URL).hostname} collects, uses, stores, and protects your information when you use the Service.
+            This Privacy Policy explains how {LAND_NAME} ("Service", "we", "us", or "our") at {new URL(import.meta.env.VITE_LAND_URL).hostname} collects, uses, stores, and protects your information when you use the Service.
             <br /><br />
             By using the Service, you consent to the data practices described in this policy. If you do not agree, please do not use the Service.
           </div>
@@ -217,7 +219,7 @@ const PrivacySection = () => {
           <div className="prv-section-text">
             If you have questions about this Privacy Policy or wish to exercise your rights, contact us:
             <br /><br />
-            <strong>TreeOS</strong><br />
+            <strong>{LAND_NAME}</strong><br />
             Email: treeffiency@gmail.com<br />
             Website: {new URL(import.meta.env.VITE_LAND_URL).hostname}
           </div>
