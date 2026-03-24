@@ -31,6 +31,7 @@ const STATIC_ROUTES = [
   "/guide",
   "/decentralized",
   "/ai",
+  "/kernel",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -52,6 +53,10 @@ const PAGE_META = {
   "/ai": {
     title: "AI Architecture . How AI Works in TreeOS",
     description: "Three zones, per-node tools and modes, custom orchestrators. The AI stack from simple configuration to full replacement. Build any AI product on TreeOS.",
+  },
+  "/kernel": {
+    title: "The Kernel . What Runs When Everything Else Is Stripped Away",
+    description: "Two schemas, five system nodes, 17 config keys, self-healing background jobs, and 14 hardening measures. The part of TreeOS that cannot change.",
   },
   "/about": {
     title: "About - TreeOS",

@@ -14,6 +14,7 @@ import ExtensionsAbout from "./About/ExtensionsAbout.jsx";
 import LandingPage from "./Landing/LandingPage.jsx";
 import DecentralizedPage from "./Landing/DecentralizedPage.jsx";
 import AIArchitecturePage from "./Landing/AIArchitecturePage.jsx";
+import KernelPage from "./Landing/KernelPage.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 
@@ -36,6 +37,7 @@ const WelcomeRoutes = () => {
       {/* Decentralized / federation page */}
       <Route path="/decentralized" element={<DecentralizedPage />} />
       <Route path="/ai" element={<AIArchitecturePage />} />
+      <Route path="/kernel" element={<KernelPage />} />
 
       {/* Original app welcome (treeos.ai example) */}
       <Route path="/app" element={<WelcomePage />} />

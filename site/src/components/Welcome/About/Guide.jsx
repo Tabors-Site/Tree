@@ -122,13 +122,25 @@ const Guide = () => {
           </P>
           <P>
             <strong>Extension scoping</strong> (what CAPABILITIES exist): block or restrict
-            entire extensions per node. <code>ext-block solana</code> removes all solana
-            tools, hooks, and modes from that branch. <code>ext-restrict food read</code> limits
-            food to read-only tools. A Health tree can have fitness and food extensions
-            that see each other's data but can't write to each other's branches. The
-            kernel filters tools using the <code>readOnlyHint</code> annotation every tool
-            already declares. CLI: <code>ext-scope</code>, <code>ext-block</code>,
-            <code>ext-allow</code>, <code>ext-restrict</code>.
+            entire extensions per node. A Health tree with fitness and food extensions
+            can restrict each to read-only on the other's branch. The fitness coach
+            references your nutrition data while planning workouts but can't create food
+            nodes. The food coach sees your exercise history but can't modify workouts.
+            Same extensions, different access, based on where you stand.
+          </P>
+          <Code>{`treeos cd Health/Fitness
+treeos ext-restrict food read       # food can see but not write here
+
+treeos cd Health/Food
+treeos ext-restrict fitness read    # fitness can see but not write here
+
+treeos ext-block solana             # no wallets anywhere on this branch`}</Code>
+          <P>
+            Three levels: <strong>active</strong> (full access),
+            <strong> restricted</strong> (read-only tools only),
+            <strong> blocked</strong> (nothing). The kernel filters using
+            the <code>readOnlyHint</code> annotation every tool already declares.
+            No manual tool lists needed.
           </P>
         </Section>
 

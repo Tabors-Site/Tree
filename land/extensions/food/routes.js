@@ -23,6 +23,12 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
       return res.status(403).json({ error: "No access to this tree" });
     }
 
+    // Check spatial scope: is food blocked at this position?
+    const { isExtensionBlockedAtNode } = await import("../../core/tree/extensionScope.js");
+    if (await isExtensionBlockedAtNode("food", rootId)) {
+      return res.status(403).json({ error: "Food tracking is blocked on this branch. Navigate to a branch where food is active." });
+    }
+
     const user = await User.findById(userId).select("username").lean();
     const { runChat } = await import("../../ws/conversation.js");
 

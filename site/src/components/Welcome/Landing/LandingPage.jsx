@@ -63,14 +63,19 @@ const LandingPage = () => {
             <div className="lp-card">
               <h3>The Kernel</h3>
               <p>
-                Trees, nodes, notes (text or file), and the AI conversation loop.
+                Two schemas, five system nodes, and the AI conversation loop.
                 The minimum structure an agent needs to live somewhere persistent.
-                Navigate with <code>cd</code> and <code>ls</code>. Build with <code>mkdir</code>.
-                Six node types tell agents what they are looking at.
-                Per-node tools, modes, and timeouts let tree owners control AI behavior
-                at every branch. 11 kernel config keys tunable from the land's .config node.
-                Extensions add values, schedules, scripts, and more through metadata.
+                17 config keys tunable from the land's .config node. Self-healing
+                background jobs. Circuit breakers, depth limits, size guards.
+                The part that never changes.
               </p>
+              <div style={{textAlign: "center", marginTop: 16}}>
+                <a href="/kernel" style={{
+                  color: "#f97316", fontSize: "0.95rem", fontWeight: 600,
+                  textDecoration: "none", borderBottom: "1px solid rgba(249, 115, 22, 0.3)",
+                  paddingBottom: 2,
+                }}>Inside the kernel</a>
+              </div>
             </div>
             <div className="lp-card">
               <h3>Extensions</h3>
@@ -302,6 +307,54 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ── SPATIAL SCOPING EXAMPLE ── */}
+      <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Position Is Everything</h2>
+          <p className="lp-section-sub">
+            Navigate somewhere and the world changes. Each node in the tree controls
+            what extensions are active, what tools the AI has, and how it thinks.
+            Block an extension on a branch and it disappears for that entire subtree.
+            Restrict it to read-only and it can see but not touch.
+          </p>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line lp-term-output lp-term-dim">  # A Health tree with two branches, two extensions</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>cd Fitness</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>ext-restrict food read</div>
+              <div className="lp-term-line lp-term-output lp-term-green">  Restricted food to read at this node.</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Its write tools are filtered. Read tools and hooks still work.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>fitness "bench 135x10x10x8"</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-output">  Got it. Bench: 135x10/10/8. Archived.</div>
+              <div className="lp-term-line lp-term-output">  You're up from 130 last session. Nice progression.</div>
+              <div className="lp-term-line lp-term-output">  Next up: Overhead Press.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>cd ../Food</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Food</span> <span className="lp-term-caret">› </span>food "i had eggs and toast for breakfast"</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-output">  Logged. Eggs (2): 144 cal, 12g protein. Toast: 80 cal, 3g protein.</div>
+              <div className="lp-term-line lp-term-output">  Today so far: 224 / 2,000 cal. 15g protein. You've got room.</div>
+            </div>
+          </div>
+
+          <p style={{ textAlign: "center", color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", marginTop: 20 }}>
+            The fitness coach can reference your nutrition data (it's read-only there).
+            The food coach can't create workout nodes. Each branch controls its own capabilities.
+            Same extensions, different access, based on where you are.
+          </p>
+        </div>
+      </section>
+
       {/* ── FOR DIFFERENT AUDIENCES ── */}
       <section className="lp-section">
         <div className="lp-container">
@@ -443,6 +496,7 @@ const LandingPage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>Explore</h4>
+              <a href="/kernel">The Kernel</a>
               <a href="/ai">AI Architecture</a>
               <a href="/decentralized">The Network</a>
               <a href="/guide">Full Guide</a>
