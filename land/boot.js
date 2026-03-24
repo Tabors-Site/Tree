@@ -74,6 +74,7 @@ DIRECTORY_URL=${values.DIRECTORY_URL}
 
 # Vite (site/ build)
 VITE_LAND_URL=${landUrl}
+VITE_LAND_NAME=${values.LAND_NAME}
 VITE_TREE_API_URL=${landUrl}/api/v1
 `;
 }
