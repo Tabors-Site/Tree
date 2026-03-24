@@ -4,6 +4,7 @@ import { ensureLandRoot } from "./core/landRoot.js";
 import { initLandConfig } from "./core/landConfig.js";
 import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames } from "./extensions/loader.js";
 import { startUploadCleanup } from "./core/tree/uploadCleanup.js";
+import { startRetentionJob } from "./core/tree/dataRetention.js";
 import { getBlockedExtensionsAtNode } from "./core/tree/extensionScope.js";
 import { hooks } from "./core/hooks.js";
 import { syncExtensionsToTree } from "./core/landRoot.js";
@@ -94,11 +95,16 @@ export function onListen() {
     await runExtensionMigrations();
 
     // Wire spatial extension scoping into hook system
-    hooks.setScopeResolver(getBlockedExtensionsAtNode);
+    // Hooks only need blocked set (restricted extensions still fire hooks, just with limited tools)
+    hooks.setScopeResolver(async (nodeId) => {
+      const { blocked } = await getBlockedExtensionsAtNode(nodeId);
+      return blocked;
+    });
 
     startExtensionJobs();
     startUploadCleanup();
-    log.verbose("Land", "Background jobs started");
+    startRetentionJob();
+    log.verbose("Land", "Background jobs started (includes daily data retention)");
 
     startHeartbeatJob();
     startOutboxJob();

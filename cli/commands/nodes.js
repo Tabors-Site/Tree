@@ -566,6 +566,36 @@ module.exports = (program) => {
       }
     });
 
+  program
+    .command("ext-restrict <extName> [access]")
+    .description("Restrict an extension to read-only at the current node. Usage: ext-restrict food read")
+    .action(async (extName, access) => {
+      if (!extName) return console.log(chalk.yellow("Usage: ext-restrict <ext> [read]"));
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const mode = access || "read";
+        const current = await api.get(`/node/${nodeId}/extensions`);
+        const existing = {};
+        for (const c of current.chain || []) {
+          if (c.nodeId === nodeId && c.restricted) Object.assign(existing, c.restricted);
+        }
+        existing[extName] = mode;
+        // Get existing blocked too
+        const existingBlocked = [];
+        for (const c of current.chain || []) {
+          if (c.nodeId === nodeId) existingBlocked.push(...(c.blocked || []));
+        }
+        await api.post(`/node/${nodeId}/extensions`, { blocked: existingBlocked, restricted: existing });
+        console.log(chalk.green(`Restricted ${extName} to ${mode} at this node.`));
+        console.log(chalk.dim("Its write tools are filtered. Read tools and hooks still work."));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
   // ── Per-node mode overrides ──
   program
     .command("modes")

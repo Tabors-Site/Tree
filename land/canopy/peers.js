@@ -252,7 +252,12 @@ export async function pingPeer(peer) {
     if (peer.consecutiveFailures >= UNREACHABLE_THRESHOLD) {
       const daysSinceFirst =
         (Date.now() - peer.firstFailureAt.getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSinceFirst >= DEAD_THRESHOLD_DAYS) {
+      if (daysSinceFirst >= DEAD_THRESHOLD_DAYS * 3) {
+        // 90+ days dead: auto-remove
+        await peer.deleteOne();
+        log.info("Canopy", `Peer ${peer.domain} auto-removed (${Math.floor(daysSinceFirst)} days unreachable)`);
+        return false;
+      } else if (daysSinceFirst >= DEAD_THRESHOLD_DAYS) {
         peer.status = "dead";
         log.verbose("Canopy", `Peer ${peer.domain} marked as dead (${DEAD_THRESHOLD_DAYS}+ days unreachable)`);
       } else {

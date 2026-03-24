@@ -649,13 +649,15 @@ export async function processMessage(visitorId, message, ctx) {
   // Get tools for current mode (with per-node tool config + spatial extension scoping)
   let treeToolConfig = null;
   let blockedExtensions = null;
+  let restrictedExtensions = null;
   const currentNodeId = session.currentNodeId || session.rootId;
   if (currentNodeId) {
     try {
-      // Walk from current node up to root, merging tool configs + blocked extensions
+      // Walk from current node up to root, merging tool configs + extension scoping
       const allowed = new Set();
       const blocked = new Set();
       const blockedExts = new Set();
+      const restrictedExts = new Map(); // extName -> access mode ("read")
       let cursor = currentNodeId;
       const visited = new Set();
       while (cursor && !visited.has(cursor)) {
@@ -667,6 +669,11 @@ export async function processMessage(visitorId, message, ctx) {
         if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
         // Spatial extension scoping
         if (meta.extensions?.blocked) for (const e of meta.extensions.blocked) blockedExts.add(e);
+        if (meta.extensions?.restricted) {
+          for (const [e, access] of Object.entries(meta.extensions.restricted)) {
+            if (!blockedExts.has(e) && !restrictedExts.has(e)) restrictedExts.set(e, access);
+          }
+        }
         cursor = n.parent;
       }
       if (allowed.size || blocked.size) {
@@ -676,13 +683,14 @@ export async function processMessage(visitorId, message, ctx) {
         };
       }
       if (blockedExts.size) blockedExtensions = blockedExts;
+      if (restrictedExts.size) restrictedExtensions = restrictedExts;
     } catch {}
   }
   let tools = getToolsForMode(session.modeKey, treeToolConfig);
-  // Filter out tools from spatially blocked extensions
-  if (blockedExtensions) {
+  // Filter tools by spatial extension scope (blocked + restricted)
+  if (blockedExtensions || restrictedExtensions) {
     const { filterToolsByScope } = await import("../core/tree/extensionScope.js");
-    tools = filterToolsByScope(tools, blockedExtensions);
+    tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
   }
 
   // Tool calling loop

@@ -564,7 +564,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         const { z } = await import("zod");
 
         for (const tool of instance.tools) {
-          registerToolOwner(tool.name, name);
+          registerToolOwner(tool.name, name, tool.annotations?.readOnlyHint ?? false);
           mcpServer.tool(
             tool.name,
             tool.description,

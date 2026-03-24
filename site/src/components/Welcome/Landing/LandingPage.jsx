@@ -257,6 +257,10 @@ const LandingPage = () => {
           </p>
 
           <div className="lp-ext-groups">
+            <ExtGroup title="Health" items={[
+              { name: "fitness", desc: "Workout coaching and tracking" },
+              { name: "food", desc: "Calorie and macro tracking" },
+            ]} />
             <ExtGroup title="AI and Knowledge" items={[
               { name: "understanding", desc: "Bottom-up tree compression" },
               { name: "dreams", desc: "Daily background maintenance", href: "/about/dreams" },

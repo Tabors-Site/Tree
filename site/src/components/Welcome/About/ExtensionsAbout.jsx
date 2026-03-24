@@ -207,6 +207,8 @@ if (other?.exports?.myFunction) {
           </div>
           <div className="ext-grid">
             {[
+              { name: "fitness", desc: "Personal fitness coaching, workout programming, and exercise tracking" },
+              { name: "food", desc: "Calorie and macro tracking, meal planning, and nutritional coaching" },
               { name: "tree-orchestrator", desc: "Chat/place/query conversation AI with planning and multi-step execution" },
               { name: "html-rendering", desc: "Server-rendered HTML pages, share token auth, and page registration API for other extensions" },
               { name: "understanding", desc: "Bottom-up tree compression with LLM summarization" },

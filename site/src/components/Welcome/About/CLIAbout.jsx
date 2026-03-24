@@ -292,6 +292,17 @@ const CLIAbout = () => {
         {/* ── BLOG ── */}
         <div className="cli-section">
           <div className="cli-section-title">
+            <span className="cli-section-icon">💪</span> Health
+          </div>
+          <div className="cli-section-text" style={{ marginBottom: 14 }}>
+            Fitness coaching and food tracking. Each uses custom AI modes with domain-specific prompts.
+          </div>
+          <CmdRow cmd="fitness [message]" desc="Talk to your fitness coach. Plans workouts, logs exercises, tracks progress." />
+          <CmdRow cmd="food [message]" desc="Talk to your food coach. Logs meals, tracks macros, plans nutrition." />
+        </div>
+
+        <div className="cli-section">
+          <div className="cli-section-title">
             <span className="cli-section-icon">📰</span> Blog
           </div>
           <div className="cli-section-text" style={{ marginBottom: 14 }}>

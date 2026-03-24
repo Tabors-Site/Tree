@@ -41,7 +41,7 @@ export async function isExtensionBlockedAtNode(extName, nodeId) {
     return cached.blocked;
   }
 
-  const blockedSet = await getBlockedExtensionsAtNode(nodeId);
+  const { blocked: blockedSet } = await getBlockedExtensionsAtNode(nodeId);
   const blocked = blockedSet.has(extName);
 
   _cache.set(key, { blocked, time: Date.now() });
@@ -49,14 +49,20 @@ export async function isExtensionBlockedAtNode(extName, nodeId) {
 }
 
 /**
- * Get the full set of blocked extensions at a node position.
- * Walks parent chain, accumulates all blocked extensions.
+ * Get blocked and restricted extensions at a node position.
+ * Walks parent chain, accumulates.
+ *
+ * blocked: extension is fully disabled (no tools, hooks, modes, metadata)
+ * restricted: extension has limited access (e.g. "read" = read-only tools only)
+ *
+ * Restricted is overridden by blocked (if a parent blocks and a child restricts, blocked wins).
  *
  * @param {string} nodeId
- * @returns {Promise<Set<string>>}
+ * @returns {Promise<{ blocked: Set<string>, restricted: Map<string,string> }>}
  */
 export async function getBlockedExtensionsAtNode(nodeId) {
   const blocked = new Set();
+  const restricted = new Map(); // extName -> access mode ("read")
   let cursor = nodeId;
   const visited = new Set();
 
@@ -70,11 +76,21 @@ export async function getBlockedExtensionsAtNode(nodeId) {
     if (extConfig?.blocked && Array.isArray(extConfig.blocked)) {
       for (const name of extConfig.blocked) blocked.add(name);
     }
+    if (extConfig?.restricted && typeof extConfig.restricted === "object") {
+      for (const [name, access] of Object.entries(extConfig.restricted)) {
+        if (!blocked.has(name) && !restricted.has(name)) {
+          restricted.set(name, access);
+        }
+      }
+    }
 
     cursor = n.parent;
   }
 
-  return blocked;
+  // Remove restricted entries that are also blocked (blocked wins)
+  for (const name of blocked) restricted.delete(name);
+
+  return { blocked, restricted };
 }
 
 /**
@@ -89,42 +105,64 @@ export function clearScopeCache() {
  * Get tool names owned by a specific extension.
  * Used to filter tools when an extension is blocked.
  */
-const _toolOwnership = new Map(); // toolName -> extName
+const _toolOwnership = new Map(); // toolName -> { extName, readOnly }
 
-export function registerToolOwner(toolName, extName) {
-  _toolOwnership.set(toolName, extName);
+/**
+ * Register a tool's owner and read-only status.
+ * Called by the loader when wiring extension tools.
+ */
+export function registerToolOwner(toolName, extName, readOnly = false) {
+  _toolOwnership.set(toolName, { extName, readOnly });
 }
 
 export function getToolOwner(toolName) {
-  return _toolOwnership.get(toolName) || null;
+  return _toolOwnership.get(toolName)?.extName || null;
 }
 
 /**
- * Filter a list of tool names, removing any owned by blocked extensions.
+ * Filter tool names by scope.
+ * Removes tools from blocked extensions.
+ * For restricted extensions (access mode "read"), only keeps read-only tools.
  *
- * @param {string[]} toolNames - tool names to filter
- * @param {Set<string>} blockedExtensions - set of blocked extension names
- * @returns {string[]} filtered tool names
+ * @param {string[]} toolNames
+ * @param {Set<string>} blockedExtensions - fully blocked
+ * @param {Map<string,string>} [restrictedExtensions] - extName -> access mode ("read")
  */
-export function filterToolNamesByScope(toolNames, blockedExtensions) {
-  if (!blockedExtensions || blockedExtensions.size === 0) return toolNames;
+export function filterToolNamesByScope(toolNames, blockedExtensions, restrictedExtensions) {
+  if ((!blockedExtensions || blockedExtensions.size === 0) && (!restrictedExtensions || restrictedExtensions.size === 0)) {
+    return toolNames;
+  }
   return toolNames.filter(name => {
-    const owner = _toolOwnership.get(name);
-    return !owner || !blockedExtensions.has(owner);
+    const info = _toolOwnership.get(name);
+    if (!info) return true; // core tool, no owner, always passes
+    if (blockedExtensions?.has(info.extName)) return false;
+    if (restrictedExtensions?.has(info.extName)) {
+      const access = restrictedExtensions.get(info.extName);
+      if (access === "read") return info.readOnly;
+    }
+    return true;
   });
 }
 
 /**
- * Filter resolved tool objects (from resolveTools), removing any owned by blocked extensions.
+ * Filter resolved tool objects by scope.
  * Tool objects have shape { type: "function", function: { name, ... } }
  */
-export function filterToolsByScope(tools, blockedExtensions) {
-  if (!blockedExtensions || blockedExtensions.size === 0) return tools;
+export function filterToolsByScope(tools, blockedExtensions, restrictedExtensions) {
+  if ((!blockedExtensions || blockedExtensions.size === 0) && (!restrictedExtensions || restrictedExtensions.size === 0)) {
+    return tools;
+  }
   return tools.filter(tool => {
     const name = tool?.function?.name || tool?.name;
     if (!name) return true;
-    const owner = _toolOwnership.get(name);
-    return !owner || !blockedExtensions.has(owner);
+    const info = _toolOwnership.get(name);
+    if (!info) return true;
+    if (blockedExtensions?.has(info.extName)) return false;
+    if (restrictedExtensions?.has(info.extName)) {
+      const access = restrictedExtensions.get(info.extName);
+      if (access === "read") return info.readOnly;
+    }
+    return true;
   });
 }
 

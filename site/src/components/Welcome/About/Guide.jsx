@@ -374,6 +374,15 @@ treeos register`}</Code>
             add your own HTML pages. Publish to the registry for others.
           </P>
           <P>
+            Example: the fitness extension registers two AI modes (coach and log),
+            one HTTP route, and one CLI command. It uses existing kernel tools
+            (create-new-node-branch, edit-node-version-value, add-node-prestige,
+            get-active-leaf-execution-frontier) with fitness-specific system prompts.
+            No custom tools needed. The intelligence is in the prompts, the structure
+            is in the tree, the tracking is in values and prestige. Five files, zero
+            kernel changes.
+          </P>
+          <P>
             <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.8)" }}>Full extension developer docs</a>
           </P>
         </Section>

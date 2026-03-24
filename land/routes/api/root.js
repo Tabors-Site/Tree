@@ -759,7 +759,7 @@ router.get("/root/:rootId/extensions", urlAuth, async (req, res) => {
 router.post("/root/:rootId/extensions", authenticate, async (req, res) => {
   try {
     const { rootId } = req.params;
-    let { blocked } = req.body;
+    let { blocked, restricted } = req.body;
 
     const node = await Node.findById(rootId);
     if (!node) return res.status(404).json({ error: "Node not found" });
@@ -767,16 +767,24 @@ router.post("/root/:rootId/extensions", authenticate, async (req, res) => {
     const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
     const { clearScopeCache } = await import("../../core/tree/extensionScope.js");
 
-    if (!Array.isArray(blocked) || blocked.length === 0) {
+    const config = {};
+    if (Array.isArray(blocked) && blocked.length > 0) {
+      config.blocked = blocked.filter(b => typeof b === "string");
+    }
+    if (restricted && typeof restricted === "object" && Object.keys(restricted).length > 0) {
+      config.restricted = restricted;
+    }
+
+    if (Object.keys(config).length === 0) {
       setExtMeta(node, "extensions", null);
     } else {
-      setExtMeta(node, "extensions", { blocked: blocked.filter(b => typeof b === "string") });
+      setExtMeta(node, "extensions", config);
     }
     await node.save();
     clearScopeCache();
 
     if ("html" in req.query) return res.redirect(`/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`);
-    res.json({ success: true, blocked: blocked || [] });
+    res.json({ success: true, ...config });
   } catch (err) {
     log.error("API", "Extension scoping error:", err.message);
     res.status(400).json({ error: err.message });

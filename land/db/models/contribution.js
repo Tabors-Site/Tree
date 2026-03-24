@@ -39,5 +39,11 @@ const ContributionSchema = new mongoose.Schema({
   extensionData: { type: mongoose.Schema.Types.Mixed },
 });
 
+// Query indexes for contributions
+ContributionSchema.index({ userId: 1, date: -1 }); // user contribution history
+ContributionSchema.index({ nodeId: 1, date: -1 }); // node contribution history
+
+// Retention handled by kernel cleanup job (configurable via land config: contributionRetentionDays, 0 = forever)
+
 const Contribution = mongoose.model("Contribution", ContributionSchema);
 export default Contribution;

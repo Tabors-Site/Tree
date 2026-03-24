@@ -9,7 +9,8 @@ const router = express.Router();
 router.post("/root/:rootId/food", authenticate, async (req, res) => {
   try {
     const { rootId } = req.params;
-    const { message } = req.body;
+    const rawMessage = req.body.message;
+    const message = Array.isArray(rawMessage) ? rawMessage.join(" ") : rawMessage;
     if (!message) return res.status(400).json({ error: "message required" });
 
     const root = await Node.findById(rootId).select("rootOwner contributors").lean();

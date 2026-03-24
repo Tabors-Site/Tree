@@ -390,14 +390,14 @@ router.get("/node/:nodeId/extensions", async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // POST /api/v1/node/:nodeId/extensions
-// Block or allow extensions at a node. Inherits to children.
-// Body: { blocked: ["solana", "scripts"] }
-// Pass empty array to clear.
+// Block or restrict extensions at a node. Inherits to children.
+// Body: { blocked: ["solana"], restricted: { "food": "read" } }
+// Pass empty to clear.
 // -----------------------------------------------------------------------------
 router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
-    let { blocked } = req.body;
+    let { blocked, restricted } = req.body;
 
     const node = await Node.findById(nodeId);
     if (!node) return res.status(404).json({ error: "Node not found" });
@@ -406,10 +406,18 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
     const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
     const { clearScopeCache } = await import("../../core/tree/extensionScope.js");
 
-    if (!Array.isArray(blocked) || blocked.length === 0) {
+    const config = {};
+    if (Array.isArray(blocked) && blocked.length > 0) {
+      config.blocked = blocked.filter(b => typeof b === "string");
+    }
+    if (restricted && typeof restricted === "object" && Object.keys(restricted).length > 0) {
+      config.restricted = restricted;
+    }
+
+    if (Object.keys(config).length === 0) {
       setExtMeta(node, "extensions", null);
     } else {
-      setExtMeta(node, "extensions", { blocked: blocked.filter(b => typeof b === "string") });
+      setExtMeta(node, "extensions", config);
     }
     await node.save();
     clearScopeCache();

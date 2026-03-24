@@ -27,6 +27,7 @@ export default {
         description: "Talk to your food coach. Logs meals, tracks macros, plans nutrition.",
         method: "POST",
         endpoint: "/root/:rootId/food",
+        body: ["message"],
       },
     ],
   },

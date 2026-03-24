@@ -171,9 +171,12 @@ const AIChatSchema = new mongoose.Schema({
 
 // Query all steps in a chain
 AIChatSchema.index({ sessionId: 1, chainIndex: 1 });
+AIChatSchema.index({ userId: 1, createdAt: -1 }); // user chat history queries
 
 // Query by target node (sparse — most home-mode chats lack this field)
 AIChatSchema.index({ "treeContext.targetNodeId": 1 }, { sparse: true });
+
+// Retention handled by kernel cleanup job (configurable via land config: aiChatRetentionDays, 0 = forever)
 
 const AIChat = mongoose.model("AIChat", AIChatSchema);
 

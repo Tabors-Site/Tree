@@ -27,6 +27,7 @@ export default {
         description: "Talk to your fitness coach. Plans workouts, logs exercises, tracks progress.",
         method: "POST",
         endpoint: "/root/:rootId/fitness",
+        body: ["message"],
       },
     ],
   },
