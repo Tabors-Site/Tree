@@ -1160,6 +1160,14 @@ export async function disableExtension(name) {
     throw new Error("Invalid extension name");
   }
 
+  // Validate extension exists
+  if (!loaded.has(name)) {
+    const extDir = path.join(__dirname, name);
+    if (!fs.existsSync(extDir) || !fs.existsSync(path.join(extDir, "manifest.js"))) {
+      throw new Error(`Extension "${name}" not found. Run 'ext list' to see available extensions.`);
+    }
+  }
+
   const current = readDisabledFile();
   if (!current.includes(name)) {
     current.push(name);
