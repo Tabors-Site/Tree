@@ -46,7 +46,9 @@ class TreeAPI {
     try {
       json = JSON.parse(text);
     } catch {
-      throw new Error(`Server returned non-JSON response (HTTP ${res.status}). Is the Land running the latest version?`);
+      throw new Error(res.status === 404
+        ? "Not found (HTTP 404). This feature may require an extension that is not installed or is disabled."
+        : `Server returned non-JSON response (HTTP ${res.status}). Is the Land running the latest version?`);
     }
 
     if (!res.ok) {
@@ -76,7 +78,9 @@ class TreeAPI {
     try {
       json = JSON.parse(text);
     } catch {
-      throw new Error(`Server returned non-JSON response (HTTP ${res.status}). Is the Land running the latest version?`);
+      throw new Error(res.status === 404
+        ? "Not found (HTTP 404). This feature may require an extension that is not installed or is disabled."
+        : `Server returned non-JSON response (HTTP ${res.status}). Is the Land running the latest version?`);
     }
 
     if (!res.ok) {

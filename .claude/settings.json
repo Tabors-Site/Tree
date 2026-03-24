@@ -152,7 +152,9 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost/api/v1/uploads/0gn8eelm1.png)",
       "Bash(echo \"=== Rate limiting on API? ===\" grep -rn \"rateLimit\\\\|rate.limit\\\\|throttle\" land/middleware/ land/routes/ --include=\"*.js\")",
       "Read(//home/tabor/github/Tree/=== Request ID /**)",
-      "Bash(grep -r \"tools.*allow\\\\|tools.*block\\\\|tools.*clear\\\\|mode.*set\\\\|mode.*clear\" /home/tabor/github/Tree/land/routes --include=*.js)"
+      "Bash(grep -r \"tools.*allow\\\\|tools.*block\\\\|tools.*clear\\\\|mode.*set\\\\|mode.*clear\" /home/tabor/github/Tree/land/routes --include=*.js)",
+      "Bash(that is:*)",
+      "Bash(the latest version?\" Helps users understand why commands fail after:*)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
