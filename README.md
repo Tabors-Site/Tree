@@ -1,18 +1,18 @@
 # TreeOS
 
-A personal operating system for your mind. Grow trees of goals, plans, knowledge, and reflections. An AI builds the tree with you through conversation. Self-hosted, extensible, federated.
+An operating system for AI agents. Minimal kernel, modular extensions, federated network. Build persistent trees of knowledge that AI navigates, organizes, and grows. Self-hosted. Open source. Decentralized.
 
 ## Quick start
 
 You need Node.js 18+ and MongoDB running.
 
 ```
-git clone <repo-url> && cd Tree
+git clone https://github.com/Tabors-Site/Tree && cd Tree
 npm install
 npm start
 ```
 
-First run walks you through setup: domain, port, MongoDB. After that, your land boots.
+First run walks you through setup: domain, name, MongoDB, and extension selection from the registry. After that, your land boots.
 
 ## Connect with the CLI
 
