@@ -1637,6 +1637,22 @@ notification  — Dream notification summary and thought (falls back to placemen
             </div>
             <div className="ep-desc">Remove extension directory. Checks dependents first. Database data kept.</div>
           </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/extensions</span>
+            </div>
+            <div className="ep-desc">Show active/blocked extensions at this node with inheritance chain. Add <code>?tree=true</code> on root for tree-wide block map.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/extensions</span>
+            </div>
+            <div className="ep-desc">Block or allow extensions at this node. Body: {"{ blocked: [\"solana\"], allowed: [\"solana\"] }"}. Inherits to children.</div>
+          </div>
         </div>
 
         {/* ═══ CANOPY (FEDERATION) ═══ */}

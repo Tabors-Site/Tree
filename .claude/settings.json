@@ -171,7 +171,8 @@
       "Bash(find /home/tabor/github/Tree/land/routes -name *.js -type f)",
       "Bash(head -10 __NEW_LINE_a0a15d49778a2da6__ echo \"\" echo \"--- notes.js ---\" grep -n \"\\\\.save\\(\\)\" land/core/tree/notes.js)",
       "Bash(head -10 __NEW_LINE_a0a15d49778a2da6__ echo \"\" echo \"--- statuses.js ---\" grep -n \"\\\\.save\\(\\)\" land/core/tree/statuses.js)",
-      "Read(//home/tabor/github/Tree/=== $push/**)"
+      "Read(//home/tabor/github/Tree/=== $push/**)",
+      "Bash(grep -n \"ext-scope\\\\|ext-block\\\\|ext-allow\" cli/commands/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -281,6 +281,10 @@ Control what the AI can do and how it thinks at every node. Inherits parent to c
 | `modes`                           | Show mode overrides and available modes              |
 | `mode-set <intent> <modeKey>`     | Override a mode for an intent at this node           |
 | `mode-clear [intent]`             | Clear mode override(s)                               |
+| `ext-scope`                       | Show active/blocked extensions at current node       |
+| `ext-scope -t`                    | Show block map across entire tree                    |
+| `ext-block <name>`                | Block an extension at this node (inherits down)      |
+| `ext-allow <name>`                | Remove extension block at this node                  |
 
 ### LLM Management
 

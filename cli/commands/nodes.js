@@ -454,25 +454,61 @@ module.exports = (program) => {
   // ── Spatial extension scoping ──
   program
     .command("ext-scope")
-    .description("Show which extensions are blocked at the current node (with inheritance)")
-    .action(async () => {
+    .description("Show which extensions are active/blocked at the current position. -t tree view")
+    .option("-t, --tree", "Show block map across the entire tree")
+    .action(async ({ tree: showTree }) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
-        const nodeId = currentNodeId(cfg);
-        const data = await api.get(`/node/${nodeId}/extensions`);
-        if (!data.blocked?.length) {
-          return console.log(chalk.dim("  No extensions blocked at this position."));
-        }
-        console.log(chalk.bold(`Blocked extensions at this position:`));
-        for (const name of data.blocked) {
-          console.log(`  ${chalk.red("x")} ${name}`);
-        }
-        if (data.chain?.length) {
-          console.log(chalk.dim("\nInheritance chain:"));
-          for (const c of data.chain) {
-            console.log(chalk.dim(`  ${c.name}: ${c.blocked.join(", ")}`));
+        if (showTree) {
+          // Tree-wide view from root
+          const data = await api.get(`/root/${cfg.activeRootId}/extensions?tree=true`);
+          console.log(chalk.bold(`Extension scope for ${data.rootName || cfg.activeRootId}`));
+          console.log();
+          if (data.active?.length) {
+            console.log(chalk.green("Active:"));
+            console.log(`  ${data.active.join(", ")}`);
+          }
+          if (data.blocked?.length) {
+            console.log(chalk.red("\nBlocked (tree-wide):"));
+            for (const name of data.blocked) console.log(`  ${chalk.red("x")} ${name}`);
+          }
+          if (data.tree?.length) {
+            console.log(chalk.dim("\nPer-branch blocks:"));
+            for (const node of data.tree) {
+              const indent = "  ".repeat(node.depth + 1);
+              console.log(`${indent}${chalk.bold(node.name)}: ${chalk.red(node.blocked.join(", "))}`);
+            }
+          }
+          if (!data.blocked?.length && !data.tree?.length) {
+            console.log(chalk.dim("  All extensions active everywhere in this tree."));
+          }
+        } else {
+          // Current node view
+          const nodeId = currentNodeId(cfg);
+          const data = await api.get(`/node/${nodeId}/extensions`);
+          console.log(chalk.bold(`Extension scope at ${data.nodeName || nodeId}`));
+          console.log();
+          if (data.active?.length) {
+            console.log(chalk.green("Active:"));
+            console.log(`  ${data.active.join(", ")}`);
+          }
+          if (data.blocked?.length) {
+            console.log(chalk.red("\nBlocked:"));
+            for (const name of data.blocked) console.log(`  ${chalk.red("x")} ${name}`);
+          }
+          if (data.localBlocked?.length) {
+            console.log(chalk.dim(`\nBlocked locally at this node: ${data.localBlocked.join(", ")}`));
+          }
+          if (data.chain?.length) {
+            console.log(chalk.dim("\nInheritance:"));
+            for (const c of data.chain) {
+              console.log(chalk.dim(`  ${c.name}: ${c.blocked.join(", ")}`));
+            }
+          }
+          if (!data.blocked?.length) {
+            console.log(chalk.dim("  All extensions active at this position."));
           }
         }
       } catch (e) {

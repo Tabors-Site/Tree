@@ -285,3 +285,57 @@ Lands MAY support HTML rendering via `?html` query parameter as an extension.
 - 404: Not found
 - 429: Rate limited (MAY be used for public query endpoints)
 - 500: Server error
+
+## Per-Node Capability Scoping
+
+Lands MAY support per-node capability scoping. This allows tree owners to control which extensions, tools, and modes are available at each position in the tree.
+
+### Extension Scoping
+
+Nodes MAY store a blocked extensions list in `metadata.extensions.blocked[]`. When set, all capabilities from those extensions (tools, hooks, modes, metadata writes) are suppressed at that node and all descendants.
+
+```
+POST /api/v1/node/:nodeId/extensions   Body: { blocked: ["solana", "scripts"] }
+GET  /api/v1/node/:nodeId/extensions   Returns: { blocked, active, installed, chain }
+```
+
+Block inheritance follows the parent chain. A child never unblocks what a parent blocked. The accumulated blocked set only grows deeper in the tree.
+
+When an extension is blocked at a node:
+- Its MCP tools MUST NOT appear in the AI's tool list at that position
+- Its lifecycle hooks SHOULD NOT fire for operations on that node
+- Its AI modes SHOULD NOT resolve at that position
+- Its metadata SHOULD NOT be written to that node
+
+The extension remains installed on the land. Other trees and unblocked branches are unaffected.
+
+### Tool Scoping
+
+Nodes MAY store per-node tool configuration in `metadata.tools`:
+
+```json
+{ "allowed": ["execute-shell"], "blocked": ["delete-node-branch"] }
+```
+
+Tool config inherits from parent to child. Allowed and blocked sets accumulate up the chain.
+
+### Mode Scoping
+
+Nodes MAY override which AI mode handles a specific intent via `metadata.modes`:
+
+```json
+{ "respond": "custom:formal", "navigate": "custom:guided" }
+```
+
+Mode overrides apply at the node they're set on. They do not inherit (each node can override independently).
+
+### Resolution Order
+
+For any operation at a node, capability resolution follows this order:
+
+1. **Extension scope**: Is the extension blocked at this position? (walk parent chain)
+2. **Tool scope**: Is this specific tool allowed/blocked? (walk parent chain)
+3. **Mode scope**: Is there a per-node mode override? (check this node)
+4. **Default**: Use the mode's base tools and the zone's default mode mapping
+
+This creates a layered capability system where position in the tree determines what the AI can do, how it thinks, and which extensions are active. Navigation is capability switching.
