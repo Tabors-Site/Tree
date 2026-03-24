@@ -80,8 +80,14 @@ const LandingPage = () => {
                 No MCP wiring, no session management, no boilerplate.
                 Per-node tool and mode overrides let tree owners customize
                 what the AI can do and how it thinks at every branch.
-                One call. The kernel handles the rest.
               </p>
+              <div style={{textAlign: "center", marginTop: 16}}>
+                <a href="/ai" style={{
+                  color: "#a78bfa", fontSize: "0.95rem", fontWeight: 600,
+                  textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)",
+                  paddingBottom: 2,
+                }}>How AI works in TreeOS</a>
+              </div>
             </div>
             <div className="lp-card">
               <h3>Lands</h3>

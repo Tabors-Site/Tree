@@ -218,32 +218,91 @@ Never use `processMessage` directly unless building a custom real-time orchestra
 
 ## Custom Orchestrator
 
-Extensions can replace the entire conversation orchestrator for a bigMode (tree, home, rawIdea). The orchestrator controls how chat/place/query messages are classified, planned, and executed.
+Extensions can replace the entire conversation orchestrator for a bigMode (tree, home, land). The orchestrator controls how messages are classified, planned, and executed. This is the most powerful customization point in TreeOS. Replace it and you have a completely different AI product on the same kernel.
+
+**Discovery:** `GET /api/v1/orchestrators` returns which extension owns each bigMode.
+
+### Minimal Example
 
 ```js
+// manifest.js
+export default {
+  name: "my-orchestrator",
+  version: "1.0.0",
+  description: "Custom tree conversation flow",
+  needs: { models: ["Node", "User"] },
+  provides: { orchestrator: { bigMode: "tree" } },
+};
+
+// index.js
 export async function init(core) {
   return {
     orchestrator: {
       bigMode: "tree",
-      async handle({ visitorId, message, socket, userId, sessionId, rootId, ...ctx }) {
-        // Full control over the conversation flow
-        // Use core utilities:
-        //   core.conversation.processMessage() - run LLM with tools
-        //   core.conversation.switchMode() - change active mode
-        //   core.orchestrator.OrchestratorRuntime - session lifecycle for background work
-        //   core.orchestrator.acquireLock/releaseLock - concurrency
-        // Return { response, navigatedTo, ... }
+      async handle({ visitorId, message, socket, userId, sessionId, rootId, nodeId, mode, ...ctx }) {
+        // You have full control. Run LLM calls, use tools, navigate the tree.
+        const { content } = await core.conversation.processMessage({
+          userId,
+          username: ctx.username,
+          message,
+          mode,         // resolved mode key (e.g. "tree:respond")
+          rootId,
+          nodeId,
+          sessionId,
+          socket,       // for streaming to client
+        });
+        return { response: content };
       },
-      // Optional: custom classifier
+      // Optional: classify intent before handle() is called
       async classify({ message, treeContext, userId }) {
-        return { intent: "place", confidence: 0.95, responseHint: "..." };
+        return { intent: "chat", confidence: 1.0 };
       },
     },
   };
 }
 ```
 
-If no extension registers an orchestrator, the built-in one runs. Only one orchestrator per bigMode. First registered wins.
+### Handler Interface
+
+The `handle` function receives:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `visitorId` | string | Socket visitor ID |
+| `message` | string | User's message |
+| `socket` | Socket | Socket.IO connection for streaming |
+| `userId` | string | Authenticated user ID |
+| `username` | string | Username |
+| `sessionId` | string | Session ID (zone:rootId:userId) |
+| `rootId` | string | Tree root node ID |
+| `nodeId` | string | Current node ID |
+| `mode` | string | Resolved mode key |
+
+Return value: `{ response, navigatedTo, ... }`. The response is sent to the client.
+
+### Core Utilities Available
+
+| Utility | Access | Purpose |
+|---------|--------|---------|
+| `processMessage()` | `core.conversation.processMessage(opts)` | Run one LLM call with MCP tools |
+| `runChat()` | `core.llm.runChat(opts)` | Higher-level: handles session, abort, tracking |
+| `OrchestratorRuntime` | `core.orchestrator.OrchestratorRuntime` | Session lifecycle for multi-step flows |
+| `acquireLock/releaseLock` | `core.orchestrator.acquireLock(key)` | Concurrency control |
+| `parseJsonSafe` | `core.orchestrator.parseJsonSafe(str)` | Parse LLM JSON output (handles fences, trailing commas) |
+
+### When to Build One
+
+- You want a different conversation flow (e.g., always plan before acting, or never auto-navigate)
+- You want to integrate external systems into the conversation loop
+- You want to replace the chat/place/query classification entirely
+- You want to add pre/post processing around every message
+
+### Rules
+
+- Only one orchestrator per bigMode. First registered wins.
+- If no orchestrator is registered for a bigMode, the built-in flow runs.
+- The built-in `tree-orchestrator` is itself an extension. Disable it and register your own.
+- `GET /api/v1/orchestrators` shows what is active.
 
 ## Available Core Services
 
@@ -657,6 +716,76 @@ export async function init(core) {
 ```
 
 Modes cannot override core modes. The conversation system routes to custom modes the same way it routes to built-in modes.
+
+## Per-Node Tool Customization
+
+Any node can allow or block specific MCP tools. This lets you create branches with different AI capabilities without writing code.
+
+**How it works:** Tools are resolved in three layers:
+1. Mode base tools (what the active mode defines)
+2. Extension tools (what extensions inject via the loader)
+3. Node config (`metadata.tools.allowed[]` / `metadata.tools.blocked[]`)
+
+Node config inherits from parent to child. A tool blocked at a parent stays blocked for all descendants unless explicitly re-allowed.
+
+**API:**
+```
+GET  /api/v1/node/:nodeId/tools          Shows effective tools, base, added, blocked, inheritance chain
+POST /api/v1/node/:nodeId/tools          Set { allowed: [...], blocked: [...] }
+```
+
+**CLI:**
+```
+tools                            Show effective tools at current node
+tools-allow execute-shell        Add a tool to this node
+tools-block delete-node-branch   Block a tool at this node
+tools-clear                      Remove all local config (inherit from parent)
+```
+
+**Examples:**
+- DevOps branch: `tools-allow execute-shell` gives AI shell access on one branch only
+- Archive branch: `tools-block delete-node-branch` prevents deletion
+- Read-only branch: `tools-block create-new-node-branch delete-node-branch edit-node-status`
+
+**From extension code:**
+```js
+import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+
+// Allow a tool programmatically
+const tools = getExtMeta(node, "tools") || {};
+tools.allowed = [...(tools.allowed || []), "my-custom-tool"];
+setExtMeta(node, "tools", tools);
+await node.save();
+```
+
+## Per-Node Mode Overrides
+
+Any node can override which AI mode handles a specific intent. This lets different branches think differently.
+
+**How it works:** Mode resolution has three layers:
+1. Per-node override in `metadata.modes[intent]`
+2. Default mapping for the zone (e.g., `tree:respond`)
+3. Big mode fallback
+
+**API:**
+```
+GET  /api/v1/node/:nodeId/modes          Shows overrides and available modes
+POST /api/v1/node/:nodeId/modes          Set { intent: "respond", modeKey: "custom:formal" }
+POST /api/v1/node/:nodeId/modes          Clear: { intent: "respond", clear: true }
+```
+
+**CLI:**
+```
+modes                                Show current overrides and available modes
+mode-set respond custom:formal       Override respond intent at this node
+mode-clear respond                   Clear one override
+mode-clear                           Clear all overrides
+```
+
+**Examples:**
+- Research branch: `mode-set respond tree:research` uses a research-focused mode
+- Journal branch: `mode-set respond custom:reflective` for introspective responses
+- Training branch: `mode-set navigate custom:guided` for step-by-step navigation
 
 ## CLI Subcommands
 

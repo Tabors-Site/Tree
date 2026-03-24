@@ -15,6 +15,7 @@ import {
   hasExtension,
   getExtensionManifest,
 } from "../../extensions/loader.js";
+import { listOrchestrators } from "../../core/orchestratorRegistry.js";
 
 const router = express.Router();
 
@@ -412,6 +413,78 @@ router.get("/land/root", authenticateOrPublic, async (req, res) => {
         metadata: c.metadata || null,
       })),
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/orchestrators
+ * Shows which extension owns each conversation zone.
+ */
+router.get("/orchestrators", (req, res) => {
+  const active = listOrchestrators();
+  res.json({
+    tree: active.tree || null,
+    home: active.home || null,
+    land: active.land || null,
+  });
+});
+
+/**
+ * GET /api/v1/tools/available
+ * Lists all MCP tools available in tree mode, with source info.
+ */
+router.get("/tools/available", async (req, res) => {
+  try {
+    const { getAllToolNamesForBigMode, getSubModes } = await import("../../ws/modes/registry.js");
+    const allTools = getAllToolNamesForBigMode("tree");
+
+    // Build tool-to-mode mapping
+    const modes = getSubModes("tree");
+    const toolSources = {};
+    for (const t of allTools) toolSources[t] = [];
+    for (const m of modes) {
+      if (!m.toolNames) continue;
+      for (const t of m.toolNames) {
+        if (toolSources[t]) toolSources[t].push(m.key);
+      }
+    }
+
+    res.json({
+      count: allTools.length,
+      tools: allTools.sort().map(name => ({
+        name,
+        modes: toolSources[name] || [],
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/v1/modes/available
+ * Lists all registered AI modes with their tools and metadata.
+ */
+router.get("/modes/available", async (req, res) => {
+  try {
+    const { getSubModes } = await import("../../ws/modes/registry.js");
+    const bigModes = ["tree", "home", "land"];
+    const result = {};
+
+    for (const bm of bigModes) {
+      const modes = getSubModes(bm);
+      result[bm] = modes.map(m => ({
+        key: m.key,
+        label: m.label || m.key,
+        emoji: m.emoji || null,
+        tools: m.toolNames || [],
+        assignmentSlot: m.assignmentSlot || null,
+      }));
+    }
+
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

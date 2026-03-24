@@ -30,6 +30,7 @@ const STATIC_ROUTES = [
   "/blog",
   "/guide",
   "/decentralized",
+  "/ai",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -47,6 +48,10 @@ const PAGE_META = {
   "/decentralized": {
     title: "Decentralized AI . The TreeOS Network",
     description: "No central server. No single owner. Sovereign lands connecting through an open protocol. Knowledge and AI capabilities flowing across a federated network.",
+  },
+  "/ai": {
+    title: "AI Architecture . How AI Works in TreeOS",
+    description: "Three zones, per-node tools and modes, custom orchestrators. The AI stack from simple configuration to full replacement. Build any AI product on TreeOS.",
   },
   "/about": {
     title: "About - TreeOS",
