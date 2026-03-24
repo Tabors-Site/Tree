@@ -20,6 +20,8 @@ export async function init(core) {
       "land-ext-disable",
       "land-ext-enable",
       "land-ext-search",
+      "ext-scope-read",
+      "ext-scope-set",
       "execute-shell",
     ],
     buildSystemPrompt({ username }) {
@@ -50,5 +52,10 @@ When unsure, check land-status first for context.`;
   return {
     router,
     tools: getTools(),
+    // Inject scoping tools into tree modes so tree owners can manage extension access
+    modeTools: [
+      { modeKey: "tree:librarian", toolNames: ["ext-scope-read", "ext-scope-set"] },
+      { modeKey: "tree:structure", toolNames: ["ext-scope-read", "ext-scope-set"] },
+    ],
   };
 }

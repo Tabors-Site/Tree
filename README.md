@@ -54,17 +54,35 @@ The core handles nodes, notes, auth, and AI conversation. Everything else is an 
 ```
 treeos ext list                    # See what's loaded
 treeos ext search                  # Browse the registry
-treeos ext install understanding   # Pull from registry
+treeos ext install understanding   # Pull from registry (auto-resolves deps, verifies SHA256)
 treeos ext disable solana          # Skip on next boot
 treeos ext enable solana           # Load again on next boot
 treeos ext uninstall blog          # Remove (data stays in DB)
 treeos ext publish my-extension    # Share with the network
 ```
 
+### Per-node extension scoping
+
+Any node controls which extensions are active at that position. Block an extension at a tree root and it disappears from the entire tree. Restrict it to read-only and it can observe but not modify. Navigate somewhere else and everything is back.
+
+```
+treeos ext-scope                   # Show active/blocked/restricted at current position
+treeos ext-scope -t                # Tree-wide view of all blocks
+treeos ext-block solana scripts    # Block extensions (inherits to children)
+treeos ext-allow solana            # Remove from block list
+treeos ext-restrict food read      # Read-only tools only (hooks still fire)
+```
+
+Three levels: **active** (full access), **restricted** (read-only tools), **blocked** (nothing). The kernel filters tools using MCP `readOnlyHint` annotations. Extensions check `isExtensionBlockedAtNode()` in their routes.
+
+Example: a Health tree with fitness and food extensions. Each branch restricts the other to read-only. The fitness coach references nutrition data. The food coach sees exercise history. Neither modifies the other's branch.
+
 ### Built-in extensions
 
 | Extension | What it does |
 |-----------|-------------|
+| fitness | Personal fitness coaching, workout programming, and exercise tracking |
+| food | Calorie and macro tracking, meal planning, and nutritional coaching |
 | understanding | Bottom up tree compression. Summarizes node layers with LLM for navigational context. |
 | scripts | Sandboxed JavaScript execution on nodes with safe functions for values, goals, and status |
 | prestige | Node versioning. Complete a version and start a new generation. |

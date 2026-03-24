@@ -40,6 +40,9 @@ import { isPrivateHost } from "../canopy/security.js";
 
 const router = express.Router();
 
+// Canopy-specific body size limit (100KB). Prevents peers from sending huge payloads.
+router.use(express.json({ limit: "100kb" }));
+
 /**
  * Middleware: Require admin (god tier) for canopy admin endpoints.
  * Must be used after authenticate.

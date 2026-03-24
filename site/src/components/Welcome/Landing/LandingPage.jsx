@@ -80,11 +80,11 @@ const LandingPage = () => {
             <div className="lp-card">
               <h3>Extensions</h3>
               <p>
-                Packaged units of LLM complexity. Two core functions handle all AI:
-                runChat for conversations, runPipeline for multi-step chains.
-                No MCP wiring, no session management, no boilerplate.
-                Per-node tool and mode overrides let tree owners customize
-                what the AI can do and how it thinks at every branch.
+                Install an extension and it just works. Fitness coaching, food tracking,
+                workout logging, Solana wallets, scripts, understanding runs. Each
+                extension adds its own commands and AI behavior. Block extensions on
+                branches where you don't want them. The tree controls what's active
+                at every position.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/ai" style={{
@@ -203,7 +203,8 @@ const LandingPage = () => {
                 and acts. <strong>Chat</strong> reads and writes.
                 <strong> Place</strong> adds content silently.
                 <strong> Query</strong> reads only, changes nothing.
-                The orchestrator is an extension. Replace it with your own.
+                Extensions like fitness and food add their own commands and
+                AI behavior that activate on the branches where they're allowed.
               </p>
             </div>
           </div>
@@ -312,10 +313,9 @@ const LandingPage = () => {
         <div className="lp-container">
           <h2 className="lp-section-title">Position Is Everything</h2>
           <p className="lp-section-sub">
-            Navigate somewhere and the world changes. Each node in the tree controls
-            what extensions are active, what tools the AI has, and how it thinks.
-            Block an extension on a branch and it disappears for that entire subtree.
-            Restrict it to read-only and it can see but not touch.
+            Navigate somewhere and the world changes. Each branch controls which
+            extensions are active. Block an extension and it disappears for that
+            entire subtree. Restrict it to read-only and it can observe but not modify.
           </p>
 
           <div className="lp-terminal">

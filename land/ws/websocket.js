@@ -161,10 +161,29 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       credentials: true,
     },
     transports: ["websocket", "polling"],
+    maxHttpBufferSize: 1e6,       // 1MB max message size
+    pingTimeout: 30000,           // 30s ping timeout
+    pingInterval: 25000,          // 25s ping interval
+    connectTimeout: 10000,        // 10s connection timeout
   });
+
+  // Per-IP connection limit
+  const ipConnectionCounts = new Map();
+  const MAX_CONNECTIONS_PER_IP = 20;
 
   // Auth middleware
   io.use((socket, next) => {
+    const ip = socket.handshake.address || "unknown";
+    const count = (ipConnectionCounts.get(ip) || 0) + 1;
+    if (count > MAX_CONNECTIONS_PER_IP) {
+      return next(new Error("Too many connections from this IP"));
+    }
+    ipConnectionCounts.set(ip, count);
+    socket.on("disconnect", () => {
+      const c = ipConnectionCounts.get(ip) || 1;
+      if (c <= 1) ipConnectionCounts.delete(ip);
+      else ipConnectionCounts.set(ip, c - 1);
+    });
     const cookie = socket.request.headers.cookie;
     socket.userId = null;
 

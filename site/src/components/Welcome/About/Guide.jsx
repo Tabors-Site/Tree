@@ -91,42 +91,11 @@ const Guide = () => {
             <li><strong>Query</strong> reads only. Answers questions. Changes nothing.</li>
           </ul>
           <P>
-            How tree mode works internally (the orchestrator, classifier, placement strategy) is
-            an extension. The built-in tree-orchestrator handles it. Replace it with your own.
-          </P>
-          <P>
-            Each node can customize what the AI can do and how it thinks. This is the
-          per-node customization system. Three layers, from simple to advanced:
-          </P>
-          <P>
-            <strong>Per-node tools</strong> (what the AI CAN do): set
-            <code> metadata.tools.allowed</code> to add tools (like shell access on a DevOps branch)
-            or <code>metadata.tools.blocked</code> to remove them (like blocking deletes on a
-            reference branch). Tools inherit from parent to child. A block on the root applies to
-            the whole tree. A child can add tools its parent does not have. CLI:
-            <code> tools</code>, <code>tools-allow</code>, <code>tools-block</code>.
-          </P>
-          <P>
-            <strong>Per-node modes</strong> (how the AI THINKS): set
-            <code> metadata.modes.respond</code> to use a custom response mode at that node.
-            Each intent (navigate, structure, edit, notes, librarian, respond) can be overridden
-            independently. A "legal" branch can use a formal response mode. A "creative" branch
-            can use a freeform mode. The kernel resolves: node override, then default, then
-            fallback. CLI: <code>modes</code>, <code>mode-set</code>, <code>mode-clear</code>.
-          </P>
-          <P>
-            <strong>Custom orchestrators</strong> (the entire FLOW): an extension registers
-            a custom orchestrator that replaces how chat/place/query works. Build a completely
-            different intent classification, placement strategy, or multi-agent flow. The
-            built-in tree-orchestrator is itself an extension that can be swapped.
-          </P>
-          <P>
-            <strong>Extension scoping</strong> (what CAPABILITIES exist): block or restrict
-            entire extensions per node. A Health tree with fitness and food extensions
-            can restrict each to read-only on the other's branch. The fitness coach
-            references your nutrition data while planning workouts but can't create food
-            nodes. The food coach sees your exercise history but can't modify workouts.
-            Same extensions, different access, based on where you stand.
+            Each node controls what extensions are active at that position in the tree.
+            Block an extension on a branch and it disappears for that entire subtree.
+            Restrict it to read-only and it can observe but not modify. This is how
+            a Health tree has a Fitness branch and a Food branch where each extension
+            sees the other's data but can't write to it.
           </P>
           <Code>{`treeos cd Health/Fitness
 treeos ext-restrict food read       # food can see but not write here
@@ -137,10 +106,13 @@ treeos ext-restrict fitness read    # fitness can see but not write here
 treeos ext-block solana             # no wallets anywhere on this branch`}</Code>
           <P>
             Three levels: <strong>active</strong> (full access),
-            <strong> restricted</strong> (read-only tools only),
-            <strong> blocked</strong> (nothing). The kernel filters using
-            the <code>readOnlyHint</code> annotation every tool already declares.
-            No manual tool lists needed.
+            <strong> restricted</strong> (read-only),
+            <strong> blocked</strong> (nothing). Inherits from parent to child.
+          </P>
+          <P>
+            For developers building extensions, there are deeper customization layers:
+            per-node tool configs, per-node AI behavior overrides, and replaceable
+            conversation orchestrators. See the <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.8)" }}>extension docs</a>.
           </P>
         </Section>
 

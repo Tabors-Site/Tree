@@ -281,5 +281,66 @@ export default function getTools() {
         }
       },
     },
+    // ── Extension Scoping Tools ──
+
+    {
+      name: "ext-scope-read",
+      description: "Show which extensions are blocked or restricted at a node. Returns active, blocked, restricted, and inheritance chain.",
+      schema: {
+        nodeId: z.string().describe("Node ID to check extension scope at"),
+        userId: z.string().describe("Injected by server. Ignore."),
+      },
+      annotations: { readOnlyHint: true },
+      async handler({ nodeId, userId }) {
+        try {
+          const { getBlockedExtensionsAtNode } = await import("../../core/tree/extensionScope.js");
+          const { getLoadedExtensionNames } = await import("../../extensions/loader.js");
+          const { blocked, restricted } = await getBlockedExtensionsAtNode(nodeId);
+          const installed = getLoadedExtensionNames();
+          const active = installed.filter(e => !blocked.has(e));
+          const restrictedObj = Object.fromEntries(restricted);
+          return { content: [{ type: "text", text: JSON.stringify({ nodeId, active, blocked: [...blocked], restricted: restrictedObj, installed }, null, 2) }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+        }
+      },
+    },
+
+    {
+      name: "ext-scope-set",
+      description: "Block or restrict extensions at a node. Inherits to all children. Use to control what extensions can do on specific branches.",
+      schema: {
+        nodeId: z.string().describe("Node ID to set extension scope on"),
+        blocked: z.array(z.string()).optional().describe("Extensions to fully block (no tools, hooks, modes, metadata)"),
+        restricted: z.record(z.string(), z.string()).optional().describe("Extensions to restrict. e.g. { \"food\": \"read\" } for read-only tools"),
+        userId: z.string().describe("Injected by server. Ignore."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      async handler({ nodeId, blocked, restricted, userId }) {
+        try {
+          const node = await Node.findById(nodeId);
+          if (!node) return { content: [{ type: "text", text: "Node not found" }] };
+
+          const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+          const { clearScopeCache } = await import("../../core/tree/extensionScope.js");
+
+          const config = {};
+          if (blocked?.length) config.blocked = blocked;
+          if (restricted && Object.keys(restricted).length) config.restricted = restricted;
+
+          if (Object.keys(config).length === 0) {
+            setExtMeta(node, "extensions", null);
+          } else {
+            setExtMeta(node, "extensions", config);
+          }
+          await node.save();
+          clearScopeCache();
+
+          return { content: [{ type: "text", text: `Extension scope updated on "${node.name}". ${config.blocked?.length ? `Blocked: ${config.blocked.join(", ")}. ` : ""}${config.restricted ? `Restricted: ${JSON.stringify(config.restricted)}. ` : ""}Inherits to all children.` }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+        }
+      },
+    },
   ];
 }

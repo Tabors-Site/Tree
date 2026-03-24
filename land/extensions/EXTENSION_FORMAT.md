@@ -787,6 +787,68 @@ mode-clear                           Clear all overrides
 - Journal branch: `mode-set respond custom:reflective` for introspective responses
 - Training branch: `mode-set navigate custom:guided` for step-by-step navigation
 
+## Per-Node Extension Scoping
+
+Any node can block or restrict entire extensions. This is the broadest capability control. When an extension is blocked at a node, all its tools, hooks, modes, and metadata writes are suppressed at that position and all descendants.
+
+**Three access levels:**
+
+| Level | Tools | Hooks | Modes | Metadata writes |
+|-------|-------|-------|-------|-----------------|
+| **active** (default) | all | all fire | all resolve | allowed |
+| **restricted "read"** | read-only tools only | all fire | all resolve | allowed |
+| **blocked** | none | skipped | skipped | rejected |
+
+**Storage:** `node.metadata.extensions = { blocked: ["solana"], restricted: { "food": "read" } }`
+
+**Inheritance:** walks parent chain, accumulates. A child never unblocks what a parent blocked.
+
+**API:**
+```
+GET  /api/v1/node/:nodeId/extensions          Show blocked/restricted with inheritance chain
+POST /api/v1/node/:nodeId/extensions          Set { blocked: [...], restricted: { "ext": "read" } }
+GET  /api/v1/root/:rootId/extensions?tree=1   Tree-wide block map
+POST /api/v1/root/:rootId/extensions          Set at tree root
+```
+
+**CLI:**
+```
+ext-scope                         Show what's active/blocked/restricted at current node
+ext-scope -t                      Tree-wide view of all blocks across branches
+ext-block solana scripts          Block extensions at current node
+ext-allow solana                  Remove from block list
+ext-restrict food read            Restrict to read-only tools
+```
+
+**From extension routes:**
+
+Extensions should check spatial scope before running AI conversations:
+
+```js
+import { isExtensionBlockedAtNode } from "../../core/tree/extensionScope.js";
+
+// In your route handler:
+if (await isExtensionBlockedAtNode("my-extension", rootId)) {
+  return res.status(403).json({ error: "This extension is blocked on this branch." });
+}
+```
+
+**How restricted "read" works:**
+
+Every MCP tool declares `readOnlyHint` in its annotations. When an extension is restricted to "read" at a node, the kernel filters its tools to only those with `readOnlyHint: true`. The extension's hooks still fire (it can observe) but it can only read, not write. This lets two extensions coexist on a tree where each can see the other's data but not modify it.
+
+**Example: Health tree with fitness and food:**
+
+```
+treeos cd Health/Fitness
+treeos ext-restrict food read      # food can see fitness data but not write here
+
+treeos cd Health/Food
+treeos ext-restrict fitness read   # fitness can see food data but not write here
+```
+
+The fitness coach can reference nutrition data while planning workouts. The food coach can see exercise history when recommending meals. Neither can modify the other's branch.
+
 ## CLI Subcommands
 
 For extensions with multiple related commands, use the subcommands pattern:
