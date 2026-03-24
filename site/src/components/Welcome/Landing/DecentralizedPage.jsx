@@ -55,17 +55,21 @@ const DecentralizedPage = () => {
             <div className="lp-card">
               <h3>Canopy Protocol</h3>
               <p>
-                Lands discover each other through the Canopy protocol. When two lands peer,
-                they exchange signed metadata: what extensions they run, what public trees they
-                have, what capabilities their agents offer. No central authority approves the connection.
+                Lands peer directly through Ed25519 signed requests. No OAuth. No API keys from
+                a third party. Two lands exchange their public keys, and from then on every
+                request between them is cryptographically verified. They share what extensions
+                they run, what public trees they have, what capabilities their agents offer.
+                The connection is peer-to-peer. No authority in the middle.
               </p>
             </div>
             <div className="lp-card">
               <h3>The Directory</h3>
               <p>
-                The directory at <a href="https://dir.treeos.ai" style={{color: "#999"}}>dir.treeos.ai</a> indexes
-                lands and public trees for discovery. It hosts the extension registry.
-                It is a convenience, not a requirement. Lands can peer directly without it.
+                A directory helps lands find each other. The public one runs at{" "}
+                <a href="https://dir.treeos.ai" style={{color: "#999"}}>dir.treeos.ai</a>.
+                It indexes lands, public trees, and the extension registry. But anyone can
+                run their own directory. Point your land at a different one. Or skip it entirely
+                and peer by typing the other land's URL directly. The directory is a phone book, not a gatekeeper.
               </p>
             </div>
           </div>
@@ -210,6 +214,22 @@ const DecentralizedPage = () => {
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>
             <a className="lp-btn lp-btn-secondary" href="https://dir.treeos.ai" style={{marginLeft: 12}}>Browse Directory</a>
           </div>
+        </div>
+      </section>
+
+      {/* ── CLOSING ── */}
+      <section className="lp-section" style={{paddingBottom: 80}}>
+        <div className="lp-container" style={{textAlign: "center"}}>
+          <p style={{
+            fontSize: "1.4rem", fontWeight: 700, letterSpacing: "0.02em",
+            color: "#4ade80", marginBottom: 8,
+          }}>
+            Built to be unstoppable.
+          </p>
+          <p style={{color: "#666", fontSize: "0.95rem", maxWidth: 500, margin: "0 auto"}}>
+            Open source. AGPL-3.0. No kill switch. No terms of service that revoke access.
+            The protocol is public. The code is public. The network belongs to everyone who runs it.
+          </p>
         </div>
       </section>
 

@@ -84,13 +84,20 @@ const LandingPage = () => {
               </p>
             </div>
             <div className="lp-card">
-              <h3><a href="/decentralized" style={{color: "inherit", textDecoration: "none"}}>Lands</a></h3>
+              <h3>Lands</h3>
               <p>
                 Sovereign instances of TreeOS. You run yours. Someone else runs theirs.
-                Each land chooses its own extensions, manages its own trees, runs its own AI.
-                No central authority. Your land, your packages, your call.
-                {" "}<a href="/decentralized" style={{color: "#999", fontSize: "0.85em"}}>Learn about the network</a>
+                Lands peer directly through signed requests. No middleman. The public
+                directory at dir.treeos.ai helps lands find each other, but anyone can
+                run their own directory. No single point of control.
               </p>
+              <div style={{textAlign: "center", marginTop: 16}}>
+                <a href="/decentralized" style={{
+                  color: "#4ade80", fontSize: "0.95rem", fontWeight: 600,
+                  textDecoration: "none", borderBottom: "1px solid rgba(74, 222, 128, 0.3)",
+                  paddingBottom: 2,
+                }}>Explore the network</a>
+              </div>
             </div>
           </div>
         </div>
