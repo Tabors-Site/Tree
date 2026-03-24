@@ -23,7 +23,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
   <meta property="og:description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
   <meta property="og:url" content="${getLandUrl()}/chat" />
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="TreeOS" />
+  <meta property="og:site_name" content="${landName}" />
   <meta property="og:image" content="${getLandUrl()}/tree.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -691,6 +691,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
       username: "${escapeHtml(username)}",
       userId: "${userId}",
       trees: ${treesJSON},
+      landName: "${landName.replace(/"/g, '\\"')}",
     };
 
     // State
@@ -900,7 +901,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
       statusText.textContent = "Disconnected";
       updateSendBtn();
 
-      chatMessages.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from TreeOS. Please refresh the page to reconnect.</p></div>';
+      chatMessages.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from ' + CONFIG.landName + '. Please refresh the page to reconnect.</p></div>';
     });
 
     // Ignore navigate events — no iframe

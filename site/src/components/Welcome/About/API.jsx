@@ -643,10 +643,18 @@ const ApiAccessSection = () => {
 
           <div className="endpoint">
             <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/user/:userId/shareToken</span>
+            </div>
+            <div className="ep-desc">View share token page (?html) or get token as JSON. URL auth (share token or JWT).</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/user/:userId/shareToken</span>
             </div>
-            <div className="ep-desc">Create or refresh the URL share token. Invalidates the previous token.</div>
+            <div className="ep-desc">{"Update share token. Body: { htmlShareToken }. Owner only."}</div>
           </div>
 
           <div className="section-spacer"></div>
@@ -942,6 +950,38 @@ const ApiAccessSection = () => {
             <div className="ep-code">{`main     — Default slot used for tree chat/profile
 rawIdea  — Used for raw idea auto-placement`}</div>
             <div className="ep-note">Pass <code>connectionId: null</code> to unassign the slot.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/user/:userId/llm-failover</span>
+            </div>
+            <div className="ep-desc">Get the user's LLM failover chain (ordered list of backup connections).</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/llm-failover</span>
+            </div>
+            <div className="ep-desc">{"Push a connection to the failover chain. Body: { connectionId }."}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method del">DELETE</span>
+              <span className="ep-url">/api/v1/user/:userId/llm-failover/:connectionId</span>
+            </div>
+            <div className="ep-desc">Remove a specific connection from the failover chain.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method del">DELETE</span>
+              <span className="ep-url">/api/v1/user/:userId/llm-failover</span>
+            </div>
+            <div className="ep-desc">Clear the entire failover chain.</div>
           </div>
 
           {/* ── AI Chats ─────────── */}
@@ -2072,6 +2112,135 @@ updateScheduleForNode(datetime | null)`}</div>
   "slippageBps": 50
 }`}</div>
             <div className="ep-note">If type is SOL, amount is in lamports. If type is token, amount is the UI amount (human-readable).</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* LAND MANAGEMENT                                               */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="land">
+          <div className="section-title">
+            <span className="section-icon">🏔️</span> Land Management
+          </div>
+          <div className="section-text">
+            System-level endpoints for land configuration, status, and introspection. Most require god-tier access.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/root</span>
+            </div>
+            <div className="ep-desc">Get the land root node with system children (.identity, .config, .peers, .extensions).</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/config</span>
+            </div>
+            <div className="ep-desc">Get all land configuration values.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/config/:key</span>
+            </div>
+            <div className="ep-desc">Get a specific config value.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method put">PUT</span>
+              <span className="ep-url">/api/v1/land/config/:key</span>
+            </div>
+            <div className="ep-desc">{"Set a config value. Body: { value }"}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/status</span>
+            </div>
+            <div className="ep-desc">Land status: name, domain, loaded extensions, peers, uptime. (land-manager extension)</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/orchestrators</span>
+            </div>
+            <div className="ep-desc">List registered orchestrators by bigMode (tree, home, land) and which extension owns each.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/tools</span>
+            </div>
+            <div className="ep-desc">List all registered MCP tools with descriptions, schemas, and which extension provides each.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/modes</span>
+            </div>
+            <div className="ep-desc">List all registered AI modes with labels, tools, and which extension provides each.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/land/chat</span>
+            </div>
+            <div className="ep-desc">{"Chat with the land manager AI. Body: { message }. God-tier only. (land-manager extension)"}</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* PER-NODE CONFIG                                               */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="node-config">
+          <div className="section-title">
+            <span className="section-icon">🔧</span> Per-Node Configuration
+          </div>
+          <div className="section-text">
+            Customize AI tools and modes per node. Tools inherit from parent to child. Mode overrides let
+            different branches think differently.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/tools</span>
+            </div>
+            <div className="ep-desc">Get effective tools at this node: base tools, added, blocked, inheritance chain.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/tools</span>
+            </div>
+            <div className="ep-desc">{"Set tool config. Body: { allowed: [...], blocked: [...] }. Inherits to children."}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/modes</span>
+            </div>
+            <div className="ep-desc">Get mode overrides and available modes at this node.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/modes</span>
+            </div>
+            <div className="ep-desc">{"Set mode override. Body: { intent, modeKey } or { intent, clear: true }."}</div>
           </div>
         </div>
 

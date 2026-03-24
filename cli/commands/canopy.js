@@ -37,9 +37,10 @@ module.exports = (program) => {
     });
 
   program
-    .command("peer <action> [value...]")
+    .command("peer [action] [value...]")
     .description("Manage peers: peer add <url>, peer remove <domain>, peer block/unblock <domain>, peer discover <domain>")
     .action(async (action, parts) => {
+      if (!action) return console.log(chalk.yellow("Usage: peer <action> [value]\n  add <url>        Peer with a land\n  remove <domain>  Remove a peer\n  block <domain>   Block a peer\n  unblock <domain> Unblock a peer\n  discover <domain> Look up in directory\n  ping             Heartbeat all peers"));
       const cfg = requireAuth();
       const api = new TreeAPI(cfg.apiKey);
       const value = parts && parts.length ? parts.join(" ") : null;

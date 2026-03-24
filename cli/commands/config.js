@@ -29,9 +29,10 @@ async function showConfig() {
 module.exports = (program) => {
   // Top-level connect command — first thing a user runs
   program
-    .command("connect <url>")
+    .command("connect [url]")
     .description("Set the Land URL to connect to (e.g. http://localhost:3000)")
     .action(async (url) => {
+      if (!url) return console.log(chalk.yellow("Usage: connect <url>  (e.g. connect http://localhost:3000)"));
       try {
         const cfg = load();
         cfg.landUrl = url.replace(/\/+$/, "");
@@ -137,9 +138,10 @@ module.exports = (program) => {
     });
 
   configCmd
-    .command("get <key>")
+    .command("get [key]")
     .description("Get a single config value")
     .action(async (key) => {
+      if (!key) return console.log(chalk.yellow("Usage: config get <key>  (e.g. config get LAND_NAME)"));
       try {
         const api = getApi();
         const data = await api.getLandConfigValue(key);
@@ -155,9 +157,10 @@ module.exports = (program) => {
     });
 
   configCmd
-    .command("set <key> <value>")
+    .command("set [key] [value]")
     .description("Set a config value (admin only)")
     .action(async (key, value) => {
+      if (!key || !value) return console.log(chalk.yellow("Usage: config set <key> <value>  (e.g. config set LAND_NAME \"My Land\")"));
       try {
         const api = getApi();
         await api.setLandConfig(key, value);

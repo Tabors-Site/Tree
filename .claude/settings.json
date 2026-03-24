@@ -154,7 +154,8 @@
       "Read(//home/tabor/github/Tree/=== Request ID /**)",
       "Bash(grep -r \"tools.*allow\\\\|tools.*block\\\\|tools.*clear\\\\|mode.*set\\\\|mode.*clear\" /home/tabor/github/Tree/land/routes --include=*.js)",
       "Bash(that is:*)",
-      "Bash(the latest version?\" Helps users understand why commands fail after:*)"
+      "Bash(the latest version?\" Helps users understand why commands fail after:*)",
+      "Bash(grep '\\\\.command\\(\"\"\"\".*<' cli/commands/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

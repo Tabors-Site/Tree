@@ -487,9 +487,10 @@ module.exports = (program) => {
     });
 
   program
-    .command("mode-set <intent> <modeKey>")
+    .command("mode-set [intent] [modeKey]")
     .description("Override mode for an intent at this node (e.g. mode-set respond custom:formal)")
     .action(async (intent, modeKey) => {
+      if (!intent || !modeKey) return console.log(chalk.yellow("Usage: mode-set <intent> <modeKey>\n  e.g. mode-set respond custom:formal\n  Run 'modes' to see available modes and intents."));
       const cfg = requireAuth();
       if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
