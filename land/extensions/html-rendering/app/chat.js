@@ -13,7 +13,7 @@ import {
   respondToInvite,
 } from "../../../core/tree/invites.js";
 import { notFoundPage } from "../../../middleware/notFoundPage.js";
-import { getLandUrl } from "../../../canopy/identity.js";
+import { getLandUrl, getLandIdentity } from "../../../canopy/identity.js";
 
 const router = express.Router();
 
@@ -78,22 +78,24 @@ router.get("/chat", authenticateLite, async (req, res) => {
       })),
     );
 
+    const landName = getLandIdentity()?.name || "TreeOS";
+
     return res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Chat - TreeOS</title>
+  <title>Chat - ${landName}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#736fe6" />
   <link rel="icon" href="/tree.png" />
   <link rel="canonical" href="${getLandUrl()}/chat" />
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
-  <meta property="og:title" content="Chat - TreeOS" />
-  <meta property="og:description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
+  <meta name="description" content="Chat with your knowledge trees on ${landName}." />
+  <meta property="og:title" content="Chat - ${landName}" />
+  <meta property="og:description" content="Chat with your knowledge trees on ${landName}." />
   <meta property="og:url" content="${getLandUrl()}/chat" />
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="TreeOS" />
+  <meta property="og:site_name" content="${landName}" />
   <meta property="og:image" content="${getLandUrl()}/tree.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -762,6 +764,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       username: "${escapeHtml(username)}",
       userId: "${req.userId}",
       trees: ${treesJSON},
+      landName: "${landName.replace(/"/g, '\\"')}",
     };
 
     // State
@@ -971,7 +974,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       statusText.textContent = "Disconnected";
       updateSendBtn();
 
-      chatMessages.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from TreeOS. Please refresh the page to reconnect.</p></div>';
+      chatMessages.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from ' + CONFIG.landName + '. Please refresh the page to reconnect.</p></div>';
     });
 
     // Ignore navigate events — no iframe

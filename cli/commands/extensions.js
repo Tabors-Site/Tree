@@ -367,8 +367,14 @@ Examples:
       try {
         const api = getApi();
 
-        // Warn if other extensions depend on this one
+        // Validate extension exists on this land
         const allManifests = await api.get("/land/extensions");
+        const known = (allManifests?.extensions || []).map(e => e.name);
+        if (!known.includes(name)) {
+          return console.log(chalk.red(`Extension "${name}" not found on this land. Run 'ext list' to see loaded extensions.`));
+        }
+
+        // Warn if other extensions depend on this one
         if (allManifests?.extensions) {
           const dependents = allManifests.extensions
             .filter(e => e.name !== name && (e.needs?.extensions || e.manifest?.needs?.extensions || []).includes(name))
@@ -399,6 +405,7 @@ Examples:
       try {
         const api = getApi();
         const data = await api.enableExtension(name);
+        if (data?.error) return console.log(chalk.red(data.error));
         console.log(chalk.green(`Enabled: ${name}`));
         console.log(chalk.dim("Restart the land for this to take effect."));
         await refreshProtocolCache();
@@ -417,8 +424,7 @@ Examples:
       try {
         const api = getApi();
 
-        // Check if other extensions depend on this one
-        const protocol = await api.get("/protocol");
+        // Validate and check dependencies
         const allManifests = await api.get("/land/extensions");
         const dependents = [];
         if (allManifests?.extensions) {

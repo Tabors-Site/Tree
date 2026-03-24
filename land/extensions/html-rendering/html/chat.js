@@ -2,23 +2,24 @@
 /* HTML renderer for chat page                     */
 /* ─────────────────────────────────────────────── */
 
-import { getLandUrl } from "../../../canopy/identity.js";
+import { getLandUrl, getLandIdentity } from "../../../canopy/identity.js";
 import { baseStyles } from "./baseStyles.js";
 import { escapeHtml } from "./utils.js";
 
 export function renderChat({ username, userId, treesJSON, trees }) {
+  const landName = getLandIdentity()?.name || "TreeOS";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Chat - TreeOS</title>
+  <title>Chat - ${landName}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#736fe6" />
   <link rel="icon" href="/tree.png" />
   <link rel="canonical" href="${getLandUrl()}/chat" />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
-  <meta property="og:title" content="Chat - TreeOS" />
+  <meta property="og:title" content="Chat - ${landName}" />
   <meta property="og:description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
   <meta property="og:url" content="${getLandUrl()}/chat" />
   <meta property="og:type" content="website" />
