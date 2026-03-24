@@ -220,7 +220,7 @@ Never use `processMessage` directly unless building a custom real-time orchestra
 
 Extensions can replace the entire conversation orchestrator for a bigMode (tree, home, land). The orchestrator controls how messages are classified, planned, and executed. This is the most powerful customization point in TreeOS. Replace it and you have a completely different AI product on the same kernel.
 
-**Discovery:** `GET /api/v1/orchestrators` returns which extension owns each bigMode.
+**Discovery:** `GET /api/v1/land/orchestrators` returns which extension owns each bigMode.
 
 ### Minimal Example
 
@@ -302,7 +302,7 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 - Only one orchestrator per bigMode. First registered wins.
 - If no orchestrator is registered for a bigMode, the built-in flow runs.
 - The built-in `tree-orchestrator` is itself an extension. Disable it and register your own.
-- `GET /api/v1/orchestrators` shows what is active.
+- `GET /api/v1/land/orchestrators` shows what is active.
 
 ## Available Core Services
 

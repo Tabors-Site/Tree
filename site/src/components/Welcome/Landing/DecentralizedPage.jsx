@@ -237,7 +237,7 @@ const DecentralizedPage = () => {
       <footer className="lp-footer">
         <div className="lp-container">
           <div className="lp-footer-bottom">
-            TreeOS . AGPL-3.0 . Tabor Holly
+            TreeOS . AGPL-3.0 . <a href="https://tabors.site" style={{color: "inherit", textDecoration: "none"}}>Tabor Holly</a>
           </div>
         </div>
       </footer>

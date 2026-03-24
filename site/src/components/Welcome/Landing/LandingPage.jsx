@@ -438,6 +438,12 @@ const LandingPage = () => {
               <a href="/about/extensions">Extensions</a>
             </div>
             <div className="lp-footer-col">
+              <h4>Explore</h4>
+              <a href="/ai">AI Architecture</a>
+              <a href="/decentralized">The Network</a>
+              <a href="/guide">Full Guide</a>
+            </div>
+            <div className="lp-footer-col">
               <h4>Network</h4>
               <a href="https://dir.treeos.ai">Directory</a>
               <a href="/blog">Blog</a>
@@ -449,7 +455,7 @@ const LandingPage = () => {
             </div>
           </div>
           <div className="lp-footer-bottom">
-            TreeOS . AGPL-3.0 . Tabor Holly
+            TreeOS . AGPL-3.0 . <a href="https://tabors.site" style={{color: "inherit", textDecoration: "none"}}>Tabor Holly</a>
           </div>
         </div>
       </footer>
