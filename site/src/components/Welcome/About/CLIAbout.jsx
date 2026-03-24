@@ -237,6 +237,14 @@ const CLIAbout = () => {
           <CmdRow cmd="ext disable <name>" desc="Disable an extension (warns about dependents)" />
           <CmdRow cmd="ext enable <name>" desc="Re-enable a disabled extension" />
           <CmdRow cmd="ext uninstall <name>" desc="Remove extension (blocks if dependents exist, -f to force)" />
+          <div className="cli-section-text" style={{ marginTop: 14, marginBottom: 14 }}>
+            Per-node extension scoping. Control which extensions are active at each position in the tree.
+          </div>
+          <CmdRow cmd="ext-scope" desc="Show active/blocked/restricted extensions at current position" />
+          <CmdRow cmd="ext-scope -t" desc="Tree-wide view of all extension blocks across branches" />
+          <CmdRow cmd="ext-block <name>" desc="Block an extension at current node (inherits to all children)" />
+          <CmdRow cmd="ext-allow <name>" desc="Remove an extension from block list at current node" />
+          <CmdRow cmd="ext-restrict <name> read" desc="Restrict extension to read-only tools at current node" />
         </div>
 
         {/* ── LLM CONNECTIONS ── */}

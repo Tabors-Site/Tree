@@ -120,6 +120,16 @@ const Guide = () => {
             different intent classification, placement strategy, or multi-agent flow. The
             built-in tree-orchestrator is itself an extension that can be swapped.
           </P>
+          <P>
+            <strong>Extension scoping</strong> (what CAPABILITIES exist): block or restrict
+            entire extensions per node. <code>ext-block solana</code> removes all solana
+            tools, hooks, and modes from that branch. <code>ext-restrict food read</code> limits
+            food to read-only tools. A Health tree can have fitness and food extensions
+            that see each other's data but can't write to each other's branches. The
+            kernel filters tools using the <code>readOnlyHint</code> annotation every tool
+            already declares. CLI: <code>ext-scope</code>, <code>ext-block</code>,
+            <code>ext-allow</code>, <code>ext-restrict</code>.
+          </P>
         </Section>
 
         {/* ══════════════════════════════════════════════════════════════ */}

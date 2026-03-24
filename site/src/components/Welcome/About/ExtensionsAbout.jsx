@@ -337,6 +337,52 @@ if (other?.exports?.myFunction) {
           </div>
         </div>
 
+        {/* -- SPATIAL SCOPING -- */}
+        <div className="ext-section">
+          <div className="ext-section-title">
+            <span className="ext-section-icon">🌍</span> Spatial Extension Scoping
+          </div>
+          <div className="ext-section-text">
+            Any node can control which extensions are active at that position.
+            Block an extension at a tree root and it disappears from the entire
+            tree. Block it on a branch and only that subtree is affected. The
+            extension stays installed on the land. Other trees still use it.
+            Navigate somewhere and the capabilities change.
+          </div>
+          <div className="ext-section-text" style={{ marginTop: 12 }}>
+            Three access levels per extension per node:
+          </div>
+          <div className="ext-file-list">
+            <div className="ext-file-item">
+              <code>active</code> . full access. All tools, hooks, modes, metadata. The default.
+            </div>
+            <div className="ext-file-item">
+              <code>restricted "read"</code> . read-only tools pass. Write tools filtered out. Hooks still fire.
+            </div>
+            <div className="ext-file-item">
+              <code>blocked</code> . nothing. No tools, no hooks, no modes, no metadata writes.
+            </div>
+          </div>
+          <div className="ext-section-text" style={{ marginTop: 12 }}>
+            This is how a Health tree has a Fitness branch and a Food branch where
+            each extension can see the other's data (restricted to read) but can't
+            write to it. The fitness coach can reference your nutrition while planning
+            workouts, but can't create food nodes on the fitness branch.
+          </div>
+          <div className="ext-code-block">{`treeos cd Health/Fitness
+treeos ext-restrict food read      # food can see but not write here
+treeos ext-block solana            # no wallets on this branch
+
+treeos cd Health/Food
+treeos ext-restrict fitness read   # fitness can see but not write here`}</div>
+          <div className="ext-section-text" style={{ marginTop: 12 }}>
+            Tool filtering uses the MCP <code>readOnlyHint</code> annotation that
+            every tool already declares. When an extension is restricted to read,
+            only its read-only tools pass through. No manual tool lists needed.
+            The kernel handles it.
+          </div>
+        </div>
+
         {/* -- AI ENTRY POINTS -- */}
         <div className="ext-section">
           <div className="ext-section-title">

@@ -1473,6 +1473,41 @@ notification  — Dream notification summary and thought (falls back to placemen
             </div>
             <div className="ep-desc">{"Set mode override. Body: { intent, modeKey } or { intent, clear: true }."}</div>
           </div>
+
+          <div className="section-spacer"></div>
+          <div className="sub-title">Extension Scoping</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/extensions</span>
+            </div>
+            <div className="ep-desc">Show blocked/restricted extensions at this node with inheritance chain and active list.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/extensions</span>
+            </div>
+            <div className="ep-desc">{"Block or restrict extensions. Body: { blocked: [\"solana\"], restricted: { \"food\": \"read\" } }. Inherits to children."}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/extensions</span>
+            </div>
+            <div className="ep-desc">Tree-wide view: blocked, restricted, installed, active extensions. Pass ?tree=true for per-branch block map.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/extensions</span>
+            </div>
+            <div className="ep-desc">{"Set extension scoping at tree root. Body: { blocked: [...], restricted: { ... } }."}</div>
+          </div>
         </div>
 
         {/* ═══ LAND MANAGEMENT ═══ */}
