@@ -67,6 +67,8 @@ async function editStatus({
   };
 }
 
+const MAX_CASCADE_DEPTH = 50;
+
 async function updateNodeStatusRecursively(
   node,
   status,
@@ -79,6 +81,9 @@ async function updateNodeStatusRecursively(
     await Node.findByIdAndUpdate(node._id, { $set: { status } });
     return;
   }
+
+  const depth = arguments[6] || 0;
+  if (depth > MAX_CASCADE_DEPTH) return;
 
   if (["active", "trimmed", "completed"].includes(status)) {
     for (const childId of node.children) {
@@ -94,16 +99,10 @@ async function updateNodeStatusRecursively(
         sessionId,
         action: "editStatus",
         statusEdited: status,
-    
       });
 
       await updateNodeStatusRecursively(
-        childNode,
-        status,
-        userId,
-        wasAi,
-        aiChatId,
-        sessionId,
+        childNode, status, userId, wasAi, aiChatId, sessionId, depth + 1,
       );
     }
   }

@@ -408,9 +408,9 @@ export async function editNodeName({
   if (newName.startsWith(".")) {
     throw new Error("Node names cannot start with a dot");
   }
-  if (newType.startsWith("/")) {
-        throw new Error("Node Names cannot start with a /");
-      }
+  if (newName.startsWith("/")) {
+    throw new Error("Node names cannot start with a /");
+  }
   if (newName.startsWith("@")) {
     throw new Error("Node names cannot start with @");
   }
