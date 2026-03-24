@@ -94,73 +94,71 @@ const AboutHome = () => {
         {/* ── HERO ── */}
         <div className="ah-hero">
           <div className="ah-logo">🌳</div>
-          <h1>TreeOS</h1>
+          <h1>TreeOS Land</h1>
           <p className="ah-tagline">
-            An operating system for context.
+            The first land on the TreeOS network.
           </p>
         </div>
 
         {/* ── INTRO ── */}
         <div className="ah-section">
           <div className="ah-section-text">
-            TreeOS is a self-hosted, modular, federated system for building
-            persistent knowledge structures. Lands host trees. Trees hold nodes.
-            Each node carries notes and one of six semantic types
-            (goal, plan, task, knowledge, resource, identity). Extensions store
-            their data in node metadata. AI interacts through three strict modes.
-            Lands connect into a network. The whole thing runs from a terminal.
+            This is the reference implementation of{" "}
+            <a href="/" style={{color: "rgba(255,255,255,0.8)"}}>TreeOS</a>, built by{" "}
+            <a href="https://tabors.site" style={{color: "rgba(255,255,255,0.8)"}}>Tabor Holly</a>.
+            It runs every built-in extension: understanding runs, dream cycles, raw idea
+            placement, Solana wallets, scripts, Stripe billing, energy metering,
+            Telegram and Discord gateways. The testbed, the example, and the first
+            node in the network.
           </div>
         </div>
 
         {/* ── ARCHITECTURE ── */}
         <div className="ah-section">
-          <div className="ah-section-title">Architecture</div>
+          <div className="ah-section-title">What This Land Runs</div>
           <div className="ah-section-text">
-            Four layers. Each one is independent and documented separately.
+            25 extensions. Full AI orchestration. LLM failover. Per-node customization.
+            Daily dream cycles. Federation with the Canopy network.
           </div>
         </div>
 
         <div className="ah-arch-grid">
           <div className="ah-arch-item">
-            <div className="ah-arch-label">Land</div>
+            <div className="ah-arch-label">AI</div>
             <div className="ah-arch-desc">
-              The server. A land stores trees, runs AI, serves the API, and manages users.
-              Every land is self-hosted and fully independent. You own your data, your models,
-              your rules. Lands connect to each other through federation but work fine standalone.
+              Chat with your trees. Place content. Query for answers. The tree-orchestrator
+              classifies intent, navigates, executes, and responds. Per-node tools let you
+              add shell access to a DevOps branch or block deletes on an archive.
             </div>
-            <a href="/about/land" className="ah-arch-link">Land and Canopy docs</a>
+            <a href="/ai" className="ah-arch-link">How AI works</a>
           </div>
 
           <div className="ah-arch-item">
-            <div className="ah-arch-label">Tree</div>
+            <div className="ah-arch-label">Dreams</div>
             <div className="ah-arch-desc">
-              The data structure. A tree is a hierarchy of nodes, each with notes
-              and a semantic type (goal, plan, task, knowledge, resource, identity). Extensions add
-              values, schedules, scripts, and more through metadata. Navigate with
-              <code>cd</code> and <code>ls</code>. AI interacts through three strict modes:
-              chat (read+write), place (write), query (read only).
+              Set a dream time and your trees maintain themselves overnight.
+              Cleanup reorganizes structure. Short-term drain processes deferred items.
+              Understanding runs compress branches into navigational context.
             </div>
-            <a href="/about/node-types" className="ah-arch-link">Node types docs</a>
+            <a href="/about/dreams" className="ah-arch-link">Dream docs</a>
           </div>
 
           <div className="ah-arch-item">
-            <div className="ah-arch-label">Canopy</div>
+            <div className="ah-arch-label">Network</div>
             <div className="ah-arch-desc">
-              The federation protocol. Lands peer with each other using signed requests.
-              Users on one land can browse public trees on another, receive invites,
-              and contribute remotely. The directory service at dir.treeos.ai handles
-              discovery, public tree indexing, and the extension registry.
+              This land peers with others through Canopy. Browse public trees
+              across the network. Invite users from other lands. The directory
+              at dir.treeos.ai indexes everything.
             </div>
-            <a href="/about/land" className="ah-arch-link">Federation docs</a>
+            <a href="/decentralized" className="ah-arch-link">The network</a>
           </div>
 
           <div className="ah-arch-item">
             <div className="ah-arch-label">Extensions</div>
             <div className="ah-arch-desc">
-              The module system. The core protocol handles nodes, notes, types, status,
-              and AI modes. Everything else is a package: values, understanding, scripts, energy,
-              billing, dreams, Solana wallets. Install what you need. Disable what you
-              don't. Build your own and publish to the registry.
+              Every feature on this land is an extension. Values, schedules, scripts,
+              energy, billing, Solana, gateway, blog, prestige. Install what you need.
+              Build your own. Publish to the registry.
             </div>
             <a href="/about/extensions" className="ah-arch-link">Extension docs</a>
           </div>
@@ -168,15 +166,16 @@ const AboutHome = () => {
 
         <div className="ah-section">
           <div className="ah-section-title">
-            Why This Project Exists
+            Why This Exists
           </div>
           <div className="ah-section-text">
-            This is a personal project by Tabor Holly.
+            Built by <a href="https://tabors.site" style={{color: "rgba(255,255,255,0.8)"}}>Tabor Holly</a>.
             <br /><br />
-            It's my attempt at building what I believe large language model technology
-            will need going forward: persistent memory, a navigable structure driven by
-            text input, and a unified system where instructions, knowledge, and history
-            all live together, readable by both humans and LLMs.
+            This is what I believe AI agents need: persistent memory in a navigable
+            structure, where instructions and knowledge and history live together,
+            readable by both humans and LLMs. A system where people build, share, and
+            run LLM complexity on a federated network. Not locked behind someone else's
+            API. <a href="/" style={{color: "rgba(255,255,255,0.8)"}}>Open at core.</a>
           </div>
         </div>
         {/* ── EXPLORE ── */}

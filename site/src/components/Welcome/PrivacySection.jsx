@@ -221,7 +221,7 @@ const PrivacySection = () => {
             <br /><br />
             <strong>{LAND_NAME} Land</strong><br />
             Email: treeffiency@gmail.com<br />
-            Website: {new URL(import.meta.env.VITE_LAND_URL).hostname}
+            Website: {new URL(import.meta.env.VITE_LAND_URL).hostname}/app
           </div>
         </div>
 

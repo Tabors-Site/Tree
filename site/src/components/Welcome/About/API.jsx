@@ -43,52 +43,25 @@ const ApiAccessSection = () => {
           <div className="toc-title">Contents</div>
 
           <div className="toc-group">
-            <div className="toc-group-label">Getting Started</div>
+            <div className="toc-group-label">Core Protocol</div>
             <TocLink to="overview">🔑 Overview &amp; Authentication</TocLink>
             <TocLink to="me">👋 Identity (Me)</TocLink>
-            <TocLink to="url-modes">🌐 URL Modes: ?html &amp; ?token</TocLink>
-          </div>
-
-          <div className="toc-group">
-            <div className="toc-group-label">AI</div>
-            <TocLink to="tree-chat">🧠 Tree Chat</TocLink>
+            <TocLink to="tree-chat">🧠 Tree Chat (chat/place/query are THE protocol)</TocLink>
             <TocLink to="tree-place">📌 Tree Place</TocLink>
             <TocLink to="tree-query">🔍 Tree Query</TocLink>
-            <TocLink to="raw-idea-chat">🤖 Raw Idea Chat</TocLink>
-            <TocLink to="raw-idea-place">📥 Raw Idea Place</TocLink>
-            <TocLink to="understand-tree">🔬 Understand Tree</TocLink>
-          </div>
-
-          <div className="toc-group">
-            <div className="toc-group-label">User</div>
             <TocLink to="user">👤 User Endpoints</TocLink>
-          </div>
-
-          <div className="toc-group">
-            <div className="toc-group-label">Tree</div>
             <TocLink to="root">🌳 Root Endpoints</TocLink>
-            <TocLink to="gateway">📡 Gateway Channels</TocLink>
-            <TocLink to="book">📖 Book &amp; Sharing</TocLink>
-            <TocLink to="understandings">🧠 Understandings</TocLink>
-          </div>
-
-          <div className="toc-group">
-            <div className="toc-group-label">Node</div>
             <TocLink to="node">🔷 Node Endpoints</TocLink>
-            <TocLink to="scripts">⚙️ Scripts</TocLink>
             <TocLink to="version">📋 Node Operations</TocLink>
-            <TocLink to="transactions">🤝 Transactions</TocLink>
-            <TocLink to="solana">💎 Solana Wallet</TocLink>
+            <TocLink to="notes">📝 Notes</TocLink>
+            <TocLink to="contributions">📊 Contributions</TocLink>
+            <TocLink to="node-config">🔧 Per-Node Configuration</TocLink>
           </div>
 
           <div className="toc-group">
-            <div className="toc-group-label">Extensions</div>
+            <div className="toc-group-label">Land Management</div>
+            <TocLink to="land">🏔️ Land Management</TocLink>
             <TocLink to="extensions">🧩 Extension Management</TocLink>
-          </div>
-
-          <div className="toc-group">
-            <div className="toc-group-label">Blog</div>
-            <TocLink to="blog">📝 Blog Endpoints</TocLink>
           </div>
 
           <div className="toc-group">
@@ -98,7 +71,25 @@ const ApiAccessSection = () => {
             <TocLink to="canopy-admin">🛡️ Admin Management</TocLink>
             <TocLink to="canopy-proxy">🔀 Proxy</TocLink>
           </div>
+
+          <div className="toc-group">
+            <div className="toc-group-label">Extensions (optional, ships with default land)</div>
+            <TocLink to="url-modes">🌐 URL Modes: ?html &amp; ?token</TocLink>
+            <TocLink to="raw-idea-chat">🤖 Raw Idea Chat</TocLink>
+            <TocLink to="raw-idea-place">📥 Raw Idea Place</TocLink>
+            <TocLink to="understand-tree">🔬 Understand Tree</TocLink>
+            <TocLink to="understandings">🧠 Understandings</TocLink>
+            <TocLink to="gateway">📡 Gateway Channels</TocLink>
+            <TocLink to="book">📖 Book &amp; Sharing</TocLink>
+            <TocLink to="scripts">⚙️ Scripts</TocLink>
+            <TocLink to="transactions">🤝 Transactions</TocLink>
+            <TocLink to="solana">💎 Solana Wallet</TocLink>
+            <TocLink to="blog">📝 Blog</TocLink>
+            <TocLink to="energy-section">⚡ Energy</TocLink>
+          </div>
         </div>
+
+        {/* ═══ CORE PROTOCOL ═══ */}
 
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/*  1. OVERVIEW & AUTH                                           */}
@@ -214,46 +205,6 @@ const ApiAccessSection = () => {
               <strong>Generate API keys</strong> from your profile page at{" "}
               <code>/api/v1/user/:userId/api-keys?html</code>. You can have up
               to 10 active keys and revoke them individually.
-            </div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  2. URL MODES                                                 */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="url-modes">
-          <div className="section-title">
-            <span className="section-icon">🌐</span> URL Modes: ?html &amp; ?token
-          </div>
-          <div className="section-text">
-            Every GET endpoint supports two query parameters that change how the
-            response is delivered:
-          </div>
-
-          <div className="sub-title">?token=YOUR_TOKEN</div>
-          <div className="section-text">
-            A URL access token that authenticates the request. Only required for GET
-            routes when you don't have an API key header.
-            Tokens are tied to your account and can be found or refreshed on
-            your profile page.
-            <br /><br />
-            Example: <code>/api/v1/node/:nodeId/5/notes?token=abc123</code>
-          </div>
-
-          <div className="sub-title">?html</div>
-          <div className="section-text">
-            When present, the server returns a fully rendered HTML page instead
-            of raw JSON. This is what the browser app uses. Without{" "}
-            <code>?html</code>, you always get JSON.
-            <br /><br />
-            Example: <code>/api/v1/node/:nodeId/5/notes?token=abc123&amp;html</code>
-          </div>
-
-          <div className="highlight-box">
-            <div className="section-text">
-              <strong>For API integrations</strong>, use the <code>x-api-key</code>{" "}
-              header and omit both <code>?html</code> and <code>?token</code>.
-              The token/html pattern is designed for shareable browser links.
             </div>
           </div>
         </div>
@@ -385,228 +336,7 @@ const ApiAccessSection = () => {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  RAW IDEA CHAT                                                 */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="raw-idea-chat">
-          <div className="section-title">
-            <span className="section-icon">🤖</span> Raw Idea Chat
-          </div>
-          <div className="section-text">
-            Same as Raw Idea Place, but synchronous — waits for the AI to finish
-            and returns a conversational response along with which tree the idea
-            was placed on. Useful when you want both placement <em>and</em> an
-            answer in a single call.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/user/:userId/raw-ideas/chat</span>
-            </div>
-            <div className="ep-desc">
-              Send text content directly. Creates the raw idea, places it on the
-              best tree, and returns the AI&#39;s response -- all in one call.
-            </div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{ "content": "Your idea text here" }`}</div>
-            <div className="ep-label">Success Response</div>
-            <div className="ep-code">{`{
-  "success": true,
-  "answer": "Your idea about X was placed under ...",
-  "rootId": "abc123",
-  "rootName": "My Tree",
-  "targetNodeId": "def456",
-  "targetNodePath": [
-    { "_id": "abc123", "name": "My Tree" },
-    { "_id": "xyz789", "name": "Health" },
-    { "_id": "def456", "name": "Sleep" }
-  ],
-  "rawIdeaId": "ghi789"
-}`}</div>
-            <div className="ep-label">Failure Response</div>
-            <div className="ep-code">{`{ "success": false, "error": "No trees available for this user" }`}</div>
-            <div className="ep-note">
-              This is a long-running request (up to 19 minutes) -- the AI is doing
-              real work behind the scenes.
-            </div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/chat</span>
-            </div>
-            <div className="ep-desc">
-              Same as above, but for an existing raw idea. Create a raw idea first
-              via <code>POST /api/v1/user/:userId/raw-ideas</code>, then call this endpoint.
-              Only works for <code>pending</code> text ideas.
-            </div>
-            <div className="ep-label">Success Response</div>
-            <div className="ep-code">{`{
-  "success": true,
-  "answer": "Your idea about X was placed under ...",
-  "rootId": "abc123",
-  "rootName": "My Tree",
-  "targetNodeId": "def456",
-  "targetNodePath": [
-    { "_id": "abc123", "name": "My Tree" },
-    { "_id": "xyz789", "name": "Health" },
-    { "_id": "def456", "name": "Sleep" }
-  ]
-}`}</div>
-            <div className="ep-label">Failure Response</div>
-            <div className="ep-code">{`{ "success": false, "error": "No trees available for this user" }`}</div>
-            <div className="ep-note">
-              This is a long-running request (up to 19 minutes) -- the AI is doing
-              real work behind the scenes.
-            </div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  RAW IDEA PLACE                                                */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="raw-idea-place">
-          <div className="section-title">
-            <span className="section-icon">📥</span> Raw Idea Place
-          </div>
-          <div className="section-text">
-            Takes a raw idea created from a user&#39;s profile and places it onto
-            a tree. The AI picks the best tree, finds the right place in it,
-            and stores the idea — all automatically. No root ID needed.
-            <br /><br />
-            This is fire-and-forget: it returns immediately while placement
-            runs in the background. Does not generate a response — just places
-            the idea. Use Raw Idea Chat above if you need a conversational reply.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/user/:userId/raw-ideas/place</span>
-            </div>
-            <div className="ep-desc">
-              Send text content directly. Creates the raw idea and triggers
-              AI placement in the background -- all in one call. Fire-and-forget.
-            </div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{ "content": "Your idea text here" }`}</div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{'{ "message": "Orchestration started", "rawIdeaId": "abc123" }  // 202 Accepted'}</div>
-            <div className="ep-note">
-              Poll the idea&#39;s status via <code>GET /api/v1/user/:userId/raw-ideas/:rawIdeaId</code> to track progress.
-              Use Raw Idea Chat above if you need a conversational reply.
-            </div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/place</span>
-            </div>
-            <div className="ep-desc">
-              Same as above, but for an existing raw idea. Create a raw idea first
-              via <code>POST /api/v1/user/:userId/raw-ideas</code>, then trigger orchestration.
-              Only works for <code>pending</code> text ideas.
-            </div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{'{ "message": "Orchestration started" }  // 202 Accepted'}</div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  UNDERSTAND TREE                                               */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="understand-tree">
-          <div className="section-title">
-            <span className="section-icon">🔬</span> Understand Tree
-          </div>
-          <div className="section-text">
-            Runs AI-powered compression across an entire tree. The AI reads every
-            node, summarizes leaf content, then merges summaries layer by layer
-            until a single root encoding remains — a holistic understanding of the
-            whole tree from a given perspective.
-            <br /><br />
-            Example perspectives:
-          </div>
-          <ul className="ep-examples">
-            <li><code>translate to Chinese</code></li>
-            <li><code>summarize this into 30 words</code></li>
-            <li><code>find all the places where marketing strategy is mentioned</code></li>
-            <li><code>extract every action item and deadline</code></li>
-            <li><code>identify contradictions or conflicting ideas</code></li>
-          </ul>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/root/:rootId/understandings</span>
-            </div>
-            <div className="ep-desc">
-              Create a new understanding run. Pass a <code>perspective</code> in the
-              request body to tell the AI what lens to use. Set <code>incremental</code> to
-              <code>true</code> to reuse an existing completed run and only reprocess
-              nodes that changed since the last run.
-            </div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{ "perspective": "summarize this into 30 words", "incremental": true }`}</div>
-            <div className="ep-note">
-              When <code>incremental</code> is <code>true</code>, the system finds the most recent
-              completed run for the same root and perspective, detects which nodes have new
-              contributions, and only reprocesses dirty nodes and their ancestors. If no prior
-              run exists, a fresh run is created. Defaults to <code>false</code>.
-            </div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/orchestrate</span>
-            </div>
-            <div className="ep-desc">
-              Run the AI understanding orchestrator on an existing run.
-              The AI compresses all nodes layer by layer until a single root
-              encoding remains. Only one orchestration can run at a time per run.
-            </div>
-            <div className="ep-label">Success Response</div>
-            <div className="ep-code">{`{
-  "success": true,
-  "understandingRunId": "abc123",
-  "perspective": "summarize this into 30 words",
-  "nodeCount": 12,
-  "nodesProcessed": 11,
-  "rootEncoding": "Compressed summary of the tree…"
-}`}</div>
-            <div className="ep-label">Already Complete</div>
-            <div className="ep-code">{`{ "success": true, "alreadyComplete": true, "rootEncoding": "…" }`}</div>
-            <div className="ep-note">
-              Create a run first via <code>POST /api/v1/root/:rootId/understandings</code>,
-              then trigger orchestration. This is a long-running request — the AI
-              processes every node in the tree. Idempotent — if the run was
-              interrupted, calling again picks up where it left off. If already
-              complete, returns the final result immediately.
-            </div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/stop</span>
-            </div>
-            <div className="ep-desc">
-              Stop an active understanding orchestration. Aborts the in-flight
-              session and halts processing. Progress is preserved -- calling
-              orchestrate again will resume from where it stopped.
-            </div>
-            <div className="ep-label">Success Response</div>
-            <div className="ep-code">{`{ "success": true }`}</div>
-            <div className="ep-label">No Active Session</div>
-            <div className="ep-code">{`{ "success": false, "error": "No active session found for this run" }`}</div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  3. USER ENDPOINTS                                            */}
+        {/*  USER ENDPOINTS                                               */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <div className="section" id="user">
           <div className="section-title">
@@ -616,6 +346,8 @@ const ApiAccessSection = () => {
             Profile, roots, API keys, contributions, notes, tags, raw ideas,
             invites, chat history, and custom LLM configuration.
           </div>
+
+          <p className="api-note">Additional user endpoints are added by extensions: energy, raw-ideas, api-keys, deleted-revive, user-llm, user-queries.</p>
 
           {/* ── Profile ──────────── */}
           <div className="sub-title">Profile</div>
@@ -1088,7 +820,7 @@ rawIdea  — Used for raw idea auto-placement`}</div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  4. ROOT ENDPOINTS                                            */}
+        {/*  ROOT ENDPOINTS                                               */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <div className="section" id="root">
           <div className="section-title">
@@ -1098,6 +830,8 @@ rawIdea  — Used for raw idea auto-placement`}</div>
             Roots are the top-level entry point of a tree. Most tree-wide
             operations happen at this scope.
           </div>
+
+          <p className="api-note">Additional root endpoints are added by extensions: values, dreams, holdings, schedules, calendar, understandings, gateway, book.</p>
 
           {/* ── Tree Data ────────── */}
           <div className="sub-title">Tree Data</div>
@@ -1346,249 +1080,7 @@ notification  — Dream notification summary and thought (falls back to placemen
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  GATEWAY CHANNELS                                              */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="gateway">
-          <div className="section-title">
-            <span className="section-icon">📡</span> Gateway Channels
-          </div>
-          <div className="section-text">
-            Gateway channels connect your tree to external services like Telegram,
-            Discord, and browser push notifications. Each root can have up to 10
-            channels. Channels have a <strong>direction</strong> (input, output,
-            or input-output), a <strong>mode</strong> (place, query, or chat),
-            and <strong>queue protection</strong> for input channels.
-          </div>
-
-          {/* ── List ── */}
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/root/:rootId/gateway/channels</span>
-            </div>
-            <div className="ep-desc">List all gateway channels for a root. Secrets are excluded from the response.</div>
-          </div>
-
-          {/* ── Create ── */}
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/root/:rootId/gateway/channels</span>
-            </div>
-            <div className="ep-desc">Create a new gateway channel.</div>
-            <div className="ep-label">Request Body (Telegram - Output)</div>
-            <div className="ep-code">{`{
-  "name": "My Telegram Bot",
-  "type": "telegram",
-  "direction": "output",
-  "config": { "botToken": "123:ABC...", "chatId": "-100123..." },
-  "notificationTypes": ["dream-summary", "dream-thought"]
-}`}</div>
-            <div className="ep-label">Request Body (Telegram - Input/Output Chat)</div>
-            <div className="ep-code">{`{
-  "name": "Tree Chat Bot",
-  "type": "telegram",
-  "direction": "input-output",
-  "mode": "read-write",
-  "config": { "botToken": "123:ABC...", "chatId": "-100123..." },
-  "notificationTypes": ["dream-summary"],
-  "queueBehavior": "respond"
-}`}</div>
-            <div className="ep-label">Request Body (Discord - Output)</div>
-            <div className="ep-code">{`{
-  "name": "Dream Updates",
-  "type": "discord",
-  "direction": "output",
-  "config": { "webhookUrl": "https://discord.com/api/webhooks/..." },
-  "notificationTypes": ["dream-summary"]
-}`}</div>
-            <div className="ep-label">Request Body (Discord - Input/Output)</div>
-            <div className="ep-code">{`{
-  "name": "Discord Tree Chat",
-  "type": "discord",
-  "direction": "input-output",
-  "mode": "read-write",
-  "config": {
-    "botToken": "discord-bot-token...",
-    "discordChannelId": "1234567890123456789"
-  },
-  "queueBehavior": "respond"
-}`}</div>
-            <div className="ep-label">Channel Types</div>
-            <div className="ep-code">{`telegram  - Bot token + chat ID (input, output, or both)
-discord   - Webhook URL (output) or bot token + channel ID (input)
-webapp    - Browser push notification (output only)`}</div>
-            <div className="ep-label">Direction</div>
-            <div className="ep-code">{`output        - Push notifications out (dream summaries, etc.)
-input         - Receive messages in (place content, no response)
-input-output  - Bidirectional (send messages, get responses)`}</div>
-            <div className="ep-label">Mode (for input channels)</div>
-            <div className="ep-code">{`write       - Place mode: scans tree, makes edits, no response
-read        - Query mode: reads tree, responds, no edits
-read-write  - Chat mode: reads tree, makes edits, responds`}</div>
-            <div className="ep-label">Queue Behavior (for input channels)</div>
-            <div className="ep-code">{`respond  - Replies "busy" when 2+ messages processing (default)
-silent   - Drops overflow messages without responding`}</div>
-            <div className="ep-label">Notification Types (for output channels)</div>
-            <div className="ep-code">{`dream-summary  - Nightly dream summary
-dream-thought  - Nightly dream thought`}</div>
-            <div className="ep-note">
-              All secrets (bot tokens, webhook URLs, push subscriptions) are
-              encrypted at rest using AES-256-CBC. Maximum 10 channels per root.
-              Discord input channels require Standard tier or above.
-              Send "cancel" to any input channel to abort all active processing.
-            </div>
-          </div>
-
-          {/* ── Update ── */}
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method put">PUT</span>
-              <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId</span>
-            </div>
-            <div className="ep-desc">Update a channel{"'"}s name, enabled status, notification types, queue behavior, or config.</div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{ "enabled": false }
-{ "queueBehavior": "silent" }
-{ "notificationTypes": ["dream-summary"] }`}</div>
-          </div>
-
-          {/* ── Delete ── */}
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method delete">DELETE</span>
-              <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId</span>
-            </div>
-            <div className="ep-desc">
-              Delete a gateway channel. Only the channel creator can delete it.
-              Automatically unregisters Telegram webhooks and disconnects Discord bots.
-            </div>
-          </div>
-
-          {/* ── Test ── */}
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId/test</span>
-            </div>
-            <div className="ep-desc">Send a test notification through a channel to verify it works.</div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{'{ "success": true }'}</div>
-          </div>
-
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  5. BOOK & SHARING                                            */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="book">
-          <div className="section-title">
-            <span className="section-icon">📖</span> Book &amp; Sharing
-          </div>
-          <div className="section-text">
-            The book view compiles all notes from a root and its children into a
-            single hierarchical document. Books can be shared via public links.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/root/:rootId/book</span>
-            </div>
-            <div className="ep-desc">Book view — all notes from every child node compiled into a hierarchical format.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/root/:rootId/book/generate</span>
-            </div>
-            <div className="ep-desc">Generate a shareable link for the book. Returns a share ID for the public URL.</div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{'{ "shareId": "abc123..." }'}</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/root/:rootId/book/share/:shareId</span>
-            </div>
-            <div className="ep-desc">Public book link. Always renders HTML. No authentication required — anyone with the link can view.</div>
-            <div className="ep-note">This is the URL you share with others.</div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  6. UNDERSTANDINGS                                            */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="understandings">
-          <div className="section-title">
-            <span className="section-icon">🧠</span> Understandings
-          </div>
-          <div className="section-text">
-            Understandings are AI-powered analysis runs across a tree. Each run
-            produces encodings for individual nodes, capturing the AI's
-            interpretation of the node's state and content.
-            <br /><br />
-            To run the full AI orchestrator, see <a href="#understand-tree">Understand Tree</a> above.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/root/:rootId/understandings</span>
-            </div>
-            <div className="ep-desc">
-              Create a new understanding run for the tree. Pass <code>incremental: true</code> to
-              reuse an existing completed run and only reprocess changed nodes.
-            </div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{ "perspective": "general", "incremental": true }`}</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/root/:rootId/understandings</span>
-            </div>
-            <div className="ep-desc">List all understanding runs for this tree.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/root/:rootId/understandings/:understandingNodeId</span>
-            </div>
-            <div className="ep-desc">View a single understanding node and all of its run encodings across every run.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId</span>
-            </div>
-            <div className="ep-desc">View a specific understanding run and its results.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/:understandingNodeId</span>
-            </div>
-            <div className="ep-desc">View a node's encoding state from the perspective of a specific understanding run.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/stop</span>
-            </div>
-            <div className="ep-desc">Stop an active understanding orchestration. Progress is preserved and can be resumed.</div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  7. NODE ENDPOINTS                                            */}
+        {/*  NODE ENDPOINTS                                               */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <div className="section" id="node">
           <div className="section-title">
@@ -1599,6 +1091,8 @@ dream-thought  - Nightly dream thought`}</div>
             every tree. Node state (status, type) lives directly on the node.
             Extension data (values, goals, schedule) lives in the node's metadata map.
           </div>
+
+          <p className="api-note">Additional node endpoints are added by extensions: values, goals, scripts, transactions, solana, schedules, prestige.</p>
 
           <div className="sub-title">Node Management</div>
 
@@ -1669,73 +1163,7 @@ dream-thought  - Nightly dream thought`}</div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  8. SCRIPTS                                                   */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="scripts">
-          <div className="section-title">
-            <span className="section-icon">⚙️</span> Scripts
-          </div>
-          <div className="section-text">
-            Nodes can have attached scripts — small JavaScript programs that run
-            in a sandboxed VM. Scripts can read and mutate node values, goals,
-            status, schedule, and prestige.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/script/create</span>
-            </div>
-            <div className="ep-desc">Create or update a script on this node.</div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{
-  "name": "dailyReset",
-  "script": "setValueForNode('streak', 0);"
-}`}</div>
-            <div className="ep-note">Max 2000 characters. Scripts are node-scoped (not version-scoped).</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/script/:scriptId</span>
-            </div>
-            <div className="ep-desc">View a script's source code and metadata.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/script/:scriptId/execute</span>
-            </div>
-            <div className="ep-desc">Execute a script on this node.</div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{`{
-  "message": "Script executed successfully",
-  "logs": ["console output line 1", "..."],
-  "node": { "...updated node data" }
-}`}</div>
-          </div>
-
-          <div className="highlight-box">
-            <div className="section-text">
-              <strong>Script environment:</strong> Sandboxed VM, 3-second timeout,
-              up to 200 console.log lines captured.
-            </div>
-          </div>
-
-          <div className="sub-title">Available Functions Inside Scripts</div>
-          <div className="ep-code">{`getApi()
-setValueForNode(key, value)
-setGoalForNode(key, goal)
-editStatusForNode(status)
-addPrestigeForNode()
-updateScheduleForNode(datetime | null)`}</div>
-          <div className="ep-note">Scripts run under the permissions of the calling user or API key. Failures are logged with captured output and error messages.</div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/*  9. NODE VERSION ENDPOINTS                                    */}
+        {/*  NODE OPERATIONS                                              */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <div className="section" id="version">
           <div className="section-title">
@@ -1790,8 +1218,84 @@ updateScheduleForNode(datetime | null)`}</div>
 
           <div className="section-spacer"></div>
 
-          {/* ── Notes ────────────── */}
-          <div className="sub-title">Notes</div>
+          {/* ── Values & Goals ───── */}
+          <div className="sub-title">Values &amp; Goals</div>
+          <div className="desc-muted">
+            Version-scoped key–value pairs for metrics, automation, and computed
+            state. Keys prefixed with <code>_auto__</code> are read-only and
+            system-generated.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values</span>
+            </div>
+            <div className="ep-desc">List all values and goals on this version.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/value</span>
+            </div>
+            <div className="ep-desc">Set a value on this version.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{'{ "key": "revenue", "value": 42000 }'}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/goal</span>
+            </div>
+            <div className="ep-desc">Set a goal on this version.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{'{ "key": "revenue", "goal": 100000 }'}</div>
+          </div>
+
+          <div className="section-spacer"></div>
+
+          {/* ── AI Chats ─────────── */}
+          <div className="sub-title">AI Chats</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/chats</span>
+            </div>
+            <div className="ep-desc">View AI chat sessions that targeted or modified this node.</div>
+            <div className="ep-label">Query Parameters</div>
+            <div className="param-row">
+              <span className="param-key">?limit=NUMBER</span>
+              <span className="param-desc">Max sessions to return (default 10, max 10)</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?sessionId=ID</span>
+              <span className="param-desc">Filter to a specific session</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?startDate=ISO</span>
+              <span className="param-desc">Filter chats after this date</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">?endDate=ISO</span>
+              <span className="param-desc">Filter chats before this date</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  NOTES                                                        */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="notes">
+          <div className="section-title">
+            <span className="section-icon">📝</span> Notes
+          </div>
+          <div className="section-text">
+            Notes are content attached to nodes. Text notes and file notes.
+            Core note CRUD on any node.
+          </div>
 
           <div className="endpoint">
             <div className="ep-method-url">
@@ -1891,11 +1395,18 @@ updateScheduleForNode(datetime | null)`}</div>
             <div className="ep-desc">Open the full-page editor for an existing note.</div>
             <div className="ep-note">HTML only. File notes redirect to the view page.</div>
           </div>
+        </div>
 
-          <div className="section-spacer"></div>
-
-          {/* ── Contributions ────── */}
-          <div className="sub-title">Contributions</div>
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  CONTRIBUTIONS                                                */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="contributions">
+          <div className="section-title">
+            <span className="section-icon">📊</span> Contributions
+          </div>
+          <div className="section-text">
+            Audit trail of all actions on a node.
+          </div>
 
           <div className="endpoint">
             <div className="ep-method-url">
@@ -1917,265 +1428,54 @@ updateScheduleForNode(datetime | null)`}</div>
               <span className="param-desc">Filter to date</span>
             </div>
           </div>
-
-          <div className="section-spacer"></div>
-
-          {/* ── Values & Goals ───── */}
-          <div className="sub-title">Values &amp; Goals</div>
-          <div className="desc-muted">
-            Version-scoped key–value pairs for metrics, automation, and computed
-            state. Keys prefixed with <code>_auto__</code> are read-only and
-            system-generated.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/values</span>
-            </div>
-            <div className="ep-desc">List all values and goals on this version.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/value</span>
-            </div>
-            <div className="ep-desc">Set a value on this version.</div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{'{ "key": "revenue", "value": 42000 }'}</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/goal</span>
-            </div>
-            <div className="ep-desc">Set a goal on this version.</div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{'{ "key": "revenue", "goal": 100000 }'}</div>
-          </div>
-
-          <div className="section-spacer"></div>
-
-          {/* ── AI Chats ─────────── */}
-          <div className="sub-title">AI Chats</div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/chats</span>
-            </div>
-            <div className="ep-desc">View AI chat sessions that targeted or modified this node.</div>
-            <div className="ep-label">Query Parameters</div>
-            <div className="param-row">
-              <span className="param-key">?limit=NUMBER</span>
-              <span className="param-desc">Max sessions to return (default 10, max 10)</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">?sessionId=ID</span>
-              <span className="param-desc">Filter to a specific session</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">?startDate=ISO</span>
-              <span className="param-desc">Filter chats after this date</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">?endDate=ISO</span>
-              <span className="param-desc">Filter chats before this date</span>
-            </div>
-          </div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 10. TRANSACTIONS                                              */}
+        {/* PER-NODE CONFIG                                               */}
         {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="transactions">
+        <div className="section" id="node-config">
           <div className="section-title">
-            <span className="section-icon">🤝</span> Transactions
+            <span className="section-icon">🔧</span> Per-Node Configuration
           </div>
           <div className="section-text">
-            Transactions are value trades between two sides. Each side is either
-            a <strong>NODE</strong> (an internal tree node with key–value pairs)
-            or <strong>OUTSIDE</strong> (an external source like a Solana wallet).
-            Approval follows the tree's transaction policy.
-          </div>
-
-          <div className="highlight-box">
-            <div className="section-text">
-              <strong>How sides work:</strong><br />
-              • <strong>NODE</strong> — trades node values (key–value pairs). Requires <code>nodeId</code> and <code>versionIndex</code>.<br />
-              • <strong>OUTSIDE</strong> — represents an external source (e.g. a Solana wallet). Uses <code>sourceType</code> and <code>sourceId</code>. Cannot carry values — only the NODE side sends/receives.<br /><br />
-              <strong>Values:</strong> <code>valuesA</code> and <code>valuesB</code> are objects mapping value keys to amounts (e.g. <code>{"{ \"gold\": 100 }"}</code>). Each side's values represent what that side <em>gives</em>. At least one side must include values. An OUTSIDE side cannot have values.
-            </div>
-          </div>
-
-          <div className="sub-title">List &amp; View</div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/transactions</span>
-            </div>
-            <div className="ep-desc">List all transactions (pending, accepted, and rejected) for this node version.</div>
+            Customize AI tools and modes per node. Tools inherit from parent to child. Mode overrides let
+            different branches think differently.
           </div>
 
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/transactions/:transactionId</span>
+              <span className="ep-url">/api/v1/node/:nodeId/tools</span>
             </div>
-            <div className="ep-desc">View a single transaction including both sides, traded values, approval groups, and status.</div>
-          </div>
-
-          <div className="sub-title">Create</div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/transactions</span>
-            </div>
-            <div className="ep-desc">Create a new transaction proposal between two sides.</div>
-            <div className="ep-label">Node ↔ Node Example</div>
-            <div className="ep-code">{`{
-  "sideA.kind": "NODE",
-  "sideA.nodeId": "node-id-A",
-  "versionAIndex": 1,
-  "valuesA": { "gold": 100 },
-
-  "sideB.kind": "NODE",
-  "sideB.nodeId": "node-id-B",
-  "versionBIndex": 2,
-  "valuesB": { "wood": 50 }
-}`}</div>
-            <div className="ep-label">Node ↔ Outside (Solana) Example</div>
-            <div className="ep-code">{`{
-  "sideA.kind": "NODE",
-  "sideA.nodeId": "node-id-A",
-  "versionAIndex": 1,
-  "valuesA": { "gold": 100 },
-
-  "sideB.kind": "OUTSIDE",
-  "sideB.sourceType": "SOLANA",
-  "sideB.sourceId": "So1anaWa11etAddr3ss..."
-}`}</div>
-            <div className="ep-label">Field Reference</div>
-            <div className="param-row">
-              <span className="param-key">sideX.kind</span>
-              <span className="param-desc"><code>NODE</code> or <code>OUTSIDE</code> — only one side may be OUTSIDE</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">sideX.nodeId</span>
-              <span className="param-desc">Required when kind is <code>NODE</code></span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">sideX.sourceType</span>
-              <span className="param-desc">External source type (currently <code>SOLANA</code>). Used when kind is <code>OUTSIDE</code></span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">sideX.sourceId</span>
-              <span className="param-desc">External identifier (e.g. Solana wallet address). Used when kind is <code>OUTSIDE</code></span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">versionXIndex</span>
-              <span className="param-desc">Required for <code>NODE</code> sides. Side B defaults to latest version if omitted</span>
-            </div>
-            <div className="param-row">
-              <span className="param-key">valuesX</span>
-              <span className="param-desc">Object of <code>{"{ key: amount }"}</code> that this side gives. OUTSIDE sides cannot have values</span>
-            </div>
-            <div className="ep-note">
-              Self-trades (same node + same version on both sides) are not allowed.
-              If all approval groups resolve immediately, the transaction executes on creation.
-            </div>
-          </div>
-
-          <div className="sub-title">Approve &amp; Deny</div>
-          <div className="desc-muted">
-            Approval follows the tree's transaction policy (set via{" "}
-            <code>POST /api/v1/root/:rootId/transaction-policy</code>).
-            Depending on the policy, one or more approvals may be needed.
-            Status transitions: <code>pending</code> → <code>accepted</code> or <code>rejected</code>.
+            <div className="ep-desc">Get effective tools at this node: base tools, added, blocked, inheritance chain.</div>
           </div>
 
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/transactions/:transactionId/approve</span>
+              <span className="ep-url">/api/v1/node/:nodeId/tools</span>
             </div>
-            <div className="ep-desc">Approve a pending transaction. When enough approvals are collected (per policy), the transaction executes and values are exchanged.</div>
+            <div className="ep-desc">{"Set tool config. Body: { allowed: [...], blocked: [...] }. Inherits to children."}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/modes</span>
+            </div>
+            <div className="ep-desc">Get mode overrides and available modes at this node.</div>
           </div>
 
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/transactions/:transactionId/deny</span>
+              <span className="ep-url">/api/v1/node/:nodeId/modes</span>
             </div>
-            <div className="ep-desc">Deny a pending transaction. Sets the transaction status to rejected.</div>
+            <div className="ep-desc">{"Set mode override. Body: { intent, modeKey } or { intent, clear: true }."}</div>
           </div>
         </div>
 
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 11. SOLANA WALLET                                             */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="solana">
-          <div className="section-title">
-            <span className="section-icon">💎</span> Solana Wallet
-          </div>
-          <div className="section-text">
-            Each node version can have an associated Solana wallet. Balances are
-            stored in lamports. Auto values like <code>_auto__sol</code> update
-            automatically on read.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/values/solana</span>
-            </div>
-            <div className="ep-desc">Get wallet address, SOL balance, and token balances.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/values/solana</span>
-            </div>
-            <div className="ep-desc">Create or configure the wallet for this version.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/values/solana/send</span>
-            </div>
-            <div className="ep-desc">Send SOL to another address.</div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{
-  "destination": "So1anaAddr3ss...",
-  "amount": 1000000
-}`}</div>
-            <div className="ep-note">Amount is in lamports (1 SOL = 1,000,000,000 lamports).</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/values/solana/transaction</span>
-            </div>
-            <div className="ep-desc">Execute a token swap via Jupiter aggregator.</div>
-            <div className="ep-label">Request Body</div>
-            <div className="ep-code">{`{
-  "fromType": "sol | token",
-  "toType": "sol | token",
-  "amount": 500000000,
-  "inputMint": "optional-mint-address",
-  "outputMint": "optional-mint-address",
-  "slippageBps": 50
-}`}</div>
-            <div className="ep-note">If type is SOL, amount is in lamports. If type is token, amount is the UI amount (human-readable).</div>
-          </div>
-        </div>
+        {/* ═══ LAND MANAGEMENT ═══ */}
 
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* LAND MANAGEMENT                                               */}
@@ -2270,51 +1570,6 @@ updateScheduleForNode(datetime | null)`}</div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* PER-NODE CONFIG                                               */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="node-config">
-          <div className="section-title">
-            <span className="section-icon">🔧</span> Per-Node Configuration
-          </div>
-          <div className="section-text">
-            Customize AI tools and modes per node. Tools inherit from parent to child. Mode overrides let
-            different branches think differently.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/tools</span>
-            </div>
-            <div className="ep-desc">Get effective tools at this node: base tools, added, blocked, inheritance chain.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/tools</span>
-            </div>
-            <div className="ep-desc">{"Set tool config. Body: { allowed: [...], blocked: [...] }. Inherits to children."}</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/node/:nodeId/modes</span>
-            </div>
-            <div className="ep-desc">Get mode overrides and available modes at this node.</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method post">POST</span>
-              <span className="ep-url">/api/v1/node/:nodeId/modes</span>
-            </div>
-            <div className="ep-desc">{"Set mode override. Body: { intent, modeKey } or { intent, clear: true }."}</div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
         {/* EXTENSIONS                                                    */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <div className="section" id="extensions">
@@ -2384,58 +1639,7 @@ updateScheduleForNode(datetime | null)`}</div>
           </div>
         </div>
 
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* BLOG                                                          */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        <div className="section" id="blog">
-          <div className="section-title">
-            <span className="section-icon">📝</span> Blog
-          </div>
-          <div className="section-text">
-            Public endpoints for reading blog posts. No authentication required.
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/blog/posts</span>
-            </div>
-            <div className="ep-desc">List all published blog posts, sorted by newest first.</div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{`{
-  "success": true,
-  "posts": [
-    {
-      "title": "Why I Built Tree",
-      "slug": "why-i-built-tree",
-      "summary": "...",
-      "publishedAt": "2026-03-15T...",
-      "authorName": "tabor"
-    }
-  ]
-}`}</div>
-          </div>
-
-          <div className="endpoint">
-            <div className="ep-method-url">
-              <span className="ep-method get">GET</span>
-              <span className="ep-url">/api/v1/blog/posts/:slug</span>
-            </div>
-            <div className="ep-desc">Get a single published blog post by its slug, including full content.</div>
-            <div className="ep-label">Response</div>
-            <div className="ep-code">{`{
-  "success": true,
-  "post": {
-    "title": "Why I Built Tree",
-    "slug": "why-i-built-tree",
-    "content": "<p>Full HTML content...</p>",
-    "summary": "...",
-    "publishedAt": "2026-03-15T...",
-    "authorName": "tabor"
-  }
-}`}</div>
-          </div>
-        </div>
+        {/* ═══ CANOPY (FEDERATION) ═══ */}
 
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* CANOPY: PUBLIC DISCOVERY                                      */}
@@ -2746,6 +1950,842 @@ updateScheduleForNode(datetime | null)`}</div>
               <code>other.land/api/v1/node/abc</code> with your CanopyToken.
             </div>
             <div className="ep-note">Requires API key or JWT authentication. Your home land must be peered with the target domain.</div>
+          </div>
+        </div>
+
+        {/* ═══ EXTENSIONS ═══ */}
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  URL MODES                                                    */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="url-modes">
+          <div className="section-title">
+            <span className="section-icon">🌐</span> URL Modes: ?html &amp; ?token
+          </div>
+          <div className="section-text">
+            Every GET endpoint supports two query parameters that change how the
+            response is delivered:
+          </div>
+
+          <div className="sub-title">?token=YOUR_TOKEN</div>
+          <div className="section-text">
+            A URL access token that authenticates the request. Only required for GET
+            routes when you don't have an API key header.
+            Tokens are tied to your account and can be found or refreshed on
+            your profile page.
+            <br /><br />
+            Example: <code>/api/v1/node/:nodeId/5/notes?token=abc123</code>
+          </div>
+
+          <div className="sub-title">?html</div>
+          <div className="section-text">
+            When present, the server returns a fully rendered HTML page instead
+            of raw JSON. This is what the browser app uses. Without{" "}
+            <code>?html</code>, you always get JSON.
+            <br /><br />
+            Example: <code>/api/v1/node/:nodeId/5/notes?token=abc123&amp;html</code>
+          </div>
+
+          <div className="highlight-box">
+            <div className="section-text">
+              <strong>For API integrations</strong>, use the <code>x-api-key</code>{" "}
+              header and omit both <code>?html</code> and <code>?token</code>.
+              The token/html pattern is designed for shareable browser links.
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  RAW IDEA CHAT                                                 */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="raw-idea-chat">
+          <div className="section-title">
+            <span className="section-icon">🤖</span> Raw Idea Chat
+          </div>
+          <div className="section-text">
+            Same as Raw Idea Place, but synchronous — waits for the AI to finish
+            and returns a conversational response along with which tree the idea
+            was placed on. Useful when you want both placement <em>and</em> an
+            answer in a single call.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/chat</span>
+            </div>
+            <div className="ep-desc">
+              Send text content directly. Creates the raw idea, places it on the
+              best tree, and returns the AI&#39;s response -- all in one call.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "content": "Your idea text here" }`}</div>
+            <div className="ep-label">Success Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "answer": "Your idea about X was placed under ...",
+  "rootId": "abc123",
+  "rootName": "My Tree",
+  "targetNodeId": "def456",
+  "targetNodePath": [
+    { "_id": "abc123", "name": "My Tree" },
+    { "_id": "xyz789", "name": "Health" },
+    { "_id": "def456", "name": "Sleep" }
+  ],
+  "rawIdeaId": "ghi789"
+}`}</div>
+            <div className="ep-label">Failure Response</div>
+            <div className="ep-code">{`{ "success": false, "error": "No trees available for this user" }`}</div>
+            <div className="ep-note">
+              This is a long-running request (up to 19 minutes) -- the AI is doing
+              real work behind the scenes.
+            </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/chat</span>
+            </div>
+            <div className="ep-desc">
+              Same as above, but for an existing raw idea. Create a raw idea first
+              via <code>POST /api/v1/user/:userId/raw-ideas</code>, then call this endpoint.
+              Only works for <code>pending</code> text ideas.
+            </div>
+            <div className="ep-label">Success Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "answer": "Your idea about X was placed under ...",
+  "rootId": "abc123",
+  "rootName": "My Tree",
+  "targetNodeId": "def456",
+  "targetNodePath": [
+    { "_id": "abc123", "name": "My Tree" },
+    { "_id": "xyz789", "name": "Health" },
+    { "_id": "def456", "name": "Sleep" }
+  ]
+}`}</div>
+            <div className="ep-label">Failure Response</div>
+            <div className="ep-code">{`{ "success": false, "error": "No trees available for this user" }`}</div>
+            <div className="ep-note">
+              This is a long-running request (up to 19 minutes) -- the AI is doing
+              real work behind the scenes.
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  RAW IDEA PLACE                                                */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="raw-idea-place">
+          <div className="section-title">
+            <span className="section-icon">📥</span> Raw Idea Place
+          </div>
+          <div className="section-text">
+            Takes a raw idea created from a user&#39;s profile and places it onto
+            a tree. The AI picks the best tree, finds the right place in it,
+            and stores the idea — all automatically. No root ID needed.
+            <br /><br />
+            This is fire-and-forget: it returns immediately while placement
+            runs in the background. Does not generate a response — just places
+            the idea. Use Raw Idea Chat above if you need a conversational reply.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/place</span>
+            </div>
+            <div className="ep-desc">
+              Send text content directly. Creates the raw idea and triggers
+              AI placement in the background -- all in one call. Fire-and-forget.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "content": "Your idea text here" }`}</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "message": "Orchestration started", "rawIdeaId": "abc123" }  // 202 Accepted'}</div>
+            <div className="ep-note">
+              Poll the idea&#39;s status via <code>GET /api/v1/user/:userId/raw-ideas/:rawIdeaId</code> to track progress.
+              Use Raw Idea Chat above if you need a conversational reply.
+            </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/user/:userId/raw-ideas/:rawIdeaId/place</span>
+            </div>
+            <div className="ep-desc">
+              Same as above, but for an existing raw idea. Create a raw idea first
+              via <code>POST /api/v1/user/:userId/raw-ideas</code>, then trigger orchestration.
+              Only works for <code>pending</code> text ideas.
+            </div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "message": "Orchestration started" }  // 202 Accepted'}</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  UNDERSTAND TREE                                               */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="understand-tree">
+          <div className="section-title">
+            <span className="section-icon">🔬</span> Understand Tree
+          </div>
+          <div className="section-text">
+            Runs AI-powered compression across an entire tree. The AI reads every
+            node, summarizes leaf content, then merges summaries layer by layer
+            until a single root encoding remains — a holistic understanding of the
+            whole tree from a given perspective.
+            <br /><br />
+            Example perspectives:
+          </div>
+          <ul className="ep-examples">
+            <li><code>translate to Chinese</code></li>
+            <li><code>summarize this into 30 words</code></li>
+            <li><code>find all the places where marketing strategy is mentioned</code></li>
+            <li><code>extract every action item and deadline</code></li>
+            <li><code>identify contradictions or conflicting ideas</code></li>
+          </ul>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings</span>
+            </div>
+            <div className="ep-desc">
+              Create a new understanding run. Pass a <code>perspective</code> in the
+              request body to tell the AI what lens to use. Set <code>incremental</code> to
+              <code>true</code> to reuse an existing completed run and only reprocess
+              nodes that changed since the last run.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "perspective": "summarize this into 30 words", "incremental": true }`}</div>
+            <div className="ep-note">
+              When <code>incremental</code> is <code>true</code>, the system finds the most recent
+              completed run for the same root and perspective, detects which nodes have new
+              contributions, and only reprocesses dirty nodes and their ancestors. If no prior
+              run exists, a fresh run is created. Defaults to <code>false</code>.
+            </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/orchestrate</span>
+            </div>
+            <div className="ep-desc">
+              Run the AI understanding orchestrator on an existing run.
+              The AI compresses all nodes layer by layer until a single root
+              encoding remains. Only one orchestration can run at a time per run.
+            </div>
+            <div className="ep-label">Success Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "understandingRunId": "abc123",
+  "perspective": "summarize this into 30 words",
+  "nodeCount": 12,
+  "nodesProcessed": 11,
+  "rootEncoding": "Compressed summary of the tree…"
+}`}</div>
+            <div className="ep-label">Already Complete</div>
+            <div className="ep-code">{`{ "success": true, "alreadyComplete": true, "rootEncoding": "…" }`}</div>
+            <div className="ep-note">
+              Create a run first via <code>POST /api/v1/root/:rootId/understandings</code>,
+              then trigger orchestration. This is a long-running request — the AI
+              processes every node in the tree. Idempotent — if the run was
+              interrupted, calling again picks up where it left off. If already
+              complete, returns the final result immediately.
+            </div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/stop</span>
+            </div>
+            <div className="ep-desc">
+              Stop an active understanding orchestration. Aborts the in-flight
+              session and halts processing. Progress is preserved -- calling
+              orchestrate again will resume from where it stopped.
+            </div>
+            <div className="ep-label">Success Response</div>
+            <div className="ep-code">{`{ "success": true }`}</div>
+            <div className="ep-label">No Active Session</div>
+            <div className="ep-code">{`{ "success": false, "error": "No active session found for this run" }`}</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  UNDERSTANDINGS                                               */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="understandings">
+          <div className="section-title">
+            <span className="section-icon">🧠</span> Understandings
+          </div>
+          <div className="section-text">
+            Understandings are AI-powered analysis runs across a tree. Each run
+            produces encodings for individual nodes, capturing the AI's
+            interpretation of the node's state and content.
+            <br /><br />
+            To run the full AI orchestrator, see <a href="#understand-tree">Understand Tree</a> above.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings</span>
+            </div>
+            <div className="ep-desc">
+              Create a new understanding run for the tree. Pass <code>incremental: true</code> to
+              reuse an existing completed run and only reprocess changed nodes.
+            </div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "perspective": "general", "incremental": true }`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings</span>
+            </div>
+            <div className="ep-desc">List all understanding runs for this tree.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings/:understandingNodeId</span>
+            </div>
+            <div className="ep-desc">View a single understanding node and all of its run encodings across every run.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId</span>
+            </div>
+            <div className="ep-desc">View a specific understanding run and its results.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/:understandingNodeId</span>
+            </div>
+            <div className="ep-desc">View a node's encoding state from the perspective of a specific understanding run.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/understandings/run/:runId/stop</span>
+            </div>
+            <div className="ep-desc">Stop an active understanding orchestration. Progress is preserved and can be resumed.</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  GATEWAY CHANNELS                                              */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="gateway">
+          <div className="section-title">
+            <span className="section-icon">📡</span> Gateway Channels
+          </div>
+          <div className="section-text">
+            Gateway channels connect your tree to external services like Telegram,
+            Discord, and browser push notifications. Each root can have up to 10
+            channels. Channels have a <strong>direction</strong> (input, output,
+            or input-output), a <strong>mode</strong> (place, query, or chat),
+            and <strong>queue protection</strong> for input channels.
+          </div>
+
+          {/* ── List ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels</span>
+            </div>
+            <div className="ep-desc">List all gateway channels for a root. Secrets are excluded from the response.</div>
+          </div>
+
+          {/* ── Create ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels</span>
+            </div>
+            <div className="ep-desc">Create a new gateway channel.</div>
+            <div className="ep-label">Request Body (Telegram - Output)</div>
+            <div className="ep-code">{`{
+  "name": "My Telegram Bot",
+  "type": "telegram",
+  "direction": "output",
+  "config": { "botToken": "123:ABC...", "chatId": "-100123..." },
+  "notificationTypes": ["dream-summary", "dream-thought"]
+}`}</div>
+            <div className="ep-label">Request Body (Telegram - Input/Output Chat)</div>
+            <div className="ep-code">{`{
+  "name": "Tree Chat Bot",
+  "type": "telegram",
+  "direction": "input-output",
+  "mode": "read-write",
+  "config": { "botToken": "123:ABC...", "chatId": "-100123..." },
+  "notificationTypes": ["dream-summary"],
+  "queueBehavior": "respond"
+}`}</div>
+            <div className="ep-label">Request Body (Discord - Output)</div>
+            <div className="ep-code">{`{
+  "name": "Dream Updates",
+  "type": "discord",
+  "direction": "output",
+  "config": { "webhookUrl": "https://discord.com/api/webhooks/..." },
+  "notificationTypes": ["dream-summary"]
+}`}</div>
+            <div className="ep-label">Request Body (Discord - Input/Output)</div>
+            <div className="ep-code">{`{
+  "name": "Discord Tree Chat",
+  "type": "discord",
+  "direction": "input-output",
+  "mode": "read-write",
+  "config": {
+    "botToken": "discord-bot-token...",
+    "discordChannelId": "1234567890123456789"
+  },
+  "queueBehavior": "respond"
+}`}</div>
+            <div className="ep-label">Channel Types</div>
+            <div className="ep-code">{`telegram  - Bot token + chat ID (input, output, or both)
+discord   - Webhook URL (output) or bot token + channel ID (input)
+webapp    - Browser push notification (output only)`}</div>
+            <div className="ep-label">Direction</div>
+            <div className="ep-code">{`output        - Push notifications out (dream summaries, etc.)
+input         - Receive messages in (place content, no response)
+input-output  - Bidirectional (send messages, get responses)`}</div>
+            <div className="ep-label">Mode (for input channels)</div>
+            <div className="ep-code">{`write       - Place mode: scans tree, makes edits, no response
+read        - Query mode: reads tree, responds, no edits
+read-write  - Chat mode: reads tree, makes edits, responds`}</div>
+            <div className="ep-label">Queue Behavior (for input channels)</div>
+            <div className="ep-code">{`respond  - Replies "busy" when 2+ messages processing (default)
+silent   - Drops overflow messages without responding`}</div>
+            <div className="ep-label">Notification Types (for output channels)</div>
+            <div className="ep-code">{`dream-summary  - Nightly dream summary
+dream-thought  - Nightly dream thought`}</div>
+            <div className="ep-note">
+              All secrets (bot tokens, webhook URLs, push subscriptions) are
+              encrypted at rest using AES-256-CBC. Maximum 10 channels per root.
+              Discord input channels require Standard tier or above.
+              Send "cancel" to any input channel to abort all active processing.
+            </div>
+          </div>
+
+          {/* ── Update ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method put">PUT</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId</span>
+            </div>
+            <div className="ep-desc">Update a channel{"'"}s name, enabled status, notification types, queue behavior, or config.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{ "enabled": false }
+{ "queueBehavior": "silent" }
+{ "notificationTypes": ["dream-summary"] }`}</div>
+          </div>
+
+          {/* ── Delete ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method delete">DELETE</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId</span>
+            </div>
+            <div className="ep-desc">
+              Delete a gateway channel. Only the channel creator can delete it.
+              Automatically unregisters Telegram webhooks and disconnects Discord bots.
+            </div>
+          </div>
+
+          {/* ── Test ── */}
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/gateway/channels/:channelId/test</span>
+            </div>
+            <div className="ep-desc">Send a test notification through a channel to verify it works.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "success": true }'}</div>
+          </div>
+
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  BOOK & SHARING                                               */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="book">
+          <div className="section-title">
+            <span className="section-icon">📖</span> Book &amp; Sharing
+          </div>
+          <div className="section-text">
+            The book view compiles all notes from a root and its children into a
+            single hierarchical document. Books can be shared via public links.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/book</span>
+            </div>
+            <div className="ep-desc">Book view — all notes from every child node compiled into a hierarchical format.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/book/generate</span>
+            </div>
+            <div className="ep-desc">Generate a shareable link for the book. Returns a share ID for the public URL.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{'{ "shareId": "abc123..." }'}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/book/share/:shareId</span>
+            </div>
+            <div className="ep-desc">Public book link. Always renders HTML. No authentication required — anyone with the link can view.</div>
+            <div className="ep-note">This is the URL you share with others.</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/*  SCRIPTS                                                      */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="scripts">
+          <div className="section-title">
+            <span className="section-icon">⚙️</span> Scripts
+          </div>
+          <div className="section-text">
+            Nodes can have attached scripts — small JavaScript programs that run
+            in a sandboxed VM. Scripts can read and mutate node values, goals,
+            status, schedule, and prestige.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/script/create</span>
+            </div>
+            <div className="ep-desc">Create or update a script on this node.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{
+  "name": "dailyReset",
+  "script": "setValueForNode('streak', 0);"
+}`}</div>
+            <div className="ep-note">Max 2000 characters. Scripts are node-scoped (not version-scoped).</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/script/:scriptId</span>
+            </div>
+            <div className="ep-desc">View a script's source code and metadata.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/script/:scriptId/execute</span>
+            </div>
+            <div className="ep-desc">Execute a script on this node.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{
+  "message": "Script executed successfully",
+  "logs": ["console output line 1", "..."],
+  "node": { "...updated node data" }
+}`}</div>
+          </div>
+
+          <div className="highlight-box">
+            <div className="section-text">
+              <strong>Script environment:</strong> Sandboxed VM, 3-second timeout,
+              up to 200 console.log lines captured.
+            </div>
+          </div>
+
+          <div className="sub-title">Available Functions Inside Scripts</div>
+          <div className="ep-code">{`getApi()
+setValueForNode(key, value)
+setGoalForNode(key, goal)
+editStatusForNode(status)
+addPrestigeForNode()
+updateScheduleForNode(datetime | null)`}</div>
+          <div className="ep-note">Scripts run under the permissions of the calling user or API key. Failures are logged with captured output and error messages.</div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* TRANSACTIONS                                                  */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="transactions">
+          <div className="section-title">
+            <span className="section-icon">🤝</span> Transactions
+          </div>
+          <div className="section-text">
+            Transactions are value trades between two sides. Each side is either
+            a <strong>NODE</strong> (an internal tree node with key–value pairs)
+            or <strong>OUTSIDE</strong> (an external source like a Solana wallet).
+            Approval follows the tree's transaction policy.
+          </div>
+
+          <div className="highlight-box">
+            <div className="section-text">
+              <strong>How sides work:</strong><br />
+              • <strong>NODE</strong> — trades node values (key–value pairs). Requires <code>nodeId</code> and <code>versionIndex</code>.<br />
+              • <strong>OUTSIDE</strong> — represents an external source (e.g. a Solana wallet). Uses <code>sourceType</code> and <code>sourceId</code>. Cannot carry values — only the NODE side sends/receives.<br /><br />
+              <strong>Values:</strong> <code>valuesA</code> and <code>valuesB</code> are objects mapping value keys to amounts (e.g. <code>{"{ \"gold\": 100 }"}</code>). Each side's values represent what that side <em>gives</em>. At least one side must include values. An OUTSIDE side cannot have values.
+            </div>
+          </div>
+
+          <div className="sub-title">List &amp; View</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions</span>
+            </div>
+            <div className="ep-desc">List all transactions (pending, accepted, and rejected) for this node version.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions/:transactionId</span>
+            </div>
+            <div className="ep-desc">View a single transaction including both sides, traded values, approval groups, and status.</div>
+          </div>
+
+          <div className="sub-title">Create</div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions</span>
+            </div>
+            <div className="ep-desc">Create a new transaction proposal between two sides.</div>
+            <div className="ep-label">Node ↔ Node Example</div>
+            <div className="ep-code">{`{
+  "sideA.kind": "NODE",
+  "sideA.nodeId": "node-id-A",
+  "versionAIndex": 1,
+  "valuesA": { "gold": 100 },
+
+  "sideB.kind": "NODE",
+  "sideB.nodeId": "node-id-B",
+  "versionBIndex": 2,
+  "valuesB": { "wood": 50 }
+}`}</div>
+            <div className="ep-label">Node ↔ Outside (Solana) Example</div>
+            <div className="ep-code">{`{
+  "sideA.kind": "NODE",
+  "sideA.nodeId": "node-id-A",
+  "versionAIndex": 1,
+  "valuesA": { "gold": 100 },
+
+  "sideB.kind": "OUTSIDE",
+  "sideB.sourceType": "SOLANA",
+  "sideB.sourceId": "So1anaWa11etAddr3ss..."
+}`}</div>
+            <div className="ep-label">Field Reference</div>
+            <div className="param-row">
+              <span className="param-key">sideX.kind</span>
+              <span className="param-desc"><code>NODE</code> or <code>OUTSIDE</code> — only one side may be OUTSIDE</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">sideX.nodeId</span>
+              <span className="param-desc">Required when kind is <code>NODE</code></span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">sideX.sourceType</span>
+              <span className="param-desc">External source type (currently <code>SOLANA</code>). Used when kind is <code>OUTSIDE</code></span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">sideX.sourceId</span>
+              <span className="param-desc">External identifier (e.g. Solana wallet address). Used when kind is <code>OUTSIDE</code></span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">versionXIndex</span>
+              <span className="param-desc">Required for <code>NODE</code> sides. Side B defaults to latest version if omitted</span>
+            </div>
+            <div className="param-row">
+              <span className="param-key">valuesX</span>
+              <span className="param-desc">Object of <code>{"{ key: amount }"}</code> that this side gives. OUTSIDE sides cannot have values</span>
+            </div>
+            <div className="ep-note">
+              Self-trades (same node + same version on both sides) are not allowed.
+              If all approval groups resolve immediately, the transaction executes on creation.
+            </div>
+          </div>
+
+          <div className="sub-title">Approve &amp; Deny</div>
+          <div className="desc-muted">
+            Approval follows the tree's transaction policy (set via{" "}
+            <code>POST /api/v1/root/:rootId/transaction-policy</code>).
+            Depending on the policy, one or more approvals may be needed.
+            Status transitions: <code>pending</code> → <code>accepted</code> or <code>rejected</code>.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions/:transactionId/approve</span>
+            </div>
+            <div className="ep-desc">Approve a pending transaction. When enough approvals are collected (per policy), the transaction executes and values are exchanged.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/transactions/:transactionId/deny</span>
+            </div>
+            <div className="ep-desc">Deny a pending transaction. Sets the transaction status to rejected.</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* SOLANA WALLET                                                 */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="solana">
+          <div className="section-title">
+            <span className="section-icon">💎</span> Solana Wallet
+          </div>
+          <div className="section-text">
+            Each node version can have an associated Solana wallet. Balances are
+            stored in lamports. Auto values like <code>_auto__sol</code> update
+            automatically on read.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values/solana</span>
+            </div>
+            <div className="ep-desc">Get wallet address, SOL balance, and token balances.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values/solana</span>
+            </div>
+            <div className="ep-desc">Create or configure the wallet for this version.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values/solana/send</span>
+            </div>
+            <div className="ep-desc">Send SOL to another address.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{
+  "destination": "So1anaAddr3ss...",
+  "amount": 1000000
+}`}</div>
+            <div className="ep-note">Amount is in lamports (1 SOL = 1,000,000,000 lamports).</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/values/solana/transaction</span>
+            </div>
+            <div className="ep-desc">Execute a token swap via Jupiter aggregator.</div>
+            <div className="ep-label">Request Body</div>
+            <div className="ep-code">{`{
+  "fromType": "sol | token",
+  "toType": "sol | token",
+  "amount": 500000000,
+  "inputMint": "optional-mint-address",
+  "outputMint": "optional-mint-address",
+  "slippageBps": 50
+}`}</div>
+            <div className="ep-note">If type is SOL, amount is in lamports. If type is token, amount is the UI amount (human-readable).</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* BLOG                                                          */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="blog">
+          <div className="section-title">
+            <span className="section-icon">📝</span> Blog
+          </div>
+          <div className="section-text">
+            Public endpoints for reading blog posts. No authentication required.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/blog/posts</span>
+            </div>
+            <div className="ep-desc">List all published blog posts, sorted by newest first.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "posts": [
+    {
+      "title": "Why I Built Tree",
+      "slug": "why-i-built-tree",
+      "summary": "...",
+      "publishedAt": "2026-03-15T...",
+      "authorName": "tabor"
+    }
+  ]
+}`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/blog/posts/:slug</span>
+            </div>
+            <div className="ep-desc">Get a single published blog post by its slug, including full content.</div>
+            <div className="ep-label">Response</div>
+            <div className="ep-code">{`{
+  "success": true,
+  "post": {
+    "title": "Why I Built Tree",
+    "slug": "why-i-built-tree",
+    "content": "<p>Full HTML content...</p>",
+    "summary": "...",
+    "publishedAt": "2026-03-15T...",
+    "authorName": "tabor"
+  }
+}`}</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* ENERGY                                                        */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="energy-section">
+          <div className="section-title">
+            <span className="section-icon">⚡</span> Energy
+          </div>
+          <div className="section-text">
+            Energy is the usage metering system. Every AI operation costs energy.
+            Users on paid plans get a monthly allocation, and additional energy can
+            be purchased. Custom LLM connections bypass energy costs entirely.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/user/:userId/energy</span>
+            </div>
+            <div className="ep-desc">View current energy balance, plan tier, profile type, and custom LLM connection status.</div>
           </div>
         </div>
 

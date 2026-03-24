@@ -5,22 +5,24 @@ import "./WelcomePage.css";
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
 const URL = import.meta.env.VITE_LAND_URL;
 
+const LAND_NAME = import.meta.env.VITE_LAND_NAME || "TreeOS Land";
+
+
 const WelcomePage = () => {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
   const bannerMessages = [
-    "Welcome to TreeOS. Click Start Chat to get started.",
-    "CLI available. Install with npm install -g TreeOS and manage your trees from the terminal.",
+    `Welcome to ${LAND_NAME} Land! Click Start Chat to get started.` ,
     "New: Gateway channels are live. Connect Telegram, Discord, or web push for input, output, or full chat.",
     "Trees can now dream. Set a sleep schedule and let your Tree organize itself overnight.",
-    "Understanding runs detect changes incrementally — only dirty branches get reprocessed.",
-    "New:Session dashboards track every AI process running across your Trees in real time.",
+    "Understanding runs detect changes incrementally. No more wasted LLM power.",
+    "New: Session dashboards track every AI process running across your Trees in real time.",
     "Start Chat offers a streamlined interface. Use the Dashboard for full control.",
     "Understanding runs summarize your entire Tree from any perspective you define.",
     "Collaborative workspaces are live. Invite others to build together.",
-    "Custom LLM support is available. Bring your own key in OpenAI-compatible format.",
+    "Redudant LLM retry system is now available.",
     "This project is in active development. Expect occasional downtime as new features ship.",
     "New perspectives are revealing.",
 
@@ -135,9 +137,9 @@ const WelcomePage = () => {
               🌳
             </div>
 
-            <h1 data-text="TreeOS">TreeOS</h1>
+            <h1 data-text="TreeOS">{LAND_NAME} Land</h1>
           </a>
-          <h2>An Operating System for Context</h2>
+          <h2>First vision ever built from TreeOS</h2>
 
         </div>
         <footer className="hero-footer">
