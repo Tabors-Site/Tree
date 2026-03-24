@@ -17,70 +17,17 @@ program
   .configureHelp({
     formatHelp(cmd, helper) {
       const sections = [
-        {
-          title: "Getting Started",
-          cmds: ["connect", "register", "login", "logout", "whoami"],
-        },
-        {
-          title: "User Home",
-          cmds: ["roots", "use", "root", "mkroot", "retire", "home", "deleted", "revive", "invites", "tags", "contributions", "share-token"],
-        },
-        {
-          title: "Raw Ideas",
-          cmds: ["ideas", "idea", "idea-store", "idea-place", "idea-auto", "idea-transfer", "rm-idea"],
-        },
-        {
-          title: "Navigation",
-          cmds: ["pwd", "ls", "cd", "land", "tree"],
-        },
-        {
-          title: "Node Management",
-          cmds: ["mkdir", "rm", "mv", "rename", "what", "type", "complete", "activate", "trim", "prestige"],
-        },
-        {
-          title: "Notes & Values",
-          cmds: ["note", "notes", "cat", "rm-note", "book", "contributions", "values", "value", "goal"],
-        },
-        {
-          title: "Scheduling",
-          cmds: ["schedule", "calendar", "dream-time"],
-        },
-        {
-          title: "Collaboration",
-          cmds: ["team", "invite", "invites", "kick", "owner", "visibility"],
-        },
-        {
-          title: "Links & Sharing",
-          cmds: ["link", "share"],
-        },
-        {
-          title: "AI",
-          cmds: ["chat", "place", "query", "chats"],
-        },
-        {
-          title: "Understanding Runs",
-          cmds: ["understand", "understandings", "understand-status", "understand-stop"],
-        },
-        {
-          title: "Canopy (federation)",
-          cmds: ["peers", "peer", "search", "browse"],
-        },
-        {
-          title: "Blog",
-          cmds: ["blogs", "blog"],
-        },
-        {
-          title: "API Keys",
-          cmds: ["api-keys"],
-        },
-        {
-          title: "LLM Connections",
-          cmds: ["llms", "llm"],
-        },
-        {
-          title: "Land Config",
-          cmds: ["config"],
-        },
+        { title: "Getting Started", cmds: ["connect", "register", "login", "logout", "whoami"] },
+        { title: "Navigation", cmds: ["pwd", "ls", "cd", "land", "home", "tree"] },
+        { title: "Trees", cmds: ["roots", "use", "root", "mkroot", "retire"] },
+        { title: "Nodes", cmds: ["mkdir", "rm", "mv", "rename", "what", "type", "complete", "activate", "trim"] },
+        { title: "Notes", cmds: ["note", "notes", "cat", "rm-note", "download"] },
+        { title: "AI", cmds: ["chat", "place", "query", "chats"] },
+        { title: "Collaboration", cmds: ["team", "invite", "invites", "kick", "owner", "visibility", "share", "link", "share-token"] },
+        { title: "LLM", cmds: ["llms", "llm"] },
+        { title: "Extensions", cmds: ["ext", "protocol", "tools", "tools-allow", "tools-block", "tools-clear", "modes", "mode-set", "mode-clear"] },
+        { title: "Canopy", cmds: ["peers", "peer", "search", "browse"] },
+        { title: "Config", cmds: ["config", "show"] },
       ];
 
       const cmdMap = {};

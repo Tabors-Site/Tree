@@ -9,7 +9,7 @@ import {
   dashboardHTML,
   dashboardJS,
 } from "./sessionManagerPartial.js";
-import { getLandUrl } from "../../../canopy/identity.js";
+import { getLandUrl, getLandIdentity } from "../../../canopy/identity.js";
 
 const router = express.Router();
 
@@ -58,22 +58,24 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       !!user.llmDefault ||
       (await CustomLlmConnection.countDocuments({ userId: req.userId })) > 0;
 
+    const landName = getLandIdentity()?.name || "TreeOS";
+
     return res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dashboard - TreeOS</title>
+  <title>${landName}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#667eea" />
   <link rel="icon" href="/tree.png" />
   <link rel="canonical" href="${getLandUrl()}/app" />
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="description" content="TreeOS dashboard with tree visualization, chat, and knowledge management tools." />
-  <meta property="og:title" content="Dashboard - TreeOS" />
-  <meta property="og:description" content="TreeOS dashboard with tree visualization, chat, and knowledge management tools." />
+  <meta name="description" content="${landName}. Powered by TreeOS." />
+  <meta property="og:title" content="${landName}" />
+  <meta property="og:description" content="${landName}. Powered by TreeOS." />
   <meta property="og:url" content="${getLandUrl()}/app" />
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="TreeOS" />
+  <meta property="og:site_name" content="${landName}" />
   <meta property="og:image" content="${getLandUrl()}/tree.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1396,7 +1398,7 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
         <a href="/app" class="tree-home-link">
           <div class="chat-title">
             <span class="tree-icon">🌳</span>
-            <h1>Tree</h1>
+            <h1>${landName}</h1>
           </div>
         </a>
         <span class="root-name-inline" id="rootNameLabel" title=""></span>
@@ -1525,7 +1527,7 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       <div class="drag-handle"></div>
       <div class="mobile-sheet-title-row">
         <div class="mobile-sheet-title">
-          <a href="/app" class="mobile-tree-icon-wrapper" title="Back to TreeOS">
+          <a href="/app" class="mobile-tree-icon-wrapper" title="Back to ${landName}">
             <div class="mobile-status-indicator connecting" id="mobileStatusIndicator"></div>
             <span class="tree-icon">🌳</span>
           </a>
