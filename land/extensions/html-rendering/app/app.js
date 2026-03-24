@@ -1588,7 +1588,8 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       username: "${username || req.userId}",
       htmlShareToken: "${htmlShareToken}",
       homeUrl: "/api/v1/user/${req.userId}?html&token=${htmlShareToken}&inApp=1",
-      hasLlm: ${hasLlm}
+      hasLlm: ${hasLlm},
+      landName: "${landName.replace(/"/g, '\\"')}",
     };
 
     // Elements
@@ -1832,7 +1833,7 @@ socket.on("navigate", ({ url, replace }) => {
       navIndicators.forEach(el => { if (el) el.classList.remove("active"); });
 
       [chatMessages, mobileChatMessages].forEach(container => {
-        container.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from TreeOS. Please refresh the whole website to reconnect.</p></div>';
+        container.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from ' + CONFIG.landName + '. Please refresh the whole website to reconnect.</p></div>';
       });
     });
 
@@ -2163,7 +2164,7 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
     // ================================================================
 
     const MODE_WELCOMES = {
-      "home:default": { icon: "🌳", title: "Welcome to TreeOS", desc: "Your intelligent workspace is ready — build, explore, and reflect" },
+      "home:default": { icon: "🌳", title: "Welcome to " + CONFIG.landName, desc: "Your intelligent workspace is ready. Build, explore, and reflect." },
       "home:raw-idea-placement": { icon: "💡", title: "Raw Ideas", desc: "Capture unstructured thoughts and gradually grow them into trees (work in progress)" },
       "home:reflect": { icon: "🔮", title: "Reflect", desc: "Review your notes, tags, and contributions across all your trees" },
       "tree:structure": { icon: "🏗️", title: "Structure Mode", desc: "Create, reorganize, and grow the overall shape of your tree" },

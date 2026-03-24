@@ -1,7 +1,6 @@
 import User from "../../db/models/user.js";
 import Node from "../../db/models/node.js";
 
-// setHtmlShareToken moved to extensions/html-rendering/routes.js
 
 export async function updateRecentRoots(userId, rootId) {
   if (!userId || !rootId) return;

@@ -24,34 +24,6 @@ const limiter = rateLimit({
   },
 });
 
-// SET share token
-router.post("/setHTMLShareToken", authenticate, limiter, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    let { htmlShareToken } = req.body;
-    if (typeof htmlShareToken !== "string") {
-      return res.status(400).json({ message: "htmlShareToken must be a string" });
-    }
-
-    htmlShareToken = htmlShareToken.trim();
-    if (htmlShareToken.length > 128 || htmlShareToken.length < 1) {
-      return res.status(400).json({ message: "htmlShareToken must be 1 to 128 characters" });
-    }
-    if (!URL_SAFE_REGEX.test(htmlShareToken)) {
-      return res.status(400).json({ message: "htmlShareToken may only contain URL-safe characters" });
-    }
-
-    setUserMeta(user, "html", { shareToken: htmlShareToken });
-    await user.save();
-
-    return res.json({ htmlShareToken });
-  } catch (err) {
-    log.error("HTML", "setHtmlShareToken error:", err.message);
-    res.status(500).json({ message: "Failed to set html share token" });
-  }
-});
 
 // VERIFY token (returns share token + user info for frontend)
 router.post("/verify-token", authenticate, async (req, res) => {
@@ -95,7 +67,7 @@ router.post("/verify-token", authenticate, async (req, res) => {
 });
 
 // Share token management page
-router.get("/user/:userId/sharetoken", urlAuth, async (req, res) => {
+router.get("/user/:userId/shareToken", urlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const user = await User.findById(userId).select("username metadata").lean();
@@ -122,7 +94,7 @@ router.get("/user/:userId/sharetoken", urlAuth, async (req, res) => {
 });
 
 // POST share token update
-router.post("/user/:userId/sharetoken", authenticate, async (req, res) => {
+router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
       return res.status(403).json({ error: "Not authorized" });

@@ -250,6 +250,51 @@ No login required.
 | `blogs`                 | List published posts               |
 | `blog <slug or number>` | Read a post by slug or list number |
 
+### Extensions
+
+Install, manage, and build modular capabilities.
+
+| Command                    | Description                                    |
+| -------------------------- | ---------------------------------------------- |
+| `ext list`                 | List loaded extensions with status              |
+| `ext info <name>`          | Show manifest details                           |
+| `ext search [query]`       | Search the extension registry                   |
+| `ext view <name>`          | View registry extension (files, manifest)       |
+| `ext install <name>`       | Install from registry (auto-resolves deps)      |
+| `ext update <name>`        | Update to latest version                        |
+| `ext disable <name>`       | Disable (takes effect on restart)               |
+| `ext enable <name>`        | Re-enable a disabled extension                  |
+| `ext uninstall <name>`     | Remove extension directory (data stays in DB)   |
+| `ext publish <name>`       | Publish to the registry                         |
+| `protocol`                 | Show land capabilities and loaded extensions    |
+
+### Per-Node AI Customization
+
+Control what the AI can do and how it thinks at every node. Inherits parent to child.
+
+| Command                           | Description                                          |
+| --------------------------------- | ---------------------------------------------------- |
+| `tools`                           | Show effective tools at current node                 |
+| `tools-allow <tool>`              | Add a tool to this node (e.g. execute-shell)         |
+| `tools-block <tool>`              | Block a tool at this node (e.g. delete-node-branch)  |
+| `tools-clear`                     | Remove all local tool config (inherit from parent)   |
+| `modes`                           | Show mode overrides and available modes              |
+| `mode-set <intent> <modeKey>`     | Override a mode for an intent at this node           |
+| `mode-clear [intent]`             | Clear mode override(s)                               |
+
+### LLM Management
+
+| Command                             | Description                                    |
+| ----------------------------------- | ---------------------------------------------- |
+| `llms`                              | List your LLM connections                      |
+| `llm add`                           | Add a new connection (interactive)             |
+| `llm remove <id>`                   | Remove a connection                            |
+| `llm assign <slot> <id>`            | Assign to user slot (main)                     |
+| `llm tree-assign <slot> <id>`       | Assign to tree slot (default, respond, etc.)   |
+| `llm failover`                      | Show failover stack                            |
+| `llm failover-push <id>`            | Add backup connection                          |
+| `llm failover-pop`                  | Remove last backup                             |
+
 ### Land Config
 
 View and manage runtime configuration for the Land. Settings stored in the `.config` system node.
@@ -395,12 +440,12 @@ All commands map to the [Tree REST API](https://treeOS.ai/about/api). Remote tre
 
 ## Links
 
-- [Tree](https://treeOS.ai)
-- [Getting Started](https://treeOS.ai/about/gettingstarted)
-- [Raw Ideas](https://treeOS.ai/about/raw-ideas)
-- [Energy System](https://treeOS.ai/about/energy)
-- [Dreams](https://treeOS.ai/about/dreams)
-- [Gateway](https://treeOS.ai/about/gateway)
+- [TreeOS](https://treeOS.ai)
+- [Full Guide](https://treeOS.ai/guide)
+- [AI Architecture](https://treeOS.ai/ai)
+- [The Network](https://treeOS.ai/decentralized)
 - [API Reference](https://treeOS.ai/about/api)
 - [CLI Guide](https://treeOS.ai/about/cli)
-- [Blog](https://treeOS.ai/blog)
+- [Extensions](https://treeOS.ai/about/extensions)
+- [Directory](https://dir.treeOS.ai)
+- [GitHub](https://github.com/Tabors-Site/Tree)
