@@ -45,7 +45,7 @@ async function editStatus({
     sessionId,
     action: "editStatus",
     statusEdited: status,
-    nodeVersion: "0",
+
   });
 
   if (isInherited) {
@@ -96,7 +96,7 @@ async function updateNodeStatusRecursively(
         sessionId,
         action: "editStatus",
         statusEdited: status,
-        nodeVersion: "0",
+    
       });
 
       await updateNodeStatusRecursively(

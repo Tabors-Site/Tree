@@ -27,6 +27,17 @@ router.use(webhookRouter);
 router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
   try {
     const channels = await getChannelsForRoot(req.params.rootId);
+    if ("html" in req.query) {
+      try {
+        const { getExtension } = await import("../loader.js");
+        const renderGateway = getExtension("html-rendering")?.exports?.renderGateway;
+        if (renderGateway) {
+          const Node = (await import("../../db/models/node.js")).default;
+          const root = await Node.findById(req.params.rootId).select("name").lean();
+          return res.send(renderGateway({ rootId: req.params.rootId, rootName: root?.name || "", queryString: `?token=${req.query.token || ""}&html`, channels }));
+        }
+      } catch {}
+    }
     res.json({ channels });
   } catch (err) {
     log.error("Gateway", "List channels error:", err.message);

@@ -5,14 +5,15 @@ import Note from "../../db/models/notes.js";
 import User from "../../db/models/user.js";
 import { hooks } from "../hooks.js";
 
-// Legacy version resolution. Without prestige extension, always returns 0.
+// Resolve "latest" to the current version number from metadata.version.current.
+// Any versioning extension writes to this kernel-level key (metadata.version.current).
+// Without a versioning extension, always returns 0.
 export async function resolveVersion(nodeId, version) {
   if (version === "latest") {
-    // Check if prestige extension stores current version in metadata
     const node = await Node.findById(nodeId).select("metadata").lean();
     if (!node) throw new Error("Node not found");
     const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
-    return meta.prestige?.current || 0;
+    return meta.version?.current || 0;
   }
   return Number(version);
 }
@@ -613,7 +614,6 @@ export async function getContextForAi(nodeId, options = {}) {
   }
 
   // Let extensions enrich the context with their data
-  // (values, goals, schedule, prestige, etc.)
   await hooks.run("enrichContext", { context, node, meta });
 
   // ---- Notes ----

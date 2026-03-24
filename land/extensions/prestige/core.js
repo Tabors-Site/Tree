@@ -80,6 +80,7 @@ async function addPrestigeToNode(node) {
   const newSchedule = scheduleData ? calculateNextSchedule(scheduleData) : null;
 
   setExtMeta(node, "prestige", prestigeData);
+  setExtMeta(node, "version", { current: prestigeData.current });
   setExtMeta(node, "values", newValues);
   if (newSchedule) setExtMeta(node, "schedule", newSchedule);
 

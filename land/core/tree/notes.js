@@ -131,7 +131,7 @@ async function createNote({
   const hookData = { nodeId, version, content: finalContent, userId, contentType };
   const hookResult = await hooks.run("beforeNote", hookData);
   if (hookResult.cancelled) return { error: hookResult.reason || "Note creation cancelled by extension" };
-  // Extensions may have modified version (e.g. prestige sets it to current level)
+  // Extensions may have modified version via beforeNote hook
   version = hookData.version;
 
   // ── SAVE ────────────────────────────────────────
@@ -166,7 +166,7 @@ async function createNote({
     aiChatId,
     sessionId,
     action: "note",
-    nodeVersion: version,
+
     noteAction: {
       action: "add",
       noteId: newNote._id.toString(),
@@ -292,7 +292,7 @@ async function editNote({
     aiChatId,
     sessionId,
     action: "note",
-    nodeVersion: note.version,
+
     noteAction: {
       action: "edit",
       noteId: note._id.toString(),
@@ -314,7 +314,7 @@ async function getNotes({ nodeId, version, limit, startDate, endDate }) {
     }
 
     const query = { nodeId };
-    // Only filter by version if explicitly provided (prestige extension sets this)
+    // Only filter by version if explicitly provided
     if (version !== undefined && version !== null) {
       query.version = version;
     }
@@ -514,7 +514,7 @@ async function deleteNoteAndFile({
     aiChatId,
     sessionId,
     action: "note",
-    nodeVersion: version,
+
     noteAction: {
       action: "remove",
       noteId: noteId.toString(),
@@ -644,7 +644,6 @@ async function transferNote({
   noteId,
   targetNodeId,
   userId,
-  prestige = null,
   wasAi = false,
   aiChatId = null,
   sessionId = null,
@@ -682,14 +681,10 @@ async function transferNote({
     throw new Error("Cannot transfer notes between different trees");
   }
 
-  // Resolve target version (prestige extension sets this via metadata, default 0)
-  let targetVersion;
-  if (typeof prestige === "number" && prestige >= 0) {
-    targetVersion = prestige;
-  } else {
-    const meta = targetNode.metadata instanceof Map ? Object.fromEntries(targetNode.metadata) : (targetNode.metadata || {});
-    targetVersion = meta.prestige?.current ?? 0;
-  }
+  // Resolve target version via beforeNote hook
+  const hookData = { nodeId: targetNodeId, version: 0, content: "", userId, contentType: "text" };
+  await hooks.run("beforeNote", hookData);
+  const targetVersion = hookData.version;
 
   // Save original location for contribution logging
   const sourceNodeId = note.nodeId;
@@ -708,7 +703,7 @@ async function transferNote({
     aiChatId,
     sessionId,
     action: "note",
-    nodeVersion: Number(sourceVersion),
+
     noteAction: {
       action: "remove",
       noteId: noteId.toString(),
@@ -723,7 +718,7 @@ async function transferNote({
     aiChatId,
     sessionId,
     action: "note",
-    nodeVersion: targetVersion,
+
     noteAction: {
       action: "add",
       noteId: noteId.toString(),

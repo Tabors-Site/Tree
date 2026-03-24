@@ -110,7 +110,7 @@ export async function createNewNode(
       aiChatId,
       sessionId,
       action: "updateChildNode",
-      nodeVersion: "0",
+
       updateChildNode: {
         action: "added",
         childId: newNode._id.toString(),
@@ -125,7 +125,7 @@ export async function createNewNode(
     aiChatId,
     sessionId,
     action: "create",
-    nodeVersion: "0",
+
   });
 
   if (note?.trim()) {
@@ -266,7 +266,7 @@ export async function deleteNodeBranch(
         aiChatId,
         sessionId,
         action: "updateChildNode",
-        nodeVersion: "0",
+  
         updateChildNode: {
           action: "removed",
           childId: nodeId.toString(),
@@ -281,7 +281,7 @@ export async function deleteNodeBranch(
     aiChatId,
     sessionId,
     action: "branchLifecycle",
-    nodeVersion: "0",
+
     branchLifecycle: {
       action: "retired",
       fromParentId: oldParent?.toString() ?? null,
@@ -350,7 +350,7 @@ export async function updateParentRelationship(
       aiChatId,
       sessionId,
       action: "updateChildNode",
-      nodeVersion: oldParent.prestige.toString(),
+
       updateChildNode: {
         action: "removed",
         childId: nodeChildId.toString(),
@@ -370,7 +370,7 @@ export async function updateParentRelationship(
     aiChatId,
     sessionId,
     action: "updateParent",
-    nodeVersion: nodeChild.prestige.toString(),
+
     updateParent: {
       oldParentId: oldParentId ? oldParentId.toString() : null,
       newParentId: nodeNewParentId.toString(),
@@ -388,7 +388,7 @@ export async function updateParentRelationship(
     aiChatId,
     sessionId,
     action: "updateChildNode",
-    nodeVersion: nodeNewParent.prestige.toString(),
+
     updateChildNode: {
       action: "added",
       childId: nodeChildId.toString(),
@@ -442,7 +442,7 @@ export async function editNodeName({
     wasAi,
     aiChatId,
     sessionId,
-    nodeVersion: "0",
+
     editNameNode: {
       oldName,
       newName,
@@ -501,7 +501,7 @@ export async function reviveNodeBranch({
     nodeId: targetParentId,
     wasAi,
     action: "updateChildNode",
-    nodeVersion: targetParent.prestige.toString(),
+
     updateChildNode: {
       action: "added",
       childId: deletedNodeId.toString(),
@@ -512,7 +512,7 @@ export async function reviveNodeBranch({
     nodeId: deletedNodeId,
     wasAi,
     action: "branchLifecycle",
-    nodeVersion: deletedNode.prestige.toString(),
+
     branchLifecycle: {
       action: "revived",
       fromParentId: "deleted",
@@ -569,7 +569,7 @@ export async function reviveNodeBranchAsRoot({
     nodeId: deletedNodeId,
     wasAi,
     action: "branchLifecycle",
-    nodeVersion: deletedNode.prestige.toString(),
+
     branchLifecycle: {
       action: "revivedAsRoot",
     },

@@ -109,7 +109,7 @@ export async function createInvite({
       nodeId: node.id,
       action: "invite",
       inviteAction,
-      nodeVersion: "0",
+
     });
 
     await invite.save();
@@ -148,7 +148,7 @@ export async function createInvite({
       nodeId: node.id,
       action: "invite",
       inviteAction,
-      nodeVersion: "0",
+
     });
 
     return { message: "Ownership transferred and invite logged" };
@@ -187,7 +187,7 @@ export async function createInvite({
         nodeId: node.id,
         action: "invite",
         inviteAction,
-        nodeVersion: "0",
+  
       });
 
       return { message: "Contributor removed by owner and invite logged" };
@@ -213,13 +213,13 @@ export async function createInvite({
         nodeId: node.id,
         action: "invite",
         inviteAction,
-        nodeVersion: "0",
+  
       });
       await logContribution({
         userId: userInvitingId,
         nodeId: node.id,
         action: "branchLifecycle",
-        nodeVersion: "0",
+  
         branchLifecycle: {
           action: "retired",
           fromParentId: null,
@@ -261,7 +261,7 @@ export async function createInvite({
         nodeId: node.id,
         action: "invite",
         inviteAction,
-        nodeVersion: "0",
+  
       });
 
       return { message: "Contributor removed themselves and invite logged" };
@@ -353,7 +353,6 @@ export async function respondToInvite({ inviteId, userId, acceptInvite }) {
     nodeId: node.id,
     action: "invite",
     inviteAction,
-    nodeVersion: "0",
   });
 
   return {

@@ -155,7 +155,19 @@
       "Bash(grep -r \"tools.*allow\\\\|tools.*block\\\\|tools.*clear\\\\|mode.*set\\\\|mode.*clear\" /home/tabor/github/Tree/land/routes --include=*.js)",
       "Bash(that is:*)",
       "Bash(the latest version?\" Helps users understand why commands fail after:*)",
-      "Bash(grep '\\\\.command\\(\"\"\"\".*<' cli/commands/*.js)"
+      "Bash(grep '\\\\.command\\(\"\"\"\".*<' cli/commands/*.js)",
+      "Bash(1 __NEW_LINE_0b777fab0a9dd62f__ echo \"--- ls ---\" node cli/index.js ls)",
+      "Bash(1 __NEW_LINE_570ba39c3bf94432__ echo \"--- ls ---\" node cli/index.js ls)",
+      "Bash(1 __NEW_LINE_570ba39c3bf94432__ echo \"--- notes ---\" node cli/index.js notes)",
+      "Bash(1 __NEW_LINE_570ba39c3bf94432__ echo \"--- deleted ---\" node cli/index.js deleted)",
+      "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo '--- type task ---' node cli/index.js cd test-cli-check 2)",
+      "Bash(1 node:*)",
+      "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo '--- note hello ---' node cli/index.js note 'cli test note' 2)",
+      "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo '--- value strength 5 ---' node cli/index.js value strength 5 2)",
+      "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo '--- goal strength 50 ---' node cli/index.js goal strength 50 2)",
+      "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- complete ---\" node cli/index.js complete 2)",
+      "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- rm ---\" node cli/index.js cd .. 2)",
+      "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- calendar ---\" node cli/index.js calendar)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

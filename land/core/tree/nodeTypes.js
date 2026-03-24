@@ -72,7 +72,7 @@ export async function editNodeType({
     wasAi,
     aiChatId,
     sessionId,
-    nodeVersion: "0",
+
     editType: {
       oldType,
       newType,
