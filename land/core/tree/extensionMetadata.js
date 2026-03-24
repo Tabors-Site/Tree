@@ -12,6 +12,7 @@
  */
 
 const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "storage"]);
+const MAX_METADATA_VALUE_BYTES = 512 * 1024; // 512KB per extension namespace per node
 
 /**
  * Get an extension's metadata namespace from a node.
@@ -45,6 +46,18 @@ function isBlockedLocally(node, extName) {
  */
 export function setExtMeta(node, extName, data) {
   if (isBlockedLocally(node, extName)) return false;
+  // Size guard: prevent extensions from writing unbounded data
+  if (data != null) {
+    try {
+      const size = Buffer.byteLength(JSON.stringify(data), "utf8");
+      if (size > MAX_METADATA_VALUE_BYTES) {
+        throw new Error(`Metadata for "${extName}" exceeds ${MAX_METADATA_VALUE_BYTES / 1024}KB limit (${Math.round(size / 1024)}KB)`);
+      }
+    } catch (e) {
+      if (e.message.includes("limit")) throw e;
+      // JSON.stringify failed (circular ref, etc.) - allow but warn
+    }
+  }
   if (!node.metadata) {
     node.metadata = new Map();
   }

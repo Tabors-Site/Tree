@@ -317,4 +317,4 @@ export function getAllToolNamesForBigMode(bigMode) {
  * Number of recent messages to carry across a mode switch.
  */
 export let CARRY_MESSAGES = 4;
-export function setCarryMessages(n) { CARRY_MESSAGES = n; }
+export function setCarryMessages(n) { CARRY_MESSAGES = Math.max(0, Math.min(20, Number(n) || 4)); }

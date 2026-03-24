@@ -48,6 +48,8 @@ import log from "./log.js";
 
 const HOOK_TIMEOUT_MS = 5000;
 const MAX_HANDLERS_PER_HOOK = 100;
+const CIRCUIT_BREAKER_THRESHOLD = 5; // consecutive failures before auto-disable
+const _failureCounts = new Map(); // "hookName:extName" -> count
 
 // Map<hookName, Array<{ extName, handler }>>
 const registry = new Map();
@@ -168,10 +170,25 @@ async function run(hookName, data) {
   if (!isBefore && hookName !== "enrichContext") {
     await Promise.allSettled(
       handlers
-        .filter(({ extName }) => !blockedExtensions || !blockedExtensions.has(extName))
+        .filter(({ extName }) => {
+          if (blockedExtensions && blockedExtensions.has(extName)) return false;
+          const key = `${hookName}:${extName}`;
+          if ((_failureCounts.get(key) || 0) >= CIRCUIT_BREAKER_THRESHOLD) return false;
+          return true;
+        })
         .map(({ extName, handler }) =>
           withTimeout(handler(data), HOOK_TIMEOUT_MS, `${hookName}:${extName}`)
-            .catch(err => log.warn("Hooks", `${hookName} from "${extName}" failed:`, err.message))
+            .then(() => _failureCounts.delete(`${hookName}:${extName}`))
+            .catch(err => {
+              const key = `${hookName}:${extName}`;
+              const count = (_failureCounts.get(key) || 0) + 1;
+              _failureCounts.set(key, count);
+              if (count >= CIRCUIT_BREAKER_THRESHOLD) {
+                log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open. Auto-disabled.`);
+              } else {
+                log.warn("Hooks", `${hookName} from "${extName}" failed (${count}/${CIRCUIT_BREAKER_THRESHOLD}):`, err.message);
+              }
+            })
         )
     );
     return { cancelled: false };
@@ -179,19 +196,25 @@ async function run(hookName, data) {
 
   // Before hooks and enrichContext: sequential
   for (const { extName, handler } of handlers) {
-    // Skip if extension is blocked at this node
     if (blockedExtensions && blockedExtensions.has(extName)) continue;
+    const key = `${hookName}:${extName}`;
+    if ((_failureCounts.get(key) || 0) >= CIRCUIT_BREAKER_THRESHOLD) continue;
     try {
       const result = await withTimeout(handler(data), HOOK_TIMEOUT_MS, `${hookName}:${extName}`);
+      _failureCounts.delete(key); // success resets counter
       if (isBefore && result === false) {
         return { cancelled: true, reason: `Cancelled by ${extName}` };
       }
     } catch (err) {
+      const count = (_failureCounts.get(key) || 0) + 1;
+      _failureCounts.set(key, count);
+      if (count >= CIRCUIT_BREAKER_THRESHOLD) {
+        log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open.`);
+      }
       if (isBefore) {
         log.error("Hooks", `${hookName} from "${extName}" threw, cancelling:`, err.message);
         return { cancelled: true, reason: err.message };
       }
-      // enrichContext: log and continue
       log.warn("Hooks", `${hookName} from "${extName}" failed:`, err.message);
     }
   }

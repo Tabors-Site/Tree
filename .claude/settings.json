@@ -178,7 +178,8 @@
       "Bash(ls -la /home/tabor/github/Tree/cli/*.js)",
       "Bash(grep -n \"router.*protocol\\\\|/protocol\" /home/tabor/github/Tree/land/routes/*.js)",
       "Bash(echo \"=== 1. Remaining read-modify-save patterns ===\" grep -rn \"await.*save\\(\\)\" land/core/tree/*.js)",
-      "Bash(1 cd:*)"
+      "Bash(1 cd:*)",
+      "Bash(head -3 __NEW_LINE_2ae7ef9ab1f1cc6b__ echo \"\" echo \"--- Extension init failures ---\" grep -n \"catch.*init\\\\|try.*init\\\\|init.*error\" land/extensions/loader.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
