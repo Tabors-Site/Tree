@@ -132,6 +132,44 @@ const ApiAccessSection = () => {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* AUTH                                                          */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="auth">
+          <div className="section-title">
+            <span className="section-icon">🔐</span> Authentication
+          </div>
+          <div className="section-text">
+            Register, login, and logout. Returns a JWT token for subsequent API calls.
+            Pass the token as <code>Authorization: Bearer TOKEN</code> or as a cookie.
+            API keys can also be used via <code>x-api-key</code> header.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/register</span>
+            </div>
+            <div className="ep-desc">{"Create a new account. Body: { username, password }. Returns JWT token."}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/login</span>
+            </div>
+            <div className="ep-desc">{"Authenticate. Body: { username, password }. Returns JWT token and user info."}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/logout</span>
+            </div>
+            <div className="ep-desc">Clear session cookie. Requires authentication.</div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
         {/*  IDENTITY (ME)                                                */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <div className="section" id="me">
@@ -1226,6 +1264,30 @@ notification  — Dream notification summary and thought (falls back to placemen
             <div className="ep-note">Use 24-hour <code>HH:MM</code> format. Pass <code>null</code> or omit to disable dreaming.</div>
           </div>
 
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/holdings</span>
+            </div>
+            <div className="ep-desc">List deferred items (short-term memory) for a tree. These are ideas the AI held back for better placement later.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/root/:rootId/holdings/:itemId</span>
+            </div>
+            <div className="ep-desc">View details of a specific deferred item.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/root/:rootId/holdings/:itemId/dismiss</span>
+            </div>
+            <div className="ep-desc">Dismiss a deferred item (mark as handled without placing).</div>
+          </div>
+
           <div className="section-spacer"></div>
 
           {/* ── AI Chats ─────────── */}
@@ -2169,6 +2231,14 @@ updateScheduleForNode(datetime | null)`}</div>
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/land/users</span>
+            </div>
+            <div className="ep-desc">List all users on the land with profile types and tree counts. God-tier only. (land-manager extension)</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/land/orchestrators</span>
             </div>
             <div className="ep-desc">List registered orchestrators by bigMode (tree, home, land) and which extension owns each.</div>
@@ -2378,6 +2448,14 @@ updateScheduleForNode(datetime | null)`}</div>
             Canopy is the federation protocol that connects independent TreeOS
             lands into a network. These public endpoints require no authentication
             and allow lands to discover each other.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/redirect</span>
+            </div>
+            <div className="ep-desc">Redirect to the land's frontend URL. Used by the directory for "visit" links.</div>
           </div>
 
           <div className="endpoint">
@@ -2616,6 +2694,30 @@ updateScheduleForNode(datetime | null)`}</div>
             <div className="ep-desc">Search the Canopy Directory for public trees across all registered lands.</div>
             <div className="ep-label">Query Parameters</div>
             <div className="ep-code">{`?q=search-term`}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/admin</span>
+            </div>
+            <div className="ep-desc">Canopy admin overview page (?html) or JSON summary of peers, events, directory status.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/admin/invites</span>
+            </div>
+            <div className="ep-desc">List pending cross-land invites (incoming and outgoing).</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/canopy/admin/directory</span>
+            </div>
+            <div className="ep-desc">Canopy Directory browser page (?html) or JSON of registered lands and public trees.</div>
           </div>
         </div>
 

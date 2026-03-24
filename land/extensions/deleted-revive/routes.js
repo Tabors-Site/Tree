@@ -46,7 +46,7 @@ export default function createRouter(core) {
       const { userId, nodeId } = req.params;
       const { targetParentId } = req.body;
 
-      if (req.userId.toString() !== userId.toString()) {
+      if (!req.userId || req.userId.toString() !== userId.toString()) {
         return res.status(403).json({ error: "Not authorized" });
       }
 
@@ -77,7 +77,7 @@ export default function createRouter(core) {
     try {
       const { userId, nodeId } = req.params;
 
-      if (req.userId.toString() !== userId.toString()) {
+      if (!req.userId || req.userId.toString() !== userId.toString()) {
         return res.status(403).json({ error: "Not authorized" });
       }
 
