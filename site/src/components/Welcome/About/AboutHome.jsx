@@ -169,8 +169,7 @@ const AboutHome = () => {
             Why This Exists
           </div>
           <div className="ah-section-text">
-            Built by <a href="https://tabors.site" style={{color: "rgba(255,255,255,0.8)"}}>Tabor Holly</a>.
-            <br /><br />
+         
             This is what I believe AI agents need: persistent memory in a navigable
             structure, where instructions and knowledge and history live together,
             readable by both humans and LLMs. A system where people build, share, and

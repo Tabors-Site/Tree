@@ -646,15 +646,16 @@ export async function processMessage(visitorId, message, ctx) {
 
   session.messages.push({ role: "user", content: message });
 
-  // Get tools for current mode (with per-node tool config, inherited up the tree)
+  // Get tools for current mode (with per-node tool config + spatial extension scoping)
   let treeToolConfig = null;
+  let blockedExtensions = null;
   const currentNodeId = session.currentNodeId || session.rootId;
   if (currentNodeId) {
     try {
-      // Walk from current node up to root, merging tool configs
-      // Child overrides parent. Allowed accumulates. Blocked accumulates.
+      // Walk from current node up to root, merging tool configs + blocked extensions
       const allowed = new Set();
       const blocked = new Set();
+      const blockedExts = new Set();
       let cursor = currentNodeId;
       const visited = new Set();
       while (cursor && !visited.has(cursor)) {
@@ -664,6 +665,8 @@ export async function processMessage(visitorId, message, ctx) {
         const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
         if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
         if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
+        // Spatial extension scoping
+        if (meta.extensions?.blocked) for (const e of meta.extensions.blocked) blockedExts.add(e);
         cursor = n.parent;
       }
       if (allowed.size || blocked.size) {
@@ -672,9 +675,15 @@ export async function processMessage(visitorId, message, ctx) {
           blocked: blocked.size ? [...blocked] : undefined,
         };
       }
+      if (blockedExts.size) blockedExtensions = blockedExts;
     } catch {}
   }
-  const tools = getToolsForMode(session.modeKey, treeToolConfig);
+  let tools = getToolsForMode(session.modeKey, treeToolConfig);
+  // Filter out tools from spatially blocked extensions
+  if (blockedExtensions) {
+    const { filterToolsByScope } = await import("../core/tree/extensionScope.js");
+    tools = filterToolsByScope(tools, blockedExtensions);
+  }
 
   // Tool calling loop
   let response;

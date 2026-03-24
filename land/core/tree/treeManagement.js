@@ -86,22 +86,17 @@ export async function createNewNode(
   await newNode.save();
 
   if (isRoot) {
-    user.roots.addToSet(newNode._id);
-    await user.save();
-    // Add to Land root's children
+    await User.findByIdAndUpdate(user._id, { $addToSet: { roots: newNode._id } });
     const landRootId = getLandRootId();
     if (landRootId) {
-      await Node.findByIdAndUpdate(landRootId, {
-        $addToSet: { children: newNode._id },
-      });
+      await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: newNode._id } });
     }
   } else if (parentNodeID) {
-    const parentNode = await Node.findById(parentNodeID);
+    const parentNode = await Node.findById(parentNodeID).select("systemRole").lean();
     if (!parentNode) throw new Error("Parent node not found");
     if (parentNode.systemRole) throw new Error("Cannot create nodes under system nodes");
 
-    parentNode.children.addToSet(newNode._id);
-    await parentNode.save();
+    await Node.findByIdAndUpdate(parentNodeID, { $addToSet: { children: newNode._id } });
 
     await logContribution({
       userId: user._id,
@@ -336,12 +331,9 @@ export async function updateParentRelationship(
   }
 
 
-  // Remove from old parent
+  // Remove from old parent (atomic)
   if (oldParent) {
-    oldParent.children = oldParent.children.filter(
-      (childId) => childId.toString() !== nodeChildId,
-    );
-    await oldParent.save();
+    await Node.findByIdAndUpdate(oldParent._id, { $pull: { children: nodeChildId } });
 
     await logContribution({
       userId,
@@ -358,9 +350,8 @@ export async function updateParentRelationship(
     });
   }
 
-  // Update parent field
-  nodeChild.parent = nodeNewParentId;
-  await nodeChild.save();
+  // Update parent field (atomic)
+  await Node.findByIdAndUpdate(nodeChildId, { $set: { parent: nodeNewParentId } });
 
   // Log updateParent
   await logContribution({
@@ -377,9 +368,8 @@ export async function updateParentRelationship(
     },
   });
 
-  // Add to new parent
-  nodeNewParent.children.addToSet(nodeChildId);
-  await nodeNewParent.save();
+  // Add to new parent (atomic)
+  await Node.findByIdAndUpdate(nodeNewParentId, { $addToSet: { children: nodeChildId } });
 
   await logContribution({
     userId,

@@ -342,6 +342,87 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
+// GET /api/v1/node/:nodeId/extensions
+// Shows blocked extensions at this position (with inheritance chain)
+// Shows which extensions are active vs blocked from the land's installed set
+// -----------------------------------------------------------------------------
+router.get("/node/:nodeId/extensions", async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    const { getBlockedExtensionsAtNode } = await import("../../core/tree/extensionScope.js");
+    const blocked = await getBlockedExtensionsAtNode(nodeId);
+
+    const node = await Node.findById(nodeId).select("name metadata").lean();
+    const meta = node?.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node?.metadata || {});
+    const local = meta.extensions?.blocked || [];
+
+    const { getLoadedExtensionNames } = await import("../../extensions/loader.js");
+    const installed = getLoadedExtensionNames();
+
+    // Walk chain for inheritance detail
+    const chain = [];
+    let cursor = nodeId;
+    const visited = new Set();
+    while (cursor && !visited.has(cursor)) {
+      visited.add(cursor);
+      const n = await Node.findById(cursor).select("name metadata parent systemRole").lean();
+      if (!n || n.systemRole) break;
+      const m = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
+      if (m.extensions?.blocked?.length) {
+        chain.push({ nodeId: n._id, name: n.name, blocked: m.extensions.blocked });
+      }
+      cursor = n.parent;
+    }
+
+    res.json({
+      nodeId,
+      nodeName: node?.name || "",
+      blocked: [...blocked],
+      localBlocked: local,
+      installed,
+      active: installed.filter(e => !blocked.has(e)),
+      chain: chain.reverse(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// POST /api/v1/node/:nodeId/extensions
+// Block or allow extensions at a node. Inherits to children.
+// Body: { blocked: ["solana", "scripts"] }
+// Pass empty array to clear.
+// -----------------------------------------------------------------------------
+router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    let { blocked } = req.body;
+
+    const node = await Node.findById(nodeId);
+    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (node.systemRole) return res.status(400).json({ error: "Cannot modify system nodes" });
+
+    const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+    const { clearScopeCache } = await import("../../core/tree/extensionScope.js");
+
+    if (!Array.isArray(blocked) || blocked.length === 0) {
+      setExtMeta(node, "extensions", null);
+    } else {
+      setExtMeta(node, "extensions", { blocked: blocked.filter(b => typeof b === "string") });
+    }
+    await node.save();
+    clearScopeCache();
+
+    if ("html" in req.query) return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
+    res.json({ success: true, blocked: blocked || [] });
+  } catch (err) {
+    log.error("API", "editExtensions error:", err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
 // GET /api/v1/node/:nodeId
 // Returns the node (flat schema, no versions)
 // Supports JSON or ?html mode

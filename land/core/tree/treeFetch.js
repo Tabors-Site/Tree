@@ -25,7 +25,7 @@ export async function buildPathString(nodeId) {
   let depth = 0;
 
   while (cursor && depth < maxDepth) {
-    const node = await Node.findById(cursor)
+    const node = await Node.findById(cursor).lean()
       .select("_id name parent systemRole")
       .lean()
       .exec();
@@ -57,7 +57,7 @@ export async function getRootNodesForUser(userId) {
     throw new Error("userId is required");
   }
 
-  const user = await User.findById(userId)
+  const user = await User.findById(userId).lean()
     .populate("roots", "name _id")
     .lean()
     .exec();
@@ -77,7 +77,7 @@ export async function resolveRootNode(nodeId) {
     throw new Error("nodeId is required");
   }
 
-  let node = await Node.findById(nodeId)
+  let node = await Node.findById(nodeId).lean()
     .select("parent rootOwner contributors")
     .lean()
     .exec();
@@ -91,7 +91,7 @@ export async function resolveRootNode(nodeId) {
       throw new Error("Invalid tree: no rootOwner found");
     }
 
-    node = await Node.findById(node.parent)
+    node = await Node.findById(node.parent).lean()
       .select("parent rootOwner contributors systemRole")
       .lean()
       .exec();
@@ -358,7 +358,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
   }
 
   // ---- Load current node ----
-  const current = await Node.findById(nodeId)
+  const current = await Node.findById(nodeId).lean()
     .select("_id name parent children rootOwner systemRole")
     .lean()
     .exec();
@@ -653,7 +653,7 @@ export async function getContextForAi(nodeId, options = {}) {
 
   // ---- Parent ----
   if (node.parent) {
-    const parentNode = await Node.findById(node.parent)
+    const parentNode = await Node.findById(node.parent).lean()
       .select("_id name systemRole")
       .lean()
       .exec();
@@ -697,7 +697,7 @@ export async function getContextForAi(nodeId, options = {}) {
 
   // ---- Siblings ----
   if (includeSiblings && node.parent) {
-    const parentNode = await Node.findById(node.parent)
+    const parentNode = await Node.findById(node.parent).lean()
       .select("children")
       .lean()
       .exec();

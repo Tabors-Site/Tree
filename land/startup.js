@@ -4,6 +4,8 @@ import { ensureLandRoot } from "./core/landRoot.js";
 import { initLandConfig } from "./core/landConfig.js";
 import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames } from "./extensions/loader.js";
 import { startUploadCleanup } from "./core/tree/uploadCleanup.js";
+import { getBlockedExtensionsAtNode } from "./core/tree/extensionScope.js";
+import { hooks } from "./core/hooks.js";
 import { syncExtensionsToTree } from "./core/landRoot.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
 import { startOutboxJob } from "./canopy/events.js";
@@ -90,6 +92,9 @@ export function onListen() {
 
     await syncExtensionsToTree(getLoadedManifests());
     await runExtensionMigrations();
+
+    // Wire spatial extension scoping into hook system
+    hooks.setScopeResolver(getBlockedExtensionsAtNode);
 
     startExtensionJobs();
     startUploadCleanup();

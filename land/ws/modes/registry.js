@@ -103,14 +103,28 @@ export function getDefaultMode(bigMode) {
  * @returns {string} resolved mode key (e.g. "tree:navigate" or "custom:smart-nav")
  */
 export function resolveMode(intent, bigMode, nodeMetadata = null) {
-  // Layer 1: per-node override
   const meta = nodeMetadata instanceof Map ? Object.fromEntries(nodeMetadata) : (nodeMetadata || {});
+
+  // Spatial extension scoping: collect blocked extensions from node metadata
+  const blockedExts = meta.extensions?.blocked ? new Set(meta.extensions.blocked) : null;
+
+  // Layer 1: per-node override (skip if owning extension is blocked)
   const nodeMode = meta.modes?.[intent];
-  if (nodeMode && ALL_MODES[nodeMode]) return nodeMode;
+  if (nodeMode && ALL_MODES[nodeMode]) {
+    const owner = ALL_MODES[nodeMode]._extName;
+    if (!blockedExts || !owner || !blockedExts.has(owner)) {
+      return nodeMode;
+    }
+  }
 
   // Layer 2: default mapping (bigMode:intent)
   const defaultKey = `${bigMode}:${intent}`;
-  if (ALL_MODES[defaultKey]) return defaultKey;
+  if (ALL_MODES[defaultKey]) {
+    const owner = ALL_MODES[defaultKey]._extName;
+    if (!blockedExts || !owner || !blockedExts.has(owner)) {
+      return defaultKey;
+    }
+  }
 
   // Layer 3: bigMode default
   return DEFAULT_MODES[bigMode] || defaultKey;
@@ -152,6 +166,10 @@ export function getToolsForMode(modeKey, treeToolConfig = null) {
 
 // Extension tool injection hook. Set by the loader after initialization.
 let _getExtToolsFn = () => [];
+
+// Mode registration callback. Set by loader for spatial scoping.
+let _onModeRegistered = null;
+export function setModeRegistrationHook(fn) { _onModeRegistered = fn; }
 
 /**
  * Called by extension loader to register the tool injection function.
@@ -197,7 +215,9 @@ export function registerMode(modeKey, modeConfig, extName = "unknown") {
     preserveContextOnLoop: modeConfig.preserveContextOnLoop,
   };
 
+  mode._extName = extName;
   ALL_MODES[modeKey] = mode;
+  if (_onModeRegistered) _onModeRegistered(modeKey, extName);
   log.verbose("Modes", `Registered: ${modeKey} (${extName})`);
   return true;
 }

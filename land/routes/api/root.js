@@ -707,6 +707,83 @@ router.post(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
+// EXTENSION SCOPING (block/allow extensions per tree)
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get("/root/:rootId/extensions", urlAuth, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const { getBlockedExtensionsAtNode } = await import("../../core/tree/extensionScope.js");
+    const blocked = await getBlockedExtensionsAtNode(rootId);
+
+    const root = await Node.findById(rootId).select("name metadata children").lean();
+    const meta = root?.metadata instanceof Map ? Object.fromEntries(root.metadata) : (root?.metadata || {});
+    const local = meta.extensions?.blocked || [];
+
+    const { getLoadedExtensionNames } = await import("../../extensions/loader.js");
+    const installed = getLoadedExtensionNames();
+
+    // Tree view: walk children to show where blocks are set
+    const tree = [];
+    async function walkTree(nodeId, depth) {
+      if (depth > 10) return; // safety cap
+      const n = await Node.findById(nodeId).select("name metadata children systemRole").lean();
+      if (!n || n.systemRole) return;
+      const m = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
+      const nodeBlocked = m.extensions?.blocked || [];
+      if (nodeBlocked.length > 0) {
+        tree.push({ nodeId: n._id, name: n.name, depth, blocked: nodeBlocked });
+      }
+      if (n.children) {
+        for (const childId of n.children) await walkTree(childId, depth + 1);
+      }
+    }
+    if (req.query.tree === "true" || req.query.tree === "1") {
+      await walkTree(rootId, 0);
+    }
+
+    res.json({
+      rootId,
+      rootName: root?.name || "",
+      blocked: [...blocked],
+      localBlocked: local,
+      installed,
+      active: installed.filter(e => !blocked.has(e)),
+      ...(tree.length ? { tree } : {}),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/root/:rootId/extensions", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    let { blocked } = req.body;
+
+    const node = await Node.findById(rootId);
+    if (!node) return res.status(404).json({ error: "Node not found" });
+
+    const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+    const { clearScopeCache } = await import("../../core/tree/extensionScope.js");
+
+    if (!Array.isArray(blocked) || blocked.length === 0) {
+      setExtMeta(node, "extensions", null);
+    } else {
+      setExtMeta(node, "extensions", { blocked: blocked.filter(b => typeof b === "string") });
+    }
+    await node.save();
+    clearScopeCache();
+
+    if ("html" in req.query) return res.redirect(`/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`);
+    res.json({ success: true, blocked: blocked || [] });
+  } catch (err) {
+    log.error("API", "Extension scoping error:", err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // DREAM TIME
 // ─────────────────────────────────────────────────────────────────────────
 

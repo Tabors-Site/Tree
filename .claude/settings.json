@@ -168,7 +168,10 @@
       "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- complete ---\" node cli/index.js complete 2)",
       "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- rm ---\" node cli/index.js cd .. 2)",
       "Bash(1 __NEW_LINE_945d6d25d53edd15__ echo \"--- calendar ---\" node cli/index.js calendar)",
-      "Bash(find /home/tabor/github/Tree/land/routes -name *.js -type f)"
+      "Bash(find /home/tabor/github/Tree/land/routes -name *.js -type f)",
+      "Bash(head -10 __NEW_LINE_a0a15d49778a2da6__ echo \"\" echo \"--- notes.js ---\" grep -n \"\\\\.save\\(\\)\" land/core/tree/notes.js)",
+      "Bash(head -10 __NEW_LINE_a0a15d49778a2da6__ echo \"\" echo \"--- statuses.js ---\" grep -n \"\\\\.save\\(\\)\" land/core/tree/statuses.js)",
+      "Read(//home/tabor/github/Tree/=== $push/**)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -180,7 +183,8 @@
       "/home/tabor/github/Tree/land/routes/api/html",
       "/home/tabor/github/Tree/orchestrators/core/orchestratorRegistry.js\";\\nlet orchestrateTreeRequest;\\ntry { ({ orchestrateTreeRequest } = await import(\"../tree-orchestrator",
       "/home/tabor/github/Tree/s|import { orchestrateTreeRequest } from \"../orchestrators/tree.js\";|",
-      "/home/tabor/github/Tree/s/{LAND_NAME} is a web-based/{LAND_NAME} Land is a web-based"
+      "/home/tabor/github/Tree/s/{LAND_NAME} is a web-based/{LAND_NAME} Land is a web-based",
+      "/home/tabor/github/Tree/s/await User.findById(userId)$"
     ]
   }
 }

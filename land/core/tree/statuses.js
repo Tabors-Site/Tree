@@ -3,6 +3,7 @@ import {
   findNodeById,
 } from "../../db/utils.js";
 import { hooks } from "../hooks.js";
+import Node from "../../db/models/node.js";
 // Energy: dynamic import, no-op if extension not installed
 
 async function editStatus({
@@ -75,18 +76,15 @@ async function updateNodeStatusRecursively(
   sessionId = null,
 ) {
   if (status === "divider") {
-    node.status = status;
-    await node.save();
+    await Node.findByIdAndUpdate(node._id, { $set: { status } });
     return;
   }
 
   if (["active", "trimmed", "completed"].includes(status)) {
     for (const childId of node.children) {
-      const childNode = await findNodeById(childId);
+      await Node.findByIdAndUpdate(childId, { $set: { status } });
+      const childNode = await Node.findById(childId).select("_id children").lean();
       if (!childNode) continue;
-
-      childNode.status = status;
-      await childNode.save();
 
       await logContribution({
         userId,

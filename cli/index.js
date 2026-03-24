@@ -25,7 +25,7 @@ program
         { title: "AI", cmds: ["chat", "place", "query", "chats"] },
         { title: "Collaboration", cmds: ["team", "invite", "invites", "kick", "owner", "visibility", "share", "link", "share-token"] },
         { title: "LLM", cmds: ["llms", "llm"] },
-        { title: "Extensions", cmds: ["ext", "protocol", "tools", "tools-allow", "tools-block", "tools-clear", "modes", "mode-set", "mode-clear"] },
+        { title: "Extensions", cmds: ["ext", "ext-scope", "ext-block", "ext-allow", "protocol", "tools", "tools-allow", "tools-block", "tools-clear", "modes", "mode-set", "mode-clear"] },
         { title: "Canopy", cmds: ["peers", "peer", "search", "browse"] },
         { title: "Config", cmds: ["config", "show"] },
       ];

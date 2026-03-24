@@ -52,6 +52,10 @@ const MAX_HANDLERS_PER_HOOK = 100;
 // Map<hookName, Array<{ extName, handler }>>
 const registry = new Map();
 
+// Spatial scoping: function to resolve blocked extensions at a node.
+// Set by startup after extensionScope is loaded.
+let _getScopeFn = null;
+
 /** Simple Levenshtein distance for typo detection. */
 function levenshtein(a, b) {
   const m = a.length, n = b.length;
@@ -149,21 +153,34 @@ async function run(hookName, data) {
   const handlers = registry.get(hookName);
   if (!handlers || handlers.length === 0) return { cancelled: false };
 
+  // Spatial extension scoping: resolve blocked extensions at this node
+  const nodeId = data?.nodeId || data?.node?._id || null;
+  let blockedExtensions = null;
+  if (nodeId && _getScopeFn) {
+    try {
+      blockedExtensions = await _getScopeFn(String(nodeId));
+    } catch {}
+  }
+
   const isBefore = hookName.startsWith("before");
 
   // After hooks: run in parallel, fire-and-forget
   if (!isBefore && hookName !== "enrichContext") {
     await Promise.allSettled(
-      handlers.map(({ extName, handler }) =>
-        withTimeout(handler(data), HOOK_TIMEOUT_MS, `${hookName}:${extName}`)
-          .catch(err => log.warn("Hooks", `${hookName} from "${extName}" failed:`, err.message))
-      )
+      handlers
+        .filter(({ extName }) => !blockedExtensions || !blockedExtensions.has(extName))
+        .map(({ extName, handler }) =>
+          withTimeout(handler(data), HOOK_TIMEOUT_MS, `${hookName}:${extName}`)
+            .catch(err => log.warn("Hooks", `${hookName} from "${extName}" failed:`, err.message))
+        )
     );
     return { cancelled: false };
   }
 
   // Before hooks and enrichContext: sequential
   for (const { extName, handler } of handlers) {
+    // Skip if extension is blocked at this node
+    if (blockedExtensions && blockedExtensions.has(extName)) continue;
     try {
       const result = await withTimeout(handler(data), HOOK_TIMEOUT_MS, `${hookName}:${extName}`);
       if (isBefore && result === false) {
@@ -195,9 +212,18 @@ function list() {
   return result;
 }
 
+/**
+ * Set the spatial scope resolver. Called once at boot.
+ * fn(nodeId) -> Promise<Set<string>> of blocked extension names.
+ */
+function setScopeResolver(fn) {
+  _getScopeFn = fn;
+}
+
 export const hooks = {
   register,
   unregister,
   run,
   list,
+  setScopeResolver,
 };

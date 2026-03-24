@@ -7,10 +7,14 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices } from "../core/services.js";
-import { setExtensionToolResolver, registerMode } from "../ws/modes/registry.js";
+import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../ws/modes/registry.js";
 import { hooks } from "../core/hooks.js";
 import { registerOrchestrator } from "../core/orchestratorRegistry.js";
+import { registerModeOwner, registerToolOwner } from "../core/tree/extensionScope.js";
 import log from "../core/log.js";
+
+// Wire mode ownership tracking for spatial scoping
+setModeRegistrationHook(registerModeOwner);
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
 function toImportURL(filePath) {
@@ -560,6 +564,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         const { z } = await import("zod");
 
         for (const tool of instance.tools) {
+          registerToolOwner(tool.name, name);
           mcpServer.tool(
             tool.name,
             tool.description,

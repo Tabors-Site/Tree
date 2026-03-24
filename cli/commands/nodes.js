@@ -451,6 +451,85 @@ module.exports = (program) => {
       }
     });
 
+  // ── Spatial extension scoping ──
+  program
+    .command("ext-scope")
+    .description("Show which extensions are blocked at the current node (with inheritance)")
+    .action(async () => {
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const data = await api.get(`/node/${nodeId}/extensions`);
+        if (!data.blocked?.length) {
+          return console.log(chalk.dim("  No extensions blocked at this position."));
+        }
+        console.log(chalk.bold(`Blocked extensions at this position:`));
+        for (const name of data.blocked) {
+          console.log(`  ${chalk.red("x")} ${name}`);
+        }
+        if (data.chain?.length) {
+          console.log(chalk.dim("\nInheritance chain:"));
+          for (const c of data.chain) {
+            console.log(chalk.dim(`  ${c.name}: ${c.blocked.join(", ")}`));
+          }
+        }
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("ext-block [extNames...]")
+    .description("Block extensions at the current node. Their tools, hooks, and modes won't work here or below.")
+    .action(async (parts) => {
+      if (!parts?.length) return console.log(chalk.yellow("Usage: ext-block <ext1> <ext2>"));
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const names = parts.join(",").split(",").map(s => s.trim()).filter(Boolean);
+        // Get existing config and merge
+        const current = await api.get(`/node/${nodeId}/extensions`);
+        const existing = [];
+        for (const c of current.chain || []) {
+          if (c.nodeId === nodeId) existing.push(...(c.blocked || []));
+        }
+        const blocked = [...new Set([...existing, ...names])];
+        await api.post(`/node/${nodeId}/extensions`, { blocked });
+        console.log(chalk.green(`Blocked: ${names.join(", ")}`));
+        console.log(chalk.dim("Their tools, hooks, modes, and metadata are now inactive at this position and all children."));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("ext-allow [extNames...]")
+    .description("Remove extensions from the block list at the current node.")
+    .action(async (parts) => {
+      if (!parts?.length) return console.log(chalk.yellow("Usage: ext-allow <ext1> <ext2>"));
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const names = new Set(parts.join(",").split(",").map(s => s.trim()).filter(Boolean));
+        const current = await api.get(`/node/${nodeId}/extensions`);
+        const existing = [];
+        for (const c of current.chain || []) {
+          if (c.nodeId === nodeId) existing.push(...(c.blocked || []));
+        }
+        const blocked = existing.filter(n => !names.has(n));
+        await api.post(`/node/${nodeId}/extensions`, { blocked });
+        console.log(chalk.green(`Allowed: ${[...names].join(", ")}`));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
   // ── Per-node mode overrides ──
   program
     .command("modes")

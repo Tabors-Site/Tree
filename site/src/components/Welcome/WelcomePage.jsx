@@ -137,9 +137,9 @@ const WelcomePage = () => {
               🌳
             </div>
 
-            <h1 data-text="TreeOS">{LAND_NAME} Land</h1>
+            <h1 data-text={LAND_NAME + " Land"} Land>{LAND_NAME} Land</h1>
           </a>
-          <h2>First vision ever built from TreeOS</h2>
+          <h2>First ever vision built off TreeOS</h2>
 
         </div>
         <footer className="hero-footer">
