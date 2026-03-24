@@ -109,13 +109,13 @@ export async function resolveRootNode(nodeId) {
 }
 
 export async function isDescendant(ancestorId, nodeId) {
-  let current = await Node.findById(nodeId).select("parent");
+  let current = await Node.findById(nodeId).select("parent").lean();
 
   while (current && current.parent) {
     if (current.parent.toString() === ancestorId.toString()) {
       return true;
     }
-    current = await Node.findById(current.parent).select("parent");
+    current = await Node.findById(current.parent).select("parent").lean();
   }
 
   return false;
@@ -376,7 +376,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
   } else {
     let cursor = current;
     while (cursor.parent) {
-      const next = await Node.findById(cursor.parent)
+      const next = await Node.findById(cursor.parent).lean()
         .select("_id name parent rootOwner systemRole")
         .lean()
         .exec();
@@ -428,7 +428,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
   let siblings = [];
 
   if (current.parent && current.parent !== "deleted") {
-    const parentCandidate = await Node.findById(current.parent)
+    const parentCandidate = await Node.findById(current.parent).lean()
       .select("_id name children systemRole")
       .lean()
       .exec();

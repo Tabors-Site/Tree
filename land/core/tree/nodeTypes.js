@@ -62,8 +62,7 @@ export async function editNodeType({
 
 
   const oldType = node.type;
-  node.type = newType;
-  await node.save();
+  await Node.findByIdAndUpdate(nodeId, { $set: { type: newType } });
 
   await logContribution({
     userId,

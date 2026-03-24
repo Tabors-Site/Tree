@@ -176,7 +176,9 @@
       "Bash(grep -n \"get-active-leaf-execution-frontier\" /home/tabor/github/Tree/land/ws/*.js -B 2 -A 10)",
       "Bash(grep -rn \"type.*:\" /home/tabor/github/Tree/land/core/tree/*.js)",
       "Bash(ls -la /home/tabor/github/Tree/cli/*.js)",
-      "Bash(grep -n \"router.*protocol\\\\|/protocol\" /home/tabor/github/Tree/land/routes/*.js)"
+      "Bash(grep -n \"router.*protocol\\\\|/protocol\" /home/tabor/github/Tree/land/routes/*.js)",
+      "Bash(echo \"=== 1. Remaining read-modify-save patterns ===\" grep -rn \"await.*save\\(\\)\" land/core/tree/*.js)",
+      "Bash(1 cd:*)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -189,7 +191,8 @@
       "/home/tabor/github/Tree/orchestrators/core/orchestratorRegistry.js\";\\nlet orchestrateTreeRequest;\\ntry { ({ orchestrateTreeRequest } = await import(\"../tree-orchestrator",
       "/home/tabor/github/Tree/s|import { orchestrateTreeRequest } from \"../orchestrators/tree.js\";|",
       "/home/tabor/github/Tree/s/{LAND_NAME} is a web-based/{LAND_NAME} Land is a web-based",
-      "/home/tabor/github/Tree/s/await User.findById(userId)$"
+      "/home/tabor/github/Tree/s/await User.findById(userId)$",
+      "/home/tabor/github/Tree/s/await Node.findById(cursor.parent)$"
     ]
   }
 }
