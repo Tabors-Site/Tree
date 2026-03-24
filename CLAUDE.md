@@ -198,6 +198,18 @@ Per-node mode overrides via `metadata.modes`:
 - Kernel `resolveMode(intent, bigMode, nodeMetadata)` handles resolution
 - CLI: `modes`, `mode-set <intent> <modeKey>`, `mode-clear`
 
+### Extensions (what CAPABILITIES exist)
+```
+Node metadata.extensions.blocked -> inherits parent to child
+```
+
+Per-node extension blocking via `metadata.extensions.blocked`:
+- `ext-block solana scripts shell` blocks at current node, inherits down
+- Blocked extensions lose their hooks, tools, modes, and metadata writes
+- The kernel filters at three points: hook firing, tool resolution, mode resolution
+- CLI: `ext-scope`, `ext-scope -t`, `ext-block <name>`, `ext-allow <name>`
+- Navigate somewhere and the capability surface changes
+
 ### Orchestrators (the entire FLOW)
 Extensions register custom orchestrators via `core.orchestrators.register()`. Replaces the entire chat/place/query conversation flow. The built-in tree-orchestrator is itself an extension.
 

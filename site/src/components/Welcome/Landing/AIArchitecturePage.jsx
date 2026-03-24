@@ -102,24 +102,27 @@ const AIArchitecturePage = () => {
               </div>
             </div>
             <div className="lp-card">
-              <h3>Timeouts: How Long AI Tries</h3>
+              <h3>Extensions: What Capabilities Exist</h3>
               <p>
-                Different branches can have different patience. A quick-response FAQ branch
-                gets 30 seconds. A deep research branch gets 10 minutes. The kernel resolves
-                the timeout per node, per mode, or uses the land default.
+                Block entire extensions at any node. A knowledge tree blocks Solana, scripts,
+                and shell. A shared tree blocks dangerous extensions at the root so contributors
+                can't use them. Blocked extensions lose their hooks, tools, modes, and metadata
+                writes at that node and all children. Navigate somewhere and the world reshapes.
               </p>
               <div style={{background: "rgba(0,0,0,0.3)", borderRadius: 8, padding: "12px 16px", marginTop: 12, fontSize: "0.85rem", color: "#999", fontFamily: "monospace"}}>
-                <span style={{color: "#666"}}># set via metadata</span><br/>
-                metadata.timeouts.respond = 30000<br/>
-                metadata.timeouts.understand = 600000
+                ext-block solana scripts shell<br/>
+                ext-scope  <span style={{color: "#666"}}># see what's active here</span><br/>
+                ext-scope -t  <span style={{color: "#666"}}># tree-wide block map</span>
               </div>
             </div>
           </div>
 
           <p className="lp-section-sub" style={{marginTop: 32}}>
-            All of this inherits. Set tools on the root and every node in the tree gets them.
-            Override on a branch and only that branch changes. The kernel resolves it automatically
-            by walking from the current node up to the root, merging at each level.
+            All three layers inherit parent to child. Set a block on the root and every node
+            in the tree inherits it. Override on a branch and only that branch changes.
+            The kernel walks from the current node up to the root, merging at each level.
+            One tree can have a branch with shell access, another that's read-only, and
+            another that can't even see certain extensions exist. No code changes. Just metadata.
           </p>
         </div>
       </section>
@@ -129,7 +132,7 @@ const AIArchitecturePage = () => {
         <div className="lp-container">
           <h2 className="lp-section-title">The AI Stack</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Four layers. Each one is customizable independently. Most people use the defaults.
+            Five layers. Each one is customizable independently. Most people use the defaults.
             Power users adjust the top layers. Developers replace the bottom ones.
           </p>
           <div className="lp-steps">
@@ -138,9 +141,10 @@ const AIArchitecturePage = () => {
               <div className="lp-step-content">
                 <h4>Per-Node Config <span style={{color: "#666", fontWeight: 400}}>(no code)</span></h4>
                 <p>
-                  Tools, modes, and timeouts set through metadata on any node. CLI commands
-                  or API calls. This is what tree owners use. No JavaScript, no extensions,
-                  just configuration. The most accessible layer.
+                  Tools, modes, extensions, and timeouts set through metadata on any node.
+                  CLI commands or API calls. Block an extension at the root and it disappears
+                  from the entire tree. Tools, modes, hooks, metadata writes, all filtered
+                  by position. The most accessible layer.
                 </p>
               </div>
             </div>

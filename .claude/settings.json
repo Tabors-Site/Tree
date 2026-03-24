@@ -172,7 +172,11 @@
       "Bash(head -10 __NEW_LINE_a0a15d49778a2da6__ echo \"\" echo \"--- notes.js ---\" grep -n \"\\\\.save\\(\\)\" land/core/tree/notes.js)",
       "Bash(head -10 __NEW_LINE_a0a15d49778a2da6__ echo \"\" echo \"--- statuses.js ---\" grep -n \"\\\\.save\\(\\)\" land/core/tree/statuses.js)",
       "Read(//home/tabor/github/Tree/=== $push/**)",
-      "Bash(grep -n \"ext-scope\\\\|ext-block\\\\|ext-allow\" cli/commands/*.js)"
+      "Bash(grep -n \"ext-scope\\\\|ext-block\\\\|ext-allow\" cli/commands/*.js)",
+      "Bash(grep -n \"get-active-leaf-execution-frontier\" /home/tabor/github/Tree/land/ws/*.js -B 2 -A 10)",
+      "Bash(grep -rn \"type.*:\" /home/tabor/github/Tree/land/core/tree/*.js)",
+      "Bash(ls -la /home/tabor/github/Tree/cli/*.js)",
+      "Bash(grep -n \"router.*protocol\\\\|/protocol\" /home/tabor/github/Tree/land/routes/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
