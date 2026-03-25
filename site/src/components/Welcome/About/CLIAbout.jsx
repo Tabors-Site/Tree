@@ -282,7 +282,7 @@ const CLIAbout = () => {
           <CmdRow cmd="peers" desc="List peered lands" />
           <CmdRow cmd="peer add <domain>" desc="Peer with another land" />
           <CmdRow cmd="peer remove <domain>" desc="Remove a peer" />
-          <CmdRow cmd="search <query>" desc="Search the directory for lands and trees" />
+          <CmdRow cmd="search <query>" desc="Search the Horizon for lands and trees" />
           <CmdRow cmd="browse <domain> [query]" desc="Browse public trees on another land" />
         </div>
 

@@ -231,9 +231,9 @@ Connect to peer lands, discover trees across the network, and navigate into remo
 | `peer remove <domain>`     | Remove a peer                                       |
 | `peer block <domain>`      | Block a peer land                                   |
 | `peer unblock <domain>`    | Unblock a peer land                                 |
-| `peer discover <domain>`   | Look up a land in the directory and auto-peer       |
+| `peer discover <domain>`   | Look up a land on the Horizon and auto-peer         |
 | `peer ping`                | Heartbeat check all peers                           |
-| `search [query]`           | Search the directory for public trees               |
+| `search [query]`           | Search the Horizon for public trees                 |
 | `search -l [query]`        | Search for lands instead of trees                   |
 | `browse <domain> [query]`  | List public trees on a specific peer land            |
 | `cd @domain/treename`      | Enter a remote tree (all commands proxy through)     |
@@ -451,5 +451,5 @@ All commands map to the [Tree REST API](https://treeOS.ai/about/api). Remote tre
 - [API Reference](https://treeOS.ai/about/api)
 - [CLI Guide](https://treeOS.ai/about/cli)
 - [Extensions](https://treeOS.ai/about/extensions)
-- [Directory](https://dir.treeOS.ai)
+- [The Horizon](https://horizon.treeOS.ai)
 - [GitHub](https://github.com/Tabors-Site/Tree)

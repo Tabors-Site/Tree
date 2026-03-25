@@ -37,14 +37,14 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId, Node,
   const invitingUser = await User.findById(userInvitingId).select("username").lean();
   if (!invitingUser) throw new Error("Inviting user not found");
 
-  // Find the peer land, or auto-peer via directory
+  // Find the peer land, or auto-peer via Horizon
   let peer = await canopy.getPeerByDomain(domain);
 
   if (!peer) {
-    // Try the directory
-    const directoryLand = await canopy.lookupLandByDomain(domain);
-    if (directoryLand && directoryLand.baseUrl) {
-      peer = await canopy.registerPeer(directoryLand.baseUrl);
+    // Try the Horizon
+    const horizonLand = await canopy.lookupLandByDomain(domain);
+    if (horizonLand && horizonLand.baseUrl) {
+      peer = await canopy.registerPeer(horizonLand.baseUrl);
     }
   }
 

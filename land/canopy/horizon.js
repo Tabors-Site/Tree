@@ -2,7 +2,7 @@ import log from "../seed/log.js";
 import { getLandInfoPayload, signCanopyToken } from "./identity.js";
 import Node from "../seed/models/node.js";
 
-const DIRECTORY_URL = process.env.DIRECTORY_URL;
+const HORIZON_URL = process.env.HORIZON_URL;
 const RE_REGISTER_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 let reRegisterTimer = null;
@@ -33,20 +33,20 @@ async function getPublicTrees() {
 }
 
 /**
- * Register this land with the directory service.
+ * Register this land with the Horizon service.
  * Sends land identity + public trees. Authenticates with a CanopyToken.
  */
-export async function registerWithDirectory() {
-  if (!DIRECTORY_URL) return;
+export async function registerWithHorizon() {
+  if (!HORIZON_URL) return;
 
   try {
     const info = getLandInfoPayload();
     const publicTrees = await getPublicTrees();
 
-    // Sign a token targeting the directory
-    const token = await signCanopyToken("directory-registration", "directory");
+    // Sign a token targeting the Horizon
+    const token = await signCanopyToken("horizon-registration", "horizon");
 
-    const res = await fetch(`${DIRECTORY_URL}/directory/register`, {
+    const res = await fetch(`${HORIZON_URL}/horizon/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -67,35 +67,35 @@ export async function registerWithDirectory() {
     const data = await res.json();
 
     if (data.success) {
-      log.verbose("Canopy", `Registered with directory at ${DIRECTORY_URL}`);
+      log.verbose("Canopy", `Registered with Horizon at ${HORIZON_URL}`);
     } else {
-      log.error("Canopy", `[Land] Directory registration failed: ${data.error}`);
+      log.error("Canopy", `[Land] Horizon registration failed: ${data.error}`);
     }
   } catch (err) {
-    log.error("Canopy", `[Land] Could not reach directory at ${DIRECTORY_URL}: ${err.message}`);
+    log.error("Canopy", `[Land] Could not reach Horizon at ${HORIZON_URL}: ${err.message}`);
   }
 }
 
 /**
  * Start periodic re-registration (updates public tree list, refreshes lastSeenAt).
  */
-export function startDirectoryRegistration() {
-  if (!DIRECTORY_URL) {
-    log.verbose("Land", "No DIRECTORY_URL set, skipping directory registration");
+export function startHorizonRegistration() {
+  if (!HORIZON_URL) {
+    log.verbose("Land", "No HORIZON_URL set, skipping Horizon registration");
     return;
   }
 
   // Register immediately
-  registerWithDirectory();
+  registerWithHorizon();
 
   // Re-register every hour
-  reRegisterTimer = setInterval(registerWithDirectory, RE_REGISTER_INTERVAL);
+  reRegisterTimer = setInterval(registerWithHorizon, RE_REGISTER_INTERVAL);
 }
 
 /**
  * Stop re-registration.
  */
-export function stopDirectoryRegistration() {
+export function stopHorizonRegistration() {
   if (reRegisterTimer) {
     clearInterval(reRegisterTimer);
     reRegisterTimer = null;
@@ -103,15 +103,15 @@ export function stopDirectoryRegistration() {
 }
 
 /**
- * Look up a land by domain through the directory service.
+ * Look up a land by domain through the Horizon service.
  * Returns { domain, name, baseUrl, publicKey, ... } or null.
  */
 export async function lookupLandByDomain(domain) {
-  if (!DIRECTORY_URL) return null;
+  if (!HORIZON_URL) return null;
 
   try {
     const res = await fetch(
-      `${DIRECTORY_URL}/directory/land/${encodeURIComponent(domain)}`,
+      `${HORIZON_URL}/horizon/land/${encodeURIComponent(domain)}`,
       { signal: AbortSignal.timeout(10000) }
     );
 
@@ -127,14 +127,14 @@ export async function lookupLandByDomain(domain) {
 }
 
 /**
- * Search lands by name or domain through the directory.
+ * Search lands by name or domain through the Horizon.
  */
 export async function searchLands(query) {
-  if (!DIRECTORY_URL) return [];
+  if (!HORIZON_URL) return [];
 
   try {
     const res = await fetch(
-      `${DIRECTORY_URL}/directory/lands?q=${encodeURIComponent(query)}`,
+      `${HORIZON_URL}/horizon/lands?q=${encodeURIComponent(query)}`,
       { signal: AbortSignal.timeout(10000) }
     );
 
@@ -148,14 +148,14 @@ export async function searchLands(query) {
 }
 
 /**
- * Search public trees across the network through the directory.
+ * Search public trees across the network through the Horizon.
  */
 export async function searchPublicTrees(query) {
-  if (!DIRECTORY_URL) return [];
+  if (!HORIZON_URL) return [];
 
   try {
     const res = await fetch(
-      `${DIRECTORY_URL}/directory/search/trees?q=${encodeURIComponent(query)}`,
+      `${HORIZON_URL}/horizon/search/trees?q=${encodeURIComponent(query)}`,
       { signal: AbortSignal.timeout(10000) }
     );
 

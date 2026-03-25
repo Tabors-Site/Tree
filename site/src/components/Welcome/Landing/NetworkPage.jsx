@@ -15,7 +15,7 @@ const NetworkPage = () => {
             Every land is a node in a distributed network.
           </p>
           <div className="lp-hero-ctas">
-            <a className="lp-btn lp-btn-primary" href="https://dir.treeos.ai">Browse the Directory</a>
+            <a className="lp-btn lp-btn-primary" href="https://horizon.treeos.ai">Browse the Horizon</a>
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/ai">The AI</a>
             <a className="lp-btn lp-btn-secondary" href="/cascade">Cascade</a>
@@ -100,11 +100,11 @@ const NetworkPage = () => {
               <div className="lp-step-content">
                 <h4>Discovery</h4>
                 <p>
-                  Lands find each other through a directory service or direct peering by URL. The directory
-                  at <a href="https://dir.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>dir.treeos.ai</a> helps
+                  Lands find each other through the Horizon or direct peering by URL. The Horizon
+                  at <a href="https://horizon.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>horizon.treeos.ai</a> helps
                   lands discover each other and browse published extensions. It's where <code>treeos ext search</code> and <code>treeos ext publish</code> hit.
-                  Anyone can run their own directory. It's a search index over public metadata that lands voluntarily advertise.
-                  Extension code lives on the publishing land, not the directory. The directory is a convenience, not an authority.
+                  Anyone can run their own Horizon. It's a search index over public metadata that lands voluntarily advertise.
+                  Extension code lives on the publishing land, not the Horizon. The Horizon is a convenience, not an authority.
                   Remove it and direct peering still works.
                 </p>
               </div>
@@ -220,7 +220,7 @@ const NetworkPage = () => {
               ["Heartbeats share status, not data", "Peers exchange extension lists and health. Not user data. Not tree content. Not notes. The network knows you exist. It doesn't know what you're doing."],
               ["Cascade is opt-in", "cascadeEnabled defaults to false. No signals flow until you turn it on. Even when on, each node chooses whether to participate via metadata.cascade.enabled."],
               ["Peering is mutual", "Both lands must agree to peer. One-sided peering is rejected. You choose your neighbors."],
-              ["No platform risk", "If dir.treeos.ai goes down, your land keeps running. If a peer goes offline, your trees are unaffected. Each node is independent. There is no single point of failure."],
+              ["No platform risk", "If horizon.treeos.ai goes down, your land keeps running. If a peer goes offline, your trees are unaffected. Each node is independent. There is no single point of failure."],
             ].map(([title, desc]) => (
               <div key={title} style={{
                 padding: "14px 0",
@@ -251,7 +251,7 @@ const NetworkPage = () => {
               <p>
                 Git is distributed. Every clone is a full copy. GitHub is a hosted service that
                 adds collaboration on top. The seed works the same way. Every land is a complete
-                system. The directory adds discovery. The protocol adds connection. But each
+                system. The Horizon adds discovery. The protocol adds connection. But each
                 land stands alone.
               </p>
             </div>
@@ -274,7 +274,7 @@ const NetworkPage = () => {
             <div className="lp-card">
               <h3>No Platform Risk</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
-                If the directory goes down, your land keeps running. If a peer goes offline,
+                If the Horizon goes down, your land keeps running. If a peer goes offline,
                 your trees are unaffected. The network is resilient because each node is
                 independent. There is no single point of failure.
               </p>
@@ -316,7 +316,7 @@ const NetworkPage = () => {
           </div>
           <div style={{marginTop: 24}}>
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>
-            <a className="lp-btn lp-btn-secondary" href="https://dir.treeos.ai" style={{marginLeft: 12}}>Browse Directory</a>
+            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai" style={{marginLeft: 12}}>Browse Horizon</a>
           </div>
         </div>
       </section>

@@ -11,7 +11,7 @@ import mongoose from "mongoose";
 import { isValidRootLlmSlot, getAllRootLlmSlots } from "../../seed/llm/connections.js";
 import { getNodeChats } from "../../seed/ws/chatHistory.js";
 
-import { registerWithDirectory } from "../../canopy/directory.js";
+import { registerWithHorizon } from "../../canopy/horizon.js";
 
 const router = express.Router();
 
@@ -124,8 +124,8 @@ router.post("/root/:rootId/visibility", authenticate, async (req, res) => {
       $set: { visibility },
     });
 
-    registerWithDirectory().catch((err) =>
-      log.error("API", "[Land] Directory re-sync after visibility change failed:", err)
+    registerWithHorizon().catch((err) =>
+      log.error("API", "[Land] Horizon re-sync after visibility change failed:", err)
     );
 
     return sendOk(res, { visibility });

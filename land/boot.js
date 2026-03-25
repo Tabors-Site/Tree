@@ -28,7 +28,7 @@ const DEFAULTS = {
   LAND_DEFAULT_TIER: "god",
   REQUIRE_EMAIL: "true",
   ENABLE_FRONTEND_HTML: "true",
-  DIRECTORY_URL: "https://dir.treeos.ai",
+  HORIZON_URL: "https://horizon.treeos.ai",
 };
 
 function parseEnv(content) {
@@ -70,7 +70,7 @@ LAND_NAME=${values.LAND_NAME}
 LAND_DEFAULT_TIER=${values.LAND_DEFAULT_TIER}
 REQUIRE_EMAIL=${values.REQUIRE_EMAIL}
 ENABLE_FRONTEND_HTML=${values.ENABLE_FRONTEND_HTML}
-DIRECTORY_URL=${values.DIRECTORY_URL}
+HORIZON_URL=${values.HORIZON_URL}
 
 # Vite (site/ build)
 VITE_LAND_URL=${landUrl}
@@ -106,7 +106,7 @@ async function interactiveSetup(existingEnv = {}) {
   values.REQUIRE_EMAIL = await ask("Require email for registration? (true/false)", "REQUIRE_EMAIL");
   values.ENABLE_FRONTEND_HTML =
     existingEnv.ENABLE_FRONTEND_HTML || DEFAULTS.ENABLE_FRONTEND_HTML;
-  values.DIRECTORY_URL = await ask("Directory URL (empty for standalone)", "DIRECTORY_URL");
+  values.HORIZON_URL = await ask("Horizon URL (empty for standalone)", "HORIZON_URL");
 
   rl.close();
 
@@ -114,19 +114,19 @@ async function interactiveSetup(existingEnv = {}) {
   console.log(`\n  Configuration saved to ${envPath}\n`);
 
   // Extension picker (first-time only)
-  await pickExtensions(values.DIRECTORY_URL);
+  await pickExtensions(values.HORIZON_URL);
 
   console.log("  Starting Land server...\n");
 }
 
-async function pickExtensions(directoryUrl) {
-  if (!directoryUrl) return;
+async function pickExtensions(horizonUrl) {
+  if (!horizonUrl) return;
 
   let extensions;
   try {
     const fetch = (await import("node-fetch")).default;
-    console.log(`  Checking extension registry at ${directoryUrl}...`);
-    const res = await fetch(`${directoryUrl}/extensions`, {
+    console.log(`  Checking extension registry at ${horizonUrl}...`);
+    const res = await fetch(`${horizonUrl}/extensions`, {
       headers: { "Content-Type": "application/json" },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -158,7 +158,7 @@ async function pickExtensions(directoryUrl) {
     rl.close();
     const selected = extensions;
     // Jump to install (reuse code below)
-    return await installSelected(selected, directoryUrl);
+    return await installSelected(selected, horizonUrl);
   }
 
   // Categorize extensions
@@ -177,7 +177,7 @@ async function pickExtensions(directoryUrl) {
     console.log(`\n  Installing ${recommended.length} recommended extensions...\n`);
     for (const name of recommended) console.log(`    ${name}`);
     rl.close();
-    return await installSelected(recommended.map(n => extMap[n]), directoryUrl);
+    return await installSelected(recommended.map(n => extMap[n]), horizonUrl);
   }
 
   const categories = [
@@ -238,10 +238,10 @@ async function pickExtensions(directoryUrl) {
     return;
   }
 
-  await installSelected(selected, directoryUrl);
+  await installSelected(selected, horizonUrl);
 }
 
-async function installSelected(selected, directoryUrl) {
+async function installSelected(selected, horizonUrl) {
   console.log(`\n  Installing ${selected.length} extensions...\n`);
 
   const fetch = (await import("node-fetch")).default;
@@ -249,7 +249,7 @@ async function installSelected(selected, directoryUrl) {
 
   for (const ext of selected) {
     try {
-      const res = await fetch(`${directoryUrl}/extensions/${ext.name}/${ext.version}`, {
+      const res = await fetch(`${horizonUrl}/extensions/${ext.name}/${ext.version}`, {
         headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) { console.log(`    ${ext.name}: skipped (HTTP ${res.status})`); continue; }

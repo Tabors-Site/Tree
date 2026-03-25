@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://directory.treeos.ai/</loc>
+    <loc>https://horizon.treeos.ai/</loc>
     <changefreq>hourly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://directory.treeos.ai/directory/lands</loc>
+    <loc>https://horizon.treeos.ai/horizon/lands</loc>
     <changefreq>hourly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://directory.treeos.ai/directory/search/trees</loc>
+    <loc>https://horizon.treeos.ai/horizon/search/trees</loc>
     <changefreq>hourly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://directory.treeos.ai/directory/health</loc>
+    <loc>https://horizon.treeos.ai/horizon/health</loc>
     <changefreq>always</changefreq>
     <priority>0.3</priority>
   </url>

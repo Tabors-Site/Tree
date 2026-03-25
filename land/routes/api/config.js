@@ -295,7 +295,7 @@ router.post("/land/extensions/install", authenticate, async (req, res) => {
 /**
  * POST /api/v1/land/extensions/:name/publish
  * Publish a local extension to the registry.
- * Reads the extension files and sends them to the directory service.
+ * Reads the extension files and sends them to the Horizon service.
  */
 router.post("/land/extensions/:name/publish", authenticate, async (req, res) => {
   try {
@@ -316,17 +316,17 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${name}" not found locally`);
     }
 
-    // Send to directory service
-    const directoryUrl = getLandConfigValue("DIRECTORY_URL");
-    if (!directoryUrl) {
-      return sendError(res, 400, ERR.INVALID_INPUT, "No DIRECTORY_URL configured");
+    // Send to Horizon service
+    const horizonUrl = getLandConfigValue("HORIZON_URL");
+    if (!horizonUrl) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "No HORIZON_URL configured");
     }
 
     const { getLandIdentity, signCanopyToken } = await import("../../canopy/identity.js");
     const identity = getLandIdentity();
-    const token = await signCanopyToken("extension-publish", "directory");
+    const token = await signCanopyToken("extension-publish", "horizon");
 
-    const dirRes = await fetch(`${directoryUrl}/extensions`, {
+    const dirRes = await fetch(`${horizonUrl}/extensions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

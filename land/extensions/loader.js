@@ -1047,14 +1047,14 @@ export async function readExtensionFiles(name) {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the directory service URL from land config or env.
+ * Resolve the Horizon service URL from land config or env.
  */
-async function getDirectoryUrl() {
+async function getHorizonUrl() {
   try {
     const { getLandConfigValue } = await import("../seed/landConfig.js");
-    return getLandConfigValue("directoryUrl") || process.env.DIRECTORY_URL || "https://dir.treeos.ai";
+    return getLandConfigValue("HORIZON_URL") || process.env.HORIZON_URL || "https://horizon.treeos.ai";
   } catch {
-    return process.env.DIRECTORY_URL || "https://dir.treeos.ai";
+    return process.env.HORIZON_URL || "https://horizon.treeos.ai";
   }
 }
 
@@ -1135,7 +1135,7 @@ async function installFromRepo(name, repoUrl, version) {
 
 /**
  * Install an extension from the registry by name.
- * Fetches metadata + files from the directory service, verifies integrity,
+ * Fetches metadata + files from the Horizon service, verifies integrity,
  * and writes files to disk.
  *
  * @param {string} name - extension name
@@ -1147,12 +1147,12 @@ export async function installExtension(name, version) {
     throw new Error("Invalid extension name");
   }
 
-  const dirUrl = await getDirectoryUrl();
+  const horizonUrl = await getHorizonUrl();
 
   // Fetch extension metadata (latest or specific version)
   const metaUrl = version
-    ? `${dirUrl}/extensions/${encodeURIComponent(name)}/${version}`
-    : `${dirUrl}/extensions/${encodeURIComponent(name)}`;
+    ? `${horizonUrl}/extensions/${encodeURIComponent(name)}/${version}`
+    : `${horizonUrl}/extensions/${encodeURIComponent(name)}`;
   const metaRes = await fetch(metaUrl);
   if (!metaRes.ok) {
     const err = await metaRes.json().catch(() => ({ error: `HTTP ${metaRes.status}` }));
@@ -1166,7 +1166,7 @@ export async function installExtension(name, version) {
 
   // Fetch full version with files if not included
   if (!ext.files) {
-    const fullRes = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}/${ext.version}`);
+    const fullRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/${ext.version}`);
     if (!fullRes.ok) throw new Error("Failed to fetch extension files from registry");
     ext = await fullRes.json();
   }

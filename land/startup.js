@@ -11,7 +11,7 @@ import { syncExtensionsToTree } from "./seed/landRoot.js";
 import { registerCanopyAuth } from "./canopy/auth.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
 import { startOutboxJob, startCanopyRetentionJob } from "./canopy/events.js";
-import { startDirectoryRegistration } from "./canopy/directory.js";
+import { startHorizonRegistration } from "./canopy/horizon.js";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -159,8 +159,8 @@ export function onListen() {
     startHeartbeatJob();
     startOutboxJob();
     startCanopyRetentionJob();
-    startDirectoryRegistration();
-    log.verbose("Canopy", "Peering, outbox, directory, retention ready");
+    startHorizonRegistration();
+    log.verbose("Canopy", "Peering, outbox, Horizon, retention ready");
 
     hooks.run("afterBoot", {}).catch(() => {});
     printReady();

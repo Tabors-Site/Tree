@@ -42,7 +42,7 @@ function verifySignature(signedContent, signature, publicKeyPem) {
  * is verified against the key in the request body.
  * For existing lands, the token is verified against the stored public key.
  */
-export async function verifyDirectoryToken(authHeader, requestPublicKey = null) {
+export async function verifyHorizonToken(authHeader, requestPublicKey = null) {
   if (!authHeader || !authHeader.startsWith("CanopyToken ")) {
     return { valid: false, error: "Missing CanopyToken authorization header" };
   }
@@ -94,15 +94,15 @@ export async function verifyDirectoryToken(authHeader, requestPublicKey = null) 
 }
 
 /**
- * Express middleware for directory authentication.
+ * Express middleware for Horizon authentication.
  * Attaches req.canopyAuth = { payload } on success.
  * Pass { allowNewRegistration: true } to accept keys from the request body.
  */
-export function verifyDirectoryAuth({ allowNewRegistration = false } = {}) {
+export function verifyHorizonAuth({ allowNewRegistration = false } = {}) {
   return async (req, res, next) => {
     const requestPublicKey = allowNewRegistration ? req.body?.publicKey : null;
 
-    const result = await verifyDirectoryToken(
+    const result = await verifyHorizonToken(
       req.headers.authorization,
       requestPublicKey
     );

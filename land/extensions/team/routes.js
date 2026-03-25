@@ -34,7 +34,7 @@ export function buildRouter(core) {
         const RemoteUser = (await import("../../canopy/models/remoteUser.js")).default;
         const canopy = await import("../../canopy/identity.js");
         const peers = await import("../../canopy/peers.js");
-        const directory = await import("../../canopy/directory.js");
+        const horizon = await import("../../canopy/horizon.js");
 
         const result = await sendRemoteInvite({
           userInvitingId: req.userId,
@@ -49,7 +49,7 @@ export function buildRouter(core) {
             getPeerByDomain: peers.getPeerByDomain,
             getPeerBaseUrl: peers.getPeerBaseUrl,
             registerPeer: peers.registerPeer,
-            lookupLandByDomain: directory.lookupLandByDomain,
+            lookupLandByDomain: horizon.lookupLandByDomain,
           },
         });
 

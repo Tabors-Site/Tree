@@ -86,6 +86,9 @@ treeos start`}</Code>
               ["Canopy", "The federation protocol. How lands discover and connect to each other."],
               ["Mode", "How the AI thinks at a position. Extensions register modes. The kernel resolves them."],
               ["Orchestrator", "The entire conversation flow. Replaceable. The built-in one is itself an extension."],
+              ["Zone", "Land (/), Home (~), or Tree (/MyTree). Where you are determines what the AI can do. Kernel concept."],
+              ["Seed Version", "How the kernel tracks its own version for migrations. Checked at boot. Migrations run in order."],
+              ["Perspective Filter", "How trees control what cascade signals they accept. Extension-level filtering on .flow data."],
             ].map(([term, desc]) => (
               <div key={term} style={{padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.06)"}}>
                 <span style={{color: "#4ade80", fontWeight: 700, marginRight: 12}}>{term}</span>
@@ -262,7 +265,7 @@ treeos ext-scope                  # see what's active at this position`}</Code>
           <P>
             Install from the registry: <code>treeos ext install understanding</code>.
             Publish your own: <code>treeos ext publish my-extension</code>.
-            Browse what exists at <a href="https://dir.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>dir.treeos.ai</a>.
+            Browse what exists at <a href="https://horizon.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>horizon.treeos.ai</a>.
           </P>
           <P>
             <a href="/extensions" style={{color: "rgba(255,255,255,0.7)"}}>Deep dive: Extensions</a>
@@ -341,7 +344,9 @@ treeos ext-scope                  # see what's active at this position`}</Code>
             growth per partition with circular overwrite. Retention deletes entire partitions by date.
           </P>
           <P>
-            <a href="/cascade" style={{color: "rgba(255,255,255,0.7)"}}>Deep dive: Cascade and the Water Cycle</a>
+            <a href="/cascade" style={{color: "rgba(255,255,255,0.7)"}}>Deep dive: Cascade (technical spec)</a>
+            <span style={{color: "rgba(255,255,255,0.15)", margin: "0 12px"}}>.</span>
+            <a href="/flow" style={{color: "rgba(255,255,255,0.7)"}}>The Flow (water cycle)</a>
           </P>
         </div>
       </section>
@@ -378,8 +383,8 @@ treeos llm assign         # assign to tree or mode`}</Code>
             user data never leaves their home land.
           </P>
           <P>
-            Peers discover each other through the directory at <a href="https://dir.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>dir.treeos.ai</a> or
-            by direct peering. The directory is discovery, not authority. Remove it and peering still works.
+            Peers discover each other through the Horizon at <a href="https://horizon.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>horizon.treeos.ai</a> or
+            by direct peering. The Horizon is discovery, not authority. Remove it and peering still works.
             Messages are signed with Ed25519 keys from .identity. Heartbeats exchange extension lists
             and health status, not user data.
           </P>
@@ -409,9 +414,12 @@ treeos config set llmTimeout 900
 treeos config set cascadeEnabled true
 treeos config set treeCircuitEnabled true`}</Code>
           <P>
-            35+ config keys covering: LLM (timeout, retries, model), conversation (tool iterations,
+            <strong>42</strong> config keys. The kernel owns every one.
+          </P>
+          <P>
+            Covering: LLM (timeout, retries, model), conversation (tool iterations,
             context window, carry messages), sessions (TTL, stale timeout, max), notes (max chars),
-            tree summary (depth, nodes), retention (chats, contributions, canopy events), cascade
+            tree summary (depth, nodes), retention (chats, contributions), cascade
             (enabled, depth, payload, rate limit, result TTL, flow cap), uploads (enabled, max size,
             MIME filter), document guard (max size), ancestor cache (TTL), integrity check (interval),
             tree circuit breaker (enabled, thresholds, weights, interval), tool circuit breaker (threshold),
@@ -496,7 +504,7 @@ export async function init(core) {
             what you build. It grows whatever you plant.
           </P>
           <P>
-            Check out extensions built so far at <a href="https://dir.treeos.ai" style={{color: "#4ade80"}}>dir.treeos.ai</a> and
+            Check out extensions built so far at <a href="https://horizon.treeos.ai" style={{color: "#4ade80"}}>horizon.treeos.ai</a> and
             publish your own. Every extension is a piece contributed toward the future of AI infrastructure.
             Open code. Open doors. This was designed to be held back by no one.
           </P>
@@ -511,8 +519,8 @@ export async function init(core) {
           <h2 className="lp-section-title">Building a Custom Orchestrator</h2>
           <P>
             The most ambitious thing you can build on the seed. A custom orchestrator replaces how
-            the AI thinks about and responds to every message in a zone. The built-in tree-orchestrator
-            is itself an extension. Uninstall it and plug in your own.
+            the AI thinks about and responds to every message in a zone. The built-in orchestrator
+            ships as the treeos extension. Uninstall it and plug in your own.
           </P>
           <Code>{`export async function init(core) {
   core.orchestrators.register("tree", {
@@ -553,7 +561,7 @@ export async function init(core) {
             <li>Extension init (call init(core) in order)</li>
             <li>Wire (routes, tools, hooks, modes, jobs, indexes)</li>
             <li>Background jobs (retention, upload cleanup, integrity, circuit breaker)</li>
-            <li>Canopy peering, heartbeat, outbox, directory registration</li>
+            <li>Canopy peering, heartbeat, outbox, Horizon registration</li>
             <li>afterBoot hook fires</li>
           </ol>
         </div>
@@ -608,7 +616,7 @@ export async function init(core) {
             <a className="lp-btn lp-btn-secondary" href="/flow">The Flow</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
-            <a className="lp-btn lp-btn-secondary" href="https://dir.treeos.ai">Directory</a>
+            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
             <a className="lp-btn lp-btn-secondary" href="https://github.com/Tabors-Site/Tree">GitHub</a>
           </div>
         </div>

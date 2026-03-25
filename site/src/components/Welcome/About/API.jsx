@@ -1706,7 +1706,7 @@ notification  — Dream notification summary and thought (falls back to placemen
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/land/extensions/:name/uninstall</span>
             </div>
-            <div className="ep-desc">Remove extension directory. Checks dependents first. Database data kept.</div>
+            <div className="ep-desc">Remove extension folder. Checks dependents first. Database data kept.</div>
           </div>
 
           <div className="endpoint">
@@ -1746,7 +1746,7 @@ notification  — Dream notification summary and thought (falls back to placemen
               <span className="ep-method get">GET</span>
               <span className="ep-url">/canopy/redirect</span>
             </div>
-            <div className="ep-desc">Redirect to the land's frontend URL. Used by the directory for "visit" links.</div>
+            <div className="ep-desc">Redirect to the land's frontend URL. Used by the Horizon for "visit" links.</div>
           </div>
 
           <div className="endpoint">
@@ -1888,7 +1888,7 @@ notification  — Dream notification summary and thought (falls back to placemen
           </div>
           <div className="section-text">
             Admin endpoints for managing peers, monitoring events, and searching
-            the directory. Requires API key or JWT authentication with admin privileges.
+            the Horizon. Requires API key or JWT authentication with admin privileges.
           </div>
 
           <div className="endpoint">
@@ -1914,7 +1914,7 @@ notification  — Dream notification summary and thought (falls back to placemen
               <span className="ep-method post">POST</span>
               <span className="ep-url">/canopy/admin/peer/discover</span>
             </div>
-            <div className="ep-desc">Look up a land in the Canopy Directory and auto-peer if found.</div>
+            <div className="ep-desc">Look up a land in the Canopy Horizon and auto-peer if found.</div>
             <div className="ep-label">Request Body</div>
             <div className="ep-code">{`{ "domain": "other-land.com" }`}</div>
           </div>
@@ -1970,9 +1970,9 @@ notification  — Dream notification summary and thought (falls back to placemen
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/canopy/admin/directory/lands</span>
+              <span className="ep-url">/canopy/admin/horizon/lands</span>
             </div>
-            <div className="ep-desc">Search the Canopy Directory for registered lands.</div>
+            <div className="ep-desc">Search the Canopy Horizon for registered lands.</div>
             <div className="ep-label">Query Parameters</div>
             <div className="ep-code">{`?q=search-term`}</div>
           </div>
@@ -1980,9 +1980,9 @@ notification  — Dream notification summary and thought (falls back to placemen
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/canopy/admin/directory/trees</span>
+              <span className="ep-url">/canopy/admin/horizon/trees</span>
             </div>
-            <div className="ep-desc">Search the Canopy Directory for public trees across all registered lands.</div>
+            <div className="ep-desc">Search the Canopy Horizon for public trees across all registered lands.</div>
             <div className="ep-label">Query Parameters</div>
             <div className="ep-code">{`?q=search-term`}</div>
           </div>
@@ -1992,7 +1992,7 @@ notification  — Dream notification summary and thought (falls back to placemen
               <span className="ep-method get">GET</span>
               <span className="ep-url">/canopy/admin</span>
             </div>
-            <div className="ep-desc">Canopy admin overview page (?html) or JSON summary of peers, events, directory status.</div>
+            <div className="ep-desc">Canopy admin overview page (?html) or JSON summary of peers, events, Horizon status.</div>
           </div>
 
           <div className="endpoint">
@@ -2006,9 +2006,9 @@ notification  — Dream notification summary and thought (falls back to placemen
           <div className="endpoint">
             <div className="ep-method-url">
               <span className="ep-method get">GET</span>
-              <span className="ep-url">/canopy/admin/directory</span>
+              <span className="ep-url">/canopy/admin/horizon</span>
             </div>
-            <div className="ep-desc">Canopy Directory browser page (?html) or JSON of registered lands and public trees.</div>
+            <div className="ep-desc">Canopy Horizon browser page (?html) or JSON of registered lands and public trees.</div>
           </div>
         </div>
 

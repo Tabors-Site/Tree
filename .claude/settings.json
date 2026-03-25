@@ -228,7 +228,13 @@
       "Bash(/tmp/dead_code_check.txt:*)",
       "Bash(grep -l \"Energy: dynamic import\" /home/tabor/github/Tree/land/seed/**/*.js)",
       "Bash(grep -r \"conversationSessionCount\\\\|getSessionInfo\" /home/tabor/github/Tree/land --include=*.js)",
-      "Bash(for key:*)"
+      "Bash(for key:*)",
+      "Bash(grep -n \"throw new Error\\\\|throw Error\\\\|throw {\" /home/tabor/github/Tree/land/seed/tree/*.js)",
+      "Bash(grep -n buildPromptForMode /home/tabor/github/Tree/land/seed/ws/*.js /home/tabor/github/Tree/land/seed/ws/**/*.js)",
+      "Bash(grep -n \"core\\\\.models\\\\[\" /home/tabor/github/Tree/land/extensions/*/index.js)",
+      "Bash(find /home/tabor/github/Tree/land/seed -name \"*.js\" -exec grep -l \"export.*function\\\\|export async function\" {})",
+      "Bash(grep -h \"from.*seed/\" /home/tabor/github/Tree/land/extensions/*/routes.js)",
+      "Bash(grep -n \"throw;\" /home/tabor/github/Tree/land/seed/tree/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

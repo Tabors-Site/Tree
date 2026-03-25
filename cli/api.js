@@ -135,9 +135,9 @@ class TreeAPI {
   }
   // Install: fetch from registry, send files to land
   async installExtension(name, version) {
-    const dirUrl = await this._getDirectoryUrl();
+    const horizonUrl = await this._getHorizonUrl();
     const versionPath = version ? `/${version}` : "/latest";
-    const res = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}${version ? `/${version}` : ""}`, {
+    const res = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}${version ? `/${version}` : ""}`, {
       headers: { "Content-Type": "application/json" },
     });
     if (!res.ok) {
@@ -150,7 +150,7 @@ class TreeAPI {
     if (!ext) throw new Error("Extension not found");
     // Fetch full version with files
     if (!ext.files) {
-      const fullRes = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}/${ext.version}`, {
+      const fullRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/${ext.version}`, {
         headers: { "Content-Type": "application/json" },
       });
       if (!fullRes.ok) throw new Error("Failed to fetch extension files");
@@ -168,9 +168,9 @@ class TreeAPI {
   }
   // Search registry
   async searchRegistry(query) {
-    const dirUrl = await this._getDirectoryUrl();
+    const horizonUrl = await this._getHorizonUrl();
     const qs = query ? `?q=${encodeURIComponent(query)}` : "";
-    const res = await fetch(`${dirUrl}/extensions${qs}`, {
+    const res = await fetch(`${horizonUrl}/extensions${qs}`, {
       headers: { "Content-Type": "application/json" },
     });
     if (!res.ok) throw new Error(`Registry search failed: ${res.status}`);
@@ -180,15 +180,15 @@ class TreeAPI {
   publishExtension(name) {
     return this.post(`/land/extensions/${encodeURIComponent(name)}/publish`);
   }
-  async _getDirectoryUrl() {
-    // Ask the land for its directory URL
-    const config = await this.get("/land/config/DIRECTORY_URL").catch(() => null);
+  async _getHorizonUrl() {
+    // Ask the land for its Horizon URL
+    const config = await this.get("/land/config/HORIZON_URL").catch(() => null);
     if (config?.value) {
       let url = config.value;
       if (!/^https?:\/\//i.test(url)) url = "https://" + url;
       return url.replace(/\/+$/, "");
     }
-    return "https://dir.treeos.ai";
+    return "https://horizon.treeos.ai";
   }
 
   // ── API Keys ────────────────────────────────────────────────────────────
@@ -520,11 +520,11 @@ class TreeAPI {
   }
   searchLands(q) {
     const qs = q ? `?q=${encodeURIComponent(q)}` : "";
-    return this._canopyReq("GET", `/canopy/admin/directory/lands${qs}`);
+    return this._canopyReq("GET", `/canopy/admin/horizon/lands${qs}`);
   }
   searchTrees(q) {
     const qs = q ? `?q=${encodeURIComponent(q)}` : "";
-    return this._canopyReq("GET", `/canopy/admin/directory/trees${qs}`);
+    return this._canopyReq("GET", `/canopy/admin/horizon/trees${qs}`);
   }
   getRemotePublicTrees(domain, q) {
     const params = new URLSearchParams();

@@ -147,8 +147,8 @@ const AboutHome = () => {
             <div className="ah-arch-label">Network</div>
             <div className="ah-arch-desc">
               This land peers with others through Canopy. Browse public trees
-              across the network. Invite users from other lands. The directory
-              at dir.treeos.ai indexes everything.
+              across the network. Invite users from other lands. The Horizon
+              at horizon.treeos.ai indexes everything.
             </div>
             <a href="/decentralized" className="ah-arch-link">The network</a>
           </div>

@@ -2,7 +2,7 @@
 
 Owner: Tabor Holly
 Contact: taborgreat@gmail.com
-Project: Canopy Directory
+Project: Canopy Horizon
 Site: https://treeos.ai
 
 /* TECHNOLOGY */

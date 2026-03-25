@@ -213,7 +213,6 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | maxSessions | 10000 | Max concurrent sessions |
 | chatRetentionDays | 90 | Auto-delete chats |
 | contributionRetentionDays | 365 | Auto-delete contributions |
-| canopyEventRetentionDays | 30 | Auto-delete canopy events (canopy owns cleanup) |
 | timezone | auto | Land timezone for AI prompts |
 | disabledExtensions | [] | Extensions to skip on boot |
 | cascadeEnabled | false | Enable cascade signals |

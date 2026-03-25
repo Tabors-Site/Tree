@@ -237,11 +237,11 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
     <div>
       <h1>${escapeHtml(treeName)}</h1>
       <div class="meta">by ${escapeHtml(ownerUsername)}</div>
-      <a href="https://dir.treeos.ai" target="_blank" rel="noopener"
+      <a href="https://horizon.treeos.ai" target="_blank" rel="noopener"
         style="font-size:0.75rem;color:rgba(255,255,255,0.35);text-decoration:none;margin-top:4px;display:inline-block;transition:color 0.2s;"
         onmouseover="this.style.color='rgba(255,255,255,0.7)'"
         onmouseout="this.style.color='rgba(255,255,255,0.35)'"
-      >Canopy Directory</a>
+      >Canopy Horizon</a>
     </div>
     <span class="badge">Public</span>
   </div>

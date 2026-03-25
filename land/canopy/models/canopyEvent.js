@@ -29,7 +29,7 @@ const CanopyEventSchema = new mongoose.Schema({
 
 CanopyEventSchema.index({ status: 1, createdAt: 1 });
 CanopyEventSchema.index({ targetLand: 1, status: 1 });
-// Retention handled by kernel cleanup job (configurable via land config: canopyEventRetentionDays, 0 = forever)
+// Retention handled by canopy's own cleanup job (configurable via land config: canopyEventRetentionDays, default 30 days)
 
 const CanopyEvent = mongoose.model("CanopyEvent", CanopyEventSchema);
 

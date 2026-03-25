@@ -1,7 +1,7 @@
 import { Router } from "express";
 import Land from "../db/models/land.js";
 import PublicTree from "../db/models/publicTree.js";
-import { verifyDirectoryAuth } from "../auth.js";
+import { verifyHorizonAuth } from "../auth.js";
 
 const router = Router();
 
@@ -10,12 +10,12 @@ function escapeRegex(str) {
 }
 
 /**
- * POST /directory/register
+ * POST /horizon/register
  * Register or update a land and its public trees.
  */
 router.post(
   "/register",
-  verifyDirectoryAuth({ allowNewRegistration: true }),
+  verifyHorizonAuth({ allowNewRegistration: true }),
   async (req, res) => {
     try {
       const {
@@ -46,10 +46,10 @@ router.post(
       }
 
       // SECURITY: Validate aud claim if present
-      if (req.canopyAuth.payload.aud && req.canopyAuth.payload.aud !== "directory") {
+      if (req.canopyAuth.payload.aud && req.canopyAuth.payload.aud !== "horizon") {
         return res.status(401).json({
           success: false,
-          error: "Token audience must be 'directory'",
+          error: "Token audience must be 'horizon'",
         });
       }
 
@@ -81,14 +81,14 @@ router.post(
         }
       }
 
-      // SECURITY: Check directory capacity for new registrations
+      // SECURITY: Check Horizon capacity for new registrations
       const existingLand = await Land.findOne({ domain });
       if (!existingLand) {
         const totalLands = await Land.countDocuments();
         if (totalLands >= 50000) {
           return res.status(503).json({
             success: false,
-            error: "Directory capacity reached",
+            error: "Horizon capacity reached",
           });
         }
       }
@@ -143,7 +143,7 @@ router.post(
         landId: land._id,
       });
     } catch (err) {
-      console.error("[Directory] Register error:", err.message);
+      console.error("[Horizon] Register error:", err.message);
       return res.status(500).json({
         success: false,
         error: "Internal server error",
@@ -153,7 +153,7 @@ router.post(
 );
 
 /**
- * GET /directory/lands
+ * GET /horizon/lands
  * List registered lands with optional search and filtering.
  */
 router.get("/lands", async (req, res) => {
@@ -202,13 +202,13 @@ router.get("/lands", async (req, res) => {
 
     return res.json({ success: true, lands: mapped, total, page });
   } catch (err) {
-    console.error("[Directory] List lands error:", err.message);
+    console.error("[Horizon] List lands error:", err.message);
     return res.status(500).json({ success: false, error: "Internal server error" });
   }
 });
 
 /**
- * GET /directory/land/:domain
+ * GET /horizon/land/:domain
  * Get full details for a single land.
  */
 router.get("/land/:domain", async (req, res) => {
@@ -234,7 +234,7 @@ router.get("/land/:domain", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("[Directory] Get land error:", err.message);
+    console.error("[Horizon] Get land error:", err.message);
     return res.status(500).json({ success: false, error: "Internal server error" });
   }
 });
@@ -286,18 +286,18 @@ router.get("/search/trees", async (req, res) => {
 
     return res.json({ success: true, trees: enriched, total, page });
   } catch (err) {
-    console.error("[Directory] Search trees error:", err.message);
+    console.error("[Horizon] Search trees error:", err.message);
     return res.status(500).json({ success: false, error: "Internal server error" });
   }
 });
 
 /**
- * DELETE /directory/land/:domain
+ * DELETE /horizon/land/:domain
  * Remove a land and all its public trees. Requires valid CanopyToken from the land.
  */
 router.delete(
   "/land/:domain",
-  verifyDirectoryAuth(),
+  verifyHorizonAuth(),
   async (req, res) => {
     try {
       const domain = req.params.domain;
@@ -323,14 +323,14 @@ router.delete(
         message: `Land ${domain} and its public trees have been removed`,
       });
     } catch (err) {
-      console.error("[Directory] Delete land error:", err.message);
+      console.error("[Horizon] Delete land error:", err.message);
       return res.status(500).json({ success: false, error: "Internal server error" });
     }
   }
 );
 
 /**
- * GET /directory/health
+ * GET /horizon/health
  * Health check endpoint.
  */
 router.get("/health", async (req, res) => {

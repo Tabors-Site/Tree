@@ -233,15 +233,15 @@ export async function handleInviteRemote(req, res, {
 
   let peer = await getPeerByDomain(domain);
   if (!peer) {
-    const directoryLand = await lookupLandByDomain(domain);
-    if (directoryLand && directoryLand.baseUrl) {
+    const horizonLand = await lookupLandByDomain(domain);
+    if (horizonLand && horizonLand.baseUrl) {
       try {
-        peer = await registerPeer(directoryLand.baseUrl);
+        peer = await registerPeer(horizonLand.baseUrl);
       } catch (peerErr) {
-        return sendError(res, 502, ERR.PEER_UNREACHABLE, `Found land ${domain} in directory but could not connect: ${peerErr.message}`);
+        return sendError(res, 502, ERR.PEER_UNREACHABLE, `Found land ${domain} on the Horizon but could not connect: ${peerErr.message}`);
       }
     } else {
-      return sendError(res, 404, ERR.PEER_NOT_FOUND, `Land ${domain} not found. Not a peer and not in the directory.`);
+      return sendError(res, 404, ERR.PEER_NOT_FOUND, `Land ${domain} not found. Not a peer and not on the Horizon.`);
     }
   }
 

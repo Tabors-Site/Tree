@@ -10,7 +10,7 @@ import { errorHtml } from "./notFoundPage.js";
 import { resolveHtmlShareAccess } from "./shareAuth.js";
 import { verifyCanopyToken, getLandIdentity } from "../../canopy/identity.js";
 import { getPeerByDomain, registerPeer } from "../../canopy/peers.js";
-import { lookupLandByDomain } from "../../canopy/directory.js";
+import { lookupLandByDomain } from "../../canopy/horizon.js";
 import { authStrategies } from "../../seed/services.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,16 +47,16 @@ export default async function urlAuth(req, res, next) {
       let peer = await getPeerByDomain(unverified.iss);
       if (!peer) {
         try {
-          const directoryLand = await lookupLandByDomain(unverified.iss);
-          if (directoryLand?.baseUrl) {
+          const horizonLand = await lookupLandByDomain(unverified.iss);
+          if (horizonLand?.baseUrl) {
             const infoRes = await fetch(
-              `${directoryLand.baseUrl.replace(/\/+$/, "")}/canopy/info`,
+              `${horizonLand.baseUrl.replace(/\/+$/, "")}/canopy/info`,
               { signal: AbortSignal.timeout(5000) }
             );
             if (infoRes.ok) {
               const info = await infoRes.json();
               if (info.domain === unverified.iss) {
-                peer = await registerPeer(directoryLand.baseUrl);
+                peer = await registerPeer(horizonLand.baseUrl);
               }
             }
           }

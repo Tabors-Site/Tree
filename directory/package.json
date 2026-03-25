@@ -1,5 +1,5 @@
 {
-  "name": "canopy-directory",
+  "name": "canopy-horizon",
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",

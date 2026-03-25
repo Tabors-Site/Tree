@@ -34,7 +34,7 @@ import LandPeer from "../canopy/models/landPeer.js";
 import Node from "../seed/models/node.js";
 import authenticate from "../seed/middleware/authenticate.js";
 import { getExtension } from "../extensions/loader.js";
-import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
+import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/horizon.js";
 import { isPrivateHost } from "../canopy/security.js";
 import { getUserMeta } from "../seed/tree/userMetadata.js";
 
@@ -616,10 +616,10 @@ router.post("/canopy/invite-remote", authenticate, async (req, res) => {
 });
 
 /**
- * GET /canopy/admin/directory/lands
- * Search the directory for lands.
+ * GET /canopy/admin/horizon/lands
+ * Search the Horizon for lands.
  */
-router.get("/canopy/admin/directory/lands", authenticate, requireAdmin, async (req, res) => {
+router.get("/canopy/admin/horizon/lands", authenticate, requireAdmin, async (req, res) => {
   try {
     const lands = await searchLands(req.query.q || "");
     sendOk(res, { lands });
@@ -629,10 +629,10 @@ router.get("/canopy/admin/directory/lands", authenticate, requireAdmin, async (r
 });
 
 /**
- * GET /canopy/admin/directory/trees
- * Search the directory for public trees across the network.
+ * GET /canopy/admin/horizon/trees
+ * Search the Horizon for public trees across the network.
  */
-router.get("/canopy/admin/directory/trees", authenticate, requireAdmin, async (req, res) => {
+router.get("/canopy/admin/horizon/trees", authenticate, requireAdmin, async (req, res) => {
   try {
     const trees = await searchPublicTrees(req.query.q || "");
     sendOk(res, { trees });
@@ -643,7 +643,7 @@ router.get("/canopy/admin/directory/trees", authenticate, requireAdmin, async (r
 
 /**
  * POST /canopy/admin/peer/discover
- * Look up a land by domain in the directory and auto-peer with it.
+ * Look up a land by domain on the Horizon and auto-peer with it.
  */
 router.post("/canopy/admin/peer/discover", authenticate, requireAdmin, async (req, res) => {
   try {
@@ -652,12 +652,12 @@ router.post("/canopy/admin/peer/discover", authenticate, requireAdmin, async (re
       return sendError(res, 400, ERR.INVALID_INPUT, "Missing domain");
     }
 
-    const directoryLand = await lookupLandByDomain(domain);
-    if (!directoryLand || !directoryLand.baseUrl) {
-      return sendError(res, 404, ERR.NODE_NOT_FOUND, `Land ${domain} not found in directory`);
+    const horizonLand = await lookupLandByDomain(domain);
+    if (!horizonLand || !horizonLand.baseUrl) {
+      return sendError(res, 404, ERR.NODE_NOT_FOUND, `Land ${domain} not found on the Horizon`);
     }
 
-    const peer = await registerPeer(directoryLand.baseUrl);
+    const peer = await registerPeer(horizonLand.baseUrl);
     sendOk(res, { peer });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

@@ -184,13 +184,13 @@ Examples:
     .action(async (parts, opts) => {
       const query = parts ? parts.join(" ") : "";
       try {
-        const dirUrl = "https://dir.treeos.ai";
+        const horizonUrl = "https://horizon.treeos.ai";
         const params = new URLSearchParams();
         if (query) params.set("q", query);
         if (opts.limit) params.set("limit", opts.limit);
         if (opts.tag) params.set("tag", opts.tag);
         const qs = params.toString() ? `?${params}` : "";
-        const res = await fetch(`${dirUrl}/extensions${qs}`, {
+        const res = await fetch(`${horizonUrl}/extensions${qs}`, {
           headers: { "Content-Type": "application/json" },
         });
         if (!res.ok) throw new Error(`Registry unavailable (${res.status})`);
@@ -217,9 +217,9 @@ Examples:
       const name = parts[0];
       const version = parts[1] || null;
       try {
-        const dirUrl = "https://dir.treeos.ai";
+        const horizonUrl = "https://horizon.treeos.ai";
         const vPath = version ? `/${version}` : "";
-        const res = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}${vPath}`);
+        const res = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}${vPath}`);
         if (!res.ok) return console.log(chalk.red(`"${name}" not found in registry.`));
         const data = await res.json();
         const ext = version ? data : data.latest;
@@ -338,8 +338,8 @@ Examples:
         console.log(chalk.dim(`Checking registry for ${name}...`));
         let registry;
         try {
-          const dirUrl = await api._getDirectoryUrl();
-          const res = await fetch(`${dirUrl}/extensions/${encodeURIComponent(name)}`);
+          const horizonUrl = await api._getHorizonUrl();
+          const res = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}`);
           if (res.ok) registry = await res.json();
         } catch {}
         if (!registry?.latest) return console.log(chalk.red(`"${name}" not found in registry.`));

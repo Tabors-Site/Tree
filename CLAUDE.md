@@ -24,7 +24,7 @@ Everything else. Values, schedules, prestige, scripts, dreams, understanding, en
 - **Backend**: Node.js + Express 4, MongoDB (Mongoose 8), Socket.IO 4, OpenAI SDK (any compatible endpoint)
 - **Frontend**: React 18 + Vite 6 (landing/docs site), server-rendered HTML (extension: html-rendering)
 - **Auth**: JWT + bcrypt
-- **Federation**: Canopy protocol, directory service at dir.treeos.ai
+- **Federation**: Canopy protocol, Horizon at horizon.treeos.ai
 
 ## Project Structure
 
@@ -104,7 +104,7 @@ land/
 └── startup.js         # Boot sequence
 
 site/src/              # React frontend (landing page, docs, about pages)
-directory/             # Canopy Directory Service (separate standalone)
+directory/             # The Horizon (separate standalone)
 cli/                   # CLI package
 ```
 

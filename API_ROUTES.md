@@ -118,12 +118,12 @@
 - get("/canopy/admin/events/failed"
 - post(
 - post("/canopy/invite-remote"
-- get("/canopy/admin/directory/lands"
-- get("/canopy/admin/directory/trees"
+- get("/canopy/admin/horizon/lands"
+- get("/canopy/admin/horizon/trees"
 - post("/canopy/admin/peer/discover"
 - get("/canopy/admin"
 - get("/canopy/admin/invites"
-- get("/canopy/admin/directory"
+- get("/canopy/admin/horizon"
 
 ### cascade.js
 - post("/node/:nodeId/cascade"

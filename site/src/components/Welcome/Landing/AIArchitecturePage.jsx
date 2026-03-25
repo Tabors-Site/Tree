@@ -18,6 +18,7 @@ const AIArchitecturePage = () => {
           <div className="lp-hero-ctas">
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/cascade">Cascade</a>
+            <a className="lp-btn lp-btn-secondary" href="/flow">The Flow</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
           </div>

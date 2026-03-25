@@ -218,7 +218,7 @@ const ExtensionsPage = () => {
             work together. But it is one interpretation. The seed grows whatever you plant.
           </p>
           <div style={{marginTop: 24}}>
-            <a className="lp-btn lp-btn-primary" href="https://dir.treeos.ai">Browse Extensions</a>
+            <a className="lp-btn lp-btn-primary" href="https://horizon.treeos.ai">Browse Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/seed" style={{marginLeft: 12}}>The Seed</a>
           </div>
         </div>
@@ -229,7 +229,7 @@ const ExtensionsPage = () => {
         <div className="lp-container" style={{textAlign: "center"}}>
           <h2 className="lp-section-title">Start Building</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Check out extensions built so far at <a href="https://dir.treeos.ai" style={{color: "#4ade80", textDecoration: "none"}}>dir.treeos.ai</a> and
+            Check out extensions built so far at <a href="https://horizon.treeos.ai" style={{color: "#4ade80", textDecoration: "none"}}>horizon.treeos.ai</a> and
             publish your own to start growing. Every extension is a piece contributed toward the future
             of AI infrastructure. There are many things to be built off the kernel.
           </p>
@@ -238,8 +238,8 @@ const ExtensionsPage = () => {
             We can work together on this.
           </p>
           <p className="lp-section-sub" style={{color: "rgba(255,255,255,0.3)", fontSize: "0.85rem"}}>
-            The directory at dir.treeos.ai is one place to discover lands and share extensions.
-            Anyone can host their own directory. Lands connect peer to peer. The directory is
+            The Horizon at horizon.treeos.ai is one place to discover lands and share extensions.
+            Anyone can host their own Horizon. Lands connect peer to peer. The Horizon is
             just discovery. But building together in one place is how communities grow.
           </p>
         </div>

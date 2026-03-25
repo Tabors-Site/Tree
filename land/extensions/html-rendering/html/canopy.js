@@ -732,7 +732,7 @@ function navLinks(activePage) {
   const pages = [
     { href: "/canopy/admin", label: "Dashboard" },
     { href: "/canopy/admin/invites", label: "Invites" },
-    { href: "/canopy/admin/directory", label: "Directory" },
+    { href: "/canopy/admin/horizon", label: "Horizon" },
   ];
   return pages
     .map(
@@ -875,19 +875,19 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// 3. renderCanopyDirectory
+// 3. renderCanopyHorizon
 // ─────────────────────────────────────────────────────────────────────────
 
-export function renderCanopyDirectory({ hasDirectory }) {
-  const noDirectoryMessage = !hasDirectory
+export function renderCanopyHorizon({ hasHorizon }) {
+  const noHorizonMessage = !hasHorizon
     ? '<div class="glass-card" style="animation-delay: 0.1s;">' +
       '<div class="empty-state">' +
-      '<p>No directory service configured.</p>' +
-      '<p style="margin-top: 8px; font-size: 13px;">Set the <code>DIRECTORY_URL</code> environment variable to connect to a directory and discover other lands.</p>' +
+      '<p>No Horizon service configured.</p>' +
+      '<p style="margin-top: 8px; font-size: 13px;">Set the <code>HORIZON_URL</code> environment variable to connect to the Horizon and discover other lands.</p>' +
       '</div></div>'
     : "";
 
-  const searchSection = hasDirectory
+  const searchSection = hasHorizon
     ? '<div class="glass-card" style="animation-delay: 0.1s;">' +
       '<div class="tab-bar">' +
       '<button class="active" id="tab-lands" onclick="switchTab(\'lands\')">Lands</button>' +
@@ -929,7 +929,7 @@ export function renderCanopyDirectory({ hasDirectory }) {
     .loading { text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px; }
   `;
 
-  const directoryScript = `
+  const horizonScript = `
       var currentTab = "lands";
 
       function switchTab(tab) {
@@ -946,8 +946,8 @@ export function renderCanopyDirectory({ hasDirectory }) {
         resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
 
         var endpoint = currentTab === "lands"
-          ? "/canopy/admin/directory/lands"
-          : "/canopy/admin/directory/trees";
+          ? "/canopy/admin/horizon/lands"
+          : "/canopy/admin/horizon/trees";
 
         var data = await canopyFetch(endpoint + "?q=" + encodeURIComponent(query));
 
@@ -1026,7 +1026,7 @@ export function renderCanopyDirectory({ hasDirectory }) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#667eea">
-    <title>Canopy Directory</title>
+    <title>Canopy Horizon</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>${sharedStyles}${extraStyles}</style>
@@ -1036,21 +1036,21 @@ export function renderCanopyDirectory({ hasDirectory }) {
 
     <div class="container">
       <div class="page-header">
-        <h1>Directory</h1>
+        <h1>Horizon</h1>
         <p>Discover lands and public trees across the network</p>
       </div>
 
       <div class="nav-links">
-        ${navLinks("/canopy/admin/directory")}
+        ${navLinks("/canopy/admin/horizon")}
       </div>
 
-      ${noDirectoryMessage}
+      ${noHorizonMessage}
       ${searchSection}
     </div>
 
     <script>
       ${sharedScripts}
-      ${hasDirectory ? directoryScript : ""}
+      ${hasHorizon ? horizonScript : ""}
     </script>
   </body>
   </html>

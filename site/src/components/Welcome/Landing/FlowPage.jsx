@@ -41,10 +41,10 @@ const FlowPage = () => {
             }}>
               <div style={{display: "flex", gap: 16, alignItems: "baseline"}}>
                 <span style={{color: "#94a3b8", fontSize: "0.8rem", fontWeight: 600, minWidth: 110, textTransform: "uppercase", letterSpacing: "0.5px"}}>The sky</span>
-                <span style={{color: "var(--color-text-primary)", fontSize: "0.95rem", fontWeight: 500}}>The directory</span>
+                <span style={{color: "var(--color-text-primary)", fontSize: "0.95rem", fontWeight: 500}}>The Horizon</span>
               </div>
               <p style={{color: "var(--color-text-secondary)", fontSize: "0.85rem", lineHeight: 1.7, margin: "8px 0 0", paddingLeft: 126}}>
-                Where lands look to find other lands. <code>dir.treeos.ai</code> is one sky.
+                Where lands look to find other lands. <code>horizon.treeos.ai</code> is one sky.
                 Anyone can run their own. It indexes lands and published extensions.
                 Remove it and direct peering still works. The sky helps you see farther.
                 It does not carry data.
@@ -313,7 +313,7 @@ const FlowPage = () => {
         <div className="lp-container" style={{textAlign: "center"}}>
           <p className="lp-section-sub lp-section-sub-wide" style={{color: "var(--color-text-tertiary)"}}>
             The land is the ground. The seed is what grows. .flow is the water table.
-            The AI is photosynthesis. Canopy is trees reaching for each other. The directory is the sky.
+            The AI is photosynthesis. Canopy is trees reaching for each other. The Horizon is the sky.
             The cycle runs itself. It just needs the first drop.
           </p>
           <div style={{marginTop: 24}}>

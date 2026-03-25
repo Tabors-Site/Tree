@@ -2,7 +2,7 @@ import { Router } from "express";
 import crypto from "crypto";
 import Extension from "../db/models/extension.js";
 import Land from "../db/models/land.js";
-import { verifyDirectoryAuth } from "../auth.js";
+import { verifyHorizonAuth } from "../auth.js";
 
 function computeChecksum(files) {
   const hash = crypto.createHash("sha256");
@@ -213,7 +213,7 @@ router.get("/:name/:version", async (req, res) => {
  * Publish an extension. Requires land authentication.
  * Body: { manifest, files, readme, tags, repoUrl }
  */
-router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) => {
+router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => {
   try {
     const { manifest, files, readme, tags, repoUrl, maintainers } = req.body;
 
@@ -313,7 +313,7 @@ router.post("/", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) =
  * DELETE /extensions/:name/:version
  * Unpublish a version. Requires land authentication (author only).
  */
-router.delete("/:name/:version", verifyDirectoryAuth(), attachLandIdentity(), async (req, res) => {
+router.delete("/:name/:version", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => {
   try {
     const { name, version } = req.params;
 

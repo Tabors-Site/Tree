@@ -57,7 +57,7 @@ const LandAbout = () => {
               <div className="lnd-name-desc">The protocol connecting lands</div>
             </div>
             <div className="lnd-name-item">
-              <div className="lnd-name-label">Directory</div>
+              <div className="lnd-name-label">Horizon</div>
               <div className="lnd-name-desc">A phonebook for land discovery</div>
             </div>
           </div>
@@ -201,11 +201,11 @@ const LandAbout = () => {
           <div className="lnd-section-text">
             Lands don't need to be pre-connected. The network grows organically
             from collaboration. The first time a user invites someone from
-            another Land, the two Lands peer automatically (via the directory
+            another Land, the two Lands peer automatically (via the Horizon
             or direct URL). After that, they stay connected and monitor each
             other's health.
             <br /><br />
-            The directory service is optional. It's a phonebook that makes
+            The Horizon is optional. It's a phonebook that makes
             discovery easier. If it goes down, peered Lands keep working.
             Eventually, Lands could discover each other peer to peer without
             any central service at all.
@@ -270,7 +270,7 @@ const LandAbout = () => {
           <div className="lnd-section-text">
             Clone the repo, set your domain and MongoDB connection, and run
             <code>node server.js</code>. Your Land generates its identity
-            on first boot and is ready to go. Connect to the directory to be
+            on first boot and is ready to go. Connect to the Horizon to be
             discoverable, or peer manually with other lands you know.
           </div>
           <div className="lnd-code-block">

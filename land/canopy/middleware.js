@@ -2,7 +2,7 @@ import log from "../seed/log.js";
 import { sendError, ERR } from "../seed/protocol.js";
 import { verifyCanopyToken, getLandIdentity } from "./identity.js";
 import { getPeerByDomain, registerPeer } from "./peers.js";
-import { lookupLandByDomain } from "./directory.js";
+import { lookupLandByDomain } from "./horizon.js";
 import { canopyResponseHeaders } from "./protocol.js";
 
 /**
@@ -81,18 +81,18 @@ export async function authenticateCanopy(req, res, next) {
       const discoverKey = `discover:${issuerDomain}`;
       if (checkRateLimit(discoverKey, 3)) {
         try {
-          const directoryLand = await lookupLandByDomain(issuerDomain);
-          if (directoryLand?.baseUrl) {
-            // Verify the directory domain matches the token issuer
-            // to prevent a directory entry from impersonating another domain
+          const horizonLand = await lookupLandByDomain(issuerDomain);
+          if (horizonLand?.baseUrl) {
+            // Verify the Horizon domain matches the token issuer
+            // to prevent a Horizon entry from impersonating another domain
             const infoRes = await fetch(
-              `${directoryLand.baseUrl.replace(/\/+$/, "")}/canopy/info`,
+              `${horizonLand.baseUrl.replace(/\/+$/, "")}/canopy/info`,
               { signal: AbortSignal.timeout(5000) }
             );
             if (infoRes.ok) {
               const info = await infoRes.json();
               if (info.domain === issuerDomain) {
-                peer = await registerPeer(directoryLand.baseUrl);
+                peer = await registerPeer(horizonLand.baseUrl);
               }
             }
           }
@@ -100,7 +100,7 @@ export async function authenticateCanopy(req, res, next) {
       }
 
       if (!peer) {
-        return sendError(res, 403, ERR.FORBIDDEN, `Unknown land: ${issuerDomain}. Not registered as a peer and not in the directory.`);
+        return sendError(res, 403, ERR.FORBIDDEN, `Unknown land: ${issuerDomain}. Not registered as a peer and not found on the Horizon.`);
       }
     }
 

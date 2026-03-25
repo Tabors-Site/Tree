@@ -1,111 +1,157 @@
-# TreeOS
+# The Seed
 
-> TreeOS is an operating system for context. A self-hosted, modular, federated knowledge system where AI and humans build persistent tree structures together. Built by Tabor Holly. AGPL-3.0.
+> An open source kernel for AI agents. Two schemas, a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Plant the seed on a server. It grows trees. AGPL-3.0. Built by Tabor Holly.
 
-## What It Is
+## What Is the Seed
 
-TreeOS gives AI persistent, structured memory. Instead of flat conversations that disappear, knowledge lives in hierarchical trees that persist, compound, and connect across a federated network.
+The seed is a kernel. Not an application. Not an OS. The contract that applications and operating systems are built on.
 
-Trees hold anything: goals, plans, tasks, knowledge bases, research, project tracking, or any structured system that needs to persist and grow over time. Both humans and AI read from and write to the same tree.
+It defines: two database schemas (Node with 12 fields, User with 8 fields), an AI conversation loop with MCP tool execution, 26 lifecycle hooks, a cascade engine for signal flow between nodes, five registries (hooks, modes, orchestrators, socket handlers, auth strategies), spatial extension scoping, and a response protocol. 42 config keys. All runtime-configurable.
 
-## Architecture: Three Layers
+Remove every extension and the seed still boots. It provides structure. Extensions provide meaning.
 
-**Kernel** (cannot change without forking): Node schema (_id, name, type, status, children, parent, metadata), User schema (_id, username, password, roots, llmDefault, metadata), Note model, Contribution model. The API protocol (chat/place/query behavioral contracts). 8 lifecycle hooks. Mode registry. Orchestrator registry. Extension loader. Canopy federation. Per-node tool/mode/timeout customization.
+TreeOS is the first operating system built on the seed. It ships 25+ extensions. But it is one interpretation. Anyone can build their own OS on the same kernel.
 
-**Core** (ships with every land, replaceable): AI conversation loop (processMessage, runChat, runPipeline). WebSocket server. MCP bridge. OrchestratorRuntime. Built-in tree modes. parseJsonSafe. Session management. 11 kernel config keys tunable from land .config node.
+## Four Primitives
 
-**Extensions** (optional, installable): Everything else. Values, schedules, scripts, dreams, orchestrators. Install what you need. The kernel boots without any of them.
+Everything in the seed serves one of four:
 
-Every land serves its capabilities at `GET /api/v1/protocol`.
+- **Structure**: Two schemas (Node, User), nodes in hierarchies, metadata Maps for extension data
+- **Intelligence**: Conversation loop, LLM/tool/mode resolution chains, position injection, MCP bridge
+- **Extensibility**: Extension loader, open hook system, spatial scoping, five registries
+- **Communication**: Cascade signals, .flow system node with daily partitions, visible results, response protocol
 
-## Core Protocol
+## Schemas
 
-- **Nodes**: hierarchical structures with notes and metadata (extension data)
-- **Types**: six semantic labels (goal, plan, task, knowledge, resource, identity) plus custom
-- **AI Modes**: three strict interaction boundaries
-  - **Chat**: reads and writes (conversational)
-  - **Place**: writes content without conversation
-  - **Query**: reads only, changes nothing
-- **Per-node customization**: tools (what AI can do), modes (how AI thinks), timeouts. Inherits parent to child.
-- **Canopy**: federation protocol connecting lands into a network
-- **Hooks**: beforeNote, afterNote, beforeContribution, afterNodeCreate, beforeStatusChange, afterStatusChange, beforeNodeDelete, enrichContext
+### Node (12 fields, excluding _id)
+name, type, status, dateCreated, llmDefault, visibility, children[], parent, rootOwner, contributors[], systemRole, metadata (Map)
+
+Type is free-form. Status is active, completed, or trimmed. Extension data lives in metadata under the extension's name. The Map preserves unknown keys across network transit.
+
+### User (8 fields, excluding _id)
+username, password, roots[], llmDefault, isAdmin, isRemote, homeLand, metadata (Map)
+
+Supporting models: Note (content), Contribution (audit trail), AIChat (conversation sessions), LLMConnection (endpoint storage).
+
+## Three Zones
+
+Where you are determines AI behavior. Structural, not interpretive.
+
+- **Land** (`/`): System management. Admin required.
+- **Home** (`~`): Personal space. Notes, ideas, history.
+- **Tree** (`/MyTree`): Chat/place/query. Three strict behavioral contracts.
+
+Zones are kernel. Sub-modes within zones are extensions. The treeos extension registers navigate, structure, edit, respond, librarian. A different extension could register completely different modes.
+
+## The AI
+
+Every AI interaction: resolve LLM, resolve tools, build prompt with [Position] block, enter tool loop. The AI always knows where it is. Extension modes cannot exclude position context.
+
+Four resolution chains at every node:
+1. Extension scope (blocked/restricted extensions, inherits parent to child)
+2. Tool scope (mode base + extension tools + per-node allowed/blocked)
+3. Mode resolution (per-node override, default, fallback)
+4. LLM resolution (extension slot on tree, tree default, user slot, user default)
+
+Entry points for extensions: `runChat()` (single message, persistent session) and `OrchestratorRuntime` (multi-step pipeline).
+
+## 26 Hooks
+
+before: beforeNote, beforeNodeCreate, beforeStatusChange, beforeNodeDelete, beforeContribution, beforeRegister, beforeResponse, beforeLLMCall, beforeToolCall
+after: afterNote, afterNodeCreate, afterStatusChange, afterRegister, afterLLMCall, afterToolCall, afterSessionCreate, afterSessionEnd, afterNavigate, afterMetadataWrite, afterScopeChange, afterBoot, onDocumentPressure, onTreeTripped, onTreeRevived
+sequential: enrichContext, onCascade
+
+Before hooks can cancel. After hooks run in parallel. 5s timeout per handler. Circuit breaker auto-disables after 5 consecutive failures. Spatial scoping filters blocked extensions.
+
+## Cascade
+
+When content is written at a cascade-enabled node, the kernel fires onCascade. Extensions propagate signals. Every signal writes a result to .flow.
+
+- `checkCascade`: kernel-internal, automatic on content writes
+- `deliverCascade`: extension-external, explicit propagation
+- Never block inbound: signals always accepted, always produce a result
+
+Six statuses: succeeded, failed, rejected, queued, partial, awaiting. None terminal.
+
+.flow uses daily partitions. flowMaxResultsPerDay caps growth with circular overwrite. Retention deletes entire partitions by date.
 
 ## Extensions
 
-Everything beyond the core protocol is a modular extension. Install, disable, remove, or build your own.
+A folder with manifest.js and index.js. The manifest declares needs (models, services, other extensions with semver). init(core) returns routes, tools, jobs, pageRouter, exports.
 
-25 built-in extensions: tree-orchestrator (chat/place/query AI, replaceable), land-manager (autonomous land management, 11 tools), shell (server command execution), understanding (tree compression), dreams (background maintenance), scripts (sandboxed JS), energy (usage metering), billing (Stripe), prestige (versioning), values (numeric values and goals), schedules, raw-ideas (auto-placement), blog, book (note exports), solana (on-chain wallets), api-keys, user-llm (custom model connections), user-queries, deleted-revive, transactions (value trading), gateway (external channels), email (forgot password), html-rendering, console (structured logging), visibility (public/private toggle and share tokens).
+Five registries: hooks, modes, orchestrators, socket handlers, auth strategies.
 
-Extensions declare dependencies in a manifest and only receive the services they request. The extension registry at dir.treeos.ai allows publishing and pulling packages.
+Spatial scoping: block extensions per-node with inheritance. metadata.extensions.blocked removes all capabilities. metadata.extensions.restricted demotes to read-only.
 
-## CLI
+Extensions communicate through hooks (pub/sub), getExtension().exports (direct call), and metadata (shared state on nodes).
 
-The CLI works like a regular terminal. `cd`, `ls`, `mkdir`, `rm`, `mv`. If you know a shell, you know TreeOS.
+An operating system is just extensions working together. When enough extensions depend on each other, a coherent experience emerges.
 
-```
-npm install -g treeos
-treeos connect https://treeos.ai
-treeos register
-```
+## Ownership
 
-Key commands: `chat`, `place`, `query`, `mkdir`, `cd`, `ls`, `tree`, `note`, `value`, `type`, `ext install`, `llm add`.
+Resolves by walking parent chain. First rootOwner found is the ownership boundary. Contributors accumulate along the walk. Five chain-validated mutations: addContributor, removeContributor, setOwner, removeOwner, transferOwnership. All reject on system nodes.
 
-## Self-Hosting
+## Federation (Canopy)
 
-Anyone can run their own land. One command to boot:
+Lands connect through REST with Ed25519 signed messages. Peer discovery through the Horizon at horizon.treeos.ai or direct peering. Each land is sovereign. User data stays on the home land. Remote users are ghost records.
 
-```
-treeos land
-```
+Heartbeats exchange extension lists and health. Not user data. Cascade signals flow between lands. The metadata Map preserves all extension data across transit.
 
-First boot walks through domain, MongoDB, and extension selection from the registry.
+## Safety
 
-## Federation
+42 config keys. 26 hooks. Six system nodes. And these protections:
 
-Lands connect through the Canopy protocol. Users on one land can browse public trees on another, receive invites, and contribute remotely. The directory service at dir.treeos.ai handles land discovery, public tree indexing, and the extension registry.
+- Hook circuit breaker (5 failures disables handler)
+- Tool circuit breaker (5 failures disables tool per session)
+- Tree circuit breaker (health equation trips the tree, extensions revive)
+- Document size guard (14MB ceiling, 512KB per namespace, onDocumentPressure at 80%)
+- .flow partitioning (daily partitions, circular overwrite, retention by date)
+- Ancestor cache (one walk serves all six resolution chains, snapshot per message)
+- Atomic metadata writes (MongoDB $set per namespace, no clobber)
+- DB health check (before each tool call, AI tells user if dead)
+- Tree integrity check (boot and daily, auto-repair)
+- Index verification (boot, create missing, no collection scans)
+- Seed versioning (migrations in order, failed retry next boot)
+- Ownership chain validation
+- Graceful shutdown (.unref() timers, SIGTERM clean exit)
 
-## LLM Setup
+## Boot Sequence
 
-Every user connects their own OpenAI-compatible endpoint (Ollama, OpenRouter, Together, etc.) or uses the tree owner's model. Core tree slots: default, placement, respond, notes. Extensions register additional slots via registerModeAssignment().
+1. DB connect
+2. Index verification
+3. System nodes (land root, .identity, .config, .peers, .extensions, .flow)
+4. Config load
+5. Seed migrations
+6. Tree integrity check
+7. Extension discovery and dependency resolution
+8. Extension init (topological sort)
+9. Wire (routes, tools, hooks, modes, jobs, indexes)
+10. Background jobs
+11. Canopy peering
+12. afterBoot hook
 
-## Site Structure
+## Key URLs
 
-The root of treeOS.ai is the protocol landing page, describing the OS, extensions, and how to get started. The `/app` route is the example application built on the protocol (chat entry, dashboard access). The `/dashboard` route is the server-rendered tree management interface. The `/chat` route is the conversational AI interface. All `/about/*` routes are protocol and system documentation.
+- Landing: https://treeos.ai
+- The Seed: https://treeos.ai/seed
+- The AI: https://treeos.ai/ai
+- Cascade: https://treeos.ai/cascade
+- The Flow: https://treeos.ai/flow
+- Extensions: https://treeos.ai/extensions
+- The Network: https://treeos.ai/network
+- Full Guide: https://treeos.ai/guide
+- API Reference: https://treeos.ai/about/api
+- CLI Reference: https://treeos.ai/about/cli
+- The Horizon: https://horizon.treeos.ai
+- GitHub: https://github.com/Tabors-Site/Tree
 
-## Documentation
+## API
 
-- [About TreeOS](https://treeOS.ai/about)
-- [Getting Started](https://treeOS.ai/about/gettingstarted)
-- [API Reference](https://treeOS.ai/about/api)
-- [CLI Guide](https://treeOS.ai/about/cli)
-- [Extensions](https://treeOS.ai/about/extensions)
-- [Node Types](https://treeOS.ai/about/node-types)
-- [Gateway](https://treeOS.ai/about/gateway)
-- [Land and Canopy](https://treeOS.ai/about/land)
-- [Energy System](https://treeOS.ai/about/energy)
-- [Raw Ideas](https://treeOS.ai/about/raw-ideas)
-- [Tree Dreams](https://treeOS.ai/about/dreams)
-- [Blog](https://treeOS.ai/blog)
-- [Directory](https://dir.treeOS.ai)
+Base: `https://treeos.ai/api/v1`
+Auth: Bearer token or x-api-key header.
+Response shape: `{ status: "ok", data }` or `{ status: "error", error: { code, message } }`.
+Protocol endpoint: `GET /api/v1/protocol` returns loaded extensions, capabilities, CLI commands.
 
-## API Access
+## License
 
-Base URL: `https://treeOS.ai/api/v1`
-
-Authentication via `x-api-key` header or Bearer token.
-
-### Public Endpoints
-- `GET /blog/posts` . list blog posts
-- `GET /api/v1/protocol` . land capabilities, extensions, CLI commands
-
-### Core Endpoints
-- Node CRUD (flat schema: status on node, extension data in metadata), notes, contributions
-- AI modes: chat, place, query
-- Canopy federation: peering, proxy, discovery
-- Gateway channel management
-
-### Extension Endpoints
-- Extension management: list, install, disable, enable, uninstall, publish
-- Understanding runs, scripts, schedules, energy, billing, raw ideas, etc.
-
-Full API docs: https://treeOS.ai/about/api
+The seed is AGPL-3.0. Every file in seed/ carries `// TreeOS Seed . AGPL-3.0 . https://treeos.ai`. Extensions are separate works. Extension authors choose their own license. The seed license does not infect extensions.

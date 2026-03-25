@@ -109,8 +109,8 @@ const LandingPage = () => {
               <p style={{flex: 1}}>
                 Every land is sovereign. You run yours. Someone else runs theirs.
                 Lands peer directly through signed requests. Share trees, proxy LLM
-                calls, propagate cascade signals. The public directory helps lands
-                find each other. Anyone can run their own directory.
+                calls, propagate cascade signals. The Horizon helps lands
+                find each other. Anyone can run their own Horizon.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/network" style={{
@@ -347,7 +347,7 @@ const LandingPage = () => {
           <div className="lp-ext-cta">
             <a href="/extensions">How extensions work</a>
             <span style={{color: "rgba(255,255,255,0.15)", margin: "0 12px"}}>.</span>
-            <a href="https://dir.treeos.ai">Browse extensions at dir.treeos.ai</a>
+            <a href="https://horizon.treeos.ai">Browse extensions at horizon.treeos.ai</a>
           </div>
           <p style={{textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: "0.85rem", marginTop: 16, maxWidth: 600, margin: "16px auto 0", lineHeight: 1.7}}>
             Every extension is a piece contributed toward the future of AI infrastructure. There are
@@ -541,6 +541,7 @@ const LandingPage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>TreeOS</h4>
+              <a href="/app">Site</a>
               <a href="/about/api">API</a>
               <a href="/about/cli">CLI</a>
               <a href="/about/gateway">Gateway</a>
@@ -549,7 +550,7 @@ const LandingPage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>Community</h4>
-              <a href="https://dir.treeos.ai">Directory</a>
+              <a href="https://horizon.treeos.ai">Horizon</a>
               <a href="/blog">Blog</a>
             </div>
             <div className="lp-footer-col">

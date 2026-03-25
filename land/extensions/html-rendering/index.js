@@ -40,13 +40,13 @@ pageRouter.get("/canopy/admin", authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-pageRouter.get("/canopy/admin/directory", authenticate, async (req, res) => {
+pageRouter.get("/canopy/admin/horizon", authenticate, async (req, res) => {
   if (!isHtmlEnabled()) return res.status(404).json({ error: "HTML disabled" });
   try {
     const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
     if (!user?.isAdmin) return res.status(403).json({ error: "Admin required" });
-    const hasDirectory = !!process.env.DIRECTORY_URL;
-    res.send(renderers.renderCanopyDirectory({ hasDirectory }));
+    const hasHorizon = !!process.env.HORIZON_URL;
+    res.send(renderers.renderCanopyHorizon({ hasHorizon }));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

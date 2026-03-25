@@ -268,8 +268,8 @@ export default function getTools() {
       async handler({ query, userId }) {
         try {
           const { getLandConfigValue } = await import("../../seed/landConfig.js");
-          const dirUrl = getLandConfigValue("directoryUrl") || "https://dir.treeos.ai";
-          const url = query ? `${dirUrl}/extensions?q=${encodeURIComponent(query)}` : `${dirUrl}/extensions`;
+          const horizonUrl = getLandConfigValue("HORIZON_URL") || "https://horizon.treeos.ai";
+          const url = query ? `${horizonUrl}/extensions?q=${encodeURIComponent(query)}` : `${horizonUrl}/extensions`;
           const res = await fetch(url);
           const data = await res.json();
           const exts = data.extensions || data || [];

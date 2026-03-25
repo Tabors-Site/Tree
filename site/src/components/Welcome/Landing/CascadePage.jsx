@@ -18,6 +18,7 @@ const CascadePage = () => {
           <div className="lp-hero-ctas">
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/ai">The AI</a>
+            <a className="lp-btn lp-btn-secondary" href="/flow">The Flow</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
           </div>
@@ -215,7 +216,7 @@ const CascadePage = () => {
 
           {/* ── DIAGRAM ── */}
           <div style={{maxWidth: 700, margin: "0 auto 48px"}}>
-            <img src="/diagram-flow.svg" alt="Two lands with trees growing from them, connected by canopy above and .flow below. The sky is the directory. Roots pull from the water table. The AI at each node is photosynthesis." style={{width: "100%", height: "auto"}} />
+            <img src="/diagram-flow.svg" alt="Two lands with trees growing from them, connected by canopy above and .flow below. The sky is the Horizon. Roots pull from the water table. The AI at each node is photosynthesis." style={{width: "100%", height: "auto"}} />
           </div>
 
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>

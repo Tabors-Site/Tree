@@ -396,7 +396,7 @@ export function renderExtensionPage({ ext, versions }) {
 </head>
 <body>
   <div class="container">
-    <a href="/" class="home-btn">&larr; Directory</a>
+    <a href="/" class="home-btn">&larr; Horizon</a>
 
     <div class="ext-header">
       <div class="ext-title">${escapeHtml(ext.name)}</div>
@@ -553,7 +553,7 @@ export function renderExtensionPage({ ext, versions }) {
     </div>` : ""}
 
     <div class="footer">
-      <a href="/">&larr; Back to Directory</a>
+      <a href="/">&larr; Back to Horizon</a>
     </div>
   </div>
 

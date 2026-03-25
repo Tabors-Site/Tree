@@ -75,7 +75,7 @@ async function runHealthChecks() {
       status: { $in: ["active", "degraded", "unreachable"] },
     });
 
-    console.log(`[Directory] Health check starting for ${lands.length} lands`);
+    console.log(`[Horizon] Health check starting for ${lands.length} lands`);
 
     // Run checks in parallel with a concurrency limit
     const batchSize = 10;
@@ -84,9 +84,9 @@ async function runHealthChecks() {
       await Promise.allSettled(batch.map((land) => checkLand(land)));
     }
 
-    console.log("[Directory] Health check complete");
+    console.log("[Horizon] Health check complete");
   } catch (err) {
-    console.error("[Directory] Health check error:", err.message);
+    console.error("[Horizon] Health check error:", err.message);
   }
 }
 
@@ -96,7 +96,7 @@ async function runHealthChecks() {
 export function startHealthCheckJob() {
   if (intervalId) return;
   console.log(
-    `[Directory] Health check job started. Interval: ${HEALTH_CHECK_INTERVAL / 1000}s`
+    `[Horizon] Health check job started. Interval: ${HEALTH_CHECK_INTERVAL / 1000}s`
   );
   intervalId = setInterval(runHealthChecks, HEALTH_CHECK_INTERVAL);
 }
@@ -108,6 +108,6 @@ export function stopHealthCheckJob() {
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;
-    console.log("[Directory] Health check job stopped");
+    console.log("[Horizon] Health check job stopped");
   }
 }

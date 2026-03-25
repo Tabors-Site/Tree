@@ -16,7 +16,7 @@ const DecentralizedPage = () => {
             Nobody controls the network. Everybody contributes to it.
           </p>
           <div className="lp-hero-ctas">
-            <a className="lp-btn lp-btn-primary" href="https://dir.treeos.ai">Browse the Directory</a>
+            <a className="lp-btn lp-btn-primary" href="https://horizon.treeos.ai">Browse the Horizon</a>
             <a className="lp-btn lp-btn-secondary" href="/">Back to TreeOS</a>
           </div>
         </div>
@@ -63,13 +63,13 @@ const DecentralizedPage = () => {
               </p>
             </div>
             <div className="lp-card">
-              <h3>The Directory</h3>
+              <h3>The Horizon</h3>
               <p>
-                A directory helps lands find each other. The public one runs at{" "}
-                <a href="https://dir.treeos.ai" style={{color: "#999"}}>dir.treeos.ai</a>.
+                The Horizon helps lands find each other. The public one runs at{" "}
+                <a href="https://horizon.treeos.ai" style={{color: "#999"}}>horizon.treeos.ai</a>.
                 It indexes lands, public trees, and the extension registry. But anyone can
-                run their own directory. Point your land at a different one. Or skip it entirely
-                and peer by typing the other land's URL directly. The directory is a phone book, not a gatekeeper.
+                run their own Horizon. Point your land at a different one. Or skip it entirely
+                and peer by typing the other land's URL directly. The Horizon is a phone book, not a gatekeeper.
               </p>
             </div>
           </div>
@@ -145,7 +145,7 @@ const DecentralizedPage = () => {
             <div className="lp-card">
               <h3>No Platform Risk</h3>
               <p>
-                If dir.treeos.ai goes down, your land keeps running. If a peer goes offline,
+                If horizon.treeos.ai goes down, your land keeps running. If a peer goes offline,
                 your trees are unaffected. The network is resilient because each node is
                 independent. There is no single point of failure.
               </p>
@@ -180,7 +180,7 @@ const DecentralizedPage = () => {
               <p>
                 Git is distributed. Every clone is a full copy. GitHub is a hosted service that
                 adds collaboration on top. TreeOS works the same way. Every land is a complete
-                system. The directory adds discovery. The protocol adds connection. But each
+                system. The Horizon adds discovery. The protocol adds connection. But each
                 land stands alone.
               </p>
             </div>
@@ -212,7 +212,7 @@ const DecentralizedPage = () => {
           </div>
           <div style={{marginTop: 24}}>
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>
-            <a className="lp-btn lp-btn-secondary" href="https://dir.treeos.ai" style={{marginLeft: 12}}>Browse Directory</a>
+            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai" style={{marginLeft: 12}}>Browse Horizon</a>
           </div>
         </div>
       </section>

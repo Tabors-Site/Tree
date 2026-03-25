@@ -108,10 +108,10 @@ const WelcomePage = () => {
 
         <div className="hero-top">
           <a
-            href={import.meta.env.VITE_DIRECTORY}
+            href={import.meta.env.VITE_HORIZON}
             className="back-to-site-btn legacy"
           >
-            Directory
+            Horizon
           </a>
 
           <div className="hero-top-right">

@@ -758,7 +758,7 @@ const KernelPage = () => {
           </p>
           <p className="lp-section-sub" style={{color: "rgba(255,255,255,0.3)", fontSize: "0.85rem"}}>
             Every file in <code>seed/</code> carries a one-line header: <code>// TreeOS Seed . AGPL-3.0 . https://treeos.ai</code>.
-            Extension manifests declare a <code>license</code> field. The directory and CLI display it.
+            Extension manifests declare a <code>license</code> field. The Horizon and CLI display it.
             Nothing blocks extensions without licenses. The seed is open. The ecosystem is free.
             Legal terms protect the seed. Code enforcement doesn't.
           </p>

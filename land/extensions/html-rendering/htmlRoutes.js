@@ -714,7 +714,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
       const modes = getExtMeta(node, "modes");
       if (req.body.intent && req.body.modeKey) modes[req.body.intent] = req.body.modeKey;
       if (req.body.clearIntent) delete modes[req.body.clearIntent];
-      setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : undefined);
+      await setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : undefined);
       await node.save();
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -738,7 +738,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
       }
       if (req.body.clearAllowed) toolConfig.allowed = [];
       if (req.body.clearBlocked) toolConfig.blocked = [];
-      setExtMeta(node, "tools", Object.keys(toolConfig).length > 0 ? toolConfig : undefined);
+      await setExtMeta(node, "tools", Object.keys(toolConfig).length > 0 ? toolConfig : undefined);
       await node.save();
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {

@@ -241,7 +241,7 @@ The Canopy protocol enables land-to-land discovery and collaboration. Every land
 
 ### Discovery
 
-Lands MAY register with a directory service for network-wide discovery. The directory is optional infrastructure, not part of the core protocol.
+Lands MAY register with the Horizon for network-wide discovery. The Horizon is optional infrastructure, not part of the core protocol.
 
 ## Protocol Endpoint
 

@@ -100,7 +100,7 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#667eea">
-  <title>Canopy Directory</title>
+  <title>Canopy Horizon</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
@@ -498,7 +498,7 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
   <div class="container">
     <a href="https://treeos.ai" class="home-btn">&larr; Home</a>
     <div class="page-header">
-      <h1>Canopy Directory</h1>
+      <h1>Canopy Horizon</h1>
       <p>The phonebook for the TreeOS network</p>
     </div>
 
@@ -568,9 +568,9 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
     <div class="footer">
       <a href="https://treeos.ai/about/land" class="footer-cta">What is a Land? Start your own.</a>
       <br><br>
-      Canopy Directory Service
+      Canopy Horizon
       <span class="separator"></span>
-      <a href="/directory/health">API Health</a>
+      <a href="/horizon/health">API Health</a>
     </div>
   </div>
 
@@ -601,7 +601,7 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
     async function searchLands() {
       var q = document.getElementById("land-search").value.trim();
       try {
-        var res = await fetch("/directory/lands?q=" + encodeURIComponent(q) + "&limit=50");
+        var res = await fetch("/horizon/lands?q=" + encodeURIComponent(q) + "&limit=50");
         var data = await res.json();
         var grid = document.getElementById("land-grid");
 
@@ -631,7 +631,7 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
     async function searchTrees() {
       var q = document.getElementById("tree-search").value.trim();
       try {
-        var res = await fetch("/directory/search/trees?q=" + encodeURIComponent(q) + "&limit=50");
+        var res = await fetch("/horizon/search/trees?q=" + encodeURIComponent(q) + "&limit=50");
         var data = await res.json();
         var tbody = document.getElementById("tree-body");
 

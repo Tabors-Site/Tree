@@ -3,8 +3,8 @@
 <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
 </defs>
 
-<!-- Sky / Directory label -->
-<text x="340" y="24" text-anchor="middle" opacity="0.4" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" fill="#c2c0b6">sky . directory . how lands find each other</text>
+<!-- Sky / Horizon label -->
+<text x="340" y="24" text-anchor="middle" opacity="0.4" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" fill="#c2c0b6">sky . horizon . how lands find each other</text>
 
 <!-- Canopy connection -->
 <path d="M200 70 C200 45, 480 45, 480 70" fill="none" stroke="#5DCAA5" stroke-width="1.5" stroke-dasharray="6 4"/>
