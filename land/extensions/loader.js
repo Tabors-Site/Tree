@@ -595,13 +595,13 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           for (const rpath of routePaths) {
             routeOwnership.set(rpath, manifest.name);
           }
-          app.use("/api/v1", wrapExtensionRouter(instance.router, manifest.name));
+          app.use("/api/v1", instance.router);
         }
       }
 
       // Wire page routes (mounted at / for HTML pages like /login, /register)
       if (instance.pageRouter && typeof instance.pageRouter.use === "function") {
-        app.use("/", wrapExtensionRouter(instance.pageRouter, manifest.name));
+        app.use("/", instance.pageRouter);
       }
 
       // Wire MCP tools and register in tool resolver
