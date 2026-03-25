@@ -14,6 +14,7 @@ export function buildRouter(core) {
   const { logContribution } = core.contributions;
   const { escapeRegex } = core._utils;
   const { queueCanopyEvent } = core._canopy;
+  const ownership = core.ownership;
 
   // ── Invite routes (moved from routes/api/root.js) ─────────────────
 
@@ -72,6 +73,7 @@ export function buildRouter(core) {
         logContribution,
         escapeRegex,
         queueCanopyEvent,
+        ownership,
       });
 
       if ("html" in req.query) {
@@ -107,6 +109,7 @@ export function buildRouter(core) {
         logContribution,
         escapeRegex,
         queueCanopyEvent,
+        ownership,
       });
 
       if ("html" in req.query) {
@@ -142,6 +145,7 @@ export function buildRouter(core) {
         logContribution,
         escapeRegex,
         queueCanopyEvent,
+        ownership,
       });
 
       if ("html" in req.query) {
@@ -172,6 +176,7 @@ export function buildRouter(core) {
         logContribution,
         escapeRegex,
         queueCanopyEvent,
+        ownership,
       });
 
       if ("html" in req.query) {
@@ -233,6 +238,7 @@ export function buildRouter(core) {
           User,
           logContribution,
           queueCanopyEvent,
+          ownership,
         });
 
         if ("html" in req.query) {

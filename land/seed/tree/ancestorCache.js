@@ -25,6 +25,7 @@
 import log from "../log.js";
 import Node from "../models/node.js";
 import { getLandConfigValue } from "../landConfig.js";
+import { ERR } from "../protocol.js";
 
 // ── Cache storage ──
 
@@ -193,7 +194,7 @@ export function resolveExtensionScopeFromChain(ancestors) {
  */
 export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
   if (!ancestors || ancestors.length === 0) {
-    return { ok: false, error: "NODE_NOT_FOUND", message: "Node not found." };
+    return { ok: false, error: ERR.NODE_NOT_FOUND, message: "Node not found." };
   }
 
   let isContributor = false;
@@ -201,7 +202,7 @@ export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
 
   for (const node of ancestors) {
     if (node.systemRole) {
-      return { ok: false, error: "INVALID_TREE", message: "Invalid tree: reached system node boundary" };
+      return { ok: false, error: ERR.INVALID_TREE, message: "Invalid tree: reached system node boundary" };
     }
 
     // Accumulate contributors
@@ -217,7 +218,7 @@ export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
   }
 
   if (!ownerNode) {
-    return { ok: false, error: "INVALID_TREE", message: "Invalid tree: no rootOwner found" };
+    return { ok: false, error: ERR.INVALID_TREE, message: "Invalid tree: no rootOwner found" };
   }
 
   const isOwner = !!(userId && ownerNode.rootOwner === userId);

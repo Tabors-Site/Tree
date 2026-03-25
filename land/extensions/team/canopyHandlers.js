@@ -80,7 +80,7 @@ export async function handleInviteOffer(req, res, { User, RemoteUser, validateCa
  * POST /canopy/invite/accept
  * A remote land confirms that their user accepted an invite.
  */
-export async function handleInviteAccept(req, res, { User, Node, RemoteUser, validateCanopyRequest }) {
+export async function handleInviteAccept(req, res, { User, Node, RemoteUser, validateCanopyRequest, addContributor }) {
   const validation = validateCanopyRequest("invite_accept", req.body);
   if (!validation.valid) {
     return sendError(res, 400, ERR.INVALID_INPUT, "Validation failed", { errors: validation.errors });
@@ -146,7 +146,7 @@ export async function handleInviteAccept(req, res, { User, Node, RemoteUser, val
       if (createErr.code === 11000) {
         ghostUser = await User.findOne({ _id: userId, isRemote: true });
         if (!ghostUser) {
-          return sendError(res, 409, ERR.INVALID_INPUT, "User ID conflicts with a local account");
+          return sendError(res, 409, ERR.RESOURCE_CONFLICT, "User ID conflicts with a local account");
         }
       } else {
         throw createErr;
@@ -154,14 +154,8 @@ export async function handleInviteAccept(req, res, { User, Node, RemoteUser, val
     }
   }
 
-  await Node.findByIdAndUpdate(invite.rootId, {
-    $addToSet: { contributors: userId },
-  });
-
-  if (!ghostUser.roots.includes(invite.rootId)) {
-    ghostUser.roots.push(invite.rootId);
-    await ghostUser.save();
-  }
+  // afterOwnershipChange hook updates metadata.nav.roots for the ghost user
+  await addContributor(invite.rootId, userId, invite.userInviting);
 
   sendOk(res, { message: "Invite accepted" });
 }

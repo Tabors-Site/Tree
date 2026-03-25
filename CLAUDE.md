@@ -252,9 +252,12 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | afterNavigate | after | Fires when user navigates to a tree root. Extensions track recency. |
 | afterMetadataWrite | after | After setExtMeta succeeds. { nodeId, extName, data }. Zero overhead if no listeners. |
 | afterScopeChange | after | After extension blocking/restriction changes. { nodeId, blocked, restricted, userId } |
+| afterOwnershipChange | after | After rootOwner or contributors changed. { nodeId, action, targetUserId, previousOwnerId? } |
 | afterBoot | after | Once after all extensions loaded, config initialized, server listening. |
 | onCascade | sequential | Fires on content write at cascade-enabled node. Results written to .flow. |
 | onDocumentPressure | after | Any document exceeds 80% of maxDocumentSizeBytes. { documentType, documentId, currentSize, projectedSize, maxSize, percent } |
+| onTreeTripped | after | Tree circuit breaker tripped. { rootId, reason, scores, timestamp } |
+| onTreeRevived | after | Tripped tree revived. { rootId, timestamp } |
 
 ## Cascade
 
@@ -271,17 +274,19 @@ Single file `seed/protocol.js` defines how the kernel talks to everything outsid
 | HTTP | Category | ERR codes |
 |------|----------|-----------|
 | 200/201 | Success/Created | (sendOk) |
-| 400 | Bad request | INVALID_INPUT, INVALID_STATUS, INVALID_TYPE |
+| 400 | Bad request | INVALID_INPUT, INVALID_STATUS, INVALID_TYPE, INVALID_TREE |
 | 401 | Unauthorized | UNAUTHORIZED |
-| 403 | Forbidden | FORBIDDEN, EXTENSION_BLOCKED, SESSION_EXPIRED |
+| 403 | Forbidden | FORBIDDEN, EXTENSION_BLOCKED, SESSION_EXPIRED, CASCADE_DISABLED, UPLOAD_DISABLED |
 | 404 | Not found | NODE_NOT_FOUND, USER_NOT_FOUND, NOTE_NOT_FOUND, TREE_NOT_FOUND, PEER_NOT_FOUND, EXTENSION_NOT_FOUND, ORCHESTRATOR_NOT_FOUND |
-| 409 | Conflict | ORCHESTRATOR_LOCKED |
-| 429 | Rate limited | RATE_LIMITED |
+| 409 | Conflict | ORCHESTRATOR_LOCKED, RESOURCE_CONFLICT |
+| 413 | Payload too large | DOCUMENT_SIZE_EXCEEDED, CASCADE_DEPTH_EXCEEDED, UPLOAD_TOO_LARGE |
+| 415 | Unsupported media | UPLOAD_MIME_REJECTED |
+| 429 | Rate limited | RATE_LIMITED, CASCADE_REJECTED |
 | 500 | Internal | INTERNAL, TIMEOUT, HOOK_TIMEOUT, HOOK_CANCELLED |
 | 502 | Bad gateway | PEER_UNREACHABLE |
-| 503 | Service unavailable | LLM_TIMEOUT, LLM_FAILED, LLM_NOT_CONFIGURED |
+| 503 | Service unavailable | LLM_TIMEOUT, LLM_FAILED, LLM_NOT_CONFIGURED, TREE_DORMANT |
 
-INVALID_INPUT means garbage the kernel can't parse. Not "I understood your request but the thing doesn't exist."
+INVALID_INPUT means garbage the kernel can't parse. Not "I understood your request but the thing doesn't exist." RESOURCE_CONFLICT means the request is valid but the current state of the resource prevents it.
 
 **WebSocket event types:** Named constants in `WS` object. Kernel events only: chatResponse, chatError, chatCancelled, toolResult, placeResult, modeSwitched, treeChanged, registered, navigatorSession, recentRoots, availableModes, conversationCleared, navigate, reload. Dashboard and extension events own their own constants.
 

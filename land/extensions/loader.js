@@ -212,9 +212,10 @@ function getDisabledExtensions(configFn) {
 // ---------------------------------------------------------------------------
 
 const AVAILABLE_SERVICES = new Set([
-  "contributions", "auth",
+  "contributions", "auth", "protocol",
   "session", "chat", "llm", "mcp",
   "websocket", "orchestrator",
+  "orchestrators", "cascade", "ownership", "tree",
 ]);
 
 const AVAILABLE_MODELS = new Set([

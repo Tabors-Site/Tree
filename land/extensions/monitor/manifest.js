@@ -7,7 +7,9 @@ export default {
     models: ["Node", "User", "Contribution"],
   },
 
-  optional: {},
+  optional: {
+    services: ["llm"],
+  },
 
   provides: {
     routes: "./routes.js",

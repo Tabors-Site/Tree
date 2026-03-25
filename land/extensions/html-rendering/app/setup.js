@@ -24,16 +24,20 @@ router.get("/setup", authenticateLite, async (req, res) => {
     }
 
     const user = await User.findById(req.userId)
-      .select("username roots metadata llmDefault")
+      .select("username metadata llmDefault")
       .lean();
     if (!user) {
       return res.redirect("/login?redirect=/setup");
     }
 
+    const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+    const nav = getUserMeta(user, "nav");
+    const userRoots = Array.isArray(nav.roots) ? nav.roots : [];
+
     const connCount = await LlmConnection.countDocuments({ userId: req.userId });
     const hasMainLlm = !!(user.llmDefault);
     const needsLlm = !hasMainLlm && connCount === 0;
-    const needsTree = !user.roots || user.roots.length === 0;
+    const needsTree = userRoots.length === 0;
 
     // Both done, go to chat
     if (!needsLlm && !needsTree) {

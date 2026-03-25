@@ -4,6 +4,7 @@
 // Destructive: translate → navigate → confirm → execute (existing flow)
 
 import log from "../../seed/log.js";
+import { WS } from "../../seed/protocol.js";
 import {
   switchMode,
   processMessage,
@@ -513,7 +514,7 @@ async function executePlanSteps({
 
         // Only navigate if this session controls the iframe
         if (isActiveNavigator(userId, rt.sessionId)) {
-          socket.emit("navigate", {
+          socket.emit(WS.NAVIGATE, {
             url: `/api/v1/node/${targetNodeId}?html`,
             replace: false,
           });
@@ -979,7 +980,7 @@ async function executePlanSteps({
 
       // Notify frontend of tree changes
       if (intent.intent === "structure" && execResult?.operations?.length > 0) {
-        socket.emit("treeChanged", {
+        socket.emit(WS.TREE_CHANGED, {
           nodeId: targetNodeId,
           changeType: execResult?.action || "modified",
         });
@@ -1842,7 +1843,7 @@ async function executePendingOperation({
   });
 
   if (pending.action === "structure" && execResult?.operations?.length > 0) {
-    socket.emit("treeChanged", {
+    socket.emit(WS.TREE_CHANGED, {
       nodeId: pending.targetNodeId,
       changeType: execResult?.action || "modified",
     });
@@ -1987,7 +1988,7 @@ async function runRespond({
     onToolResults(results) {
       if (signal?.aborted) return;
       for (const r of results) {
-        socket.emit("toolResult", r);
+        socket.emit(WS.TOOL_RESULT, r);
       }
     },
   });

@@ -234,7 +234,18 @@
       "Bash(grep -n \"core\\\\.models\\\\[\" /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(find /home/tabor/github/Tree/land/seed -name \"*.js\" -exec grep -l \"export.*function\\\\|export async function\" {})",
       "Bash(grep -h \"from.*seed/\" /home/tabor/github/Tree/land/extensions/*/routes.js)",
-      "Bash(grep -n \"throw;\" /home/tabor/github/Tree/land/seed/tree/*.js)"
+      "Bash(grep -n \"throw;\" /home/tabor/github/Tree/land/seed/tree/*.js)",
+      "Bash(do manifest=\"/home/tabor/github/Tree/land/extensions/$ext/manifest.js\" echo \"=== $ext ===\" echo \"Manifest needs.services:\" grep -A10 \"needs:\" \"$manifest\")",
+      "Read(//home/tabor/github/Tree/land/extensions/$ext/**)",
+      "Bash(grep -rn path: /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep -rn \"provides.*routes.*true\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(echo \"None\" __NEW_LINE_93d8f2bcfd9ada0a__ echo \"Actually uses:\" grep -o \"core\\\\.[a-zA-Z_]*\" \"$index\")",
+      "Bash(grep -r \"res\\\\.json\\\\|res\\\\.status.*\\\\.json\\\\|res\\\\.send\" /home/tabor/github/Tree/land/extensions --include=*.js)",
+      "Bash(grep -rn \"res\\\\.status\\\\|res\\\\.json\\\\|res\\\\.send\" /home/tabor/github/Tree/land/extensions --include=*.js)",
+      "Bash(bash /tmp/analyze_errors.sh)",
+      "Bash(grep -rn \"res\\\\.status.*\\\\.json\\\\|res\\\\.json.*{\" /home/tabor/github/Tree/land/extensions --include=*.js)",
+      "Bash(find /home/tabor/github/Tree/land/seed -name \"*.js\" -exec wc -l {})",
+      "Bash(grep -r \"const.*=.*[0-9]{4,}\" /home/tabor/github/Tree/land/seed --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

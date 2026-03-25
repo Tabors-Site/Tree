@@ -30,6 +30,7 @@ import log from "./log.js";
  *   afterScopeChange   - After metadata.extensions.blocked/restricted changes. { nodeId, blocked, restricted, userId }
  *   afterBoot          - Once after all extensions loaded, config initialized, server listening. Fires once.
  *   onDocumentPressure - Any document exceeds 80% of maxDocumentSizeBytes on a write. { documentType, documentId, currentSize, projectedSize, maxSize, percent }
+ *   afterOwnershipChange - After rootOwner or contributors changed. { nodeId, action, targetUserId, previousOwnerId? }
  *   onTreeTripped      - Tree circuit breaker tripped. { rootId, reason, scores, timestamp }
  *   onTreeRevived      - Tripped tree revived. { rootId, timestamp }
  *

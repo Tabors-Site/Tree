@@ -97,7 +97,7 @@ export async function createNode(
   await newNode.save();
 
   if (isRoot) {
-    await User.findByIdAndUpdate(user._id, { $addToSet: { roots: newNode._id } });
+    // Navigation extension manages metadata.nav.roots via afterNodeCreate hook
     const landRootId = getLandRootId();
     if (landRootId) {
       await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: newNode._id } });
@@ -256,29 +256,24 @@ export async function deleteNodeBranch(
 
   await nodeToDelete.save();
 
-  const allNodes = await Node.find();
+  if (oldParent && oldParent !== "deleted") {
+    await Node.findByIdAndUpdate(oldParent, {
+      $pull: { children: nodeId },
+    });
 
-  for (const node of allNodes) {
-    if (node.children && node.children.includes(nodeId)) {
-      node.children = node.children.filter(
-        (childId) => childId.toString() !== nodeId.toString(),
-      );
-      await node.save();
+    await logContribution({
+      userId,
+      nodeId: oldParent.toString(),
+      wasAi,
+      chatId,
+      sessionId,
+      action: "updateChild",
 
-      await logContribution({
-        userId,
-        nodeId: node._id.toString(),
-        wasAi,
-        chatId,
-        sessionId,
-        action: "updateChild",
-  
-        updateChild: {
-          action: "removed",
-          childId: nodeId.toString(),
-        },
-      });
-    }
+      updateChild: {
+        action: "removed",
+        childId: nodeId.toString(),
+      },
+    });
   }
   await logContribution({
     userId,
@@ -555,9 +550,8 @@ export async function reviveNodeBranchAsRoot({
   deletedNode.rootOwner = userId;
   await deletedNode.save();
 
-  await User.findByIdAndUpdate(userId, {
-    $addToSet: { roots: deletedNodeId },
-  });
+  // Navigation extension manages metadata.nav.roots via afterOwnershipChange hook
+  hooks.run("afterOwnershipChange", { nodeId: deletedNodeId, action: "setOwner", targetUserId: userId }).catch(() => {});
 
   // Add to Land root's children
   const landRootId = getLandRootId();

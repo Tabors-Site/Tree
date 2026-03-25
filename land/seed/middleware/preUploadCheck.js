@@ -17,14 +17,14 @@ export default function preUploadCheck(req, res, next) {
   // Master switch
   const enabled = getLandConfigValue("uploadEnabled");
   if (enabled === false || enabled === "false") {
-    return sendError(res, 403, ERR.FORBIDDEN, "Uploads are disabled on this land");
+    return sendError(res, 403, ERR.UPLOAD_DISABLED, "Uploads are disabled on this land");
   }
 
   // Size ceiling
   const maxBytes = Number(getLandConfigValue("maxUploadBytes")) || 104857600;
   const contentLength = parseInt(req.headers["content-length"], 10);
   if (contentLength && contentLength > maxBytes) {
-    return sendError(res, 413, ERR.INVALID_INPUT,
+    return sendError(res, 413, ERR.UPLOAD_TOO_LARGE,
       `Upload exceeds maximum size (${Math.round(maxBytes / 1048576)}MB)`);
   }
 
@@ -34,7 +34,7 @@ export default function preUploadCheck(req, res, next) {
     const mime = contentType.split(";")[0].trim();
     const passes = allowed.some(prefix => mime.startsWith(prefix));
     if (!passes) {
-      return sendError(res, 415, ERR.INVALID_INPUT,
+      return sendError(res, 415, ERR.UPLOAD_MIME_REJECTED,
         `File type not allowed. Accepted: ${allowed.join(", ")}`);
     }
   }

@@ -53,25 +53,9 @@ export async function buildPathStrings(nodeIds) {
   return results;
 }
 
-export async function getRootNodesForUser(userId) {
-  if (!userId) {
-    throw new Error("userId is required");
-  }
-
-  const user = await User.findById(userId)
-    .populate("roots", "name _id")
-    .lean()
-    .exec();
-
-  if (!user || !Array.isArray(user.roots) || user.roots.length === 0) {
-    return [];
-  }
-
-  return user.roots.map((node) => ({
-    _id: node._id.toString(),
-    name: node.name,
-  }));
-}
+// getRootNodesForUser removed. Navigation state (metadata.nav.roots) is owned
+// by the navigation extension. Use its exports:
+//   getExtension("navigation")?.exports?.getUserRootsWithNames(userId)
 
 export async function resolveRootNode(nodeId) {
   if (!nodeId) {

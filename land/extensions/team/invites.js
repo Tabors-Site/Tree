@@ -1,4 +1,6 @@
 import { Invite } from "./model.js";
+import { invalidateNode } from "../../seed/tree/ancestorCache.js";
+import { getExtension } from "../loader.js";
 
 // EXACT UUID REGEX FROM OLD CODE
 const isValidUUID = (id) =>
@@ -33,6 +35,7 @@ export async function createInvite({
   logContribution,
   escapeRegex,
   queueCanopyEvent,
+  ownership,
 }) {
   const node = await Node.findById(rootId).populate("rootOwner contributors");
   if (!node) throw new Error("Root node not found");
@@ -124,15 +127,11 @@ export async function createInvite({
       throw new Error("User already owns this root");
     }
 
-    node.rootOwner = receivingUser._id;
+    // Kernel handles: set new owner, remove new owner from contributors, demote old owner to contributor
+    // afterOwnershipChange hook updates metadata.nav.roots for the new owner
+    await ownership.transferOwnership(rootId, receivingUser._id, userInvitingId);
     // Clear LLM assignments. The new owner doesn't own the old connections.
-    node.llmDefault = null;
-    node.contributors = node.contributors.filter(
-      (u) => u._id.toString() !== receivingUser._id.toString(),
-    );
-    node.contributors.push(invitingUser);
-
-    await node.save();
+    await Node.updateOne({ _id: rootId }, { $set: { llmDefault: null } });
 
     invite.status = "accepted";
     await invite.save();
@@ -163,18 +162,11 @@ export async function createInvite({
 
     // Case 2: Owner removes a contributor
     if (isOwner && receivingUser._id.toString() !== userInvitingId) {
-      node.contributors = node.contributors.filter(
-        (u) => u._id.toString() !== receivingUser._id.toString(),
-      );
-
-      await node.save();
+      // afterOwnershipChange hook updates metadata.nav.roots for the removed contributor
+      await ownership.removeContributor(rootId, receivingUser._id, userInvitingId);
 
       invite.status = "accepted";
       await invite.save();
-
-      await User.findByIdAndUpdate(receivingUser._id, {
-        $pull: { roots: rootId },
-      });
 
       inviteAction.action = "removeContributor";
 
@@ -197,10 +189,11 @@ export async function createInvite({
     ) {
       node.parent = "deleted";
       await node.save();
+      invalidateNode(rootId);
 
-      await User.findByIdAndUpdate(userInvitingId, {
-        $pull: { roots: rootId },
-      });
+      // Remove from navigation list (not an ownership.js op, so no hook fires)
+      const nav = getExtension("navigation")?.exports;
+      if (nav?.removeRoot) await nav.removeRoot(userInvitingId, rootId);
 
       inviteAction.action = "removeContributor";
 
@@ -237,18 +230,11 @@ export async function createInvite({
         );
       }
 
-      node.contributors = node.contributors.filter(
-        (u) => u._id.toString() !== userInvitingId,
-      );
-
-      await node.save();
+      // afterOwnershipChange hook updates metadata.nav.roots
+      await ownership.removeContributor(rootId, userInvitingId, userInvitingId);
 
       invite.status = "accepted";
       await invite.save();
-
-      await User.findByIdAndUpdate(userInvitingId, {
-        $pull: { roots: rootId },
-      });
 
       inviteAction.action = "removeContributor";
 
@@ -269,7 +255,7 @@ export async function createInvite({
   throw new Error("Invalid invite operation");
 }
 
-export async function respondToInvite({ inviteId, userId, acceptInvite, Node, User, logContribution, queueCanopyEvent }) {
+export async function respondToInvite({ inviteId, userId, acceptInvite, Node, User, logContribution, queueCanopyEvent, ownership }) {
   // Atomic status transition prevents double-processing
   const invite = await Invite.findOneAndUpdate(
     { _id: inviteId, status: "pending" },
@@ -330,15 +316,17 @@ export async function respondToInvite({ inviteId, userId, acceptInvite, Node, Us
   const inviteAction = { receivingId: userId };
 
   if (acceptInvite) {
-    // Atomic dedup: $addToSet on contributors instead of push
-    await Node.findByIdAndUpdate(invite.rootId, {
-      $addToSet: { contributors: userId },
-    });
+    // Kernel validates user exists, prevents adding owner as contributor, invalidates cache
+    // If addContributor fails (inviter lost ownership, user became owner, etc.),
+    // revert the invite status so it can be retried or re-issued.
+    try {
+      await ownership.addContributor(invite.rootId, userId, invite.userInviting);
+    } catch (err) {
+      await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
+      throw err;
+    }
 
-    await User.findByIdAndUpdate(userId, {
-      $addToSet: { roots: invite.rootId },
-    });
-
+    // afterOwnershipChange hook updates metadata.nav.roots for the new contributor
     inviteAction.action = "acceptInvite";
   } else {
     inviteAction.action = "denyInvite";

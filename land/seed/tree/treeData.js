@@ -258,7 +258,12 @@ export function filterTreeByStatus(node, filters) {
 /**
  * Strip sensitive fields from node metadata before sending to clients.
  */
-const SENSITIVE_KEYS = new Set(["privateKey", "secretKey", "encryptedPayload", "apiKey", "botToken"]);
+// Suffix-match sensitive keys. Covers future extensions without kernel changes.
+const SENSITIVE_SUFFIXES = ["key", "secret", "token", "password", "mnemonic", "phrase"];
+function isSensitiveKey(key) {
+  const lower = key.toLowerCase();
+  return SENSITIVE_SUFFIXES.some(s => lower.endsWith(s));
+}
 
 export function stripMetadataSecrets(node) {
   if (!node) return node;
@@ -267,7 +272,7 @@ export function stripMetadataSecrets(node) {
 
   for (const [ns, data] of Object.entries(meta)) {
     if (!data || typeof data !== "object") continue;
-    const cleaned = stripDeep(data, SENSITIVE_KEYS);
+    const cleaned = stripDeep(data);
     if (cleaned !== data) {
       meta[ns] = cleaned;
       changed = true;
@@ -278,15 +283,15 @@ export function stripMetadataSecrets(node) {
   return node;
 }
 
-function stripDeep(obj, sensitiveKeys) {
+function stripDeep(obj) {
   if (!obj || typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) return obj.map(item => stripDeep(item, sensitiveKeys));
+  if (Array.isArray(obj)) return obj.map(item => stripDeep(item));
 
   const result = {};
   let stripped = false;
   for (const [key, val] of Object.entries(obj)) {
-    if (sensitiveKeys.has(key)) { stripped = true; continue; }
-    result[key] = val && typeof val === "object" ? stripDeep(val, sensitiveKeys) : val;
+    if (isSensitiveKey(key)) { stripped = true; continue; }
+    result[key] = val && typeof val === "object" ? stripDeep(val) : val;
   }
   return stripped ? result : obj;
 }

@@ -110,8 +110,13 @@ export default function getTools() {
           return { content: [{ type: "text", text: "Permission denied." }] };
         }
         try {
-          const users = await User.find({ isRemote: { $ne: true } }).select("username isAdmin roots").lean();
-          const lines = users.map(u => `${u.username} (${u.isAdmin ? "admin" : "user"}) . ${u.roots?.length || 0} trees`);
+          const users = await User.find({ isRemote: { $ne: true } }).select("username isAdmin metadata").lean();
+          const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+          const lines = users.map(u => {
+            const nav = getUserMeta(u, "nav");
+            const treeCount = Array.isArray(nav.roots) ? nav.roots.length : 0;
+            return `${u.username} (${u.isAdmin ? "admin" : "user"}) . ${treeCount} trees`;
+          });
           return { content: [{ type: "text", text: lines.join("\n") || "No users." }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Error: ${err.message}` }] };

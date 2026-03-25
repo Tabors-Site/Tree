@@ -8,7 +8,7 @@ import { getLandUrl } from "../../canopy/identity.js";
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 export async function createPurchaseSession(req, res) {
-  if (!stripe) return sendError(res, 503, ERR.INTERNAL, "Stripe is not configured");
+  if (!stripe) return sendError(res, 500, ERR.INTERNAL, "Stripe is not configured");
   try {
     const { userId, plan, energyAmount } = req.body;
 

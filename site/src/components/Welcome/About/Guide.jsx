@@ -174,7 +174,7 @@ treeos config set maxToolIterations 25`}</Code>
             Type is free-form. Status is active, completed, or trimmed.
           </P>
           <P>
-            <strong>User</strong> (8 fields): username, password, roots[], llmDefault, isAdmin,
+            <strong>User</strong> (7 fields): username, password, llmDefault, isAdmin,
             isRemote, homeLand, metadata (Map). Extensions store everything in the metadata Map
             under their own namespace.
           </P>
@@ -248,7 +248,7 @@ You are tabor's personal fitness coach...`}</Code>
             session types, LLM assignment slots, and exported functions for other extensions.
           </P>
           <P>
-            Five registries, same pattern: <strong>Hooks</strong> (26 lifecycle events),
+            Five registries, same pattern: <strong>Hooks</strong> (27 lifecycle events),
             <strong> Modes</strong> (AI behavior per position), <strong>Orchestrators</strong> (conversation flow),
             <strong> Socket Handlers</strong> (real-time events), <strong>Auth Strategies</strong> (authentication methods).
             Extensions register. The kernel resolves.
@@ -278,7 +278,7 @@ treeos ext-scope                  # see what's active at this position`}</Code>
       {/* ══════════════════════════════════════════════════════════════ */}
       <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 800}}>
-          <h2 className="lp-section-title">26 Hooks</h2>
+          <h2 className="lp-section-title">27 Hooks</h2>
           <P>
             An open pub/sub bus. Before hooks run sequentially and can cancel. After hooks
             run in parallel and react. Sequential hooks (enrichContext, onCascade) build
@@ -300,6 +300,7 @@ treeos ext-scope                  # see what's active at this position`}</Code>
               ["afterNavigate", "Tree navigation"],
               ["afterMetadataWrite", "Metadata changes"],
               ["afterScopeChange", "Extension scope changes"],
+              ["afterOwnershipChange", "Ownership or contributors changed"],
               ["afterBoot", "One-time post-boot setup"],
               ["onCascade", "Cascade signal handler (sequential)"],
               ["onDocumentPressure", "Document approaching 14MB limit"],
@@ -587,6 +588,117 @@ export async function init(core) {
           <P>
             <a href="/about/api" style={{color: "rgba(255,255,255,0.7)"}}>Full API reference</a>
           </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 18.5 PROTOCOL REFERENCE */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Protocol Reference</h2>
+          <P>
+            Every HTTP response is <code>{"{ status: \"ok\", data }"}</code> or
+            <code> {"{ status: \"error\", error: { code, message } }"}</code>.
+            The <code>code</code> field is one of these semantic constants from <code>protocol.js</code>.
+          </P>
+          <div style={{fontSize: "0.8rem", marginBottom: 32}}>
+            {[
+              ["400", "INVALID_INPUT", "Malformed request"],
+              ["400", "INVALID_STATUS", "Bad status value"],
+              ["400", "INVALID_TYPE", "Bad type value"],
+              ["400", "INVALID_TREE", "Broken tree structure (no rootOwner, circular ref)"],
+              ["401", "UNAUTHORIZED", "No auth, bad auth"],
+              ["403", "FORBIDDEN", "Authenticated but denied"],
+              ["403", "EXTENSION_BLOCKED", "Extension blocked at position"],
+              ["403", "SESSION_EXPIRED", "Session timed out"],
+              ["403", "CASCADE_DISABLED", "cascadeEnabled is false"],
+              ["403", "UPLOAD_DISABLED", "uploadEnabled is false"],
+              ["404", "NODE_NOT_FOUND", "Node doesn't exist"],
+              ["404", "USER_NOT_FOUND", "User doesn't exist"],
+              ["404", "NOTE_NOT_FOUND", "Note doesn't exist"],
+              ["404", "TREE_NOT_FOUND", "Tree doesn't exist"],
+              ["404", "EXTENSION_NOT_FOUND", "Extension not loaded"],
+              ["404", "ORCHESTRATOR_NOT_FOUND", "No orchestrator registered"],
+              ["404", "PEER_NOT_FOUND", "Land not found in network"],
+              ["409", "ORCHESTRATOR_LOCKED", "Operation already running"],
+              ["409", "RESOURCE_CONFLICT", "State prevents this action"],
+              ["413", "DOCUMENT_SIZE_EXCEEDED", "Document approaching 16MB"],
+              ["413", "CASCADE_DEPTH_EXCEEDED", "Signal exceeded cascadeMaxDepth"],
+              ["413", "UPLOAD_TOO_LARGE", "Exceeds maxUploadBytes"],
+              ["415", "UPLOAD_MIME_REJECTED", "MIME type not in allowedMimeTypes"],
+              ["429", "RATE_LIMITED", "Too many requests"],
+              ["429", "CASCADE_REJECTED", "Rate limited or payload too large"],
+              ["500", "INTERNAL", "Unexpected kernel error"],
+              ["500", "TIMEOUT", "Operation timed out"],
+              ["500", "HOOK_TIMEOUT", "Hook handler hung"],
+              ["500", "HOOK_CANCELLED", "Hook cancelled operation"],
+              ["502", "PEER_UNREACHABLE", "Land found but can't connect"],
+              ["503", "LLM_TIMEOUT", "LLM call timed out"],
+              ["503", "LLM_FAILED", "LLM call failed"],
+              ["503", "LLM_NOT_CONFIGURED", "No LLM available"],
+              ["503", "TREE_DORMANT", "Tree circuit breaker tripped"],
+            ].map(([http, code, desc]) => (
+              <div key={code} style={{
+                display: "flex", gap: 12, padding: "6px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+                alignItems: "baseline",
+              }}>
+                <span style={{color: "rgba(255,255,255,0.3)", minWidth: 30, fontFamily: "monospace"}}>{http}</span>
+                <code style={{color: "#4ade80", minWidth: 200}}>{code}</code>
+                <span style={{color: "#666", flex: 1}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+
+          <P><strong>Cascade Statuses</strong> (not HTTP errors, used in .flow results):</P>
+          <div style={{fontSize: "0.8rem", marginBottom: 32}}>
+            {[
+              ["succeeded", "#4ade80", "Handler processed the signal"],
+              ["failed", "#f87171", "Handler encountered an error"],
+              ["rejected", "#fbbf24", "Handler intentionally declined"],
+              ["queued", "#60a5fa", "Accepted, processing deferred"],
+              ["partial", "#c084fc", "Some handlers succeeded, others did not"],
+              ["awaiting", "#94a3b8", "Response expected, timeout transitions to failed"],
+            ].map(([status, color, desc]) => (
+              <div key={status} style={{
+                display: "flex", gap: 12, padding: "6px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+                alignItems: "baseline",
+              }}>
+                <code style={{color, minWidth: 100}}>{status}</code>
+                <span style={{color: "#666"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+
+          <P><strong>WebSocket Events</strong> (kernel-emitted only, extensions define their own):</P>
+          <div style={{fontSize: "0.8rem"}}>
+            {[
+              ["chatResponse", "AI response chunk"],
+              ["chatError", "AI error"],
+              ["chatCancelled", "Request cancelled"],
+              ["toolResult", "MCP tool result"],
+              ["placeResult", "Place operation result"],
+              ["modeSwitched", "AI mode changed"],
+              ["treeChanged", "Tree structure modified"],
+              ["registered", "User registered on socket"],
+              ["navigatorSession", "Active navigator info"],
+              ["availableModes", "Modes for current position"],
+              ["conversationCleared", "Conversation reset"],
+              ["navigate", "Navigation event"],
+              ["reload", "Client should reload"],
+            ].map(([evt, desc]) => (
+              <div key={evt} style={{
+                display: "flex", gap: 12, padding: "6px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+                alignItems: "baseline",
+              }}>
+                <code style={{color: "#60a5fa", minWidth: 180}}>{evt}</code>
+                <span style={{color: "#666"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

@@ -1,6 +1,7 @@
 import express from "express";
 import { exportLand, snapshotLand, importLand, listBackups } from "./core.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
 import path from "path";
 
@@ -10,16 +11,16 @@ const router = express.Router();
 router.post("/backup/full", async (req, res) => {
   try {
     const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
-    if (!user?.isAdmin) return res.status(403).json({ status: "error", error: { code: "FORBIDDEN", message: "Admin required" } });
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
 
     const backupPath = getLandConfigValue("backupPath") || "./backups";
     const filename = `full-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
     const outputPath = path.join(backupPath, filename);
 
     const result = await exportLand({ outputPath });
-    res.json({ status: "ok", data: result });
+    sendOk(res, result);
   } catch (err) {
-    res.status(500).json({ status: "error", error: { code: "INTERNAL", message: err.message } });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -27,16 +28,16 @@ router.post("/backup/full", async (req, res) => {
 router.post("/backup/snapshot", async (req, res) => {
   try {
     const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
-    if (!user?.isAdmin) return res.status(403).json({ status: "error", error: { code: "FORBIDDEN", message: "Admin required" } });
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
 
     const backupPath = getLandConfigValue("backupPath") || "./backups";
     const filename = `snapshot-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
     const outputPath = path.join(backupPath, filename);
 
     const result = await snapshotLand({ outputPath });
-    res.json({ status: "ok", data: result });
+    sendOk(res, result);
   } catch (err) {
-    res.status(500).json({ status: "error", error: { code: "INTERNAL", message: err.message } });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -44,15 +45,15 @@ router.post("/backup/snapshot", async (req, res) => {
 router.post("/backup/restore", async (req, res) => {
   try {
     const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
-    if (!user?.isAdmin) return res.status(403).json({ status: "error", error: { code: "FORBIDDEN", message: "Admin required" } });
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
 
     const { file } = req.body;
-    if (!file) return res.status(400).json({ status: "error", error: { code: "INVALID_INPUT", message: "file is required" } });
+    if (!file) return sendError(res, 400, ERR.INVALID_INPUT, "file is required");
 
     const result = await importLand(file);
-    res.json({ status: "ok", data: result });
+    sendOk(res, result);
   } catch (err) {
-    res.status(500).json({ status: "error", error: { code: "INTERNAL", message: err.message } });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -60,13 +61,13 @@ router.post("/backup/restore", async (req, res) => {
 router.get("/backup/list", async (req, res) => {
   try {
     const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
-    if (!user?.isAdmin) return res.status(403).json({ status: "error", error: { code: "FORBIDDEN", message: "Admin required" } });
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
 
     const backupPath = getLandConfigValue("backupPath") || "./backups";
     const backups = listBackups(backupPath);
-    res.json({ status: "ok", data: { backups } });
+    sendOk(res, { backups });
   } catch (err) {
-    res.status(500).json({ status: "error", error: { code: "INTERNAL", message: err.message } });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

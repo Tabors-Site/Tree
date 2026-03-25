@@ -3,6 +3,7 @@
 // uses LLM for summarization only (no tool calling), commits results.
 
 import log from "../../seed/log.js";
+import { WS } from "../../seed/protocol.js";
 import { switchMode, processMessage } from "../../seed/ws/conversation.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import { emitNavigate, emitToUser } from "../../seed/ws/websocket.js";
@@ -182,7 +183,7 @@ export async function orchestrateUnderstanding({
   if (isSite) {
     setActiveNavigator(userId, rt.sessionId);
     const sess = getSession(rt.sessionId);
-    emitToUser(userId, "navigatorSession", {
+    emitToUser(userId, WS.NAVIGATOR_SESSION, {
       sessionId: rt.sessionId,
       type: sess?.type || SESSION_TYPES.UNDERSTANDING_ORCHESTRATE,
       description: sess?.description || `Understanding: ${runPerspective}`,

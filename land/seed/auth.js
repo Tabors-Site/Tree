@@ -48,7 +48,12 @@ export async function createUser(username, password, opts = {}) {
     password,
     isAdmin: opts.isAdmin || false,
   });
-  await user.save();
+  try {
+    await user.save();
+  } catch (err) {
+    if (err.code === 11000) throw new Error("Username already taken");
+    throw err;
+  }
   return user;
 }
 
@@ -76,5 +81,5 @@ export function generateToken(user) {
 export async function findUserByUsername(username) {
   return User.findOne({
     username: { $regex: `^${escapeRegex(username)}$`, $options: "i" },
-  });
+  }).select("+password");
 }

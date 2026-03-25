@@ -7,7 +7,7 @@ import { logContribution } from "../../seed/utils.js";
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 export async function stripeWebhook(req, res) {
-  if (!stripe) return sendError(res, 503, ERR.INTERNAL, "Stripe is not configured");
+  if (!stripe) return sendError(res, 500, ERR.INTERNAL, "Stripe is not configured");
   const sig = req.headers["stripe-signature"];
 
   let event;

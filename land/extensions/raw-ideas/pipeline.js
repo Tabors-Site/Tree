@@ -8,9 +8,9 @@ import { setRootId, getClientForUser } from "../../seed/ws/conversation.js";
 
 import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
 import {
-  getRootNodesForUser,
   buildDeepTreeSummary,
 } from "../../seed/tree/treeFetch.js";
+import { getExtension } from "../loader.js";
 import { logContribution } from "../../seed/utils.js";
 import RawIdea from "./model.js";
 import Node from "../../seed/models/node.js";
@@ -137,7 +137,8 @@ export async function orchestrateRawIdeaPlacement({
 
   try {
     // PHASE 1: Choose best-fit root
-    const roots = await getRootNodesForUser(userId);
+    const nav = getExtension("navigation")?.exports;
+    const roots = nav ? await nav.getUserRootsWithNames(userId) : [];
     if (!roots || roots.length === 0) {
       await markStuck("No trees available for this user");
       return withResponse ? { success: false, reason: "No trees available for this user" } : undefined;

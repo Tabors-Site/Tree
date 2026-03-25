@@ -25,9 +25,9 @@ name, type, status, dateCreated, llmDefault, visibility, children[], parent, roo
 
 Type is free-form. The kernel validates format (string, max 50 chars, no HTML). Extensions define meaning. Status is active, completed, or trimmed. Extensions store their data in metadata under their name: `metadata.values`, `metadata.prestige`, `metadata.cascade`, `metadata.extensions`, `metadata.tools`, `metadata.modes`. The Map preserves unknown keys across network transit.
 
-### User (8 fields, excluding _id)
+### User (7 fields, excluding _id)
 
-username, password, roots[], llmDefault, isAdmin, isRemote, homeLand, metadata (Map)
+username, password, llmDefault, isAdmin, isRemote, homeLand, metadata (Map)
 
 One default LLM connection. `isAdmin` is a boolean the kernel checks for authorization (private IP bypass, note size bypass, admin route gates). `isRemote` and `homeLand` are identity fields the auth layer checks on every request. Federation data (remote roots) lives in `metadata.canopy`. Tier/plan lives in `metadata.tiers`. Extensions store energy budgets, API keys, LLM slot assignments, storage usage, and preferences in metadata.
 
@@ -138,6 +138,7 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | afterNavigate | after | Fires when user navigates to a tree root. Extensions track recency. |
 | afterMetadataWrite | after | After setExtMeta succeeds. { nodeId, extName, data }. Zero overhead if no listeners. |
 | afterScopeChange | after | After extension blocking/restriction changes. { nodeId, blocked, restricted, userId } |
+| afterOwnershipChange | after | After rootOwner or contributors changed. { nodeId, action, targetUserId, previousOwnerId? } |
 | afterBoot | after | Once after all extensions loaded, config initialized, server listening. |
 | onCascade | sequential | Fires on content write at cascade-enabled node. Results written to .flow. |
 | onDocumentPressure | after | Any document exceeds 80% of maxDocumentSizeBytes. { documentType, documentId, currentSize, projectedSize, maxSize, percent } |

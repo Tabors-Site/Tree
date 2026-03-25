@@ -115,6 +115,9 @@ export async function blockPeer(domain) {
         { contributors: { $in: ghostIds } },
         { $pullAll: { contributors: ghostIds } }
       );
+      // Bulk contributor removal across many nodes requires full cache clear
+      const { invalidateAll } = await import("../seed/tree/ancestorCache.js");
+      invalidateAll();
       log.verbose("Canopy", `Blocked ${domain}: removed ${ghostIds.length} ghost users from all trees`);
     }
   }

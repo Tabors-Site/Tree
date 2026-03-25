@@ -301,7 +301,7 @@ router.post("/node/:nodeId/notes/:noteId/transfer", authenticate, useLatest, (re
 
 router.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {
-    return sendError(res, 413, ERR.INVALID_INPUT, "File exceeds maximum size of 4 GB");
+    return sendError(res, 413, ERR.UPLOAD_TOO_LARGE, "File exceeds maximum size of 4 GB");
   }
   next(err);
 });

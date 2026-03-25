@@ -13,16 +13,14 @@ router.get("/user/:userId", authenticate, async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const user = await User.findById(userId)
-      .populate("roots", "name _id visibility")
-      .exec();
+    const user = await User.findById(userId).exec();
 
     if (!user) {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
     (getExtension("energy")?.exports?.maybeResetEnergy || (() => false))(user);
 
-    const roots = user.roots || [];
+    const roots = (await getExtension("navigation")?.exports?.getUserRootsWithNames(userId)) || [];
     const billingMeta = getUserMeta(user, "billing");
     const plan = billingMeta.plan || "basic";
     const energyData = getUserMeta(user, "energy");
@@ -86,7 +84,7 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
 
 router.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {
-    return sendError(res, 413, ERR.INVALID_INPUT, "File exceeds maximum size of 4 GB");
+    return sendError(res, 413, ERR.UPLOAD_TOO_LARGE, "File exceeds maximum size of 4 GB");
   }
   next(err);
 });

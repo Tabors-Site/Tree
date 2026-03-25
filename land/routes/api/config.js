@@ -232,7 +232,7 @@ router.post("/land/extensions/:name/uninstall", authenticate, async (req, res) =
       .filter(m => m.needs?.extensions?.includes(name))
       .map(m => m.name);
     if (dependents.length > 0 && !req.body?.force) {
-      return sendError(res, 409, ERR.INVALID_INPUT,
+      return sendError(res, 409, ERR.RESOURCE_CONFLICT,
         `Cannot uninstall "${name}": ${dependents.join(", ")} depend on it. Pass { "force": true } to override.`,
         { dependents });
     }

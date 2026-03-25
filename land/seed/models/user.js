@@ -6,9 +6,9 @@ import { v4 as uuidv4 } from "uuid";
 const UserSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
   username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  password: { type: String, required: true, select: false },
 
-  roots: [{ type: String, ref: "Node" }],
+  // Navigation (tree root list) lives in metadata.nav.roots, managed by navigation extension.
 
   // Core LLM connection (set during register/setup). Extension slots in metadata.
   llmDefault: { type: String, ref: "LlmConnection", default: null },

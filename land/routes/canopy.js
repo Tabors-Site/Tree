@@ -37,6 +37,7 @@ import { getExtension } from "../extensions/loader.js";
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/horizon.js";
 import { isPrivateHost } from "../canopy/security.js";
 import { getUserMeta } from "../seed/tree/userMetadata.js";
+import { addContributor } from "../seed/tree/ownership.js";
 
 
 const router = express.Router();
@@ -331,7 +332,7 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
   try {
     const handlers = await loadTeamCanopyHandlers();
     if (!handlers) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, TEAM_NOT_INSTALLED_MSG);
-    await handlers.handleInviteAccept(req, res, { User, Node, RemoteUser, validateCanopyRequest });
+    await handlers.handleInviteAccept(req, res, { User, Node, RemoteUser, validateCanopyRequest, addContributor });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }

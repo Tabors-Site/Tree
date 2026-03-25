@@ -200,7 +200,7 @@ router.delete(
         return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
       }
       if (rawIdea.status === "processing" || rawIdea.status === "succeeded") {
-        return sendError(res, 409, ERR.INVALID_INPUT, `Cannot delete a raw idea with status "${rawIdea.status}"`);
+        return sendError(res, 409, ERR.RESOURCE_CONFLICT, `Cannot delete a raw idea with status "${rawIdea.status}"`);
       }
       const result = await coreDeleteRawIdeaAndFile({ rawIdeaId, userId: req.userId });
       return sendOk(res, result);
@@ -226,7 +226,7 @@ router.post(
       }
       const rawIdeaCheck = await RawIdea.findById(rawIdeaId).lean();
       if (rawIdeaCheck?.status === "processing") {
-        return sendError(res, 409, ERR.INVALID_INPUT, "Cannot transfer a raw idea while it is being processed");
+        return sendError(res, 409, ERR.RESOURCE_CONFLICT, "Cannot transfer a raw idea while it is being processed");
       }
       const result = await coreConvertRawIdeaToNote({ rawIdeaId, userId: req.userId, nodeId });
 
@@ -359,12 +359,12 @@ router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
     const result = await coreCreateRawIdea({ contentType: "text", content: content.trim(), userId: req.userId });
     const user = await User.findById(req.userId).select("username").lean();
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) sendError(res, 504, ERR.TIMEOUT, "Request timed out."); }, TIMEOUT_MS);
+    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) sendError(res, 500, ERR.TIMEOUT, "Request timed out."); }, TIMEOUT_MS);
     const source = req.body?.source === "user" ? "user" : "api";
     const orchResult = await orchestrateRawIdeaPlacement({ rawIdeaId: result.rawIdea._id, userId: req.userId, username: user?.username || "unknown", withResponse: true, source });
     clearTimeout(timer);
     if (timedOut) return;
-    if (!orchResult || !orchResult.success) return sendError(res, 200, ERR.LLM_FAILED, orchResult?.reason || "Could not process the idea.");
+    if (!orchResult || !orchResult.success) return sendError(res, 503, ERR.LLM_FAILED, orchResult?.reason || "Could not process the idea.");
     return sendOk(res, { answer: orchResult.answer, rootId: orchResult.rootId, rootName: orchResult.rootName, targetNodeId: orchResult.targetNodeId, rawIdeaId: result.rawIdea._id });
   } catch (err) {
  log.error("Raw Ideas", "raw-idea create+chat error:", err);
@@ -380,7 +380,7 @@ router.post("/user/:userId/raw-ideas/:rawIdeaId/place", authenticate, async (req
     if (!rawIdea || rawIdea.userId === "deleted") return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
     if (rawIdea.userId.toString() !== req.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     if (rawIdea.contentType === "file") return sendError(res, 400, ERR.INVALID_TYPE, "File ideas cannot be auto-placed");
-    if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.INVALID_STATUS, `Already ${rawIdea.status}`);
+    if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.RESOURCE_CONFLICT, `Already ${rawIdea.status}`);
     if (!(await userHasLlm(req.userId))) return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
     if (alreadyProcessing) return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
@@ -402,18 +402,18 @@ router.post("/user/:userId/raw-ideas/:rawIdeaId/chat", authenticate, async (req,
     if (!rawIdea || rawIdea.userId === "deleted") return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
     if (rawIdea.userId.toString() !== req.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     if (rawIdea.contentType === "file") return sendError(res, 400, ERR.INVALID_TYPE, "File ideas cannot be auto-placed");
-    if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.INVALID_STATUS, `Already ${rawIdea.status}`);
+    if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.RESOURCE_CONFLICT, `Already ${rawIdea.status}`);
     if (!(await userHasLlm(req.userId))) return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
     if (alreadyProcessing) return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
     const user = await User.findById(req.userId).select("username").lean();
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) sendError(res, 504, ERR.TIMEOUT, "Request timed out."); }, TIMEOUT_MS);
+    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) sendError(res, 500, ERR.TIMEOUT, "Request timed out."); }, TIMEOUT_MS);
     const source = req.body?.source === "user" ? "user" : "api";
     const result = await orchestrateRawIdeaPlacement({ rawIdeaId, userId: req.userId, username: user?.username || "unknown", withResponse: true, source });
     clearTimeout(timer);
     if (timedOut) return;
-    if (!result || !result.success) return sendError(res, 200, ERR.LLM_FAILED, result?.reason || "Could not process the idea.");
+    if (!result || !result.success) return sendError(res, 503, ERR.LLM_FAILED, result?.reason || "Could not process the idea.");
     return sendOk(res, { answer: result.answer, rootId: result.rootId, rootName: result.rootName, targetNodeId: result.targetNodeId });
   } catch (err) {
  log.error("Raw Ideas", "raw-idea chat error:", err);

@@ -15,6 +15,7 @@ import Node from "../models/node.js";
 import User from "../models/user.js";
 import { resolveTreeAccess } from "./treeAccess.js";
 import { invalidateNode } from "./ancestorCache.js";
+import { hooks } from "../hooks.js";
 
 /**
  * Add a contributor to a node. Only the resolved owner or admin can do this.
@@ -25,13 +26,21 @@ export async function addContributor(nodeId, contributorId, actorId) {
   if (!node) throw new Error("Node not found");
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 
+  await assertUserExists(contributorId);
   await assertOwnerOrAdmin(nodeId, actorId);
+
+  // Prevent adding the resolved owner as a contributor (redundant, logically wrong)
+  const targetAccess = await resolveTreeAccess(nodeId, contributorId);
+  if (targetAccess.ok && targetAccess.isOwner) {
+    throw new Error("Cannot add the owner as a contributor");
+  }
 
   await Node.updateOne(
     { _id: nodeId },
     { $addToSet: { contributors: contributorId } },
   );
   invalidateNode(nodeId); // contributors[] changed
+  hooks.run("afterOwnershipChange", { nodeId, action: "addContributor", targetUserId: contributorId }).catch(() => {});
 }
 
 /**
@@ -43,6 +52,8 @@ export async function removeContributor(nodeId, contributorId, actorId) {
   if (!node) throw new Error("Node not found");
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 
+  await assertUserExists(contributorId);
+
   // Self-removal is always allowed
   if (contributorId !== actorId) {
     await assertOwnerOrAdmin(nodeId, actorId);
@@ -53,6 +64,7 @@ export async function removeContributor(nodeId, contributorId, actorId) {
     { $pull: { contributors: contributorId } },
   );
   invalidateNode(nodeId); // contributors[] changed
+  hooks.run("afterOwnershipChange", { nodeId, action: "removeContributor", targetUserId: contributorId }).catch(() => {});
 }
 
 /**
@@ -64,6 +76,12 @@ export async function setOwner(nodeId, newOwnerId, actorId) {
   const node = await Node.findById(nodeId).select("systemRole rootOwner parent").lean();
   if (!node) throw new Error("Node not found");
   if (node.systemRole) throw new Error("Cannot set ownership on system nodes");
+
+  await assertUserExists(newOwnerId);
+
+  if (node.rootOwner && node.rootOwner.toString() === newOwnerId) {
+    throw new Error("User is already the owner at this node");
+  }
 
   // If this node already has rootOwner, only that owner or an admin can change it.
   // If it doesn't, resolve the owner above.
@@ -81,11 +99,18 @@ export async function setOwner(nodeId, newOwnerId, actorId) {
     await assertAdmin(actorId);
   }
 
+  const previousOwnerId = node.rootOwner ? node.rootOwner.toString() : null;
+
+  // Set owner and remove from contributors (owner access supersedes contributor)
   await Node.updateOne(
     { _id: nodeId },
-    { $set: { rootOwner: newOwnerId } },
+    {
+      $set: { rootOwner: newOwnerId },
+      $pull: { contributors: newOwnerId },
+    },
   );
   invalidateNode(nodeId); // rootOwner changed
+  hooks.run("afterOwnershipChange", { nodeId, action: "setOwner", targetUserId: newOwnerId, previousOwnerId }).catch(() => {});
 }
 
 /**
@@ -108,11 +133,14 @@ export async function removeOwner(nodeId, actorId) {
     await assertAdmin(actorId);
   }
 
+  const removedOwnerId = node.rootOwner.toString();
+
   await Node.updateOne(
     { _id: nodeId },
     { $set: { rootOwner: null } },
   );
   invalidateNode(nodeId); // rootOwner removed
+  hooks.run("afterOwnershipChange", { nodeId, action: "removeOwner", targetUserId: removedOwnerId }).catch(() => {});
 }
 
 /**
@@ -125,16 +153,35 @@ export async function transferOwnership(nodeId, newOwnerId, actorId) {
   if (node.systemRole) throw new Error("Cannot modify system nodes");
   if (!node.rootOwner || node.rootOwner === "SYSTEM") throw new Error("Node has no owner to transfer from");
 
-  const isCurrentOwner = node.rootOwner.toString() === actorId;
+  await assertUserExists(newOwnerId);
+
+  const oldOwnerId = node.rootOwner.toString();
+
+  if (oldOwnerId === newOwnerId) {
+    throw new Error("User is already the owner at this node");
+  }
+
+  const isCurrentOwner = oldOwnerId === actorId;
   if (!isCurrentOwner) {
     await assertAdmin(actorId);
   }
 
+  // Step 1: Set new owner + remove new owner from contributors
   await Node.updateOne(
     { _id: nodeId },
-    { $set: { rootOwner: newOwnerId } },
+    {
+      $set: { rootOwner: newOwnerId },
+      $pull: { contributors: newOwnerId },
+    },
+  );
+  // Step 2: Demote old owner to contributor (separate op: MongoDB
+  // cannot $pull and $addToSet on the same array in one update)
+  await Node.updateOne(
+    { _id: nodeId },
+    { $addToSet: { contributors: oldOwnerId } },
   );
   invalidateNode(nodeId); // rootOwner transferred
+  hooks.run("afterOwnershipChange", { nodeId, action: "transferOwnership", targetUserId: newOwnerId, previousOwnerId: oldOwnerId }).catch(() => {});
 }
 
 // ── Helpers ──
@@ -154,4 +201,10 @@ async function assertAdmin(actorId) {
   if (!actor?.isAdmin) {
     throw new Error("Only an admin can perform this action");
   }
+}
+
+async function assertUserExists(userId) {
+  if (!userId) throw new Error("User ID is required");
+  const user = await User.findById(userId).select("_id").lean();
+  if (!user) throw new Error("User not found");
 }

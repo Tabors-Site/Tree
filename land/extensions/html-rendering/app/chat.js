@@ -34,17 +34,21 @@ router.get("/chat", authenticateLite, async (req, res) => {
     }
 
     const user = await User.findById(req.userId).select(
-      "username roots metadata",
+      "username metadata llmDefault",
     );
     if (!user) {
       return notFoundPage(req, res, "This user doesn't exist.");
     }
 
+    const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+    const nav = getUserMeta(user, "nav");
+    const userRoots = Array.isArray(nav.roots) ? nav.roots : [];
+
     // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
     const setupSkipped = req.cookies?.setupSkipped === "1";
     if (!setupSkipped) {
       const hasMainLlm = !!user.llmDefault;
-      const hasTree = user.roots && user.roots.length > 0;
+      const hasTree = userRoots.length > 0;
       if (!hasMainLlm || !hasTree) {
         const connCount = hasMainLlm
           ? 1
@@ -58,7 +62,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     const { username } = user;
 
     // Load user's trees
-    const rootIds = (user.roots || []).map(String);
+    const rootIds = userRoots.map(String);
     let trees = [];
     if (rootIds.length > 0) {
       trees = await Node.find({ _id: { $in: rootIds } })

@@ -75,7 +75,7 @@ const KernelPage = () => {
                 os: "System Call Hooking",
                 osDesc: "Intercepts kernel operations. Powerful and dangerous. Used in security tools and rootkits.",
                 seed: "Hook System",
-                seedDesc: "26 lifecycle hooks. before hooks intercept and cancel. after hooks react in parallel. Any extension can hook any operation. beforeToolCall rewrites arguments. beforeNote blocks writes. Orchestrator replacement swaps the entire conversation flow. 5s timeout, circuit breaker, spatial filtering. Power with guardrails.",
+                seedDesc: "27 lifecycle hooks. before hooks intercept and cancel. after hooks react in parallel. Any extension can hook any operation. beforeToolCall rewrites arguments. beforeNote blocks writes. Orchestrator replacement swaps the entire conversation flow. 5s timeout, circuit breaker, spatial filtering. Power with guardrails.",
               },
               {
                 os: "Inter-Process Communication",
@@ -163,12 +163,12 @@ const KernelPage = () => {
               <h3>User</h3>
               <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#999", lineHeight: 2}}>
                 _id, username, password<br/>
-                roots[], llmDefault<br/>
+                llmDefault<br/>
                 isAdmin, isRemote, homeLand<br/>
                 <span style={{color: "#4ade80"}}>metadata (Map)</span>
               </div>
               <p style={{marginTop: 12, fontSize: "0.85rem", color: "#666"}}>
-                8 fields. One default LLM connection. Extensions store energy budgets, API keys,
+                7 fields. One default LLM connection. Extensions store energy budgets, API keys,
                 LLM slot assignments, storage usage, and preferences in metadata.
               </p>
             </div>
@@ -276,7 +276,7 @@ const KernelPage = () => {
               </div>
             </div>
             <div className="lp-card">
-              <h3>After Hooks (15)</h3>
+              <h3>After Hooks (16)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
                 Parallel, fire-and-forget. Errors logged, never block.
               </p>
@@ -292,6 +292,7 @@ const KernelPage = () => {
                 afterNavigate<br/>
                 afterMetadataWrite<br/>
                 afterScopeChange<br/>
+                afterOwnershipChange<br/>
                 afterBoot<br/>
                 <span style={{color: "#fbbf24"}}>onDocumentPressure</span><br/>
                 <span style={{color: "#f87171"}}>onTreeTripped</span><br/>
@@ -328,7 +329,7 @@ const KernelPage = () => {
           </p>
           <div style={{maxWidth: 600, margin: "0 auto"}}>
             {[
-              ["Hooks", "Lifecycle event handlers. 26 kernel hooks. Extensions fire their own."],
+              ["Hooks", "Lifecycle event handlers. 27 kernel hooks. Extensions fire their own."],
               ["Modes", "AI conversation modes. How the AI thinks at each position."],
               ["Orchestrators", "Conversation flow replacements. Swap the entire chat/place/query pipeline."],
               ["Socket Handlers", "WebSocket event handlers. Extensions add real-time features."],

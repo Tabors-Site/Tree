@@ -111,12 +111,12 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
   router.get("/user/:userId", urlAuth, htmlOnly, async (req, res) => {
     try {
       const userId = req.params.userId;
-      const user = await User.findById(userId).populate("roots", "name").exec();
+      const user = await User.findById(userId).exec();
       if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
       (getExtension("energy")?.exports?.maybeResetEnergy || (() => false))(user);
 
-      const roots = user.roots || [];
+      const roots = (await getExtension("navigation")?.exports?.getUserRootsWithNames(userId)) || [];
       const billingMeta = getUserMeta(user, "billing");
       const plan = billingMeta.plan || "basic";
       const energyData = getUserMeta(user, "energy");

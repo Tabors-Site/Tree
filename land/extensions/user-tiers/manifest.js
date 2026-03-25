@@ -5,6 +5,7 @@ export default {
 
   needs: {
     models: ["User"],
+    services: ["protocol"],
   },
 
   optional: {},

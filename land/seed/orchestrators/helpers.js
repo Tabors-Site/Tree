@@ -28,7 +28,6 @@ export function parseJsonSafe(text) {
 
     // Fix common LLM JSON mistakes
     cleaned = cleaned.replace(/,\s*([}\]])/g, "$1");  // trailing commas
-    cleaned = cleaned.replace(/'/g, '"');                // single quotes -> double (only in JSON context)
 
     // Try direct parse
     try { return JSON.parse(cleaned); } catch {}

@@ -1,9 +1,9 @@
 import express from "express";
+import authenticate from "../../seed/middleware/authenticate.js";
 import { getUserTier, setUserTier } from "./core.js";
 
 export default function (core) {
   const router = express.Router();
-  const authenticate = core.auth.resolveTreeAccess;
   const { sendOk, sendError, ERR } = core.protocol;
   const User = core.models.User;
 

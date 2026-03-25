@@ -12,6 +12,7 @@ import authenticateLite from "./authenticateLite.js";
 import { notFoundPage, errorHtml } from "./notFoundPage.js";
 import { resolvePublicRoot, isPublic, hasTreeLlm } from "./publicAccess.js";
 import { isHtmlEnabled } from "./config.js";
+import { sendError, ERR } from "../../seed/protocol.js";
 
 // Mount HTML intercept routes (handles ?html on kernel API paths)
 const htmlRouter = buildHtmlRoutes({ urlAuth, renderers: { ...renderers, notFoundPage, errorHtml } });
@@ -25,10 +26,10 @@ pageRouter.use("/", setupRouter);
 // Canopy admin pages (HTML-only, moved from routes/canopy.js)
 import authenticate from "../../seed/middleware/authenticate.js";
 pageRouter.get("/canopy/admin", authenticate, async (req, res) => {
-  if (!isHtmlEnabled()) return res.status(404).json({ error: "HTML disabled" });
+  if (!isHtmlEnabled()) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "HTML disabled");
   try {
     const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
-    if (!user?.isAdmin) return res.status(403).json({ error: "Admin required" });
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     const { getAllPeers, getPendingEventCount, getFailedEvents } = await import("../../canopy/peers.js");
     const { getLandInfoPayload } = await import("../../canopy/identity.js");
     const peers = await getAllPeers();
@@ -37,17 +38,17 @@ pageRouter.get("/canopy/admin", authenticate, async (req, res) => {
     const failedEvents = await getFailed();
     const land = getLandInfoPayload();
     res.send(renderers.renderCanopyAdmin({ land, peers, pendingEvents, failedEvents }));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendError(res, 500, ERR.INTERNAL, err.message); }
 });
 
 pageRouter.get("/canopy/admin/horizon", authenticate, async (req, res) => {
-  if (!isHtmlEnabled()) return res.status(404).json({ error: "HTML disabled" });
+  if (!isHtmlEnabled()) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "HTML disabled");
   try {
     const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
-    if (!user?.isAdmin) return res.status(403).json({ error: "Admin required" });
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     const hasHorizon = !!process.env.HORIZON_URL;
     res.send(renderers.renderCanopyHorizon({ hasHorizon }));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { sendError(res, 500, ERR.INTERNAL, err.message); }
 });
 
 function generateShareToken() {

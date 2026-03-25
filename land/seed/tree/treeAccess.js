@@ -1,5 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import { getAncestorChain, resolveTreeAccessFromChain } from "./ancestorCache.js";
+import { ERR } from "../protocol.js";
 
 /**
  * Resolve tree access by walking the parent chain via the ancestor cache.
@@ -16,7 +17,7 @@ export async function resolveTreeAccess(nodeId, userId) {
   if (!nodeId) {
     return {
       ok: false,
-      error: "NODE_ID_MISSING",
+      error: ERR.INVALID_INPUT,
       message: "nodeId is required",
     };
   }
@@ -25,7 +26,7 @@ export async function resolveTreeAccess(nodeId, userId) {
   if (!ancestors) {
     return {
       ok: false,
-      error: "NODE_NOT_FOUND",
+      error: ERR.NODE_NOT_FOUND,
       message: "Node not found. Use get-root-nodes-by-user to find a valid node.",
     };
   }

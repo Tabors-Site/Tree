@@ -120,7 +120,7 @@ async function runTreeOrchestration(opts, res) {
       const msg = mode === "place"
         ? "Request timed out."
         : "Request timed out. The tree took too long to respond.";
-      sendError(res, 504, ERR.TIMEOUT, msg);
+      sendError(res, 500, ERR.TIMEOUT, msg);
     }
   }, TIMEOUT_MS);
 
@@ -196,7 +196,7 @@ async function runTreeOrchestration(opts, res) {
           ? (result?.reason || "Could not place content.")
           : (result?.answer || "Could not process your message.");
         const detail = mode === "place" ? { stepSummaries: result?.stepSummaries || [] } : undefined;
-        return sendError(res, 200, ERR.ORCHESTRATOR_NOT_FOUND, msg, detail);
+        return sendError(res, 503, ERR.LLM_FAILED, msg, detail);
       }
 
       if (mode === "place") {

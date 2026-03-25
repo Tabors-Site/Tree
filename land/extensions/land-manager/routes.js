@@ -4,6 +4,7 @@ import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
 import log from "../../seed/log.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { getUserMeta } from "../../seed/tree/userMetadata.js";
 
 const router = express.Router();
 
@@ -50,15 +51,18 @@ router.get("/land/users", authenticate, async (req, res) => {
     }
 
     const users = await User.find({ isRemote: { $ne: true } })
-      .select("username isAdmin roots")
+      .select("username isAdmin metadata")
       .lean();
 
     sendOk(res, {
-      users: users.map(u => ({
-        username: u.username,
-        isAdmin: u.isAdmin || false,
-        trees: u.roots?.length || 0,
-      })),
+      users: users.map(u => {
+        const nav = getUserMeta(u, "nav");
+        return {
+          username: u.username,
+          isAdmin: u.isAdmin || false,
+          trees: Array.isArray(nav.roots) ? nav.roots.length : 0,
+        };
+      }),
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

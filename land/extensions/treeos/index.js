@@ -1,5 +1,6 @@
 import log from "../../seed/log.js";
 import { buildNavigationHandler } from "./navigation.js";
+import { buildTools } from "./handlers.js";
 
 // Tree modes
 import treeNavigate from "./modes/tree/navigate.js";
@@ -15,7 +16,7 @@ import treeNotes from "./modes/tree/notes.js";
 import homeDefault from "./modes/home/default.js";
 import homeReflect from "./modes/home/reflect.js";
 
-// Tools (the full TOOL_DEFS catalog)
+// Tools (OpenAI-format TOOL_DEFS for mode toolNames resolution)
 import TOOL_DEFS from "./tools.js";
 
 export async function init(core) {
@@ -37,19 +38,14 @@ export async function init(core) {
   core.modes.setDefaultMode("home", "home:default");
   core.modes.setDefaultMode("tree", "tree:navigate");
 
-  // Build tool array from TOOL_DEFS for MCP registration
-  const tools = Object.values(TOOL_DEFS).map(def => ({
-    name: def.function?.name || def.name,
-    description: def.function?.description || def.description || "",
-    inputSchema: def.function?.parameters || def.parameters || { type: "object", properties: {} },
-    annotations: def.function?.annotations || def.annotations || {},
-  }));
+  // Build MCP tools with zod schemas and handlers
+  const tools = buildTools();
 
   // Register afterToolCall hook for frontend navigation
   const onAfterToolCall = buildNavigationHandler(core);
   core.hooks.register("afterToolCall", onAfterToolCall, "treeos");
 
-  log.info("TreeOS", `Registered ${Object.keys(TOOL_DEFS).length} tools, 10 modes, navigation hook`);
+  log.info("TreeOS", `Registered ${tools.length} tools, 10 modes, navigation hook`);
 
   return {
     tools,

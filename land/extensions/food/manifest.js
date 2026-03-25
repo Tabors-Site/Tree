@@ -8,6 +8,7 @@ export default {
   },
 
   optional: {
+    services: ["llm"],
     extensions: ["values", "prestige", "schedules"],
   },
 

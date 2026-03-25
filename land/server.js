@@ -17,7 +17,7 @@ function notFoundPage(req, res, message = "This page doesn't exist or may have b
 }
 import securityHeaders from "./seed/middleware/securityHeaders.js";
 // Billing webhook loaded dynamically (extension-owned)
-let stripeWebhook = (req, res) => sendError(res, 503, ERR.INTERNAL, "Billing extension not loaded");
+let stripeWebhook = (req, res) => sendError(res, 500, ERR.INTERNAL, "Billing extension not loaded");
 try {
   const mod = await import("./extensions/billing/webhook.js");
   stripeWebhook = mod.stripeWebhook;

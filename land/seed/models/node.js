@@ -1,5 +1,4 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-import log from "../log.js";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 
@@ -39,52 +38,8 @@ const NodeSchema = new mongoose.Schema({
 // No virtuals. Extension data lives in metadata. Callers use getExtMeta/setExtMeta.
 // Ownership and contributor mutations live in seed/tree/ownership.js (uses resolveTreeAccess).
 
-NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
-  if (this.systemRole) {
-    throw new Error("System nodes cannot be deleted");
-  }
-  const Node = mongoose.model("Node");
-
-  try {
-    const children = await Node.find({ parent: this._id });
-
-    for (const child of children) {
-      await child.deleteOne();
-    }
-
-    if (this.parent) {
-      const parentNode = await Node.findById(this.parent);
-      if (parentNode) {
-        parentNode.children = parentNode.children.filter(
-          (childId) => childId !== this._id
-        );
-        await parentNode.save(); // persist the changes (removes the child reference)
-      }
-    }
-
-    await this.deleteOne();
-  } catch (error) {
-    log.error("DB",
-      `Error in deleteWithChildrenBottomUp for node ${this._id}:`,
-      error
-    );
-    throw error;
-  }
-};
-
-// Cascade delete: remove children bottom-up when a node is deleted
-NodeSchema.pre("findOneAndDelete", async function (next) {
-  const Node = mongoose.model("Node");
-
-  const nodeId = this.getQuery()._id;
-  const node = await Node.findById(nodeId);
-
-  if (node) {
-    await node.deleteWithChildrenBottomUp();
-  }
-
-  next();
-});
+// Node deletion is soft-delete only (parent set to "deleted" in treeManagement.js).
+// The deleted-revive extension can bring them back. No hard delete on nodes.
 
 NodeSchema.index({ parent: 1 });
 NodeSchema.index({ rootOwner: 1 });

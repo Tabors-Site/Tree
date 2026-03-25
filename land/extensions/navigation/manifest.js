@@ -1,7 +1,7 @@
 export default {
-  name: "recent-roots",
-  version: "1.0.0",
-  description: "Tracks recently visited trees. Stores navigation history in user metadata. Emits to frontend for sidebar display.",
+  name: "navigation",
+  version: "2.0.0",
+  description: "Manages user navigation state: tree root list (metadata.nav.roots) and recently visited trees (metadata.nav.recentRoots). Reacts to ownership changes via afterOwnershipChange hook.",
 
   needs: {
     services: ["websocket"],
