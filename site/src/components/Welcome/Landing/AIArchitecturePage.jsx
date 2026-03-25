@@ -8,16 +8,18 @@ const AIArchitecturePage = () => {
       <section className="lp-hero">
         <div className="lp-hero-inner">
           <div className="lp-tree-icon">🧠</div>
-          <h1 className="lp-title">How AI Works in TreeOS</h1>
-          <p className="lp-subtitle">Three zones. Per-node control. Replaceable everything.</p>
+          <h1 className="lp-title">The AI</h1>
+          <p className="lp-subtitle">How the tree thinks.</p>
           <p className="lp-tagline">
-            The AI in TreeOS is not one thing. It is a stack of layers, each customizable
-            without touching the one below it. Users control what the AI can do at every node.
-            Builders create new AI modes and tools. Developers replace the entire conversation flow.
+            The intelligence primitive. A conversation loop in the seed that resolves which LLM to call,
+            which tools to provide, which mode to think in, and which position context to inject.
+            All based on where you are in the tree. Users configure. Builders extend. Developers replace.
           </p>
           <div className="lp-hero-ctas">
-            <a className="lp-btn lp-btn-secondary" href="/">Back to TreeOS</a>
-            <a className="lp-btn lp-btn-secondary" href="/guide">Full Guide</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/cascade">Cascade</a>
+            <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
           </div>
         </div>
       </section>
@@ -194,9 +196,9 @@ const AIArchitecturePage = () => {
         <div className="lp-container">
           <h2 className="lp-section-title">Building a Custom Orchestrator</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            This is the most ambitious thing you can build on TreeOS. A custom orchestrator
+            This is the most ambitious thing you can build on the seed. A custom orchestrator
             replaces how the AI thinks about and responds to every message in a zone. The
-            built-in tree-orchestrator is 2500 lines of intent classification, navigation,
+            built-in tree-orchestrator is itself an extension, 2500 lines of intent classification, navigation,
             planning, and execution. Yours can be 50 lines or 50,000. The kernel does not care.
           </p>
           <div className="lp-terminal" style={{maxWidth: 600, margin: "0 auto"}}>
@@ -279,25 +281,34 @@ const AIArchitecturePage = () => {
           <h2 className="lp-section-title">Reliability Built In</h2>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr 1fr"}}>
             <div className="lp-card lp-card-sm">
+              <h4>Position Injection</h4>
+              <p>Every prompt starts with a [Position] block. The AI always knows where it is. Extension modes cannot exclude it.</p>
+              <div style={{background: "rgba(0,0,0,0.3)", borderRadius: 6, padding: "8px 12px", marginTop: 8, fontFamily: "monospace", fontSize: "0.75rem", color: "#888", lineHeight: 1.6}}>
+                [Position]<br/>
+                User: tabor<br/>
+                Tree: My Fitness (abc-123)<br/>
+                Current node: Push Day (xyz-456)
+              </div>
+            </div>
+            <div className="lp-card lp-card-sm">
               <h4>LLM Failover</h4>
-              <p>
-                Stack backup LLM connections. When your primary hits a rate limit
-                or goes down, the kernel tries the next one automatically.
-              </p>
+              <p>Backup LLM connections. Rate limit or outage hits, the kernel tries the next one automatically.</p>
             </div>
             <div className="lp-card lp-card-sm">
               <h4>Model Agnostic</h4>
-              <p>
-                Any OpenAI-compatible endpoint. Ollama, OpenRouter, Together,
-                Anthropic, local models. Per-tree and per-mode assignments.
-              </p>
+              <p>Any OpenAI-compatible endpoint. Per-tree and per-mode LLM assignments.</p>
             </div>
             <div className="lp-card lp-card-sm">
-              <h4>Configurable</h4>
-              <p>
-                28 kernel config keys. Timeouts, retries, context window,
-                tool iterations, session limits, cascade, uploads. No code changes needed.
-              </p>
+              <h4>Tool Circuit Breaker</h4>
+              <p>5 failures disables one tool for the session. The AI adapts. One bad API key doesn't kill the tree.</p>
+            </div>
+            <div className="lp-card lp-card-sm">
+              <h4>DB Health Check</h4>
+              <p>Before each tool call, check database. If dead, the AI tells the user instead of retrying blind.</p>
+            </div>
+            <div className="lp-card lp-card-sm">
+              <h4>Ancestor Cache</h4>
+              <p>One shared cache for all resolution chains. Snapshot per message. 120 DB queries become 1.</p>
             </div>
           </div>
         </div>
@@ -306,7 +317,7 @@ const AIArchitecturePage = () => {
       {/* ── HOOKS ── */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">23 Lifecycle Hooks</h2>
+          <h2 className="lp-section-title">26 Lifecycle Hooks</h2>
           <p className="lp-section-sub lp-section-sub-wide">
             Extensions modify kernel behavior without touching kernel code. Register a handler.
             The kernel fires it at the right moment. Before hooks can cancel. After hooks react.
@@ -337,6 +348,9 @@ const AIArchitecturePage = () => {
               ["afterSessionCreate", "React to new sessions"],
               ["afterSessionEnd", "React to ended sessions"],
               ["onCascade", "Handle cascade signals, results to .flow"],
+              ["onDocumentPressure", "Document approaching size limit"],
+              ["onTreeTripped", "Tree circuit breaker tripped"],
+              ["onTreeRevived", "Tripped tree revived"],
             ].map(([name, desc]) => (
               <div key={name} style={{
                 display: "flex", justifyContent: "space-between", padding: "8px 0",

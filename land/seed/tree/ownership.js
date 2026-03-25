@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Ownership and contributor mutations.
  *

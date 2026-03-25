@@ -75,7 +75,7 @@ const KernelPage = () => {
                 os: "System Call Hooking",
                 osDesc: "Intercepts kernel operations. Powerful and dangerous. Used in security tools and rootkits.",
                 seed: "Hook System",
-                seedDesc: "24 lifecycle hooks. before hooks intercept and cancel. after hooks react in parallel. Any extension can hook any operation. beforeToolCall rewrites arguments. beforeNote blocks writes. Orchestrator replacement swaps the entire conversation flow. 5s timeout, circuit breaker, spatial filtering. Power with guardrails.",
+                seedDesc: "26 lifecycle hooks. before hooks intercept and cancel. after hooks react in parallel. Any extension can hook any operation. beforeToolCall rewrites arguments. beforeNote blocks writes. Orchestrator replacement swaps the entire conversation flow. 5s timeout, circuit breaker, spatial filtering. Power with guardrails.",
               },
               {
                 os: "Inter-Process Communication",
@@ -88,6 +88,12 @@ const KernelPage = () => {
                 osDesc: "Brings the system up in the right order. Hardware init, driver loading, filesystem mount, service startup.",
                 seed: "Boot Sequence",
                 seedDesc: "DB connect, index verification, system nodes, config load, seed migrations, integrity check, extension discovery, dependency resolution, topological sort, init(), wire routes/tools/hooks/modes, background jobs, Canopy peering, afterBoot hook. Each step depends on the one before it.",
+              },
+              {
+                os: "Thermal Throttling and Safe Shutdown",
+                osDesc: "CPU overheats, kernel throttles the clock. Disk failing, kernel remounts read-only. Data preserved. System protects itself from making things worse.",
+                seed: "Tree Circuit Breaker",
+                seedDesc: "Health equation monitors node count, metadata density, and error rate. When the score exceeds 1.0, the tree trips. No AI, no writes, no cascade. Read access stays open. Data preserved. Extensions diagnose and revive. The kernel protects the land from one sick tree dragging everything down.",
               },
             ].map(({ os, osDesc, seed, seedDesc }) => (
               <div key={os} style={{
@@ -170,8 +176,33 @@ const KernelPage = () => {
         </div>
       </section>
 
-      {/* ── CONVERSATION LOOP ── */}
+      {/* ── THREE ZONES ── */}
       <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Three Zones</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Navigation determines the AI's behavior zone. Structural, not interpretive. Determined by URL.
+            Zones are kernel. Sub-modes within zones are extensions.
+          </p>
+          <div className="lp-cards-3">
+            <div className="lp-card">
+              <h3>Land <code>/</code></h3>
+              <p>System management. Extensions, config, users, peers. Admin access required. The kernel provides a fallback mode. The land-manager extension provides the real one.</p>
+            </div>
+            <div className="lp-card">
+              <h3>Home <code>~</code></h3>
+              <p>Personal space. Raw ideas, notes across trees, chat history, contributions. The kernel provides a fallback. Extensions provide the experience.</p>
+            </div>
+            <div className="lp-card">
+              <h3>Tree <code>/MyTree</code></h3>
+              <p>Inside a tree. Chat/place/query. The treeos extension registers navigate, structure, edit, respond, librarian. A different extension could register completely different modes.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CONVERSATION LOOP ── */}
+      <section className="lp-section">
         <div className="lp-container">
           <h2 className="lp-section-title">The Conversation Loop</h2>
           <p className="lp-section-sub lp-section-sub-wide">
@@ -228,7 +259,7 @@ const KernelPage = () => {
           </p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr 1fr"}}>
             <div className="lp-card">
-              <h3>Before Hooks (7)</h3>
+              <h3>Before Hooks (9)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
                 Sequential. Can modify data. Can cancel. 5s timeout per handler.
               </p>
@@ -239,11 +270,13 @@ const KernelPage = () => {
                 beforeNodeDelete<br/>
                 beforeContribution<br/>
                 beforeRegister<br/>
-                beforeResponse
+                beforeResponse<br/>
+                beforeLLMCall<br/>
+                beforeToolCall
               </div>
             </div>
             <div className="lp-card">
-              <h3>After Hooks (13)</h3>
+              <h3>After Hooks (15)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
                 Parallel, fire-and-forget. Errors logged, never block.
               </p>
@@ -260,18 +293,18 @@ const KernelPage = () => {
                 afterMetadataWrite<br/>
                 afterScopeChange<br/>
                 afterBoot<br/>
-                <span style={{color: "#fbbf24"}}>onDocumentPressure</span>
+                <span style={{color: "#fbbf24"}}>onDocumentPressure</span><br/>
+                <span style={{color: "#f87171"}}>onTreeTripped</span><br/>
+                <span style={{color: "#4ade80"}}>onTreeRevived</span>
               </div>
             </div>
             <div className="lp-card">
-              <h3>Sequential (4)</h3>
+              <h3>Sequential (2)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
-                Return values captured. Handlers can read each other's additions.
+                Return values captured. Handlers read each other's additions.
               </p>
               <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "#555", marginTop: 12, lineHeight: 1.8}}>
                 enrichContext<br/>
-                beforeLLMCall<br/>
-                beforeToolCall<br/>
                 <span style={{color: "#4ade80"}}>onCascade</span>
               </div>
             </div>
@@ -285,44 +318,52 @@ const KernelPage = () => {
         </div>
       </section>
 
-      {/* ── EXTENSION LOADER ── */}
+      {/* ── FIVE REGISTRIES ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Extension Loader</h2>
+          <h2 className="lp-section-title">Five Registries</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            At boot, the loader scans extension directories, reads manifests, validates
-            dependencies, resolves load order (topological sort), and wires everything
-            into the land. Extensions only receive the services they declared.
+            Same pattern across all five. Extensions register. The kernel resolves.
+            Failure falls back to the kernel, never to silence.
           </p>
-          <div className="lp-steps">
-            <div className="lp-step">
-              <div className="lp-step-num">1</div>
-              <div className="lp-step-content">
-                <h4>Discover</h4>
-                <p>Scan <code>extensions/</code> for directories with <code>manifest.js</code>. Skip disabled extensions (from env, file, or DB config). Validate manifest fields.</p>
+          <div style={{maxWidth: 600, margin: "0 auto"}}>
+            {[
+              ["Hooks", "Lifecycle event handlers. 26 kernel hooks. Extensions fire their own."],
+              ["Modes", "AI conversation modes. How the AI thinks at each position."],
+              ["Orchestrators", "Conversation flow replacements. Swap the entire chat/place/query pipeline."],
+              ["Socket Handlers", "WebSocket event handlers. Extensions add real-time features."],
+              ["Auth Strategies", "Authentication methods. JWT is built-in. API keys, share tokens, public access are extensions."],
+            ].map(([name, desc]) => (
+              <div key={name} style={{
+                display: "flex", gap: 12, padding: "10px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+              }}>
+                <span style={{color: "#4ade80", minWidth: 140, fontSize: "0.85rem", fontWeight: 600}}>{name}</span>
+                <span style={{color: "#888", fontSize: "0.85rem"}}>{desc}</span>
               </div>
-            </div>
-            <div className="lp-step">
-              <div className="lp-step-num">2</div>
-              <div className="lp-step-content">
-                <h4>Resolve</h4>
-                <p>Check needs (models, services, middleware, extensions with semver constraints). Check optional deps. Topological sort so dependencies load first. Skip extensions with unmet requirements.</p>
-              </div>
-            </div>
-            <div className="lp-step">
-              <div className="lp-step-num">3</div>
-              <div className="lp-step-content">
-                <h4>Initialize</h4>
-                <p>Call each extension's <code>init(core)</code> with a scoped services bundle. Extensions register modes, hooks, and set <code>core.energy</code> or other services. Return router, tools, jobs, exports.</p>
-              </div>
-            </div>
-            <div className="lp-step">
-              <div className="lp-step-num">4</div>
-              <div className="lp-step-content">
-                <h4>Wire</h4>
-                <p>Mount routes at <code>/api/v1</code>. Register MCP tools with ownership tracking. Register page routes. Start background jobs. Run schema migrations. Sync extension state to the .extensions system node.</p>
-              </div>
-            </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── DEEP DIVES ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{textAlign: "center"}}>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
+            <a href="/extensions" className="lp-card" style={{textDecoration: "none"}}>
+              <h3>Extensions</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                How the tree grows. The manifest, the loader, five registries, spatial scoping.
+                How to build one. How an OS emerges from extensions working together.
+              </p>
+            </a>
+            <a href="/network" className="lp-card" style={{textDecoration: "none"}}>
+              <h3>The Network</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                How trees connect. Lands, Canopy protocol, Ed25519 signing, federation,
+                sovereignty. Your data stays on your land.
+              </p>
+            </a>
           </div>
         </div>
       </section>
@@ -373,6 +414,64 @@ const KernelPage = () => {
           <p className="lp-section-sub" style={{marginTop: 20}}>
             Navigate to a different node. All four chains re-resolve. Different tools appear.
             Different mode fires. Different model runs. The tree reshapes around where you stand.
+          </p>
+        </div>
+      </section>
+
+      {/* ── GUARANTEES ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Kernel Guarantees</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Promises the seed makes. Not configurable. Not optional. Always true.
+          </p>
+          <div style={{maxWidth: 600, margin: "0 auto"}}>
+            {[
+              ["Never block inbound", "Cascade signals always accepted. Always produce a result. No configuration can prevent a signal from arriving."],
+              ["Position injection", "Every AI prompt receives a [Position] block before the mode's content. The AI always knows where it is. Extension modes cannot exclude it."],
+              ["Time injection", "Every AI prompt receives the current time in the land's timezone. Cannot be turned off."],
+              ["Extension router timeout", "Extension routes wrapped with 5s timeout. If an extension hangs, the kernel route handles the request. Extensions can never permanently shadow kernel routes."],
+              ["Auth fallthrough", "authenticateOptional tries every registered auth strategy. If none match, request continues anonymously. The kernel pipeline handles them all."],
+            ].map(([name, desc]) => (
+              <div key={name} style={{padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.05)"}}>
+                <div style={{color: "#4ade80", fontSize: "0.85rem", fontWeight: 600, marginBottom: 4}}>{name}</div>
+                <div style={{color: "#888", fontSize: "0.85rem", lineHeight: 1.7}}>{desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── OWNERSHIP ── */}
+      <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Ownership</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Ownership resolves by walking the parent chain. The first node with <code>rootOwner</code> set
+            is the ownership boundary. Setting rootOwner on a branch delegates that sub-tree to a new owner.
+            Contributors accumulate along the walk. If a user is in <code>contributors[]</code> at any node
+            between the current position and the ownership boundary, they have write access.
+          </p>
+          <div style={{maxWidth: 600, margin: "0 auto"}}>
+            {[
+              ["addContributor", "Resolved owner or admin. Atomic $addToSet."],
+              ["removeContributor", "Resolved owner, admin, or self-removal."],
+              ["setOwner", "Owner above or admin can delegate."],
+              ["removeOwner", "Owner above or admin can revoke. Falls back to next owner up."],
+              ["transferOwnership", "Current owner or admin can transfer."],
+            ].map(([name, desc]) => (
+              <div key={name} style={{
+                display: "flex", gap: 12, padding: "8px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+              }}>
+                <code style={{color: "#4ade80", fontSize: "0.85rem", minWidth: 180}}>{name}</code>
+                <span style={{color: "#888", fontSize: "0.85rem"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+          <p className="lp-section-sub" style={{marginTop: 16, color: "rgba(255,255,255,0.4)"}}>
+            All five reject on system nodes. All five validate the chain before writing.
+            Extensions use <code>core.ownership.*</code>.
           </p>
         </div>
       </section>
@@ -537,6 +636,15 @@ const KernelPage = () => {
               ["allowedFrameDomains", "CSP frame-ancestors domains", "[]"],
               ["ancestorCacheTTL", "Parent chain cache TTL (ms)", "30000"],
               ["integrityCheckInterval", "Tree fsck interval (ms, 24h default)", "86400000"],
+              ["treeCircuitEnabled", "Master switch for tree circuit breaker", "false"],
+              ["maxTreeNodes", "Node count threshold for health equation", "10000"],
+              ["maxTreeMetadataBytes", "Metadata size threshold", "1073741824"],
+              ["maxTreeErrorRate", "Errors per hour threshold", "100"],
+              ["circuitNodeWeight", "Node count weight in equation", "0.4"],
+              ["circuitDensityWeight", "Metadata density weight", "0.3"],
+              ["circuitErrorWeight", "Error rate weight", "0.3"],
+              ["circuitCheckInterval", "Health check interval (ms, 1h)", "3600000"],
+              ["toolCircuitThreshold", "Consecutive tool failures before session disable", "5"],
               ["seedVersion", "Current seed version (set by migration runner)", "0.1.0"],
             ].map(([key, desc, def]) => (
               <div key={key} style={{
@@ -570,6 +678,7 @@ const KernelPage = () => {
               ["Per-namespace cap", "512KB per extension namespace per node. 20 extensions at max = 10MB, under the ceiling."],
               [".flow partitioning", "Daily partition nodes prevent unbounded growth. Retention deletes entire partitions by date."],
               ["Ownership chain", "rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify."],
+              ["Tree circuit breaker", "Health equation monitors nodes, metadata size, error rate. Score > 1.0 trips the tree to read-only. Extensions revive. Defaults to off."],
               ["Ancestor cache", "Shared cache for all six resolution chain walks. One DB walk serves all. Snapshot per message for consistency. Auto-invalidation on structural changes."],
               ["Atomic metadata writes", "setExtMeta uses MongoDB $set per namespace. Concurrent writes to different namespaces never clobber."],
               ["DB health check", "Before each tool call, check database readyState. If dead, tell the AI to inform the user instead of retrying."],
@@ -627,9 +736,32 @@ const KernelPage = () => {
           </p>
           <div style={{marginTop: 24}}>
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>
-            <a className="lp-btn lp-btn-secondary" href="/about/extensions" style={{marginLeft: 12}}>Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/extensions" style={{marginLeft: 12}}>Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/guide" style={{marginLeft: 12}}>Full Guide</a>
           </div>
+        </div>
+      </section>
+
+      {/* ── LICENSE ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 700}}>
+          <h2 className="lp-section-title">License</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            The seed is <strong style={{color: "#e5e5e5"}}>AGPL-3.0</strong>. You can run it, modify it, build on it.
+            If you modify the seed and run it as a service, you share your seed modifications.
+          </p>
+          <p className="lp-section-sub lp-section-sub-wide" style={{color: "rgba(255,255,255,0.4)"}}>
+            Extensions are separate works. They interact with the seed through the defined API
+            (core services bundle, hooks, registries, metadata Maps). Extension authors choose their
+            own license. The seed license does not infect extensions. Build proprietary extensions,
+            open source extensions, whatever you want. The ecosystem is free.
+          </p>
+          <p className="lp-section-sub" style={{color: "rgba(255,255,255,0.3)", fontSize: "0.85rem"}}>
+            Every file in <code>seed/</code> carries a one-line header: <code>// TreeOS Seed . AGPL-3.0 . https://treeos.ai</code>.
+            Extension manifests declare a <code>license</code> field. The directory and CLI display it.
+            Nothing blocks extensions without licenses. The seed is open. The ecosystem is free.
+            Legal terms protect the seed. Code enforcement doesn't.
+          </p>
         </div>
       </section>
 

@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import { getLandConfigValue } from "../landConfig.js";
 
 export default function securityHeaders(req, res, next) {

@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "../log.js";
 import { hooks } from "../hooks.js";
 // ws/sessionRegistry.js
@@ -444,4 +445,4 @@ setInterval(() => {
   for (const [key, val] of scopedSessions) {
     if (now - val.lastActivity > DEFAULT_SCOPE_TTL) scopedSessions.delete(key);
   }
-}, 5 * 60 * 1000);
+}, 5 * 60 * 1000).unref();

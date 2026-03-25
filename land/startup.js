@@ -143,9 +143,14 @@ export function onListen() {
     const { startIntegrityJob } = await import("./seed/tree/integrityCheck.js");
     startIntegrityJob();
 
+    // Tree circuit breaker (only if treeCircuitEnabled)
+    const { startCircuitJob } = await import("./seed/tree/treeCircuit.js");
+    startCircuitJob();
+
     // Cascade result cleanup (every 6 hours, cleans expired signals from .flow)
     const { cleanupExpiredResults } = await import("./seed/tree/cascade.js");
-    setInterval(() => cleanupExpiredResults().catch(() => {}), 6 * 60 * 60 * 1000);
+    const cascadeCleanupTimer = setInterval(() => cleanupExpiredResults().catch(() => {}), 6 * 60 * 60 * 1000);
+    cascadeCleanupTimer.unref();
 
     log.verbose("Land", "Background jobs started (includes daily data retention)");
 

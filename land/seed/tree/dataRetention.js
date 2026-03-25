@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Kernel data retention cleanup.
  * Runs daily. Deletes old Chat and Contribution records based on land config.
@@ -9,6 +10,8 @@
 
 import log from "../log.js";
 import { getLandConfigValue } from "../landConfig.js";
+import Node from "../models/node.js";
+import { CASCADE } from "../protocol.js";
 
 let cleanupTimer = null;
 
@@ -30,6 +33,43 @@ export async function runRetentionCleanup() {
     } catch (err) {
       log.error("Retention", "Chat cleanup failed:", err.message);
     }
+  }
+
+  // Awaiting cascade timeout sweep
+  try {
+    const awaitingTimeout = parseInt(getLandConfigValue("awaitingTimeout") || "300", 10);
+    const cutoffMs = Date.now() - awaitingTimeout * 1000;
+    const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id").lean();
+    if (flowNode) {
+      const partitions = await Node.find({ parent: flowNode._id }).select("_id metadata");
+      for (const partition of partitions) {
+        const results = partition.metadata instanceof Map
+          ? partition.metadata.get("results") || {}
+          : partition.metadata?.results || {};
+        let modified = false;
+        for (const [signalId, entries] of Object.entries(results)) {
+          const arr = Array.isArray(entries) ? entries : [entries];
+          for (const r of arr) {
+            if (r.status === CASCADE.AWAITING && new Date(r.timestamp).getTime() < cutoffMs) {
+              r.status = CASCADE.FAILED;
+              r.payload = { ...(r.payload || {}), reason: "timeout" };
+              modified = true;
+            }
+          }
+        }
+        if (modified) {
+          if (partition.metadata instanceof Map) {
+            partition.metadata.set("results", results);
+          } else {
+            partition.metadata.results = results;
+          }
+          if (partition.markModified) partition.markModified("metadata");
+          await partition.save();
+        }
+      }
+    }
+  } catch (err) {
+    log.error("Retention", "Awaiting timeout sweep failed:", err.message);
   }
 
   // Contribution cleanup

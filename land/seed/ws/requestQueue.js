@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 // ws/requestQueue.js
 // Per-key promise-chain queue. Supports serial (default) or bounded-concurrency modes.
 // Different keys run in parallel.

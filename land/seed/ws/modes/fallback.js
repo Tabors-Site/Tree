@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 // Kernel fallback modes. The floor. Always available.
 // If no extension registers modes, these are what the conversation loop resolves to.
 // Functional but featureless. Extensions provide the ceiling.

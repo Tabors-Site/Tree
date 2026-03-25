@@ -23,9 +23,11 @@ const LandingPage = () => {
           <h1 className="lp-title">The Seed</h1>
           <p className="lp-subtitle">An Open Kernel for AI Agents</p>
           <p className="lp-tagline">
-            Two schemas, a conversation loop, a hook system, and an extension loader.
+            Two schemas, a conversation loop, a hook system, a cascade engine,
+            an extension loader, and a response protocol.
             The minimum kernel an AI agent needs to live somewhere persistent, think at every
-            position, and grow through extensions. Plant the seed. Build anything on top of it.
+            position, communicate through signals, and grow through extensions. Plant the seed.
+            Build anything on top of it.
           </p>
           <div className="lp-hero-ctas">
             <button className="lp-btn lp-btn-primary" onClick={scrollToInstall}>Get Started</button>
@@ -45,8 +47,8 @@ const LandingPage = () => {
           <h2 className="lp-section-title">Kernel and Implementation</h2>
           <p className="lp-section-sub lp-section-sub-wide">
             The seed is the kernel. It defines the data contract, the conversation loop, the hook
-            system, and the extension loader. It never changes. It never imports from extensions.
-            It boots clean with zero extensions installed.
+            system, the cascade engine, the extension loader, and the response protocol. It never
+            changes. It never imports from extensions. It boots clean with zero extensions installed.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
             TreeOS is one implementation built on the seed. It ships with extensions for AI modes,
@@ -68,12 +70,13 @@ const LandingPage = () => {
         <div className="lp-container">
           <h2 className="lp-section-title">Three Layers</h2>
           <div className="lp-cards-3">
-            <div className="lp-card">
+            <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
               <h3 style={{color: "#f97316"}}>The Seed (Kernel)</h3>
-              <p>
+              <p style={{flex: 1}}>
                 Two schemas (Node and User), an AI conversation loop, five registries
-                (hooks, modes, orchestrators, socket handlers, auth strategies), cascade
-                signals, and a response protocol. 28 config keys. 23 lifecycle hooks.
+                (hooks, modes, orchestrators, socket handlers, auth strategies), a cascade
+                engine, and a response protocol. Lifecycle hooks covering every critical
+                moment from node creation to AI response to cascade signals.
                 The part that never changes. Build on it.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
@@ -84,9 +87,9 @@ const LandingPage = () => {
                 }}>Inside the seed</a>
               </div>
             </div>
-            <div className="lp-card">
+            <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
               <h3 style={{color: "#a78bfa"}}>Extensions</h3>
-              <p>
+              <p style={{flex: 1}}>
                 Everything else. AI modes, tool definitions, billing, HTML rendering,
                 fitness, food, scripts, wallets, gateways, dreams, understanding.
                 Install what you need. Build your own. Each extension adds commands,
@@ -101,16 +104,16 @@ const LandingPage = () => {
                 }}>How AI works</a>
               </div>
             </div>
-            <div className="lp-card">
+            <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
               <h3 style={{color: "#4ade80"}}>Federation</h3>
-              <p>
+              <p style={{flex: 1}}>
                 Every land is sovereign. You run yours. Someone else runs theirs.
                 Lands peer directly through signed requests. Share trees, proxy LLM
                 calls, propagate cascade signals. The public directory helps lands
                 find each other. Anyone can run their own directory.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
-                <a href="/decentralized" style={{
+                <a href="/network" style={{
                   color: "#4ade80", fontSize: "0.95rem", fontWeight: 600,
                   textDecoration: "none", borderBottom: "1px solid rgba(74, 222, 128, 0.3)",
                   paddingBottom: 2,
@@ -118,6 +121,34 @@ const LandingPage = () => {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── DEEP DIVES ── */}
+      <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Go Deeper</h2>
+          <p className="lp-section-sub">Six pages. Each one answers one question.</p>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "repeat(3, 1fr)"}}>
+            {[
+              { href: "/seed", title: "The Seed", desc: "What is the contract?" },
+              { href: "/ai", title: "The AI", desc: "How does the tree think?" },
+              { href: "/cascade", title: "Cascade", desc: "How does the tree communicate?" },
+              { href: "/flow", title: "The Flow", desc: "How does data move?" },
+              { href: "/extensions", title: "Extensions", desc: "How does the tree grow?" },
+              { href: "/network", title: "The Network", desc: "How do trees connect?" },
+            ].map(({ href, title, desc }) => (
+              <a key={href} href={href} className="lp-card" style={{textDecoration: "none", textAlign: "center", padding: 24}}>
+                <h3 style={{fontSize: "1rem", marginBottom: 6}}>{title}</h3>
+                <p style={{fontSize: "0.8rem"}}>{desc}</p>
+              </a>
+            ))}
+          </div>
+          <p className="lp-section-sub" style={{marginTop: 20, fontStyle: "italic", color: "rgba(255,255,255,0.3)", fontSize: "0.85rem"}}>
+            The land is the ground. Trees pull signals from .flow like roots pull water.
+            The AI at each node transforms raw input into new structure. The tree grows from what flows through it.
+            Cascade connects the seed to extensions to federation. The nervous system running through all three layers.
+          </p>
         </div>
       </section>
 
@@ -298,7 +329,8 @@ const LandingPage = () => {
               { name: "html-rendering", desc: "Server-rendered pages" },
             ]} />
             <ExtGroup title="System" items={[
-              { name: "tree-orchestrator", desc: "Built-in chat/place/query AI" },
+              { name: "treeos", desc: "AI modes, tools, navigation" },
+              { name: "tree-orchestrator", desc: "Chat/place/query conversation flow" },
               { name: "land-manager", desc: "AI land management" },
               { name: "shell", desc: "Server shell from AI" },
               { name: "gateway", desc: "External channels (Telegram, Discord)" },
@@ -306,12 +338,22 @@ const LandingPage = () => {
               { name: "user-queries", desc: "Notes, tags, chats" },
               { name: "deleted-revive", desc: "Soft delete and recovery" },
               { name: "email", desc: "Email, password reset" },
+              { name: "backup", desc: "Full and snapshot backup/restore" },
+              { name: "recent-roots", desc: "Recent trees sidebar" },
+              { name: "dashboard", desc: "Session and activity dashboard" },
             ]} />
           </div>
 
           <div className="lp-ext-cta">
-            <a href="/about/extensions">Extension docs</a>
+            <a href="/extensions">How extensions work</a>
+            <span style={{color: "rgba(255,255,255,0.15)", margin: "0 12px"}}>.</span>
+            <a href="https://dir.treeos.ai">Browse extensions at dir.treeos.ai</a>
           </div>
+          <p style={{textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: "0.85rem", marginTop: 16, maxWidth: 600, margin: "16px auto 0", lineHeight: 1.7}}>
+            Every extension is a piece contributed toward the future of AI infrastructure. There are
+            many things to be built off the kernel. Open code, open doors, resilient, decentralized.
+            This was designed to be held back by no one.
+          </p>
         </div>
       </section>
 
@@ -489,29 +531,26 @@ const LandingPage = () => {
           <div className="lp-footer-grid">
             <div className="lp-footer-col">
               <h4>Docs</h4>
-              <a href="/about/gettingstarted">Getting Started</a>
+              <a href="/guide">Guide</a>
+              <a href="/seed">The Seed</a>
+              <a href="/ai">The AI</a>
+              <a href="/cascade">Cascade</a>
+              <a href="/flow">The Flow</a>
+              <a href="/extensions">Extensions</a>
+              <a href="/network">The Network</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>TreeOS</h4>
               <a href="/about/api">API</a>
               <a href="/about/cli">CLI</a>
-              <a href="/about/extensions">Extensions</a>
-            </div>
-            <div className="lp-footer-col">
-              <h4>Protocol</h4>
-              <a href="/about/node-types">Node Types</a>
               <a href="/about/gateway">Gateway</a>
-              <a href="/about/land">Land and Canopy</a>
-              <a href="/about/extensions">Extensions</a>
+              <a href="/about/land">Land Setup</a>
+              <a href="/about/energy">Energy</a>
             </div>
             <div className="lp-footer-col">
-              <h4>Explore</h4>
-              <a href="/kernel">The Seed</a>
-              <a href="/ai">AI Architecture</a>
-              <a href="/decentralized">The Network</a>
-              <a href="/guide">Full Guide</a>
-              <a href="/blog">Blog</a>
-            </div>
-            <div className="lp-footer-col">
-              <h4>Network</h4>
+              <h4>Community</h4>
               <a href="https://dir.treeos.ai">Directory</a>
+              <a href="/blog">Blog</a>
             </div>
             <div className="lp-footer-col">
               <h4>Source</h4>

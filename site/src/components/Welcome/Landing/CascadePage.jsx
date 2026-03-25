@@ -16,8 +16,10 @@ const CascadePage = () => {
             signals visible, results permanent, and the tree alive.
           </p>
           <div className="lp-hero-ctas">
-            <a className="lp-btn lp-btn-secondary" href="/kernel">The Seed</a>
-            <a className="lp-btn lp-btn-secondary" href="/ai">AI Architecture</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/ai">The AI</a>
+            <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
           </div>
         </div>
       </section>
@@ -94,9 +96,10 @@ const CascadePage = () => {
               <div className="lp-step-content">
                 <h4>.flow system node</h4>
                 <p>
-                  One system node that stores all cascade results. Keyed by signalId.
-                  Results accumulate over time. Cleaned by <code>resultTTL</code> (default 7 days).
-                  The land's short-term memory of what moved and what happened.
+                  Results stored in daily partition nodes under .flow. Each day gets its own
+                  child node (YYYY-MM-DD). <code>flowMaxResultsPerDay</code> caps growth per partition
+                  with circular overwrite. Retention deletes entire partitions older than{" "}
+                  <code>resultTTL</code> (default 7 days). The land's short-term memory.
                 </p>
               </div>
             </div>
@@ -210,6 +213,11 @@ const CascadePage = () => {
             result there. The land can feel its own hydration.
           </p>
 
+          {/* ── DIAGRAM ── */}
+          <div style={{maxWidth: 700, margin: "0 auto 48px"}}>
+            <img src="/diagram-flow.svg" alt="Two lands with trees growing from them, connected by canopy above and .flow below. The sky is the directory. Roots pull from the water table. The AI at each node is photosynthesis." style={{width: "100%", height: "auto"}} />
+          </div>
+
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
             <div className="lp-card">
               <h3 style={{color: "#4ade80"}}>Trees are root systems</h3>
@@ -250,8 +258,9 @@ const CascadePage = () => {
             <div className="lp-card lp-card-sm">
               <h4 style={{color: "#c084fc"}}>Pooling</h4>
               <p>
-                Too many signals arrive and .flow fills up. <code>resultTTL</code> drains it.
-                Old results expire. The water table stays manageable.
+                Too many signals arrive and .flow fills up. Daily partitions cap at{" "}
+                <code>flowMaxResultsPerDay</code>. Oldest results cycle out. <code>resultTTL</code> drains
+                expired partitions entirely. The water table stays manageable.
               </p>
             </div>
             <div className="lp-card lp-card-sm">
@@ -309,7 +318,7 @@ const CascadePage = () => {
             </div>
             <div className="lp-card lp-card-sm">
               <h4>Codebook</h4>
-              <p>Compressed representations of tree knowledge. A codebook extension builds summaries from cascade signals, creating dense context that other nodes can reference without reading the full tree.</p>
+              <p>Two nodes that communicate repeatedly build a shared language. A codebook extension tracks recurring patterns and distills them into a compression map. Each exchange gets faster because the symbols carry more meaning.</p>
             </div>
             <div className="lp-card lp-card-sm">
               <h4>Channels</h4>
@@ -357,7 +366,7 @@ const CascadePage = () => {
             into something that breathes.
           </p>
           <div style={{marginTop: 32}}>
-            <a className="lp-btn lp-btn-secondary" href="/kernel">Back to the Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">Back to the Seed</a>
           </div>
         </div>
       </section>

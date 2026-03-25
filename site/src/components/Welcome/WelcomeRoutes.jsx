@@ -12,10 +12,12 @@ import LandAbout from "./About/LandAbout.jsx";
 import NodeTypesAbout from "./About/NodeTypesAbout.jsx";
 import ExtensionsAbout from "./About/ExtensionsAbout.jsx";
 import LandingPage from "./Landing/LandingPage.jsx";
-import DecentralizedPage from "./Landing/DecentralizedPage.jsx";
 import AIArchitecturePage from "./Landing/AIArchitecturePage.jsx";
 import KernelPage from "./Landing/KernelPage.jsx";
 import CascadePage from "./Landing/CascadePage.jsx";
+import ExtensionsPage from "./Landing/ExtensionsPage.jsx";
+import NetworkPage from "./Landing/NetworkPage.jsx";
+import FlowPage from "./Landing/FlowPage.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 
@@ -35,12 +37,15 @@ const WelcomeRoutes = () => {
       {/* Landing page (protocol site) */}
       <Route path="/" element={<LandingPage />} />
 
-      {/* Decentralized / federation page */}
-      <Route path="/decentralized" element={<DecentralizedPage />} />
+      {/* /decentralized redirects to /network (old URL, kept for backcompat) */}
+      <Route path="/decentralized" element={<NetworkPage />} />
       <Route path="/ai" element={<AIArchitecturePage />} />
       <Route path="/kernel" element={<KernelPage />} />
       <Route path="/seed" element={<KernelPage />} />
       <Route path="/cascade" element={<CascadePage />} />
+      <Route path="/extensions" element={<ExtensionsPage />} />
+      <Route path="/network" element={<NetworkPage />} />
+      <Route path="/flow" element={<FlowPage />} />
 
       {/* Original app welcome (treeos.ai example) */}
       <Route path="/app" element={<WelcomePage />} />

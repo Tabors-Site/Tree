@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Cascade: The Nervous System
  *
@@ -44,6 +45,16 @@ export async function checkCascade(nodeId, writeContext) {
   const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
   const cascadeConfig = meta.cascade;
   if (!cascadeConfig?.enabled) return;
+
+  // Rate limit: count signals from this node in the current minute
+  const rateLimit = parseInt(getLandConfigValue("cascadeRateLimit") || "60", 10);
+  const recentCount = await countRecentSignals(nodeId);
+  if (recentCount >= rateLimit) {
+    const signalId = uuidv4();
+    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "rate_limited", count: recentCount, limit: rateLimit }, timestamp: new Date(), signalId };
+    await writeResult(signalId, result);
+    return { signalId, result };
+  }
 
   // Both booleans true. Fire onCascade.
   const signalId = uuidv4();
@@ -92,6 +103,15 @@ export async function checkCascade(nodeId, writeContext) {
  * @param {number} opts.depth - current propagation depth
  */
 export async function deliverCascade({ nodeId, signalId, payload = {}, source, depth = 0 }) {
+  // Check payload size limit
+  const maxPayloadBytes = parseInt(getLandConfigValue("cascadeMaxPayloadBytes") || "51200", 10);
+  const payloadBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+  if (payloadBytes > maxPayloadBytes) {
+    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "payload_too_large", size: payloadBytes, max: maxPayloadBytes }, timestamp: new Date(), signalId };
+    await writeResult(signalId, result);
+    return result;
+  }
+
   // Check depth limit
   const maxDepth = parseInt(getLandConfigValue("cascadeMaxDepth") || "50", 10);
   if (depth > maxDepth) {
@@ -113,8 +133,16 @@ export async function deliverCascade({ nodeId, signalId, payload = {}, source, d
     return result;
   }
 
+  // Circuit breaker: reject signals to tripped trees
+  const nodeMeta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+  if (nodeMeta.circuit?.tripped) {
+    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "tree circuit breaker tripped" }, timestamp: new Date(), signalId };
+    await writeResult(signalId, result);
+    return result;
+  }
+
   // Check node's cascade config
-  const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+  const meta = nodeMeta;
   const cascadeConfig = meta.cascade;
 
   // Never block inbound. Fire onCascade regardless of local cascade config.
@@ -137,6 +165,30 @@ export async function deliverCascade({ nodeId, signalId, payload = {}, source, d
 
   await writeResult(signalId, result);
   return result;
+}
+
+/**
+ * Count cascade signals from a specific node in the last minute.
+ * Reads today's .flow partition and counts results where source matches.
+ */
+async function countRecentSignals(nodeId) {
+  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id").lean();
+  if (!flowNode) return 0;
+  const today = todayPartitionName();
+  const partition = await Node.findOne({ parent: flowNode._id, name: today }).select("metadata").lean();
+  if (!partition) return 0;
+  const results = partition.metadata instanceof Map
+    ? partition.metadata.get("results") || {}
+    : partition.metadata?.results || {};
+  const oneMinuteAgo = Date.now() - 60000;
+  let count = 0;
+  for (const entries of Object.values(results)) {
+    const arr = Array.isArray(entries) ? entries : [entries];
+    for (const r of arr) {
+      if (r.source === nodeId && new Date(r.timestamp).getTime() > oneMinuteAgo) count++;
+    }
+  }
+  return count;
 }
 
 // ── .flow Partitioning ──

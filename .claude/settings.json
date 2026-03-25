@@ -227,7 +227,8 @@
       "Bash(grep -r unregisterSessionType /home/tabor/github/Tree/land --include=*.js)",
       "Bash(/tmp/dead_code_check.txt:*)",
       "Bash(grep -l \"Energy: dynamic import\" /home/tabor/github/Tree/land/seed/**/*.js)",
-      "Bash(grep -r \"conversationSessionCount\\\\|getSessionInfo\" /home/tabor/github/Tree/land --include=*.js)"
+      "Bash(grep -r \"conversationSessionCount\\\\|getSessionInfo\" /home/tabor/github/Tree/land --include=*.js)",
+      "Bash(for key:*)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

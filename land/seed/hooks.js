@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "./log.js";
 /**
  * Hook System
@@ -29,6 +30,8 @@ import log from "./log.js";
  *   afterScopeChange   - After metadata.extensions.blocked/restricted changes. { nodeId, blocked, restricted, userId }
  *   afterBoot          - Once after all extensions loaded, config initialized, server listening. Fires once.
  *   onDocumentPressure - Any document exceeds 80% of maxDocumentSizeBytes on a write. { documentType, documentId, currentSize, projectedSize, maxSize, percent }
+ *   onTreeTripped      - Tree circuit breaker tripped. { rootId, reason, scores, timestamp }
+ *   onTreeRevived      - Tripped tree revived. { rootId, timestamp }
  *
  * Extension hooks (examples, extensions define their own):
  *   gateway:beforeDispatch    - Before notification dispatch
@@ -130,6 +133,7 @@ function register(hookName, handler, extName = "unknown") {
       "beforeResponse", "beforeRegister", "afterRegister",
       "afterSessionCreate", "afterSessionEnd", "afterNavigate",
       "afterMetadataWrite", "afterScopeChange", "afterBoot",
+      "onTreeTripped", "onTreeRevived",
     ];
     if (!hookName.includes(":")) {
       // Only check non-namespaced hooks (ext hooks use "extName:hookName")

@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import Node from "../models/node.js";
 import { logContribution, containsHtml } from "../utils.js";
 import User from "../models/user.js";

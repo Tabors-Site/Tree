@@ -33,6 +33,9 @@ const STATIC_ROUTES = [
   "/ai",
   "/kernel",
   "/cascade",
+  "/extensions",
+  "/flow",
+  "/network",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -62,6 +65,18 @@ const PAGE_META = {
   "/cascade": {
     title: "Cascade . How the Tree Communicates",
     description: "The fourth primitive. Seven kernel additions. Two entry points. Six statuses none terminal. .flow as the water table. The nervous system of the tree.",
+  },
+  "/flow": {
+    title: "The Flow . How Data Moves Through the System",
+    description: "The water cycle of TreeOS. Clouds, rain, land, roots, photosynthesis, transpiration, canopy wind. Every part maps to something real. The intuitive guide to how data moves.",
+  },
+  "/extensions": {
+    title: "Extensions . How the Tree Grows",
+    description: "The manifest, the loader, five registries, spatial scoping. How to build an extension. How an operating system emerges from extensions working together.",
+  },
+  "/network": {
+    title: "The Network . How Trees Connect",
+    description: "Sovereign lands. Canopy protocol. Ed25519 signing. Federation without a central authority. Your data stays on your land.",
   },
   "/about": {
     title: "About - TreeOS",

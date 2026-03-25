@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 // ws/websocket.js
 // WebSocket server - handles socket events, delegates to conversation manager
 

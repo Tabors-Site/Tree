@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * User metadata helpers.
  * Same pattern as extensionMetadata.js but for User documents.

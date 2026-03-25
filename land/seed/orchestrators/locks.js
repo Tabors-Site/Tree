@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Central in-memory lock manager for orchestrator pipelines.
  * Prevents concurrent execution of the same pipeline on the same resource.

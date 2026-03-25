@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 // seed/services.js
 // Assembles the shared services bundle that extensions receive via init(core).
 // Services the host land doesn't have get no-op stubs so extensions always
@@ -54,6 +55,7 @@ import {
   invalidateNode, invalidateAll, getCacheStats,
 } from "./tree/ancestorCache.js";
 import { checkIntegrity } from "./tree/integrityCheck.js";
+import { checkTreeHealth, tripTree, reviveTree, isTreeAlive } from "./tree/treeCircuit.js";
 
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)
@@ -142,8 +144,12 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     // --- Ownership (contributor and rootOwner mutations, chain-validated) ---
     ownership: { addContributor, removeContributor, setOwner, removeOwner, transferOwnership },
 
-    // --- Tree infrastructure (cache, integrity) ---
-    tree: { getAncestorChain, snapshotAncestors, invalidateNode, invalidateAll, getCacheStats, checkIntegrity },
+    // --- Tree infrastructure (cache, integrity, circuit breaker) ---
+    tree: {
+      getAncestorChain, snapshotAncestors, invalidateNode, invalidateAll, getCacheStats,
+      checkIntegrity,
+      checkTreeHealth, tripTree, reviveTree, isTreeAlive,
+    },
 
     // --- Cascade (extensions call deliverCascade to propagate signals) ---
     cascade: { deliverCascade },

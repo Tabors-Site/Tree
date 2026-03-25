@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Seed Migration Runner
  *
@@ -96,7 +97,7 @@ export async function runSeedMigrations() {
   }
 
   // Update stored version
-  await setLandConfigValue("seedVersion", currentVersion);
+  await setLandConfigValue("seedVersion", currentVersion, { internal: true });
 
   if (ran > 0) {
     log.info("Seed", `${ran} migration(s) applied. Seed is now at ${currentVersion}`);

@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 

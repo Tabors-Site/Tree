@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Seed version. Checked at boot against the version stored in .config.
  * If they differ, migrations between the stored version and this version run in order.

@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 // seed/tree/uploadCleanup.js
 // Periodic cleanup of orphaned upload files.
 // Scans the uploads directory for files not referenced by any Note or RawIdea.
@@ -100,6 +101,7 @@ export function startUploadCleanup({ intervalMs = DEFAULT_INTERVAL_MS, graceMs =
       log.error("Uploads", "Cleanup job error:", err.message),
     );
   }, intervalMs);
+  if (cleanupTimer.unref) cleanupTimer.unref();
   log.info("Uploads", `Orphan cleanup started (every ${Math.round(intervalMs / 60000)}m, grace ${Math.round(graceMs / 60000)}m)`);
 }
 

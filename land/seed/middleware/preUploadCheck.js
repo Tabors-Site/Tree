@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Pre-multer guard: validates multipart upload requests.
  * Three kernel checks before the file reaches multer:

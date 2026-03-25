@@ -1,8 +1,16 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "./log.js";
 import Node from "./models/node.js";
 
 let configCache = null;
 let initialized = false;
+
+/**
+ * Config keys that cannot be written via the public API or CLI.
+ * Only kernel internals (e.g. migration runner) may write these
+ * by passing { internal: true }.
+ */
+const PROTECTED_KEYS = new Set(["seedVersion"]);
 
 /**
  * Load config values from the .config system node into cache.
@@ -38,7 +46,10 @@ export function getLandConfigValue(key) {
 /**
  * Set a config value in the .config node and update cache.
  */
-export async function setLandConfigValue(key, value) {
+export async function setLandConfigValue(key, value, { internal } = {}) {
+  if (PROTECTED_KEYS.has(key) && !internal) {
+    throw new Error(`Config key "${key}" is protected and cannot be modified manually`);
+  }
   await Node.updateOne(
     { systemRole: "config" },
     { $set: { [`metadata.${key}`]: value } }

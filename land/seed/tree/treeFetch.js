@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "../log.js";
 import mongoose from "mongoose";
 import Node from "../models/node.js";

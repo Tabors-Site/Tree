@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Ancestor Path Cache
  *
@@ -220,13 +221,19 @@ export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
   }
 
   const isOwner = !!(userId && ownerNode.rootOwner === userId);
+
+  // Circuit breaker: tripped trees deny write access
+  const circuit = ownerNode.metadata?.circuit;
+  const isTripped = !!(circuit?.tripped);
+
   return {
     ok: true,
     rootId: ownerNode._id,
     isRoot: ownerNode._id === startNodeId,
     isOwner,
     isContributor,
-    canWrite: isOwner || isContributor,
+    isTripped,
+    canWrite: (isOwner || isContributor) && !isTripped,
   };
 }
 

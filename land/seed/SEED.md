@@ -141,6 +141,8 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | afterBoot | after | Once after all extensions loaded, config initialized, server listening. |
 | onCascade | sequential | Fires on content write at cascade-enabled node. Results written to .flow. |
 | onDocumentPressure | after | Any document exceeds 80% of maxDocumentSizeBytes. { documentType, documentId, currentSize, projectedSize, maxSize, percent } |
+| onTreeTripped | after | Tree circuit breaker tripped. { rootId, reason, scores, timestamp } |
+| onTreeRevived | after | Tripped tree revived. { rootId, timestamp } |
 
 ## Ownership
 
@@ -196,6 +198,7 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | Key | Default | Purpose |
 |-----|---------|---------|
 | LAND_NAME | "My Land" | Display name |
+| landUrl | auto | Land URL. Set at boot from domain and port. Used in security headers and LLM request signing. |
 | llmTimeout | 900 | Seconds per LLM API call |
 | llmMaxRetries | 3 | Retry count on 429/500 |
 | maxToolIterations | 15 | Tool calls per message |
@@ -226,11 +229,31 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | flowMaxResultsPerDay | 10000 | Max cascade results per daily partition |
 | allowedFrameDomains | [] | Additional domains allowed in CSP frame-ancestors |
 | ancestorCacheTTL | 30000 | Milliseconds before cached ancestor chains expire |
-
 | integrityCheckInterval | 86400000 | Milliseconds between periodic tree integrity checks (24h) |
-| seedVersion | "0.1.0" | Current seed version. Compared at boot to run migrations. |
+| treeCircuitEnabled | false | Master switch for tree circuit breaker |
+| maxTreeNodes | 10000 | Node count threshold for health equation |
+| maxTreeMetadataBytes | 1073741824 | Total metadata size threshold (1GB) |
+| maxTreeErrorRate | 100 | Errors per hour threshold |
+| circuitNodeWeight | 0.4 | Weight of node count in health equation |
+| circuitDensityWeight | 0.3 | Weight of metadata density |
+| circuitErrorWeight | 0.3 | Weight of error rate |
+| circuitCheckInterval | 3600000 | Health check interval (1 hour) |
+| toolCircuitThreshold | 5 | Consecutive failures before a tool is disabled for the session |
+| seedVersion | "0.1.0" | Current seed version. Compared at boot to run migrations. Set by migration runner. Do not modify manually. |
 
 Extension config (like `htmlEnabled`) lives in .config too, written by extensions on first boot, not by the kernel.
+
+## Tree Circuit Breaker
+
+When a tree exceeds health thresholds, its circuit trips. No AI interactions. No cascade. No writes. Read access stays open. The data is intact. The tree is sleeping.
+
+Health equation: `(nodeCount / max) * nodeWeight + (metadataDensity / max) * densityWeight + (errorRate / max) * errorWeight`. When the score exceeds 1.0, the tree trips. Error rate reads from both contribution log (tool/write failures) and .flow partitions (cascade failures/rejections).
+
+State stored on root node: `metadata.circuit = { tripped, reason, timestamp, scores }`. The kernel writes one field. Extensions read it.
+
+The kernel trips. Extensions heal. `core.tree.reviveTree(rootId)` clears the circuit. The kernel does NOT auto-revive.
+
+Defaults to OFF (`treeCircuitEnabled: false`).
 
 ## Seed Versioning
 
@@ -243,13 +266,15 @@ Extension config (like `htmlEnabled`) lives in .config too, written by extension
 | Never block inbound | Cascade signals always accepted, always produce a result. |
 | Hook timeout | 5s per handler. Hanging handlers killed and logged. |
 | Hook cap | 100 handlers per hook. |
-| Circuit breaker | 5 consecutive failures auto-disables the handler. |
+| Hook circuit breaker | 5 consecutive failures auto-disables the hook handler. |
+| Tool circuit breaker | 5 consecutive failures disables the tool for that session. AI adapts to other tools. One bad API key disables one tool, not the whole tree. |
 | Extension router timeout | 5s. Hanging extension routes fall through to kernel. |
 | Metadata guard | Blocked extensions can't write to nodes. Four core namespaces (cascade, extensions, tools, modes) bypass blocking. |
 | Document size guard | Every metadata write checks total document size against maxDocumentSizeBytes (14MB default). Writes exceeding the limit rejected with DOCUMENT_SIZE_EXCEEDED. onDocumentPressure fires at 80% capacity. |
 | Per-namespace cap | 512KB per extension namespace per node via setExtMeta. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |
 | .flow partitioning | Daily partition nodes prevent unbounded growth. flowMaxResultsPerDay cap with circular overwrite. Retention deletes entire partitions by date. |
 | Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. System nodes always rejected. |
+| Tree circuit breaker | Health equation monitors node count, metadata density, error rate. Score > 1.0 trips the tree. No AI, no writes, no cascade. Read access stays. Extensions revive. Defaults to off. |
 | Ancestor cache | Shared cache for parent chain walks. One walk serves all six resolution chains. Snapshot per message for consistency. moveNode clears entire cache. deleteNode clears entries containing the deleted node. Metadata/ownership changes clear the affected node and descendants. |
 | Session cap | 10K max with oldest-first eviction. |
 | Depth limits | 50 for status cascade. 100 for auth traversal. 50 for cascade propagation. |

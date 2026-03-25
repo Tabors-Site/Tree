@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Get LLM assignments for a node from metadata.
  * Core field: node.llmDefault (the tree-wide default).

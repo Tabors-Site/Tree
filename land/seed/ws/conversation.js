@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 // ws/conversation.js
 // Mode-aware conversation state management and chat processing
 import log from "../log.js";
@@ -458,7 +459,7 @@ setInterval(
       );
   },
   10 * 60 * 1000,
-);
+).unref();
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODE SWITCHING
@@ -568,6 +569,19 @@ export async function processMessage(visitorId, message, ctx) {
   const snapshotNodeId = session.currentNodeId || session.rootId || ctx.rootId;
   if (snapshotNodeId) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
+  }
+
+  // Circuit breaker: if the tree is tripped, reject immediately. No LLM call.
+  if (session._ancestorSnapshot) {
+    // The owner node (root) is the last non-system node in the chain
+    const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== "SYSTEM");
+    if (rootAncestor?.metadata?.circuit?.tripped) {
+      return {
+        content: "This tree is dormant. It exceeded health thresholds and its circuit breaker tripped. Contact the land operator or wait for an extension to revive it.",
+        modeKey: session.modeKey,
+        _internal: { tripped: true, rootId: rootAncestor._id },
+      };
+    }
   }
 
   // Resolve LLM client for this user (custom or default, with root override)
@@ -940,6 +954,21 @@ export async function processMessage(visitorId, message, ctx) {
       // Auto-inject userId
       args.userId = ctx.userId;
 
+      // Tool circuit breaker: if this tool has failed too many times in this session, skip it.
+      // The tool disappears from the AI's perspective. It adapts by using other tools.
+      // One bad API key disables one tool, not the whole tree.
+      if (!session._toolFailures) session._toolFailures = {};
+      const toolCircuitThreshold = parseInt(getLandConfigValue("toolCircuitThreshold") || "5", 10);
+      if ((session._toolFailures[toolName] || 0) >= toolCircuitThreshold) {
+        session.messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: `Tool "${toolName}" has been temporarily disabled due to repeated failures. Use a different approach.` }),
+        });
+        toolResults.push({ tool: toolName, args, success: false, error: "tool_circuit_tripped" });
+        continue;
+      }
+
       // beforeToolCall: extensions can modify args or cancel
       const hookData = { toolName, args, userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey };
       const hookResult = await hooks.run("beforeToolCall", hookData);
@@ -987,6 +1016,9 @@ export async function processMessage(visitorId, message, ctx) {
 
         toolResults.push({ tool: toolName, args, success: true });
 
+        // Tool circuit breaker: success resets failure count
+        delete session._toolFailures[toolName];
+
         // afterToolCall (success): fire-and-forget
         hooks.run("afterToolCall", {
           toolName, args, result: resultText, success: true,
@@ -994,6 +1026,12 @@ export async function processMessage(visitorId, message, ctx) {
         }).catch(() => {});
       } catch (err) {
         log.error("LLM", `❌ Tool ${toolName} failed:`, err.message);
+
+        // Tool circuit breaker: increment failure count
+        session._toolFailures[toolName] = (session._toolFailures[toolName] || 0) + 1;
+        if (session._toolFailures[toolName] >= toolCircuitThreshold) {
+          log.warn("LLM", `Tool "${toolName}" tripped after ${toolCircuitThreshold} consecutive failures. Disabled for this session.`);
+        }
 
         // If DB died during tool execution, tell the AI clearly
         const errorMsg = !isDbHealthy()

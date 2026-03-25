@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import User from "../models/user.js";
 import LlmConnection from "../models/llmConnection.js";
 import Node from "../models/node.js";

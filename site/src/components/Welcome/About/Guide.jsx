@@ -1,460 +1,633 @@
-
-import "./AboutLayout.css";
+import "../Landing/LandingPage.css";
 
 const Guide = () => {
   return (
-    <div className="about-layout">
-      <div className="al-page-card" style={{ maxWidth: 900 }}>
+    <div className="lp">
 
-        {/* ── BACK ── */}
-        <div className="al-page-back">
-          <a className="al-back-link" href="/">←</a>
+      {/* ── HERO ── */}
+      <section className="lp-hero" style={{minHeight: "50vh"}}>
+        <div className="lp-hero-inner">
+          <h1 className="lp-title">The Guide</h1>
+          <p className="lp-subtitle">Simple to advanced. Everything you need to know.</p>
+          <div className="lp-hero-ctas">
+            <a className="lp-btn lp-btn-secondary" href="/">Home</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/ai">The AI</a>
+            <a className="lp-btn lp-btn-secondary" href="/cascade">Cascade</a>
+            <a className="lp-btn lp-btn-secondary" href="/flow">The Flow</a>
+            <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
+          </div>
         </div>
+      </section>
 
-        <h1 style={{ fontSize: "2.4rem", marginBottom: 8 }}>TreeOS Guide</h1>
-        <p style={{ color: "rgba(255,255,255,0.5)", marginBottom: 48, fontSize: "1.1rem" }}>
-          Everything you need to know. Simple to advanced.
-        </p>
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 1. WHAT IS THIS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">What Is This?</h2>
+          <P>
+            The seed is an open source kernel for AI agents. You plant it on a server. It grows trees.
+            Trees are hierarchical data structures where AI lives permanently. It builds, navigates,
+            remembers, and connects to other servers through a federated network.
+          </P>
+          <P>
+            The kernel is minimal: two database schemas (Node and User), a conversation loop,
+            a hook system, a cascade engine, and an extension loader. Everything else is an extension
+            you install. Strip every extension and the seed still boots. It defines the data contract
+            that everything builds on.
+          </P>
+          <P>
+            TreeOS is one operating system built on the seed. It ships with 25+ extensions that
+            work together: AI modes, tree orchestration, values, schedules, understanding, energy,
+            HTML rendering, gateway channels. But TreeOS is just one interpretation. A medical
+            platform, a code review pipeline, a research assistant could all be built on the same kernel.
+            Same relationship as Linux and Ubuntu. The seed is the kernel. The extensions are the distribution.
+          </P>
+        </div>
+      </section>
 
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 1. WHAT IS TREEOS */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="What is TreeOS?">
-          <P>
-            TreeOS is an open source operating system for AI agents. You run a server (called a land),
-            and AI lives there permanently. It builds and navigates tree-structured knowledge. It
-            remembers. It grows. It connects to other lands through a federated network.
-          </P>
-          <P>
-            The core is minimal: nodes, notes, types, status, and an AI conversation loop.
-            Everything else (values, schedules, scripts, wallets, versioning) is an extension
-            you install from the registry. The system adapts to what you need.
-          </P>
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 2. THE KERNEL */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="The Seed">
-          <P>
-            The kernel is called the seed. You plant it. It grows trees.
-          </P>
-          <P>
-            A <strong>node</strong> has a name, a type, a status, children, and a metadata map.
-            That is it. Notes (text or files) attach to nodes. Types (goal, plan, task, knowledge,
-            resource, identity) tell agents what they are looking at. Status (active, completed,
-            trimmed) tracks lifecycle. Custom types are valid.
-          </P>
-          <P>
-            A <strong>tree</strong> is a root node with children. A <strong>land</strong> hosts
-            trees, runs AI, and serves the API. A <strong>user</strong> has a username, password,
-            one default LLM connection, and a metadata map for extension data.
-          </P>
-          <P>
-            The seed has four primitives. <strong>Structure</strong>: two schemas, nodes in
-            hierarchies. <strong>Intelligence</strong>: the conversation loop, resolution
-            chains. <strong>Extensibility</strong>: the loader, hooks, pub-sub.
-            <strong> Communication</strong>: cascade, .flow, visible results.
-            Extensions are everything else: values, schedules, scripts, dreams, fitness,
-            food, orchestrators. Install what you need. Strip every extension and the seed
-            still boots.
-          </P>
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 3. AI MODES */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="Three Zones">
-          <P>
-            Where you are determines what the AI can do. There is no mode switching
-            menu. Navigation is mode switching. <code>cd /</code> puts you in land management.
-            <code>cd ~</code> puts you in personal home. <code>cd MyTree</code> puts you in
-            tree mode. The AI's tools, context, and behavior change automatically.
-          </P>
-          <P>
-            <strong>Land</strong> (<code>/</code>): The root. The land-manager extension gives the AI
-            system-level tools: read config, list users, check peers, view extension status.
-            Add the shell extension for server command execution.
-            The AI becomes a land operator. Manage extensions, run diagnostics, all
-            through chat. Requires admin access.
-          </P>
-          <P>
-            <strong>Home</strong> (<code>~</code>): Your personal space. Raw ideas, notes across
-            all trees, chat history, contributions. The AI helps you organize and reflect.
-          </P>
-          <P>
-            <strong>Tree</strong> (<code>/MyTree</code>): Inside a tree. Three strict behavioral
-            contracts apply:
-          </P>
-          <ul style={{ color: "rgba(255,255,255,0.7)", lineHeight: 2, paddingLeft: 20 }}>
-            <li><strong>Chat</strong> reads and writes. Full conversation. Create, edit, delete, navigate.</li>
-            <li><strong>Place</strong> writes only. Content placed silently. No conversational response.</li>
-            <li><strong>Query</strong> reads only. Answers questions. Changes nothing.</li>
-          </ul>
-          <P>
-            Each node controls what extensions are active at that position in the tree.
-            Block an extension on a branch and it disappears for that entire subtree.
-            Restrict it to read-only and it can observe but not modify. This is how
-            a Health tree has a Fitness branch and a Food branch where each extension
-            sees the other's data but can't write to it.
-          </P>
-          <Code>{`treeos cd Health/Fitness
-treeos ext-restrict food read       # food can see but not write here
-
-treeos cd Health/Food
-treeos ext-restrict fitness read    # fitness can see but not write here
-
-treeos ext-block solana             # no wallets anywhere on this branch`}</Code>
-          <P>
-            Three levels: <strong>active</strong> (full access),
-            <strong> restricted</strong> (read-only),
-            <strong> blocked</strong> (nothing). Inherits from parent to child.
-          </P>
-          <P>
-            For developers building extensions, there are deeper customization layers:
-            per-node tool configs, per-node AI behavior overrides, and replaceable
-            conversation orchestrators. See the <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.8)" }}>extension docs</a>.
-          </P>
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 4. EXTENSIONS */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="Extensions">
-          <P>
-            An extension is a folder with a <code>manifest.js</code> and an <code>index.js</code>.
-            The manifest declares what it needs and what it provides. The index exports an
-            <code> init(core)</code> function that receives the core services bundle.
-            Dependencies support semver constraints (<code>needs.extensions: ["other@^1.0.0"]</code>).
-          </P>
-          <P>
-            An extension can provide: HTTP routes, MCP tools, AI conversation modes, a custom
-            orchestrator, background jobs, lifecycle hooks, CLI commands, Mongoose models,
-            energy metering, session types, LLM assignment slots, environment variable
-            declarations, and exported functions for other extensions to call.
-          </P>
-          <P>
-            Extension data lives in <code>metadata</code> (a Map on every node and user).
-            Each extension gets a namespace key matching its name. Extensions communicate
-            through <code>getExtension()</code> and declared exports, never through direct
-            file imports. Uninstalling one gracefully degrades everything that depends on it.
-          </P>
-          <P>
-            Install from the registry: <code>treeos ext install understanding</code>.
-            Dependencies are resolved automatically. Installs are verified with SHA256
-            checksums. Extensions can also be installed from git repositories.
-            Publish your own: <code>treeos ext publish my-extension</code>.
-          </P>
-          <P>
-            Extensions that write to metadata should declare a <code>schemaVersion</code> and
-            provide a <code>migrations.js</code> file. When the extension updates its data shape,
-            the loader runs pending migrations at boot. This is what protects user data over
-            years of updates. Never ship a metadata format change without a migration.
-          </P>
-          <P>
-            <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.8)" }}>Full extension docs</a>
-          </P>
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 5. HOOKS */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="Hooks">
-          <P>
-            Eight lifecycle hooks let extensions modify or react to core operations without
-            touching core code. Register during <code>init(core)</code>.
-          </P>
-          <ul style={{ color: "rgba(255,255,255,0.7)", lineHeight: 2, paddingLeft: 20 }}>
-            <li><code>beforeNote</code> / <code>afterNote</code> . tag version, flag dirty</li>
-            <li><code>beforeContribution</code> . tag nodeVersion in audit log</li>
-            <li><code>afterNodeCreate</code> . initialize extension data</li>
-            <li><code>beforeStatusChange</code> / <code>afterStatusChange</code> . validate, react</li>
-            <li><code>beforeNodeDelete</code> . cleanup</li>
-            <li><code>enrichContext</code> . inject extension data into AI context</li>
-          </ul>
-          <P>
-            Before hooks can cancel operations. After hooks run in parallel. enrichContext
-            runs sequentially. All handlers have a 5 second timeout.
-          </P>
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 5.5 AI ENTRY POINTS */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="Building with AI">
-          <P>
-            Two core functions handle all AI interaction. Extensions never manage MCP
-            connections, sessions, or Chat records manually.
-          </P>
-          <P>
-            <strong>runChat</strong>: single message, persistent session. Use for user-facing
-            chat in any mode. Sessions persist per zone. Same tree keeps the same conversation.
-            Switch trees and the conversation starts fresh.
-          </P>
-          <Code>{`const { answer } = await core.llm.runChat({
-  userId, username,
-  message: "show me land status",
-  mode: "land:manager",
-});`}</Code>
-          <P>
-            <strong>runPipeline</strong>: multi-step chain with managed lifecycle. Use for
-            background jobs like dream cycles, understanding runs, cleanup passes. Each step
-            switches mode, calls the LLM, and tracks the chain. Locks prevent concurrent runs.
-          </P>
-          <Code>{`const result = await core.llm.runPipeline({
-  userId, username, rootId,
-  description: "Dream cycle",
-  lockNamespace: "dream",
-  steps: async (pipeline) => {
-    const { parsed } = await pipeline.step("tree:analyze", {
-      prompt: "Find cleanup opportunities",
-    });
-    await pipeline.step("tree:structure", {
-      prompt: "Execute plan",
-    });
-    return { summary: "Done" };
-  },
-});`}</Code>
-          <P>
-            Both handle automatically: MCP connection, mode switching, Chat creation and
-            finalization, abort/cancellation, session persistence, chain tracking, per-node
-            tool restrictions, error cleanup. The internal LLM metadata never leaks to clients.
-          </P>
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 5.7 CASCADE */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="Cascade">
-          <P>
-            The kernel has four primitives. Structure (nodes in hierarchies), intelligence
-            (the conversation loop), extensibility (the loader and hooks), and communication.
-            Cascade is the fourth. When content is written at a node marked for cascade, the
-            kernel announces it outward. Extensions propagate, react, and deliver signals to
-            other nodes and other lands. Every signal produces a visible result stored
-            in the <code>.flow</code> system node.
-          </P>
-          <P>
-            Set <code>metadata.cascade = {`{ enabled: true, propagate: "children" }`}</code> on
-            any node. Enable <code>cascadeEnabled</code> in land config. Now every note written
-            at that node fires <code>onCascade</code>. Extensions register handlers to react.
-            A fitness extension sends "workout completed." A food extension on a sibling branch
-            receives it and adjusts the meal plan. A remote land receives it through Canopy
-            and knows what happened.
-          </P>
-          <P>
-            Six result statuses: succeeded, failed, rejected, queued, partial, awaiting. None
-            terminal. A failed signal can be retried. An awaiting signal is waiting for a response.
-            The system never declares something permanently dead. Results live in <code>.flow</code> for
-            7 days (configurable via <code>resultTTL</code>), then are cleaned up.
-          </P>
-          <P>
-            The kernel does not propagate signals. It does not route between nodes. It does not
-            filter content. It announces that something happened at a cascade-enabled position
-            and records the outcome. Propagation, routing, and filtering are extensions built on
-            top of the <code>onCascade</code> hook and the <code>deliverCascade</code> function.
-          </P>
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 6. LLM SYSTEM */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="LLM System">
-          <P>
-            Every user has one default LLM connection (<code>llmDefault</code>). Set during
-            registration or via <code>treeos llm add</code>. This is the model that powers
-            all AI modes for that user across all trees.
-          </P>
-          <P>
-            Tree owners can set a tree-level default (<code>llmDefault</code> on the root node)
-            that overrides the user default for anyone working in that tree.
-          </P>
-          <P>
-            Extensions register additional LLM slots in metadata. The resolution chain:
-            extension slot on tree, then tree default, then extension slot on user, then user default.
-          </P>
-          <P>
-            TreeOS is model-agnostic. Any OpenAI-compatible endpoint works (Ollama, vLLM,
-            OpenRouter, Anthropic, OpenAI, local models).
-          </P>
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 6.5 KERNEL CONFIG */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="Kernel Config">
-          <P>
-            Every kernel tunable is configurable from the land's .config node. No code editing.
-            Set a value with the CLI and it applies on next boot.
-          </P>
-          <Code>{`treeos config set maxToolIterations 25
-treeos config set llmTimeout 900        # seconds
-treeos config set noteMaxChars 10000
-treeos config set carryMessages 6`}</Code>
-          <P>Available kernel config keys:</P>
-          <ul style={{ color: "rgba(255,255,255,0.7)", lineHeight: 2, paddingLeft: 20 }}>
-            <li><code>llmTimeout</code> . seconds per LLM API call (default: 900)</li>
-            <li><code>llmMaxRetries</code> . retry count on 429/500 errors (default: 3)</li>
-            <li><code>maxToolIterations</code> . max tool calls per message (default: 15)</li>
-            <li><code>maxConversationMessages</code> . context window size (default: 30)</li>
-            <li><code>noteMaxChars</code> . max characters per note (default: 5000)</li>
-            <li><code>treeSummaryMaxDepth</code> . how deep the AI sees the tree (default: 4)</li>
-            <li><code>treeSummaryMaxNodes</code> . how many nodes the AI sees (default: 60)</li>
-            <li><code>carryMessages</code> . messages carried across mode switches (default: 4)</li>
-            <li><code>sessionTTL</code> . scoped session idle timeout in seconds (default: 900)</li>
-            <li><code>staleSessionTimeout</code> . stale session cleanup in seconds (default: 1800)</li>
-          </ul>
-          <P>
-            Extensions read their own config keys via <code>core.config.get("myExtension.timeout")</code>.
-            Any key can be stored in the .config node. The kernel only processes the keys above.
-            Everything else is available for extensions to read.
-          </P>
-          <P>
-            With the land-manager extension installed, the AI can read and write these config
-            values through chat. A land that manages itself: adjust timeouts, tune context
-            windows, configure extensions, all through natural language at the land root.
-          </P>
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 7. CLI */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="CLI">
-          <P>
-            The CLI works like a regular terminal. <code>cd</code>, <code>ls</code>,
-            <code> mkdir</code>, <code>rm</code>, <code>mv</code>. Navigate trees like
-            a filesystem. Add notes with <code>note</code>. Chat with <code>chat</code>.
-          </P>
-          <P>
-            Extension commands appear automatically. If the connected land has the solana
-            extension, <code>wallet</code> shows up in help. If it does not, the command
-            does not exist.
-          </P>
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 2. QUICK START */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Quick Start</h2>
+          <P>Run a land (server):</P>
+          <Code>{`git clone https://github.com/Tabors-Site/Tree && cd Tree
+npm run install:all
+npm start`}</Code>
+          <P>First boot walks you through setup: domain, name, LLM connection, extension selection.</P>
+          <P>Or connect to an existing land as a user:</P>
           <Code>{`npm install -g treeos
 treeos connect https://treeos.ai
 treeos register
 treeos start`}</Code>
-          <P>
-            <a href="/about/cli" style={{ color: "rgba(255,255,255,0.8)" }}>Full CLI reference</a>
-          </P>
-        </Section>
+        </div>
+      </section>
 
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 8. FEDERATION */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="Federation (Canopy)">
-          <P>
-            Lands connect through the Canopy protocol. Each land is sovereign. No central
-            authority. Peer with other lands, browse their public trees, invite their users
-            to collaborate on yours.
-          </P>
-          <P>
-            The directory service at <a href="https://dir.treeos.ai" style={{ color: "rgba(255,255,255,0.8)" }}>dir.treeos.ai</a> indexes
-            lands, public trees, and the extension registry. It is optional. Lands can peer
-            directly without it.
-          </P>
-          <P>
-            Lands advertise their loaded extensions. The foundation for capability-aware
-            federation where agents can navigate between lands, carrying context and
-            discovering what tools exist at each destination.
-          </P>
-        </Section>
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 3. THE VOCABULARY */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">The Vocabulary</h2>
+          <div style={{maxWidth: 650, margin: "0 auto"}}>
+            {[
+              ["Seed", "The kernel. Two schemas, conversation loop, hooks, cascade, extension loader. Never changes."],
+              ["Land", "One running server. One database. One seed. The ground everything grows from."],
+              ["Tree", "A root node with children. The data structure users and AI work in."],
+              ["Node", "One item in a tree. Has a name, type, status, children, parent, metadata Map."],
+              ["Note", "Text or file content attached to a node. The primary data unit."],
+              ["Extension", "A folder with a manifest and an init function. Adds capabilities to the land."],
+              ["Cascade", "Signals that flow between nodes when content is written. The tree's nervous system."],
+              [".flow", "System node that stores cascade results in daily partitions. The land's water table."],
+              ["Canopy", "The federation protocol. How lands discover and connect to each other."],
+              ["Mode", "How the AI thinks at a position. Extensions register modes. The kernel resolves them."],
+              ["Orchestrator", "The entire conversation flow. Replaceable. The built-in one is itself an extension."],
+            ].map(([term, desc]) => (
+              <div key={term} style={{padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.06)"}}>
+                <span style={{color: "#4ade80", fontWeight: 700, marginRight: 12}}>{term}</span>
+                <span style={{color: "rgba(255,255,255,0.55)", fontSize: "0.95rem"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 9. RUNNING A LAND */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="Running a Land">
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 4. THREE ZONES */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Three Zones</h2>
           <P>
-            A land is a Node.js server with MongoDB. First boot walks you through setup:
-            domain, name, extension selection from the registry.
+            Where you are determines what the AI can do. No mode switching menu. Navigation is
+            mode switching. <code>cd /</code> and the AI becomes a system operator.
+            <code> cd ~</code> and it becomes your personal assistant. <code>cd MyTree</code> and
+            it works the tree with you. Tools, context, and behavior change automatically.
           </P>
-          <Code>{`git clone https://github.com/Tabors-Site/Tree && cd Tree
-npm run install:all
-npm land`}</Code>
-          <P>
-            Or connect to an existing land as a user:
-          </P>
-          <Code>{`treeos connect https://treeos.ai
-treeos register`}</Code>
-          <P>
-            <a href="/about/land" style={{ color: "rgba(255,255,255,0.8)" }}>Land setup guide</a>
-          </P>
-        </Section>
+          <div className="lp-cards-3">
+            <div className="lp-card">
+              <h3 style={{color: "#f97316"}}>Land <code>/</code></h3>
+              <p>System management. Extensions, config, users, peers, diagnostics. Admin access required.</p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#a78bfa"}}>Home <code>~</code></h3>
+              <p>Personal space. Raw ideas, notes across trees, chat history, contributions. Organize and reflect.</p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#4ade80"}}>Tree <code>/MyTree</code></h3>
+              <p><strong>Chat</strong> reads and writes. <strong>Place</strong> adds content silently. <strong>Query</strong> reads only. The orchestrator classifies intent.</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 10. BUILDING EXTENSIONS */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="Building Extensions">
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 5. CLI */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">The CLI</h2>
+          <P>
+            Works like a regular terminal. <code>cd</code>, <code>ls</code>,
+            <code> mkdir</code>, <code>rm</code>, <code>mv</code>. Navigate trees like a filesystem.
+            Extension commands appear automatically based on what the connected land has installed.
+          </P>
+          <Code>{`treeos cd Goals/Fitness
+treeos chat "add a back and biceps routine"
+treeos note "Hit 135 on bench today"
+treeos tree
+treeos ext-scope         # see what's active here
+treeos config set maxToolIterations 25`}</Code>
+          <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem"}}>
+            Note: the CLI is built for TreeOS. It is not part of the seed. It is one of the first
+            tools built on the kernel to give users and developers direct access to the tree.
+            Anyone building on the seed can build their own CLI, frontend, or interface.
+          </P>
+          <P>
+            <a href="/about/cli" style={{color: "rgba(255,255,255,0.7)"}}>Full CLI reference</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 6. THE SEED (KERNEL) */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">The Seed</h2>
+          <P>
+            Four primitives. <strong>Structure</strong>: two schemas, nodes in hierarchies.
+            <strong> Intelligence</strong>: the conversation loop, resolution chains.
+            <strong> Extensibility</strong>: the loader, hooks, registries.
+            <strong> Communication</strong>: cascade, .flow, visible results.
+          </P>
+          <P>
+            <strong>Node</strong> (12 fields): name, type, status, dateCreated, llmDefault, visibility,
+            children[], parent, rootOwner, contributors[], systemRole, metadata (Map).
+            Type is free-form. Status is active, completed, or trimmed.
+          </P>
+          <P>
+            <strong>User</strong> (8 fields): username, password, roots[], llmDefault, isAdmin,
+            isRemote, homeLand, metadata (Map). Extensions store everything in the metadata Map
+            under their own namespace.
+          </P>
+          <P>
+            Six system nodes created at boot: Land Root, .identity (Ed25519 keys), .config (all runtime config),
+            .peers (federation), .extensions (registry), .flow (cascade results in daily partitions).
+          </P>
+          <P>
+            <a href="/seed" style={{color: "rgba(255,255,255,0.7)"}}>Deep dive: The Seed</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 7. THE AI */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">How AI Works</h2>
+          <P>
+            Every AI interaction goes through the conversation loop: resolve LLM, resolve tools,
+            build prompt with position injection, enter the tool loop. The loop calls the LLM,
+            executes tool calls via MCP, appends results, repeats until done or hits the iteration cap.
+          </P>
+          <P>
+            The <code>[Position]</code> block is injected into every prompt before the mode's own content.
+            The AI always knows where it is. Extension modes cannot exclude it.
+          </P>
+          <Code>{`[Position]
+User: tabor
+Tree: My Fitness (abc-123-def)
+Current node: Push Day (xyz-456-ghi)
+
+You are tabor's personal fitness coach...`}</Code>
+          <P>
+            Four resolution chains determine what happens at every position:
+          </P>
+          <ol style={{color: "rgba(255,255,255,0.6)", lineHeight: 2, paddingLeft: 20}}>
+            <li><strong>Extension scope</strong>: walk parent chain, accumulate blocked/restricted extensions</li>
+            <li><strong>Tool scope</strong>: mode base tools + extension tools + per-node allowed/blocked</li>
+            <li><strong>Mode resolution</strong>: per-node override, then default, then fallback</li>
+            <li><strong>LLM resolution</strong>: extension slot on tree, tree default, user slot, user default</li>
+          </ol>
+          <P>
+            Two entry points for extensions: <code>runChat()</code> for single messages with persistent sessions,
+            and <code>OrchestratorRuntime</code> for multi-step pipelines. Both handle MCP connection,
+            session management, chat tracking, abort, and cleanup automatically.
+          </P>
+          <P>
+            <a href="/ai" style={{color: "rgba(255,255,255,0.7)"}}>Deep dive: The AI</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 8. EXTENSIONS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Extensions</h2>
+          <P>
+            A folder with <code>manifest.js</code> and <code>index.js</code>.
+            The manifest declares what it needs (models, services, other extensions with semver)
+            and what it provides (CLI commands, env vars, indexes). The index exports
+            <code> init(core)</code> which receives the services bundle and returns routes, tools,
+            jobs, page routes, and exports.
+          </P>
+          <P>
+            An extension can provide: HTTP routes, MCP tools for the AI, AI conversation modes,
+            a custom orchestrator, background jobs, lifecycle hooks, CLI commands, Mongoose models,
+            session types, LLM assignment slots, and exported functions for other extensions.
+          </P>
+          <P>
+            Five registries, same pattern: <strong>Hooks</strong> (26 lifecycle events),
+            <strong> Modes</strong> (AI behavior per position), <strong>Orchestrators</strong> (conversation flow),
+            <strong> Socket Handlers</strong> (real-time events), <strong>Auth Strategies</strong> (authentication methods).
+            Extensions register. The kernel resolves.
+          </P>
+          <P>
+            <strong>Spatial scoping</strong>: block an extension at any node and it loses all power at that
+            position and every descendant. Tools disappear. Hooks stop firing. Modes don't resolve.
+            Restrict to read-only and only read tools survive. Navigate somewhere and the capability
+            surface changes.
+          </P>
+          <Code>{`treeos ext-block shell solana     # blocked at this node and below
+treeos ext-restrict food read     # food is read-only here
+treeos ext-scope                  # see what's active at this position`}</Code>
+          <P>
+            Install from the registry: <code>treeos ext install understanding</code>.
+            Publish your own: <code>treeos ext publish my-extension</code>.
+            Browse what exists at <a href="https://dir.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>dir.treeos.ai</a>.
+          </P>
+          <P>
+            <a href="/extensions" style={{color: "rgba(255,255,255,0.7)"}}>Deep dive: Extensions</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 9. HOOKS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">26 Hooks</h2>
+          <P>
+            An open pub/sub bus. Before hooks run sequentially and can cancel. After hooks
+            run in parallel and react. Sequential hooks (enrichContext, onCascade) build
+            cumulative output. Any hook name is valid. Extensions fire their own.
+          </P>
+          <div style={{maxWidth: 600, margin: "0 auto", fontSize: "0.85rem"}}>
+            {[
+              ["beforeNote / afterNote", "Before/after note save"],
+              ["beforeNodeCreate / afterNodeCreate", "Before/after node creation"],
+              ["beforeStatusChange / afterStatusChange", "Before/after status write"],
+              ["beforeNodeDelete", "Before deletion, cleanup"],
+              ["beforeContribution", "Modify contribution data"],
+              ["enrichContext", "Inject extension data into AI context (sequential)"],
+              ["beforeLLMCall / afterLLMCall", "Before/after LLM API call"],
+              ["beforeToolCall / afterToolCall", "Before/after MCP tool execution"],
+              ["beforeResponse", "Modify AI response before client"],
+              ["beforeRegister / afterRegister", "Before/after user registration"],
+              ["afterSessionCreate / afterSessionEnd", "Session lifecycle"],
+              ["afterNavigate", "Tree navigation"],
+              ["afterMetadataWrite", "Metadata changes"],
+              ["afterScopeChange", "Extension scope changes"],
+              ["afterBoot", "One-time post-boot setup"],
+              ["onCascade", "Cascade signal handler (sequential)"],
+              ["onDocumentPressure", "Document approaching 14MB limit"],
+              ["onTreeTripped / onTreeRevived", "Tree circuit breaker events"],
+            ].map(([name, desc]) => (
+              <div key={name} style={{
+                display: "flex", justifyContent: "space-between", padding: "6px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.04)", gap: 12,
+              }}>
+                <code style={{color: "#4ade80", fontSize: "0.8rem", whiteSpace: "nowrap"}}>{name}</code>
+                <span style={{color: "#666", textAlign: "right"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+          <P style={{marginTop: 16}}>
+            5s timeout per handler. 100 handlers per hook cap. Circuit breaker auto-disables
+            after 5 consecutive failures. Spatial scoping filters: blocked extensions' handlers are skipped.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 10. CASCADE */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Cascade</h2>
+          <P>
+            When content is written at a node with <code>metadata.cascade.enabled = true</code> and
+            <code> cascadeEnabled = true</code> in .config, the kernel fires <code>onCascade</code>.
+            Extensions propagate signals to children, siblings, or remote lands via Canopy.
+            Every signal produces a visible result stored in .flow.
+          </P>
+          <P>
+            Two entry points. <code>checkCascade</code> is seed-internal (fires automatically on content writes).
+            <code> deliverCascade</code> is extension-external (extensions call it to propagate). The kernel
+            never blocks inbound. Always accepts. Always writes a result.
+          </P>
+          <P>
+            Six result statuses: succeeded, failed, rejected, queued, partial, awaiting. None terminal.
+            Results stored in daily partition nodes under .flow. <code>flowMaxResultsPerDay</code> caps
+            growth per partition with circular overwrite. Retention deletes entire partitions by date.
+          </P>
+          <P>
+            <a href="/cascade" style={{color: "rgba(255,255,255,0.7)"}}>Deep dive: Cascade and the Water Cycle</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 11. LLM SYSTEM */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">LLM System</h2>
+          <P>
+            Model-agnostic. Any OpenAI-compatible endpoint: Ollama, OpenRouter, Anthropic, local models.
+            Each user has a default LLM connection. Tree owners can override per-tree.
+            Extensions register additional LLM slots in metadata for per-mode assignments.
+          </P>
+          <P>
+            Resolution chain: extension slot on tree, tree default, extension slot on user, user default.
+            First match wins. Failover chain on 429/500 errors. Configurable timeout and retry count.
+          </P>
+          <Code>{`treeos llm add            # add a connection
+treeos llm assign         # assign to tree or mode`}</Code>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 12. FEDERATION */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Federation</h2>
+          <P>
+            Lands connect through the Canopy protocol. Each land is sovereign. Your data stays
+            on your server. Remote users are ghost records (username + home land URL). The real
+            user data never leaves their home land.
+          </P>
+          <P>
+            Peers discover each other through the directory at <a href="https://dir.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>dir.treeos.ai</a> or
+            by direct peering. The directory is discovery, not authority. Remove it and peering still works.
+            Messages are signed with Ed25519 keys from .identity. Heartbeats exchange extension lists
+            and health status, not user data.
+          </P>
+          <P>
+            Cascade signals flow between lands. A tree on Land A writes content. An extension propagates
+            to Land B via Canopy. Land B's kernel accepts it (never block inbound), fires onCascade,
+            writes to .flow. The metadata Map preserves all extension data across transit.
+          </P>
+          <P>
+            <a href="/network" style={{color: "rgba(255,255,255,0.7)"}}>Deep dive: The Network</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 13. KERNEL CONFIG */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Kernel Config</h2>
+          <P>
+            Every tunable value lives in the .config system node. Readable and writable via CLI,
+            API, or the land-manager AI. No code editing. No restarts for most values.
+          </P>
+          <Code>{`treeos config set maxToolIterations 25
+treeos config set llmTimeout 900
+treeos config set cascadeEnabled true
+treeos config set treeCircuitEnabled true`}</Code>
+          <P>
+            35+ config keys covering: LLM (timeout, retries, model), conversation (tool iterations,
+            context window, carry messages), sessions (TTL, stale timeout, max), notes (max chars),
+            tree summary (depth, nodes), retention (chats, contributions, canopy events), cascade
+            (enabled, depth, payload, rate limit, result TTL, flow cap), uploads (enabled, max size,
+            MIME filter), document guard (max size), ancestor cache (TTL), integrity check (interval),
+            tree circuit breaker (enabled, thresholds, weights, interval), tool circuit breaker (threshold),
+            and seed version.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 14. SAFETY */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Safety</h2>
+          <P>The kernel protects itself from extensions, from runaway AI, and from time.</P>
+          <div style={{fontSize: "0.85rem"}}>
+            {[
+              ["Hook circuit breaker", "5 consecutive failures auto-disables the handler"],
+              ["Tool circuit breaker", "5 consecutive failures disables one tool per session"],
+              ["Tree circuit breaker", "Health equation trips the tree. No AI, no writes. Extensions revive."],
+              ["Document size guard", "14MB ceiling, 512KB per namespace, onDocumentPressure at 80%"],
+              [".flow partitioning", "Daily partitions, circular overwrite, retention by date"],
+              ["Ancestor cache", "One walk serves all six resolution chains. Snapshot per message."],
+              ["DB health check", "Before each tool call. Dead DB tells the AI to inform the user."],
+              ["Atomic metadata", "MongoDB $set per namespace. Concurrent writes never clobber."],
+              ["Tree integrity", "On boot and daily. Auto-repair phantom refs and broken links."],
+              ["Index verification", "On boot. Create missing indexes. No collection scans."],
+              ["Seed versioning", "Migrations run in order. Failed migrations retry next boot."],
+              ["Ownership chain", "rootOwner/contributor mutations validate the parent chain."],
+              ["Graceful shutdown", "All timers .unref(). SIGTERM closes clean."],
+            ].map(([name, desc]) => (
+              <div key={name} style={{
+                display: "flex", gap: 12, padding: "8px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+              }}>
+                <span style={{color: "#4ade80", minWidth: 170, fontWeight: 600, fontSize: "0.8rem"}}>{name}</span>
+                <span style={{color: "#666"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 15. BUILDING EXTENSIONS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Building Extensions</h2>
           <P>
             Create a folder in <code>extensions/</code>. Add <code>manifest.js</code> and
             <code> index.js</code>. Restart. Your extension loads.
           </P>
-          <P>
-            The manifest declares dependencies (models, services, other extensions with
-            semver constraints) and what you provide (routes, tools, modes, orchestrator,
-            hooks, jobs, CLI commands, exported functions).
-            The <code>init(core)</code> function receives only the services you declared.
-          </P>
-          <P>
-            Store data in <code>node.metadata</code> or <code>user.metadata</code> under
-            your extension name. Communicate with other extensions
-            through <code>getExtension()</code> and declared exports. Use hooks to inject
-            into AI context. Use <code>html-rendering</code>'s <code>registerPage()</code> to
-            add your own HTML pages. Publish to the registry for others.
-          </P>
-          <P>
-            Example: the fitness extension registers two AI modes (coach and log),
-            one HTTP route, and one CLI command. It uses existing kernel tools
-            (create-new-node-branch, edit-node-version-value, add-node-prestige,
-            get-active-leaf-execution-frontier) with fitness-specific system prompts.
-            No custom tools needed. The intelligence is in the prompts, the structure
-            is in the tree, the tracking is in values and prestige. Five files, zero
-            kernel changes.
-          </P>
-          <P>
-            <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.8)" }}>Full extension developer docs</a>
-          </P>
-        </Section>
+          <Code>{`// manifest.js
+export default {
+  name: "my-ext",
+  version: "1.0.0",
+  needs: { models: ["Node"], services: ["hooks", "protocol"] },
+  provides: { cli: [{ command: "my-cmd", description: "Does a thing" }] },
+};
 
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* 11. API */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="API">
-          <P>
-            REST API at <code>/api/v1/</code>. Bearer token or API key auth.
-            Every tree operation, note, value, and AI mode is accessible via HTTP.
-            The <code>/api/v1/protocol</code> endpoint returns the land's capabilities,
-            loaded extensions, and available CLI commands.
-          </P>
-          <P>
-            <a href="/about/api" style={{ color: "rgba(255,255,255,0.8)" }}>Full API reference</a>
-          </P>
-        </Section>
+// index.js
+export async function init(core) {
+  core.hooks.register("afterNote", async (data) => {
+    // react to notes being written
+  }, "my-ext");
 
-        {/* ── LINKS ── */}
-        <div style={{ marginTop: 48, paddingTop: 24, borderTop: "1px solid rgba(255,255,255,0.1)", textAlign: "center" }}>
-          <a href="/" style={{ color: "rgba(255,255,255,0.6)", marginRight: 16 }}>Home</a>
-          <a href="/about" style={{ color: "rgba(255,255,255,0.6)", marginRight: 16 }}>Docs</a>
-          <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.6)", marginRight: 16 }}>Extensions</a>
-          <a href="/about/api" style={{ color: "rgba(255,255,255,0.6)", marginRight: 16 }}>API</a>
-          <a href="/about/cli" style={{ color: "rgba(255,255,255,0.6)", marginRight: 16 }}>CLI</a>
-          <a href="https://github.com/Tabors-Site/Tree" style={{ color: "rgba(255,255,255,0.6)" }}>GitHub</a>
+  return {
+    router,         // HTTP routes at /api/v1
+    tools: [...],   // MCP tools for the AI
+    exports: { ... }, // for other extensions
+  };
+}`}</Code>
+          <P>
+            Store data in <code>node.metadata</code> under your extension name via <code>setExtMeta</code>.
+            Communicate with other extensions through hooks (pub/sub), exports (direct call via
+            <code> getExtension()</code>), or metadata (shared state on nodes).
+          </P>
+          <P>
+            An operating system is just extensions working together. When enough extensions
+            depend on each other, a coherent experience emerges. The seed doesn't care
+            what you build. It grows whatever you plant.
+          </P>
+          <P>
+            Check out extensions built so far at <a href="https://dir.treeos.ai" style={{color: "#4ade80"}}>dir.treeos.ai</a> and
+            publish your own. Every extension is a piece contributed toward the future of AI infrastructure.
+            Open code. Open doors. This was designed to be held back by no one.
+          </P>
         </div>
+      </section>
 
-      </div>
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 16. BUILDING ORCHESTRATORS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Building a Custom Orchestrator</h2>
+          <P>
+            The most ambitious thing you can build on the seed. A custom orchestrator replaces how
+            the AI thinks about and responds to every message in a zone. The built-in tree-orchestrator
+            is itself an extension. Uninstall it and plug in your own.
+          </P>
+          <Code>{`export async function init(core) {
+  core.orchestrators.register("tree", {
+    async handle({ message, userId, rootId, socket }) {
+      // Your entire AI flow
+      const { answer } = await core.llm.runChat({
+        userId, username: socket.username,
+        message,
+        mode: "my-custom:mode",
+      });
+      return { answer };
+    }
+  });
+}`}</Code>
+          <P>
+            Multi-agent debate. Parallel research. Code review pipeline. The kernel dispatches
+            to whatever orchestrator is registered. One extension. One init() call. The whole AI changes.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 17. BOOT SEQUENCE */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Boot Sequence</h2>
+          <P>Each step depends on the one before it.</P>
+          <ol style={{color: "rgba(255,255,255,0.6)", lineHeight: 2.2, paddingLeft: 20, fontSize: "0.95rem"}}>
+            <li>Database connect</li>
+            <li>Index verification (create missing indexes)</li>
+            <li>System nodes (ensureLandRoot, .identity, .config, .peers, .extensions, .flow)</li>
+            <li>Config load from .config node</li>
+            <li>Seed migrations (version check, run pending)</li>
+            <li>Tree integrity check (parent/children[] consistency, auto-repair)</li>
+            <li>Extension discovery (scan manifests)</li>
+            <li>Dependency resolution (topological sort)</li>
+            <li>Extension init (call init(core) in order)</li>
+            <li>Wire (routes, tools, hooks, modes, jobs, indexes)</li>
+            <li>Background jobs (retention, upload cleanup, integrity, circuit breaker)</li>
+            <li>Canopy peering, heartbeat, outbox, directory registration</li>
+            <li>afterBoot hook fires</li>
+          </ol>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 18. API */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">API</h2>
+          <P>
+            REST at <code>/api/v1/</code>. Bearer token or API key auth. Every tree operation,
+            note, value, and AI interaction is accessible via HTTP. The protocol endpoint at
+            <code> /api/v1/protocol</code> returns loaded extensions, capabilities, and CLI commands.
+          </P>
+          <P>
+            Response shape: <code>{"{ status: \"ok\", data }"}</code> or
+            <code> {"{ status: \"error\", error: { code, message } }"}</code>.
+            Semantic error codes (NODE_NOT_FOUND, UNAUTHORIZED, DOCUMENT_SIZE_EXCEEDED, etc.)
+            that mean something. Extensions access through <code>core.protocol</code>.
+          </P>
+          <P>
+            <a href="/about/api" style={{color: "rgba(255,255,255,0.7)"}}>Full API reference</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 19. LICENSE */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">License</h2>
+          <P>
+            The seed is AGPL-3.0. Run it, modify it, build on it. If you modify the seed and run it
+            as a service, share your seed modifications. Extensions are separate works that interact
+            through the defined API. Extension authors choose their own license. The seed license
+            does not infect extensions.
+          </P>
+        </div>
+      </section>
+
+      {/* ── LINKS ── */}
+      <section className="lp-section lp-section-alt" style={{paddingTop: 40, paddingBottom: 40}}>
+        <div className="lp-container" style={{textAlign: "center"}}>
+          <div style={{display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap"}}>
+            <a className="lp-btn lp-btn-secondary" href="/">Home</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/ai">The AI</a>
+            <a className="lp-btn lp-btn-secondary" href="/cascade">Cascade</a>
+            <a className="lp-btn lp-btn-secondary" href="/flow">The Flow</a>
+            <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
+            <a className="lp-btn lp-btn-secondary" href="https://dir.treeos.ai">Directory</a>
+            <a className="lp-btn lp-btn-secondary" href="https://github.com/Tabors-Site/Tree">GitHub</a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer className="lp-footer">
+        <div className="lp-container">
+          <div className="lp-footer-bottom">
+            TreeOS . AGPL-3.0 . <a href="https://tabors.site" style={{color: "inherit", textDecoration: "none"}}>Tabor Holly</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
 
-const Section = ({ title, children }) => (
-  <div style={{ marginBottom: 48 }}>
-    <h2 style={{ fontSize: "1.6rem", marginBottom: 16, color: "rgba(255,255,255,0.9)" }}>{title}</h2>
-    {children}
-  </div>
-);
-
-const P = ({ children }) => (
-  <p style={{ color: "rgba(255,255,255,0.65)", lineHeight: 1.8, marginBottom: 16, fontSize: "1.05rem" }}>
+const P = ({ children, style }) => (
+  <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.8, marginBottom: 16, fontSize: "1rem", ...style}}>
     {children}
   </p>
 );
@@ -462,11 +635,11 @@ const P = ({ children }) => (
 const Code = ({ children }) => (
   <pre style={{
     background: "rgba(0,0,0,0.4)",
-    border: "1px solid rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.08)",
     borderRadius: 8,
     padding: "16px 20px",
-    color: "rgba(255,255,255,0.7)",
-    fontSize: "0.9rem",
+    color: "rgba(255,255,255,0.65)",
+    fontSize: "0.85rem",
     lineHeight: 1.6,
     overflowX: "auto",
     marginBottom: 16,
