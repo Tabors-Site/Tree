@@ -1,8 +1,8 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import Node from "../../db/models/node.js";
-import authenticate from "../../middleware/authenticate.js";
-import urlAuth from "../../middleware/urlAuth.js";
+import Node from "../../seed/models/node.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   updateScript,
   executeScript,
@@ -10,6 +10,13 @@ import {
 } from "./core.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
 
 const router = express.Router();
 
@@ -23,14 +30,12 @@ function filterQuery(req) {
 }
 
 // GET script detail
-router.get("/node/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/script/:scriptId", readAuth, async (req, res) => {
   try {
     const { nodeId, scriptId } = req.params;
 
     if (!nodeId || !scriptId) {
-      return res.status(400).json({
-        error: "Missing required fields: nodeId, scriptId",
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Missing required fields: nodeId, scriptId");
     }
 
     const { script, contributions } = await getScript({ nodeId, scriptId });
@@ -41,7 +46,7 @@ router.get("/node/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
     const wantHtml = "html" in req.query;
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({ script, contributions });
+      return sendOk(res, { script, contributions });
     }
 
     return res.send(
@@ -50,14 +55,14 @@ router.get("/node/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
   } catch (err) {
  log.error("Scripts", "Error fetching script:", err);
 
-    if (
-      err.message === "Node not found" ||
-      err.message === "Script not found"
-    ) {
-      return res.status(404).json({ error: err.message });
+    if (err.message === "Node not found") {
+      return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
+    }
+    if (err.message === "Script not found") {
+      return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
     }
 
-    return res.status(500).json({ error: "Internal server error" });
+    return sendError(res, 500, ERR.INTERNAL, "Internal server error");
   }
 });
 
@@ -122,13 +127,13 @@ router.post(
 );
 
 // Script help/reference page
-router.get("/node/:nodeId/scripts/help", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/scripts/help", readAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
     const node = await Node.findById(nodeId).lean();
     if (!node) {
-      return res.status(404).json({ error: "Node not found" });
+      return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
     }
 
     const data = {
@@ -227,7 +232,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, 0 + 1);`,
     const wantHtml = "html" in req.query;
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json(data);
+      return sendOk(res, data);
     }
 
     const qs = filterQuery(req);
@@ -238,7 +243,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, 0 + 1);`,
     );
   } catch (err) {
  log.error("Scripts", "Error loading script help:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return sendError(res, 500, ERR.INTERNAL, "Internal server error");
   }
 });
 

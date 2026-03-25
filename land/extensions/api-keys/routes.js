@@ -1,13 +1,14 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import User from "../../db/models/user.js";
-import authenticate from "../../middleware/authenticate.js";
+import User from "../../seed/models/user.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   createApiKey,
   generateApiKey,
   deleteApiKey,
 } from "./core.js";
-import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
+import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
@@ -15,7 +16,7 @@ const router = express.Router();
 
 router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
   if (req.userId.toString() !== req.params.userId.toString()) {
-    return res.status(403).json({ message: "Not authorized" });
+    return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
   }
 
   const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -32,7 +33,7 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
     );
 
     const user = await User.findById(userId);
-    if (!user) return res.status(404).send("User not found");
+    if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
     let keys = getUserMeta(user, "apiKeys") || [];
 
@@ -66,7 +67,7 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
 router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
-      return res.status(403).json({ message: "Not authorized" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -74,12 +75,12 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
 
     const user = await User.findById(req.userId)
       .select("username metadata");
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     const apiKeys = getUserMeta(user, "apiKeys") || [];
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json(
-        apiKeys.map((k) => ({
+      return sendOk(res, {
+        keys: apiKeys.map((k) => ({
           id: k._id,
           name: k.name,
           createdAt: k.createdAt,
@@ -87,7 +88,7 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
           usageCount: k.usageCount,
           revoked: k.revoked,
         })),
-      );
+      });
     }
 
     const token = req.query.token ?? "";
@@ -98,7 +99,7 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
     );
   } catch (err) {
  log.error("Api Keys", "api keys page error:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -107,7 +108,7 @@ router.delete(
   authenticate,
   async (req, res) => {
     if (req.userId.toString() !== req.params.userId.toString()) {
-      return res.status(403).json({ message: "Not authorized" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
     return deleteApiKey(req, res);
   },

@@ -2,19 +2,19 @@
 // Periodically picks up the latest pending text raw idea for each premium/god user
 // and fires the raw-idea orchestrator as if they had clicked the Auto-place button.
 
-import log from "../../core/log.js";
-import User from "../../db/models/user.js";
+import log from "../../seed/log.js";
+import User from "../../seed/models/user.js";
 import RawIdea from "./model.js";
-import AIChat from "../../db/models/aiChat.js";
+import Chat from "../../seed/models/chat.js";
 import { orchestrateRawIdeaPlacement } from "./pipeline.js";
-import { isUserOnline } from "../../ws/websocket.js";
-import { userHasLlm } from "../../ws/conversation.js";
+import { isUserOnline } from "../../seed/ws/websocket.js";
+import { userHasLlm } from "../../seed/ws/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────────────────────────────────
 
-const ELIGIBLE_PLANS = ["standard", "premium", "god"];
+const ELIGIBLE_PLANS = ["standard", "premium"];
 
 // ─────────────────────────────────────────────────────────────────────────
 // STATE
@@ -58,7 +58,7 @@ async function processUser(user) {
   if (!rawIdea) return;
 
  log.verbose("Raw Ideas", 
-    `⏰ Auto-placing raw idea ${rawIdea._id} for user ${user.username} (${user.profileType})`,
+    `⏰ Auto-placing raw idea ${rawIdea._id} for user ${user.username}`,
   );
 
   // Fire-and-forget — same pattern as the HTTP route
@@ -83,10 +83,13 @@ export async function runRawIdeaAutoPlace() {
  log.verbose("Raw Ideas", "⏰ Raw idea auto-place job running…");
   try {
     const users = await User.find({
-      profileType: { $in: ELIGIBLE_PLANS },
+      $or: [
+        { "metadata.tiers.plan": { $in: ELIGIBLE_PLANS } },
+        { isAdmin: true },
+      ],
       "metadata.rawIdeas.autoPlace": { $ne: false },
     })
-      .select("_id username profileType metadata")
+      .select("_id username isAdmin metadata")
       .lean();
 
     if (users.length === 0) {
@@ -139,7 +142,7 @@ export async function startRawIdeaAutoPlaceJob({ intervalMs = 15 * 60 * 1000 } =
 
   // Finalize any AI chats left without an endMessage from a previous server run
   try {
-    const { modifiedCount } = await AIChat.updateMany(
+    const { modifiedCount } = await Chat.updateMany(
       { "endMessage.time": null },
       {
         $set: {

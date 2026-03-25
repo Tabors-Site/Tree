@@ -2,7 +2,8 @@
 // Webhook receiver endpoints for gateway input channels.
 // No auth middleware — external platforms (Telegram) call these directly.
 
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
+import { sendOk } from "../../seed/protocol.js";
 import express from "express";
 import GatewayChannel from "./model.js";
 import { processGatewayMessage } from "./input.js";
@@ -17,7 +18,7 @@ const router = express.Router();
 
 router.post("/gateway/telegram/:channelId", async (req, res) => {
   // Always respond 200 to Telegram immediately (prevents retries)
-  res.status(200).json({ ok: true });
+  sendOk(res, { ok: true });
 
   try {
     var channelId = req.params.channelId;

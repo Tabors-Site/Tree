@@ -11,7 +11,7 @@ export default {
 
   provides: {
     models: {
-      CustomLlmConnection: "./model.js",
+      LlmConnection: "./model.js",
     },
     routes: "./routes.js",
     tools: false,

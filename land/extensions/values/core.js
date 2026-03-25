@@ -1,5 +1,5 @@
-import { findNodeById, logContribution } from "../../db/utils.js";
-import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+import { findNodeById, logContribution } from "../../seed/utils.js";
+import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
@@ -47,7 +47,7 @@ async function setValueForNode({
   value,
   userId,
   wasAi = false,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 }) {
   key = assertUserWritableKey(key);
@@ -75,7 +75,7 @@ async function setValueForNode({
   await node.save();
 
   await logContribution({
-    userId, nodeId, wasAi, aiChatId, sessionId,
+    userId, nodeId, wasAi, chatId, sessionId,
     action: "editValue",
     valueEdited: { [finalKey]: numericValue },
     nodeVersion: "0",
@@ -91,7 +91,7 @@ async function setGoalForNode({
   goal,
   userId,
   wasAi = false,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 }) {
   key = assertUserWritableKey(key);
@@ -123,7 +123,7 @@ async function setGoalForNode({
   await node.save();
 
   await logContribution({
-    userId, nodeId, wasAi, aiChatId, sessionId,
+    userId, nodeId, wasAi, chatId, sessionId,
     action: "editGoal",
     goalEdited: { [finalKey]: numericGoal },
     nodeVersion: "0",

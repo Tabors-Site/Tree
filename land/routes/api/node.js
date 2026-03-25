@@ -1,22 +1,30 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../../middleware/urlAuth.js";
-import authenticate from "../../middleware/authenticate.js";
-import { createNewNode, editNodeName } from "../../core/tree/treeManagement.js";
-import { editNodeType } from "../../core/tree/nodeTypes.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+
+import { getExtension } from "../../extensions/loader.js";
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
+import { createNode, editNodeName } from "../../seed/tree/treeManagement.js";
+import { editNodeType } from "../../seed/tree/nodeTypes.js";
 import {
   updateParentRelationship,
   deleteNodeBranch,
-} from "../../core/tree/treeManagement.js";
+} from "../../seed/tree/treeManagement.js";
 
-import { editStatus } from "../../core/tree/statuses.js";
+import { editStatus } from "../../seed/tree/statuses.js";
 
-import Node from "../../db/models/node.js";
-import User from "../../db/models/user.js";
-import { resolveVersion, buildPathString } from "../../core/tree/treeFetch.js";
-import { getNodeAIChats } from "../../core/llms/aichat.js";
+import Node from "../../seed/models/node.js";
+import User from "../../seed/models/user.js";
+import { resolveVersion, buildPathString } from "../../seed/tree/treeFetch.js";
+import { getNodeChats } from "../../seed/ws/chatHistory.js";
 
-import { getExtension } from "../../extensions/loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
@@ -27,7 +35,7 @@ router.param("version", async (req, res, next, val) => {
     req.params.version = String(await resolveVersion(req.params.nodeId, val));
     next();
   } catch (err) {
-    return res.status(404).json({ error: err.message });
+    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
   }
 });
 
@@ -37,7 +45,7 @@ async function useLatest(req, res, next) {
     req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
     next();
   } catch (err) {
-    return res.status(404).json({ error: err.message });
+    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
   }
 }
 
@@ -58,7 +66,7 @@ function filterQuery(req) {
 // GET /node/:nodeId/chats
 // AI chat history for a specific node (or its entire subtree)
 // ─────────────────────────────────────────────────────────────────────────
-router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/chats", readAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -67,7 +75,7 @@ router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
     let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-      return res.status(400).json({ error: "Invalid limit" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit");
     }
     if (limit > 10) {
       limit = 10;
@@ -83,10 +91,10 @@ router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
 
     const node = await Node.findById(nodeId).select("name rootOwner").lean();
     if (!node) {
-      return res.status(404).json({ error: "Node not found" });
+      return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
     }
 
-    const { sessions } = await getNodeAIChats({
+    const { sessions } = await getNodeChats({
       nodeId,
       sessionLimit: limit || 10,
       sessionId,
@@ -97,7 +105,7 @@ router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
     const allChats = sessions.flatMap((s) => s.chats);
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({
+      return sendOk(res, {
         nodeId,
         nodeName: node.name,
         count: allChats.length,
@@ -121,7 +129,7 @@ router.get("/node/:nodeId/chats", urlAuth, async (req, res) => {
     );
   } catch (err) {
     log.error("API", "Node chats error:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 const editStatusHandler = async (req, res) => {
@@ -133,9 +141,7 @@ const editStatusHandler = async (req, res) => {
     const ALLOWED_STATUSES = ["active", "completed", "trimmed"];
 
     if (!ALLOWED_STATUSES.includes(status)) {
-      return res.status(400).json({
-        error: "Invalid status. Must be active, completed, or trimmed.",
-      });
+      return sendError(res, 400, ERR.INVALID_STATUS, "Invalid status. Must be active, completed, or trimmed.");
     }
     const isInherited =
       req.body?.isInherited === "true" ||
@@ -143,7 +149,7 @@ const editStatusHandler = async (req, res) => {
       req.query?.isInherited === "true";
 
     if (!status) {
-      return res.status(400).json({ error: "status is required" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "status is required");
     }
 
     const result = await editStatus({
@@ -159,10 +165,10 @@ const editStatusHandler = async (req, res) => {
       );
     }
 
-    res.json({ success: true, ...result });
+    sendOk(res, result);
   } catch (err) {
     log.error("API", "editStatus error:", err);
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 };
 router.post("/node/:nodeId/editStatus", authenticate, useLatest, editStatusHandler);
@@ -183,9 +189,7 @@ router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
       req.query?.parentId;
 
     if (!newParentId) {
-      return res.status(400).json({
-        error: "newParentId is required",
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, "newParentId is required");
     }
 
     const result = await updateParentRelationship(nodeId, newParentId, userId);
@@ -197,14 +201,13 @@ router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
       );
     }
 
-    res.json({
-      success: true,
+    sendOk(res, {
       nodeChild: result.nodeChild,
       nodeNewParent: result.nodeNewParent,
     });
   } catch (err) {
     log.error("API", "updateParent error:", err);
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 // ── Per-node mode overrides ──
@@ -213,20 +216,20 @@ router.get("/node/:nodeId/modes", async (req, res) => {
   try {
     const { nodeId } = req.params;
     const node = await Node.findById(nodeId).select("name metadata").lean();
-    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
     const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
     const modes = meta.modes || {};
 
     // List available modes from registry
     let availableModes = [];
     try {
-      const { getSubModes } = await import("../../ws/modes/registry.js");
+      const { getSubModes } = await import("../../seed/ws/modes/registry.js");
       availableModes = getSubModes("tree").map(m => m.key);
     } catch {}
 
-    res.json({ nodeId, name: node.name, modes, availableModes });
+    sendOk(res, { nodeId, name: node.name, modes, availableModes });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -236,10 +239,10 @@ router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
     const { intent, modeKey, clear } = req.body;
 
     const node = await Node.findById(nodeId);
-    if (!node) return res.status(404).json({ error: "Node not found" });
-    if (node.systemRole) return res.status(400).json({ error: "Cannot modify system nodes" });
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
+    if (node.systemRole) return sendError(res, 400, ERR.INVALID_INPUT, "Cannot modify system nodes");
 
-    const { getExtMeta, setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+    const { getExtMeta, setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
 
     if (clear) {
       // Clear all mode overrides or a specific one
@@ -249,12 +252,12 @@ router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
       }
       setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : null);
     } else {
-      if (!intent || !modeKey) return res.status(400).json({ error: "intent and modeKey required" });
+      if (!intent || !modeKey) return sendError(res, 400, ERR.INVALID_INPUT, "intent and modeKey required");
 
       // Validate mode exists
       try {
-        const { getMode } = await import("../../ws/modes/registry.js");
-        if (!getMode(modeKey)) return res.status(400).json({ error: `Mode "${modeKey}" not registered` });
+        const { getMode } = await import("../../seed/ws/modes/registry.js");
+        if (!getMode(modeKey)) return sendError(res, 400, ERR.INVALID_INPUT, `Mode "${modeKey}" not registered`);
       } catch {}
 
       const modes = getExtMeta(node, "modes") || {};
@@ -264,10 +267,10 @@ router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
 
     await node.save();
     if ("html" in req.query) return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
-    res.json({ success: true, modes: getExtMeta(node, "modes") || {} });
+    sendOk(res, { modes: getExtMeta(node, "modes") || {} });
   } catch (err) {
     log.error("API", "editModes error:", err.message);
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -298,15 +301,15 @@ router.get("/node/:nodeId/tools", async (req, res) => {
 
     let baseTools = [];
     try {
-      const { getAllToolNamesForBigMode } = await import("../../ws/modes/registry.js");
+      const { getAllToolNamesForBigMode } = await import("../../seed/ws/modes/registry.js");
       baseTools = getAllToolNamesForBigMode("tree");
     } catch {}
 
     const effective = [...new Set([...baseTools, ...allAllowed])].filter(t => !allBlocked.has(t)).sort();
 
-    res.json({ nodeId, baseTools, hasConfig: allAllowed.size > 0 || allBlocked.size > 0, added: [...allAllowed], blocked: [...allBlocked], effective, chain: chain.reverse() });
+    sendOk(res, { nodeId, baseTools, hasConfig: allAllowed.size > 0 || allBlocked.size > 0, added: [...allAllowed], blocked: [...allBlocked], effective, chain: chain.reverse() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -318,10 +321,10 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
     if (req.body.blockedRaw) blocked = req.body.blockedRaw.split(",").map(s => s.trim()).filter(Boolean);
 
     const node = await Node.findById(nodeId);
-    if (!node) return res.status(404).json({ error: "Node not found" });
-    if (node.systemRole) return res.status(400).json({ error: "Cannot modify system nodes" });
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
+    if (node.systemRole) return sendError(res, 400, ERR.INVALID_INPUT, "Cannot modify system nodes");
 
-    const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+    const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
     const toolConfig = {};
     if (Array.isArray(allowed)) toolConfig.allowed = allowed.filter(t => typeof t === "string");
     if (Array.isArray(blocked)) toolConfig.blocked = blocked.filter(t => typeof t === "string");
@@ -334,10 +337,10 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
     await node.save();
 
     if ("html" in req.query) return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
-    res.json({ success: true, tools: toolConfig });
+    sendOk(res, { tools: toolConfig });
   } catch (err) {
     log.error("API", "editTools error:", err.message);
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -349,7 +352,7 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
 router.get("/node/:nodeId/extensions", async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const { getBlockedExtensionsAtNode } = await import("../../core/tree/extensionScope.js");
+    const { getBlockedExtensionsAtNode } = await import("../../seed/tree/extensionScope.js");
     const blocked = await getBlockedExtensionsAtNode(nodeId);
 
     const node = await Node.findById(nodeId).select("name metadata").lean();
@@ -374,7 +377,7 @@ router.get("/node/:nodeId/extensions", async (req, res) => {
       cursor = n.parent;
     }
 
-    res.json({
+    sendOk(res, {
       nodeId,
       nodeName: node?.name || "",
       blocked: [...blocked],
@@ -384,7 +387,7 @@ router.get("/node/:nodeId/extensions", async (req, res) => {
       chain: chain.reverse(),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -400,11 +403,11 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
     let { blocked, restricted } = req.body;
 
     const node = await Node.findById(nodeId);
-    if (!node) return res.status(404).json({ error: "Node not found" });
-    if (node.systemRole) return res.status(400).json({ error: "Cannot modify system nodes" });
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
+    if (node.systemRole) return sendError(res, 400, ERR.INVALID_INPUT, "Cannot modify system nodes");
 
-    const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
-    const { clearScopeCache } = await import("../../core/tree/extensionScope.js");
+    const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+    const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
 
     const config = {};
     if (Array.isArray(blocked) && blocked.length > 0) {
@@ -423,10 +426,10 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
     clearScopeCache();
 
     if ("html" in req.query) return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
-    res.json({ success: true, blocked: blocked || [] });
+    sendOk(res, { blocked: blocked || [] });
   } catch (err) {
     log.error("API", "editExtensions error:", err.message);
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -435,12 +438,12 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
 // Returns the node (flat schema, no versions)
 // Supports JSON or ?html mode
 // -----------------------------------------------------------------------------
-router.get("/node/:nodeId", urlAuth, async (req, res) => {
+router.get("/node/:nodeId", readAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const node = await Node.findById(nodeId).lean();
 
-    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
     const queryString = filterQuery(req);
     const qs = queryString ? `?${queryString}` : "";
@@ -453,7 +456,7 @@ router.get("/node/:nodeId", urlAuth, async (req, res) => {
     const wantHtml = req.query.html !== undefined;
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({ node });
+      return sendOk(res, { node });
     }
 
     const parentName = node.parent
@@ -467,7 +470,7 @@ router.get("/node/:nodeId", urlAuth, async (req, res) => {
     );
   } catch (err) {
     log.error("API", "Error fetching node:", err);
-    res.status(500).json({ error: "Internal server error" });
+    sendError(res, 500, ERR.INTERNAL, "Internal server error");
   }
 });
 
@@ -476,14 +479,14 @@ router.get("/node/:nodeId", urlAuth, async (req, res) => {
 // Returns a single version (includes Notes link)
 // Supports JSON or ?html mode
 // -----------------------------------------------------------------------------
-router.get("/node/:nodeId/:version", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version", readAuth, async (req, res) => {
   try {
     const { nodeId, version, parent } = req.params;
     const v = Number(version);
 
     const node = await Node.findById(nodeId).lean();
 
-    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
     // Flat schema: version 0 = current state
     const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
@@ -512,7 +515,7 @@ router.get("/node/:nodeId/:version", urlAuth, async (req, res) => {
     const wantHtml = req.query.html !== undefined;
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({
+      return sendOk(res, {
         id: node._id,
         name: node.name,
         version: v,
@@ -556,7 +559,7 @@ router.get("/node/:nodeId/:version", urlAuth, async (req, res) => {
     );
   } catch (err) {
     log.error("API", "Error fetching version:", err);
-    res.status(500).json({ error: "Internal server error" });
+    sendError(res, 500, ERR.INTERNAL, "Internal server error");
   }
 });
 router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
@@ -566,23 +569,17 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
     const userId = req.userId;
 
     if (!name || typeof name !== "string") {
-      return res.status(400).json({
-        success: false,
-        error: "Name is required",
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Name is required");
     }
 
     // Load parent
     const parentNode = await Node.findById(nodeId);
     if (!parentNode) {
-      return res.status(404).json({
-        success: false,
-        error: "Parent node not found",
-      });
+      return sendError(res, 404, ERR.NODE_NOT_FOUND, "Parent node not found");
     }
 
     // Create child
-    const childNode = await createNewNode(
+    const childNode = await createNode(
       name,
       schedule || null,
       reeffectTime || null,
@@ -594,7 +591,7 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
       note || null,
       null, // validatedUser
       false, // wasAi
-      null, // aiChatId
+      null, // chatId
       null, // sessionId
       type || null,
     );
@@ -606,14 +603,13 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
       );
     }
 
-    res.status(201).json({
-      success: true,
+    sendOk(res, {
       childId: childNode._id,
       child: childNode,
-    });
+    }, 201);
   } catch (err) {
     log.error("API", "createChild error:", err);
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -630,13 +626,12 @@ router.post("/node/:nodeId/delete", authenticate, async (req, res) => {
       );
     }
 
-    return res.json({
-      success: true,
+    return sendOk(res, {
       deletedNode: deletedNode._id,
     });
   } catch (err) {
     log.error("API", "delete node error:", err);
-    return res.status(400).json({ error: err.message });
+    return sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -648,7 +643,7 @@ const editNameHandler = async (req, res) => {
     const newName = req.body?.name || req.query?.name;
 
     if (!newName) {
-      return res.status(400).json({ error: "newName is required" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "newName is required");
     }
 
     const result = await editNodeName({
@@ -663,13 +658,10 @@ const editNameHandler = async (req, res) => {
       );
     }
 
-    res.json({
-      success: true,
-      ...result,
-    });
+    sendOk(res, result);
   } catch (err) {
     log.error("API", "editName error:", err);
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 };
 router.post("/node/:nodeId/editName", authenticate, editNameHandler);
@@ -700,13 +692,10 @@ router.post(
         );
       }
 
-      res.json({
-        success: true,
-        ...result,
-      });
+      sendOk(res, result);
     } catch (err) {
       log.error("API", "editType error:", err);
-      res.status(400).json({ error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );

@@ -1,3 +1,5 @@
+import { getUserMeta } from "../../../seed/tree/userMetadata.js";
+
 const PLAN_DAILY_VALUE = {
   basic: 0,
   standard: 500,
@@ -11,7 +13,8 @@ export function validatePurchase(user, { plan, energyAmount }) {
       throw new Error("Invalid plan");
     }
 
-    const oldVal = PLAN_DAILY_VALUE[user.profileType] ?? 0;
+    const currentPlan = getUserMeta(user, "tiers").plan || "basic";
+    const oldVal = PLAN_DAILY_VALUE[currentPlan] ?? 0;
     const newVal = PLAN_DAILY_VALUE[plan] ?? 0;
 
     if (newVal < oldVal) {

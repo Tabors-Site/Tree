@@ -1,12 +1,12 @@
 import { z } from "zod";
-import Node from "../../db/models/node.js";
-import User from "../../db/models/user.js";
-import { getExtMeta } from "../../core/tree/extensionMetadata.js";
-import log from "../../core/log.js";
+import Node from "../../seed/models/node.js";
+import User from "../../seed/models/user.js";
+import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
+import log from "../../seed/log.js";
 
-async function requireGod(userId) {
-  const user = await User.findById(userId).select("profileType").lean();
-  return user?.profileType === "god";
+async function requireAdmin(userId) {
+  const user = await User.findById(userId).select("isAdmin").lean();
+  return user?.isAdmin === true;
 }
 
 export default function getTools() {
@@ -31,7 +31,7 @@ export default function getTools() {
 
           let peerCount = 0;
           try {
-            const LandPeer = (await import("../../db/models/landPeer.js")).default;
+            const LandPeer = (await import("../../canopy/models/landPeer.js")).default;
             peerCount = await LandPeer.countDocuments();
           } catch {}
 
@@ -79,7 +79,7 @@ export default function getTools() {
       },
       annotations: { readOnlyHint: false, destructiveHint: true },
       async handler({ key, value, userId }) {
-        if (!await requireGod(userId)) {
+        if (!await requireAdmin(userId)) {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
@@ -106,12 +106,12 @@ export default function getTools() {
       },
       annotations: { readOnlyHint: true },
       async handler({ userId }) {
-        if (!await requireGod(userId)) {
+        if (!await requireAdmin(userId)) {
           return { content: [{ type: "text", text: "Permission denied." }] };
         }
         try {
-          const users = await User.find({ isRemote: { $ne: true } }).select("username profileType roots").lean();
-          const lines = users.map(u => `${u.username} (${u.profileType}) . ${u.roots?.length || 0} trees`);
+          const users = await User.find({ isRemote: { $ne: true } }).select("username isAdmin roots").lean();
+          const lines = users.map(u => `${u.username} (${u.isAdmin ? "admin" : "user"}) . ${u.roots?.length || 0} trees`);
           return { content: [{ type: "text", text: lines.join("\n") || "No users." }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Error: ${err.message}` }] };
@@ -128,7 +128,7 @@ export default function getTools() {
       annotations: { readOnlyHint: true },
       async handler({ userId }) {
         try {
-          const LandPeer = (await import("../../db/models/landPeer.js")).default;
+          const LandPeer = (await import("../../canopy/models/landPeer.js")).default;
           const peers = await LandPeer.find().lean();
           if (!peers.length) return { content: [{ type: "text", text: "No peers." }] };
           const lines = peers.map(p => `${p.domain} . ${p.status || "unknown"} . last seen ${p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleString() : "never"}`);
@@ -200,7 +200,7 @@ export default function getTools() {
       },
       annotations: { readOnlyHint: false, destructiveHint: true },
       async handler({ name: extName, userId }) {
-        if (!await requireGod(userId)) {
+        if (!await requireAdmin(userId)) {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
@@ -222,7 +222,7 @@ export default function getTools() {
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
       async handler({ name: extName, userId }) {
-        if (!await requireGod(userId)) {
+        if (!await requireAdmin(userId)) {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
@@ -244,7 +244,7 @@ export default function getTools() {
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
       async handler({ name: extName, userId }) {
-        if (!await requireGod(userId)) {
+        if (!await requireAdmin(userId)) {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
@@ -267,7 +267,7 @@ export default function getTools() {
       annotations: { readOnlyHint: true },
       async handler({ query, userId }) {
         try {
-          const { getLandConfigValue } = await import("../../core/landConfig.js");
+          const { getLandConfigValue } = await import("../../seed/landConfig.js");
           const dirUrl = getLandConfigValue("directoryUrl") || "https://dir.treeos.ai";
           const url = query ? `${dirUrl}/extensions?q=${encodeURIComponent(query)}` : `${dirUrl}/extensions`;
           const res = await fetch(url);
@@ -293,7 +293,7 @@ export default function getTools() {
       annotations: { readOnlyHint: true },
       async handler({ nodeId, userId }) {
         try {
-          const { getBlockedExtensionsAtNode } = await import("../../core/tree/extensionScope.js");
+          const { getBlockedExtensionsAtNode } = await import("../../seed/tree/extensionScope.js");
           const { getLoadedExtensionNames } = await import("../../extensions/loader.js");
           const { blocked, restricted } = await getBlockedExtensionsAtNode(nodeId);
           const installed = getLoadedExtensionNames();
@@ -321,8 +321,8 @@ export default function getTools() {
           const node = await Node.findById(nodeId);
           if (!node) return { content: [{ type: "text", text: "Node not found" }] };
 
-          const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
-          const { clearScopeCache } = await import("../../core/tree/extensionScope.js");
+          const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+          const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
 
           const config = {};
           if (blocked?.length) config.blocked = blocked;

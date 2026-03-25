@@ -1,9 +1,10 @@
-// routes/app.js
+// html-rendering/app/app.js
 import express from "express";
-import User from "../../../db/models/user.js";
-import CustomLlmConnection from "../../../db/models/customLlmConnection.js";
-import authenticateLite from "../../../middleware/authenticateLite.js";
-import { notFoundPage } from "../../../middleware/notFoundPage.js";
+import { sendError, ERR } from "../../../seed/protocol.js";
+import User from "../../../seed/models/user.js";
+import LlmConnection from "../../../seed/models/llmConnection.js";
+import authenticateLite from "../authenticateLite.js";
+import { notFoundPage } from "../notFoundPage.js";
 import {
   dashboardCSS,
   dashboardHTML,
@@ -20,9 +21,7 @@ const router = express.Router();
 router.get("/dashboard", authenticateLite, async (req, res) => {
   try {
     if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.status(404).json({
-        error: "Server-rendered HTML is disabled. Use the SPA frontend.",
-      });
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled. Use the SPA frontend.");
     }
     if (!req.userId) {
       return res.redirect("/login");
@@ -44,19 +43,19 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       if (!hasMainLlm || !hasTree) {
         const connCount = hasMainLlm
           ? 1
-          : await CustomLlmConnection.countDocuments({ userId: req.userId });
+          : await LlmConnection.countDocuments({ userId: req.userId });
         if (connCount === 0 || !hasTree) {
           return res.redirect("/setup");
         }
       }
     }
 
-    const { getUserMeta } = await import("../../../core/tree/userMetadata.js");
+    const { getUserMeta } = await import("../../../seed/tree/userMetadata.js");
     const htmlShareToken = getUserMeta(user, "html")?.shareToken || "";
     const { username } = user;
     const hasLlm =
       !!user.llmDefault ||
-      (await CustomLlmConnection.countDocuments({ userId: req.userId })) > 0;
+      (await LlmConnection.countDocuments({ userId: req.userId })) > 0;
 
     const landName = getLandIdentity()?.name || "TreeOS";
 

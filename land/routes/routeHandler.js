@@ -6,6 +6,7 @@ import { authApiRouter, authPageRouter } from "./auth.js";
 import user from "./api/user.js";
 
 import contributions from "./api/contributions.js";
+import cascade from "./api/cascade.js";
 
 import orchestrate from "./api/orchestrate.js";
 // gateway webhooks loaded via extension system
@@ -13,18 +14,23 @@ import landConfig from "./api/config.js";
 import canopy from "./canopy.js";
 
 import { handleMcpRequest, mcpServerInstance } from "../mcp/server.js";
-import authenticateMCP from "../middleware/authenticateMCP.js";
+import authenticateMCP from "../seed/middleware/authenticateMCP.js";
 
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
+import { sendOk, sendError, ERR } from "../seed/protocol.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-import { notFoundPage } from "../middleware/notFoundPage.js";
+import { loadExtensions, getLoadedExtensionNames, getLoadedManifests, getExtension } from "../extensions/loader.js";
 
-import { loadExtensions, getLoadedExtensionNames, getLoadedManifests } from "../extensions/loader.js";
-import { getLandConfigValue } from "../core/landConfig.js";
+function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
+  const fn = getExtension("html-rendering")?.exports?.notFoundPage;
+  if (fn) return fn(req, res, message);
+  return sendError(res, 404, ERR.NODE_NOT_FOUND, message);
+}
+import { getLandConfigValue } from "../seed/landConfig.js";
 
 const BLOCKED_IDS = ["deleted", "empty", "null", "system"];
 
@@ -34,11 +40,7 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
-    res.status(429).json({
-      error: "Too many requests",
-      message: "You are sending requests too fast. Try again in 15 minutes.",
-      retryAfterMinutes: 15,
-    });
+    sendError(res, 429, ERR.RATE_LIMITED, "You are sending requests too fast. Try again in 15 minutes.", { retryAfterMinutes: 15 });
   },
 });
 
@@ -77,6 +79,7 @@ export default async function registerURLRoutes(app) {
   // understanding routes loaded via extension system
   app.use("/api/v1", note);
   app.use("/api/v1", contributions);
+  app.use("/api/v1", cascade);
   // values routes loaded via extension system
   app.use("/api/v1", node);
   app.use("/api/v1", orchestrate);
@@ -104,7 +107,7 @@ export default async function registerURLRoutes(app) {
       }
     }
 
-    res.json({
+    sendOk(res, {
       name: "TreeOS",
       version: "1.0",
       capabilities: [

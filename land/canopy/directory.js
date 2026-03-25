@@ -1,6 +1,6 @@
-import log from "../core/log.js";
+import log from "../seed/log.js";
 import { getLandInfoPayload, signCanopyToken } from "./identity.js";
-import Node from "../db/models/node.js";
+import Node from "../seed/models/node.js";
 
 const DIRECTORY_URL = process.env.DIRECTORY_URL;
 const RE_REGISTER_INTERVAL = 60 * 60 * 1000; // 1 hour

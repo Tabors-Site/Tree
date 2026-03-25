@@ -81,7 +81,7 @@ const ExtensionsAbout = () => {
 
   // Required: won't load without these
   needs: {
-    services: ["llm", "session", "aiChat", "orchestrator"],
+    services: ["llm", "session", "chat", "orchestrator"],
     models: ["Node", "Contribution"],
     extensions: ["other-ext@^1.0.0"],  // semver constraints supported
   },
@@ -390,7 +390,7 @@ treeos ext-restrict fitness read   # fitness can see but not write here`}</div>
           </div>
           <div className="ext-section-text">
             Every extension uses one of two core functions for AI. No manual MCP connections,
-            no session management, no AIChat tracking. One call handles everything.
+            no session management, no Chat tracking. One call handles everything.
           </div>
 
           <div className="ext-section-text" style={{ marginTop: 16 }}>

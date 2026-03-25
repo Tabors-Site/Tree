@@ -5,7 +5,7 @@ export default {
 
   // Required: won't load without these
   needs: {
-    services: ["llm", "session", "aiChat", "orchestrator", "mcp"],
+    services: ["llm", "session", "chat", "orchestrator", "mcp"],
     models: ["Node", "Contribution"],
   },
 

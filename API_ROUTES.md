@@ -1,5 +1,5 @@
 # TreeOS API Route Inventory
-# Generated Mon Mar 23 17:34:01 PDT 2026
+# Updated March 24, 2026
 
 ## Core Routes
 
@@ -125,7 +125,22 @@
 - get("/canopy/admin/invites"
 - get("/canopy/admin/directory"
 
+### cascade.js
+- post("/node/:nodeId/cascade"
+- get("/flow"
+- get("/flow/:signalId"
+
 ## Extension Routes
+
+### fitness
+- post("/root/:rootId/fitness"
+
+### food
+- post("/root/:rootId/food"
+
+### monitor
+- post("/land/activity"
+- get("/land/activity"
 
 ### api-keys
 - post("/user/:userId/api-keys"

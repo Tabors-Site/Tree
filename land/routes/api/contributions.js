@@ -1,10 +1,18 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../../middleware/urlAuth.js";
-import { getContributions } from "../../core/tree/contributions.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { getContributions } from "../../seed/tree/contributions.js";
 import getNodeName from "./helpers/getNameById.js";
-import { resolveVersion } from "../../core/tree/treeFetch.js";
+import { resolveVersion } from "../../seed/tree/treeFetch.js";
 import { getExtension } from "../../extensions/loader.js";
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
@@ -15,27 +23,27 @@ router.param("version", async (req, res, next, val) => {
     req.params.version = String(await resolveVersion(req.params.nodeId, val));
     next();
   } catch (err) {
-    return res.status(404).json({ error: err.message });
+    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
   }
 });
 
 router.get(
   "/node/:nodeId/:version/contributions",
-  urlAuth,
+  readAuth,
   async (req, res) => {
     try {
       const { nodeId, version } = req.params;
       const parsedVersion = Number(version);
 
       if (isNaN(parsedVersion)) {
-        return res.status(400).json({ error: "Invalid version" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid version");
       }
 
       const rawLimit = req.query.limit;
       const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
       if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-        return res.status(400).json({ error: "Invalid limit" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit");
       }
 
       const filtered = Object.entries(req.query)
@@ -56,7 +64,7 @@ router.get(
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
       if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json({ nodeId, version: parsedVersion, ...result });
+        return sendOk(res, { nodeId, version: parsedVersion, ...result });
       }
 
       const nodeName = await getNodeName(nodeId);
@@ -73,19 +81,19 @@ router.get(
       );
     } catch (err) {
       log.error("API", err);
-      res.status(500).json({ error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
 
 // Versionless alias (protocol-compliant)
-router.get("/node/:nodeId/contributions", urlAuth, async (req, res, next) => {
+router.get("/node/:nodeId/contributions", readAuth, async (req, res, next) => {
   try {
     req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
     req.url = `/node/${req.params.nodeId}/${req.params.version}/contributions`;
     router.handle(req, res, next);
   } catch (err) {
-    return res.status(404).json({ error: err.message });
+    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
   }
 });
 

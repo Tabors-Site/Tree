@@ -1,4 +1,4 @@
-import log from "../core/log.js";
+import log from "../seed/log.js";
 import { signCanopyToken } from "./identity.js";
 import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
 

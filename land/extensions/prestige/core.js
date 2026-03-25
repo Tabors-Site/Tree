@@ -1,8 +1,8 @@
 import {
   logContribution,
   findNodeById,
-} from "../../db/utils.js";
-import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+} from "../../seed/utils.js";
+import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
@@ -17,7 +17,7 @@ async function addPrestige({
   nodeId,
   userId,
   wasAi,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 }) {
   const node = await findNodeById(nodeId);
@@ -38,7 +38,7 @@ async function addPrestige({
     userId,
     nodeId,
     wasAi,
-    aiChatId,
+    chatId,
     sessionId,
     action: "prestige",
     nodeVersion: currentLevel,

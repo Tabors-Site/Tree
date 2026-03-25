@@ -2,11 +2,12 @@
 // First-time onboarding: connect LLM + create first tree.
 // Skips steps already completed, redirects to /chat when done.
 
-import log from "../../../core/log.js";
+import log from "../../../seed/log.js";
+import { sendError, ERR } from "../../../seed/protocol.js";
 import express from "express";
-import authenticateLite from "../../../middleware/authenticateLite.js";
-import User from "../../../db/models/user.js";
-import CustomLlmConnection from "../../../db/models/customLlmConnection.js";
+import authenticateLite from "../authenticateLite.js";
+import User from "../../../seed/models/user.js";
+import LlmConnection from "../../../seed/models/llmConnection.js";
 import { renderSetup } from "./setupPage.js";
 
 const router = express.Router();
@@ -14,7 +15,7 @@ const router = express.Router();
 router.get("/setup", authenticateLite, async (req, res) => {
   try {
     if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.status(404).json({ error: "Server-rendered HTML is disabled. Use the SPA frontend." });
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled. Use the SPA frontend.");
     }
 
     if (!req.userId) {
@@ -28,7 +29,7 @@ router.get("/setup", authenticateLite, async (req, res) => {
       return res.redirect("/login?redirect=/setup");
     }
 
-    const connCount = await CustomLlmConnection.countDocuments({ userId: req.userId });
+    const connCount = await LlmConnection.countDocuments({ userId: req.userId });
     const hasMainLlm = !!(user.llmDefault);
     const needsLlm = !hasMainLlm && connCount === 0;
     const needsTree = !user.roots || user.roots.length === 0;

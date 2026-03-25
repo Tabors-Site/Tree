@@ -2,11 +2,11 @@
 // Analyzes tree structure and moves misplaced nodes / removes empty misplaced nodes.
 // Pipeline: analyze (tool-less) -> execute moves via tree:structure -> execute deletes via tree:structure.
 
-import log from "../../core/log.js";
-import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
-import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
-import { buildDeepTreeSummary } from "../../core/tree/treeFetch.js";
-import Node from "../../db/models/node.js";
+import log from "../../seed/log.js";
+import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
+import { buildDeepTreeSummary } from "../../seed/tree/treeFetch.js";
+import Node from "../../seed/models/node.js";
 
 const MAX_MOVES = 5;
 const MAX_DELETES = 3;

@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { exec } from "child_process";
 import { promisify } from "util";
-import User from "../../db/models/user.js";
-import log from "../../core/log.js";
+import User from "../../seed/models/user.js";
+import log from "../../seed/log.js";
 
 const execAsync = promisify(exec);
 const TIMEOUT_MS = 30000;
@@ -24,9 +24,9 @@ export default function getTools() {
         openWorldHint: true,
       },
       async handler({ command, userId }) {
-        const user = await User.findById(userId).select("profileType").lean();
-        if (!user || user.profileType !== "god") {
-          return { content: [{ type: "text", text: "Permission denied. Shell access requires god-tier profile." }] };
+        const user = await User.findById(userId).select("isAdmin").lean();
+        if (!user || !user.isAdmin) {
+          return { content: [{ type: "text", text: "Permission denied. Shell access requires admin." }] };
         }
         if (!command) {
           return { content: [{ type: "text", text: "No command provided." }] };

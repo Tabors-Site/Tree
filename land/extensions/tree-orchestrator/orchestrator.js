@@ -3,7 +3,7 @@
 // Librarian: navigates, reads, places — behind the scenes
 // Destructive: translate → navigate → confirm → execute (existing flow)
 
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import {
   switchMode,
   processMessage,
@@ -12,20 +12,20 @@ import {
   resetConversation,
   getClientForUser,
   resolveRootLlmForMode,
-} from "../../ws/conversation.js";
+} from "../../seed/ws/conversation.js";
 import { classify, translateDestructive } from "./translator.js";
-import { setAiContributionContext } from "../../ws/aiChatTracker.js";
-import { isActiveNavigator } from "../../ws/sessionRegistry.js";
+import { setChatContext } from "../../seed/ws/chatTracker.js";
+import { isActiveNavigator } from "../../seed/ws/sessionRegistry.js";
 
 import {
   getContextForAi,
   getNavigationContext,
   buildDeepTreeSummary,
-} from "../../core/tree/treeFetch.js";
+} from "../../seed/tree/treeFetch.js";
 import mongoose from "mongoose";
-import Node from "../../db/models/node.js";
-import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
-import { resolveMode } from "../../ws/modes/registry.js";
+import Node from "../../seed/models/node.js";
+import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { resolveMode } from "../../seed/ws/modes/registry.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODE RESOLUTION HELPER
@@ -460,7 +460,7 @@ async function executePlanSteps({
       );
 
       const navMode = await resolveModeForNode("navigate", lastTargetNodeId);
-      switchMode(visitorId, navMode, {
+      await switchMode(visitorId, navMode, {
         ...meta,
         currentNodeId: getCurrentNodeId(visitorId) || rootId,
         clearHistory: true,
@@ -612,7 +612,7 @@ async function executePlanSteps({
               skipReason: "Node not found",
             }),
           );
-          resetConversation(visitorId, { username, userId });
+          await resetConversation(visitorId, { username, userId });
           continue;
         }
       }
@@ -660,7 +660,7 @@ async function executePlanSteps({
       );
       lastTargetNodeId = targetNodeId;
       lastTargetPath = targetPath;
-      resetConversation(visitorId, { username, userId });
+      await resetConversation(visitorId, { username, userId });
       continue;
     }
 
@@ -934,7 +934,7 @@ async function executePlanSteps({
         } catch {}
       }
 
-      switchMode(visitorId, executionMode, {
+      await switchMode(visitorId, executionMode, {
         ...meta,
         targetNodeId,
         prestige,
@@ -1012,7 +1012,7 @@ async function executePlanSteps({
     }
 
     // Reset conversation — next step starts fresh
-    resetConversation(visitorId, { username, userId });
+    await resetConversation(visitorId, { username, userId });
 
     // Carry forward position
     lastTargetNodeId = targetNodeId;
@@ -1047,7 +1047,7 @@ export async function orchestrateTreeRequest({
 
   const rootId = rootIdParam ?? getRootId(visitorId);
 
-  // Create an attached runtime (reuses the websocket's session, MCP, AIChat)
+  // Create an attached runtime (reuses the websocket's session, MCP, Chat)
   const rt = new OrchestratorRuntime({
     rootId,
     userId,
@@ -1064,13 +1064,13 @@ export async function orchestrateTreeRequest({
   // Attach to the existing websocket session
   rt.attach({ sessionId, mainChatId: rootChatId, llmProvider, signal, chainIndex: 1 });
 
-  // Ensure AI contribution context is set so MCP tool calls get aiChatId/sessionId
+  // Ensure AI contribution context is set so MCP tool calls get chatId/sessionId
   if (rootChatId) {
-    setAiContributionContext(visitorId, sessionId, rootChatId);
+    setChatContext(visitorId, sessionId, rootChatId);
   }
 
   const meta = { username, userId, rootId, slot, llmProvider };
-  const modesUsed = []; // Track full chain for AIChat
+  const modesUsed = []; // Track full chain for Chat
 
   // ────────────────────────────────────────────────────────
   // QUERY FAST PATH — skip classifier, go straight to context gather + respond
@@ -1455,7 +1455,7 @@ async function runQueryFlow({
   emitStatus(socket, "navigate", "Reading tree...");
 
   const queryLibMode = await resolveModeForNode("librarian", getCurrentNodeId(visitorId) || rootId);
-  switchMode(visitorId, queryLibMode, {
+  await switchMode(visitorId, queryLibMode, {
     ...meta,
     treeSummary: treeSummary || "",
     intent: "query",
@@ -1566,7 +1566,7 @@ async function runLibrarianFlow({
   );
 
   const libMode = await resolveModeForNode("librarian", getCurrentNodeId(visitorId) || rootId);
-  switchMode(visitorId, libMode, {
+  await switchMode(visitorId, libMode, {
     ...meta,
     treeSummary: treeSummary || "",
     intent: classification.intent,
@@ -1798,7 +1798,7 @@ async function executePendingOperation({
     } catch {}
   }
 
-  switchMode(visitorId, executionMode, {
+  await switchMode(visitorId, executionMode, {
     ...meta,
     targetNodeId: pending.targetNodeId,
     prestige,
@@ -1860,7 +1860,7 @@ async function executePendingOperation({
     }),
   );
 
-  resetConversation(visitorId, { username, userId });
+  await resetConversation(visitorId, { username, userId });
 
   // ── RESUME REMAINING PLAN STEPS (using shared loop) ──
   const remainingPlan = pending.remainingPlan || [];
@@ -1946,7 +1946,7 @@ async function runRespond({
   }
 
   const respondMode = await resolveModeForNode("respond", getCurrentNodeId(visitorId) || rootId);
-  switchMode(visitorId, respondMode, {
+  await switchMode(visitorId, respondMode, {
     username,
     userId,
     rootId,

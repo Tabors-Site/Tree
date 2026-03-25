@@ -1,6 +1,6 @@
 // ws/modes/tree/dreamSummary.js
 // Tool-less mode for generating a plain English summary of a tree dream.
-// Receives the AIChat log from cleanup + drain phases and produces a notification.
+// Receives the Chat log from cleanup + drain phases and produces a notification.
 
 export default {
   name: "tree:dream-summary",

@@ -1,5 +1,5 @@
 import express from "express";
-import authenticate from "../../middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import { createPurchaseSession } from "./purchase.js";
 import { setEnergyService } from "./core/upgradePlan.js";
 

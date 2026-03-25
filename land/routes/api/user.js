@@ -1,22 +1,24 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../../middleware/urlAuth.js";
-import authenticate from "../../middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 
-import User from "../../db/models/user.js";
-import { getUserMeta } from "../../core/tree/userMetadata.js";
+import { getExtension } from "../../extensions/loader.js";
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
+
+import User from "../../seed/models/user.js";
+import { getUserMeta } from "../../seed/tree/userMetadata.js";
 
 // Energy: dynamic import, no-op if extension not installed
-import { getExtension } from "../../extensions/loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
-import { createNewNode } from "../../core/tree/treeManagement.js";
-
-import {
-  getPendingInvitesForUser,
-  respondToInvite,
-} from "../../core/tree/invites.js";
-
+import { createNode } from "../../seed/tree/treeManagement.js";
 
 const router = express.Router();
 
@@ -31,7 +33,7 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-router.get("/user/:userId", urlAuth, async (req, res) => {
+router.get("/user/:userId", readAuth, async (req, res) => {
   try {
     const { userId } = req.params;
 
@@ -47,24 +49,27 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
       .exec();
 
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
     (getExtension("energy")?.exports?.maybeResetEnergy || (() => false))(user);
 
     const roots = user.roots || [];
-    const profileType = user.profileType || "basic";
+    const billingMeta = getUserMeta(user, "billing");
+    const plan = billingMeta.plan || "basic";
     const energyData = getUserMeta(user, "energy");
     const energy = energyData.available;
     const extraEnergy = energyData.additional;
+    const canopyMeta = getUserMeta(user, "canopy");
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({
+      return sendOk(res, {
         userId: user._id,
         username: user.username,
         roots,
-        remoteRoots: user.remoteRoots || [],
-        profileType,
+        remoteRoots: canopyMeta.remoteRoots || [],
+        isAdmin: user.isAdmin || false,
+        plan,
         energy,
       });
     }
@@ -92,7 +97,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
         userId,
         user,
         roots,
-        profileType,
+        plan,
         energy,
         extraEnergy,
         queryString,
@@ -102,7 +107,7 @@ router.get("/user/:userId", urlAuth, async (req, res) => {
     );
   } catch (err) {
     log.error("API", "Error in /user/:userId:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -152,10 +157,11 @@ router.post("/user/reset-password/:token", async (req, res) => {
     }
 
     user.password = password;
-    const { setUserMeta, getUserMeta } = await import("../../core/tree/userMetadata.js");
+    const { setUserMeta, getUserMeta } = await import("../../seed/tree/userMetadata.js");
     const auth = getUserMeta(user, "auth");
     delete auth.resetPasswordToken;
     delete auth.resetPasswordExpiry;
+    auth.tokensInvalidBefore = new Date().toISOString();
     setUserMeta(user, "auth", auth);
 
     await user.save();
@@ -173,17 +179,14 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
     const { name, type } = req.body;
 
     if (req.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ success: false, error: "Not authorized" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
 
     if (!name || typeof name !== "string") {
-      return res.status(400).json({
-        success: false,
-        error: "Name is required",
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Name is required");
     }
 
-    const rootNode = await createNewNode(
+    const rootNode = await createNode(
       name,
       null,
       0,
@@ -195,7 +198,7 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
       null,
       req.user,
       false, // wasAi
-      null, // aiChatId
+      null, // chatId
       null, // sessionId
       type || null,
     );
@@ -207,88 +210,19 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
       );
     }
 
-    res.status(201).json({
-      success: true,
+    sendOk(res, {
       rootId: rootNode._id,
       root: rootNode,
-    });
+    }, 201);
   } catch (err) {
     log.error("API", "createRoot error:", err);
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
 // Raw idea routes moved to extensions/raw-ideas
 
-router.get("/user/:userId/invites", urlAuth, async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    // 🔐 user can only see their own invites
-    if (req.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ error: "Not authorized" });
-    }
-
-    const invites = await getPendingInvitesForUser(userId);
-
-    const wantHtml = "html" in req.query;
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({ success: true, invites });
-    }
-
-    // ---------- HTML ----------
-    const token = req.query.token ?? "";
-    const tokenQS = token ? `?token=${token}&html` : `?html`;
-
-    return res.send(html().renderInvites({ userId, invites, token }));
-  } catch (err) {
-    log.error("API", "invites page error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post(
-  "/user/:userId/invites/:inviteId",
-  authenticate,
-
-  async (req, res) => {
-    try {
-      const { userId, inviteId } = req.params;
-      const { accept } = req.body;
-
-      if (req.userId.toString() !== userId.toString()) {
-        return res.status(403).json({ error: "Not authorized" });
-      }
-
-      const acceptInvite = accept === true || accept === "true";
-
-      await respondToInvite({
-        inviteId,
-        userId: req.userId,
-        acceptInvite,
-      });
-
-      // 🌐 HTML redirect support
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/v1/user/${userId}/invites?token=${req.query.token ?? ""}&html`,
-        );
-      }
-
-      // 📦 JSON response
-      return res.json({
-        success: true,
-        accepted: acceptInvite,
-      });
-    } catch (err) {
-      log.error("API", "respond invite error:", err);
-      return res.status(400).json({
-        success: false,
-        error: err.message,
-      });
-    }
-  },
-);
+// Invite routes moved to extensions/team
 
 // Deleted/revive routes moved to extensions/deleted-revive
 
@@ -301,9 +235,7 @@ router.post(
 
 router.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {
-    return res
-      .status(413)
-      .json({ success: false, error: "File exceeds maximum size of 4 GB" });
+    return sendError(res, 413, ERR.INVALID_INPUT, "File exceeds maximum size of 4 GB");
   }
   next(err);
 });

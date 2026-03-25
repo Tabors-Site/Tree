@@ -1,5 +1,5 @@
-import log from "../core/log.js";
-import LandPeer from "../db/models/landPeer.js";
+import log from "../seed/log.js";
+import LandPeer from "./models/landPeer.js";
 import { getLandIdentity, getLandInfoPayload } from "./identity.js";
 import { isCompatibleVersion } from "./protocol.js";
 import { isPrivateHost } from "./security.js";
@@ -104,8 +104,8 @@ export async function blockPeer(domain) {
 
   if (peer) {
     // Remove all ghost users from this land from all tree contributor arrays
-    const { default: User } = await import("../db/models/user.js");
-    const { default: Node } = await import("../db/models/node.js");
+    const { default: User } = await import("../seed/models/user.js");
+    const { default: Node } = await import("../seed/models/node.js");
 
     const ghostUsers = await User.find({ isRemote: true, homeLand: domain }).select("_id").lean();
     const ghostIds = ghostUsers.map((g) => g._id);

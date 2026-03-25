@@ -7,11 +7,17 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import registerURLRoutes from "./routes/routeHandler.js";
-import { initWebSocketServer } from "./ws/websocket.js";
-import { notFoundPage } from "./middleware/notFoundPage.js";
-import securityHeaders from "./middleware/securityHeaders.js";
+import { initWebSocketServer } from "./seed/ws/websocket.js";
+import { sendOk, sendError, ERR } from "./seed/protocol.js";
+import { getExtension } from "./extensions/loader.js";
+function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
+  const fn = getExtension("html-rendering")?.exports?.notFoundPage;
+  if (fn) return fn(req, res, message);
+  return sendError(res, 404, ERR.NODE_NOT_FOUND, message);
+}
+import securityHeaders from "./seed/middleware/securityHeaders.js";
 // Billing webhook loaded dynamically (extension-owned)
-let stripeWebhook = (req, res) => res.status(503).json({ error: "Billing extension not loaded" });
+let stripeWebhook = (req, res) => sendError(res, 503, ERR.INTERNAL, "Billing extension not loaded");
 try {
   const mod = await import("./extensions/billing/webhook.js");
   stripeWebhook = mod.stripeWebhook;
@@ -45,7 +51,7 @@ app.use(securityHeaders);
 // Health check (no auth, used by load balancers / uptime monitors)
 app.get("/health", async (_req, res) => {
   const mongoose = (await import("mongoose")).default;
-  res.json({
+  sendOk(res, {
     ok: true,
     uptime: Math.floor(process.uptime()),
     db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",

@@ -1,21 +1,29 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../../middleware/urlAuth.js";
-import authenticate from "../../middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { getExtension } from "../loader.js";
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
 import {
   createUnderstandingRun,
   findOrCreateUnderstandingRun,
 } from "./core.js";
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
-import Contribution from "../../db/models/contribution.js";
-import { getNotes } from "../../core/tree/notes.js";
+import Contribution from "../../seed/models/contribution.js";
+import { getNotes } from "../../seed/tree/notes.js";
 const router = express.Router();
 
-import Node from "../../db/models/node.js";
-import { userHasLlm } from "../../ws/conversation.js";
+import Node from "../../seed/models/node.js";
+import { userHasLlm } from "../../seed/ws/conversation.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
-import { getSessionsForUser, endSession, SESSION_TYPES } from "../../ws/sessionRegistry.js";
+import { getSessionsForUser, endSession, SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { renderUnderstandingRun, renderUnderstandingNode, renderUnderstandingsList, renderRunNodeView, buildRunCards, buildRunNodeInputsHtml } from "./html.js";
 
 function buildQueryString(req) {
@@ -39,18 +47,14 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
 
     const rootNode = await Node.findById(nodeId).lean();
     if (!rootNode) {
-      return res.status(404).json({
-        error: "Root node not found",
-      });
+      return sendError(res, 404, ERR.NODE_NOT_FOUND, "Root node not found");
     }
 
     // Check LLM access — tree owner needs an LLM or root must have one assigned
     const hasUserLlm = await userHasLlm(userId);
     const hasRootLlm = !!(rootNode.llmDefault && rootNode.llmDefault !== "none");
     if (!hasUserLlm && !hasRootLlm) {
-      return res
-        .status(403)
-        .json({ error: "No LLM connection. Visit /setup to set one up." });
+      return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     }
 
     const result = incremental
@@ -63,23 +67,19 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
         }?token=${req.query.token ?? ""}&html`,
       );
     }
-    return res.status(201).json({
-      success: true,
+    return sendOk(res, {
       rootNodeId: nodeId,
       ...result,
-    });
+    }, 201);
   } catch (err) {
  log.error("Understanding", "Error creating understanding run:", err);
-    return res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.get(
   "/root/:nodeId/understandings/run/:runId",
-  urlAuth,
+  readAuth,
   async (req, res) => {
     try {
       const { runId, nodeId } = req.params;
@@ -87,7 +87,7 @@ router.get(
 
       const run = await UnderstandingRun.findById(runId).lean();
       if (!run) {
-        return res.status(404).json({ error: "UnderstandingRun not found" });
+        return sendError(res, 404, ERR.NODE_NOT_FOUND, "UnderstandingRun not found");
       }
 
       const topology = new Map(
@@ -174,7 +174,7 @@ router.get(
       // JSON mode
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json({
+        return sendOk(res, {
           understandingRunId: run._id,
           rootNodeId: run.rootNodeId,
           perspective: run.perspective,
@@ -263,14 +263,14 @@ router.get(
       );
     } catch (err) {
  log.error("Understanding", "Error fetching UnderstandingRun:", err);
-      return res.status(500).json({ error: err.message });
+      return sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
 
 router.get(
   "/root/:nodeId/understandings/:understandingNodeId",
-  urlAuth,
+  readAuth,
   async (req, res) => {
     try {
       const { understandingNodeId, nodeId } = req.params;
@@ -279,7 +279,7 @@ router.get(
       const uNode =
         await UnderstandingNode.findById(understandingNodeId).lean();
       if (!uNode) {
-        return res.status(404).json({ error: "UnderstandingNode not found" });
+        return sendError(res, 404, ERR.NODE_NOT_FOUND, "UnderstandingNode not found");
       }
 
       const realNode = await Node.findById(uNode.realNodeId)
@@ -292,7 +292,7 @@ router.get(
       if (runId) {
         run = await UnderstandingRun.findById(runId).lean();
         if (!run) {
-          return res.status(404).json({ error: "UnderstandingRun not found" });
+          return sendError(res, 404, ERR.NODE_NOT_FOUND, "UnderstandingRun not found");
         }
 
         const topo = run.topology?.[understandingNodeId];
@@ -354,7 +354,7 @@ router.get(
 
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json(data);
+        return sendOk(res, data);
       }
 
       const qs = buildQueryString(req);
@@ -378,18 +378,18 @@ router.get(
       );
     } catch (err) {
  log.error("Understanding", "Error fetching UnderstandingNode:", err);
-      return res.status(500).json({ error: err.message });
+      return sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
-router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
+router.get("/root/:nodeId/understandings", readAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const queryString = buildQueryString(req);
 
     const root = await Node.findById(nodeId).select("_id name userId").lean();
     if (!root) {
-      return res.status(404).json({ error: "Root not found" });
+      return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     }
 
     const runs = await UnderstandingRun.find({ rootNodeId: nodeId })
@@ -409,7 +409,7 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
 
     const wantHtml = "html" in req.query;
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json(data);
+      return sendOk(res, data);
     }
 
     const runCards = buildRunCards({
@@ -428,13 +428,13 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
     );
   } catch (err) {
  log.error("Understanding", "Error fetching understandings:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.get(
   "/root/:nodeId/understandings/run/:runId/:understandingNodeId",
-  urlAuth,
+  readAuth,
   async (req, res) => {
     try {
       const { runId, understandingNodeId, nodeId } = req.params;
@@ -442,13 +442,13 @@ router.get(
 
       const root = await Node.findById(nodeId).select("_id name userId").lean();
       if (!root) {
-        return res.status(404).json({ error: "Root not found" });
+        return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
       }
 
       const uNode =
         await UnderstandingNode.findById(understandingNodeId).lean();
       if (!uNode) {
-        return res.status(404).json({ error: "UnderstandingNode not found" });
+        return sendError(res, 404, ERR.NODE_NOT_FOUND, "UnderstandingNode not found");
       }
 
       const realNode = await Node.findById(uNode.realNodeId)
@@ -457,7 +457,7 @@ router.get(
 
       const run = await UnderstandingRun.findById(runId).lean();
       if (!run) {
-        return res.status(404).json({ error: "UnderstandingRun not found" });
+        return sendError(res, 404, ERR.NODE_NOT_FOUND, "UnderstandingRun not found");
       }
 
       // Safe perspectiveStates accessor
@@ -556,7 +556,7 @@ router.get(
 
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json(data);
+        return sendOk(res, data);
       }
 
       /* =========================
@@ -594,7 +594,7 @@ router.get(
       );
     } catch (err) {
  log.error("Understanding", "Error fetching run node view:", err);
-      return res.status(500).json({ error: err.message });
+      return sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
@@ -612,7 +612,7 @@ router.post("/root/:nodeId/understandings/run/:runId/orchestrate", authenticate,
   const rootNode = await Node.findById(nodeId).select("llmDefault metadata").lean();
   const hasRootLlm = !!(rootNode?.llmDefault && rootNode.llmDefault !== "none");
   if (!hasRootLlm && !(await userHasLlm(userId))) {
-    return res.status(403).json({ success: false, error: "No LLM connection. Visit /setup to set one up." });
+    return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
   }
 
   try {
@@ -620,10 +620,10 @@ router.post("/root/:nodeId/understandings/run/:runId/orchestrate", authenticate,
     if ("html" in req.query && result.success) {
       return res.redirect(`/api/v1/root/${nodeId}/understandings/run/${runId}?token=${req.query.token ?? ""}&html`);
     }
-    return res.json(result);
+    return sendOk(res, result);
   } catch (err) {
  log.error("Understanding", "Understanding orchestration error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -632,9 +632,9 @@ router.post("/root/:nodeId/understandings/run/:runId/stop", authenticate, async 
   const userId = req.userId;
   const sessions = getSessionsForUser(userId);
   const match = sessions.find((s) => s.type === SESSION_TYPES.UNDERSTANDING_ORCHESTRATE && s.meta?.runId === runId);
-  if (!match) return res.json({ success: false, error: "No active session found for this run" });
+  if (!match) return sendError(res, 404, ERR.NODE_NOT_FOUND, "No active session found for this run");
   endSession(match.sessionId);
-  return res.json({ success: true });
+  return sendOk(res);
 });
 
 export default router;

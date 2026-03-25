@@ -1,12 +1,39 @@
 # TreeOS Extensions
 
-Optional features built on top of the core TreeOS protocol. These are implemented by the reference land at treeos.ai but are not required for protocol compliance. Other lands MAY implement any combination of these extensions.
+Optional features built on the seed. Every extension is a folder with a `manifest.js` and an `index.js`. Install from the registry, build your own, block per-branch. The seed never imports from extensions. Extensions import from seed.
 
-Extensions are advertised via the `extensions` array in `GET /protocol`.
+Extensions are advertised via the `extensions` array in `GET /protocol`. Full developer spec at [land/extensions/EXTENSION_FORMAT.md](land/extensions/EXTENSION_FORMAT.md).
+
+## Fitness
+
+Personal fitness coaching, workout programming, and exercise tracking. Two AI modes (coach and log), one route, one CLI command. Uses existing seed tools (create-new-node-branch, edit-node-version-value, add-node-prestige, get-active-leaf-execution-frontier) with fitness-specific system prompts. Zero custom tools.
+
+| Command | What it does |
+|---------|-------------|
+| `treeos fitness "i want to get strong"` | Plans workouts, builds tree structure |
+| `treeos fitness "bench 135x10x10x8"` | Logs values, prestiges, advances |
+
+## Food
+
+Calorie and macro tracking, meal planning, and nutritional coaching. Same pattern as fitness: two modes, one route, one CLI command.
+
+| Command | What it does |
+|---------|-------------|
+| `treeos food "what should i eat?"` | Plans meals based on remaining budget |
+| `treeos food "i had eggs and toast"` | Logs food, tracks macros, reports totals |
+
+## Monitor
+
+Land activity monitoring. Summarizes AI usage, hook activity, sessions, and extension health. The AI doesn't dump raw data. It tells a story.
+
+| Command | What it does |
+|---------|-------------|
+| `treeos activity "what happened today"` | AI-powered activity summary |
+| `GET /land/activity` | Raw stats JSON for dashboards |
 
 ## Energy System
 
-Meters usage across all tree operations. Each action costs energy. Balance resets daily based on plan tier.
+Meters usage through lifecycle hooks (beforeNote, beforeStatusChange, afterNodeCreate, beforeNodeDelete). The seed fires the hooks. Energy registers handlers. No energy logic in the seed.
 
 | Method | Path | Description |
 |--------|------|-------------|

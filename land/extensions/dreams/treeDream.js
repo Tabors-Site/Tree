@@ -4,18 +4,18 @@
 // Pipeline: cleanup (multi-pass) → short-term drain (multi-pass) → understanding run.
 // Triggered by user-configured dreamTime on root nodes.
 
-import log from "../../core/log.js";
-import Node from "../../db/models/node.js";
-import User from "../../db/models/user.js";
+import log from "../../seed/log.js";
+import Node from "../../seed/models/node.js";
+import User from "../../seed/models/user.js";
 import ShortMemory from "./model.js";
 import { orchestrateReorganize } from "./cleanupReorganize.js";
 import { orchestrateExpand } from "./cleanupExpand.js";
 import { drainTree } from "./shortTermDrain.js";
 import { getExtension } from "../loader.js";
 import { orchestrateDreamNotify } from "./dreamNotify.js";
-import { userHasLlm } from "../../ws/conversation.js";
-import { acquireLock, releaseLock } from "../../orchestrators/locks.js";
-import { setExtMeta } from "../../core/tree/extensionMetadata.js";
+import { userHasLlm } from "../../seed/ws/conversation.js";
+import { acquireLock, releaseLock } from "../../seed/orchestrators/locks.js";
+import { setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG

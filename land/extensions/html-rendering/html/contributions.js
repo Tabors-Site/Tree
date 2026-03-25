@@ -159,15 +159,15 @@ function renderAction(rawC, { nodeId, parsedVersion, nextVersion, queryString })
       return text;
     }
 
-    case "updateChildNode": {
-      const uc = c.updateChildNode || {};
+    case "updateChild": {
+      const uc = c.updateChild || {};
       return uc.action === "added"
         ? `Added child ${link(uc.childId, queryString)}`
         : `Removed child ${link(uc.childId, queryString)}`;
     }
 
-    case "editNameNode": {
-      const en = c.editNameNode || {};
+    case "editName": {
+      const en = c.editName || {};
       return `Renamed from <code>${esc(en.oldName)}</code> to <code>${esc(en.newName)}</code>`;
     }
 

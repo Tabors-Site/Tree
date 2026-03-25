@@ -1,6 +1,6 @@
-import Node from "../../db/models/node.js";
-import { logContribution } from "../../db/utils.js";
-import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+import Node from "../../seed/models/node.js";
+import { logContribution } from "../../seed/utils.js";
+import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
@@ -11,7 +11,7 @@ async function updateSchedule({
   reeffectTime,
   userId,
   wasAi = false,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 }) {
   if (!nodeId || reeffectTime === undefined) {
@@ -59,7 +59,7 @@ async function updateSchedule({
     userId,
     nodeId,
     wasAi,
-    aiChatId,
+    chatId,
     sessionId,
     action: "editSchedule",
     scheduleEdited,

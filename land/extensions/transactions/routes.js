@@ -1,7 +1,15 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../../middleware/urlAuth.js";
-import authenticate from "../../middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { getExtension } from "../loader.js";
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
 
 import {
   setTransactionPolicy,
@@ -17,7 +25,7 @@ import {
   renderTransactionDetail,
 } from "./html.js";
 
-import { resolveVersion } from "../../core/tree/treeFetch.js";
+import { resolveVersion } from "../../seed/tree/treeFetch.js";
 
 const router = express.Router();
 const allowedParams = ["token", "html"];
@@ -28,7 +36,7 @@ router.param("version", async (req, res, next, val) => {
     req.params.version = String(await resolveVersion(req.params.nodeId, val));
     next();
   } catch (err) {
-    return res.status(404).json({ error: err.message });
+    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
   }
 });
 
@@ -126,13 +134,13 @@ function validateTransactionSemantics(normalized) {
 /**
  * LIST TRANSACTIONS FOR NODE + VERSION
  */
-router.get("/node/:nodeId/:version/transactions", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/transactions", readAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const parsedVersion = Number(version);
 
     if (isNaN(parsedVersion)) {
-      return res.status(400).json({ error: "Invalid version" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid version");
     }
 
     const filtered = Object.entries(req.query)
@@ -153,7 +161,7 @@ router.get("/node/:nodeId/:version/transactions", urlAuth, async (req, res) => {
 
     // JSON MODE
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({
+      return sendOk(res, {
         nodeId,
         version: parsedVersion,
         ...result,
@@ -174,7 +182,7 @@ router.get("/node/:nodeId/:version/transactions", urlAuth, async (req, res) => {
     );
   } catch (err) {
  log.error("Transactions", "transactions list error:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -205,9 +213,9 @@ router.post(
         );
       }
 
-      return res.json({ success: true, transaction });
+      return sendOk(res, { transaction });
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
@@ -234,9 +242,9 @@ router.post(
         );
       }
 
-      return res.json({ success: true, transaction: tx });
+      return sendOk(res, { transaction: tx });
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
@@ -260,9 +268,9 @@ router.post(
         );
       }
 
-      res.json({ success: true });
+      sendOk(res);
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
@@ -315,7 +323,7 @@ function normalizeTransactionBody(body) {
  */
 router.get(
   "/node/:nodeId/:version/transactions/:transactionId",
-  urlAuth,
+  readAuth,
   async (req, res) => {
     try {
       const { nodeId, version, transactionId } = req.params;
@@ -333,7 +341,7 @@ router.get(
 
       // JSON MODE
       if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json(result);
+        return sendOk(res, result);
       }
 
       const tx = result.transaction;
@@ -369,7 +377,8 @@ router.get(
           ? 400
           : 500;
 
-      res.status(status).json({ error: err.message });
+      const code = status === 400 ? ERR.INVALID_INPUT : ERR.INTERNAL;
+      sendError(res, status, code, err.message);
     }
   },
 );
@@ -380,11 +389,11 @@ async function useLatest(req, res, next) {
     req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
     next();
   } catch (err) {
-    return res.status(404).json({ error: err.message });
+    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
   }
 }
 
-router.get("/node/:nodeId/transactions", urlAuth, useLatest, (req, res, next) => {
+router.get("/node/:nodeId/transactions", readAuth, useLatest, (req, res, next) => {
   req.url = `/node/${req.params.nodeId}/${req.params.version}/transactions`;
   router.handle(req, res, next);
 });
@@ -422,10 +431,10 @@ router.post("/root/:nodeId/transaction-policy", authenticate, async (req, res) =
       );
     }
 
-    return res.json({ success: true, ...result });
+    return sendOk(res, result);
   } catch (err) {
  log.error("Transactions", "Change policy error:", err);
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 

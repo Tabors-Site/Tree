@@ -61,7 +61,7 @@ const LandingPage = () => {
           <h2 className="lp-section-title">Core Concepts</h2>
           <div className="lp-cards-3">
             <div className="lp-card">
-              <h3>The Kernel</h3>
+              <h3>The Seed</h3>
               <p>
                 Two schemas, five system nodes, and the AI conversation loop.
                 The minimum structure an agent needs to live somewhere persistent.
@@ -74,7 +74,7 @@ const LandingPage = () => {
                   color: "#f97316", fontSize: "0.95rem", fontWeight: 600,
                   textDecoration: "none", borderBottom: "1px solid rgba(249, 115, 22, 0.3)",
                   paddingBottom: 2,
-                }}>Inside the kernel</a>
+                }}>Inside the seed</a>
               </div>
             </div>
             <div className="lp-card">
@@ -496,7 +496,7 @@ const LandingPage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>Explore</h4>
-              <a href="/kernel">The Kernel</a>
+              <a href="/kernel">The Seed</a>
               <a href="/ai">AI Architecture</a>
               <a href="/decentralized">The Network</a>
               <a href="/guide">Full Guide</a>

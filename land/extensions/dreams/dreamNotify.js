@@ -2,13 +2,17 @@
 // Phase 4 of tree dream: generates summary + thought notifications from dream AI chats.
 // Two tool-less LLM calls, then saves Notification documents.
 
-import log from "../../core/log.js";
-import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
-import { SESSION_TYPES } from "../../ws/sessionRegistry.js";
+import log from "../../seed/log.js";
+import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { getExtension } from "../loader.js";
-import AIChat from "../../db/models/aiChat.js";
-import Node from "../../db/models/node.js";
-import Notification from "./notification.model.js";
+import Chat from "../../seed/models/chat.js";
+import Node from "../../seed/models/node.js";
+
+function getNotificationModel() {
+  const ext = getExtension("notifications");
+  return ext?.exports?.Notification || null;
+}
 
 const MSG_CAP = 1500;
 
@@ -18,7 +22,7 @@ function capText(text) {
 }
 
 /**
- * Build a condensed dream log from AIChat records.
+ * Build a condensed dream log from Chat records.
  */
 function buildDreamLog(chats) {
   const entries = [];
@@ -73,7 +77,7 @@ export async function orchestrateDreamNotify({
 
   try {
     // Fetch dream AI chats
-    const dreamChats = await AIChat.find({
+    const dreamChats = await Chat.find({
       sessionId: { $in: dreamSessionIds },
     })
       .sort({ sessionId: 1, chainIndex: 1 })
@@ -137,8 +141,13 @@ export async function orchestrateDreamNotify({
     }
 
     if (notifications.length > 0) {
-      await Notification.insertMany(notifications);
- log.verbose("Dreams", `Created ${notifications.length} notification(s) for ${recipients.size} user(s)`);
+      const Notification = getNotificationModel();
+      if (!Notification) {
+        log.warn("Dreams", "Notifications extension not installed, skipping notification save");
+      } else {
+        await Notification.insertMany(notifications);
+        log.verbose("Dreams", `Created ${notifications.length} notification(s) for ${recipients.size} user(s)`);
+      }
 
       // Dispatch to gateway channels (fire-and-forget)
       const uniqueNotifs = [];

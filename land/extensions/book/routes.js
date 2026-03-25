@@ -1,8 +1,7 @@
 import express from "express";
 import Book from "./model.js";
-import urlAuth from "../../middleware/urlAuth.js";
-import authenticate from "../../middleware/authenticate.js";
-import { notFoundPage } from "../../middleware/notFoundPage.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   getBook as coreGetBook,
   generateBook as coreGenerateBook,
@@ -10,9 +9,22 @@ import {
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
+
+function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
+  const fn = getExtension("html-rendering")?.exports?.notFoundPage;
+  if (fn) return fn(req, res, message);
+  return sendError(res, 404, ERR.NODE_NOT_FOUND, message);
+}
+
 const router = express.Router();
 
-router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
+router.get("/root/:nodeId/book", readAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -73,9 +85,9 @@ router.get("/root/:nodeId/book", urlAuth, async (req, res) => {
       );
     }
 
-    return res.json({ success: true, book });
+    return sendOk(res, { book });
   } catch (err) {
-    return res.status(400).json({ success: false, error: err.message });
+    return sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -101,12 +113,11 @@ router.post("/root/:nodeId/book/generate", authenticate, async (req, res) => {
       userId: req.user?._id,
     });
 
-    return res.json({
-      success: true,
+    return sendOk(res, {
       redirect: `/api/v1/root/${nodeId}/book/share/${shareId}?html`,
     });
   } catch (err) {
-    return res.status(400).json({ success: false, error: err.message });
+    return sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -173,9 +184,9 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       );
     }
 
-    return res.json({ success: true, book });
+    return sendOk(res, { book });
   } catch (err) {
-    return res.status(400).json({ success: false, error: err.message });
+    return sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 

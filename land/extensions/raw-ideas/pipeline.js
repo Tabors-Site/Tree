@@ -1,21 +1,21 @@
 // orchestrators/pipelines/rawIdea.js
 // Automates raw idea placement: chooseRoot -> delegate to treeOrchestrator -> record result.
 
-import log from "../../core/log.js";
-import { OrchestratorRuntime, parseJsonSafe } from "../../orchestrators/runtime.js";
-import { SESSION_TYPES, updateSessionMeta } from "../../ws/sessionRegistry.js";
-import { setRootId, getClientForUser } from "../../ws/conversation.js";
+import log from "../../seed/log.js";
+import { OrchestratorRuntime, parseJsonSafe } from "../../seed/orchestrators/runtime.js";
+import { SESSION_TYPES, updateSessionMeta } from "../../seed/ws/sessionRegistry.js";
+import { setRootId, getClientForUser } from "../../seed/ws/conversation.js";
 
-import { getOrchestrator } from "../../core/orchestratorRegistry.js";
+import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
 import {
   getRootNodesForUser,
   buildDeepTreeSummary,
-} from "../../core/tree/treeFetch.js";
-import { logContribution } from "../../db/utils.js";
+} from "../../seed/tree/treeFetch.js";
+import { logContribution } from "../../seed/utils.js";
 import RawIdea from "./model.js";
-import Node from "../../db/models/node.js";
+import Node from "../../seed/models/node.js";
 
-import { nullSocket } from "../../orchestrators/helpers.js";
+import { nullSocket } from "../../seed/orchestrators/helpers.js";
 
 /**
  * Extract the best targetNodeId from a tree result's step summaries.
@@ -127,7 +127,7 @@ export async function orchestrateRawIdeaPlacement({
       userId,
       nodeId: "deleted",
       wasAi: true,
-      aiChatId: rt.mainChatId,
+      chatId: rt.mainChatId,
       sessionId: rt.sessionId,
       action: "rawIdea",
       nodeVersion: "0",
@@ -252,7 +252,7 @@ export async function orchestrateRawIdeaPlacement({
       userId,
       nodeId: targetNodeId,
       wasAi: true,
-      aiChatId: rt.mainChatId,
+      chatId: rt.mainChatId,
       sessionId: rt.sessionId,
       action: "rawIdea",
       nodeVersion,
@@ -294,7 +294,7 @@ export async function orchestrateRawIdeaPlacement({
         userId,
         nodeId: "deleted",
         wasAi: true,
-        aiChatId: rt.mainChatId,
+        chatId: rt.mainChatId,
         sessionId: rt.sessionId,
         action: "rawIdea",
         nodeVersion: "0",

@@ -3,16 +3,13 @@
 // No iframe, no tree view — just pick a tree and talk.
 
 import express from "express";
-import User from "../../../db/models/user.js";
-import Node from "../../../db/models/node.js";
-import CustomLlmConnection from "../../../db/models/customLlmConnection.js";
-import authenticateLite from "../../../middleware/authenticateLite.js";
-import { getNotifications } from "../../../core/tree/notifications.js";
-import {
-  getPendingInvitesForUser,
-  respondToInvite,
-} from "../../../core/tree/invites.js";
-import { notFoundPage } from "../../../middleware/notFoundPage.js";
+import { sendOk, sendError, ERR } from "../../../seed/protocol.js";
+import User from "../../../seed/models/user.js";
+import Node from "../../../seed/models/node.js";
+import LlmConnection from "../../../seed/models/llmConnection.js";
+import authenticateLite from "../authenticateLite.js";
+import { getExtension } from "../../loader.js";
+import { notFoundPage } from "../notFoundPage.js";
 import { getLandUrl, getLandIdentity } from "../../../canopy/identity.js";
 
 const router = express.Router();
@@ -29,9 +26,7 @@ function escapeHtml(str) {
 router.get("/chat", authenticateLite, async (req, res) => {
   try {
     if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.status(404).json({
-        error: "Server-rendered HTML is disabled. Use the SPA frontend.",
-      });
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled. Use the SPA frontend.");
     }
     if (!req.userId) {
       return res.redirect("/login");
@@ -52,7 +47,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       if (!hasMainLlm || !hasTree) {
         const connCount = hasMainLlm
           ? 1
-          : await CustomLlmConnection.countDocuments({ userId: req.userId });
+          : await LlmConnection.countDocuments({ userId: req.userId });
         if (connCount === 0 || !hasTree) {
           return res.redirect("/setup");
         }
@@ -1609,14 +1604,13 @@ router.get("/chat", authenticateLite, async (req, res) => {
 router.get("/chat/notifications", authenticateLite, async (req, res) => {
   try {
     if (!req.userId)
-      return res.status(401).json({ error: "Not authenticated" });
+      return sendError(res, 401, ERR.UNAUTHORIZED, "Not authenticated");
     const rootId = req.query.rootId;
-    const { notifications, total } = await getNotifications({
-      userId: req.userId,
-      rootId,
-      limit: 50,
-      sinceDays: 7,
-    });
+    const notifExt = getExtension("notifications");
+    const getNotifications = notifExt?.exports?.getNotifications;
+    const { notifications, total } = getNotifications
+      ? await getNotifications({ userId: req.userId, rootId, limit: 50, sinceDays: 7 })
+      : { notifications: [], total: 0 };
 
     // Include dream config when viewing a specific tree
     let dreamTime = null;
@@ -1631,10 +1625,10 @@ router.get("/chat/notifications", authenticateLite, async (req, res) => {
       }
     }
 
-    return res.json({ notifications, total, dreamTime, isOwner });
+    return sendOk(res, { notifications, total, dreamTime, isOwner });
   } catch (err) {
     console.error("Chat notifications error:", err);
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -1642,10 +1636,13 @@ router.get("/chat/notifications", authenticateLite, async (req, res) => {
 router.get("/chat/invites", authenticateLite, async (req, res) => {
   try {
     if (!req.userId)
-      return res.status(401).json({ error: "Not authenticated" });
+      return sendError(res, 401, ERR.UNAUTHORIZED, "Not authenticated");
 
-    // Pending invites for this user
-    const invites = await getPendingInvitesForUser(req.userId);
+    // Pending invites for this user (from team extension)
+    const teamExt = getExtension("team")?.exports || {};
+    const invites = teamExt.getPendingInvitesForUser
+      ? await teamExt.getPendingInvitesForUser(req.userId)
+      : [];
     const inviteList = invites.map((inv) => ({
       id: inv._id,
       from: inv.userInviting?.username
@@ -1678,26 +1675,30 @@ router.get("/chat/invites", authenticateLite, async (req, res) => {
       }
     }
 
-    return res.json({ invites: inviteList, members });
+    return sendOk(res, { invites: inviteList, members });
   } catch (err) {
     console.error("Chat invites error:", err);
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.post("/chat/invites/:inviteId", authenticateLite, async (req, res) => {
   try {
     if (!req.userId)
-      return res.status(401).json({ error: "Not authenticated" });
+      return sendError(res, 401, ERR.UNAUTHORIZED, "Not authenticated");
     const { accept } = req.body;
-    await respondToInvite({
+    const teamExt = getExtension("team")?.exports || {};
+    if (!teamExt.respondToInvite) {
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Team extension not installed");
+    }
+    await teamExt.respondToInvite({
       inviteId: req.params.inviteId,
       userId: req.userId,
       acceptInvite: accept === true || accept === "true",
     });
-    return res.json({ success: true });
+    return sendOk(res);
   } catch (err) {
-    return res.status(400).json({ error: err.message });
+    return sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 

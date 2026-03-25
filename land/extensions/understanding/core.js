@@ -1,9 +1,9 @@
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
-import Node from "../../db/models/node.js";
-import Contribution from "../../db/models/contribution.js";
-import { getNotes } from "../../core/tree/notes.js";
-import { logContribution } from "../../db/utils.js";
+import Node from "../../seed/models/node.js";
+import Contribution from "../../seed/models/contribution.js";
+import { getNotes } from "../../seed/tree/notes.js";
+import { logContribution } from "../../seed/utils.js";
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 function containsHtml(str) {
@@ -18,7 +18,7 @@ export async function createUnderstandingRun(
   userId,
   perspective = "general",
   wasAi = false,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 ) {
   const nodes = await Node.find({}).lean();
@@ -77,7 +77,7 @@ export async function createUnderstandingRun(
     userId: userId,
     nodeId: rootNodeId,
     wasAi,
-    aiChatId,
+    chatId,
     sessionId,
     energyUsed,
 
@@ -109,7 +109,7 @@ export async function findOrCreateUnderstandingRun(
   userId,
   perspective = "general",
   wasAi = false,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 ) {
   const existing = await UnderstandingRun.findOne({
@@ -140,7 +140,7 @@ export async function findOrCreateUnderstandingRun(
     userId,
     perspective,
     wasAi,
-    aiChatId,
+    chatId,
     sessionId,
   );
 }
@@ -606,7 +606,7 @@ export async function commitCompressionResult({
   currentLayer,
   userId,
   wasAi = true,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 }) {
   const run = await UnderstandingRun.findById(understandingRunId).lean();
@@ -649,7 +649,7 @@ export async function commitCompressionResult({
       userId,
       nodeId: node.realNodeId,
       wasAi,
-      aiChatId,
+      chatId,
       sessionId,
       energyUsed,
       action: "understanding",
@@ -726,7 +726,7 @@ export async function commitCompressionResult({
         userId,
         nodeId: node.realNodeId,
         wasAi,
-        aiChatId,
+        chatId,
         sessionId,
         energyUsed,
         action: "understanding",

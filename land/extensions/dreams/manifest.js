@@ -4,14 +4,14 @@ export default {
   description: "Background tree maintenance. Runs cleanup, short term drain, and understanding on a daily schedule.",
 
   needs: {
-    services: ["llm", "session", "aiChat", "orchestrator"],
+    services: ["llm", "session", "chat", "orchestrator"],
     models: ["Node", "Contribution"],
     extensions: ["understanding"],
   },
 
   optional: {
     services: ["energy"],
-    extensions: ["gateway"],
+    extensions: ["gateway", "notifications"],
   },
 
   provides: {

@@ -2,25 +2,25 @@
 // Central processor for incoming gateway messages (Telegram, Discord).
 // Mirrors the tree.js API endpoint pattern but with per-channel queue + cancel.
 
-import log from "../../core/log.js";
-import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
+import log from "../../seed/log.js";
+import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import GatewayChannel from "./model.js";
-import Node from "../../db/models/node.js";
-import User from "../../db/models/user.js";
-import { getOrchestrator } from "../../core/orchestratorRegistry.js";
+import Node from "../../seed/models/node.js";
+import User from "../../seed/models/user.js";
+import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
 import {
   userHasLlm,
-} from "../../ws/conversation.js";
-import { enqueue, getQueueDepth } from "../../ws/requestQueue.js";
+} from "../../seed/ws/conversation.js";
+import { enqueue, getQueueDepth } from "../../seed/ws/requestQueue.js";
 import {
   setSessionAbort,
   clearSessionAbort,
   endSession,
   abortSessionsByScope,
   SESSION_TYPES,
-} from "../../ws/sessionRegistry.js";
-import { resolveTreeAccess } from "../../core/authenticate.js";
-import { nullSocket } from "../../orchestrators/helpers.js";
+} from "../../seed/ws/sessionRegistry.js";
+import { resolveTreeAccess } from "../../seed/authenticate.js";
+import { nullSocket } from "../../seed/orchestrators/helpers.js";
 
 const BUSY_MESSAGE =
   "I'm already processing your last 2 messages. Please send again later.";
@@ -89,10 +89,10 @@ export async function processGatewayMessage(
       `Gateway: ${lowerTrimmed} command for channel ${channelId}, aborted ${abortCount} in-flight message(s)`,
     );
 
-    // Finalize any open AIChats that were in-flight
+    // Finalize any open chats that were in-flight
     try {
-      var AIChat = (await import("../../db/models/aiChat.js")).default;
-      await AIChat.updateMany(
+      var Chat = (await import("../../seed/models/chat.js")).default;
+      await Chat.updateMany(
         {
           userId: channel.userId,
           "endMessage.time": null,
@@ -108,7 +108,7 @@ export async function processGatewayMessage(
       );
     } catch (err) {
  log.error("Gateway",
-        "Gateway: failed to finalize AIChats on cancel:",
+        "Gateway: failed to finalize chats on cancel:",
         err.message,
       );
     }
@@ -172,7 +172,7 @@ export async function processGatewayMessage(
   var result = await enqueue(
     queueKey,
     async () => {
-      // Create runtime for session + MCP + AIChat lifecycle
+      // Create runtime for session + MCP + Chat lifecycle
       var rt = new OrchestratorRuntime({
         rootId: channel.rootId,
         userId: channel.userId,

@@ -2,12 +2,12 @@
 // Translates natural user language into tree operations using the Tree Constitution.
 // Sits between user input and the tree orchestrator.
 
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { getClientForUser, resolveRootLlmForMode } from "../../ws/conversation.js";
-import { parseJsonSafe } from "../../orchestrators/helpers.js";
+import { getClientForUser, resolveRootLlmForMode } from "../../seed/ws/conversation.js";
+import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

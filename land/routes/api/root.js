@@ -1,19 +1,24 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../../middleware/urlAuth.js";
-import authenticate from "../../middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 
-import { getAllData, getTreeStructure } from "../../core/tree/treeDataFetching.js";
-import { createInvite } from "../../core/tree/invites.js";
-import { sendRemoteInvite } from "../../core/tree/remoteInvites.js";
+import { getAllNodeData, getTreeStructure } from "../../seed/tree/treeData.js";
 import { getExtension } from "../../extensions/loader.js";
+
+// readAuth: delegates to html-rendering's readAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
-import Node from "../../db/models/node.js";
+import Node from "../../seed/models/node.js";
 import mongoose from "mongoose";
-import { getConnectionsForUser, isValidRootLlmSlot, getAllRootLlmSlots } from "../../core/llms/customLLM.js";
-import { getNodeAIChats } from "../../core/llms/aichat.js";
-import { buildPathString } from "../../core/tree/treeFetch.js";
+import { getConnectionsForUser, isValidRootLlmSlot, getAllRootLlmSlots } from "../../seed/llm/connections.js";
+import { getNodeChats } from "../../seed/ws/chatHistory.js";
+import { buildPathString } from "../../seed/tree/treeFetch.js";
 
 import { registerWithDirectory } from "../../canopy/directory.js";
 
@@ -32,7 +37,7 @@ const allowedParams = [
   "year",
 ];
 
-router.get("/root/:nodeId", urlAuth, async (req, res) => {
+router.get("/root/:nodeId", readAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -53,7 +58,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
 
     // Load owner + contributors + llm assignments
     const rootMeta = await Node.findById(nodeId)
-      .populate("rootOwner", "username _id profileType planExpiresAt")
+      .populate("rootOwner", "username _id isAdmin metadata")
       .populate("contributors", "username _id isRemote homeLand")
       .select(
         "rootOwner contributors metadata llmDefault visibility",
@@ -97,7 +102,7 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
         json.queryAvailable = queryAvailable;
       }
 
-      return res.json(json);
+      return sendOk(res, json);
     }
 
     const currentUserId = req.userId ? req.userId.toString() : null;
@@ -143,19 +148,19 @@ router.get("/root/:nodeId", urlAuth, async (req, res) => {
     );
   } catch (err) {
     log.error("API", "Error in /root/:nodeId:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 // GET /root/:rootId/all — full tree with versions, notes, contributions, scripts
 // GET /root/:rootId/query?html — Public query page
-router.get("/root/:rootId/query", urlAuth, async (req, res) => {
+router.get("/root/:rootId/query", readAuth, async (req, res) => {
   try {
     const { rootId } = req.params;
     const wantHtml = req.query.html !== undefined;
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.status(400).json({ error: "Use POST /root/:rootId/query to submit queries. Add ?html for the query page." });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Use POST /root/:rootId/query to submit queries. Add ?html for the query page.");
     }
 
     const root = await Node.findById(rootId)
@@ -163,7 +168,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
       .populate("rootOwner", "username")
       .lean();
 
-    if (!root) return res.status(404).json({ error: "Tree not found" });
+    if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
     // Only show query page for public trees, or to the owner/contributors
     const isPublicAccess = !!req.isPublicAccess;
@@ -172,7 +177,7 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
     const isContributor = isAuthenticated && (root.contributors || []).map(String).includes(String(req.userId));
 
     if (root.visibility !== "public" && !isOwner && !isContributor) {
-      return res.status(403).json({ error: "This tree is not public." });
+      return sendError(res, 403, ERR.FORBIDDEN, "This tree is not public.");
     }
 
     const treeHasLlm = !!(root.llmDefault && root.llmDefault !== "none");
@@ -189,28 +194,22 @@ router.get("/root/:rootId/query", urlAuth, async (req, res) => {
     );
   } catch (err) {
     log.error("API", "Error in /root/:rootId/query:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-router.get("/root/:rootId/all", urlAuth, async (req, res) => {
+router.get("/root/:rootId/all", readAuth, async (req, res) => {
   try {
     const { rootId } = req.params;
 
-    const fakeReq = { ...req, body: { rootId } };
-    let allData = null;
-
-    const fakeRes = {
-      json(data) {
-        allData = data;
-      },
-      status() {
-        return { json(d) { allData = null; } };
-      },
+    const filters = {
+      active: req.query.active === undefined ? true : req.query.active === "true",
+      trimmed: req.query.trimmed === undefined ? false : req.query.trimmed === "true",
+      completed: req.query.completed === undefined ? true : req.query.completed === "true",
     };
 
-    await getAllData(fakeReq, fakeRes);
-    if (!allData) return res.status(500).json({ error: "Failed to fetch tree data" });
+    const allData = await getAllNodeData(rootId, filters);
+    if (!allData) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
     // Strip sensitive payment/transaction data from contributions
     const stripContributions = (node) => {
@@ -228,10 +227,10 @@ router.get("/root/:rootId/all", urlAuth, async (req, res) => {
     };
     stripContributions(allData);
 
-    return res.json(allData);
+    return sendOk(res, allData);
   } catch (err) {
     log.error("API", "Error in /root/:rootId/all:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -243,17 +242,16 @@ router.post("/root/:rootId/visibility", authenticate, async (req, res) => {
 
     const validValues = ["private", "public"];
     if (!validValues.includes(visibility)) {
-      return res.status(400).json({
-        error: `visibility must be one of: ${validValues.join(", ")}`,
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT,
+        `visibility must be one of: ${validValues.join(", ")}`);
     }
 
     const root = await Node.findById(rootId).select("rootOwner").lean();
     if (!root) {
-      return res.status(404).json({ error: "Tree not found" });
+      return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
     }
     if (String(root.rootOwner) !== String(req.userId)) {
-      return res.status(403).json({ error: "Only the tree owner can change visibility" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Only the tree owner can change visibility");
     }
 
     await Node.findByIdAndUpdate(rootId, {
@@ -265,169 +263,14 @@ router.post("/root/:rootId/visibility", authenticate, async (req, res) => {
       log.error("API", "[Land] Directory re-sync after visibility change failed:", err)
     );
 
-    return res.json({ success: true, visibility });
+    return sendOk(res, { visibility });
   } catch (err) {
     log.error("API", "Error in /root/:rootId/visibility:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-// POST /root/:rootId/invite
-router.post("/root/:rootId/invite", authenticate, async (req, res) => {
-  try {
-    const { rootId } = req.params;
-    const { userReceiving } = req.body;
-
-    if (!userReceiving) {
-      return res.status(400).json({
-        success: false,
-        error: "userReceiving is required",
-      });
-    }
-
-    // Detect cross-land invite (username@domain.tld format)
-    // Must have @ with text before and after, and a dot after the @
-    const atIndex = userReceiving.indexOf("@");
-    const afterAt = atIndex > 0 ? userReceiving.slice(atIndex + 1) : "";
-    if (atIndex > 0 && afterAt.includes(".") && afterAt.length > 2) {
-      const result = await sendRemoteInvite({
-        userInvitingId: req.userId,
-        canopyId: userReceiving,
-        rootId,
-      });
-
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`,
-        );
-      }
-      return res.json({ success: true, remote: true, ...result });
-    }
-
-    await createInvite({
-      userInvitingId: req.userId,
-      userReceiving, // username OR userId
-      rootId,
-      isToBeOwner: false,
-      isUninviting: false,
-    });
-
-    // HTML redirect support
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`,
-      );
-    }
-
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
-  }
-});
-
-// POST /root/:rootId/transfer-owner
-router.post("/root/:rootId/transfer-owner", authenticate, async (req, res) => {
-  try {
-    const { rootId } = req.params;
-    const { userReceiving } = req.body;
-
-    if (!userReceiving) {
-      return res.status(400).json({
-        success: false,
-        error: "userReceiving is required",
-      });
-    }
-
-    await createInvite({
-      userInvitingId: req.userId,
-      userReceiving, // username OR userId
-      rootId,
-      isToBeOwner: true, // ⭐ THIS is the key
-      isUninviting: false,
-    });
-
-    // HTML redirect support
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`,
-      );
-    }
-
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
-  }
-});
-
-// POST /root/:rootId/remove-user
-router.post("/root/:rootId/remove-user", authenticate, async (req, res) => {
-  try {
-    const { rootId } = req.params;
-    const { userReceiving } = req.body;
-
-    if (!userReceiving) {
-      return res.status(400).json({
-        success: false,
-        error: "userReceiving is required",
-      });
-    }
-
-    await createInvite({
-      userInvitingId: req.userId,
-      userReceiving, // userId
-      rootId,
-      isToBeOwner: false,
-      isUninviting: true, // ⭐ THIS triggers removal logic
-    });
-
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/v1/user/${req.userId}?token=${req.query.token ?? ""}&html`,
-      );
-    }
-
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
-  }
-});
-
-// POST /root/:rootId/retire
-router.post("/root/:rootId/retire", authenticate, async (req, res) => {
-  try {
-    const { rootId } = req.params;
-
-    await createInvite({
-      userInvitingId: req.userId,
-      userReceiving: req.userId,
-      rootId,
-      isToBeOwner: false,
-      isUninviting: true,
-    });
-
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/v1/user/${req.userId}?token=${req.query.token ?? ""}&html`,
-      );
-    }
-
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      error: err.message,
-    });
-  }
-});
+// Invite routes moved to extensions/team
 
 // ─────────────────────────────────────────────────────────────────────────
 // ROOT LLM ASSIGNMENT
@@ -439,20 +282,17 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     const { slot, connectionId } = req.body;
 
     if (!isValidRootLlmSlot(slot)) {
-      return res.status(400).json({
-        error: `Invalid slot. Must be one of: ${getAllRootLlmSlots().join(", ")}`,
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT,
+        `Invalid slot. Must be one of: ${getAllRootLlmSlots().join(", ")}`);
     }
 
     // Validate root and ownership
     const root = await Node.findById(rootId).select("rootOwner").lean();
-    if (!root) return res.status(404).json({ error: "Root not found" });
+    if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     if (!root.rootOwner)
-      return res.status(400).json({ error: "Node is not a root" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
     if (root.rootOwner.toString() !== req.userId.toString()) {
-      return res
-        .status(403)
-        .json({ error: "Only the root owner can assign LLM connections" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can assign LLM connections");
     }
 
     // "none" is a special value for the default slot to disable LLM
@@ -460,13 +300,13 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
       // Valid, skip connection check
     } else if (connectionId) {
       // Verify connection belongs to root owner
-      const { default: CustomLlmConnection } =
-        await import("../../db/models/customLlmConnection.js");
-      const conn = await CustomLlmConnection.findOne({
+      const { default: LlmConnection } =
+        await import("../../seed/models/llmConnection.js");
+      const conn = await LlmConnection.findOne({
         _id: connectionId,
         userId: req.userId,
       }).lean();
-      if (!conn) return res.status(404).json({ error: "Connection not found" });
+      if (!conn) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Connection not found");
     }
 
     // "default" slot goes to llmDefault field, extension slots go to metadata.llm.slots
@@ -481,7 +321,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     }
 
     // Bust client cache for owner so changes take effect immediately
-    const { clearUserClientCache } = await import("../../ws/conversation.js");
+    const { clearUserClientCache } = await import("../../seed/ws/conversation.js");
     clearUserClientCache(req.userId);
 
     if ("html" in req.query) {
@@ -490,13 +330,12 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
       );
     }
 
-    return res.json({
-      success: true,
+    return sendOk(res, {
       slot,
       connectionId: connectionId || null,
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -514,15 +353,13 @@ router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
     const root = await Node.findById(rootId)
       .select("name rootOwner contributors")
       .lean();
-    if (!root) return res.status(404).json({ error: "Root not found" });
+    if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     if (!root.rootOwner)
-      return res.status(400).json({ error: "Node is not a root" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
 
     const isOwner = root.rootOwner.toString() === req.userId.toString();
     if (!isOwner)
-      return res
-        .status(403)
-        .json({ error: "Only the root owner can manage the gateway" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can manage the gateway");
 
     const { getChannelsForRoot } =
       await import("../../extensions/gateway/core.js");
@@ -530,7 +367,7 @@ router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({ rootId, channels });
+      return sendOk(res, { rootId, channels });
     }
 
     return res.send(
@@ -543,7 +380,7 @@ router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
     );
   } catch (err) {
     log.error("API", "Error in /root/:rootId/gateway:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -555,7 +392,7 @@ router.get(
   "/root/:rootId/gateway/vapid-key",
   authenticate,
   async (req, res) => {
-    return res.json({ key: process.env.VAPID_PUBLIC_KEY || null });
+    return sendOk(res, { key: process.env.VAPID_PUBLIC_KEY || null });
   },
 );
 
@@ -566,24 +403,24 @@ router.get("/root/:rootId/gateway/channels", authenticate, async (req, res) => {
     const root = await Node.findById(rootId)
       .select("rootOwner contributors")
       .lean();
-    if (!root) return res.status(404).json({ error: "Root not found" });
+    if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     if (!root.rootOwner)
-      return res.status(400).json({ error: "Node is not a root" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
 
     const isOwner = root.rootOwner.toString() === req.userId.toString();
     const isContributor = (root.contributors || []).some(
       (c) => c.toString() === req.userId.toString(),
     );
     if (!isOwner && !isContributor) {
-      return res.status(403).json({ error: "Not authorized" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
 
     const { getChannelsForRoot } =
       await import("../../extensions/gateway/core.js");
     const channels = await getChannelsForRoot(rootId);
-    return res.json({ success: true, channels });
+    return sendOk(res, { channels });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -615,7 +452,7 @@ router.post(
         queueBehavior,
       });
 
-      return res.status(201).json({ success: true, channel });
+      return sendOk(res, { channel }, 201);
     } catch (err) {
       var status = err.message.includes("not found")
         ? 404
@@ -623,7 +460,8 @@ router.post(
             err.message.includes("Only the root")
           ? 403
           : 400;
-      return res.status(status).json({ error: err.message });
+      var code = status === 404 ? ERR.NODE_NOT_FOUND : status === 403 ? ERR.FORBIDDEN : ERR.INVALID_INPUT;
+      return sendError(res, status, code, err.message);
     }
   },
 );
@@ -645,10 +483,11 @@ router.put(
         notificationTypes,
       });
 
-      return res.json({ success: true, channel });
+      return sendOk(res, { channel });
     } catch (err) {
       var status = err.message.includes("not found") ? 404 : 400;
-      return res.status(status).json({ error: err.message });
+      var code = status === 404 ? ERR.NODE_NOT_FOUND : ERR.INVALID_INPUT;
+      return sendError(res, status, code, err.message);
     }
   },
 );
@@ -664,10 +503,11 @@ router.delete(
         await import("../../extensions/gateway/core.js");
       await deleteGatewayChannel(req.userId, channelId);
 
-      return res.json({ success: true, removed: true });
+      return sendOk(res, { removed: true });
     } catch (err) {
       var status = err.message.includes("not found") ? 404 : 400;
-      return res.status(status).json({ error: err.message });
+      var code = status === 404 ? ERR.NODE_NOT_FOUND : ERR.INVALID_INPUT;
+      return sendError(res, status, code, err.message);
     }
   },
 );
@@ -683,25 +523,25 @@ router.post(
       const root = await Node.findById(rootId)
         .select("rootOwner contributors")
         .lean();
-      if (!root) return res.status(404).json({ error: "Root not found" });
+      if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
       if (!root.rootOwner)
-        return res.status(400).json({ error: "Node is not a root" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
 
       const isOwner = root.rootOwner.toString() === req.userId.toString();
       const isContributor = (root.contributors || []).some(
         (c) => c.toString() === req.userId.toString(),
       );
       if (!isOwner && !isContributor) {
-        return res.status(403).json({ error: "Not authorized" });
+        return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
 
       const { dispatchTestNotification } =
         await import("../../extensions/gateway/dispatch.js");
       var result = await dispatchTestNotification(channelId);
 
-      return res.json(result);
+      return sendOk(res, result);
     } catch (err) {
-      return res.status(400).json({ error: err.message });
+      return sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
@@ -710,10 +550,10 @@ router.post(
 // EXTENSION SCOPING (block/allow extensions per tree)
 // ─────────────────────────────────────────────────────────────────────────
 
-router.get("/root/:rootId/extensions", urlAuth, async (req, res) => {
+router.get("/root/:rootId/extensions", readAuth, async (req, res) => {
   try {
     const { rootId } = req.params;
-    const { getBlockedExtensionsAtNode } = await import("../../core/tree/extensionScope.js");
+    const { getBlockedExtensionsAtNode } = await import("../../seed/tree/extensionScope.js");
     const blocked = await getBlockedExtensionsAtNode(rootId);
 
     const root = await Node.findById(rootId).select("name metadata children").lean();
@@ -742,7 +582,7 @@ router.get("/root/:rootId/extensions", urlAuth, async (req, res) => {
       await walkTree(rootId, 0);
     }
 
-    res.json({
+    sendOk(res, {
       rootId,
       rootName: root?.name || "",
       blocked: [...blocked],
@@ -752,7 +592,7 @@ router.get("/root/:rootId/extensions", urlAuth, async (req, res) => {
       ...(tree.length ? { tree } : {}),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -762,10 +602,10 @@ router.post("/root/:rootId/extensions", authenticate, async (req, res) => {
     let { blocked, restricted } = req.body;
 
     const node = await Node.findById(rootId);
-    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-    const { setExtMeta } = await import("../../core/tree/extensionMetadata.js");
-    const { clearScopeCache } = await import("../../core/tree/extensionScope.js");
+    const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+    const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
 
     const config = {};
     if (Array.isArray(blocked) && blocked.length > 0) {
@@ -784,10 +624,10 @@ router.post("/root/:rootId/extensions", authenticate, async (req, res) => {
     clearScopeCache();
 
     if ("html" in req.query) return res.redirect(`/api/v1/root/${rootId}?token=${req.query.token ?? ""}&html`);
-    res.json({ success: true, ...config });
+    sendOk(res, config);
   } catch (err) {
     log.error("API", "Extension scoping error:", err.message);
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -798,7 +638,7 @@ router.post("/root/:rootId/extensions", authenticate, async (req, res) => {
 router.post("/root/:rootId/dream-time", authenticate, async (req, res) => {
   try {
     if (!!!mongoose.models.ShortMemory) {
-      return res.status(400).json({ error: "Dreams extension is not enabled on this land" });
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Dreams extension is not enabled on this land");
     }
 
     const { rootId } = req.params;
@@ -806,22 +646,18 @@ router.post("/root/:rootId/dream-time", authenticate, async (req, res) => {
 
     // Validate root and ownership
     const root = await Node.findById(rootId).select("rootOwner").lean();
-    if (!root) return res.status(404).json({ error: "Root not found" });
+    if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     if (!root.rootOwner)
-      return res.status(400).json({ error: "Node is not a root" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
     if (root.rootOwner.toString() !== req.userId.toString()) {
-      return res
-        .status(403)
-        .json({ error: "Only the root owner can set dream time" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can set dream time");
     }
 
     // Validate format (HH:MM or null/empty to disable)
     if (dreamTime) {
       const match = /^([01]\d|2[0-3]):([0-5]\d)$/.test(dreamTime);
       if (!match) {
-        return res
-          .status(400)
-          .json({ error: "Invalid time format — use HH:MM (24h)" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid time format. Use HH:MM (24h)");
       }
     }
 
@@ -829,13 +665,13 @@ router.post("/root/:rootId/dream-time", authenticate, async (req, res) => {
       $set: { "metadata.dreams.dreamTime": dreamTime || null },
     });
 
-    return res.json({ success: true, dreamTime: dreamTime || null });
+    return sendOk(res, { dreamTime: dreamTime || null });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
+router.get("/root/:rootId/calendar", readAuth, async (req, res) => {
   try {
     const { rootId } = req.params;
 
@@ -874,7 +710,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     // JSON MODE
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({ calendar });
+      return sendOk(res, { calendar });
     }
 
     // Group by YYYY-MM-DD
@@ -890,7 +726,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
     );
   } catch (err) {
     log.error("API", "Calendar error:", err);
-    res.status(err.status || 500).json({ error: err.message });
+    sendError(res, err.status || 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -899,7 +735,7 @@ router.get("/root/:rootId/calendar", urlAuth, async (req, res) => {
 // This is the glassified version of the /root/:nodeId/values route
 // Replace your existing values route with this code
 
-router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
+router.get("/root/:nodeId/values", readAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -916,13 +752,13 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
     // JSON MODE (default)
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json(result);
+      return sendOk(res, result);
     }
 
     return res.send(html().renderValuesPage({ nodeId, queryString, result }));
   } catch (err) {
     log.error("API", "Error in /root/:nodeId/values:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -930,7 +766,7 @@ router.get("/root/:nodeId/values", urlAuth, async (req, res) => {
 // GET /root/:rootId/chats
 // AI chat history for an entire tree (root + all descendants)
 // ─────────────────────────────────────────────────────────────────────────
-router.get("/root/:rootId/chats", urlAuth, async (req, res) => {
+router.get("/root/:rootId/chats", readAuth, async (req, res) => {
   try {
     const { rootId } = req.params;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -939,7 +775,7 @@ router.get("/root/:rootId/chats", urlAuth, async (req, res) => {
     let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-      return res.status(400).json({ error: "Invalid limit" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit");
     }
     if (limit > 10) {
       limit = 10;
@@ -955,10 +791,10 @@ router.get("/root/:rootId/chats", urlAuth, async (req, res) => {
 
     const node = await Node.findById(rootId).select("name rootOwner").lean();
     if (!node) {
-      return res.status(404).json({ error: "Root not found" });
+      return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     }
 
-    const { sessions } = await getNodeAIChats({
+    const { sessions } = await getNodeChats({
       nodeId: rootId,
       sessionLimit: limit || 10,
       sessionId,
@@ -970,7 +806,7 @@ router.get("/root/:rootId/chats", urlAuth, async (req, res) => {
     const allChats = sessions.flatMap((s) => s.chats);
 
     if (!wantHtml) {
-      return res.json({
+      return sendOk(res, {
         rootId,
         rootName: node.name,
         count: allChats.length,
@@ -1085,8 +921,8 @@ router.get("/root/:rootId/chats", urlAuth, async (req, res) => {
         updateParent: "Moved",
         editScript: "Script",
         executeScript: "Ran script",
-        updateChildNode: "Child",
-        editNameNode: "Renamed",
+        updateChild: "Child",
+        editName: "Renamed",
         rawIdea: "Raw idea",
         branchLifecycle: "Branch",
         purchase: "Purchase",
@@ -1106,7 +942,7 @@ router.get("/root/:rootId/chats", urlAuth, async (req, res) => {
         case "editValue":
         case "editGoal":
         case "editSchedule":
-        case "editNameNode":
+        case "editName":
         case "editScript":
           return "#5082dc";
         case "executeScript":
@@ -1124,7 +960,7 @@ router.get("/root/:rootId/chats", urlAuth, async (req, res) => {
         case "purchase":
           return "#34be82";
         case "updateParent":
-        case "updateChildNode":
+        case "updateChild":
           return "#3caab4";
         case "understanding":
           return "#6464d2";
@@ -2028,7 +1864,7 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 `);
   } catch (err) {
     log.error("API", "Root chats error:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

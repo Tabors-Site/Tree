@@ -1,21 +1,21 @@
-import mongoose from "./db/config.js";
+import mongoose from "./seed/dbConfig.js";
 import { getLandIdentity, getLandUrl } from "./canopy/identity.js";
-import { ensureLandRoot } from "./core/landRoot.js";
-import { initLandConfig } from "./core/landConfig.js";
+import { ensureLandRoot } from "./seed/landRoot.js";
+import { initLandConfig } from "./seed/landConfig.js";
 import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames } from "./extensions/loader.js";
-import { startUploadCleanup } from "./core/tree/uploadCleanup.js";
-import { startRetentionJob } from "./core/tree/dataRetention.js";
-import { getBlockedExtensionsAtNode } from "./core/tree/extensionScope.js";
-import { hooks } from "./core/hooks.js";
-import { syncExtensionsToTree } from "./core/landRoot.js";
+import { startUploadCleanup } from "./seed/tree/uploadCleanup.js";
+import { startRetentionJob } from "./seed/tree/dataRetention.js";
+import { getBlockedExtensionsAtNode } from "./seed/tree/extensionScope.js";
+import { hooks } from "./seed/hooks.js";
+import { syncExtensionsToTree } from "./seed/landRoot.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
-import { startOutboxJob } from "./canopy/events.js";
+import { startOutboxJob, startCanopyRetentionJob } from "./canopy/events.js";
 import { startDirectoryRegistration } from "./canopy/directory.js";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import log from "./core/log.js";
+import log from "./seed/log.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -34,8 +34,8 @@ export function onListen() {
 
     // Apply land config to kernel settings
     try {
-      const { getLandConfigValue } = await import("./core/landConfig.js");
-      const { setKernelConfig } = await import("./ws/conversation.js");
+      const { getLandConfigValue } = await import("./seed/landConfig.js");
+      const { setKernelConfig } = await import("./seed/ws/conversation.js");
 
       // Kernel config keys: read from land .config node, apply to runtime
       const KERNEL_CONFIG = {
@@ -44,13 +44,13 @@ export function onListen() {
         maxToolIterations:       { setter: setKernelConfig },
         maxConversationMessages: { setter: setKernelConfig },
         defaultModel:            { setter: setKernelConfig },
-        noteMaxChars:            { load: () => import("./core/tree/notes.js").then(m => m.setNoteMaxChars) },
-        treeSummaryMaxDepth:     { load: () => import("./core/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(v, null)) },
-        treeSummaryMaxNodes:     { load: () => import("./core/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(null, v)) },
-        carryMessages:           { load: () => import("./ws/modes/registry.js").then(m => m.setCarryMessages) },
-        sessionTTL:              { load: () => import("./ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
-        staleSessionTimeout:     { load: () => import("./ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
-        maxSessions:             { load: () => import("./ws/sessionRegistry.js").then(m => m.setMaxSessions) },
+        noteMaxChars:            { load: () => import("./seed/tree/notes.js").then(m => m.setNoteMaxChars) },
+        treeSummaryMaxDepth:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(v, null)) },
+        treeSummaryMaxNodes:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(null, v)) },
+        carryMessages:           { load: () => import("./seed/ws/modes/registry.js").then(m => m.setCarryMessages) },
+        sessionTTL:              { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
+        staleSessionTimeout:     { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
+        maxSessions:             { load: () => import("./seed/ws/sessionRegistry.js").then(m => m.setMaxSessions) },
       };
 
       for (const [key, cfg] of Object.entries(KERNEL_CONFIG)) {
@@ -71,10 +71,10 @@ export function onListen() {
 
 
     // Ensure .extensions system node exists (for lands created before this feature)
-    const Node = (await import("./db/models/node.js")).default;
+    const Node = (await import("./seed/models/node.js")).default;
     const extNode = await Node.findOne({ systemRole: "extensions" });
     if (!extNode) {
-      const { getLandRoot } = await import("./core/landRoot.js");
+      const { getLandRoot } = await import("./seed/landRoot.js");
       const landRoot = await getLandRoot();
       if (landRoot) {
         const newExtNode = new Node({
@@ -91,6 +91,26 @@ export function onListen() {
       }
     }
 
+    // Ensure .flow system node exists (for lands created before cascade)
+    const flowNode = await Node.findOne({ systemRole: "flow" });
+    if (!flowNode) {
+      const { getLandRoot } = await import("./seed/landRoot.js");
+      const landRoot = await getLandRoot();
+      if (landRoot) {
+        const newFlowNode = new Node({
+          name: ".flow",
+          parent: landRoot._id,
+          systemRole: "flow",
+          children: [],
+          contributors: [],
+        });
+        await newFlowNode.save();
+        landRoot.children.push(newFlowNode._id);
+        await landRoot.save();
+        log.verbose("Land", "Created .flow system node");
+      }
+    }
+
     await syncExtensionsToTree(getLoadedManifests());
     await runExtensionMigrations();
 
@@ -104,12 +124,18 @@ export function onListen() {
     startExtensionJobs();
     startUploadCleanup();
     startRetentionJob();
+
+    // Cascade result cleanup (every 6 hours, cleans expired signals from .flow)
+    const { cleanupExpiredResults } = await import("./seed/tree/cascade.js");
+    setInterval(() => cleanupExpiredResults().catch(() => {}), 6 * 60 * 60 * 1000);
+
     log.verbose("Land", "Background jobs started (includes daily data retention)");
 
     startHeartbeatJob();
     startOutboxJob();
+    startCanopyRetentionJob();
     startDirectoryRegistration();
-    log.verbose("Canopy", "Peering, outbox, directory ready");
+    log.verbose("Canopy", "Peering, outbox, directory, retention ready");
 
     import("./extensions/gateway/discordBotManager.js")
       .then(({ startupScan }) => {

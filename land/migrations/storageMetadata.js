@@ -10,7 +10,7 @@
  * Usage: node land/migrations/storageMetadata.js
  */
 
-import mongoose from "../db/config.js";
+import mongoose from "../seed/dbConfig.js";
 
 const User = mongoose.model("User") || mongoose.model("User", new mongoose.Schema({}, { strict: false }));
 

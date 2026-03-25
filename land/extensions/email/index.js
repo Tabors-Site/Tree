@@ -1,9 +1,10 @@
 import crypto from "crypto";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import router from "./routes.js";
 import TempUser from "./model.js";
 import { sendVerificationEmail } from "./core.js";
 import { getLandUrl } from "../../canopy/identity.js";
-import { getLandConfigValue } from "../../core/landConfig.js";
+import { getLandConfigValue } from "../../seed/landConfig.js";
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -20,7 +21,7 @@ export async function init(core) {
     const requireEmail = getLandConfigValue("REQUIRE_EMAIL") !== "false";
 
     if (requireEmail && !email) {
-      res.status(400).json({ message: "Email is required for registration" });
+      sendError(res, 400, ERR.INVALID_INPUT, "Email is required for registration");
       data.handled = true;
       return;
     }
@@ -28,7 +29,7 @@ export async function init(core) {
     if (!email) return;
 
     if (!EMAIL_REGEX.test(email) || email.length > 320) {
-      res.status(400).json({ message: "Please enter a valid email address" });
+      sendError(res, 400, ERR.INVALID_INPUT, "Please enter a valid email address");
       data.handled = true;
       return;
     }
@@ -37,7 +38,7 @@ export async function init(core) {
 
     const existingEmail = await User.findOne({ "metadata.email.address": normalizedEmail });
     if (existingEmail) {
-      res.status(400).json({ message: "Email already registered" });
+      sendError(res, 400, ERR.INVALID_INPUT, "Email already registered");
       data.handled = true;
       return;
     }
@@ -62,10 +63,10 @@ export async function init(core) {
     const verifyUrl = `${getLandUrl()}/api/v1/user/verify/${verificationToken}`;
     await sendVerificationEmail(normalizedEmail, verifyUrl, username);
 
-    res.status(201).json({
+    sendOk(res, {
       pendingVerification: true,
       message: "Check your email to complete registration",
-    });
+    }, 201);
     data.handled = true;
   }, "email");
 

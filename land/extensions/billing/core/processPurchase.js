@@ -1,7 +1,7 @@
-import User from "../../../db/models/user.js";
+import User from "../../../seed/models/user.js";
 import { upgradeUserPlan } from "./upgradePlan.js";
 import { clearUserClientCache } from "../../../ws/conversation.js";
-import { getUserMeta, setUserMeta } from "../../../core/tree/userMetadata.js";
+import { getUserMeta, setUserMeta } from "../../../seed/tree/userMetadata.js";
 
 const ALLOWED_PAID_PLANS = ["standard", "premium"];
 const PLAN_DURATION_DAYS = 30;
@@ -33,7 +33,8 @@ export async function processPurchase({
   }
 
   if (plan && plan !== "basic") {
-    if (plan !== user.profileType) {
+    const currentPlan = getUserMeta(user, "tiers").plan || "basic";
+    if (plan !== currentPlan) {
       upgradeUserPlan(user, plan);
     }
 

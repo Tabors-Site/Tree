@@ -1,26 +1,27 @@
 import express from "express";
-import authenticate from "../../middleware/authenticate.js";
-import User from "../../db/models/user.js";
-import Contribution from "../../db/models/contribution.js";
-import log from "../../core/log.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import User from "../../seed/models/user.js";
+import Contribution from "../../seed/models/contribution.js";
+import log from "../../seed/log.js";
 
 const router = express.Router();
 
 // POST /land/activity - ask about land activity
 router.post("/land/activity", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType username").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ error: "Requires god-tier." });
+    const user = await User.findById(req.userId).select("isAdmin username").lean();
+    if (!user || !user.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Requires admin.");
     }
 
     const rawQuery = req.body.query;
     const query = Array.isArray(rawQuery) ? rawQuery.join(" ") : rawQuery;
-    if (!query) return res.status(400).json({ error: "query required" });
+    if (!query) return sendError(res, 400, ERR.INVALID_INPUT, "query required");
 
-    const { runChat } = await import("../../ws/conversation.js");
+    const { runChat } = await import("../../seed/ws/conversation.js");
 
-    const { answer, aiChatId } = await runChat({
+    const { answer, chatId } = await runChat({
       userId: req.userId,
       username: user.username,
       message: query,
@@ -28,42 +29,42 @@ router.post("/land/activity", authenticate, async (req, res) => {
       res,
     });
 
-    res.json({ success: true, answer, aiChatId });
+    sendOk(res, { answer, chatId });
   } catch (err) {
     log.error("Monitor", "Activity query error:", err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 // GET /land/activity - quick stats without AI (for dashboards, health checks)
 router.get("/land/activity", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ error: "Requires god-tier." });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user || !user.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Requires god-tier.");
     }
 
     const now = new Date();
     const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
     const oneWeekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
 
-    const AIChat = (await import("../../db/models/aiChat.js")).default;
-    const { getSessionsForUser } = await import("../../ws/sessionRegistry.js");
-    const { hooks } = await import("../../core/hooks.js");
+    const Chat = (await import("../../seed/models/chat.js")).default;
+    const { getSessionsForUser } = await import("../../seed/ws/sessionRegistry.js");
+    const { hooks } = await import("../../seed/hooks.js");
     const { getLoadedExtensionNames } = await import("../../extensions/loader.js");
 
     // Aggregate stats
     const [
       contributionsToday,
       contributionsWeek,
-      aiChatsToday,
-      aiChatsWeek,
+      chatsToday,
+      chatsWeek,
       totalUsers,
     ] = await Promise.all([
       Contribution.countDocuments({ date: { $gte: oneDayAgo } }),
       Contribution.countDocuments({ date: { $gte: oneWeekAgo } }),
-      AIChat.countDocuments({ "startMessage.time": { $gte: oneDayAgo } }),
-      AIChat.countDocuments({ "startMessage.time": { $gte: oneWeekAgo } }),
+      Chat.countDocuments({ "startMessage.time": { $gte: oneDayAgo } }),
+      Chat.countDocuments({ "startMessage.time": { $gte: oneWeekAgo } }),
       User.countDocuments({}),
     ]);
 
@@ -76,24 +77,24 @@ router.get("/land/activity", authenticate, async (req, res) => {
     ]);
 
     // AI mode breakdown today
-    const modeBreakdown = await AIChat.aggregate([
+    const modeBreakdown = await Chat.aggregate([
       { $match: { "startMessage.time": { $gte: oneDayAgo } } },
       { $group: { _id: "$aiContext.path", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
-    res.json({
+    sendOk(res, {
       period: { today: oneDayAgo, week: oneWeekAgo },
       today: {
         contributions: contributionsToday,
-        aiChats: aiChatsToday,
+        chats: chatsToday,
         actions: actionBreakdown.map(a => ({ action: a._id, count: a.count })),
         modes: modeBreakdown.map(m => ({ mode: m._id, count: m.count })),
       },
       week: {
         contributions: contributionsWeek,
-        aiChats: aiChatsWeek,
+        chats: chatsWeek,
       },
       system: {
         users: totalUsers,
@@ -103,7 +104,7 @@ router.get("/land/activity", authenticate, async (req, res) => {
     });
   } catch (err) {
     log.error("Monitor", "Stats error:", err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

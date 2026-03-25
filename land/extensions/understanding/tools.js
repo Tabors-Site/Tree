@@ -19,7 +19,7 @@ export default [
         .default("general")
         .describe("Perspective for this understanding run."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -36,13 +36,13 @@ export default [
       idempotentHint: false,
       openWorldHint: false,
     },
-    handler: async ({ rootNodeId, perspective, userId, aiChatId, sessionId }) => {
+    handler: async ({ rootNodeId, perspective, userId, chatId, sessionId }) => {
       const result = await createUnderstandingRun(
         rootNodeId,
         userId,
         perspective,
         true,
-        aiChatId,
+        chatId,
         sessionId,
       );
 
@@ -71,7 +71,7 @@ export default [
         .string()
         .describe("Root node ID to list understandings for."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -253,7 +253,7 @@ Then IMMEDIATELY call understanding-capture with:
       encoding,
       rootNodeId,
       userId,
-      aiChatId,
+      chatId,
       sessionId,
     }) => {
       await commitCompressionResult({
@@ -264,7 +264,7 @@ Then IMMEDIATELY call understanding-capture with:
         encoding,
         userId,
         wasAi: true,
-        aiChatId,
+        chatId,
         sessionId,
       });
 
@@ -313,7 +313,7 @@ Then IMMEDIATELY call understanding-capture with:
           "Omit on first call. Include your summary from previous task on subsequent calls.",
         ),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -335,7 +335,7 @@ Then IMMEDIATELY call understanding-capture with:
       rootNodeId,
       previousResult,
       userId,
-      aiChatId,
+      chatId,
       sessionId,
     }) => {
       // 1. Commit previous result if provided
@@ -349,7 +349,7 @@ Then IMMEDIATELY call understanding-capture with:
             currentLayer: previousResult.currentLayer,
             userId,
             wasAi: true,
-            aiChatId,
+            chatId,
             sessionId,
           });
         } catch (err) {

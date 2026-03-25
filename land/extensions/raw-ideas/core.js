@@ -1,12 +1,13 @@
 import path from "path";
 import fs from "fs";
 import RawIdea from "./model.js";
-import Node from "../../db/models/node.js";
-import Note from "../../db/models/notes.js";
-import User from "../../db/models/user.js";
-import { logContribution } from "../../db/utils.js";
-import { createNote } from "../../core/tree/notes.js";
-import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
+import Node from "../../seed/models/node.js";
+import Note from "../../seed/models/note.js";
+import User from "../../seed/models/user.js";
+import { logContribution } from "../../seed/utils.js";
+import { createNote } from "../../seed/tree/notes.js";
+import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getExtension } from "../loader.js";
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
@@ -57,8 +58,8 @@ export async function assertNoteTextWithinLimit(content, userId) {
   if (!content) return;
 
   if (userId) {
-    const user = await User.findById(userId).select("profileType").lean();
-    if (user?.profileType === "god") return;
+    const user = await User.findById(userId).select("isAdmin").lean();
+    if (user?.isAdmin) return;
   }
 
   if (content.length > NOTE_TEXT_MAX_CHARS) {
@@ -167,7 +168,7 @@ async function convertRawIdeaToNote({
   userId,
   nodeId,
   wasAi = false,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 }) {
   if (!rawIdeaId || !userId || !nodeId) {
@@ -197,7 +198,7 @@ async function convertRawIdeaToNote({
     isReflection: false,
     file: rawIdea.contentType === "file" ? { filename: rawIdea.content, size: 0 } : null,
     wasAi,
-    aiChatId,
+    chatId,
     sessionId,
   });
 
@@ -208,7 +209,7 @@ async function convertRawIdeaToNote({
     userId,
     nodeId,
     wasAi,
-    aiChatId,
+    chatId,
     sessionId,
     action: "rawIdea",
     nodeVersion: 0,
@@ -466,7 +467,7 @@ async function searchRawIdeasByUser({
   };
 }
 
-const AUTO_PLACE_ELIGIBLE = ["standard", "premium", "god"];
+const AUTO_PLACE_ELIGIBLE = ["standard", "premium"];
 
 async function toggleAutoPlace({ userId, enabled }) {
   if (!userId) throw new Error("Missing required parameter: userId");
@@ -474,14 +475,21 @@ async function toggleAutoPlace({ userId, enabled }) {
     throw new Error("enabled must be a boolean");
 
   const user = await User.findById(userId).select(
-    "profileType metadata",
+    "isAdmin metadata",
   );
   if (!user) throw new Error("User not found");
 
-  if (!AUTO_PLACE_ELIGIBLE.includes(user.profileType)) {
-    throw new Error(
-      "Auto-place is only available on Standard, Premium, and God plans.",
-    );
+  // Admin always has access. Otherwise check tier via user-tiers extension.
+  if (!user.isAdmin) {
+    try {
+      const tiers = getExtension("user-tiers");
+      const allowed = tiers?.exports ? await tiers.exports.hasAccess(userId, "auto-place") : true;
+      if (!allowed) {
+        throw new Error("Auto-place requires a Standard or Premium plan.");
+      }
+    } catch (err) {
+      if (err.message.includes("requires")) throw err;
+    }
   }
 
   const rawIdeas = getUserMeta(user, "rawIdeas");

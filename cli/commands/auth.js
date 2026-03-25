@@ -56,7 +56,7 @@ async function saveLogin(cfg, apiKey) {
   cfg.apiKey = apiKey;
   cfg.userId = me.userId;
   cfg.username = me.username;
-  cfg.plan = me.profileType || null;
+  cfg.plan = me.plan || null;
   cfg.planExpiresAt = me.planExpiresAt || null;
   cfg.shareToken = me.shareToken || null;
   cfg.energy = me.energy || null;
@@ -92,7 +92,7 @@ async function createCliApiKey(cfg, token, userId, username) {
 /** Print post-login info */
 async function printLoginSuccess(me, api) {
   console.log(chalk.green(`\n  Logged in as ${me.username}`));
-  if (me.profileType) console.log(chalk.dim(`  Plan: ${me.profileType}`));
+  if (me.plan) console.log(chalk.dim(`  Plan: ${me.plan}`));
   try {
     const data = await api.getUser(me.userId);
     const roots = data.roots || data.user?.roots || [];
@@ -363,7 +363,7 @@ module.exports = (program) => {
         const api = new TreeAPI(cfg.apiKey, cfg.jwtToken);
         const me = await api.me();
         cfg.username = me.username;
-        cfg.plan = me.profileType || null;
+        cfg.plan = me.plan || null;
         cfg.planExpiresAt = me.planExpiresAt || null;
         cfg.shareToken = me.shareToken || null;
         cfg.energy = me.energy || null;

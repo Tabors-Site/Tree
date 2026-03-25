@@ -1,12 +1,13 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Stripe from "stripe";
 import { processPurchase } from "./core/processPurchase.js";
-import { logContribution } from "../../db/utils.js";
+import { logContribution } from "../../seed/utils.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 export async function stripeWebhook(req, res) {
-  if (!stripe) return res.status(503).json({ error: "Stripe is not configured" });
+  if (!stripe) return sendError(res, 503, ERR.INTERNAL, "Stripe is not configured");
   const sig = req.headers["stripe-signature"];
 
   let event;
@@ -52,11 +53,11 @@ export async function stripeWebhook(req, res) {
         err?.message?.toLowerCase().includes("duplicate")
       ) {
  log.verbose("Billing", "Duplicate purchase webhook ignored:", session.id);
-        return res.json({ received: true });
+        return sendOk(res, { received: true });
       }
 
  log.error("Billing", "Contribution logging failed:", err);
-      return res.status(500).json({ error: "Contribution logging failed" });
+      return sendError(res, 500, ERR.INTERNAL, "Contribution logging failed");
     }
 
     await processPurchase({
@@ -66,5 +67,5 @@ export async function stripeWebhook(req, res) {
     });
   }
 
-  res.json({ received: true });
+  sendOk(res, { received: true });
 }

@@ -92,7 +92,7 @@ RULES
     description: "Fetches raw ideas (inbox) for a user. Read-only.",
     schema: {
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -154,7 +154,7 @@ RULES
     schema: {
       rawIdeaId: z.string().describe("ID of the raw idea to place."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -172,14 +172,14 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    handler: async ({ rawIdeaId, userId, nodeId, aiChatId, sessionId }) => {
+    handler: async ({ rawIdeaId, userId, nodeId, chatId, sessionId }) => {
       try {
         const result = await convertRawIdeaToNote({
           rawIdeaId,
           userId,
           nodeId,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 

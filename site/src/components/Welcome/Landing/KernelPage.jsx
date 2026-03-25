@@ -8,11 +8,12 @@ const KernelPage = () => {
       <section className="lp-hero">
         <div className="lp-hero-inner">
           <div className="lp-tree-icon">⚙️</div>
-          <h1 className="lp-title">The Kernel</h1>
+          <h1 className="lp-title">The Seed</h1>
           <p className="lp-subtitle">What runs when everything else is stripped away.</p>
           <p className="lp-tagline">
-            Two schemas, an AI conversation loop, a hook system, and an extension loader.
-            Remove every extension and the kernel still boots. It defines the data contract
+            The kernel is called the seed. You plant it. It grows trees. Two schemas,
+            a conversation loop, a hook system, a cascade engine, and an extension loader.
+            Remove every extension and the seed still boots. It defines the data contract
             that extensions build on and the resolution chains that determine what happens
             at every position in the tree.
           </p>
@@ -52,13 +53,12 @@ const KernelPage = () => {
               <h3>User</h3>
               <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#999", lineHeight: 2}}>
                 _id, username, password<br/>
-                roots[], recentRoots[], remoteRoots[]<br/>
-                llmDefault, profileType<br/>
-                isRemote, homeLand<br/>
+                roots[], llmDefault<br/>
+                isAdmin, isRemote, homeLand<br/>
                 <span style={{color: "#4ade80"}}>metadata (Map)</span>
               </div>
               <p style={{marginTop: 12, fontSize: "0.85rem", color: "#666"}}>
-                10 fields. One default LLM connection. Extensions store energy budgets, API keys,
+                8 fields. One default LLM connection. Extensions store energy budgets, API keys,
                 LLM slot assignments, storage usage, and preferences in metadata.
               </p>
             </div>
@@ -108,7 +108,7 @@ const KernelPage = () => {
           <p className="lp-section-sub" style={{marginTop: 20}}>
             Extensions never call the loop directly. They use <code>runChat()</code> (single message, persistent session)
             or <code>OrchestratorRuntime</code> (multi-step chain). One call handles MCP connection,
-            session management, AIChat tracking, abort propagation, and cleanup.
+            session management, Chat tracking, abort propagation, and cleanup.
           </p>
         </div>
       </section>
@@ -150,7 +150,8 @@ const KernelPage = () => {
                 afterStatusChange<br/>
                 afterNodeCreate<br/>
                 afterRegister<br/>
-                enrichContext
+                enrichContext<br/>
+                <span style={{color: "#4ade80"}}>onCascade</span>
               </div>
             </div>
           </div>
@@ -255,12 +256,68 @@ const KernelPage = () => {
         </div>
       </section>
 
-      {/* ── SYSTEM NODES ── */}
+      {/* ── CASCADE ── */}
       <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Cascade</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Structure without communication is a filing cabinet. Cascade is what makes
+            the tree alive. When content is written at a node marked for cascade, the kernel
+            announces it. Extensions propagate, react, and deliver signals to other nodes
+            and other lands. Every signal produces a visible result.
+          </p>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
+            <div className="lp-card">
+              <h3>Local Origin</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                A note is written at a node with <code>metadata.cascade.enabled = true</code>.
+                The kernel checks two booleans: is cascade enabled on this node? Is <code>cascadeEnabled</code> true
+                in .config? If both yes, fire <code>onCascade</code>. The first event is always local.
+                Somebody wrote something at a position marked for cascade.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3>External Delivery</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                Extensions call <code>deliverCascade</code> to send signals to other nodes,
+                children, siblings, or remote lands via Canopy. The kernel never blocks inbound.
+                Always accepts. Always writes a result to <code>.flow</code>. Extensions decide
+                what to do when a signal arrives.
+              </p>
+            </div>
+          </div>
+          <div style={{maxWidth: 600, margin: "24px auto 0"}}>
+            <div style={{marginBottom: 12, fontSize: "0.9rem", color: "#aaa", fontWeight: 600}}>Result Shape</div>
+            <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#888", lineHeight: 2}}>
+              {"{ status, source, payload, timestamp, signalId, extName }"}
+            </div>
+            <div style={{marginTop: 8, fontSize: "0.85rem", color: "#666"}}>
+              Six statuses: <strong style={{color: "#4ade80"}}>succeeded</strong>,{" "}
+              <strong style={{color: "#f87171"}}>failed</strong>,{" "}
+              <strong style={{color: "#fbbf24"}}>rejected</strong>,{" "}
+              <strong style={{color: "#60a5fa"}}>queued</strong>,{" "}
+              <strong style={{color: "#c084fc"}}>partial</strong>,{" "}
+              <strong style={{color: "#94a3b8"}}>awaiting</strong>.
+              None terminal. None lock the channel. They are labels on what happened,
+              not permissions for what can happen next.
+            </div>
+          </div>
+          <p className="lp-section-sub" style={{marginTop: 20}}>
+            The kernel has four primitives. <strong style={{color: "#e5e5e5"}}>Structure</strong>: two schemas, nodes in hierarchies.{" "}
+            <strong style={{color: "#e5e5e5"}}>Intelligence</strong>: the conversation loop, resolution chains.{" "}
+            <strong style={{color: "#e5e5e5"}}>Extensibility</strong>: the loader, hooks, pub-sub.{" "}
+            <strong style={{color: "#e5e5e5"}}>Communication</strong>: cascade, .flow, visible results.
+            Everything else is emergent behavior from these four interacting.
+          </p>
+        </div>
+      </section>
+
+      {/* ── SYSTEM NODES ── */}
+      <section className="lp-section">
         <div className="lp-container">
           <h2 className="lp-section-title">System Nodes</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            When a land boots for the first time, the kernel creates five system nodes.
+            When a land boots for the first time, the kernel creates six system nodes.
             They hold infrastructure state, not user content.
           </p>
           <div className="lp-steps">
@@ -299,6 +356,13 @@ const KernelPage = () => {
                 <p>Extension registry. Each loaded extension is a child node with version and schema version for migrations.</p>
               </div>
             </div>
+            <div className="lp-step">
+              <div className="lp-step-num" style={{background: "#666", color: "#fff", fontSize: "0.7rem"}}>.f</div>
+              <div className="lp-step-content">
+                <h4>.flow</h4>
+                <p>Cascade result store. Holds signal outcomes keyed by signalId. Cleaned by resultTTL. The land's short-term memory of what moved and what happened.</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -324,11 +388,15 @@ const KernelPage = () => {
               ["sessionTTL", "Session idle timeout (seconds)", "900"],
               ["staleSessionTimeout", "Stale session cleanup (seconds)", "1800"],
               ["maxSessions", "Max concurrent sessions", "10000"],
-              ["aiChatRetentionDays", "Auto-delete AI chats after N days", "90"],
+              ["chatRetentionDays", "Auto-delete chats after N days", "90"],
               ["contributionRetentionDays", "Auto-delete contributions after N days", "365"],
               ["canopyEventRetentionDays", "Auto-delete canopy events after N days", "30"],
               ["timezone", "Land timezone for AI prompts", "auto"],
               ["disabledExtensions", "Extensions to skip on boot", "[]"],
+              ["cascadeEnabled", "Enable cascade signals on content writes", "false"],
+              ["resultTTL", "Seconds before cascade results cleaned from .flow", "604800"],
+              ["awaitingTimeout", "Seconds before awaiting status becomes failed", "300"],
+              ["cascadeMaxDepth", "Max propagation depth per signal", "50"],
             ].map(([key, desc, def]) => (
               <div key={key} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -363,6 +431,8 @@ const KernelPage = () => {
               ["Dependent check", "Can't uninstall if other extensions depend on it."],
               ["Checksum verification", "SHA256 verified on extension install."],
               ["Semver constraints", "Dependencies declare version requirements."],
+              ["Never block inbound", "Cascade signals always accepted. Always write a result to .flow."],
+              ["Cascade depth limit", "cascadeMaxDepth (50). Exceeding writes rejected result. Prevents loops."],
               ["Upload cleanup", "Orphaned files deleted hourly with grace period."],
               ["Graceful shutdown", "SIGTERM closes server, disconnects DB, exits clean."],
             ].map(([name, desc]) => (
@@ -386,13 +456,21 @@ const KernelPage = () => {
             The kernel does not know about fitness, food, wallets, blogs, scripts, energy budgets,
             understanding runs, dream cycles, or gateway channels. It does not render HTML pages.
             It does not meter usage. It does not tag version numbers. It does not schedule recurring tasks.
-            It does not know what a "workout" or a "calorie" is.
+            It does not propagate signals between nodes. It does not route cascade between lands.
+            It does not filter content. It does not compress context.
           </p>
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 12}}>
-            All of that is extensions. The kernel provides nodes, notes, hooks, modes, tools,
-            and the conversation loop. Extensions provide meaning. The kernel provides structure.
-            Together they make an operating system where position determines reality and
-            navigation is capability switching.
+            The seed announces that content was written at a cascade-enabled position and records
+            what happened. Propagation, routing, filtering, compression are all extensions. The seed
+            provides structure, intelligence, extensibility, and communication. Extensions provide meaning.
+          </p>
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 16, fontStyle: "italic", color: "rgba(255,255,255,0.4)"}}>
+            The land is the ground. Trees grow from it. Each tree pulls data through cascade
+            like roots pulling water. The conversation loop is photosynthesis: raw input becomes
+            structured output. .flow is the water table, local to the land, felt by every tree.
+            Signals cascade up through roots, across lands through Canopy, and down into other
+            trees. Sometimes it pools. Sometimes it floods. The seed protects the ground.
+            The tree survives. The structure holds.
           </p>
           <div style={{marginTop: 24}}>
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>

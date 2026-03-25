@@ -1,6 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
-import authenticate from "../../middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import ShortMemory from "./model.js";
 
 const router = express.Router();
@@ -13,7 +14,7 @@ async function loadRootAndAuthorize(req, res, { ownerOnly = false } = {}) {
   const Node = mongoose.model("Node");
   const root = await Node.findById(req.params.rootId).lean();
   if (!root || !root.rootOwner) {
-    res.status(404).json({ success: false, error: "Tree not found" });
+    sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
     return null;
   }
   const userId = req.userId.toString();
@@ -23,7 +24,7 @@ async function loadRootAndAuthorize(req, res, { ownerOnly = false } = {}) {
     Array.isArray(root.contributors) &&
     root.contributors.some((c) => (c.user || c).toString() === userId);
   if (!isOwner && !isContributor) {
-    res.status(403).json({ success: false, error: "Not authorized" });
+    sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     return null;
   }
   return root;
@@ -43,7 +44,7 @@ router.get("/root/:rootId/holdings", authenticate, async (req, res) => {
       .lean();
 
     if (items.length === 0) {
-      return res.json({ answer: "No short term memories right now." });
+      return sendOk(res, { answer: "No short term memories right now." });
     }
 
     const list = items.map((item) => ({
@@ -59,9 +60,9 @@ router.get("/root/:rootId/holdings", authenticate, async (req, res) => {
       createdAt: item.createdAt,
     }));
 
-    return res.json(list);
+    return sendOk(res, { items: list });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -73,10 +74,10 @@ router.get("/root/:rootId/holdings/:itemId", authenticate, async (req, res) => {
 
     const item = await ShortMemory.findById(req.params.itemId).lean();
     if (!item || item.rootId !== req.params.rootId) {
-      return res.status(404).json({ success: false, error: "Item not found" });
+      return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Item not found");
     }
 
-    return res.json({
+    return sendOk(res, {
       _id: item._id,
       content: item.content,
       status: item.status,
@@ -91,7 +92,7 @@ router.get("/root/:rootId/holdings/:itemId", authenticate, async (req, res) => {
       createdAt: item.createdAt,
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -106,21 +107,19 @@ router.post(
 
       const item = await ShortMemory.findById(req.params.itemId);
       if (!item || item.rootId !== req.params.rootId) {
-        return res
-          .status(404)
-          .json({ success: false, error: "Item not found" });
+        return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Item not found");
       }
 
       if (item.status === "dismissed") {
-        return res.json({ success: true, _id: item._id, status: "dismissed" });
+        return sendOk(res, { _id: item._id, status: "dismissed" });
       }
 
       item.status = "dismissed";
       await item.save();
 
-      return res.json({ success: true, _id: item._id, status: "dismissed" });
+      return sendOk(res, { _id: item._id, status: "dismissed" });
     } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );

@@ -1,17 +1,18 @@
 import express from "express";
-import authenticate from "../../middleware/authenticate.js";
-import Node from "../../db/models/node.js";
-import User from "../../db/models/user.js";
-import log from "../../core/log.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import Node from "../../seed/models/node.js";
+import User from "../../seed/models/user.js";
+import log from "../../seed/log.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 
 const router = express.Router();
 
 // GET /land/status - land overview (god only)
 router.get("/land/status", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (user?.profileType !== "god") {
-      return res.status(403).json({ error: "Requires god-tier." });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user?.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Requires god-tier.");
     }
 
     const { getLoadedManifests, getLoadedExtensionNames } = await import("../../extensions/loader.js");
@@ -25,42 +26,42 @@ router.get("/land/status", authenticate, async (req, res) => {
 
     let peerCount = 0;
     try {
-      const LandPeer = (await import("../../db/models/landPeer.js")).default;
+      const LandPeer = (await import("../../canopy/models/landPeer.js")).default;
       peerCount = await LandPeer.countDocuments();
     } catch {}
 
-    res.json({
+    sendOk(res, {
       land: { name: land.name, domain: land.domain, url: getLandUrl() },
       extensions: { count: loaded.length, list: manifests.map(m => ({ name: m.name, version: m.version })) },
       stats: { users: userCount, trees: treeCount, peers: peerCount },
     });
   } catch (err) {
     log.error("LandManager", "Status error:", err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 // GET /land/users - list users (god only)
 router.get("/land/users", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (user?.profileType !== "god") {
-      return res.status(403).json({ error: "Requires god-tier." });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user?.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Requires god-tier.");
     }
 
     const users = await User.find({ isRemote: { $ne: true } })
-      .select("username profileType roots")
+      .select("username isAdmin roots")
       .lean();
 
-    res.json({
+    sendOk(res, {
       users: users.map(u => ({
         username: u.username,
-        profileType: u.profileType,
+        isAdmin: u.isAdmin || false,
         trees: u.roots?.length || 0,
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -68,17 +69,17 @@ router.get("/land/users", authenticate, async (req, res) => {
 // POST /land/chat - land management chat (god only)
 router.post("/land/chat", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType username").lean();
-    if (user?.profileType !== "god") {
-      return res.status(403).json({ error: "Requires god-tier." });
+    const user = await User.findById(req.userId).select("isAdmin username").lean();
+    if (!user?.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Requires god-tier.");
     }
 
     const { message } = req.body;
-    if (!message) return res.status(400).json({ error: "message required" });
+    if (!message) return sendError(res, 400, ERR.INVALID_INPUT, "message required");
 
-    const { runChat } = await import("../../ws/conversation.js");
+    const { runChat } = await import("../../seed/ws/conversation.js");
 
-    const { answer, aiChatId } = await runChat({
+    const { answer, chatId } = await runChat({
       userId: req.userId,
       username: user.username,
       message,
@@ -86,10 +87,10 @@ router.post("/land/chat", authenticate, async (req, res) => {
       res,
     });
 
-    res.json({ success: true, answer, aiChatId });
+    sendOk(res, { answer, chatId });
   } catch (err) {
     log.error("LandManager", "Chat error:", err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

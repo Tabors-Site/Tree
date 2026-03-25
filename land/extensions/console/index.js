@@ -1,6 +1,7 @@
-import { setFormatter, setLogLevel, getLogLevel } from "../../core/log.js";
+import { setFormatter, setLogLevel, getLogLevel } from "../../seed/log.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import express from "express";
-import authenticate from "../../middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 
 const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
@@ -58,17 +59,17 @@ router.post("/land/log-level", authenticate, async (req, res) => {
   try {
     const level = parseInt(req.body.level, 10);
     if (isNaN(level) || level < 1 || level > 3) {
-      return res.status(400).json({ error: "Level must be 1, 2, or 3" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Level must be 1, 2, or 3");
     }
     setLogLevel(level);
-    res.json({ level: getLogLevel(), labels: { 1: "info", 2: "verbose", 3: "debug" } });
+    sendOk(res, { level: getLogLevel(), labels: { 1: "info", 2: "verbose", 3: "debug" } });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.get("/land/log-level", authenticate, async (req, res) => {
-  res.json({ level: getLogLevel(), labels: { 1: "info", 2: "verbose", 3: "debug" } });
+  sendOk(res, { level: getLogLevel(), labels: { 1: "info", 2: "verbose", 3: "debug" } });
 });
 
 export async function init(core) {

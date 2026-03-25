@@ -1,21 +1,30 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import authenticate, { authenticateOrPublic } from "../../middleware/authenticate.js";
-import User from "../../db/models/user.js";
-import Node from "../../db/models/node.js";
-import { getLandRoot } from "../../core/landRoot.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import User from "../../seed/models/user.js";
+import Node from "../../seed/models/node.js";
+import { getLandRoot } from "../../seed/landRoot.js";
 import {
   getAllLandConfig,
   getLandConfigValue,
   setLandConfigValue,
-} from "../../core/landConfig.js";
+} from "../../seed/landConfig.js";
 import {
   getLoadedExtensionNames,
   getLoadedManifests,
   hasExtension,
   getExtensionManifest,
+  getExtension,
 } from "../../extensions/loader.js";
-import { listOrchestrators } from "../../core/orchestratorRegistry.js";
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
+import { listOrchestrators } from "../../seed/orchestratorRegistry.js";
 
 const router = express.Router();
 
@@ -26,9 +35,9 @@ const router = express.Router();
 router.get("/land/config", authenticate, async (req, res) => {
   try {
     const config = getAllLandConfig();
-    res.json({ config });
+    sendOk(res, { config });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -39,32 +48,32 @@ router.get("/land/config", authenticate, async (req, res) => {
 router.get("/land/config/:key", authenticate, async (req, res) => {
   try {
     const value = getLandConfigValue(req.params.key);
-    res.json({ key: req.params.key, value });
+    sendOk(res, { key: req.params.key, value });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 /**
  * PUT /api/v1/land/config/:key
- * Set a config value. Requires admin (profileType === "god").
+ * Set a config value. Requires admin (isAdmin === true).
  */
 router.put("/land/config/:key", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ error: "Admin access required" });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user || !user.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
 
     const { value } = req.body;
     if (value === undefined) {
-      return res.status(400).json({ error: "value is required" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "value is required");
     }
 
     await setLandConfigValue(req.params.key, value);
-    res.json({ key: req.params.key, value, updated: true });
+    sendOk(res, { key: req.params.key, value, updated: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -81,7 +90,7 @@ router.get("/land/extensions", authenticate, async (req, res) => {
     const manifests = getLoadedManifests();
     const disabled = getLandConfigValue("disabledExtensions") || [];
 
-    res.json({
+    sendOk(res, {
       loaded: manifests.map((m) => ({
         name: m.name,
         version: m.version,
@@ -102,7 +111,7 @@ router.get("/land/extensions", authenticate, async (req, res) => {
       count: manifests.length,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -118,7 +127,7 @@ router.get("/land/extensions/:name", authenticate, async (req, res) => {
     // Check loaded extensions first
     if (hasExtension(name)) {
       const manifest = getExtensionManifest(name);
-      return res.json({ name, manifest, status: "active" });
+      return sendOk(res, { name, manifest, status: "active" });
     }
 
     // Check if it's disabled (exists on disk but not loaded)
@@ -128,15 +137,15 @@ router.get("/land/extensions/:name", authenticate, async (req, res) => {
       try {
         const { manifest } = await readExtensionFiles(name);
         if (manifest) {
-          return res.json({ name, manifest, status: "disabled" });
+          return sendOk(res, { name, manifest, status: "disabled" });
         }
       } catch {}
-      return res.json({ name, manifest: { name, version: "?" }, status: "disabled" });
+      return sendOk(res, { name, manifest: { name, version: "?" }, status: "disabled" });
     }
 
-    return res.status(404).json({ error: `Extension "${name}" not found` });
+    return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${name}" not found`);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -147,9 +156,9 @@ router.get("/land/extensions/:name", authenticate, async (req, res) => {
  */
 router.post("/land/extensions/:name/disable", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ error: "Admin access required" });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user || !user.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
 
     const { name } = req.params;
@@ -163,14 +172,14 @@ router.post("/land/extensions/:name/disable", authenticate, async (req, res) => 
     const { syncDisabledFile } = await import("../../extensions/loader.js");
     syncDisabledFile(current);
 
-    res.json({
+    sendOk(res, {
       disabled: true,
       name,
       note: "Extension will be disabled on next restart.",
       disabledExtensions: current,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -181,9 +190,9 @@ router.post("/land/extensions/:name/disable", authenticate, async (req, res) => 
  */
 router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ error: "Admin access required" });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user || !user.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
 
     const { name } = req.params;
@@ -194,14 +203,14 @@ router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
     const { syncDisabledFile } = await import("../../extensions/loader.js");
     syncDisabledFile(updated);
 
-    res.json({
+    sendOk(res, {
       enabled: true,
       name,
       note: "Extension will be enabled on next restart.",
       disabledExtensions: updated,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -212,16 +221,16 @@ router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
  */
 router.post("/land/extensions/:name/uninstall", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ error: "Admin access required" });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user || !user.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
 
     const { name } = req.params;
 
     // Safety: only allow alphanumeric and hyphens in extension names
     if (!/^[a-z0-9-]+$/i.test(name)) {
-      return res.status(400).json({ error: "Invalid extension name" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid extension name");
     }
 
     // Check if other extensions depend on this one
@@ -230,25 +239,24 @@ router.post("/land/extensions/:name/uninstall", authenticate, async (req, res) =
       .filter(m => m.needs?.extensions?.includes(name))
       .map(m => m.name);
     if (dependents.length > 0 && !req.body?.force) {
-      return res.status(409).json({
-        error: `Cannot uninstall "${name}": ${dependents.join(", ")} depend on it. Pass { "force": true } to override.`,
-        dependents,
-      });
+      return sendError(res, 409, ERR.INVALID_INPUT,
+        `Cannot uninstall "${name}": ${dependents.join(", ")} depend on it. Pass { "force": true } to override.`,
+        { dependents });
     }
 
     const result = await uninstallExtension(name);
 
     if (!result.found) {
-      return res.status(404).json({ error: `Extension "${name}" not found` });
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${name}" not found`);
     }
 
-    res.json({
+    sendOk(res, {
       uninstalled: true,
       name,
       note: "Extension directory removed. Data in database is untouched. Restart to apply.",
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -259,26 +267,26 @@ router.post("/land/extensions/:name/uninstall", authenticate, async (req, res) =
  */
 router.post("/land/extensions/install", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ error: "Admin access required" });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user || !user.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
 
     const { name, version, manifest, files } = req.body;
 
     if (!name || !files || !Array.isArray(files) || files.length === 0) {
-      return res.status(400).json({ error: "name and files are required" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "name and files are required");
     }
 
     // Safety: only allow alphanumeric and hyphens
     if (!/^[a-z0-9-]+$/i.test(name)) {
-      return res.status(400).json({ error: "Invalid extension name" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid extension name");
     }
 
     const { installExtensionFiles } = await import("../../extensions/loader.js");
     const result = await installExtensionFiles(name, files);
 
-    res.json({
+    sendOk(res, {
       installed: true,
       name,
       version: version || manifest?.version || "unknown",
@@ -287,7 +295,7 @@ router.post("/land/extensions/install", authenticate, async (req, res) => {
     });
   } catch (err) {
     log.error("API", "Extension install error:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -298,27 +306,27 @@ router.post("/land/extensions/install", authenticate, async (req, res) => {
  */
 router.post("/land/extensions/:name/publish", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ error: "Admin access required" });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user || !user.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
 
     const { name } = req.params;
     if (!/^[a-z0-9-]+$/i.test(name)) {
-      return res.status(400).json({ error: "Invalid extension name" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid extension name");
     }
 
     const { readExtensionFiles } = await import("../../extensions/loader.js");
     const { manifest, files } = await readExtensionFiles(name);
 
     if (!manifest) {
-      return res.status(404).json({ error: `Extension "${name}" not found locally` });
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${name}" not found locally`);
     }
 
     // Send to directory service
     const directoryUrl = getLandConfigValue("DIRECTORY_URL");
     if (!directoryUrl) {
-      return res.status(400).json({ error: "No DIRECTORY_URL configured" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "No DIRECTORY_URL configured");
     }
 
     const { getLandIdentity, signCanopyToken } = await import("../../canopy/identity.js");
@@ -343,10 +351,10 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
 
     const dirData = await dirRes.json();
     if (!dirRes.ok) {
-      return res.status(dirRes.status).json({ error: dirData.error || "Registry publish failed" });
+      return sendError(res, dirRes.status, ERR.INTERNAL, dirData.error || "Registry publish failed");
     }
 
-    res.json({
+    sendOk(res, {
       published: true,
       name: manifest.name,
       version: manifest.version,
@@ -354,7 +362,7 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
     });
   } catch (err) {
     log.error("API", "Extension publish error:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -370,11 +378,11 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
  *   - Trees the user contributes to
  *   - Public trees on this land
  */
-router.get("/land/root", authenticateOrPublic, async (req, res) => {
+router.get("/land/root", readAuth, async (req, res) => {
   try {
     const landRootCached = await getLandRoot();
     if (!landRootCached) {
-      return res.status(404).json({ error: "Land root not found" });
+      return sendError(res, 404, ERR.NODE_NOT_FOUND, "Land root not found");
     }
 
     // Fetch fresh from DB so we see newly created trees (cache may be stale)
@@ -398,7 +406,7 @@ router.get("/land/root", authenticateOrPublic, async (req, res) => {
       return false;
     });
 
-    res.json({
+    sendOk(res, {
       _id: landRoot._id,
       name: landRoot.name,
       children: visible.map((c) => ({
@@ -414,7 +422,7 @@ router.get("/land/root", authenticateOrPublic, async (req, res) => {
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -424,7 +432,7 @@ router.get("/land/root", authenticateOrPublic, async (req, res) => {
  */
 router.get("/land/orchestrators", (req, res) => {
   const active = listOrchestrators();
-  res.json({
+  sendOk(res, {
     tree: active.tree || null,
     home: active.home || null,
     land: active.land || null,
@@ -437,7 +445,7 @@ router.get("/land/orchestrators", (req, res) => {
  */
 router.get("/land/tools", async (req, res) => {
   try {
-    const { getAllToolNamesForBigMode, getSubModes } = await import("../../ws/modes/registry.js");
+    const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/ws/modes/registry.js");
     const allTools = getAllToolNamesForBigMode("tree");
 
     // Build tool-to-mode mapping
@@ -451,7 +459,7 @@ router.get("/land/tools", async (req, res) => {
       }
     }
 
-    res.json({
+    sendOk(res, {
       count: allTools.length,
       tools: allTools.sort().map(name => ({
         name,
@@ -459,7 +467,7 @@ router.get("/land/tools", async (req, res) => {
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -469,7 +477,7 @@ router.get("/land/tools", async (req, res) => {
  */
 router.get("/land/modes", async (req, res) => {
   try {
-    const { getSubModes } = await import("../../ws/modes/registry.js");
+    const { getSubModes } = await import("../../seed/ws/modes/registry.js");
     const bigModes = ["tree", "home", "land"];
     const result = {};
 
@@ -484,9 +492,9 @@ router.get("/land/modes", async (req, res) => {
       }));
     }
 
-    res.json(result);
+    sendOk(res, result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

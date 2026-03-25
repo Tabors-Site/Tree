@@ -9,7 +9,7 @@ export default [
     schema: {
       nodeId: z.string().describe("Node ID where scripts are stored."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -186,7 +186,7 @@ export default [
           "The Id of the script to execute. Found inside of get-node. None if new script",
         ),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -208,7 +208,7 @@ export default [
       idempotentHint: true,
       openWorldHint: false,
     },
-    handler: async ({ nodeId, scriptId, name, script, userId, aiChatId, sessionId }) => {
+    handler: async ({ nodeId, scriptId, name, script, userId, chatId, sessionId }) => {
       const result = await updateScript({
         nodeId,
         scriptId,
@@ -216,7 +216,7 @@ export default [
         script,
         userId,
         wasAi: true,
-        aiChatId,
+        chatId,
         sessionId,
       });
 
@@ -235,7 +235,7 @@ export default [
         .string()
         .describe("The Id of the script to execute. Found inside of get-node"),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -252,13 +252,13 @@ export default [
       idempotentHint: false,
       openWorldHint: true,
     },
-    handler: async ({ nodeId, scriptId, userId, aiChatId, sessionId }) => {
+    handler: async ({ nodeId, scriptId, userId, chatId, sessionId }) => {
       const result = await executeScript({
         nodeId,
         scriptId,
         userId,
         wasAi: true,
-        aiChatId,
+        chatId,
         sessionId,
       });
 

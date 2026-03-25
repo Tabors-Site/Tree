@@ -150,7 +150,7 @@ const { answer } = await core.llm.runChat({
 });
 ```
 
-Handles automatically: MCP connection, mode switching, AIChat tracking, abort on client disconnect, session persistence, error finalization. Pass `res` for HTTP routes.
+Handles automatically: MCP connection, mode switching, Chat tracking, abort on client disconnect, session persistence, error finalization. Pass `res` for HTTP routes.
 
 Sessions persist within the same zone. `tree:{rootId}:{userId}` gives each tree its own conversation. Switching trees starts fresh.
 
@@ -187,7 +187,7 @@ try {
 } catch (err) {
   rt.setError(err.message, "my-pipeline:error");
 } finally {
-  await rt.cleanup(); // finalize AIChat, close MCP, release lock
+  await rt.cleanup(); // finalize Chat, close MCP, release lock
 }
 ```
 
@@ -201,7 +201,7 @@ try {
 | `trackStep(modeKey, { input, output, startTime, endTime })` | Track a chain step without calling the LLM (for orchestrators that call processMessage themselves). |
 | `setResult(content, modeKey)` | Mark pipeline as successful. |
 | `setError(message, modeKey)` | Mark pipeline as failed/stopped. |
-| `cleanup()` | Finalize AIChat, close MCP, end session, release lock. |
+| `cleanup()` | Finalize Chat, close MCP, end session, release lock. |
 | `.aborted` | Boolean, true if abort signal fired. |
 | `.signal` | The AbortSignal for passing to processMessage. |
 | `.chainIndex` | Current chain step index (auto-increments). |
@@ -312,7 +312,7 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 | Auth | `core.auth.resolveTreeAccess` | Yes |
 | Contributions | `core.contributions.logContribution` | Yes |
 | Sessions | `core.session.*` | Yes |
-| AI Chat | `core.aiChat.*` | Yes |
+| Chat | `core.chat.*` | Yes |
 | LLM | `core.llm.*` | Yes |
 | MCP | `core.mcp.*` | Yes |
 | WebSocket | `core.websocket.*` | Yes (no-op if headless) |
@@ -400,6 +400,23 @@ export async function init(core) {
 | `enrichContext` | `{ context, node, meta }` | enrich | Inject extension data into AI context. |
 | `beforeRegister` | `{ username, password }` | before | Validate or modify registration. |
 | `afterRegister` | `{ user }` | after | Initialize user data after registration. |
+| `onCascade` | `{ node, nodeId, signalId, writeContext, source, depth, cascadeConfig }` | cascade | Fires when content is written at a cascade-enabled node or when a signal is delivered externally. Handler results are written to .flow. |
+
+### Cascade hooks
+
+`onCascade` is different from other hooks. It fires through the same hook system but handler return values become visible results stored in the `.flow` system node. This is the communication primitive. Extensions use it to react to signals, propagate to children, or deliver across lands.
+
+```js
+core.hooks.register("onCascade", async ({ node, nodeId, signalId, writeContext, source, depth }) => {
+  // React to the signal
+  // Optionally propagate to children via deliverCascade
+  // Return value is written as result to .flow
+}, "my-extension");
+```
+
+Two entry points trigger onCascade:
+- **checkCascade** (kernel-internal): called on note writes and status changes. The kernel originates.
+- **deliverCascade** (extension-external): called by extensions to deliver to other nodes. Never blocked.
 
 ### Extension hooks (examples)
 

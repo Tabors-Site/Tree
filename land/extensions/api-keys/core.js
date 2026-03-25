@@ -1,8 +1,9 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
-import User from "../../db/models/user.js";
-import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
+import User from "../../seed/models/user.js";
+import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 
 const MAX_API_KEYS_PER_USER = 10;
 
@@ -27,18 +28,18 @@ export const createApiKey = async (req, res) => {
     const { name, revokeOld = false } = req.body;
 
     if (name && typeof name !== "string") {
-      return res.status(400).json({ message: "Invalid key name" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid key name");
     }
 
     const safeName = name?.trim().slice(0, 64) || "API Key";
 
     if (containsHtml(safeName)) {
-      return res.status(400).json({ message: "Key name cannot contain HTML tags" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Key name cannot contain HTML tags");
     }
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
 
     let keys = getUserMeta(user, "apiKeys") || [];
@@ -48,7 +49,7 @@ export const createApiKey = async (req, res) => {
     }
 
     if (keys.filter((k) => !k.revoked).length > MAX_API_KEYS_PER_USER) {
-      return res.status(400).json({ message: "API key limit reached" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "API key limit reached");
     }
 
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
@@ -56,13 +57,13 @@ export const createApiKey = async (req, res) => {
     setUserMeta(user, "apiKeys", keys);
     await user.save();
 
-    return res.status(201).json({
+    return sendOk(res, {
       apiKey: rawKey,
       message: "Store this key securely. You will not see it again.",
-    });
+    }, 201);
   } catch (err) {
  log.error("Api Keys", "[createApiKey]", err);
-    return res.status(500).json({ message: "Failed to create API key" });
+    return sendError(res, 500, ERR.INTERNAL, "Failed to create API key");
   }
 };
 
@@ -70,10 +71,10 @@ export const listApiKeys = async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("metadata");
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
 
-    return res.json(
+    return sendOk(res,
       getUserMeta(user, "apiKeys") || [].map((k) => ({
         id: k._id,
         name: k.name,
@@ -85,7 +86,7 @@ export const listApiKeys = async (req, res) => {
     );
   } catch (err) {
  log.error("Api Keys", "[listApiKeys]", err);
-    return res.status(500).json({ message: "Failed to list API keys" });
+    return sendError(res, 500, ERR.INTERNAL, "Failed to list API keys");
   }
 };
 
@@ -93,22 +94,22 @@ export const deleteApiKey = async (req, res) => {
   try {
     const { keyId } = req.params;
     if (!keyId) {
-      return res.status(400).json({ message: "Key ID required" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Key ID required");
     }
 
     const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     const keys = getUserMeta(user, "apiKeys") || [];
     const key = keys.find((k) => k._id === keyId);
-    if (!key) return res.status(404).json({ message: "API key not found" });
+    if (!key) return sendError(res, 404, ERR.NODE_NOT_FOUND, "API key not found");
     key.revoked = true;
     setUserMeta(user, "apiKeys", keys);
     await user.save();
 
-    return res.json({ message: "API key revoked" });
+    return sendOk(res, { message: "API key revoked" });
   } catch (err) {
  log.error("Api Keys", "[deleteApiKey]", err);
-    return res.status(500).json({ message: "Failed to revoke API key" });
+    return sendError(res, 500, ERR.INTERNAL, "Failed to revoke API key");
   }
 };
 

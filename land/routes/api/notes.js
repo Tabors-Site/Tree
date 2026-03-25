@@ -1,9 +1,10 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
 import mime from "mime-types";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   createNote as coreCreateNote,
   getNotes as coreGetNotes,
@@ -11,15 +12,26 @@ import {
   deleteNoteAndFile as coreDeleteNoteAndFile,
   transferNote as coreTransferNote,
   getNoteEditHistory,
-} from "../../core/tree/notes.js";
+} from "../../seed/tree/notes.js";
 
-import urlAuth from "../../middleware/urlAuth.js";
 import getNodeName from "./helpers/getNameById.js";
-import authenticate from "../../middleware/authenticate.js";
-import preUploadCheck from "../../middleware/preUploadCheck.js";
-import { notFoundPage } from "../../middleware/notFoundPage.js";
-import { resolveVersion } from "../../core/tree/treeFetch.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import preUploadCheck from "../../seed/middleware/preUploadCheck.js";
+import { resolveVersion } from "../../seed/tree/treeFetch.js";
 import { getExtension } from "../../extensions/loader.js";
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
+
+function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
+  const fn = getExtension("html-rendering")?.exports?.notFoundPage;
+  if (fn) return fn(req, res, message);
+  return sendError(res, 404, ERR.NOTE_NOT_FOUND, message);
+}
 function html() { return getExtension("html-rendering")?.exports || {}; }
 import { getLandUrl } from "../../canopy/identity.js";
 
@@ -31,7 +43,7 @@ router.param("version", async (req, res, next, val) => {
     req.params.version = String(await resolveVersion(req.params.nodeId, val));
     next();
   } catch (err) {
-    return res.status(404).json({ error: err.message });
+    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
   }
 });
 
@@ -41,7 +53,7 @@ async function useLatest(req, res, next) {
     req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
     next();
   } catch (err) {
-    return res.status(404).json({ error: err.message });
+    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
   }
 }
 
@@ -67,12 +79,10 @@ const upload = multer({
   limits: { fileSize: 4 * 1024 * 1024 * 1024 },
 });
 
-router.get("/node/:nodeId/:version/notes/editor", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/notes/editor", readAuth, async (req, res) => {
   try {
     if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res
-        .status(404)
-        .json({ error: "Server-rendered HTML is disabled" });
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled");
     }
 
     const { nodeId, version } = req.params;
@@ -94,20 +104,18 @@ router.get("/node/:nodeId/:version/notes/editor", urlAuth, async (req, res) => {
     );
   } catch (err) {
     log.error("API", "Editor page error:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 // ── EDIT EXISTING NOTE EDITOR (GET) ───────────────────────────────────
 router.get(
   "/node/:nodeId/:version/notes/:noteId/editor",
-  urlAuth,
+  readAuth,
   async (req, res) => {
     try {
       if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res
-          .status(404)
-          .json({ error: "Server-rendered HTML is disabled" });
+        return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled");
       }
 
       const { nodeId, version, noteId } = req.params;
@@ -116,7 +124,7 @@ router.get(
       const token = req.query.token ?? "";
       const tokenQS = token ? `?token=${token}&html` : "?html";
 
-      const Note = (await import("../../db/models/notes.js")).default;
+      const Note = (await import("../../seed/models/note.js")).default;
       const note = await Note.findById(noteId).lean();
 
       if (!note)
@@ -146,7 +154,7 @@ router.get(
       );
     } catch (err) {
       log.error("API", "Editor page error:", err);
-      res.status(500).json({ error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
@@ -154,15 +162,15 @@ router.get(
 // ── NOTE EDIT HISTORY ───────────────────────────
 router.get(
   "/node/:nodeId/:version/notes/:noteId/history",
-  urlAuth,
+  readAuth,
   async (req, res) => {
     try {
       const { noteId } = req.params;
       const history = await getNoteEditHistory(noteId);
-      return res.json({ history });
+      return sendOk(res, { history });
     } catch (err) {
       log.error("API", "Note history error:", err);
-      res.status(500).json({ error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
@@ -174,7 +182,7 @@ router.get(
    - JSON (default)
    - HTML (when ?html is used)
 ------------------------------------------------------------------- */
-router.get("/node/:nodeId/:version/notes", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/notes", readAuth, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const rawLimit = req.query.limit;
@@ -184,10 +192,7 @@ router.get("/node/:nodeId/:version/notes", urlAuth, async (req, res) => {
     const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
 
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid limit: must be a positive number",
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit: must be a positive number");
     }
 
     const result = await coreGetNotes({
@@ -226,9 +231,9 @@ router.get("/node/:nodeId/:version/notes", urlAuth, async (req, res) => {
     }
 
     // ---------- NORMAL OLD JSON MODE ----------
-    return res.json({ success: true, notes });
+    return sendOk(res, { notes });
   } catch (err) {
-    return res.status(400).json({ success: false, error: err.message });
+    return sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -267,9 +272,9 @@ router.post(
       }
 
       // otherwise JSON (for API clients)
-      return res.json({ success: true, note: result.Note });
+      return sendOk(res, { note: result.Note });
     } catch (err) {
-      res.status(400).json({ success: false, error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
@@ -284,7 +289,7 @@ router.put(
       const { content } = req.body;
       const userId = req.userId || req.body.userId;
 
-      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      if (!userId) return sendError(res, 401, ERR.UNAUTHORIZED, "Unauthorized");
 
       const result = await editNote({
         noteId,
@@ -295,7 +300,7 @@ router.put(
         wasAi: false,
       });
 
-      return res.json({
+      return sendOk(res, {
         _id: result.Note._id,
         message: result.message,
       });
@@ -308,7 +313,15 @@ router.put(
             : err.name === "EnergyError"
               ? 403
               : 400;
-      return res.status(status).json({ error: err.message });
+      const code =
+        err.message === "Unauthorized"
+          ? ERR.FORBIDDEN
+          : err.message === "Note not found"
+            ? ERR.NOTE_NOT_FOUND
+            : err.name === "EnergyError"
+              ? ERR.FORBIDDEN
+              : ERR.INVALID_INPUT;
+      return sendError(res, status, code, err.message);
     }
   },
 );
@@ -336,7 +349,7 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
     // Check if token exists in query
     const hasToken = req.query.token !== undefined;
 
-    const Note = (await import("../../db/models/notes.js")).default;
+    const Note = (await import("../../seed/models/note.js")).default;
     const note = await Note.findById(noteId)
       .populate("userId", "username")
       .lean();
@@ -432,20 +445,20 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
 
     // ---------- DATA BEHAVIOR (NO HTML) ----------
     if (note.contentType === "text") {
-      return res.json({ text: note.content });
+      return sendOk(res, { text: note.content });
     }
 
     if (note.contentType === "file") {
       const filePath = path.join(uploadsFolder, note.content);
       if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: "File not found" });
+        return sendError(res, 404, ERR.NOTE_NOT_FOUND, "File not found");
       }
       return res.sendFile(filePath);
     }
 
-    res.status(400).json({ error: "Unknown note type" });
+    sendError(res, 400, ERR.INVALID_INPUT, "Unknown note type");
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 router.delete(
@@ -460,9 +473,9 @@ router.delete(
         userId: req.userId,
       });
 
-      res.json({ success: true, ...result });
+      sendOk(res, result);
     } catch (err) {
-      res.status(400).json({ success: false, error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
@@ -477,9 +490,7 @@ router.post(
       const { targetNodeId, prestige } = req.body;
 
       if (!targetNodeId) {
-        return res
-          .status(400)
-          .json({ success: false, error: "targetNodeId is required" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "targetNodeId is required");
       }
 
       const result = await coreTransferNote({
@@ -489,9 +500,9 @@ router.post(
         prestige: typeof prestige === "number" ? prestige : null,
       });
 
-      res.json({ success: true, ...result });
+      sendOk(res, result);
     } catch (err) {
-      res.status(400).json({ success: false, error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
@@ -503,7 +514,7 @@ router.post(
 // These forward to the versioned route handlers by injecting the version.
 // ─────────────────────────────────────────────────────────────────────────
 
-router.get("/node/:nodeId/notes", urlAuth, useLatest, (req, res, next) => {
+router.get("/node/:nodeId/notes", readAuth, useLatest, (req, res, next) => {
   req.url = `/node/${req.params.nodeId}/${req.params.version}/notes`;
   router.handle(req, res, next);
 });
@@ -535,9 +546,7 @@ router.post("/node/:nodeId/notes/:noteId/transfer", authenticate, useLatest, (re
 
 router.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {
-    return res
-      .status(413)
-      .json({ success: false, error: "File exceeds maximum size of 4 GB" });
+    return sendError(res, 413, ERR.INVALID_INPUT, "File exceeds maximum size of 4 GB");
   }
   next(err);
 });

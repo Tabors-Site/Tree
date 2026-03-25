@@ -1,7 +1,8 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import Node from "../../db/models/node.js";
-import authenticate from "../../middleware/authenticate.js";
+import Node from "../../seed/models/node.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   ensureVersionWallet,
   syncVersionSOLBalance,
@@ -41,7 +42,7 @@ router.get(
       const { nodeId, version } = req.params;
       const parsedVersion = parseVersion(version);
       if (parsedVersion === null) {
-        return res.status(400).json({ error: "Invalid version" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid version");
       }
 
       const filtered = Object.entries(req.query)
@@ -59,7 +60,7 @@ router.get(
         !("html" in req.query) ||
         process.env.ENABLE_FRONTEND_HTML !== "true"
       ) {
-        return res.json({ nodeId, version: parsedVersion, ...walletInfo });
+        return sendOk(res, { nodeId, version: parsedVersion, ...walletInfo });
       }
 
       const token = req.query.token ?? "";
@@ -83,7 +84,7 @@ router.get(
       );
     } catch (err) {
  log.error("Solana", "Error in /node/:nodeId/:version/values/solana:", err);
-      res.status(500).json({ error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
@@ -97,7 +98,7 @@ router.post(
       const { nodeId, version } = req.params;
       const parsedVersion = parseVersion(version);
       if (parsedVersion === null) {
-        return res.status(400).json({ error: "Invalid version" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid version");
       }
 
       await ensureVersionWallet(nodeId, parsedVersion);
@@ -110,9 +111,9 @@ router.post(
         );
       }
 
-      res.json({ success: true });
+      sendOk(res, {}, 201);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
@@ -127,11 +128,11 @@ router.post(
       const { destination, amount } = req.body;
       const parsedVersion = parseVersion(version);
       if (parsedVersion === null) {
-        return res.status(400).json({ error: "Invalid version" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid version");
       }
 
       if (typeof destination !== "string" || !destination.trim()) {
-        return res.status(400).json({ error: "Destination is required" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Destination is required");
       }
 
       const dest = destination.trim();
@@ -143,14 +144,12 @@ router.post(
       } else if (isLikelyNodeId(dest)) {
         toNodeId = dest;
       } else {
-        return res.status(400).json({
-          error: "Destination must be a Solana address or a nodeId",
-        });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Destination must be a Solana address or a nodeId");
       }
 
       const solAmount = Number(amount);
       if (!Number.isFinite(solAmount) || solAmount <= 0) {
-        return res.status(400).json({ error: "Invalid SOL amount" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid SOL amount");
       }
 
       const lamports = Math.round(solAmount * 1e9);
@@ -170,10 +169,10 @@ router.post(
         );
       }
 
-      res.json({ success: true, signature: result.signature, to: result.to });
+      sendOk(res, { signature: result.signature, to: result.to });
     } catch (err) {
  log.error("Solana", "Send SOL error:", err);
-      res.status(500).json({ error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
@@ -218,7 +217,7 @@ router.post(
         );
       }
 
-      return res.json({ success: true, ...result });
+      return sendOk(res, result);
     } catch (err) {
  log.error("Solana", "Swap transaction error:", err);
 
@@ -229,7 +228,7 @@ router.post(
         );
       }
 
-      res.status(500).json({ error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
@@ -242,21 +241,21 @@ router.get("/node/:nodeId/values/solana", authenticate, async (req, res) => {
       req.params.version = "0";
       // Fall through to versioned HTML route
       const node = await Node.findById(req.params.nodeId);
-      if (!node) return res.status(404).json({ error: "Node not found" });
+      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
       return res.redirect(`/api/v1/node/${req.params.nodeId}/0/values/solana?${new URLSearchParams(req.query)}`);
     }
-    res.json(info);
+    sendOk(res, info);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.post("/node/:nodeId/values/solana", authenticate, async (req, res) => {
   try {
     const result = await ensureVersionWallet(req.params.nodeId, 0);
-    res.json({ success: true, publicKey: result.publicKey, created: result.created });
+    sendOk(res, { publicKey: result.publicKey, created: result.created }, 201);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

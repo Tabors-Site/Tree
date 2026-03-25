@@ -1,5 +1,5 @@
-import log from "../core/log.js";
-import { getLandConfigValue } from "../core/landConfig.js";
+import log from "../seed/log.js";
+import { getLandConfigValue } from "../seed/landConfig.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -125,7 +125,10 @@ export function getLandInfoPayload() {
     baseUrl,
     siteUrl: process.env.LAND_SITE_URL || null,
     timezone,
-    capabilities: ["invite", "proxy", "notify", "public-trees", "llm-proxy"],
+    capabilities: [
+      ...(_getExtNames && _getExtNames().includes("team") ? ["invite"] : []),
+      "proxy", "notify", "public-trees", "llm-proxy",
+    ],
     extensions: _getExtNames ? _getExtNames() : [],
   };
 }

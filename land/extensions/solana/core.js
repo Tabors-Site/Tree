@@ -1,4 +1,4 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import {
   Keypair,
   Connection,
@@ -13,8 +13,8 @@ import {
   createTransferInstruction,
 } from "@solana/spl-token";
 import crypto from "crypto";
-import Node from "../../db/models/node.js";
-import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+import Node from "../../seed/models/node.js";
+import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 /* ------------------------------------------------------------------ */
 /*  Wallet metadata helpers                                            */
@@ -154,7 +154,7 @@ export async function syncVersionSOLBalance(node, versionIndex) {
   const lamports = await connection.getBalance(pubkey);
 
   // Store SOL balance in metadata.values
-  const { getExtMeta, setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+  const { getExtMeta, setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
   const values = getExtMeta(node, "values") || {};
   values._auto__sol = lamports;
   setExtMeta(node, "values", values);
@@ -181,7 +181,7 @@ export async function getVersionWalletInfo(nodeId, versionIndex) {
   }
 
   // Read values from metadata
-  const { getExtMeta } = await import("../../core/tree/extensionMetadata.js");
+  const { getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
   const values = getExtMeta(node, "values") || {};
 
   const tokens = [];
@@ -434,7 +434,7 @@ export async function syncVersionTokenHoldings(node, versionIndex) {
   const wallet = getWallet(node, versionIndex);
   if (!wallet?.publicKey) return null;
 
-  const { getExtMeta, setExtMeta } = await import("../../core/tree/extensionMetadata.js");
+  const { getExtMeta, setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
   const values = getExtMeta(node, "values") || {};
 
   const pubkey = wallet.publicKey;
@@ -589,7 +589,7 @@ export async function swapFromVersion({
   }
 
   const node = await Node.findById(nodeId);
-  const { getExtMeta } = await import("../../core/tree/extensionMetadata.js");
+  const { getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
   const values = getExtMeta(node, "values") || {};
   const signer = await getVersionKeypair(node, versionIndex);
   const taker = signer.publicKey.toBase58();

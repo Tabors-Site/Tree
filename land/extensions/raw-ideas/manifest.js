@@ -4,7 +4,7 @@ export default {
   description: "Quick capture of unstructured ideas with automatic tree placement",
 
   needs: {
-    services: ["llm", "session", "aiChat", "orchestrator"],
+    services: ["llm", "session", "chat", "orchestrator"],
     models: ["Node", "User"],
   },
 

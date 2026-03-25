@@ -3,18 +3,16 @@ import {
   register,
   login,
   logout,
-} from "../core/users.js";
-import authenticate from "../middleware/authenticate.js";
+} from "../seed/users.js";
+import authenticate from "../seed/middleware/authenticate.js";
 import rateLimit from "express-rate-limit";
+import { sendError, ERR } from "../seed/protocol.js";
 
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
   handler: (req, res) => {
-    res.status(429).json({
-      error: "Too many registrations",
-      message: "Please try again in 1 hour.",
-    });
+    sendError(res, 429, ERR.RATE_LIMITED, "Too many registrations. Please try again in 1 hour.");
   },
 });
 
@@ -22,11 +20,7 @@ const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   handler: (req, res) => {
-    res.status(429).json({
-      error: "Too many login attempts",
-      message: "You have been blocked for 15 minutes due to spam.",
-      retryAfterMinutes: 15,
-    });
+    sendError(res, 429, ERR.RATE_LIMITED, "Too many login attempts. You have been blocked for 15 minutes due to spam.", { retryAfterMinutes: 15 });
   },
 });
 

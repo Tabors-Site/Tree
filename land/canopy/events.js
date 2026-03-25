@@ -1,5 +1,5 @@
-import log from "../core/log.js";
-import CanopyEvent from "../db/models/canopyEvent.js";
+import log from "../seed/log.js";
+import CanopyEvent from "./models/canopyEvent.js";
 import { signCanopyToken } from "./identity.js";
 import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
 
@@ -196,4 +196,38 @@ export async function retryEvent(eventId) {
   await event.save();
 
   return processEvent(event);
+}
+
+/**
+ * Canopy event retention cleanup.
+ * Deletes sent/acked/failed events older than configured days.
+ * Runs daily alongside the kernel retention job.
+ */
+let retentionTimer = null;
+
+export async function runCanopyRetention() {
+  const { getLandConfigValue } = await import("../seed/landConfig.js");
+  const days = Number(getLandConfigValue("canopyEventRetentionDays")) || 30;
+  if (days <= 0) return;
+
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  try {
+    const result = await CanopyEvent.deleteMany({
+      status: { $in: ["sent", "acked", "failed"] },
+      createdAt: { $lt: cutoff },
+    });
+    if (result.deletedCount > 0) {
+      log.info("Canopy", `Deleted ${result.deletedCount} canopy events older than ${days} days`);
+    }
+  } catch (err) {
+    log.error("Canopy", "Event retention cleanup failed:", err.message);
+  }
+}
+
+export function startCanopyRetentionJob() {
+  runCanopyRetention().catch(() => {});
+  retentionTimer = setInterval(() => {
+    runCanopyRetention().catch(() => {});
+  }, 24 * 60 * 60 * 1000);
+  retentionTimer.unref();
 }

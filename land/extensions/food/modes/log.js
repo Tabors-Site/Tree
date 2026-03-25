@@ -22,6 +22,9 @@ export default {
   buildSystemPrompt({ username, rootId, currentNodeId }) {
     return `You are ${username}'s food logging assistant.
 
+Tree root: ${rootId || "unknown"}
+Current position: ${currentNodeId || rootId || "unknown"}
+
 YOUR ROLE
 You receive food intake reports and record them precisely. You are fast, accurate, and give immediate macro feedback. After logging, you tell ${username} where they stand for the day.
 

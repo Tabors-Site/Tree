@@ -1,4 +1,4 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import GatewayChannel from "./model.js";
 import crypto from "crypto";
 import dotenv from "dotenv";

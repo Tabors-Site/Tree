@@ -1,8 +1,8 @@
 import crypto from "crypto";
-import Node from "../../db/models/node.js";
-import Note from "../../db/models/notes.js";
+import Node from "../../seed/models/node.js";
+import Note from "../../seed/models/note.js";
 import Book from "./model.js";
-import { collectSubtreeNodeIds, nodeMatchesStatus } from "../../core/tree/notes.js";
+import { collectSubtreeNodeIds, nodeMatchesStatus } from "../../seed/tree/notes.js";
 
 function hashBookSettings(settings) {
   return crypto

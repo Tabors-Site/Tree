@@ -1,7 +1,7 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import GatewayChannel from "./model.js";
-import Node from "../../db/models/node.js";
-import User from "../../db/models/user.js";
+import Node from "../../seed/models/node.js";
+import User from "../../seed/models/user.js";
 import crypto from "crypto";
 import { getLandUrl } from "../../canopy/identity.js";
 import dotenv from "dotenv";
@@ -16,7 +16,7 @@ const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";
 
 // ─────────────────────────────────────────────────────────────────────────
-// ENCRYPTION (same pattern as customLLM.js, reusing CUSTOM_LLM_API_SECRET_KEY)
+// ENCRYPTION (same pattern as seed/llm/connections.js, reusing CUSTOM_LLM_API_SECRET_KEY)
 // ─────────────────────────────────────────────────────────────────────────
 
 function getEncryptionKey() {
@@ -231,7 +231,7 @@ function sanitizeChannel(channel) {
 // PUBLIC API
 // ─────────────────────────────────────────────────────────────────────────
 
-const PAID_TIERS = ["standard", "premium", "god"];
+const PAID_TIERS = ["standard", "premium"];
 
 export async function addGatewayChannel(
   userId,
@@ -272,13 +272,14 @@ export async function addGatewayChannel(
     throw new Error("Web push channels can only be output");
   }
 
-  // Discord input requires paid tier (standard/premium/god)
+  // Discord input requires paid tier
   var hasInput = safeDirection === "input" || safeDirection === "input-output";
   if (type === "discord" && hasInput) {
-    var user = await User.findById(userId).select("profileType").lean();
-    if (!user || !PAID_TIERS.includes(user.profileType)) {
+    var user = await User.findById(userId).select("isAdmin metadata").lean();
+    var userPlan = (user?.metadata?.tiers?.plan) || "basic";
+    if (!user || (!user.isAdmin && !PAID_TIERS.includes(userPlan))) {
       throw new Error(
-        "Discord input channels require a Standard, Premium, or God tier subscription",
+        "Discord input channels require a Standard or Premium tier subscription",
       );
     }
   }

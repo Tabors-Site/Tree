@@ -35,7 +35,10 @@ const Guide = () => {
         {/* ══════════════════════════════════════════════════════════════ */}
         {/* 2. THE KERNEL */}
         {/* ══════════════════════════════════════════════════════════════ */}
-        <Section title="The Kernel">
+        <Section title="The Seed">
+          <P>
+            The kernel is called the seed. You plant it. It grows trees.
+          </P>
           <P>
             A <strong>node</strong> has a name, a type, a status, children, and a metadata map.
             That is it. Notes (text or files) attach to nodes. Types (goal, plan, task, knowledge,
@@ -48,15 +51,13 @@ const Guide = () => {
             one default LLM connection, and a metadata map for extension data.
           </P>
           <P>
-            Three layers. The <strong>kernel</strong> is the data contract: Node/User schemas,
-            the API protocol (chat/place/query), hooks, mode registry, orchestrator registry,
-            extension loader, federation. Cannot change without forking.
-            The <strong>core</strong> ships with every land: the AI conversation loop,
-            WebSocket server, MCP bridge, OrchestratorRuntime, built-in tree modes,
-            parseJsonSafe. Replaceable by extensions.
-            <strong>Extensions</strong> are everything else: values, schedules, scripts,
-            dreams, orchestrators. Install what you need. If you strip every extension,
-            the kernel still boots.
+            The seed has four primitives. <strong>Structure</strong>: two schemas, nodes in
+            hierarchies. <strong>Intelligence</strong>: the conversation loop, resolution
+            chains. <strong>Extensibility</strong>: the loader, hooks, pub-sub.
+            <strong> Communication</strong>: cascade, .flow, visible results.
+            Extensions are everything else: values, schedules, scripts, dreams, fitness,
+            food, orchestrators. Install what you need. Strip every extension and the seed
+            still boots.
           </P>
         </Section>
 
@@ -183,7 +184,7 @@ treeos ext-block solana             # no wallets anywhere on this branch`}</Code
         <Section title="Building with AI">
           <P>
             Two core functions handle all AI interaction. Extensions never manage MCP
-            connections, sessions, or AIChat records manually.
+            connections, sessions, or Chat records manually.
           </P>
           <P>
             <strong>runChat</strong>: single message, persistent session. Use for user-facing
@@ -215,9 +216,43 @@ treeos ext-block solana             # no wallets anywhere on this branch`}</Code
   },
 });`}</Code>
           <P>
-            Both handle automatically: MCP connection, mode switching, AIChat creation and
+            Both handle automatically: MCP connection, mode switching, Chat creation and
             finalization, abort/cancellation, session persistence, chain tracking, per-node
             tool restrictions, error cleanup. The internal LLM metadata never leaks to clients.
+          </P>
+        </Section>
+
+        {/* ══════════════════════════════════════════════════════════════ */}
+        {/* 5.7 CASCADE */}
+        {/* ══════════════════════════════════════════════════════════════ */}
+        <Section title="Cascade">
+          <P>
+            The kernel has four primitives. Structure (nodes in hierarchies), intelligence
+            (the conversation loop), extensibility (the loader and hooks), and communication.
+            Cascade is the fourth. When content is written at a node marked for cascade, the
+            kernel announces it outward. Extensions propagate, react, and deliver signals to
+            other nodes and other lands. Every signal produces a visible result stored
+            in the <code>.flow</code> system node.
+          </P>
+          <P>
+            Set <code>metadata.cascade = {`{ enabled: true, propagate: "children" }`}</code> on
+            any node. Enable <code>cascadeEnabled</code> in land config. Now every note written
+            at that node fires <code>onCascade</code>. Extensions register handlers to react.
+            A fitness extension sends "workout completed." A food extension on a sibling branch
+            receives it and adjusts the meal plan. A remote land receives it through Canopy
+            and knows what happened.
+          </P>
+          <P>
+            Six result statuses: succeeded, failed, rejected, queued, partial, awaiting. None
+            terminal. A failed signal can be retried. An awaiting signal is waiting for a response.
+            The system never declares something permanently dead. Results live in <code>.flow</code> for
+            7 days (configurable via <code>resultTTL</code>), then are cleaned up.
+          </P>
+          <P>
+            The kernel does not propagate signals. It does not route between nodes. It does not
+            filter content. It announces that something happened at a cascade-enabled position
+            and records the outcome. Propagation, routing, and filtering are extensions built on
+            top of the <code>onCascade</code> hook and the <code>deliverCascade</code> function.
           </P>
         </Section>
 

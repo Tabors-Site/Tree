@@ -183,7 +183,34 @@
       "Bash(grep \"name\\\\|valid\\\\|sanitize\\\\|throw\" __NEW_LINE_ccd9175e8354df5c__ echo \"\" echo \"--- editNodeName: length limits? ---\" grep -n \"editNodeName\\\\|editName\\\\|rename\" land/core/tree/treeManagement.js)",
       "Bash(for line:*)",
       "Bash(echo \"=== Keys the kernel reads from land config ===\" grep -rn \"getLandConfigValue\" land/core/ land/ws/ land/startup.js land/extensions/loader.js --include=\"*.js\")",
-      "Bash(echo \"=== 1. Canopy request size limits? ===\" grep -rn \"limit\\\\|maxBody\\\\|bodyParser\\\\|express.json\\\\|content-length\" land/canopy/*.js land/routes/canopy.js)"
+      "Bash(echo \"=== 1. Canopy request size limits? ===\" grep -rn \"limit\\\\|maxBody\\\\|bodyParser\\\\|express.json\\\\|content-length\" land/canopy/*.js land/routes/canopy.js)",
+      "Bash(sed -i 's|land/core/|land/seed/|g' CLAUDE.md KERNEL.md README.md)",
+      "Bash(sed -i 's|├── core/|├── seed/|g' CLAUDE.md KERNEL.md README.md)",
+      "Bash(sed -i 's|│   ├── hooks|│   ├── hooks|g' CLAUDE.md)",
+      "Bash(sed -i 's|core/tree/|seed/tree/|g' CLAUDE.md KERNEL.md)",
+      "Bash(sed -i 's|core/llms/|seed/llms/|g' CLAUDE.md KERNEL.md)",
+      "Read(//home/tabor/github/Tree/=== OUTSIDE seed/**)",
+      "Bash(find /home/tabor/github/Tree/land/seed -type f -name *.js)",
+      "Bash(git mv:*)",
+      "Bash(ls -la *.md)",
+      "Bash(ls land/seed/models/*.js)",
+      "Bash(ls land/seed/ws/*.js)",
+      "Bash(sed -i 's|from \"\"../seed/tree/treeDataFetching.js\"\"|from \"\"../seed/tree/treeData.js\"\"|' land/mcp/server.js)",
+      "Bash(sed -i 's|from \"\"../../seed/tree/treeDataFetching.js\"\"|from \"\"../../seed/tree/treeData.js\"\"|' land/extensions/schedules/tools.js)",
+      "Bash(sed -i 's|from \"\"../tree/treeDataFetching.js\"\"|from \"\"../tree/treeData.js\"\"|' land/seed/ws/websocket.js)",
+      "Bash(grep -r land/core /home/tabor/github/Tree/land/seed --include=*.js)",
+      "Bash(grep -n \"\\\\.concat\\\\|\\\\.push\\\\|unshift\" /home/tabor/github/Tree/land/seed/tree/*.js)",
+      "Bash(grep -r \"land/core\\\\|../core\\\\|from.*core/\" /home/tabor/github/Tree/land/seed --include=*.js)",
+      "Bash(grep -rn \"eval\\\\|Function\\\\s*\\(\\\\|exec\\(\" /home/tabor/github/Tree/land/seed --include=*.js)",
+      "Bash(grep -n \"JSON\\\\.parse\\\\|JSON\\\\.stringify\" /home/tabor/github/Tree/land/seed/tree/*.js)",
+      "Bash(grep -n \"verifyCanopyToken\" /home/tabor/github/Tree/land/canopy/*.js)",
+      "Bash(grep -l \"from.*extensions/\" /home/tabor/github/Tree/land/seed/tree/*.js)",
+      "Bash(grep -h \"^import\\\\|^export.*from\" /home/tabor/github/Tree/land/seed/**/*.js)",
+      "Bash(grep \"extensions/\" /home/tabor/github/Tree/land/seed/middleware/*.js)",
+      "Bash(grep -r \"land/core\\\\|land/middleware\" /home/tabor/github/Tree/land/seed --include=*.js)",
+      "Bash(grep -r getDashboard /home/tabor/github/Tree/site --include=*.jsx --include=*.js)",
+      "Bash(grep -E \"^--$|// GET|// POST|router\\\\.get|router\\\\.post|wantHtml\")",
+      "Bash(grep -n \"html\\(\\)\\\\.render\\\\|res\\\\.send.*html\\\\|wantHtml.*=\" /home/tabor/github/Tree/land/routes/api/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -199,7 +226,12 @@
       "/home/tabor/github/Tree/s/await User.findById(userId)$",
       "/home/tabor/github/Tree/s/await Node.findById(cursor.parent)$",
       "/home/tabor/github/Tree/land/extensions/fitness",
-      "/home/tabor/github/Tree/land/extensions/food"
+      "/home/tabor/github/Tree/land/extensions/food",
+      "/home/tabor/github/Tree/land/db/models",
+      "/home/tabor/github/Tree/land/ws/modes/home",
+      "/home/tabor/github/db/\\|\"../ws/\\|\"../middleware/\\|\"..",
+      "/home/tabor/github/Tree/land/seed/middleware",
+      "/tmp"
     ]
   }
 }

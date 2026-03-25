@@ -1,7 +1,7 @@
 import axios from "axios";
 import { getLandUrl } from "../../../canopy/identity.js";
 
-import { editStatus } from "../../../core/tree/statuses.js";
+import { editStatus } from "../../../seed/tree/statuses.js";
 
 // Optional extension functions (wired via setExtensions() from init)
 let setValueForNode = async () => { throw new Error("Values extension not installed"); };

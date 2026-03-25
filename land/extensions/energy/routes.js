@@ -1,12 +1,20 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import User from "../../db/models/user.js";
-import urlAuth from "../../middleware/urlAuth.js";
-import authenticate from "../../middleware/authenticate.js";
-import { getConnectionsForUser } from "../../core/llms/customLLM.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import User from "../../seed/models/user.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { getConnectionsForUser } from "../../seed/llm/connections.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
-import { getUserMeta } from "../../core/tree/userMetadata.js";
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
+
+import { getUserMeta } from "../../seed/tree/userMetadata.js";
 
 const router = express.Router();
 
@@ -21,19 +29,19 @@ function buildQueryString(req) {
   return filtered ? `?${filtered}` : "";
 }
 
-router.get("/user/:userId/energy", urlAuth, async (req, res) => {
+router.get("/user/:userId/energy", readAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const qs = buildQueryString(req);
     let user = await User.findById(userId).exec();
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
 
     const energy = getUserMeta(user, "energy");
     const energyAmount = energy.available?.amount ?? 0;
     const additionalEnergy = energy.additional?.amount ?? 0;
-    const profileType = (user.profileType || "basic").toLowerCase();
+    const plan = (getUserMeta(user, "tiers").plan || "basic").toLowerCase();
     const billing = getUserMeta(user, "billing");
     const planExpiresAt = billing.planExpiresAt || null;
 
@@ -46,14 +54,14 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
       : null;
     const hasLlm = !!activeConn;
     const connectionCount = llmConnections.length;
-    const isBasic = profileType === "basic";
+    const isBasic = plan === "basic";
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({
+      return sendOk(res, {
         userId: user._id,
-        profileType,
+        plan,
         energy: energy.available,
         additionalEnergy: energy.additional,
         hasCustomLlm: hasLlm,
@@ -66,7 +74,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
         user,
         energyAmount,
         additionalEnergy,
-        profileType,
+        plan,
         planExpiresAt,
         llmConnections,
         mainAssignment,
@@ -80,7 +88,7 @@ router.get("/user/:userId/energy", urlAuth, async (req, res) => {
     );
   } catch (err) {
  log.error("Energy", "Energy page error:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

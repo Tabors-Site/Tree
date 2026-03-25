@@ -1,4 +1,5 @@
-import log from "../core/log.js";
+import log from "../seed/log.js";
+import { sendOk, sendError, ERR } from "../seed/protocol.js";
 import express from "express";
 import { getLandInfoPayload, getLandIdentity, signCanopyToken } from "../canopy/identity.js";
 import {
@@ -27,15 +28,15 @@ import {
   getFailedEvents,
   retryEvent,
 } from "../canopy/events.js";
-import User from "../db/models/user.js";
-import RemoteUser from "../db/models/remoteUser.js";
-import LandPeer from "../db/models/landPeer.js";
-import Node from "../db/models/node.js";
-import Invite from "../db/models/invite.js";
-import authenticate from "../middleware/authenticate.js";
+import User from "../seed/models/user.js";
+import RemoteUser from "../canopy/models/remoteUser.js";
+import LandPeer from "../canopy/models/landPeer.js";
+import Node from "../seed/models/node.js";
+import authenticate from "../seed/middleware/authenticate.js";
 import { getExtension } from "../extensions/loader.js";
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/directory.js";
 import { isPrivateHost } from "../canopy/security.js";
+import { getUserMeta } from "../seed/tree/userMetadata.js";
 
 
 const router = express.Router();
@@ -49,13 +50,13 @@ router.use(express.json({ limit: "100kb" }));
  */
 async function requireAdmin(req, res, next) {
   try {
-    const user = await User.findById(req.userId).select("profileType").lean();
-    if (!user || user.profileType !== "god") {
-      return res.status(403).json({ success: false, error: "Requires admin (god) permissions" });
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user || !user.isAdmin) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Requires admin permissions");
     }
     next();
   } catch (err) {
-    res.status(500).json({ success: false, error: "Failed to verify admin status" });
+    sendError(res, 500, ERR.INTERNAL, "Failed to verify admin status");
   }
 }
 
@@ -92,7 +93,7 @@ router.use("/canopy", addCanopyHeaders);
  * Used by other lands for discovery, peering, and heartbeat.
  */
 router.get("/canopy/info", (req, res) => {
-  res.json(getLandInfoPayload());
+  sendOk(res, getLandInfoPayload());
 });
 
 /**
@@ -103,13 +104,13 @@ router.get("/canopy/info", (req, res) => {
 router.get("/canopy/redirect", (req, res) => {
   const redirectDomain = process.env.LAND_REDIRECT_TO || null;
   if (redirectDomain) {
-    return res.json({
+    return sendOk(res, {
       redirect: true,
       newDomain: redirectDomain,
       permanent: true,
     });
   }
-  res.json({ redirect: false });
+  sendOk(res, { redirect: false });
 });
 
 /**
@@ -127,20 +128,16 @@ router.get("/canopy/user/:username", authenticateCanopy, async (req, res) => {
       .lean();
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: "User not found on this land",
-      });
+      return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found on this land");
     }
 
-    res.json({
-      success: true,
+    sendOk(res, {
       userId: user._id,
       username: user.username,
       landDomain: getLandIdentity().domain,
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -189,9 +186,9 @@ router.get("/canopy/public-trees", async (req, res) => {
       })
     );
 
-    res.json({ success: true, trees: results, page: parseInt(page) });
+    sendOk(res, { trees: results, page: parseInt(page) });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -204,23 +201,17 @@ router.post("/canopy/peer/register", async (req, res) => {
   try {
     const ip = req.ip || req.connection?.remoteAddress || "unknown";
     if (!checkIpRate(`register:${ip}`, 5)) {
-      return res.status(429).json({ success: false, error: "Rate limit exceeded" });
+      return sendError(res, 429, ERR.RATE_LIMITED, "Rate limit exceeded");
     }
 
     const { landId, domain, publicKey, protocolVersion, name, baseUrl } = req.body;
 
     if (!landId || !domain || !publicKey) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing required fields: landId, domain, publicKey",
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Missing required fields: landId, domain, publicKey");
     }
 
     if (!isCompatibleVersion(protocolVersion)) {
-      return res.status(400).json({
-        success: false,
-        error: `Incompatible protocol version: ${protocolVersion}`,
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, `Incompatible protocol version: ${protocolVersion}`);
     }
 
     // SECURITY: Verify the sender actually controls the claimed domain.
@@ -233,14 +224,11 @@ router.post("/canopy/peer/register", async (req, res) => {
       if (isPrivateHost(host)) {
         // Allow localhost in dev for local testing
         if (!(host === "localhost" && process.env.NODE_ENV !== "production")) {
-          return res.status(400).json({
-            success: false,
-            error: "Private/internal addresses not allowed",
-          });
+          return sendError(res, 400, ERR.INVALID_INPUT, "Private/internal addresses not allowed");
         }
       }
     } catch {
-      return res.status(400).json({ success: false, error: "Invalid baseUrl" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid baseUrl");
     }
 
     let verifiedInfo;
@@ -251,44 +239,29 @@ router.post("/canopy/peer/register", async (req, res) => {
       if (!verifyRes.ok) throw new Error("Failed to reach land");
       verifiedInfo = await verifyRes.json();
     } catch {
-      return res.status(400).json({
-        success: false,
-        error: "Could not verify land identity. Ensure your land is reachable.",
-      });
+      return sendError(res, 502, ERR.PEER_UNREACHABLE, "Could not verify land identity. Ensure your land is reachable.");
     }
 
     // Confirm the claimed identity matches what the land actually serves
     if (verifiedInfo.landId !== landId || verifiedInfo.publicKey !== publicKey) {
-      return res.status(403).json({
-        success: false,
-        error: "Land identity mismatch. The domain does not serve the claimed identity.",
-      });
+      return sendError(res, 403, ERR.FORBIDDEN, "Land identity mismatch. The domain does not serve the claimed identity.");
     }
 
     let peer = await LandPeer.findOne({ domain });
 
     if (peer) {
       if (peer.status === "blocked") {
-        return res.status(403).json({
-          success: false,
-          error: "This land is blocked",
-        });
+        return sendError(res, 403, ERR.FORBIDDEN, "This land is blocked");
       }
       // Only allow re-registration from the same landId
       if (peer.landId && peer.landId !== landId) {
-        return res.status(403).json({
-          success: false,
-          error: "Domain already registered with a different land ID",
-        });
+        return sendError(res, 403, ERR.FORBIDDEN, "Domain already registered with a different land ID");
       }
 
       // SECURITY: Reject re-registration if publicKey changed.
       // Key rotation requires admin to remove and re-peer.
       if (peer.publicKey && peer.publicKey !== publicKey) {
-        return res.status(403).json({
-          success: false,
-          error: "Public key has changed. Admin must remove and re-peer to accept new keys.",
-        });
+        return sendError(res, 403, ERR.FORBIDDEN, "Public key has changed. Admin must remove and re-peer to accept new keys.");
       }
 
       peer.landId = landId;
@@ -318,13 +291,12 @@ router.post("/canopy/peer/register", async (req, res) => {
       });
     }
 
-    res.json({
-      success: true,
+    sendOk(res, {
       message: "Peer registered",
       landId: getLandIdentity().landId,
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -332,247 +304,46 @@ router.post("/canopy/peer/register", async (req, res) => {
 // AUTHENTICATED CANOPY ENDPOINTS (require CanopyToken)
 // ============================================================
 
-/**
- * POST /canopy/invite/offer
- * A remote land notifies us that one of our users has been invited
- * to a tree on their land.
- */
+// ── Canopy invite handlers (delegated to team extension) ─────────────
+
+// Used inline with sendError below; kept as a label for grep-ability
+const TEAM_NOT_INSTALLED_MSG = "Team extension not installed. Invites unavailable.";
+
+async function loadTeamCanopyHandlers() {
+  try {
+    return await import("../extensions/team/canopyHandlers.js");
+  } catch {
+    return null;
+  }
+}
+
 router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
   try {
-    const validation = validateCanopyRequest("invite_offer", req.body);
-    if (!validation.valid) {
-      return res.status(400).json({
-        success: false,
-        errors: validation.errors,
-      });
-    }
-
-    const { receivingUsername, rootId, rootName, invitingUserId, invitingUsername, sourceInviteId } =
-      req.body;
-
-    // Use verified domain from CanopyToken, not the body claim
-    const sourceLandDomain = req.canopy.sourceLandDomain;
-
-    // Find the local user being invited
-    const localUser = await User.findOne({
-      username: receivingUsername,
-      isRemote: { $ne: true },
-    });
-
-    if (!localUser) {
-      return res.status(404).json({
-        success: false,
-        error: `User ${receivingUsername} not found on this land`,
-      });
-    }
-
-    // Store info about the remote inviter if we haven't seen them
-    await RemoteUser.findOneAndUpdate(
-      { _id: invitingUserId },
-      {
-        _id: invitingUserId,
-        username: invitingUsername || "unknown",
-        homeLandDomain: sourceLandDomain,
-        displayName: invitingUsername || "",
-        lastSyncedAt: new Date(),
-      },
-      { upsert: true, new: true }
-    );
-
-    // Check for duplicate pending invite
-    const existingInvite = await Invite.findOne({
-      userReceiving: localUser._id,
-      rootId,
-      remoteLandDomain: sourceLandDomain,
-      status: "pending",
-    });
-
-    if (existingInvite) {
-      return res.json({
-        success: true,
-        inviteId: existingInvite._id,
-        message: "Invite already pending",
-        userId: localUser._id,
-        username: localUser.username,
-      });
-    }
-
-    // Create a local invite so the user can see and respond
-    const invite = await Invite.create({
-      userInviting: invitingUserId,
-      userReceiving: localUser._id,
-      rootId,
-      remoteLandDomain: sourceLandDomain,
-      remoteRootName: rootName || "Untitled",
-      remoteInviteId: sourceInviteId || null,
-      remoteInvitingUsername: invitingUsername || null,
-      status: "pending",
-    });
-
-    res.json({
-      success: true,
-      inviteId: invite._id,
-      message: "Invite offer received",
-      userId: localUser._id,
-      username: localUser.username,
-    });
+    const handlers = await loadTeamCanopyHandlers();
+    if (!handlers) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, TEAM_NOT_INSTALLED_MSG);
+    await handlers.handleInviteOffer(req, res, { User, RemoteUser, validateCanopyRequest });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-/**
- * POST /canopy/invite/accept
- * A remote land confirms that their user accepted an invite
- * to a tree on our land.
- */
 router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
   try {
-    const validation = validateCanopyRequest("invite_accept", req.body);
-    if (!validation.valid) {
-      return res.status(400).json({ success: false, errors: validation.errors });
-    }
-
-    const { inviteId, userId, username } = req.body;
-
-    // Atomically mark invite as accepted (prevents race condition)
-    const invite = await Invite.findOneAndUpdate(
-      { _id: inviteId, status: "pending" },
-      { $set: { status: "accepted" } },
-      { new: true }
-    );
-    if (!invite) {
-      return res.status(404).json({
-        success: false,
-        error: "Invite not found or already processed",
-      });
-    }
-
-    // SECURITY: Verify the accepting land is the one the invite was intended for.
-    // The invite must have a corresponding RemoteUser from the claiming land.
-    const intendedRecipient = await RemoteUser.findById(invite.userReceiving);
-    if (!intendedRecipient || intendedRecipient.homeLandDomain !== req.canopy.sourceLandDomain) {
-      await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
-      return res.status(403).json({
-        success: false,
-        error: "This invite was not sent to your land",
-      });
-    }
-
-    // SECURITY: Check if this UUID belongs to a local user.
-    const existingLocal = await User.findOne({ _id: userId, isRemote: { $ne: true } });
-    if (existingLocal) {
-      await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
-      return res.status(403).json({
-        success: false,
-        error: "User ID conflicts with a local user. Invite rejected.",
-      });
-    }
-
-    // Find or create ghost user atomically
-    // SECURITY: Quota on ghost users per remote land (prevent database flood)
-    const ghostCount = await User.countDocuments({
-      isRemote: true,
-      homeLand: req.canopy.sourceLandDomain,
-    });
-
-    const ghostUsername = username
-      ? `${username}@${req.canopy.sourceLandDomain}`
-      : `${req.canopy.sourceLandDomain}_${userId.slice(0, 8)}`;
-
-    let ghostUser = await User.findOne({
-      _id: userId,
-      isRemote: true,
-      homeLand: req.canopy.sourceLandDomain,
-    });
-
-    if (!ghostUser) {
-      if (ghostCount >= 1000) {
-        await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
-        return res.status(429).json({
-          success: false,
-          error: "Ghost user quota exceeded for this land",
-        });
-      }
-
-      try {
-        ghostUser = await User.create({
-          _id: userId,
-          username: ghostUsername,
-          email: `${userId}@${req.canopy.sourceLandDomain}`,
-          password: "$2b$00$REMOTE_NOLOGIN_PLACEHOLDER.......................",
-          isRemote: true,
-          homeLand: req.canopy.sourceLandDomain,
-        });
-      } catch (createErr) {
-        // Duplicate key: another request created it first
-        if (createErr.code === 11000) {
-          ghostUser = await User.findOne({ _id: userId, isRemote: true });
-          if (!ghostUser) {
-            // Collision with local user that was created between our check and insert
-            return res.status(409).json({
-              success: false,
-              error: "User ID conflicts with a local account",
-            });
-          }
-        } else {
-          throw createErr;
-        }
-      }
-    }
-
-    // Add to contributors atomically (prevents duplicates)
-    await Node.findByIdAndUpdate(invite.rootId, {
-      $addToSet: { contributors: userId },
-    });
-
-    // Add root to ghost user's roots
-    if (!ghostUser.roots.includes(invite.rootId)) {
-      ghostUser.roots.push(invite.rootId);
-      await ghostUser.save();
-    }
-
-    res.json({ success: true, message: "Invite accepted" });
+    const handlers = await loadTeamCanopyHandlers();
+    if (!handlers) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, TEAM_NOT_INSTALLED_MSG);
+    await handlers.handleInviteAccept(req, res, { User, Node, RemoteUser, validateCanopyRequest });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-/**
- * POST /canopy/invite/decline
- * A remote land confirms that their user declined an invite.
- */
 router.post("/canopy/invite/decline", authenticateCanopy, async (req, res) => {
   try {
-    const validation = validateCanopyRequest("invite_decline", req.body);
-    if (!validation.valid) {
-      return res.status(400).json({ success: false, errors: validation.errors });
-    }
-
-    const { inviteId } = req.body;
-
-    const invite = await Invite.findById(inviteId);
-    if (!invite) {
-      return res.status(404).json({
-        success: false,
-        error: "Invite not found",
-      });
-    }
-
-    // SECURITY: Verify the declining land is the one the invite was sent to.
-    if (invite.remoteLandDomain && invite.remoteLandDomain !== req.canopy.sourceLandDomain) {
-      return res.status(403).json({
-        success: false,
-        error: "This invite was not sent to your land",
-      });
-    }
-
-    invite.status = "declined";
-    await invite.save();
-
-    res.json({ success: true, message: "Invite declined" });
+    const handlers = await loadTeamCanopyHandlers();
+    if (!handlers) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, TEAM_NOT_INSTALLED_MSG);
+    await handlers.handleInviteDecline(req, res, { validateCanopyRequest });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -587,7 +358,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
   try {
     const validation = validateCanopyRequest("llm_proxy", req.body);
     if (!validation.valid) {
-      return res.status(400).json({ success: false, errors: validation.errors });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Validation failed", { errors: validation.errors });
     }
 
     const { messages, tools, tool_choice, slot } = req.body;
@@ -596,39 +367,29 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
     const user = await User.findOne({
       _id: req.canopy.userId,
       isRemote: { $ne: true },
-    }).select("_id remoteRoots").lean();
+    }).select("_id metadata").lean();
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: "user_not_found",
-        message: "User not found on this land",
-      });
+      return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found on this land");
     }
 
     // Verify user has a relationship with the calling land
     const callingLand = req.canopy.sourceLandDomain;
-    const hasRelationship = user.remoteRoots?.some(
+    const canopyMeta = getUserMeta(user, "canopy");
+    const remoteRoots = canopyMeta.remoteRoots || [];
+    const hasRelationship = remoteRoots.some(
       (rr) => rr.landDomain?.toLowerCase() === callingLand?.toLowerCase()
     );
     if (!hasRelationship) {
-      return res.status(403).json({
-        success: false,
-        error: "no_relationship",
-        message: "User has no relationship with the calling land",
-      });
+      return sendError(res, 403, ERR.FORBIDDEN, "User has no relationship with the calling land");
     }
 
     // Resolve LLM connection
-    const { getClientForUser } = await import("../ws/conversation.js");
+    const { getClientForUser } = await import("../seed/ws/conversation.js");
     const clientEntry = await getClientForUser(user._id.toString(), slot || "main");
 
     if (clientEntry.noLlm) {
-      return res.status(422).json({
-        success: false,
-        error: "no_llm",
-        message: "No LLM connection configured on home land",
-      });
+      return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection configured on home land");
     }
 
     // Deduct energy before running the LLM call (skip if energy extension not installed)
@@ -637,11 +398,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
       try {
         await energySvc.useEnergy({ userId: user._id.toString(), action: "proxyLlm" });
       } catch (energyErr) {
-        return res.status(422).json({
-          success: false,
-          error: "insufficient_energy",
-          message: energyErr.message,
-        });
+        return sendError(res, 429, ERR.RATE_LIMITED, energyErr.message);
       }
     }
 
@@ -653,18 +410,13 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
       tool_choice: tools ? (tool_choice || "auto") : undefined,
     });
 
-    res.json({
-      success: true,
+    sendOk(res, {
       completion,
       model: clientEntry.model,
     });
   } catch (err) {
     log.error("API", "[Canopy] LLM proxy error:", err.message);
-    res.status(502).json({
-      success: false,
-      error: "llm_error",
-      message: err.message,
-    });
+    sendError(res, 503, ERR.LLM_FAILED, err.message);
   }
 });
 
@@ -677,7 +429,7 @@ router.post("/canopy/notify", authenticateCanopy, async (req, res) => {
   try {
     const validation = validateCanopyRequest("notify", req.body);
     if (!validation.valid) {
-      return res.status(400).json({ success: false, errors: validation.errors });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Validation failed", { errors: validation.errors });
     }
 
     const { targetUserId, notificationType, data } = req.body;
@@ -685,10 +437,7 @@ router.post("/canopy/notify", authenticateCanopy, async (req, res) => {
     // Verify the target user is local
     const user = await User.findById(targetUserId);
     if (!user || user.isRemote) {
-      return res.status(404).json({
-        success: false,
-        error: "Target user not found on this land",
-      });
+      return sendError(res, 404, ERR.USER_NOT_FOUND, "Target user not found on this land");
     }
 
     // For now, just log it. Notification delivery will use existing
@@ -697,9 +446,9 @@ router.post("/canopy/notify", authenticateCanopy, async (req, res) => {
       `[Canopy] Notification for ${user.username}: ${notificationType}`
     );
 
-    res.json({ success: true, message: "Notification received" });
+    sendOk(res, { message: "Notification received" });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -715,16 +464,13 @@ router.post("/canopy/admin/peer/add", authenticate, requireAdmin, async (req, re
   try {
     const { url } = req.body;
     if (!url) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing url",
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Missing url");
     }
 
     const peer = await registerPeer(url);
-    res.json({ success: true, peer });
+    sendOk(res, { peer });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -739,9 +485,9 @@ router.delete(
   async (req, res) => {
     try {
       await removePeer(req.params.domain);
-      res.json({ success: true, message: "Peer removed" });
+      sendOk(res, { message: "Peer removed" });
     } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   }
 );
@@ -758,14 +504,11 @@ router.post(
     try {
       const peer = await blockPeer(req.params.domain);
       if (!peer) {
-        return res.status(404).json({
-          success: false,
-          error: "Peer not found",
-        });
+        return sendError(res, 404, ERR.PEER_NOT_FOUND, "Peer not found");
       }
-      res.json({ success: true, peer });
+      sendOk(res, { peer });
     } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   }
 );
@@ -782,14 +525,11 @@ router.post(
     try {
       const peer = await unblockPeer(req.params.domain);
       if (!peer) {
-        return res.status(404).json({
-          success: false,
-          error: "Peer not found",
-        });
+        return sendError(res, 404, ERR.PEER_NOT_FOUND, "Peer not found");
       }
-      res.json({ success: true, peer });
+      sendOk(res, { peer });
     } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   }
 );
@@ -803,14 +543,13 @@ router.get("/canopy/admin/peers", authenticate, requireAdmin, async (req, res) =
     const peers = await getAllPeers();
     const pendingEvents = await getPendingEventCount();
 
-    res.json({
-      success: true,
+    sendOk(res, {
       peers,
       pendingEvents,
       land: getLandInfoPayload(),
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -821,9 +560,9 @@ router.get("/canopy/admin/peers", authenticate, requireAdmin, async (req, res) =
 router.post("/canopy/admin/heartbeat", authenticate, requireAdmin, async (req, res) => {
   try {
     const results = await runHeartbeat();
-    res.json({ success: true, results });
+    sendOk(res, { results });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -834,9 +573,9 @@ router.post("/canopy/admin/heartbeat", authenticate, requireAdmin, async (req, r
 router.get("/canopy/admin/events/failed", authenticate, requireAdmin, async (req, res) => {
   try {
     const events = await getFailedEvents();
-    res.json({ success: true, events });
+    sendOk(res, { events });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -852,154 +591,27 @@ router.post(
     try {
       const result = await retryEvent(req.params.eventId);
       if (result === null) {
-        return res.status(404).json({
-          success: false,
-          error: "Event not found",
-        });
+        return sendError(res, 404, ERR.NODE_NOT_FOUND, "Event not found");
       }
-      res.json({ success: true, sent: result });
+      sendOk(res, { sent: result });
     } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   }
 );
 
-/**
- * POST /canopy/invite-remote
- * Invite a user from a remote land to a local tree.
- * This is what a local tree owner calls to invite someone cross-land.
- */
 router.post("/canopy/invite-remote", authenticate, async (req, res) => {
   try {
-    const { canopyId, rootId } = req.body;
-
-    if (!canopyId || !rootId) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing canopyId (username@domain) or rootId",
-      });
-    }
-
-    // Parse canopy ID
-    const atIndex = canopyId.lastIndexOf("@");
-    if (atIndex === -1) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid canopy ID format. Expected username@domain",
-      });
-    }
-
-    const username = canopyId.slice(0, atIndex);
-    const domain = canopyId.slice(atIndex + 1);
-
-    // Reject self-land invites — use local invite instead
-    if (domain === getLandIdentity().domain) {
-      return res.status(400).json({
-        success: false,
-        error: "That user is on this land. Use a local invite instead of user@domain.",
-      });
-    }
-
-    // Verify the tree exists and the requester owns it
-    const rootNode = await Node.findById(rootId);
-    if (!rootNode) {
-      return res.status(404).json({
-        success: false,
-        error: "Tree not found",
-      });
-    }
-
-    if (rootNode.rootOwner !== req.userId) {
-      return res.status(403).json({
-        success: false,
-        error: "Only the tree owner can invite remote users",
-      });
-    }
-
-    // Look up the peer, auto-discover via directory if needed
-    let peer = await getPeerByDomain(domain);
-    if (!peer) {
-      // Try directory lookup and auto-peer
-      const directoryLand = await lookupLandByDomain(domain);
-      if (directoryLand && directoryLand.baseUrl) {
-        try {
-          peer = await registerPeer(directoryLand.baseUrl);
-        } catch (peerErr) {
-          return res.status(404).json({
-            success: false,
-            error: `Found land ${domain} in directory but could not connect: ${peerErr.message}`,
-          });
-        }
-      } else {
-        return res.status(404).json({
-          success: false,
-          error: `Land ${domain} not found. Not a peer and not in the directory.`,
-        });
-      }
-    }
-
-    // Resolve the user on the remote land
-    const peerBaseUrl = getPeerBaseUrl(peer);
-    const lookupToken = await signCanopyToken(req.userId, domain);
-    const resolveRes = await fetch(
-      `${peerBaseUrl}/canopy/user/${encodeURIComponent(username)}`,
-      {
-        headers: { Authorization: `CanopyToken ${lookupToken}` },
-        signal: AbortSignal.timeout(10000),
-      }
-    );
-
-    if (!resolveRes.ok) {
-      return res.status(404).json({
-        success: false,
-        error: `User ${username} not found on land ${domain}`,
-      });
-    }
-
-    const remoteUserInfo = await resolveRes.json();
-
-    // Store remote user info
-    await RemoteUser.findOneAndUpdate(
-      { _id: remoteUserInfo.userId },
-      {
-        _id: remoteUserInfo.userId,
-        username: remoteUserInfo.username,
-        homeLandDomain: domain,
-        displayName: remoteUserInfo.username,
-        lastSyncedAt: new Date(),
-      },
-      { upsert: true }
-    );
-
-    // Create the invite locally
-    const invite = await Invite.create({
-      userInviting: req.userId,
-      userReceiving: remoteUserInfo.userId,
-      rootId,
-      status: "pending",
-    });
-
-    // Notify the remote land
-    const identity = getLandIdentity();
-    const owner = await User.findById(req.userId).select("username").lean();
-
-    await queueCanopyEvent(domain, "invite_offer", {
-      sourceInviteId: invite._id,
-      invitingUserId: req.userId,
-      invitingUsername: owner?.username || "unknown",
-      receivingUsername: username,
-      rootId,
-      rootName: rootNode.name || "Untitled",
-      sourceLandDomain: identity.domain,
-    });
-
-    res.json({
-      success: true,
-      message: `Invite sent to ${canopyId}`,
-      inviteId: invite._id,
+    const handlers = await loadTeamCanopyHandlers();
+    if (!handlers) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, TEAM_NOT_INSTALLED_MSG);
+    await handlers.handleInviteRemote(req, res, {
+      User, Node, RemoteUser,
+      getLandIdentity, signCanopyToken,
+      getPeerByDomain, getPeerBaseUrl, registerPeer,
+      lookupLandByDomain, queueCanopyEvent,
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -1010,9 +622,9 @@ router.post("/canopy/invite-remote", authenticate, async (req, res) => {
 router.get("/canopy/admin/directory/lands", authenticate, requireAdmin, async (req, res) => {
   try {
     const lands = await searchLands(req.query.q || "");
-    res.json({ success: true, lands });
+    sendOk(res, { lands });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -1023,9 +635,9 @@ router.get("/canopy/admin/directory/lands", authenticate, requireAdmin, async (r
 router.get("/canopy/admin/directory/trees", authenticate, requireAdmin, async (req, res) => {
   try {
     const trees = await searchPublicTrees(req.query.q || "");
-    res.json({ success: true, trees });
+    sendOk(res, { trees });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -1037,21 +649,18 @@ router.post("/canopy/admin/peer/discover", authenticate, requireAdmin, async (re
   try {
     const { domain } = req.body;
     if (!domain) {
-      return res.status(400).json({ success: false, error: "Missing domain" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Missing domain");
     }
 
     const directoryLand = await lookupLandByDomain(domain);
     if (!directoryLand || !directoryLand.baseUrl) {
-      return res.status(404).json({
-        success: false,
-        error: `Land ${domain} not found in directory`,
-      });
+      return sendError(res, 404, ERR.NODE_NOT_FOUND, `Land ${domain} not found in directory`);
     }
 
     const peer = await registerPeer(directoryLand.baseUrl);
-    res.json({ success: true, peer });
+    sendOk(res, { peer });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -1071,7 +680,7 @@ router.post("/canopy/admin/peer/discover", authenticate, requireAdmin, async (re
 router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
   // Per-user rate limit: 60 requests per minute
   if (!checkCanopyRateLimit(`proxy:${req.userId}`, 60)) {
-    return res.status(429).json({ success: false, error: "Proxy rate limit exceeded" });
+    return sendError(res, 429, ERR.RATE_LIMITED, "Proxy rate limit exceeded");
   }
 
   try {
@@ -1088,9 +697,10 @@ router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
       query: req.query,
     });
 
+    // Proxy passthrough: forward the remote land's response as-is
     res.status(result.status).json(result.data);
   } catch (err) {
-    res.status(502).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -1104,7 +714,7 @@ router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
  */
 router.get("/canopy/admin", authenticate, requireAdmin, async (req, res) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
+    return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
 
   try {
@@ -1114,67 +724,21 @@ router.get("/canopy/admin", authenticate, requireAdmin, async (req, res) => {
     const land = getLandInfoPayload();
 
     const renderCanopyAdmin = getExtension("html-rendering")?.exports?.renderCanopyAdmin;
-    if (!renderCanopyAdmin) return res.status(404).json({ error: "html-rendering extension not available." });
+    if (!renderCanopyAdmin) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "html-rendering extension not available.");
     const page = renderCanopyAdmin({ land, peers, pendingEvents, failedEvents });
     res.send(page);
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-/**
- * GET /canopy/admin/invites
- * Server-rendered invites page for cross-land collaboration.
- */
 router.get("/canopy/admin/invites", authenticate, requireAdmin, async (req, res) => {
-  if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
-  }
-
   try {
-    // Get invites where the current user is receiving
-    const invites = await Invite.find({
-      userReceiving: req.userId,
-    }).lean();
-
-    // Enrich invites with tree names
-    for (const inv of invites) {
-      const root = await Node.findById(inv.rootId)
-        .select("name")
-        .lean();
-      inv.rootName = root?.name || "Untitled";
-    }
-
-    // Get remote users for display info
-    const remoteUserIds = invites.map((i) => i.userInviting);
-    const remoteUsers = await RemoteUser.find({
-      _id: { $in: remoteUserIds },
-    }).lean();
-
-    // Get trees the user owns or contributes to for the invite form
-    const userTrees = await Node.find({
-      rootOwner: { $nin: [null, "SYSTEM"] },
-      $or: [
-        { rootOwner: req.userId },
-        { contributors: req.userId },
-      ],
-      "versions.0.status": "active",
-    })
-      .select("_id name rootOwner")
-      .lean();
-
-    const localTrees = userTrees.map((t) => ({
-      _id: t._id,
-      name: t.name || "Untitled",
-      isOwner: t.rootOwner === req.userId,
-    }));
-
-    const renderCanopyInvites = getExtension("html-rendering")?.exports?.renderCanopyInvites;
-    if (!renderCanopyInvites) return res.status(404).json({ error: "html-rendering extension not available." });
-    const page = renderCanopyInvites({ invites, remoteUsers, localTrees });
-    res.send(page);
+    const handlers = await loadTeamCanopyHandlers();
+    if (!handlers) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, TEAM_NOT_INSTALLED_MSG);
+    await handlers.handleAdminInvites(req, res, { User, Node, RemoteUser, getExtension });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -1184,17 +748,17 @@ router.get("/canopy/admin/invites", authenticate, requireAdmin, async (req, res)
  */
 router.get("/canopy/admin/directory", authenticate, requireAdmin, async (req, res) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
+    return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
 
   try {
     const hasDirectory = !!process.env.DIRECTORY_URL;
     const renderCanopyDirectory = getExtension("html-rendering")?.exports?.renderCanopyDirectory;
-    if (!renderCanopyDirectory) return res.status(404).json({ error: "html-rendering extension not available." });
+    if (!renderCanopyDirectory) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "html-rendering extension not available.");
     const page = renderCanopyDirectory({ hasDirectory });
     res.send(page);
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

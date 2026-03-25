@@ -2,16 +2,16 @@
 // Autonomous understanding: creates/resumes a run, loops through all nodes,
 // uses LLM for summarization only (no tool calling), commits results.
 
-import log from "../../core/log.js";
-import { switchMode, processMessage } from "../../ws/conversation.js";
-import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
-import { emitNavigate, emitToUser } from "../../ws/websocket.js";
+import log from "../../seed/log.js";
+import { switchMode, processMessage } from "../../seed/ws/conversation.js";
+import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { emitNavigate, emitToUser } from "../../seed/ws/websocket.js";
 import {
   setActiveNavigator,
   getSession,
   updateSessionMeta,
   SESSION_TYPES,
-} from "../../ws/sessionRegistry.js";
+} from "../../seed/ws/sessionRegistry.js";
 import {
   getNextCompressionPayloadForLLM,
   commitCompressionResult,
@@ -20,7 +20,7 @@ import {
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
 
-import { acquireLock, releaseLock } from "../../orchestrators/locks.js";
+import { acquireLock, releaseLock } from "../../seed/orchestrators/locks.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -213,7 +213,7 @@ export async function orchestrateUnderstanding({
       const prompt = buildSummarizationPrompt(payload);
       const stepStart = new Date();
 
-      switchMode(visitorId, "tree:understand-summarize", {
+      await switchMode(visitorId, "tree:understand-summarize", {
         username,
         userId,
         perspective: runPerspective,
@@ -262,7 +262,7 @@ export async function orchestrateUnderstanding({
             currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
             userId,
             wasAi: true,
-            aiChatId: rt.mainChatId,
+            chatId: rt.mainChatId,
             sessionId: rt.sessionId,
           });
           nodesProcessed++;
@@ -284,7 +284,7 @@ export async function orchestrateUnderstanding({
         currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
         userId,
         wasAi: true,
-        aiChatId: rt.mainChatId,
+        chatId: rt.mainChatId,
         sessionId: rt.sessionId,
       });
 

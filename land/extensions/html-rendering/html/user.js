@@ -5,7 +5,7 @@
 import path from "path";
 import mime from "mime-types";
 import { getLandUrl } from "../../../canopy/identity.js";
-import { getUserMeta } from "../../../core/tree/userMetadata.js";
+import { getUserMeta } from "../../../seed/tree/userMetadata.js";
 import { baseStyles, backNavStyles, glassHeaderStyles, glassCardStyles, emptyStateStyles, responsiveBase } from "./baseStyles.js";
 import {
   esc, escapeHtml, truncate, formatTime, formatDuration,
@@ -21,7 +21,7 @@ const renderMedia = (fileUrl, mimeType) => _renderMedia(fileUrl, mimeType, { laz
 // ═══════════════════════════════════════════════════════════════════
 // 1. Profile Page - GET /user/:userId
 // ═══════════════════════════════════════════════════════════════════
-export function renderUserProfile({ userId, user, roots, profileType, energy, extraEnergy, queryString, resetTimeLabel, storageUsedKB }) {
+export function renderUserProfile({ userId, user, roots, plan, energy, extraEnergy, queryString, resetTimeLabel, storageUsedKB }) {
   const safeUsername = escapeHtml(user.username);
     return (`
 <!DOCTYPE html>
@@ -800,9 +800,8 @@ text-decoration: none;
 
         <div class="user-meta">
    <a href="/api/v1/user/${userId}/energy${queryString}">
-  <span class="plan-badge plan-${profileType}">
-  ${profileType === "god" ? "👑 " : ""}
-  ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Plan
+  <span class="plan-badge plan-${plan}">
+  ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan
 </span></a>
 
           <span class="meta-item">
@@ -1932,15 +1931,15 @@ export async function renderUserContributions({ userId, contributions, username,
           return text;
         }
 
-        case "updateChildNode": {
-          const uc = c.updateChildNode || {};
+        case "updateChild": {
+          const uc = c.updateChild || {};
           return uc.action === "added"
             ? `Added ${link(uc.childId)} as a child of ${nLink}`
             : `Removed child ${link(uc.childId)} from ${nLink}`;
         }
 
-        case "editNameNode": {
-          const en = c.editNameNode || {};
+        case "editName": {
+          const en = c.editName || {};
           return `Renamed ${nLink} from <code>${esc(en.oldName)}</code> to <code>${esc(en.newName)}</code>`;
         }
 
@@ -3283,15 +3282,15 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
         <div>
           <div class="auto-place-label">Auto-place ideas</div>
           <div class="auto-place-hint">${
-            AUTO_PLACE_ELIGIBLE.includes(user.profileType)
+            AUTO_PLACE_ELIGIBLE.includes((getUserMeta(user, "tiers").plan || "basic"))
               ? "Pending ideas are placed automatically every 15 minutes while you're offline."
               : "Available on Standard, Premium, and God plans."
           }</div>
         </div>
         <div
           id="autoPlaceToggle"
-          class="auto-place-toggle${getUserMeta(user, "rawIdeas")?.autoPlace !== false ? " active" : ""}${!AUTO_PLACE_ELIGIBLE.includes(user.profileType) ? " muted" : ""}"
-          onclick="${AUTO_PLACE_ELIGIBLE.includes(user.profileType) ? "toggleAutoPlace()" : ""}"
+          class="auto-place-toggle${getUserMeta(user, "rawIdeas")?.autoPlace !== false ? " active" : ""}${!AUTO_PLACE_ELIGIBLE.includes((getUserMeta(user, "tiers").plan || "basic")) ? " muted" : ""}"
+          onclick="${AUTO_PLACE_ELIGIBLE.includes((getUserMeta(user, "tiers").plan || "basic")) ? "toggleAutoPlace()" : ""}"
         >
           <div class="auto-place-toggle-knob"></div>
         </div>
@@ -5864,7 +5863,7 @@ input:focus {
 // ═══════════════════════════════════════════════════════════════════
 // 13. Energy Page - GET /user/:userId/energy
 // ═══════════════════════════════════════════════════════════════════
-export function renderEnergy({ userId, user, energyAmount, additionalEnergy, profileType, planExpiresAt, llmConnections, mainAssignment, rawIdeaAssignment, activeConn, hasLlm, connectionCount, isBasic, qs }) {
+export function renderEnergy({ userId, user, energyAmount, additionalEnergy, plan, planExpiresAt, llmConnections, mainAssignment, rawIdeaAssignment, activeConn, hasLlm, connectionCount, isBasic, qs }) {
     return (`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6852,9 +6851,9 @@ body {
         <div class="energy-stat-value">${energyAmount}</div>
         <div class="energy-stat-sub">Resets every 24 hours</div>
       </div>
-      <div class="energy-stat plan-${profileType}">
+      <div class="energy-stat plan-${plan}">
         <div class="energy-stat-label">Current Plan</div>
-        <div class="energy-stat-value" style="font-size: 22px; text-transform: capitalize;">${profileType}</div>
+        <div class="energy-stat-value" style="font-size: 22px; text-transform: capitalize;">${plan}</div>
         ${!isBasic && planExpiresAt ? '<div class="energy-stat-sub">Expires ' + new Date(planExpiresAt).toLocaleDateString() + "</div>" : ""}
       </div>
       <div class="energy-stat">
@@ -6877,7 +6876,7 @@ body {
           <div class="plan-feature">No file uploads</div>
           <div class="plan-feature dim">Limited access</div>
         </div>
-        ${profileType === "basic" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
+        ${plan === "basic" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
       </div>
       <div class="plan-box" data-plan="standard">
         <div class="plan-name">Standard</div>
@@ -6887,7 +6886,7 @@ body {
           <div class="plan-feature">1,500 daily energy</div>
           <div class="plan-feature">File uploads</div>
         </div>
-        ${profileType === "standard" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
+        ${plan === "standard" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
       </div>
       <div class="plan-box" data-plan="premium">
         <div class="plan-name">Premium</div>
@@ -6898,7 +6897,7 @@ body {
           <div class="plan-feature">Full access</div>
           <div class="plan-feature highlight">Offline LLM processing</div>
         </div>
-        ${profileType === "premium" || profileType === "god" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
+        ${plan === "premium" ? '<div class="plan-current-tag">Current Plan</div>' : ""}
       </div>
     </div>
     <div class="plan-renew-note" id="planNote" style="display:none;"></div>
@@ -7214,7 +7213,7 @@ loadFailoverStack();
 
 <script>
 var userId = "${userId}";
-var currentPlan = "${profileType === "god" ? "premium" : profileType}";
+var currentPlan = "${plan}";
 var PLAN_PRICE = { basic: 0, standard: 20, premium: 100 };
 var PLAN_ORDER = ["basic", "standard", "premium"];
 var ENERGY_RATE = 0.01;

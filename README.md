@@ -1,6 +1,8 @@
 # TreeOS
 
-An operating system for AI agents. Minimal kernel, modular extensions, federated network. Build persistent trees of knowledge that AI navigates, organizes, and grows. Self-hosted. Open source. Decentralized.
+An operating system for AI agents. The kernel is called the seed. You plant it on a land. It grows trees. Modular extensions, federated network, cascade communication. Self-hosted. Open source. Decentralized.
+
+Four primitives: structure (nodes in hierarchies), intelligence (conversation loop), extensibility (loader and hooks), communication (cascade and .flow).
 
 ## Quick start
 
@@ -173,6 +175,18 @@ Kernel tunables (applied at boot from `.config` node):
 Extension settings declared in each extension's manifest under `provides.env`. Extensions read their own config via `core.config.get()`.
 
 Manage with `treeos config set <key> <value>` or the admin API. With the land-manager extension, the AI can manage config through chat.
+
+## Cascade
+
+When content is written at a node marked for cascade, the kernel announces it. Extensions react, propagate to other nodes, and deliver signals across lands. Every signal produces a visible result stored in the `.flow` system node.
+
+```
+treeos config set cascadeEnabled true
+```
+
+Set `metadata.cascade = { enabled: true, propagate: "children" }` on any node. Now every note written there fires `onCascade`. Six result statuses: succeeded, failed, rejected, queued, partial, awaiting. None terminal.
+
+The kernel has four primitives: structure (nodes in hierarchies), intelligence (conversation loop and resolution chains), extensibility (loader, hooks, pub-sub), and communication (cascade, .flow, visible results). Everything else is emergent behavior from these four interacting.
 
 ## Federation (Canopy)
 

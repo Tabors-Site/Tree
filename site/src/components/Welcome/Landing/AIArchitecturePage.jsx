@@ -349,7 +349,7 @@ const AIArchitecturePage = () => {
             The kernel handles the plumbing. You build the intelligence.
           </p>
           <p style={{color: "#666", fontSize: "0.95rem", maxWidth: 550, margin: "0 auto"}}>
-            MCP connections, session persistence, AIChat tracking, abort handling, chain
+            MCP connections, session persistence, Chat tracking, abort handling, chain
             indexing, tool resolution, mode switching, hook firing, LLM failover. All
             automatic. Your extension calls one function and the rest happens.
           </p>

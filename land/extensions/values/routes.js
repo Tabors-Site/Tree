@@ -1,8 +1,16 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../../middleware/urlAuth.js";
-import { findNodeById } from "../../db/utils.js";
-import authenticate from "../../middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { findNodeById } from "../../seed/utils.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { getExtension } from "../loader.js";
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
 import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, getNodeGoals } from "./core.js";
 import { renderValues } from "./html.js";
 
@@ -18,9 +26,9 @@ router.post("/node/:nodeId/value", authenticate, async (req, res) => {
     if ("html" in req.query) {
       return res.redirect(`/api/v1/node/${nodeId}/values?token=${req.query.token ?? ""}&html`);
     }
-    res.json({ success: true });
+    sendOk(res);
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -34,18 +42,18 @@ router.post("/node/:nodeId/goal", authenticate, async (req, res) => {
     if ("html" in req.query) {
       return res.redirect(`/api/v1/node/${nodeId}/values?token=${req.query.token ?? ""}&html`);
     }
-    res.json({ success: true });
+    sendOk(res);
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
-router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/values", readAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
     const node = await findNodeById(nodeId);
-    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
     const values = getNodeValues(node);
     const goals = getNodeGoals(node);
@@ -54,7 +62,7 @@ router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({ nodeId, values, goals });
+      return sendOk(res, { nodeId, values, goals });
     }
 
     const filtered = Object.entries(req.query)
@@ -76,16 +84,16 @@ router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
     }));
   } catch (err) {
  log.error("Values", "Error in /node/:nodeId/values:", err);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-router.get("/root/:rootId/values", urlAuth, async (req, res) => {
+router.get("/root/:rootId/values", readAuth, async (req, res) => {
   try {
     const result = await getGlobalValuesTreeAndFlat(req.params.rootId);
-    res.json(result);
+    sendOk(res, result);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 

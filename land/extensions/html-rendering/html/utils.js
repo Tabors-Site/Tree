@@ -81,7 +81,7 @@ const ACTION_COLORS = {
   editValue:       { cls: "glass-blue",    hex: "#5082dc" },
   editGoal:        { cls: "glass-blue",    hex: "#5082dc" },
   editSchedule:    { cls: "glass-blue",    hex: "#5082dc" },
-  editNameNode:    { cls: "glass-blue",    hex: "#5082dc" },
+  editName:    { cls: "glass-blue",    hex: "#5082dc" },
   editScript:      { cls: "glass-blue",    hex: "#5082dc" },
   executeScript:   { cls: "glass-cyan",    hex: "#38bdd2" },
   prestige:        { cls: "glass-gold",    hex: "#c8aa32" },
@@ -92,7 +92,7 @@ const ACTION_COLORS = {
   trade:           { cls: "glass-orange",  hex: "#dc8c3c" },
   purchase:        { cls: "glass-emerald", hex: "#34be82" },
   updateParent:    { cls: "glass-teal",    hex: "#3caab4" },
-  updateChildNode: { cls: "glass-teal",    hex: "#3caab4" },
+  updateChild: { cls: "glass-teal",    hex: "#3caab4" },
   understanding:   { cls: "glass-indigo",  hex: "#6464d2" },
 };
 
@@ -123,8 +123,8 @@ const ACTION_LABELS = {
   updateParent: "Moved",
   editScript: "Script",
   executeScript: "Ran script",
-  updateChildNode: "Child",
-  editNameNode: "Renamed",
+  updateChild: "Child",
+  editName: "Renamed",
   rawIdea: "Raw idea",
   branchLifecycle: "Branch",
   purchase: "Purchase",

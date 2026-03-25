@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { updateSchedule } from "./core.js";
-import { getNodeForAi } from "../../core/tree/treeDataFetching.js";
+import { getNodeForAi } from "../../seed/tree/treeData.js";
 
 async function resolvePrestige({ nodeId, prestige }) {
   if (typeof prestige === "number" && prestige >= 0) {
@@ -40,7 +40,7 @@ export default [
           "The reeffect time in hours (must be below 1,000,000). Added to schedule when prestiging for new version.",
         ),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -63,7 +63,7 @@ export default [
       newSchedule,
       reeffectTime,
       userId,
-      aiChatId,
+      chatId,
       sessionId,
     }) => {
       const version = await resolvePrestige({
@@ -78,7 +78,7 @@ export default [
           reeffectTime,
           userId,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 

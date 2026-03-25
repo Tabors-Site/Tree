@@ -30,7 +30,8 @@ Everything else. Values, schedules, prestige, scripts, dreams, understanding, en
 
 ```
 land/
-├── core/              # Kernel: business logic, hooks, registries. ZERO extension imports.
+├── seed/              # Kernel: business logic, hooks, registries. ZERO extension imports.
+│   ├── protocol.js    # Response shapes, ERR codes, WS event types, CASCADE statuses
 │   ├── hooks.js       # 8 lifecycle hooks (beforeNote, afterNote, etc.)
 │   ├── orchestratorRegistry.js  # Extensions register conversation orchestrators
 │   ├── services.js    # Core services bundle passed to extensions via init(core)
@@ -48,12 +49,13 @@ land/
 │       ├── contributions.js     # Audit trail queries
 │       ├── extensionMetadata.js # getExtMeta/setExtMeta for node.metadata
 │       └── userMetadata.js      # getUserMeta/setUserMeta for user.metadata
-├── db/models/         # Core models ONLY (9 files, zero extension models)
-│   ├── node.js        # _id, name, type, status, dateCreated, llmDefault, visibility, children, parent, rootOwner, contributors, isSystem, systemRole, metadata
-│   ├── user.js        # _id, username, password, roots, recentRoots, remoteRoots, llmDefault, profileType, isRemote, homeLand, metadata
-│   ├── notes.js       # Text or file content attached to nodes
-│   ├── contribution.js
-│   └── (invite, landPeer, remoteUser, customLlmConnection, canopyEvent)
+├── seed/models/       # Kernel models (6 files, zero extension models)
+│   ├── node.js        # _id, name, type, status, dateCreated, llmDefault, visibility, children, parent, rootOwner, contributors, systemRole, metadata
+│   ├── user.js        # _id, username, password, roots, llmDefault, isAdmin, isRemote, homeLand, metadata
+│   ├── note.js        # Text or file content attached to nodes
+│   ├── contribution.js # Audit trail
+│   ├── chat.js        # AI conversation sessions
+│   └── llmConnection.js # LLM endpoint storage
 ├── extensions/        # ALL optional functionality lives here
 │   ├── _template/     # Scaffold for new extensions
 │   ├── tree-orchestrator/  # Built-in chat/place/query orchestrator (REPLACEABLE)
@@ -89,7 +91,7 @@ land/
 │   ├── conversation.js    # processMessage(), runChat(), runPipeline(), LLM resolution
 │   ├── websocket.js       # Socket.IO server, message handler, orchestrator dispatch, auto-abort
 │   ├── sessionRegistry.js # Session lifecycle
-│   ├── aiChatTracker.js   # LLM call logging
+│   ├── chatTracker.js     # LLM call logging
 │   ├── mcp.js             # MCP connection management
 │   ├── tools.js           # Core MCP tool definitions
 │   └── modes/             # Kernel: mode registry. Core: built-in tree modes
@@ -97,6 +99,7 @@ land/
 ├── mcp/               # MCP server
 ├── routes/            # Core HTTP routes
 ├── canopy/            # Federation protocol
+│   └── models/        # Federation models (canopyEvent, landPeer, remoteUser)
 ├── middleware/        # Auth middleware
 └── startup.js         # Boot sequence
 
@@ -115,8 +118,8 @@ children, parent, rootOwner, contributors, isSystem, systemRole, metadata (Map)
 
 ### User
 ```
-_id, username, password, roots, recentRoots, remoteRoots,
-llmDefault, profileType, isRemote, homeLand, metadata (Map)
+_id, username, password, roots,
+llmDefault, isAdmin, isRemote, homeLand, metadata (Map)
 ```
 
 Extension data lives in `metadata`. Use `getExtMeta`/`setExtMeta` for nodes, `getUserMeta`/`setUserMeta` for users.
@@ -167,7 +170,7 @@ const { answer } = await core.llm.runChat({
 });
 ```
 
-Handles automatically: MCP connection, mode switching, AIChat tracking, abort on client disconnect, session persistence, error finalization. Pass `res` for HTTP routes. Pass `signal` for programmatic abort.
+Handles automatically: MCP connection, mode switching, chat tracking, abort on client disconnect, session persistence, error finalization. Pass `res` for HTTP routes. Pass `signal` for programmatic abort.
 
 Session identity: `land:{userId}`, `home:{userId}`, `tree:{rootId}:{userId}`. Same zone = same conversation. Different tree = new session. Zone switch = new session.
 
@@ -222,7 +225,7 @@ Extension slot on tree (metadata.llm.slots.X)
       -> User default (user.llmDefault)
 ```
 
-## Hooks (8 lifecycle events)
+## Hooks (lifecycle events + cascade)
 
 | Hook | Type | Purpose |
 |------|------|---------|
@@ -234,6 +237,38 @@ Extension slot on tree (metadata.llm.slots.X)
 | afterStatusChange | after | React (clear schedule, etc.) |
 | beforeNodeDelete | before | Cleanup extension data |
 | enrichContext | enrich | Inject extension data into AI context |
+| onCascade | cascade | Fires on content write at cascade-enabled node. Results written to .flow. |
+
+## Cascade
+
+When content is written at a node with `metadata.cascade.enabled = true` and `cascadeEnabled = true` in .config, the kernel fires `onCascade`. Two entry points: `checkCascade` (kernel-internal, called on note/status writes) and `deliverCascade` (extension-external, called for propagation). Results stored in `.flow` system node. Six statuses: succeeded, failed, rejected, queued, partial, awaiting. Config: cascadeEnabled (false), resultTTL (7 days), awaitingTimeout (5 min), cascadeMaxDepth (50). Files: `seed/tree/cascade.js`, `routes/api/cascade.js`.
+
+## Response Protocol
+
+Single file `seed/protocol.js` defines how the kernel talks to everything outside itself. Extensions access via `core.protocol`.
+
+**HTTP response shape:** `{ status: "ok", data }` or `{ status: "error", error: { code, message, detail? } }`. Constructors: `sendOk(res, data, httpStatus)`, `sendError(res, httpStatus, code, message, detail)`.
+
+**HTTP status -> ERR code mapping:**
+
+| HTTP | Category | ERR codes |
+|------|----------|-----------|
+| 200/201 | Success/Created | (sendOk) |
+| 400 | Bad request | INVALID_INPUT, INVALID_STATUS, INVALID_TYPE |
+| 401 | Unauthorized | UNAUTHORIZED |
+| 403 | Forbidden | FORBIDDEN, EXTENSION_BLOCKED, SESSION_EXPIRED |
+| 404 | Not found | NODE_NOT_FOUND, USER_NOT_FOUND, NOTE_NOT_FOUND, TREE_NOT_FOUND, PEER_NOT_FOUND, EXTENSION_NOT_FOUND, ORCHESTRATOR_NOT_FOUND |
+| 409 | Conflict | ORCHESTRATOR_LOCKED |
+| 429 | Rate limited | RATE_LIMITED |
+| 500 | Internal | INTERNAL, TIMEOUT, HOOK_TIMEOUT, HOOK_CANCELLED |
+| 502 | Bad gateway | PEER_UNREACHABLE |
+| 503 | Service unavailable | LLM_TIMEOUT, LLM_FAILED, LLM_NOT_CONFIGURED |
+
+INVALID_INPUT means garbage the kernel can't parse. Not "I understood your request but the thing doesn't exist."
+
+**WebSocket event types:** Named constants in `WS` object. Kernel events only: chatResponse, chatError, chatCancelled, toolResult, placeResult, modeSwitched, treeChanged, registered, navigatorSession, recentRoots, availableModes, conversationCleared, navigate, reload. Dashboard and extension events own their own constants.
+
+**Cascade statuses:** Named constants in `CASCADE` object: succeeded, failed, rejected, queued, partial, awaiting.
 
 ## Conventions
 
@@ -241,5 +276,5 @@ Extension slot on tree (metadata.llm.slots.X)
 - Model-agnostic: any OpenAI-compatible LLM endpoint
 - Never use em dashes in user-facing text outputs
 - Extension data namespaced by extension name in metadata
-- Core NEVER imports from extensions/. Extensions import from core.
+- Core NEVER imports from extensions/. Extensions import from seed.
 - Dynamic imports with try/catch for optional cross-extension deps

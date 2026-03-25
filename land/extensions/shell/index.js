@@ -1,4 +1,4 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import getTools from "./tools.js";
 
 export async function init(core) {

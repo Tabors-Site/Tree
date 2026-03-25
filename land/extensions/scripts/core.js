@@ -1,9 +1,9 @@
 import vm from "node:vm";
 import { v4 as uuidv4 } from "uuid";
-import Node from "../../db/models/node.js";
-import { logContribution } from "../../db/utils.js";
-import Contribution from "../../db/models/contribution.js";
-import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+import Node from "../../seed/models/node.js";
+import { logContribution } from "../../seed/utils.js";
+import Contribution from "../../seed/models/contribution.js";
+import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
@@ -32,7 +32,7 @@ export async function updateScript({
   script,
   userId,
   wasAi = false,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 }) {
   const isCreating = !scriptId;
@@ -145,7 +145,7 @@ export async function updateScript({
     userId,
     nodeId,
     wasAi,
-    aiChatId,
+    chatId,
     sessionId,
     action: "editScript",
     nodeVersion: "0",
@@ -171,7 +171,7 @@ export async function executeScript({
   scriptId,
   userId,
   wasAi = false,
-  aiChatId = null,
+  chatId = null,
   sessionId = null,
 }) {
   if (!nodeId || !scriptId || !userId) {
@@ -246,7 +246,7 @@ export async function executeScript({
       userId,
       nodeId,
       wasAi,
-      aiChatId,
+      chatId,
       sessionId,
       action: "executeScript",
       nodeVersion: "0",
@@ -263,7 +263,7 @@ export async function executeScript({
       userId,
       nodeId,
       wasAi,
-      aiChatId,
+      chatId,
       sessionId,
       action: "executeScript",
       nodeVersion: "0",

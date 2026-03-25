@@ -1,39 +1,40 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import User from "../../db/models/user.js";
-import authenticate from "../../middleware/authenticate.js";
+import User from "../../seed/models/user.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
-  addCustomLlmConnection,
-  updateCustomLlmConnection,
-  deleteCustomLlmConnection,
+  addLlmConnection,
+  updateLlmConnection,
+  deleteLlmConnection,
   getConnectionsForUser,
   assignConnection,
-} from "../../core/llms/customLLM.js";
+} from "../../seed/llm/connections.js";
 
 const router = express.Router();
 
 router.get("/user/:userId/custom-llm", authenticate, async (req, res) => {
   try {
     const connections = await getConnectionsForUser(req.params.userId);
-    return res.json({ success: true, connections });
+    return sendOk(res, { connections });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.post("/user/:userId/llm-assign", authenticate, async (req, res) => {
   try {
     const { slot, connectionId } = req.body;
-    if (!slot) return res.status(400).json({ error: "slot is required" });
+    if (!slot) return sendError(res, 400, ERR.INVALID_INPUT, "slot is required");
     const result = await assignConnection(
       req.params.userId,
       slot,
       connectionId || null,
     );
-    return res.json({ success: true, ...result });
+    return sendOk(res, result);
   } catch (err) {
  log.error("User Llm", "Failed to assign custom LLM:", err.message);
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -41,11 +42,9 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
   try {
     const { name, baseUrl, apiKey, model } = req.body;
     if (!name || !baseUrl || !apiKey || !model) {
-      return res.status(400).json({
-        error: "Missing required fields: name, baseUrl, apiKey, model",
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Missing required fields: name, baseUrl, apiKey, model");
     }
-    const result = await addCustomLlmConnection(req.params.userId, {
+    const result = await addLlmConnection(req.params.userId, {
       name,
       baseUrl,
       apiKey,
@@ -63,11 +62,12 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
  log.error("User Llm", "Auto-assign main failed:", assignErr.message);
     }
 
-    return res.status(201).json({ success: true, connection: result });
+    return sendOk(res, { connection: result }, 201);
   } catch (err) {
  log.error("User Llm", "Failed to save custom LLM:", err.message);
     const status = err.message.includes("Maximum") ? 400 : 500;
-    return res.status(status).json({ error: err.message });
+    const code = status === 400 ? ERR.INVALID_INPUT : ERR.INTERNAL;
+    return sendError(res, status, code, err.message);
   }
 });
 
@@ -78,19 +78,17 @@ router.put(
     try {
       const { name, baseUrl, apiKey, model } = req.body;
       if (!baseUrl || !model) {
-        return res
-          .status(400)
-          .json({ error: "Missing required fields: baseUrl, model" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Missing required fields: baseUrl, model");
       }
-      const result = await updateCustomLlmConnection(
+      const result = await updateLlmConnection(
         req.params.userId,
         req.params.connectionId,
         { name, baseUrl, apiKey, model },
       );
-      return res.json({ success: true, connection: result });
+      return sendOk(res, { connection: result });
     } catch (err) {
  log.error("User Llm", "Failed to update custom LLM:", err.message);
-      return res.status(500).json({ error: err.message });
+      return sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
@@ -100,14 +98,14 @@ router.delete(
   authenticate,
   async (req, res) => {
     try {
-      await deleteCustomLlmConnection(
+      await deleteLlmConnection(
         req.params.userId,
         req.params.connectionId,
       );
-      return res.json({ success: true, removed: true });
+      return sendOk(res, { removed: true });
     } catch (err) {
  log.error("User Llm", "Failed to delete custom LLM:", err.message);
-      return res.status(500).json({ error: err.message });
+      return sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
@@ -119,76 +117,76 @@ router.get("/user/:userId/llm-failover", authenticate, async (req, res) => {
     const user = await User.findById(req.userId).select("metadata").lean();
     const meta = user?.metadata instanceof Map ? Object.fromEntries(user.metadata) : (user?.metadata || {});
     const stack = meta.llm?.failoverStack || [];
-    res.json({ stack });
+    sendOk(res, { stack });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.post("/user/:userId/llm-failover", authenticate, async (req, res) => {
   try {
     const { connectionId } = req.body;
-    if (!connectionId) return res.status(400).json({ error: "connectionId required" });
+    if (!connectionId) return sendError(res, 400, ERR.INVALID_INPUT, "connectionId required");
 
     const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
     // Validate connection exists and belongs to user
-    const CustomLlmConnection = (await import("./model.js")).default;
-    const conn = await CustomLlmConnection.findOne({ _id: connectionId, userId: req.userId }).lean();
-    if (!conn) return res.status(404).json({ error: "Connection not found or not yours" });
+    const LlmConnection = (await import("./model.js")).default;
+    const conn = await LlmConnection.findOne({ _id: connectionId, userId: req.userId }).lean();
+    if (!conn) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Connection not found or not yours");
 
     // Can't add your current default (it's already the primary)
     if (user.llmDefault === connectionId) {
-      return res.status(400).json({ error: "That is already your default connection. Failover is for backups." });
+      return sendError(res, 400, ERR.INVALID_INPUT, "That is already your default connection. Failover is for backups.");
     }
 
-    const { getUserMeta, setUserMeta } = await import("../../core/tree/userMetadata.js");
+    const { getUserMeta, setUserMeta } = await import("../../seed/tree/userMetadata.js");
     const llmMeta = getUserMeta(user, "llm") || {};
     const stack = llmMeta.failoverStack || [];
 
-    if (stack.includes(connectionId)) return res.status(400).json({ error: "Already in failover stack" });
-    if (stack.length >= 10) return res.status(400).json({ error: "Failover stack full (max 10)" });
+    if (stack.includes(connectionId)) return sendError(res, 400, ERR.INVALID_INPUT, "Already in failover stack");
+    if (stack.length >= 10) return sendError(res, 400, ERR.INVALID_INPUT, "Failover stack full (max 10)");
     stack.push(connectionId);
 
     llmMeta.failoverStack = stack;
     setUserMeta(user, "llm", llmMeta);
     await user.save();
 
-    res.json({ stack, added: conn.name || connectionId });
+    sendOk(res, { stack, added: conn.name || connectionId });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.delete("/user/:userId/llm-failover/:connectionId", authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-    const { getUserMeta, setUserMeta } = await import("../../core/tree/userMetadata.js");
+    const { getUserMeta, setUserMeta } = await import("../../seed/tree/userMetadata.js");
     const llmMeta = getUserMeta(user, "llm") || {};
     const stack = llmMeta.failoverStack || [];
     const idx = stack.indexOf(req.params.connectionId);
-    if (idx === -1) return res.status(404).json({ error: "Not in stack" });
+    if (idx === -1) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Not in stack");
     stack.splice(idx, 1);
 
     llmMeta.failoverStack = stack;
     setUserMeta(user, "llm", llmMeta);
     await user.save();
 
-    res.json({ removed: req.params.connectionId, stack });
+    sendOk(res, { removed: req.params.connectionId, stack });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.delete("/user/:userId/llm-failover", authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-    const { getUserMeta, setUserMeta } = await import("../../core/tree/userMetadata.js");
+    const { getUserMeta, setUserMeta } = await import("../../seed/tree/userMetadata.js");
     const llmMeta = getUserMeta(user, "llm") || {};
     const stack = llmMeta.failoverStack || [];
     const removed = stack.pop();
@@ -197,9 +195,9 @@ router.delete("/user/:userId/llm-failover", authenticate, async (req, res) => {
     setUserMeta(user, "llm", llmMeta);
     await user.save();
 
-    res.json({ removed, stack });
+    sendOk(res, { removed, stack });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

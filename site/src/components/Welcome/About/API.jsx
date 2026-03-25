@@ -186,7 +186,8 @@ const ApiAccessSection = () => {
   "success": true,
   "userId": "abc-123",
   "username": "tabor",
-  "profileType": "god",
+  "isAdmin": true,
+  "plan": "premium",
   "planExpiresAt": "2026-12-31T...",
   "email": "you@email.com",
   "shareToken": "your-share-token",
@@ -1607,6 +1608,41 @@ notification  — Dream notification summary and thought (falls back to placemen
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* EXTENSIONS                                                    */}
         {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="section" id="cascade">
+          <div className="section-title">
+            <span className="section-icon">⚡</span> Cascade
+          </div>
+          <div className="section-text">
+            Signal system for inter-node and inter-land communication. When content is written at
+            a cascade-enabled node, the kernel fires onCascade. Extensions propagate and deliver signals.
+            Results are stored in the .flow system node.
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method post">POST</span>
+              <span className="ep-url">/api/v1/node/:nodeId/cascade</span>
+            </div>
+            <div className="ep-desc">{"Deliver a cascade signal to a node. Body: { payload, source, signalId, depth }. Fires onCascade. Writes result to .flow."}</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/flow</span>
+            </div>
+            <div className="ep-desc">Read recent cascade results from .flow. Pass ?limit=N to control count.</div>
+          </div>
+
+          <div className="endpoint">
+            <div className="ep-method-url">
+              <span className="ep-method get">GET</span>
+              <span className="ep-url">/api/v1/flow/:signalId</span>
+            </div>
+            <div className="ep-desc">Read all results for a specific cascade signal chain.</div>
+          </div>
+        </div>
+
         <div className="section" id="extensions">
           <div className="section-title">
             <span className="section-icon">🧩</span> Extension Management

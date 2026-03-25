@@ -1,10 +1,11 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
 import crypto from "crypto";
-import authenticate from "../../middleware/authenticate.js";
-import urlAuth from "../../middleware/urlAuth.js";
-import User from "../../db/models/user.js";
-import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import urlAuth from "./urlAuth.js";
+import User from "../../seed/models/user.js";
+import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   renderLoginPage,
   renderRegisterPage,
@@ -20,7 +21,7 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   handler: (req, res) => {
-    res.status(429).json({ message: "Too many requests. Try again later." });
+    sendError(res, 429, ERR.RATE_LIMITED, "Too many requests. Try again later.");
   },
 });
 
@@ -43,10 +44,10 @@ router.post("/verify-token", authenticate, async (req, res) => {
       if (fullUser?.llmDefault) {
         hasLlm = true;
       } else {
-        let CustomLlmConnection;
-        try { CustomLlmConnection = (await import("../../db/models/customLlmConnection.js")).default; } catch { }
-        if (CustomLlmConnection) {
-          const connCount = await CustomLlmConnection.countDocuments({ userId: req.userId });
+        let LlmConnection;
+        try { LlmConnection = (await import("../../seed/models/llmConnection.js")).default; } catch { }
+        if (LlmConnection) {
+          const connCount = await LlmConnection.countDocuments({ userId: req.userId });
           hasLlm = connCount > 0;
         }
       }
@@ -54,7 +55,7 @@ router.post("/verify-token", authenticate, async (req, res) => {
       log.error("HTML", "verify-token LLM check error:", err.message);
     }
 
-    res.json({
+    sendOk(res, {
       userId: req.userId,
       username: req.username,
       HTMLShareToken,
@@ -62,7 +63,7 @@ router.post("/verify-token", authenticate, async (req, res) => {
     });
   } catch (err) {
     log.error("HTML", "verify-token error:", err.message);
-    res.status(500).json({ message: "Failed to verify token" });
+    sendError(res, 500, ERR.INTERNAL, "Failed to verify token");
   }
 });
 
@@ -71,7 +72,7 @@ router.get("/user/:userId/shareToken", urlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const user = await User.findById(userId).select("username metadata").lean();
-    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     const token = req.query.token ?? "";
@@ -79,17 +80,17 @@ router.get("/user/:userId/shareToken", urlAuth, async (req, res) => {
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
       const htmlMeta = getUserMeta(user, "html");
-      return res.json({ userId, shareToken: htmlMeta?.shareToken || null });
+      return sendOk(res, { userId, shareToken: htmlMeta?.shareToken || null });
     }
 
     const { getExtension } = await import("../loader.js");
     const render = getExtension("html-rendering")?.exports?.renderShareToken;
-    if (!render) return res.json({ userId, error: "HTML rendering not available" });
+    if (!render) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "HTML rendering not available");
 
     return res.send(render({ userId, user, token, tokenQS }));
   } catch (err) {
     log.error("HTML", "Share token page error:", err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -97,21 +98,21 @@ router.get("/user/:userId/shareToken", urlAuth, async (req, res) => {
 router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
-      return res.status(403).json({ error: "Not authorized" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
     const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
     let { htmlShareToken } = req.body;
     if (typeof htmlShareToken !== "string") {
-      return res.status(400).json({ error: "htmlShareToken must be a string" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "htmlShareToken must be a string");
     }
     htmlShareToken = htmlShareToken.trim();
     if (htmlShareToken.length > 128 || htmlShareToken.length < 1) {
-      return res.status(400).json({ error: "htmlShareToken must be 1 to 128 characters" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "htmlShareToken must be 1 to 128 characters");
     }
     if (!URL_SAFE_REGEX.test(htmlShareToken)) {
-      return res.status(400).json({ error: "htmlShareToken may only contain URL-safe characters" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "htmlShareToken may only contain URL-safe characters");
     }
 
     setUserMeta(user, "html", { shareToken: htmlShareToken });
@@ -121,10 +122,10 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
     if ("html" in req.query) {
       return res.redirect(`/api/v1/user/${req.params.userId}/sharetoken?token=${token}&html`);
     }
-    return res.json({ htmlShareToken });
+    return sendOk(res, { htmlShareToken });
   } catch (err) {
     log.error("HTML", "Share token update error:", err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -133,21 +134,21 @@ export const pageRouter = express.Router();
 
 pageRouter.get("/login", (req, res) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
+    return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
   renderLoginPage(req, res);
 });
 
 pageRouter.get("/register", (req, res) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
+    return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
   renderRegisterPage(req, res);
 });
 
 pageRouter.get("/forgot-password", (req, res) => {
   if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-    return res.status(404).json({ error: "Server-rendered HTML is disabled." });
+    return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
   renderForgotPasswordPage(req, res);
 });

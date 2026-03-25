@@ -11,7 +11,7 @@ export default [
         .string()
         .describe("The unique ID of the node to add prestige to."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -28,13 +28,13 @@ export default [
       idempotentHint: false,
       openWorldHint: false,
     },
-    handler: async ({ nodeId, userId, aiChatId, sessionId }) => {
+    handler: async ({ nodeId, userId, chatId, sessionId }) => {
       try {
         const result = await addPrestige({
           nodeId,
           userId,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 

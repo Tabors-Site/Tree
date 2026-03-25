@@ -1,9 +1,9 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import fs from "fs";
-import User from "../../db/models/user.js";
-import { assignConnection } from "../../core/llms/customLLM.js";
-import Node from "../../db/models/node.js";
-import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
+import User from "../../seed/models/user.js";
+import { assignConnection } from "../../seed/llm/connections.js";
+import Node from "../../seed/models/node.js";
+import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 
 const TEXT_NOTE_CHARS_PER_ENERGY = 1000;
 const TEXT_NOTE_MIN = 1;
@@ -49,10 +49,10 @@ const BASE_ACTION_COSTS = {
   removeNote: 1,
   editSchedule: 1,
   editGoal: 1,
-  editNameNode: 1,
+  editName: 1,
   editType: 1,
   updateParent: 1,
-  updateChildNode: 1,
+  updateChild: 1,
   branchLifecycle: 1,
   invite: 1,
   delete: 1,
@@ -140,13 +140,14 @@ export function maybeResetEnergy(user) {
   const billing = getUserMeta(user, "billing");
   const expiresAt = billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0);
 
+  const currentPlan = getUserMeta(user, "tiers").plan || "basic";
   if (
-    user.profileType !== "basic" &&
-    user.profileType !== "god" &&
+    currentPlan !== "basic" &&
+    !user.isAdmin &&
     expiresAt > 0 &&
     now > expiresAt
   ) {
-    user.profileType = "basic";
+    setUserMeta(user, "tiers", { plan: "basic" });
     setUserMeta(user, "billing", { ...billing, planExpiresAt: null });
 
     energy.available.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
@@ -175,7 +176,8 @@ export function maybeResetEnergy(user) {
 
   if (now - lastReset < DAY_MS) return false;
 
-  const limit = DAILY_LIMITS[user.profileType] ?? DAILY_LIMITS.basic;
+  const resetPlan = getUserMeta(user, "tiers").plan || "basic";
+  const limit = DAILY_LIMITS[resetPlan] ?? DAILY_LIMITS.basic;
 
   energy.available.amount = limit;
   energy.available.lastResetAt = new Date();
@@ -217,7 +219,7 @@ export async function useEnergy({
   if (
     (action === "note" || action === "rawIdea") &&
     payload?.type === "file" &&
-    user.profileType === "basic"
+    (getUserMeta(user, "tiers").plan || "basic") === "basic"
   ) {
     if (file?.path) {
       await fs.promises.unlink(file.path).catch(() => {});
@@ -230,7 +232,7 @@ export async function useEnergy({
 
   if (
     payload?.type === "file" &&
-    user.profileType === "standard" &&
+    (getUserMeta(user, "tiers").plan || "basic") === "standard" &&
     payload.sizeMB > MAX_FILE_MB_STANDARD
   ) {
     if (file?.path) {

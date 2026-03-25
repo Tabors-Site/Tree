@@ -1,29 +1,36 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../../middleware/urlAuth.js";
-import authenticate from "../../middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
 import {
   getDeletedBranchesForUser,
-} from "../../core/tree/treeFetch.js";
+} from "../../seed/tree/treeFetch.js";
 import {
   reviveNodeBranch,
   reviveNodeBranchAsRoot,
-} from "../../core/tree/treeManagement.js";
-import User from "../../db/models/user.js";
+} from "../../seed/tree/treeManagement.js";
+import User from "../../seed/models/user.js";
 
 export default function createRouter(core) {
   const router = express.Router();
 
-  router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
+  router.get("/user/:userId/deleted", readAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       const deleted = await getDeletedBranchesForUser(userId);
 
       if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json({ userId, deleted });
+        return sendOk(res, { userId, deleted });
       }
 
       const user = await User.findById(userId).lean();
@@ -31,13 +38,13 @@ export default function createRouter(core) {
 
       const renderDeletedBranches = html().renderDeletedBranches;
       if (!renderDeletedBranches) {
-        return res.json({ userId, deleted });
+        return sendOk(res, { userId, deleted });
       }
 
       return res.send(renderDeletedBranches({ userId, user, deleted, token }));
     } catch (err) {
  log.error("Deleted Revive", "Error in /user/:userId/deleted:", err);
-      res.status(500).json({ error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
 
@@ -47,11 +54,11 @@ export default function createRouter(core) {
       const { targetParentId } = req.body;
 
       if (!req.userId || req.userId.toString() !== userId.toString()) {
-        return res.status(403).json({ error: "Not authorized" });
+        return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
 
       if (!targetParentId) {
-        return res.status(400).json({ error: "targetParentId is required" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "targetParentId is required");
       }
 
       const result = await reviveNodeBranch({
@@ -66,10 +73,10 @@ export default function createRouter(core) {
         );
       }
 
-      return res.json({ success: true, ...result });
+      return sendOk(res, result);
     } catch (err) {
  log.error("Deleted Revive", "revive branch error:", err);
-      return res.status(400).json({ error: err.message });
+      return sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   });
 
@@ -78,7 +85,7 @@ export default function createRouter(core) {
       const { userId, nodeId } = req.params;
 
       if (!req.userId || req.userId.toString() !== userId.toString()) {
-        return res.status(403).json({ error: "Not authorized" });
+        return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
 
       const result = await reviveNodeBranchAsRoot({
@@ -92,10 +99,10 @@ export default function createRouter(core) {
         );
       }
 
-      return res.json({ success: true, ...result });
+      return sendOk(res, result);
     } catch (err) {
  log.error("Deleted Revive", "revive root error:", err);
-      return res.status(400).json({ error: err.message });
+      return sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   });
 

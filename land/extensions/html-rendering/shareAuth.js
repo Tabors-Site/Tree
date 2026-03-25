@@ -1,9 +1,9 @@
 // Share token authentication for HTML-rendered pages.
 // Moved from core/authenticate.js into the html-rendering extension.
 
-import log from "../../core/log.js";
-import User from "../../db/models/user.js";
-import { resolveRootNode } from "../../core/tree/treeFetch.js";
+import log from "../../seed/log.js";
+import User from "../../seed/models/user.js";
+import { resolveRootNode } from "../../seed/tree/treeFetch.js";
 
 export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
   if (!shareToken) {

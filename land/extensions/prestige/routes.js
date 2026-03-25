@@ -1,19 +1,20 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import authenticate from "../../middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import { addPrestige } from "./core.js";
-import Node from "../../db/models/node.js";
+import Node from "../../seed/models/node.js";
 
 const router = express.Router();
 
 async function useLatest(req, res, next) {
   try {
     const node = await Node.findById(req.params.nodeId).select("prestige").lean();
-    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
     req.params.version = String(0);
     next();
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 }
 
@@ -25,7 +26,7 @@ const prestigeHandler = async (req, res) => {
     const nextVersion = Number(version) + 1;
 
     if (Number.isNaN(nextVersion)) {
-      return res.status(400).json({ error: "Invalid version" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid version");
     }
 
     const result = await addPrestige({
@@ -39,10 +40,10 @@ const prestigeHandler = async (req, res) => {
       );
     }
 
-    res.json({ success: true, ...result });
+    sendOk(res, result);
   } catch (err) {
  log.error("Prestige", "prestige error:", err);
-    res.status(400).json({ error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 };
 

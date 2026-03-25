@@ -1,4 +1,4 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 
 export async function init(core) {
   // Logging: use log.info/verbose/debug/warn/error instead of console.log
@@ -16,7 +16,7 @@ export async function init(core) {
   // }, "my-extension");
 
   // Store per-node data in metadata (not on the Node schema):
-  // import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+  // import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
   // const data = getExtMeta(node, "my-extension");
   // setExtMeta(node, "my-extension", { key: "value" });
   // await node.save();

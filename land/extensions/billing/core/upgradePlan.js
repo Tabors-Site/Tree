@@ -1,4 +1,4 @@
-import { getUserMeta, setUserMeta } from "../../../core/tree/userMetadata.js";
+import { getUserMeta, setUserMeta } from "../../../seed/tree/userMetadata.js";
 
 let DAILY_LIMITS = {};
 export function setEnergyService(energy) { DAILY_LIMITS = energy.DAILY_LIMITS || {}; }
@@ -12,7 +12,7 @@ const PLAN_DAILY_VALUE = {
 export function upgradeUserPlan(user, newPlan) {
   const now = Date.now();
 
-  const oldPlan = user.profileType;
+  const oldPlan = getUserMeta(user, "tiers").plan || "basic";
   const billing = getUserMeta(user, "billing");
   const expiresAt = billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0);
 
@@ -32,7 +32,7 @@ export function upgradeUserPlan(user, newPlan) {
     energy.additional.amount += compensationEnergy;
   }
 
-  user.profileType = newPlan;
+  setUserMeta(user, "tiers", { plan: newPlan });
 
   energy.available.amount = DAILY_LIMITS[newPlan] ?? DAILY_LIMITS.basic;
   energy.available.lastResetAt = new Date();

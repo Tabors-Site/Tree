@@ -2,7 +2,7 @@
 // Manages persistent Discord bot connections for gateway input channels.
 // One bot client per unique bot token. Multiple channels can share a bot.
 
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import { processGatewayMessage } from "./input.js";
 import { getChannelWithSecrets } from "./core.js";
 

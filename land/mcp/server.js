@@ -1,12 +1,12 @@
-import log from "../core/log.js";
+import log from "../seed/log.js";
 import { z } from "zod";
 import { CreateMessageResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fileTypeFromBuffer } from "file-type";
-import User from "../db/models/user.js";
-import { getUserMeta } from "../core/tree/userMetadata.js";
-import Node from "../db/models/node.js";
+import User from "../seed/models/user.js";
+import { getUserMeta } from "../seed/tree/userMetadata.js";
+import Node from "../seed/models/node.js";
 
-import { emitNavigate } from "../ws/websocket.js";
+import { emitNavigate } from "../seed/ws/websocket.js";
 
 import path from "path";
 import fs from "fs";
@@ -30,37 +30,36 @@ if (!fs.existsSync(uploadsFolder)) {
 import {
   getContributionsByUser,
   getContributions,
-} from "../core/tree/contributions.js";
+} from "../seed/tree/contributions.js";
 
 // Schedules: dynamic import, stub if extension not installed
 let updateSchedule = async () => { throw new Error("Schedules extension not installed"); };
 try { ({ updateSchedule } = await import("../extensions/schedules/core.js")); } catch {}
-import { editStatus } from "../core/tree/statuses.js";
+import { editStatus } from "../seed/tree/statuses.js";
 import {
   createNote,
   getNotes,
   editNote,
   getAllNotesByUser,
-  getAllTagsForUser,
   deleteNoteAndFile,
   transferNote,
   searchNotesByUser,
-} from "../core/tree/notes.js";
+} from "../seed/tree/notes.js";
 import {
-  createNewNode,
-  createNodesRecursive,
+  createNode,
+  createNodeBranch,
   deleteNodeBranch,
   updateParentRelationship,
   editNodeName,
-} from "../core/tree/treeManagement.js";
-import { editNodeType } from "../core/tree/nodeTypes.js";
+} from "../seed/tree/treeManagement.js";
+import { editNodeType } from "../seed/tree/nodeTypes.js";
 
 import {
   getRootNodesForUser,
   getActiveLeafExecutionFrontier,
   getContextForAi,
   getNavigationContext,
-} from "../core/tree/treeFetch.js";
+} from "../seed/tree/treeFetch.js";
 
 
 import {
@@ -69,9 +68,9 @@ import {
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { getTreeForAi, getNodeForAi } from "../core/tree/treeDataFetching.js"; // import from your real backend
-import { resolveTreeAccess } from "../core/authenticate.js";
-import { getAiContributionContext } from "../ws/aiChatTracker.js";
+import { getTreeForAi, getNodeForAi } from "../seed/tree/treeData.js"; // import from your real backend
+import { resolveTreeAccess } from "../seed/authenticate.js";
+import { getChatContext } from "../seed/ws/chatTracker.js";
 
 // Legacy prestige resolution. Without prestige extension, always returns 0.
 async function resolvePrestige({ nodeId, prestige }) {
@@ -386,7 +385,7 @@ function getMcpServer() {
         .string()
         .describe("The ID of the root or starting node of the tree."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
@@ -431,7 +430,7 @@ function getMcpServer() {
     {
       nodeId: z.string().describe("Root node ID for the guided branch."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     {
@@ -601,7 +600,7 @@ function getMcpServer() {
         .describe(
           "ID of the user making the status edit (for contribution logging).",
         ),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -624,7 +623,7 @@ function getMcpServer() {
       prestige,
       isInherited,
       userId,
-      aiChatId,
+      chatId,
       sessionId,
     }) => {
       try {
@@ -634,7 +633,7 @@ function getMcpServer() {
           isInherited,
           userId,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 
@@ -660,7 +659,7 @@ function getMcpServer() {
     {
       content: z.string().describe("The text content of the note."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -679,7 +678,7 @@ function getMcpServer() {
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ content, userId, nodeId, prestige, aiChatId, sessionId }) => {
+    async ({ content, userId, nodeId, prestige, chatId, sessionId }) => {
       const version = await resolvePrestige({ nodeId, prestige });
       try {
         const result = await createNote({
@@ -690,7 +689,7 @@ function getMcpServer() {
           version,
           isReflection: true,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 
@@ -739,7 +738,7 @@ function getMcpServer() {
         .describe(
           "ID of the user making the status edit (for contribution logging).",
         ),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -762,7 +761,7 @@ function getMcpServer() {
       lineStart,
       lineEnd,
       userId,
-      aiChatId,
+      chatId,
       sessionId,
     }) => {
       try {
@@ -773,7 +772,7 @@ function getMcpServer() {
           lineStart: lineStart ?? null,
           lineEnd: lineEnd ?? null,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 
@@ -843,7 +842,7 @@ function getMcpServer() {
     "Fetches all notes written by a specific user (optionally limited to the most recent N). Recommend to use limit 10 or less. Use get-searched-notes-by-user... if looking for specifics.",
     {
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -902,7 +901,7 @@ function getMcpServer() {
     "Fetches all notes where a specific user was tagged (optionally limited to the most recent N). May be referenced as mail",
     {
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -930,11 +929,14 @@ function getMcpServer() {
       }
 
       try {
+        const { getAllTagsForUser } = await import("../extensions/team/tags.js");
+        const Note = (await import("../seed/models/note.js")).default;
         const result = await getAllTagsForUser(
           userId,
           limit,
           startDate,
           endDate,
+          Note,
         );
 
         return {
@@ -959,7 +961,7 @@ function getMcpServer() {
     {
       noteId: z.string().describe("The ID of the note to delete."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -978,13 +980,13 @@ function getMcpServer() {
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ noteId, userId, aiChatId, sessionId }) => {
+    async ({ noteId, userId, chatId, sessionId }) => {
       try {
         const result = await deleteNoteAndFile({
           noteId,
           userId,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 
@@ -1012,7 +1014,7 @@ function getMcpServer() {
         .optional()
         .describe("Target version (defaults to latest)."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -1029,7 +1031,7 @@ function getMcpServer() {
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ noteId, targetNodeId, prestige, userId, aiChatId, sessionId }) => {
+    async ({ noteId, targetNodeId, prestige, userId, chatId, sessionId }) => {
       try {
         const result = await transferNote({
           noteId,
@@ -1037,7 +1039,7 @@ function getMcpServer() {
           userId,
           prestige: prestige ?? null,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 
@@ -1078,7 +1080,7 @@ function getMcpServer() {
         ),
 
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -1095,9 +1097,9 @@ function getMcpServer() {
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ name, note, type, userId, aiChatId, sessionId }) => {
+    async ({ name, note, type, userId, chatId, sessionId }) => {
       try {
-        const rootNode = await createNewNode(
+        const rootNode = await createNode(
           name,
           null, // schedule
           0, // reeffectTime
@@ -1109,7 +1111,7 @@ function getMcpServer() {
           note ?? null,
           null,
           true,
-          aiChatId,
+          chatId,
           sessionId,
           type ?? null,
         );
@@ -1192,7 +1194,7 @@ function getMcpServer() {
         .optional()
         .describe("Parent node ID for the root of this subtree."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -1209,14 +1211,14 @@ function getMcpServer() {
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ nodeData, parentId, userId, aiChatId, sessionId }) => {
+    async ({ nodeData, parentId, userId, chatId, sessionId }) => {
       try {
-        const { rootId, rootName, totalCreated } = await createNodesRecursive(
+        const { rootId, rootName, totalCreated } = await createNodeBranch(
           nodeData,
           parentId,
           userId,
           true,
-          aiChatId,
+          chatId,
           sessionId,
         );
         return {
@@ -1249,7 +1251,7 @@ function getMcpServer() {
     {
       nodeId: z.string().describe("ID of the node branch to delete."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -1266,13 +1268,13 @@ function getMcpServer() {
       idempotentHint: false,
       openWorldHint: false,
     },
-    async ({ nodeId, userId, aiChatId, sessionId }) => {
+    async ({ nodeId, userId, chatId, sessionId }) => {
       try {
         const deletedNode = await deleteNodeBranch(
           nodeId,
           userId,
           true,
-          aiChatId,
+          chatId,
           sessionId,
         );
 
@@ -1308,7 +1310,7 @@ function getMcpServer() {
       nodeId: z.string().describe("The ID of the node being renamed."),
       newName: z.string().describe("The new name to assign to the node."),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -1325,14 +1327,14 @@ function getMcpServer() {
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, newName, userId, aiChatId, sessionId }) => {
+    async ({ nodeId, newName, userId, chatId, sessionId }) => {
       try {
         const { oldName, newName: updatedName } = await editNodeName({
           nodeId,
           newName,
           userId,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 
@@ -1369,7 +1371,7 @@ function getMcpServer() {
           "Type label or null to clear. Core types: goal, plan, task, knowledge, resource, identity. Custom types are valid.",
         ),
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -1386,14 +1388,14 @@ function getMcpServer() {
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeId, newType, userId, aiChatId, sessionId }) => {
+    async ({ nodeId, newType, userId, chatId, sessionId }) => {
       try {
         const { oldType, newType: updatedType } = await editNodeType({
           nodeId,
           newType,
           userId,
           wasAi: true,
-          aiChatId,
+          chatId,
           sessionId,
         });
 
@@ -1428,7 +1430,7 @@ function getMcpServer() {
       userId: z
         .string()
         .describe("The user performing the operation (optional)."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -1445,14 +1447,14 @@ function getMcpServer() {
       idempotentHint: true,
       openWorldHint: false,
     },
-    async ({ nodeChildId, nodeNewParentId, userId, aiChatId, sessionId }) => {
+    async ({ nodeChildId, nodeNewParentId, userId, chatId, sessionId }) => {
       try {
         const { nodeChild, nodeNewParent } = await updateParentRelationship(
           nodeChildId,
           nodeNewParentId,
           userId,
           true,
-          aiChatId,
+          chatId,
           sessionId,
         );
 
@@ -1590,7 +1592,7 @@ function getMcpServer() {
     "Search text notes by a user based on text matching.",
     {
       userId: z.string().describe("Injected by server. Ignore."),
-      aiChatId: z
+      chatId: z
         .string()
         .nullable()
         .optional()
@@ -1961,8 +1963,8 @@ async function handleMcpRequest(req, res) {
       // Key by visitorId (unique per MCP connection) to avoid collisions
       // between concurrent sessions for the same user
       const contextKey = req.visitorId || req.userId;
-      const aiCtx = getAiContributionContext(contextKey);
-      requestArgs.aiChatId = aiCtx.aiChatId;
+      const aiCtx = getChatContext(contextKey);
+      requestArgs.chatId = aiCtx.chatId;
       requestArgs.sessionId = aiCtx.sessionId;
 
       const user = await User.findById(req.userId).select("metadata");
@@ -1973,7 +1975,7 @@ async function handleMcpRequest(req, res) {
         args.htmlShareToken = htmlShareToken;
       }
 
-      const nodeId = requestArgs.nodeId ?? requestArgs.rootId;
+      const nodeId = requestArgs.nodeId ?? requestArgs.rootId ?? requestArgs.parentNodeID ?? requestArgs.parentId ?? requestArgs.rootNodeId;
 
       if (nodeId && req.userId) {
         const access = await resolveTreeAccess(nodeId, req.userId);
@@ -2129,8 +2131,8 @@ async function handleMcpRequest(req, res) {
 
       // Inject AI chat context so contributions are tracked per-chat
       const contextKey2 = req.visitorId || req.userId;
-      const aiCtx2 = getAiContributionContext(contextKey2);
-      requestArgs.aiChatId = aiCtx2.aiChatId;
+      const aiCtx2 = getChatContext(contextKey2);
+      requestArgs.chatId = aiCtx2.chatId;
       requestArgs.sessionId = aiCtx2.sessionId;
 
       const user = await User.findById(req.userId).select("metadata");
@@ -2141,7 +2143,7 @@ async function handleMcpRequest(req, res) {
         args.htmlShareToken = htmlShareToken;
       }
 
-      const nodeId = requestArgs.nodeId ?? requestArgs.rootId;
+      const nodeId = requestArgs.nodeId ?? requestArgs.rootId ?? requestArgs.parentNodeID ?? requestArgs.parentId ?? requestArgs.rootNodeId;
 
       if (nodeId && req.userId) {
         const access = await resolveTreeAccess(nodeId, req.userId);

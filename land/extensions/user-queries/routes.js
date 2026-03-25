@@ -1,18 +1,24 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../../middleware/urlAuth.js";
-import User from "../../db/models/user.js";
-import { getAIChats } from "../../core/llms/aichat.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import User from "../../seed/models/user.js";
+import { getChats } from "../../seed/ws/chatHistory.js";
 import {
   getAllNotesByUser,
-  getAllTagsForUser,
   searchNotesByUser,
-} from "../../core/tree/notes.js";
-import { getNotifications } from "../../core/tree/notifications.js";
-import { getContributionsByUser } from "../../core/tree/contributions.js";
+} from "../../seed/tree/notes.js";
+import { getContributionsByUser } from "../../seed/tree/contributions.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
 
 function escapeHtml(str) {
   return String(str || "")
@@ -26,7 +32,7 @@ function escapeHtml(str) {
 export default function createRouter(core) {
   const router = express.Router();
 
-  router.get("/user/:userId/notes", urlAuth, async (req, res) => {
+  router.get("/user/:userId/notes", readAuth, async (req, res) => {
     try {
       const userId = req.params.userId;
       const startDate = req.query.startDate;
@@ -44,10 +50,7 @@ export default function createRouter(core) {
         limit = 200;
       }
       if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid limit: must be a positive number",
-        });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit: must be a positive number");
       }
 
       let result;
@@ -64,7 +67,7 @@ export default function createRouter(core) {
       }));
 
       if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json({ success: true, notes, query });
+        return sendOk(res, { notes, query });
       }
 
       const user = await User.findById(userId).lean();
@@ -109,52 +112,20 @@ export default function createRouter(core) {
       return res.send(html().renderUserNotes({ userId, user, notes, processedNotes, query, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/notes:", err);
-      res.status(400).json({ success: false, error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   });
 
-  router.get("/user/:userId/tags", urlAuth, async (req, res) => {
-    try {
-      const userId = req.params.userId;
-      const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-      const startDate = req.query.startDate;
-      const endDate = req.query.endDate;
+  // Tags route moved to extensions/team
 
-      const token = req.query.token ?? "";
-      const rawLimit = req.query.limit;
-      const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
-
-      if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-        return res.status(400).json({ success: false, error: "Invalid limit: must be a positive number" });
-      }
-
-      const result = await getAllTagsForUser(userId, limit, startDate, endDate);
-
-      const notes = result.notes.map((n) => ({
-        ...n,
-        content: n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
-      }));
-
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json({ success: true, taggedBy: result.taggedBy, notes });
-      }
-
-      const user = await User.findById(userId).lean();
-      return res.send(await html().renderUserTags({ userId, user, notes, getNodeName, token }));
-    } catch (err) {
- log.error("User Queries", "Error in /user/:userId/tags:", err);
-      res.status(400).json({ success: false, error: err.message });
-    }
-  });
-
-  router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
+  router.get("/user/:userId/contributions", readAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : undefined;
       if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-        return res.status(400).json({ error: "Invalid limit" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit");
       }
 
       const token = req.query.token ?? "";
@@ -163,18 +134,18 @@ export default function createRouter(core) {
       const { contributions = [] } = await getContributionsByUser(userId, limit, req.query.startDate, req.query.endDate);
 
       if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json({ userId, contributions });
+        return sendOk(res, { userId, contributions });
       }
 
       const user = await User.findById(userId).lean();
       return res.send(await html().renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/contributions:", err);
-      res.status(400).json({ error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   });
 
-  router.get("/user/:userId/chats", urlAuth, async (req, res) => {
+  router.get("/user/:userId/chats", readAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -182,7 +153,7 @@ export default function createRouter(core) {
       const rawLimit = req.query.limit;
       let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
       if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-        return res.status(400).json({ error: "Invalid limit" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit");
       }
       if (limit > 10) limit = 10;
 
@@ -192,7 +163,7 @@ export default function createRouter(core) {
         sessionId = sessionId.replace(/^"+|"+$/g, "");
       }
 
-      const { sessions } = await getAIChats({
+      const { sessions } = await getChats({
         userId,
         sessionLimit: limit || 10,
         sessionId,
@@ -203,7 +174,7 @@ export default function createRouter(core) {
       const allChats = sessions.flatMap((s) => s.chats);
 
       if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json({ userId, count: allChats.length, sessions });
+        return sendOk(res, { userId, count: allChats.length, sessions });
       }
 
       const user = await User.findById(userId).lean();
@@ -212,38 +183,11 @@ export default function createRouter(core) {
       return res.send(html().renderChats({ userId, chats: allChats, sessions, username, token, sessionId }));
     } catch (err) {
  log.error("User Queries", err);
-      res.status(500).json({ error: err.message });
+      sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
 
-  router.get("/user/:userId/notifications", urlAuth, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
-      const offset = parseInt(req.query.offset, 10) || 0;
-
-      const { notifications, total } = await getNotifications({
-        userId,
-        rootId: req.query.rootId,
-        limit,
-        offset,
-      });
-
-      const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return res.json({ notifications, total, limit, offset });
-      }
-
-      const user = await User.findById(userId).lean();
-      const username = user?.username || "Unknown user";
-      const token = req.query.token ?? "";
-
-      return res.send(html().renderNotifications({ userId, notifications, total, username, token }));
-    } catch (err) {
- log.error("User Queries", "Notifications route error:", err);
-      res.status(500).json({ error: err.message });
-    }
-  });
+  // Notifications route moved to extensions/notifications
 
   return router;
 }

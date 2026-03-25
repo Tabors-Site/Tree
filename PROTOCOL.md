@@ -339,3 +339,60 @@ For any operation at a node, capability resolution follows this order:
 4. **Default**: Use the mode's base tools and the zone's default mode mapping
 
 This creates a layered capability system where position in the tree determines what the AI can do, how it thinks, and which extensions are active. Navigation is capability switching.
+
+## Cascade
+
+Lands MAY support cascade signaling. When content is written at a node with `metadata.cascade.enabled` set to true and the land config `cascadeEnabled` is true, the kernel fires the `onCascade` hook. Extensions register handlers to react, propagate, or deliver signals to other nodes.
+
+### Configuration
+
+Nodes store cascade config in `metadata.cascade`:
+
+```json
+{ "enabled": true, "propagate": "children" }
+```
+
+`propagate` controls automatic signal delivery: `"children"`, `"subtree"`, or `"none"`.
+
+### Two Entry Points
+
+- **checkCascade** (kernel-internal): called automatically when content is written (notes, status changes). The kernel originates signals.
+- **deliverCascade** (extension-external): called by extensions to deliver signals to other nodes or from other lands. The kernel never blocks inbound.
+
+### Result Shape
+
+Every cascade signal produces a result stored in the `.flow` system node:
+
+```json
+{
+  "status": "succeeded | failed | rejected | queued | partial | awaiting",
+  "source": "nodeId",
+  "payload": {},
+  "timestamp": "ISO 8601",
+  "signalId": "UUID",
+  "extName": "extension-name"
+}
+```
+
+Six statuses. None terminal.
+
+### Endpoints
+
+```
+POST /api/v1/node/:nodeId/cascade    Deliver a signal to a node
+GET  /api/v1/flow                    Read recent cascade results
+GET  /api/v1/flow/:signalId          Read results for a specific signal
+```
+
+### Config Values
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `cascadeEnabled` | `false` | Global enable for cascade |
+| `resultTTL` | `604800` | Seconds before results cleaned from .flow |
+| `awaitingTimeout` | `300` | Seconds before awaiting becomes failed |
+| `cascadeMaxDepth` | `50` | Max propagation depth per signal |
+
+### Guarantee
+
+The kernel MUST NOT block inbound cascade signals. When `deliverCascade` is called, the kernel MUST accept the signal and write a result to `.flow`. Extensions decide what to do with the signal. The kernel records what happened.

@@ -1,7 +1,7 @@
 export default {
   name: "user-queries",
   version: "1.0.0",
-  description: "User level data access for notes, tags, contributions, chats, and notifications",
+  description: "User level data access for notes, tags, contributions, and chats",
 
   needs: {
     models: ["User", "Node"],

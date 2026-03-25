@@ -1,7 +1,7 @@
 import router from "./routes.js";
 import tools from "./tools.js";
-import { getExtMeta } from "../../core/tree/extensionMetadata.js";
-import Node from "../../db/models/node.js";
+import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
+import Node from "../../seed/models/node.js";
 import { setEnergyService, addPrestige } from "./core.js";
 
 export async function init(core) {

@@ -1,20 +1,19 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 import express from "express";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 const __riDir = path.dirname(fileURLToPath(import.meta.url));
 import multer from "multer";
-import authenticate from "../../middleware/authenticate.js";
-import urlAuth from "../../middleware/urlAuth.js";
-import preUploadCheck from "../../middleware/preUploadCheck.js";
-import { notFoundPage } from "../../middleware/notFoundPage.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import preUploadCheck from "../../seed/middleware/preUploadCheck.js";
 import { getLandUrl } from "../../canopy/identity.js";
-import { userHasLlm } from "../../ws/conversation.js";
+import { userHasLlm } from "../../seed/ws/conversation.js";
 import { orchestrateRawIdeaPlacement } from "./pipeline.js";
 import RawIdea from "./model.js";
-import User from "../../db/models/user.js";
+import User from "../../seed/models/user.js";
 import {
   createRawIdea as coreCreateRawIdea,
   getRawIdeas as coreGetRawIdeas,
@@ -26,6 +25,19 @@ import {
 } from "./core.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
+
+// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
+function readAuth(req, res, next) {
+  const handler = getExtension("html-rendering")?.exports?.urlAuth;
+  if (handler) return handler(req, res, next);
+  return authenticate(req, res, next);
+}
+
+function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
+  const fn = getExtension("html-rendering")?.exports?.notFoundPage;
+  if (fn) return fn(req, res, message);
+  return sendError(res, 404, ERR.NOTE_NOT_FOUND, message);
+}
 
 const router = express.Router();
 
@@ -64,7 +76,7 @@ router.post(
     try {
       const { userId } = req.params;
       if (req.userId.toString() !== userId.toString()) {
-        return res.status(403).json({ success: false, error: "Not authorized" });
+        return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
 
       const contentType = req.file ? "file" : "text";
@@ -81,15 +93,15 @@ router.post(
         );
       }
 
-      return res.status(201).json({ success: true, rawIdea: result.rawIdea });
+      return sendOk(res, { rawIdea: result.rawIdea }, 201);
     } catch (err) {
-      res.status(400).json({ success: false, error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
 
 // GET list raw ideas
-router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
+router.get("/user/:userId/raw-ideas", readAuth, async (req, res) => {
   try {
     const userId = req.params.userId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -100,10 +112,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
     let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
     if (limit >= 200 || limit == undefined) limit = 200;
     if (limit !== undefined && (isNaN(limit) || limit <= 0)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid limit: must be a positive number",
-      });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit: must be a positive number");
     }
 
     const query = req.query.q || "";
@@ -126,7 +135,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
     }));
 
     if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return res.json({ success: true, rawIdeas });
+      return sendOk(res, { rawIdeas });
     }
 
     const user = await User.findById(userId).lean();
@@ -156,7 +165,7 @@ router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
     );
   } catch (err) {
  log.error("Raw Ideas", "Error in /user/:userId/raw-ideas:", err);
-    res.status(400).json({ success: false, error: err.message });
+    sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
@@ -167,17 +176,18 @@ router.post(
   async (req, res) => {
     try {
       if (req.userId.toString() !== req.params.userId.toString()) {
-        return res.status(403).json({ success: false, error: "Not authorized" });
+        return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
       const enabled = req.body?.enabled;
       if (typeof enabled !== "boolean") {
-        return res.status(400).json({ success: false, error: "enabled (boolean) is required" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "enabled (boolean) is required");
       }
       const result = await coreToggleAutoPlace({ userId: req.userId, enabled });
-      return res.json({ success: true, enabled: result.enabled });
+      return sendOk(res, { enabled: result.enabled });
     } catch (err) {
       const status = err.message.includes("only available on") ? 403 : 500;
-      return res.status(status).json({ success: false, error: err.message });
+      const code = status === 403 ? ERR.FORBIDDEN : ERR.INTERNAL;
+      return sendError(res, status, code, err.message);
     }
   },
 );
@@ -190,22 +200,19 @@ router.delete(
     try {
       const { userId, rawIdeaId } = req.params;
       if (req.userId.toString() !== userId.toString()) {
-        return res.status(403).json({ success: false, error: "Not authorized" });
+        return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
       const rawIdea = await RawIdea.findById(rawIdeaId);
       if (!rawIdea) {
-        return res.status(404).json({ success: false, error: "Raw idea not found" });
+        return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
       }
       if (rawIdea.status === "processing" || rawIdea.status === "succeeded") {
-        return res.status(409).json({
-          success: false,
-          error: `Cannot delete a raw idea with status "${rawIdea.status}"`,
-        });
+        return sendError(res, 409, ERR.INVALID_INPUT, `Cannot delete a raw idea with status "${rawIdea.status}"`);
       }
       const result = await coreDeleteRawIdeaAndFile({ rawIdeaId, userId: req.userId });
-      return res.json({ success: true, ...result });
+      return sendOk(res, result);
     } catch (err) {
-      res.status(400).json({ success: false, error: err.message });
+      sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
@@ -219,17 +226,14 @@ router.post(
       const { userId, rawIdeaId } = req.params;
       const { nodeId } = req.body;
       if (req.userId.toString() !== userId.toString()) {
-        return res.status(403).json({ success: false, error: "Not authorized" });
+        return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
       if (!rawIdeaId || !nodeId) {
-        return res.status(400).json({ success: false, error: "raw-idea Id and nodeId are required" });
+        return sendError(res, 400, ERR.INVALID_INPUT, "raw-idea Id and nodeId are required");
       }
       const rawIdeaCheck = await RawIdea.findById(rawIdeaId).lean();
       if (rawIdeaCheck?.status === "processing") {
-        return res.status(409).json({
-          success: false,
-          error: "Cannot transfer a raw idea while it is being processed",
-        });
+        return sendError(res, 409, ERR.INVALID_INPUT, "Cannot transfer a raw idea while it is being processed");
       }
       const result = await coreConvertRawIdeaToNote({ rawIdeaId, userId: req.userId, nodeId });
 
@@ -238,10 +242,10 @@ router.post(
           `/api/v1/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html`,
         );
       }
-      return res.json({ success: true, note: result.note });
+      return sendOk(res, { note: result.note });
     } catch (err) {
  log.error("Raw Ideas", "raw-idea transfer error:", err);
-      return res.status(400).json({ success: false, error: err.message });
+      return sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   },
 );
@@ -292,19 +296,19 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     }
 
     if (rawIdea.contentType === "text") {
-      return res.json({ text: rawIdea.content });
+      return sendOk(res, { text: rawIdea.content });
     }
     if (rawIdea.contentType === "file") {
       const filePath = path.join(uploadsFolder, rawIdea.content);
       if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: "File not found" });
+        return sendError(res, 404, ERR.NOTE_NOT_FOUND, "File not found");
       }
       return res.sendFile(filePath);
     }
 
-    res.status(400).json({ error: "Unknown raw idea type" });
+    sendError(res, 400, ERR.INVALID_TYPE, "Unknown raw idea type");
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -317,18 +321,18 @@ const TIMEOUT_MS = 19 * 60 * 1000;
 router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
-      return res.status(403).json({ error: "Not authorized" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
     const content = req.body?.content;
     if (!content || typeof content !== "string" || !content.trim()) {
-      return res.status(400).json({ error: "content (text string) is required" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "content (text string) is required");
     }
     if (!(await userHasLlm(req.userId))) {
-      return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+      return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     }
     const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
     if (alreadyProcessing) {
-      return res.status(409).json({ error: "Another idea is already being placed. Please wait for it to finish." });
+      return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
     }
     const result = await coreCreateRawIdea({ contentType: "text", content: content.trim(), userId: req.userId });
     const user = await User.findById(req.userId).select("username").lean();
@@ -336,91 +340,91 @@ router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
     orchestrateRawIdeaPlacement({
       rawIdeaId: result.rawIdea._id, userId: req.userId, username: user?.username || "unknown", source,
  }).catch((err) => log.error("Raw Ideas", "Raw-idea orchestration failed:", err.message));
-    return res.status(202).json({ message: "Orchestration started", rawIdeaId: result.rawIdea._id });
+    return sendOk(res, { message: "Orchestration started", rawIdeaId: result.rawIdea._id }, 202);
   } catch (err) {
  log.error("Raw Ideas", "raw-idea create+place error:", err);
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
-      return res.status(403).json({ error: "Not authorized" });
+      return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
     const content = req.body?.content;
     if (!content || typeof content !== "string" || !content.trim()) {
-      return res.status(400).json({ error: "content (text string) is required" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "content (text string) is required");
     }
     if (!(await userHasLlm(req.userId))) {
-      return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+      return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     }
     const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
     if (alreadyProcessing) {
-      return res.status(409).json({ error: "Another idea is already being placed. Please wait for it to finish." });
+      return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
     }
     const result = await coreCreateRawIdea({ contentType: "text", content: content.trim(), userId: req.userId });
     const user = await User.findById(req.userId).select("username").lean();
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) res.status(504).json({ success: false, error: "Request timed out." }); }, TIMEOUT_MS);
+    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) sendError(res, 504, ERR.TIMEOUT, "Request timed out."); }, TIMEOUT_MS);
     const source = req.body?.source === "user" ? "user" : "api";
     const orchResult = await orchestrateRawIdeaPlacement({ rawIdeaId: result.rawIdea._id, userId: req.userId, username: user?.username || "unknown", withResponse: true, source });
     clearTimeout(timer);
     if (timedOut) return;
-    if (!orchResult || !orchResult.success) return res.json({ success: false, error: orchResult?.reason || "Could not process the idea." });
-    return res.json({ success: true, answer: orchResult.answer, rootId: orchResult.rootId, rootName: orchResult.rootName, targetNodeId: orchResult.targetNodeId, rawIdeaId: result.rawIdea._id });
+    if (!orchResult || !orchResult.success) return sendError(res, 200, ERR.LLM_FAILED, orchResult?.reason || "Could not process the idea.");
+    return sendOk(res, { answer: orchResult.answer, rootId: orchResult.rootId, rootName: orchResult.rootName, targetNodeId: orchResult.targetNodeId, rawIdeaId: result.rawIdea._id });
   } catch (err) {
  log.error("Raw Ideas", "raw-idea create+chat error:", err);
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.post("/user/:userId/raw-ideas/:rawIdeaId/place", authenticate, async (req, res) => {
   try {
     const { rawIdeaId } = req.params;
-    if (req.userId.toString() !== req.params.userId.toString()) return res.status(403).json({ error: "Not authorized" });
+    if (req.userId.toString() !== req.params.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     const rawIdea = await RawIdea.findById(rawIdeaId);
-    if (!rawIdea || rawIdea.userId === "deleted") return res.status(404).json({ error: "Raw idea not found" });
-    if (rawIdea.userId.toString() !== req.userId.toString()) return res.status(403).json({ error: "Not authorized" });
-    if (rawIdea.contentType === "file") return res.status(422).json({ error: "File ideas cannot be auto-placed" });
-    if (rawIdea.status && rawIdea.status !== "pending") return res.status(409).json({ error: `Already ${rawIdea.status}` });
-    if (!(await userHasLlm(req.userId))) return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+    if (!rawIdea || rawIdea.userId === "deleted") return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
+    if (rawIdea.userId.toString() !== req.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
+    if (rawIdea.contentType === "file") return sendError(res, 400, ERR.INVALID_TYPE, "File ideas cannot be auto-placed");
+    if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.INVALID_STATUS, `Already ${rawIdea.status}`);
+    if (!(await userHasLlm(req.userId))) return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
-    if (alreadyProcessing) return res.status(409).json({ error: "Another idea is already being placed. Please wait for it to finish." });
+    if (alreadyProcessing) return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
     const user = await User.findById(req.userId).select("username").lean();
     const source = req.body?.source === "user" ? "user" : "api";
  orchestrateRawIdeaPlacement({ rawIdeaId, userId: req.userId, username: user?.username || "unknown", source }).catch((err) => log.error("Raw Ideas", "Raw-idea orchestration failed:", err.message));
-    return res.status(202).json({ message: "Orchestration started" });
+    return sendOk(res, { message: "Orchestration started" }, 202);
   } catch (err) {
  log.error("Raw Ideas", "raw-idea orchestrate error:", err);
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
 router.post("/user/:userId/raw-ideas/:rawIdeaId/chat", authenticate, async (req, res) => {
   try {
     const { rawIdeaId } = req.params;
-    if (req.userId.toString() !== req.params.userId.toString()) return res.status(403).json({ error: "Not authorized" });
+    if (req.userId.toString() !== req.params.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     const rawIdea = await RawIdea.findById(rawIdeaId);
-    if (!rawIdea || rawIdea.userId === "deleted") return res.status(404).json({ error: "Raw idea not found" });
-    if (rawIdea.userId.toString() !== req.userId.toString()) return res.status(403).json({ error: "Not authorized" });
-    if (rawIdea.contentType === "file") return res.status(422).json({ error: "File ideas cannot be auto-placed" });
-    if (rawIdea.status && rawIdea.status !== "pending") return res.status(409).json({ error: `Already ${rawIdea.status}` });
-    if (!(await userHasLlm(req.userId))) return res.status(403).json({ error: "No LLM connection. Visit /setup to set one up." });
+    if (!rawIdea || rawIdea.userId === "deleted") return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
+    if (rawIdea.userId.toString() !== req.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
+    if (rawIdea.contentType === "file") return sendError(res, 400, ERR.INVALID_TYPE, "File ideas cannot be auto-placed");
+    if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.INVALID_STATUS, `Already ${rawIdea.status}`);
+    if (!(await userHasLlm(req.userId))) return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
-    if (alreadyProcessing) return res.status(409).json({ error: "Another idea is already being placed. Please wait for it to finish." });
+    if (alreadyProcessing) return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
     const user = await User.findById(req.userId).select("username").lean();
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) res.status(504).json({ success: false, error: "Request timed out." }); }, TIMEOUT_MS);
+    const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) sendError(res, 504, ERR.TIMEOUT, "Request timed out."); }, TIMEOUT_MS);
     const source = req.body?.source === "user" ? "user" : "api";
     const result = await orchestrateRawIdeaPlacement({ rawIdeaId, userId: req.userId, username: user?.username || "unknown", withResponse: true, source });
     clearTimeout(timer);
     if (timedOut) return;
-    if (!result || !result.success) return res.json({ success: false, error: result?.reason || "Could not process the idea." });
-    return res.json({ success: true, answer: result.answer, rootId: result.rootId, rootName: result.rootName, targetNodeId: result.targetNodeId });
+    if (!result || !result.success) return sendError(res, 200, ERR.LLM_FAILED, result?.reason || "Could not process the idea.");
+    return sendOk(res, { answer: result.answer, rootId: result.rootId, rootName: result.rootName, targetNodeId: result.targetNodeId });
   } catch (err) {
  log.error("Raw Ideas", "raw-idea chat error:", err);
-    return res.status(500).json({ error: err.message });
+    return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

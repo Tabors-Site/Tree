@@ -1,25 +1,26 @@
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Stripe from "stripe";
-import User from "../../db/models/user.js";
+import User from "../../seed/models/user.js";
 import { validatePurchase } from "./core/validatePurchase.js";
 import { getLandUrl } from "../../canopy/identity.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 export async function createPurchaseSession(req, res) {
-  if (!stripe) return res.status(503).json({ error: "Stripe is not configured" });
+  if (!stripe) return sendError(res, 503, ERR.INTERNAL, "Stripe is not configured");
   try {
     const { userId, plan, energyAmount } = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
 
     try {
       validatePurchase(user, { plan, energyAmount });
     } catch (err) {
-      return res.status(400).json({ error: err.message });
+      return sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
 
     let totalCents = 0;
@@ -32,7 +33,7 @@ export async function createPurchaseSession(req, res) {
     }
 
     if (totalCents <= 0) {
-      return res.status(400).json({ error: "Nothing to purchase" });
+      return sendError(res, 400, ERR.INVALID_INPUT, "Nothing to purchase");
     }
 
     let productName = "Purchase";
@@ -83,10 +84,10 @@ export async function createPurchaseSession(req, res) {
       cancel_url: cancelUrl,
     });
 
-    res.json({ url: session.url });
+    sendOk(res, { url: session.url });
 
   } catch (err) {
  log.error("Billing", "Stripe session error:", err);
-    res.status(500).json({ error: "Failed to create checkout session" });
+    sendError(res, 500, ERR.INTERNAL, "Failed to create checkout session");
   }
 }

@@ -6,12 +6,12 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
-import { buildCoreServices } from "../core/services.js";
-import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../ws/modes/registry.js";
-import { hooks } from "../core/hooks.js";
-import { registerOrchestrator } from "../core/orchestratorRegistry.js";
-import { registerModeOwner, registerToolOwner } from "../core/tree/extensionScope.js";
-import log from "../core/log.js";
+import { buildCoreServices } from "../seed/services.js";
+import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../seed/ws/modes/registry.js";
+import { hooks } from "../seed/hooks.js";
+import { registerOrchestrator } from "../seed/orchestratorRegistry.js";
+import { registerModeOwner, registerToolOwner } from "../seed/tree/extensionScope.js";
+import log from "../seed/log.js";
 
 // Wire mode ownership tracking for spatial scoping
 setModeRegistrationHook(registerModeOwner);
@@ -172,8 +172,8 @@ function getDisabledExtensions(configFn) {
 // ---------------------------------------------------------------------------
 
 const AVAILABLE_SERVICES = new Set([
-  "energy", "contributions", "auth",
-  "session", "aiChat", "llm", "mcp",
+  "contributions", "auth",
+  "session", "chat", "llm", "mcp",
   "websocket", "orchestrator",
 ]);
 
@@ -190,7 +190,7 @@ function validateNeeds(manifest, core) {
 
   if (manifest.needs?.services) {
     for (const svc of manifest.needs.services) {
-      if (!AVAILABLE_SERVICES.has(svc)) {
+      if (!AVAILABLE_SERVICES.has(svc) && !core[svc]) {
         missing.push(`service:${svc}`);
       }
     }
@@ -231,16 +231,16 @@ function validateNeeds(manifest, core) {
 }
 
 /**
- * Inject no-op stubs for optional services the host land doesn't have.
+ * Inject no-op stubs for optional kernel services the host land doesn't have.
+ * Only stubs kernel-provided services (AVAILABLE_SERVICES). Extension-provided
+ * services (like energy) are either present because that extension loaded first,
+ * or absent. Extensions guard with if (core.svc) for those.
  */
 function applyOptionalStubs(manifest, core) {
   if (!manifest.optional?.services) return;
 
   for (const svc of manifest.optional.services) {
-    if (svc === "energy" && !core.energy) {
-      continue;
-    }
-    if (!core[svc]) {
+    if (AVAILABLE_SERVICES.has(svc) && !core[svc]) {
       core[svc] = {};
     }
   }
@@ -335,10 +335,19 @@ function buildScopedCore(manifest, fullCore) {
   // Build scoped object
   const scoped = {};
 
-  // Services: only inject declared ones
+  // Services: inject declared kernel services
   for (const key of AVAILABLE_SERVICES) {
     if (allowed.has(key) && fullCore[key]) {
       scoped[key] = fullCore[key];
+    }
+  }
+
+  // Also inject declared services that were dynamically registered by other
+  // extensions (e.g. energy registers core.energy during its init). The kernel
+  // doesn't name these. Extensions discover them by declaration.
+  for (const svc of allowed) {
+    if (!AVAILABLE_SERVICES.has(svc) && fullCore[svc]) {
+      scoped[svc] = fullCore[svc];
     }
   }
 
@@ -387,17 +396,19 @@ function topologicalSort(manifests) {
     if (visited.has(name)) return;
     visited.add(name);
 
-    // Visit extension dependencies first
+    // Visit extension dependencies first (strip semver constraints for lookup)
     if (item.manifest.needs?.extensions) {
       for (const dep of item.manifest.needs.extensions) {
-        if (byName.has(dep)) visit(byName.get(dep));
+        const depName = parseDepString(dep).name;
+        if (byName.has(depName)) visit(byName.get(depName));
       }
     }
 
     // Visit optional extension dependencies if they exist
     if (item.manifest.optional?.extensions) {
       for (const dep of item.manifest.optional.extensions) {
-        if (byName.has(dep)) visit(byName.get(dep));
+        const depName = parseDepString(dep).name;
+        if (byName.has(depName)) visit(byName.get(depName));
       }
     }
 
@@ -559,12 +570,12 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Wire MCP tools and register in tool resolver
       if (instance.tools && mcpServer) {
-        const { registerToolDef } = await import("../ws/tools.js");
+        const { registerToolDef } = await import("../seed/ws/tools.js");
         const { zodToJsonSchema } = await import("zod-to-json-schema");
         const { z } = await import("zod");
 
         for (const tool of instance.tools) {
-          registerToolOwner(tool.name, name, tool.annotations?.readOnlyHint ?? false);
+          registerToolOwner(tool.name, manifest.name, tool.annotations?.readOnlyHint ?? false);
           mcpServer.tool(
             tool.name,
             tool.description,
@@ -625,7 +636,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Register session types
       if (manifest.provides?.sessionTypes) {
-        const { registerSessionType } = await import("../ws/sessionRegistry.js");
+        const { registerSessionType } = await import("../seed/ws/sessionRegistry.js");
         for (const [key, value] of Object.entries(manifest.provides.sessionTypes)) {
           registerSessionType(key, value);
         }
@@ -1002,7 +1013,7 @@ export async function readExtensionFiles(name) {
  */
 async function getDirectoryUrl() {
   try {
-    const { getLandConfigValue } = await import("../core/landConfig.js");
+    const { getLandConfigValue } = await import("../seed/landConfig.js");
     return getLandConfigValue("directoryUrl") || process.env.DIRECTORY_URL || "https://dir.treeos.ai";
   } catch {
     return process.env.DIRECTORY_URL || "https://dir.treeos.ai";
@@ -1031,14 +1042,16 @@ function computeChecksum(files) {
  * @returns {{ name, version, filesWritten }}
  */
 async function installFromRepo(name, repoUrl, version) {
-  const { execSync } = await import("child_process");
+  const { execFileSync } = await import("child_process");
   const extDir = path.join(__dirname, name);
   const tmpDir = path.join(__dirname, `_tmp_${name}_${Date.now()}`);
 
   try {
-    // Clone the repo
-    const branch = version ? `--branch ${version} --single-branch` : "";
-    execSync(`git clone --depth 1 ${branch} ${repoUrl} ${tmpDir}`, {
+    // Clone the repo (using execFileSync to prevent shell injection)
+    const args = ["clone", "--depth", "1"];
+    if (version) { args.push("--branch", version, "--single-branch"); }
+    args.push(repoUrl, tmpDir);
+    execFileSync("git", args, {
       stdio: "pipe",
       timeout: 30000,
     });
@@ -1181,7 +1194,7 @@ export async function disableExtension(name) {
 
   // Also persist to DB config if available
   try {
-    const { getLandConfigValue, setLandConfigValue } = await import("../core/landConfig.js");
+    const { getLandConfigValue, setLandConfigValue } = await import("../seed/landConfig.js");
     const dbList = getLandConfigValue("disabledExtensions") || [];
     if (!dbList.includes(name)) {
       dbList.push(name);
@@ -1211,7 +1224,7 @@ export async function enableExtension(name) {
 
   // Also persist to DB config if available
   try {
-    const { getLandConfigValue, setLandConfigValue } = await import("../core/landConfig.js");
+    const { getLandConfigValue, setLandConfigValue } = await import("../seed/landConfig.js");
     const dbList = getLandConfigValue("disabledExtensions") || [];
     const dbUpdated = dbList.filter((n) => n !== name);
     await setLandConfigValue("disabledExtensions", dbUpdated);
@@ -1280,7 +1293,7 @@ export function getRegisteredJobs() {
 export async function runExtensionMigrations() {
   let Node;
   try {
-    Node = (await import("../db/models/node.js")).default;
+    Node = (await import("../seed/models/node.js")).default;
   } catch {
     log.warn("Extensions", "Cannot run migrations: Node model not available");
     return;

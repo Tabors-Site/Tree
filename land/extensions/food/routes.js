@@ -1,8 +1,9 @@
 import express from "express";
-import authenticate from "../../middleware/authenticate.js";
-import Node from "../../db/models/node.js";
-import User from "../../db/models/user.js";
-import log from "../../core/log.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import Node from "../../seed/models/node.js";
+import User from "../../seed/models/user.js";
+import log from "../../seed/log.js";
 
 const router = express.Router();
 
@@ -11,32 +12,32 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
     const { rootId } = req.params;
     const rawMessage = req.body.message;
     const message = Array.isArray(rawMessage) ? rawMessage.join(" ") : rawMessage;
-    if (!message) return res.status(400).json({ error: "message required" });
+    if (!message) return sendError(res, 400, ERR.INVALID_INPUT, "message required");
 
     const root = await Node.findById(rootId).select("rootOwner contributors").lean();
-    if (!root) return res.status(404).json({ error: "Tree not found" });
+    if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
     const userId = req.userId;
     const isOwner = root.rootOwner?.toString() === userId;
     const isContributor = root.contributors?.some(c => c.toString() === userId);
     if (!isOwner && !isContributor) {
-      return res.status(403).json({ error: "No access to this tree" });
+      return sendError(res, 403, ERR.FORBIDDEN, "No access to this tree");
     }
 
     // Check spatial scope: is food blocked at this position?
-    const { isExtensionBlockedAtNode } = await import("../../core/tree/extensionScope.js");
+    const { isExtensionBlockedAtNode } = await import("../../seed/tree/extensionScope.js");
     if (await isExtensionBlockedAtNode("food", rootId)) {
-      return res.status(403).json({ error: "Food tracking is blocked on this branch. Navigate to a branch where food is active." });
+      return sendError(res, 403, ERR.EXTENSION_BLOCKED, "Food tracking is blocked on this branch. Navigate to a branch where food is active.");
     }
 
     const user = await User.findById(userId).select("username").lean();
-    const { runChat } = await import("../../ws/conversation.js");
+    const { runChat } = await import("../../seed/ws/conversation.js");
 
     // Detect intent: logging food intake vs coaching/planning
     const isLogging = /\b(ate|had|eaten|drank|i ate|i had|logged|breakfast|lunch|dinner|snack|\d+\s*cal|\d+\s*g\b)/i.test(message);
     const mode = isLogging ? "tree:food-log" : "tree:food-coach";
 
-    const { answer, aiChatId } = await runChat({
+    const { answer, chatId } = await runChat({
       userId,
       username: user.username,
       message,
@@ -45,10 +46,10 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
       res,
     });
 
-    res.json({ success: true, answer, aiChatId, mode });
+    sendOk(res, { answer, chatId, mode });
   } catch (err) {
     log.error("Food", "Chat error:", err.message);
-    res.status(500).json({ error: err.message });
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
