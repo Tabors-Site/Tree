@@ -77,6 +77,18 @@ const logContribution = async (params) => {
     ? Object.fromEntries(extKeys.map(k => [k, extensionRest[k]]))
     : undefined;
 
+  // extensionData size guard: same 512KB cap as setExtMeta
+  if (extensionData) {
+    try {
+      const size = Buffer.byteLength(JSON.stringify(extensionData), "utf8");
+      if (size > 512 * 1024) {
+        throw new Error(`Contribution extensionData exceeds 512KB limit (${Math.round(size / 1024)}KB)`);
+      }
+    } catch (e) {
+      if (e.message.includes("limit")) throw e;
+    }
+  }
+
   try {
     // Build doc with only defined fields (avoids storing nulls in MongoDB)
     const doc = { userId, nodeId, action, date: new Date() };

@@ -2,6 +2,7 @@ import log from "../seed/log.js";
 import User from "../seed/models/user.js";
 import { getUserMeta } from "../seed/tree/userMetadata.js";
 import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
+import { getToolOwner, isExtensionBlockedAtNode } from "../seed/tree/extensionScope.js";
 import { getChatContext } from "../seed/ws/chatTracker.js";
 
 import {
@@ -106,6 +107,29 @@ async function handleMcpRequest(req, res) {
             }),
           );
           return;
+        }
+      }
+
+      // Spatial scoping: check if the tool's owning extension is blocked at this node.
+      // Without this, an MCP client can call shell tools at a node where shell is blocked.
+      if (nodeId && toolName) {
+        const ownerExt = getToolOwner(toolName);
+        if (ownerExt) {
+          const blocked = await isExtensionBlockedAtNode(ownerExt, nodeId);
+          if (blocked) {
+            res.setHeader("Content-Type", "text/event-stream");
+            res.end(
+              formatSseResponse({
+                jsonrpc: "2.0",
+                id: req.body.id,
+                error: {
+                  code: -32602,
+                  message: `Tool "${toolName}" is blocked at this position (extension "${ownerExt}" is scoped out).`,
+                },
+              }),
+            );
+            return;
+          }
         }
       }
 

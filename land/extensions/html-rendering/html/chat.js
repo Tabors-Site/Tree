@@ -925,7 +925,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
           body: JSON.stringify({ name }),
         });
         const data = await res.json();
-        if (!data.success) throw new Error(data.error || "Failed");
+        if (!res.ok || data.status === "error") throw new Error((data.error && data.error.message) || data.error || "Failed");
 
         // Add to tree list (create it if empty state)
         let treeList = document.getElementById("treeList");

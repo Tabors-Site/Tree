@@ -66,6 +66,8 @@ import log from "./log.js";
 const HOOK_TIMEOUT_MS = 5000;
 const MAX_HANDLERS_PER_HOOK = 100;
 const CIRCUIT_BREAKER_THRESHOLD = 5; // consecutive failures before auto-disable
+const CIRCUIT_HALF_OPEN_MS = 5 * 60 * 1000; // 5 min before allowing a test call
+const CHAIN_TIMEOUT_MS = 15000; // cumulative timeout for sequential override chains
 
 // Hooks that run sequentially even though they're not "before" hooks.
 // Default rule: before = sequential (can cancel), after = parallel (independent reactions).
@@ -75,6 +77,7 @@ const SEQUENTIAL_OVERRIDES = {
   onCascade: true,      // ordered .flow writes, result ordering matters
 };
 const _failureCounts = new Map(); // "hookName:extName" -> count
+const _circuitOpenedAt = new Map(); // "hookName:extName" -> timestamp when breaker opened
 
 // Map<hookName, Array<{ extName, handler }>>
 const registry = new Map();
@@ -207,17 +210,26 @@ async function run(hookName, data) {
         .filter(({ extName }) => {
           if (blockedExtensions && blockedExtensions.has(extName)) return false;
           const key = `${hookName}:${extName}`;
-          if ((_failureCounts.get(key) || 0) >= CIRCUIT_BREAKER_THRESHOLD) return false;
+          const failures = _failureCounts.get(key) || 0;
+          if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
+            // Half-open: allow one test call after CIRCUIT_HALF_OPEN_MS
+            const openedAt = _circuitOpenedAt.get(key) || 0;
+            if (Date.now() - openedAt < CIRCUIT_HALF_OPEN_MS) return false;
+          }
           return true;
         })
         .map(({ extName, handler }) =>
           withTimeout(handler(data), HOOK_TIMEOUT_MS, `${hookName}:${extName}`)
-            .then(() => _failureCounts.delete(`${hookName}:${extName}`))
+            .then(() => {
+              _failureCounts.delete(`${hookName}:${extName}`);
+              _circuitOpenedAt.delete(`${hookName}:${extName}`);
+            })
             .catch(err => {
               const key = `${hookName}:${extName}`;
               const count = (_failureCounts.get(key) || 0) + 1;
               _failureCounts.set(key, count);
               if (count >= CIRCUIT_BREAKER_THRESHOLD) {
+                _circuitOpenedAt.set(key, Date.now());
                 log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open. Auto-disabled.`);
               } else {
                 log.warn("Hooks", `${hookName} from "${extName}" failed (${count}/${CIRCUIT_BREAKER_THRESHOLD}):`, err.message);
@@ -228,14 +240,37 @@ async function run(hookName, data) {
     return { cancelled: false };
   }
 
-  // Before hooks and enrichContext: sequential
+  // Before hooks and sequential overrides (enrichContext, onCascade)
+  const isSequentialOverride = SEQUENTIAL_OVERRIDES[hookName];
+  const chainStart = isSequentialOverride ? Date.now() : 0;
+
   for (const { extName, handler } of handlers) {
     if (blockedExtensions && blockedExtensions.has(extName)) continue;
     const key = `${hookName}:${extName}`;
-    if ((_failureCounts.get(key) || 0) >= CIRCUIT_BREAKER_THRESHOLD) continue;
+    const failures = _failureCounts.get(key) || 0;
+    if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
+      // Half-open: allow one test call after CIRCUIT_HALF_OPEN_MS
+      const openedAt = _circuitOpenedAt.get(key) || 0;
+      if (Date.now() - openedAt < CIRCUIT_HALF_OPEN_MS) continue;
+    }
+
+    // Cumulative timeout for sequential override chains (enrichContext, onCascade)
+    if (isSequentialOverride) {
+      const elapsed = Date.now() - chainStart;
+      if (elapsed >= CHAIN_TIMEOUT_MS) {
+        log.warn("Hooks", `${hookName} chain exceeded ${CHAIN_TIMEOUT_MS}ms. Remaining handlers skipped.`);
+        break;
+      }
+    }
+
+    const perHandlerTimeout = isSequentialOverride
+      ? Math.min(HOOK_TIMEOUT_MS, CHAIN_TIMEOUT_MS - (Date.now() - chainStart))
+      : HOOK_TIMEOUT_MS;
+
     try {
-      const result = await withTimeout(handler(data), HOOK_TIMEOUT_MS, `${hookName}:${extName}`);
-      _failureCounts.delete(key); // success resets counter
+      const result = await withTimeout(handler(data), perHandlerTimeout, `${hookName}:${extName}`);
+      _failureCounts.delete(key);
+      _circuitOpenedAt.delete(key);
       if (isBefore && result === false) {
         return { cancelled: true, reason: `Cancelled by ${extName}` };
       }
@@ -243,6 +278,7 @@ async function run(hookName, data) {
       const count = (_failureCounts.get(key) || 0) + 1;
       _failureCounts.set(key, count);
       if (count >= CIRCUIT_BREAKER_THRESHOLD) {
+        _circuitOpenedAt.set(key, Date.now());
         log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open.`);
       }
       if (isBefore) {

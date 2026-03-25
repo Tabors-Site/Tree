@@ -4193,7 +4193,7 @@ input[type="file"].hidden-input {
         );
 
         const data = await res.json();
-        if (!data.success) throw new Error(data.error || 'Delete failed');
+        if (!res.ok || data.status === 'error') throw new Error((data.error && data.error.message) || data.error || 'Delete failed');
 
         noteItem.style.opacity = '0';
         noteItem.style.transform = 'translateY(-10px)';

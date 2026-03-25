@@ -456,11 +456,11 @@ async function canopyFetch(url, options) {
   try {
     var res = await fetch(url, options);
     var data = await res.json();
-    if (!res.ok || !data.success) {
-      showToast(data.error || "Request failed", "error");
+    if (!res.ok || data.status === "error") {
+      showToast((data.error && data.error.message) || data.error || "Request failed", "error");
       return null;
     }
-    return data;
+    return data.data || data;
   } catch (err) {
     showToast(err.message || "Network error", "error");
     return null;

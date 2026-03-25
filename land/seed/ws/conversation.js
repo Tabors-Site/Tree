@@ -51,9 +51,48 @@ export function setKernelConfig(key, value) {
     case "maxToolIterations": MAX_TOOL_ITERATIONS = num; break;
     case "maxConversationMessages": MAX_MESSAGES = num; break;
     case "defaultModel": DEFAULT_MODEL = String(value); break;
+    case "llmMaxConcurrent": LLM_MAX_CONCURRENT = num; break;
   }
 }
 export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
+
+// ── LLM Concurrency Semaphore ─────────────────────────────────────────
+// Prevents thundering herd: caps in-flight LLM calls across all users.
+// Excess callers queue with abort signal support.
+let LLM_MAX_CONCURRENT = 20;
+let _activeLlmCalls = 0;
+const _llmWaiters = [];
+
+async function acquireLlmSlot(signal) {
+  if (_activeLlmCalls < LLM_MAX_CONCURRENT) {
+    _activeLlmCalls++;
+    return;
+  }
+  return new Promise((resolve, reject) => {
+    const waiter = { resolve, reject };
+    _llmWaiters.push(waiter);
+    if (signal) {
+      const onAbort = () => {
+        const idx = _llmWaiters.indexOf(waiter);
+        if (idx >= 0) _llmWaiters.splice(idx, 1);
+        reject(new Error("Queued LLM call cancelled"));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      waiter.cleanup = () => signal.removeEventListener("abort", onAbort);
+    }
+  });
+}
+
+function releaseLlmSlot() {
+  if (_llmWaiters.length > 0) {
+    const next = _llmWaiters.shift();
+    if (next.cleanup) next.cleanup();
+    next.resolve();
+    // Slot transfers to the next waiter, _activeLlmCalls stays the same
+  } else {
+    _activeLlmCalls = Math.max(0, _activeLlmCalls - 1);
+  }
+}
 
 // ── LLM Failover Stack ──────────────────────────────────────────────────
 // When the primary LLM connection fails (429, 500, timeout), try the next
@@ -85,6 +124,13 @@ async function callWithFailover(callFn, primaryClient, userId) {
     if (!RETRYABLE_CODES.has(status) && !err.message?.includes("timed out")) {
       throw err; // not retryable
     }
+    // Jittered backoff on rate limit before trying failover stack
+    if (status === 429) {
+      const retryAfter = Number(err.headers?.["retry-after"]) || 0;
+      const baseMs = retryAfter > 0 ? retryAfter * 1000 : 1000;
+      const jitter = Math.random() * baseMs;
+      await new Promise(r => setTimeout(r, baseMs + jitter));
+    }
     log.warn("LLM", `Primary failed (${status}): ${primaryClient.model}. Trying failover stack.`);
   }
 
@@ -100,6 +146,13 @@ async function callWithFailover(callFn, primaryClient, userId) {
       log.verbose("LLM", `Failover succeeded: ${fallbackClient.model}`);
       return { response, usedClient: fallbackClient };
     } catch (err) {
+      const failStatus = err.status || err.code;
+      if (failStatus === 429) {
+        const idx = stack.indexOf(connId);
+        const baseMs = 1000 * Math.pow(2, idx);
+        const jitter = Math.random() * baseMs;
+        await new Promise(r => setTimeout(r, baseMs + jitter));
+      }
       log.warn("LLM", `Failover ${connId} failed: ${err.message?.slice(0, 100)}`);
       continue;
     }
@@ -756,6 +809,8 @@ export async function processMessage(visitorId, message, ctx) {
       throw new Error(llmHookResult.reason || "LLM call rejected");
     }
 
+    // Acquire semaphore slot before LLM call. Prevents thundering herd.
+    await acquireLlmSlot(ctx.signal);
     try {
       const failoverResult = await callWithFailover(
         (client, model) => client.chat.completions.create({ ...requestParams, model }, requestOpts),
@@ -798,6 +853,8 @@ export async function processMessage(visitorId, message, ctx) {
       } else {
         throw apiErr;
       }
+    } finally {
+      releaseLlmSlot();
     }
 
     const choice = response.choices?.[0];

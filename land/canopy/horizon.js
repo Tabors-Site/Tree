@@ -66,10 +66,10 @@ export async function registerWithHorizon() {
 
     const data = await res.json();
 
-    if (data.success) {
+    if (data.status === "ok") {
       log.verbose("Canopy", `Registered with Horizon at ${HORIZON_URL}`);
     } else {
-      log.error("Canopy", `[Land] Horizon registration failed: ${data.error}`);
+      log.error("Canopy", `[Land] Horizon registration failed: ${(data.error && data.error.message) || data.error}`);
     }
   } catch (err) {
     log.error("Canopy", `[Land] Could not reach Horizon at ${HORIZON_URL}: ${err.message}`);
@@ -118,9 +118,10 @@ export async function lookupLandByDomain(domain) {
     if (!res.ok) return null;
 
     const data = await res.json();
-    if (!data.success || !data.land) return null;
+    const result = data.data || data;
+    if (data.status === "error" || !result.land) return null;
 
-    return data.land;
+    return result.land;
   } catch {
     return null;
   }

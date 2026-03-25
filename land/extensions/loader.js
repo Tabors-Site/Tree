@@ -10,7 +10,7 @@ import { buildCoreServices } from "../seed/services.js";
 import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../seed/ws/modes/registry.js";
 import { hooks } from "../seed/hooks.js";
 import { registerOrchestrator } from "../seed/orchestratorRegistry.js";
-import { registerModeOwner, registerToolOwner } from "../seed/tree/extensionScope.js";
+import { registerModeOwner, registerToolOwner, getToolOwner } from "../seed/tree/extensionScope.js";
 import log from "../seed/log.js";
 
 // Wire mode ownership tracking for spatial scoping
@@ -46,6 +46,12 @@ function withExtensionTimeout(router, extName) {
         res.removeListener("finish", cleanup);
         log.warn("Loader", `Extension router "${extName}" timed out on ${req.method} ${req.path}, falling through`);
         next();
+      } else if (!done) {
+        // Headers already sent but response not finished. Close the partial response.
+        done = true;
+        res.removeListener("finish", cleanup);
+        log.warn("Loader", `Extension router "${extName}" timed out mid-stream on ${req.method} ${req.path}, closing response`);
+        try { res.end(); } catch {}
       }
     }, EXT_ROUTE_TIMEOUT_MS);
 
@@ -533,8 +539,20 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Build scoped core: only inject what the manifest declares
       const scopedCore = buildScopedCore(manifest, coreServices);
 
-      // Initialize
-      const instance = await extModule.init(scopedCore);
+      // Initialize (with timeout to prevent a single extension from blocking boot)
+      const INIT_TIMEOUT_MS = 10000;
+      let instance;
+      try {
+        instance = await Promise.race([
+          extModule.init(scopedCore),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`init() timed out after ${INIT_TIMEOUT_MS}ms`)), INIT_TIMEOUT_MS)
+          ),
+        ]);
+      } catch (initErr) {
+        log.error("Extensions", `"${manifest.name}": ${initErr.message}. Skipped.`);
+        continue;
+      }
 
       // Validate init() return
       if (!instance || typeof instance !== "object") {
@@ -612,6 +630,12 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         const { z } = await import("zod");
 
         for (const tool of instance.tools) {
+          // Reject duplicate tool names across extensions
+          const existingOwner = getToolOwner(tool.name);
+          if (existingOwner) {
+            log.error("Loader", `Tool "${tool.name}" from "${manifest.name}" conflicts with "${existingOwner}". Skipped.`);
+            continue;
+          }
           registerToolOwner(tool.name, manifest.name, tool.annotations?.readOnlyHint ?? false);
           try {
             if (tool.handler) {
@@ -979,36 +1003,46 @@ export async function installExtensionFiles(name, files) {
 
   const extDir = path.join(__dirname, name);
 
-  // Create directory
-  if (!fs.existsSync(extDir)) {
-    fs.mkdirSync(extDir, { recursive: true });
-  }
-
-  const resolvedExtDir = path.resolve(extDir);
+  // Write to a staging directory first. On success, atomic swap.
+  // On failure, staging is cleaned up. Prevents partial installs.
+  const stagingDir = path.join(__dirname, `.staging-${name}-${Date.now()}`);
+  fs.mkdirSync(stagingDir, { recursive: true });
+  const resolvedStaging = path.resolve(stagingDir);
 
   let filesWritten = 0;
-  for (const file of files) {
-    // Safety: resolve to absolute and verify it stays inside the extension directory.
-    // path.normalize alone is insufficient (backslash tricks, mixed separators).
-    const filePath = path.resolve(extDir, file.path);
-    if (!filePath.startsWith(resolvedExtDir + path.sep) && filePath !== resolvedExtDir) {
-      throw new Error(`Path traversal blocked: ${file.path}`);
+  try {
+    for (const file of files) {
+      // Safety: resolve to absolute and verify it stays inside the staging directory.
+      const filePath = path.resolve(stagingDir, file.path);
+      if (!filePath.startsWith(resolvedStaging + path.sep) && filePath !== resolvedStaging) {
+        throw new Error(`Path traversal blocked: ${file.path}`);
+      }
+
+      // Block null bytes (filesystem injection)
+      if (file.path.includes("\0")) {
+        throw new Error(`Null byte in file path: ${file.path}`);
+      }
+
+      const fileDir = path.dirname(filePath);
+
+      // Create subdirectories if needed
+      if (!fs.existsSync(fileDir)) {
+        fs.mkdirSync(fileDir, { recursive: true });
+      }
+
+      fs.writeFileSync(filePath, file.content, "utf8");
+      filesWritten++;
     }
 
-    // Block null bytes (filesystem injection)
-    if (file.path.includes("\0")) {
-      throw new Error(`Null byte in file path: ${file.path}`);
+    // All files written successfully. Swap staging into place.
+    if (fs.existsSync(extDir)) {
+      fs.rmSync(extDir, { recursive: true, force: true });
     }
-
-    const fileDir = path.dirname(filePath);
-
-    // Create subdirectories if needed
-    if (!fs.existsSync(fileDir)) {
-      fs.mkdirSync(fileDir, { recursive: true });
-    }
-
-    fs.writeFileSync(filePath, file.content, "utf8");
-    filesWritten++;
+    fs.renameSync(stagingDir, extDir);
+  } catch (err) {
+    // Cleanup staging on any failure
+    try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {}
+    throw err;
   }
 
   log.verbose("Extensions", `Installed: ${name} (${filesWritten} files)`);
@@ -1353,15 +1387,19 @@ export async function runExtensionMigrations() {
     return;
   }
 
+  // Find the .extensions system node once, so per-extension queries are scoped correctly.
+  // Without this, a user-created tree node named the same as an extension would be matched.
+  const { SYSTEM_ROLE } = await import("../seed/protocol.js");
+  const extensionsParent = await Node.findOne({ systemRole: SYSTEM_ROLE.EXTENSIONS }).select("_id").lean();
+
   for (const [name, { manifest, instance }] of loaded) {
     const targetVersion = manifest.provides?.schemaVersion;
     if (!targetVersion) continue; // No schema versioning declared
 
-    // Get current version from .extensions node values
-    const extNode = await Node.findOne({
-      parent: { $ne: null },
-      name,
-    }).lean();
+    // Get current version from the extension's child node under .extensions
+    const extNode = extensionsParent
+      ? await Node.findOne({ parent: extensionsParent._id, name }).lean()
+      : null;
 
     const meta = extNode?.metadata instanceof Map ? Object.fromEntries(extNode.metadata) : (extNode?.metadata || {});
     const currentVersion = meta.schemaVersion || 0;

@@ -10,7 +10,12 @@ const toolDefs = {};
  * Called by the extension loader when wiring MCP tools.
  */
 export function registerToolDef(name, schema) {
+  if (toolDefs[name]) {
+    log.error("Tools", `Tool "${name}" already registered. Duplicate rejected.`);
+    return false;
+  }
   toolDefs[name] = schema;
+  return true;
 }
 
 const _warnedTools = new Set();

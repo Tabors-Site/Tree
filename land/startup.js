@@ -59,6 +59,7 @@ export function onListen() {
         maxToolIterations:       { setter: setKernelConfig },
         maxConversationMessages: { setter: setKernelConfig },
         defaultModel:            { setter: setKernelConfig },
+        llmMaxConcurrent:        { setter: setKernelConfig },
         noteMaxChars:            { load: () => import("./seed/tree/notes.js").then(m => m.setNoteMaxChars) },
         treeSummaryMaxDepth:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(v, null)) },
         treeSummaryMaxNodes:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(null, v)) },

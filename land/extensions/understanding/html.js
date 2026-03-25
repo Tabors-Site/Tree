@@ -765,17 +765,18 @@ export function renderUnderstandingRun({
           body: JSON.stringify({ source: 'user' }),
         });
         var data = await res.json();
-        if (data.success) {
+        var result = data.data || data;
+        if (data.status === 'ok' && result.success) {
           status.style.color = 'rgba(72, 187, 120, 0.9)';
-          status.textContent = data.alreadyComplete
+          status.textContent = result.alreadyComplete
             ? '✓ Already complete'
-            : '✓ Done — ' + (data.nodesProcessed || 0) + ' nodes processed';
+            : '✓ Done — ' + (result.nodesProcessed || 0) + ' nodes processed';
           label.textContent = '✅ Complete';
           if (stopBtn) stopBtn.style.display = 'none';
           setTimeout(function() { location.reload(); }, 1500);
         } else {
           status.style.color = 'rgba(255, 107, 107, 0.9)';
-          status.textContent = '✕ ' + (data.error || 'Failed');
+          status.textContent = '✕ ' + ((data.error && data.error.message) || data.error || 'Failed');
           label.textContent = '🧠 Retry';
           btn.disabled = false;
           if (stopBtn) stopBtn.style.display = 'none';
@@ -805,7 +806,7 @@ export function renderUnderstandingRun({
           headers: { 'Content-Type': 'application/json' },
         });
         var data = await res.json();
-        if (data.success) {
+        if (data.status === 'ok') {
           status.style.display = 'block';
           status.style.color = 'rgba(255, 180, 50, 0.9)';
           status.textContent = 'Stopped';
@@ -813,7 +814,7 @@ export function renderUnderstandingRun({
         } else {
           status.style.display = 'block';
           status.style.color = 'rgba(255, 107, 107, 0.9)';
-          status.textContent = data.error || 'Could not stop';
+          status.textContent = (data.error && data.error.message) || data.error || 'Could not stop';
           label.textContent = '⏹ Stop';
           btn.disabled = false;
         }

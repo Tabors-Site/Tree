@@ -9,6 +9,7 @@ import Node from "../models/node.js";
 import Contribution from "../models/contribution.js";
 import { logContribution, escapeRegex } from "../utils.js";
 import { hooks } from "../hooks.js";
+import { getLandConfigValue } from "../landConfig.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
 import { CONTENT_TYPE, DELETED, NODE_STATUS, ERR, ProtocolError } from "../protocol.js";
@@ -66,8 +67,22 @@ async function createNote({
     throw new Error("Missing required fields");
   }
 
-  const targetNode = await Node.findById(nodeId).select("systemRole").lean();
-  if (targetNode?.systemRole) throw new Error("Cannot modify system nodes");
+  // Check node exists, is not a system node, and has not been deleted.
+  // parent: { $exists: true, $ne: null } ensures we reject nodes mid-deletion
+  // (deleteNodeBranch nullifies parent before removing the node).
+  const targetNode = await Node.findOne({
+    _id: nodeId,
+    parent: { $exists: true, $ne: null },
+  }).select("systemRole parent").lean();
+  if (!targetNode) throw new Error("Node not found or deleted");
+  if (targetNode.systemRole) throw new Error("Cannot modify system nodes");
+
+  // Note count cap: prevents runaway extensions from flooding a node
+  const maxNotes = Number(getLandConfigValue("maxNotesPerNode")) || 1000;
+  const noteCount = await Note.countDocuments({ nodeId });
+  if (noteCount >= maxNotes) {
+    throw new Error(`Node has reached the maximum of ${maxNotes} notes. Delete old notes before adding new ones.`);
+  }
 
   let filePath = null;
   if (contentType === CONTENT_TYPE.FILE) {

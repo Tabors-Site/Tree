@@ -16,6 +16,9 @@ export default {
   },
 
   provides: {
+    hooks: {
+      listens: ["enrichContext"],
+    },
     models: {
       UnderstandingRun: "./understandingRun.js",
       UnderstandingNode: "./understandingNode.js",

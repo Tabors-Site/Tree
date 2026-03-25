@@ -1574,7 +1574,7 @@ value="${escapeHtml(query)}"
         const res = await fetch(url, { method: "DELETE" });
 
         const data = await res.json();
-        if (!data.success) throw new Error(data.error || "Delete failed");
+        if (!res.ok || data.status === "error") throw new Error((data.error && data.error.message) || data.error || "Delete failed");
 
         // Fade out animation
         card.style.transition = "all 0.3s ease";
@@ -3443,7 +3443,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
             { method: "DELETE" }
           );
           const data = await res.json();
-          if (!data.success) throw new Error(data.error || "Delete failed");
+          if (!res.ok || data.status === "error") throw new Error((data.error && data.error.message) || data.error || "Delete failed");
 
           card.style.transition = "all 0.3s ease";
           card.style.opacity = "0";
@@ -3505,9 +3505,9 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: newEnabled }) }
         );
         var data = await res.json();
-        if (!data.success) {
+        if (!res.ok || data.status === "error") {
           toggle.classList.toggle("active");
-          alert(data.error || "Failed to toggle");
+          alert((data.error && data.error.message) || data.error || "Failed to toggle");
         }
       } catch (err) {
         toggle.classList.toggle("active");

@@ -74,15 +74,18 @@ export function createCanopyLlmProxyClient({ userId, homeLand, slot }) {
 
             const data = await res.json();
 
-            if (!data.success) {
+            const result = data.data || data;
+            if (data.status === "error" || !result.completion) {
+              const errMsg = (data.error && data.error.message) || data.error;
+              const errCode = (data.error && data.error.code) || "";
               throw new Error(
-                data.error === "no_llm"
+                errCode === "LLM_NOT_CONFIGURED" || errMsg === "no_llm"
                   ? "No LLM connection configured on home land"
-                  : data.message || "LLM proxy request failed"
+                  : errMsg || "LLM proxy request failed"
               );
             }
 
-            return data.completion;
+            return result.completion;
           } finally {
             clearTimeout(timeout);
           }

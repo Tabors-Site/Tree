@@ -24,6 +24,26 @@ import Node from "../models/node.js";
 
 const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade"]);
 const MAX_METADATA_VALUE_BYTES = 512 * 1024; // 512KB per extension namespace per node
+const MAX_NAMESPACE_KEY_LENGTH = 50; // same cap as node type names
+const MAX_NESTING_DEPTH = 5;
+
+/**
+ * Measure the nesting depth of a plain object/array.
+ * Arrays and objects each count as one level. Primitives are 0.
+ */
+function measureDepth(value, current = 0) {
+  if (value === null || typeof value !== "object") return current;
+  let max = current + 1;
+  const entries = Array.isArray(value) ? value : Object.values(value);
+  for (const v of entries) {
+    if (v !== null && typeof v === "object") {
+      const d = measureDepth(v, current + 1);
+      if (d > max) max = d;
+      if (max > MAX_NESTING_DEPTH) return max; // early exit
+    }
+  }
+  return max;
+}
 
 /**
  * Get an extension's metadata namespace from a node.
@@ -60,15 +80,27 @@ function isBlockedLocally(node, extName) {
 export async function setExtMeta(node, extName, data) {
   if (isBlockedLocally(node, extName)) return false;
 
-  // Per-namespace size guard
+  // Namespace key length guard
+  if (extName.length > MAX_NAMESPACE_KEY_LENGTH) {
+    throw new Error(`Metadata namespace "${extName.slice(0, 20)}..." exceeds ${MAX_NAMESPACE_KEY_LENGTH} character limit`);
+  }
+
+  // Per-namespace size guard + nesting depth check
   if (data != null) {
     try {
-      const size = Buffer.byteLength(JSON.stringify(data), "utf8");
+      const serialized = JSON.stringify(data);
+      const size = Buffer.byteLength(serialized, "utf8");
       if (size > MAX_METADATA_VALUE_BYTES) {
         throw new Error(`Metadata for "${extName}" exceeds ${MAX_METADATA_VALUE_BYTES / 1024}KB limit (${Math.round(size / 1024)}KB)`);
       }
     } catch (e) {
       if (e.message.includes("limit")) throw e;
+    }
+
+    // Nesting depth guard: prevents expensive deep queries and painful inspection
+    const depth = measureDepth(data);
+    if (depth > MAX_NESTING_DEPTH) {
+      throw new Error(`Metadata for "${extName}" exceeds max nesting depth of ${MAX_NESTING_DEPTH} (found ${depth}). Flatten your data structure.`);
     }
   }
 

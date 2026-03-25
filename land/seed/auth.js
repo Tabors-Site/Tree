@@ -34,6 +34,9 @@ export async function createUser(username, password, opts = {}) {
   if (password.length < 8) {
     throw new Error("Password must be at least 8 characters long");
   }
+  if (password.length > 128) {
+    throw new Error("Password must be 128 characters or fewer");
+  }
   username = username.trim();
 
   const existing = await User.findOne({

@@ -20,6 +20,26 @@ export async function init(core) {
     core.llm.registerRootLlmSlot?.("understanding");
   }
 
+  // Inject latest understanding encoding into every AI prompt at this tree.
+  // This is how chat knows what understanding produced. The node is the shared memory.
+  core.hooks.register("enrichContext", async ({ context, node, meta }) => {
+    if (!node?.rootOwner || node.rootOwner === "SYSTEM") return;
+    // Find the most recent completed understanding run for this tree
+    const rootId = meta?.rootId || (node.rootOwner && node.rootOwner !== "SYSTEM" ? node._id : null);
+    if (!rootId) return;
+    try {
+      const latestRun = await UnderstandingRun.findOne({
+        rootId: String(rootId),
+        status: "completed",
+      }).sort({ lastCompletedAt: -1 }).select("encodingHistory perspective").lean();
+      if (!latestRun?.encodingHistory?.length) return;
+      const latest = latestRun.encodingHistory[latestRun.encodingHistory.length - 1];
+      if (latest?.encoding) {
+        context.understanding = `[Understanding: ${latestRun.perspective || "general"}] ${latest.encoding}`;
+      }
+    } catch {}
+  }, "understanding");
+
   return {
     models: { UnderstandingRun, UnderstandingNode },
     router,

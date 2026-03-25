@@ -20,9 +20,16 @@ export async function registerPeer(peerUrl) {
   const url = peerUrl.replace(/\/+$/, "");
   const identity = getLandIdentity();
 
+  // SSRF protection: reject private/internal addresses before any network call
+  let parsed;
+  try { parsed = new URL(url); } catch { throw new Error(`Invalid URL: ${url}`); }
+  if (isPrivateHost(parsed.hostname)) {
+    throw new Error("Cannot register a peer with a private or internal address");
+  }
+
   let infoRes;
   try {
-    infoRes = await fetch(`${url}/canopy/info`);
+    infoRes = await fetch(`${url}/canopy/info`, { signal: AbortSignal.timeout(15000) });
   } catch (err) {
     throw new Error(`Could not reach land at ${url}: ${err.message}`);
   }
@@ -78,6 +85,7 @@ export async function registerPeer(peerUrl) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(getLandInfoPayload()),
+      signal: AbortSignal.timeout(15000),
     });
   } catch {
     // Not critical if this fails. They can register us later.

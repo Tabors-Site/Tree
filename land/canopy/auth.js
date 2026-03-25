@@ -61,6 +61,23 @@ export function registerCanopyAuth(authStrategies) {
         throw err;
       }
 
+      // System-to-system tokens (federation events: invites, notifications).
+      // These don't map to a ghost user. They represent the remote land itself.
+      if (payload.sub === "system") {
+        return {
+          userId: "system",
+          username: "system",
+          extra: {
+            canopy: {
+              sourceLandDomain: unverified.iss,
+              sourceLandId: payload.landId,
+              peer,
+              isSystemToken: true,
+            },
+          },
+        };
+      }
+
       const ghostUser = await User.findOne({
         _id: payload.sub,
         isRemote: true,

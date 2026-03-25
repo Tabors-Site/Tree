@@ -241,6 +241,8 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | circuitErrorWeight | 0.3 | Weight of error rate |
 | circuitCheckInterval | 3600000 | Health check interval (1 hour) |
 | toolCircuitThreshold | 5 | Consecutive failures before a tool is disabled for the session |
+| llmMaxConcurrent | 20 | Max in-flight LLM API calls across all users. Prevents thundering herd. |
+| maxNotesPerNode | 1000 | Max notes per node. Prevents runaway extension note floods. |
 | seedVersion | "0.1.0" | Current seed version. Compared at boot to run migrations. Set by migration runner. Do not modify manually. |
 
 Extension config (like `htmlEnabled`) lives in .config too, written by extensions on first boot, not by the kernel.
@@ -297,12 +299,21 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Never block inbound | Cascade signals always accepted, always produce a result. |
 | Hook timeout | 5s per handler. Hanging handlers killed and logged. |
 | Hook cap | 100 handlers per hook. |
-| Hook circuit breaker | 5 consecutive failures auto-disables the hook handler. |
+| Hook circuit breaker | 5 consecutive failures auto-disables the hook handler. Half-open recovery: after 5 minutes, one test call allowed through. Success resets. Failure re-opens. |
 | Tool circuit breaker | 5 consecutive failures disables the tool for that session. AI adapts to other tools. One bad API key disables one tool, not the whole tree. |
-| Extension router timeout | 5s on page routes (/). API routes (/api/v1) not wrapped. AI chat routes take as long as the LLM needs. |
+| Extension router timeout | 5s on page routes (/). API routes (/api/v1) not wrapped. AI chat routes take as long as the LLM needs. Mid-stream responses closed after timeout. |
+| Extension init timeout | 10s per extension init(). Hanging init skipped, boot continues. |
+| LLM concurrency semaphore | llmMaxConcurrent (default 20) caps in-flight LLM calls globally. Excess queued with abort signal support. Jittered exponential backoff on 429. |
+| enrichContext chain timeout | 15s cumulative cap for the entire enrichContext/onCascade handler chain. Per-handler timeout reduced to remaining budget. |
+| MCP spatial scoping | MCP tool calls check isExtensionBlockedAtNode before dispatch. Same spatial scoping guarantee as WebSocket conversations. |
+| Extension install rollback | Files written to staging directory. Atomic rename on success. Cleanup on failure. No partial installs. |
 | Metadata guard | Blocked extensions can't write to nodes. Four core namespaces (cascade, extensions, tools, modes) bypass blocking. |
 | Document size guard | Every metadata write checks total document size against maxDocumentSizeBytes (14MB default). Writes exceeding the limit rejected with DOCUMENT_SIZE_EXCEEDED. onDocumentPressure fires at 80% capacity. |
 | Per-namespace cap | 512KB per extension namespace per node via setExtMeta. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |
+| Namespace key length | Max 50 chars for metadata namespace keys in setExtMeta. Same cap as node type. |
+| Metadata nesting depth | Max 5 levels deep in setExtMeta. Deeper structures must be flattened by the extension. Prevents expensive deep queries. |
+| Note count per node | maxNotesPerNode (default 1000) checked in createNote before write. Prevents runaway loops from flooding a node. Configurable. |
+| Contribution extensionData cap | 512KB per contribution extensionData field. Same cap as setExtMeta. Prevents buggy extensions from writing 5MB per contribution. |
 | .flow partitioning | Daily partition nodes prevent unbounded growth. flowMaxResultsPerDay cap with circular overwrite. Retention deletes entire partitions by date. |
 | Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. System nodes always rejected. |
 | Tree circuit breaker | Health equation monitors node count, metadata density, error rate. Score > 1.0 trips the tree. No AI, no writes, no cascade. Read access stays. Extensions revive. Defaults to off. |
@@ -315,6 +326,9 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Type validation | No HTML, no dots, no slashes, max 50 chars. Free-form string. |
 | Dynamic service injection | Extensions register services on core during init(). Later extensions discover them by declaration, not by kernel naming. |
 | Auth optional | `authenticateOptional` tries all strategies, allows anonymous. Never hangs. |
+| SSRF protection | Peer registration validates hostname against isPrivateHost() before any fetch. 15s timeout on all federation fetches. |
+| Federation system tokens | System-to-system canopy events use sub="system" tokens. Auth handler returns system identity with isSystemToken flag. Route handlers gate access. |
+| Password length | Min 8, max 128 characters. Prevents bcrypt memory DoS. |
 | Atomic metadata writes | setExtMeta uses MongoDB $set on the specific namespace key. Concurrent writes to different namespaces on the same node do not clobber. |
 | DB health check | Before each tool call, the conversation loop checks database readyState. If unreachable, the tool result tells the AI "database unavailable" so it responds to the user instead of retrying blindly. |
 | Seed versioning | SEED_VERSION checked at boot against .config. Migrations run in order between stored and current version. Failed migrations block version update. Next boot retries. |
