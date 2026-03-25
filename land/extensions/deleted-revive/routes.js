@@ -22,7 +22,7 @@ export default function createRouter(core) {
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       const deleted = await getDeletedBranchesForUser(userId);
 
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, { userId, deleted });
       }
 

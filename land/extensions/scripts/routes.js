@@ -38,7 +38,7 @@ router.get("/node/:nodeId/script/:scriptId", authenticateOptional, async (req, r
 
     const wantHtml = "html" in req.query;
 
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!wantHtml || !getExtension("html-rendering")) {
       return sendOk(res, { script, contributions });
     }
 
@@ -224,7 +224,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, 0 + 1);`,
 
     const wantHtml = "html" in req.query;
 
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!wantHtml || !getExtension("html-rendering")) {
       return sendOk(res, data);
     }
 

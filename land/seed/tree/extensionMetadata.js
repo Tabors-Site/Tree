@@ -129,11 +129,30 @@ export async function setExtMeta(node, extName, data) {
 
 /**
  * Shallow merge into an extension's metadata namespace.
- * Reads current value, merges, then writes atomically.
+ * Uses atomic $set on individual keys to avoid read-modify-write races.
  * Silently skips if the extension is blocked at this node.
  */
 export async function mergeExtMeta(node, extName, partial) {
   if (isBlockedLocally(node, extName)) return false;
-  const existing = getExtMeta(node, extName);
-  return setExtMeta(node, extName, { ...existing, ...partial });
+  if (!partial || typeof partial !== "object") return false;
+
+  const updates = {};
+  for (const [key, value] of Object.entries(partial)) {
+    updates[`metadata.${extName}.${key}`] = value;
+  }
+  if (Object.keys(updates).length === 0) return false;
+
+  await Node.updateOne({ _id: node._id }, { $set: updates });
+
+  // Update in-memory document
+  if (node.metadata instanceof Map) {
+    const existing = node.metadata.get(extName) || {};
+    node.metadata.set(extName, { ...existing, ...partial });
+  } else if (node.metadata) {
+    node.metadata[extName] = { ...(node.metadata[extName] || {}), ...partial };
+  }
+
+  invalidateNode(node._id);
+  hooks.run("afterMetadataWrite", { nodeId: node._id, extName, data: partial }).catch(() => {});
+  return true;
 }

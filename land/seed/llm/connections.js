@@ -22,7 +22,7 @@ const ALGORITHM = "aes-256-cbc";
 // ENCRYPTION
 // ─────────────────────────────────────────────────────────────────────────
 
-function getEncryptionKey() {
+export function getEncryptionKey() {
   if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
     throw new Error("CUSTOM_LLM_API_SECRET_KEY must be at least 32 characters");
   }

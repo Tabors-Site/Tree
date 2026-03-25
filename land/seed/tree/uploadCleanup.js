@@ -72,6 +72,12 @@ export async function cleanOrphanedUploads({ graceMs = DEFAULT_GRACE_MS } = {}) 
       // Skip files younger than grace period (might be in-progress uploads)
       if (ageMs < graceMs) continue;
 
+      // TOCTOU guard: re-stat immediately before delete. If mtime changed
+      // since the first stat, another process touched the file (e.g., a new
+      // upload finished writing). Skip it to avoid deleting fresh content.
+      const recheck = fs.statSync(filePath);
+      if (recheck.mtimeMs !== stats.mtimeMs) continue;
+
       const sizeKB = Math.ceil(stats.size / 1024);
       fs.unlinkSync(filePath);
       deleted++;

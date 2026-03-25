@@ -84,12 +84,15 @@ export async function resolveRootNode(nodeId) {
 
 export async function isDescendant(ancestorId, nodeId) {
   let current = await Node.findById(nodeId).select("parent").lean();
+  let depth = 0;
+  const maxDepth = 100;
 
-  while (current && current.parent) {
+  while (current && current.parent && depth < maxDepth) {
     if (current.parent.toString() === ancestorId.toString()) {
       return true;
     }
     current = await Node.findById(current.parent).select("parent").lean();
+    depth++;
   }
 
   return false;

@@ -3,6 +3,7 @@ import { sendError, ERR } from "../seed/protocol.js";
 import { verifyCanopyToken, getLandIdentity } from "./identity.js";
 import { getPeerByDomain, registerPeer } from "./peers.js";
 import { lookupLandByDomain } from "./horizon.js";
+import { isPrivateHost } from "./security.js";
 import { canopyResponseHeaders } from "./protocol.js";
 
 /**
@@ -11,12 +12,17 @@ import { canopyResponseHeaders } from "./protocol.js";
  */
 const rateLimitWindows = new Map();
 const WINDOW_MS = 60 * 1000;
+const MAX_RATE_LIMIT_ENTRIES = 10000;
 
 export function checkRateLimit(key, maxRequests) {
   const now = Date.now();
   const window = rateLimitWindows.get(key);
 
   if (!window || now - window.start > WINDOW_MS) {
+    // Cap map size to prevent memory exhaustion from unique key flooding
+    if (rateLimitWindows.size >= MAX_RATE_LIMIT_ENTRIES && !rateLimitWindows.has(key)) {
+      return false; // reject new entries when map is full
+    }
     rateLimitWindows.set(key, { start: now, count: 1 });
     return true;
   }
@@ -83,8 +89,17 @@ export async function authenticateCanopy(req, res, next) {
         try {
           const horizonLand = await lookupLandByDomain(issuerDomain);
           if (horizonLand?.baseUrl) {
+            // SSRF guard: reject internal network URLs from Horizon lookup
+            try {
+              const parsed = new URL(horizonLand.baseUrl);
+              if (isPrivateHost(parsed.hostname)) {
+                log.warn("Canopy", `Auto-discovery blocked: ${horizonLand.baseUrl} resolves to private network`);
+                horizonLand = null;
+              }
+            } catch { horizonLand = null; }
+          }
+          if (horizonLand?.baseUrl) {
             // Verify the Horizon domain matches the token issuer
-            // to prevent a Horizon entry from impersonating another domain
             const infoRes = await fetch(
               `${horizonLand.baseUrl.replace(/\/+$/, "")}/canopy/info`,
               { signal: AbortSignal.timeout(5000) }

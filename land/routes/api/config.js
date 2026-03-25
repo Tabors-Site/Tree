@@ -158,12 +158,14 @@ router.post("/land/extensions/:name/disable", authenticate, async (req, res) => 
     const current = getLandConfigValue("disabledExtensions") || [];
     if (!current.includes(name)) {
       current.push(name);
+
+      // Write file FIRST, then DB. If process crashes between, the file
+      // (read at boot before DB) is the more critical source of truth.
+      // A stale DB entry is fixed on next successful disable/enable.
+      const { syncDisabledFile } = await import("../../extensions/loader.js");
+      syncDisabledFile(current);
       await setLandConfigValue("disabledExtensions", current);
     }
-
-    // Also write to local file so loader can read at boot (before DB connects)
-    const { syncDisabledFile } = await import("../../extensions/loader.js");
-    syncDisabledFile(current);
 
     sendOk(res, {
       disabled: true,

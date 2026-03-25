@@ -12,6 +12,7 @@ import {
   swapFromVersion,
 } from "./core.js";
 import { renderSolanaNoWallet, renderSolanaWallet } from "./html.js";
+import { getExtension } from "../loader.js";
 
 const router = express.Router();
 
@@ -58,7 +59,7 @@ router.get(
 
       if (
         !("html" in req.query) ||
-        process.env.ENABLE_FRONTEND_HTML !== "true"
+        !getExtension("html-rendering")
       ) {
         return sendOk(res, { nodeId, version: parsedVersion, ...walletInfo });
       }
@@ -237,7 +238,7 @@ router.post(
 router.get("/node/:nodeId/values/solana", authenticate, async (req, res) => {
   try {
     const info = await getVersionWalletInfo(req.params.nodeId, 0);
-    if ("html" in req.query && process.env.ENABLE_FRONTEND_HTML === "true") {
+    if ("html" in req.query && getExtension("html-rendering")) {
       req.params.version = "0";
       // Fall through to versioned HTML route
       const node = await Node.findById(req.params.nodeId);

@@ -1,6 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR, DELETED } from "../../seed/protocol.js";
+import { getLandConfigValue } from "../../seed/landConfig.js";
 import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
@@ -48,7 +49,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 4 * 1024 * 1024 * 1024 },
+  limits: { fileSize: Number(getLandConfigValue("maxUploadBytes")) || 104857600 },
 });
 
 function escapeHtml(str) {
@@ -127,7 +128,7 @@ router.get("/user/:userId/raw-ideas", authenticateOptional, async (req, res) => 
       content: r.contentType === "file" ? `/api/v1/uploads/${r.content}` : r.content,
     }));
 
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!wantHtml || !getExtension("html-rendering")) {
       return sendOk(res, { rawIdeas });
     }
 
@@ -277,7 +278,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
              </a>`
         : "Unknown user";
 
-    if (req.query.html !== undefined && process.env.ENABLE_FRONTEND_HTML === "true") {
+    if (req.query.html !== undefined && getExtension("html-rendering")) {
       if (rawIdea.contentType === "text") {
         return res.send(
           html().renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }),

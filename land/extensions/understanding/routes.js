@@ -17,6 +17,7 @@ import { userHasLlm } from "../../seed/ws/conversation.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
 import { getSessionsForUser, endSession, SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { renderUnderstandingRun, renderUnderstandingNode, renderUnderstandingsList, renderRunNodeView, buildRunCards, buildRunNodeInputsHtml } from "./html.js";
+import { getExtension } from "../loader.js";
 
 function buildQueryString(req) {
   const allowedParams = ["token", "html"];
@@ -165,7 +166,7 @@ router.get(
 
       // JSON mode
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, {
           understandingRunId: run._id,
           rootNodeId: run.rootNodeId,
@@ -345,7 +346,7 @@ router.get(
       };
 
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, data);
       }
 
@@ -400,7 +401,7 @@ router.get("/root/:nodeId/understandings", authenticateOptional, async (req, res
     };
 
     const wantHtml = "html" in req.query;
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!wantHtml || !getExtension("html-rendering")) {
       return sendOk(res, data);
     }
 
@@ -547,7 +548,7 @@ router.get(
       };
 
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, data);
       }
 

@@ -324,7 +324,7 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 Use the core log module instead of `console.log`. This is the standard for all extensions.
 
 ```js
-import log from "../../core/log.js";
+import log from "../../seed/log.js";
 
 log.info("MyExt", "Job started");           // Level 1: always shown. Jobs, lifecycle.
 log.verbose("MyExt", "Processing tree X");   // Level 2: normal operations. Pipeline steps.
@@ -651,7 +651,7 @@ Extensions MUST store per-node data in `node.metadata` under their extension nam
 Do NOT add fields to the core Node schema. Use the metadata helpers:
 
 ```js
-import { getExtMeta, setExtMeta, mergeExtMeta } from "../../core/tree/extensionMetadata.js";
+import { getExtMeta, setExtMeta, mergeExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 // Read
 const data = getExtMeta(node, "my-extension");  // returns {} if empty
@@ -766,7 +766,7 @@ tools-clear                      Remove all local config (inherit from parent)
 
 **From extension code:**
 ```js
-import { getExtMeta, setExtMeta } from "../../core/tree/extensionMetadata.js";
+import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 // Allow a tool programmatically
 const tools = getExtMeta(node, "tools") || {};
@@ -842,7 +842,7 @@ ext-restrict food read            Restrict to read-only tools
 Extensions should check spatial scope before running AI conversations:
 
 ```js
-import { isExtensionBlockedAtNode } from "../../core/tree/extensionScope.js";
+import { isExtensionBlockedAtNode } from "../../seed/tree/extensionScope.js";
 
 // In your route handler:
 if (await isExtensionBlockedAtNode("my-extension", rootId)) {
@@ -895,7 +895,7 @@ No action = default GET. Unknown action shows available subcommands. Missing req
 Same pattern as per-node metadata. Extensions store user-scoped data in `user.metadata`:
 
 ```js
-import { getUserMeta, setUserMeta } from "../../core/tree/userMetadata.js";
+import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 
 // Read
 const energy = getUserMeta(user, "energy");  // returns {} if empty
@@ -944,7 +944,7 @@ if (gateway?.exports?.dispatchNotifications) {
 For the tree orchestrator (or any custom orchestrator), use the core registry:
 
 ```js
-import { getOrchestrator } from "../../core/orchestratorRegistry.js";
+import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
 
 const treeOrch = getOrchestrator("tree");
 if (treeOrch) {

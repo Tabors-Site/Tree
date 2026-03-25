@@ -15,7 +15,19 @@ let outboxTimer = null;
  * Queue a canopy event for delivery to a remote land.
  * Events are stored in the database and processed by the outbox worker.
  */
+const MAX_EVENT_PAYLOAD_BYTES = 256 * 1024; // 256KB
+
 export async function queueCanopyEvent(targetLand, type, payload) {
+  // Guard against unbounded payload size
+  try {
+    const size = Buffer.byteLength(JSON.stringify(payload || {}), "utf8");
+    if (size > MAX_EVENT_PAYLOAD_BYTES) {
+      throw new Error(`Canopy event payload exceeds ${MAX_EVENT_PAYLOAD_BYTES / 1024}KB limit (${Math.round(size / 1024)}KB)`);
+    }
+  } catch (e) {
+    if (e.message.includes("limit")) throw e;
+  }
+
   return CanopyEvent.create({
     targetLand,
     type,

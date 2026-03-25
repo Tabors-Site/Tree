@@ -230,13 +230,15 @@ export async function pingPeer(peer) {
     );
     if (!todayEntry) {
       peer.uptimeHistory.push({ date: today, checks: 1, successes: 1 });
-      // Trim to 30 days
-      if (peer.uptimeHistory.length > 30) {
-        peer.uptimeHistory = peer.uptimeHistory.slice(-30);
-      }
     } else {
       todayEntry.checks += 1;
       todayEntry.successes += 1;
+    }
+    // Trim to 30 days on every save, not just on new day push.
+    // Without this, the array grows unbounded if today's entry is
+    // repeatedly updated without a new day arriving.
+    if (peer.uptimeHistory.length > 30) {
+      peer.uptimeHistory = peer.uptimeHistory.slice(-30);
     }
 
     await peer.save();

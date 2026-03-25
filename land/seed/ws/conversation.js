@@ -24,7 +24,7 @@ import {
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
 import { getLandConfigValue } from "../landConfig.js";
 
-import { resolveAndValidateHost } from "../llm/connections.js";
+import { resolveAndValidateHost, getEncryptionKey } from "../llm/connections.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -134,9 +134,17 @@ async function callWithFailover(callFn, primaryClient, userId) {
     log.warn("LLM", `Primary failed (${status}): ${primaryClient.model}. Trying failover stack.`);
   }
 
-  // Walk failover stack
+  // Walk failover stack with cumulative timeout. If all connections are
+  // rate-limited, the jittered backoff per entry can compound. Cap the total
+  // failover walk to 15 seconds so the user doesn't wait forever.
+  const FAILOVER_TIMEOUT_MS = 15000;
+  const failoverStart = Date.now();
   const stack = await getFailoverStack(userId);
   for (const connId of stack) {
+    if (Date.now() - failoverStart > FAILOVER_TIMEOUT_MS) {
+      log.warn("LLM", `Failover walk timed out after ${FAILOVER_TIMEOUT_MS}ms. Giving up.`);
+      break;
+    }
     if (connId === primaryClient.connectionId) continue; // skip primary
     try {
       const fallbackClient = await resolveConnection(connId, "failover:" + connId);
@@ -181,15 +189,14 @@ function getTimeoutForMode(modeKey, nodeMetadata = null) {
 // ENCRYPTION HELPERS (must match whatever you use when saving)
 // ─────────────────────────────────────────────────────────p────────────────
 
-const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";
 
 function decrypt(encryptedText) {
-  if (!ENCRYPTION_KEY) throw new Error("CUSTOM_LLM_API_SECRET_KEY not set. Cannot decrypt LLM credentials.");
+  // Use the unified key derivation from connections.js to avoid mismatch
+  const key = getEncryptionKey();
   const [ivHex, encrypted] = encryptedText.split(":");
   if (!ivHex || !encrypted) throw new Error("Malformed encrypted text");
   const iv = Buffer.from(ivHex, "hex");
-  const key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   let decrypted = decipher.update(encrypted, "hex", "utf8");
   decrypted += decipher.final("utf8");
@@ -603,15 +610,15 @@ export async function switchBigMode(visitorId, bigMode, ctx) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// CHAT PROCESSING
+// CHAT PROCESSING HELPERS (private, called by processMessage)
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Process a chat message within the current mode.
+ * Get session, ensure a mode exists, snapshot ancestor chain.
+ * Returns { session, mode }.
  */
-export async function processMessage(visitorId, message, ctx) {
+async function ensureSession(visitorId, ctx) {
   const session = getSession(visitorId);
-  const isInternal = ctx?.meta?.internal === true;
 
   // Ensure we have a mode - default to home:default
   if (!session.modeKey) {
@@ -627,7 +634,14 @@ export async function processMessage(visitorId, message, ctx) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
   }
 
-  // Circuit breaker: if the tree is tripped, reject immediately. No LLM call.
+  return { session, mode };
+}
+
+/**
+ * Check if the tree's circuit breaker is tripped.
+ * Returns a dormant response object, or null if healthy.
+ */
+function checkTreeCircuit(session) {
   if (session._ancestorSnapshot) {
     // The owner node (root) is the last non-system node in the chain
     const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== "SYSTEM");
@@ -639,7 +653,15 @@ export async function processMessage(visitorId, message, ctx) {
       };
     }
   }
+  return null;
+}
 
+/**
+ * Resolve LLM client with failover, connect MCP client.
+ * Returns { openai, MODEL, isCustom, resolvedConnectionId, client (MCP), clientEntry }
+ * or returns a noLlm response object (has .noLlmResponse).
+ */
+async function resolveLLMClient(ctx, session, visitorId) {
   // Resolve LLM client for this user (custom or default, with root override)
   // Auto-resolve per-mode LLM override from the tree's llmAssignments
   const rootId = session.rootId || ctx.rootId;
@@ -655,9 +677,11 @@ export async function processMessage(visitorId, message, ctx) {
   if (clientEntry.noLlm) {
     // Energy metering handled by energy extension hooks if installed
     return {
-      content:
-        "No LLM connection configured. Set one up at /setup to use AI features.",
-      modeKey: session.modeKey,
+      noLlmResponse: {
+        content:
+          "No LLM connection configured. Set one up at /setup to use AI features.",
+        modeKey: session.modeKey,
+      },
     };
   }
   const {
@@ -679,6 +703,18 @@ export async function processMessage(visitorId, message, ctx) {
     client = await connectToMCP(MCP_SERVER_URL, visitorId, mcpJwt);
   }
 
+  return { openai, MODEL, isCustom, resolvedConnectionId, client, clientEntry };
+}
+
+/**
+ * Handle conversation loop trimming, fresh mode init, max message trim, add user message.
+ * @param {object} session - Conversation session state
+ * @param {object} ctx - Request context (username, userId, rootId, etc.)
+ * @param {string} message - The user's message to add
+ * @param {object} mode - The resolved mode object
+ * @param {string} visitorId - Session visitor identifier (for logging)
+ */
+async function prepareConversation(session, ctx, message, mode, visitorId) {
   // Check for conversation length - loop if needed (BE mode)
   if (
     mode.maxMessagesBeforeLoop &&
@@ -723,10 +759,14 @@ export async function processMessage(visitorId, message, ctx) {
   }
 
   // Add user message
-
   session.messages.push({ role: "user", content: message });
+}
 
-  // Get tools for current mode (with per-node tool config + spatial extension scoping)
+/**
+ * Walk parent chain for tool config and spatial extension scoping.
+ * Returns { tools, blockedExtensions, restrictedExtensions }.
+ */
+async function resolveToolsForPosition(session) {
   let treeToolConfig = null;
   let blockedExtensions = null;
   let restrictedExtensions = null;
@@ -772,360 +812,348 @@ export async function processMessage(visitorId, message, ctx) {
     const { filterToolsByScope } = await import("../seed/tree/extensionScope.js");
     tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
   }
+  return { tools, blockedExtensions, restrictedExtensions };
+}
 
-  // Tool calling loop
+/**
+ * The LLM API call with semaphore, failover, afterLLMCall hook, and failed_generation handling.
+ * Returns the response object.
+ */
+async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
+  const requestParams = {
+    model: MODEL,
+    messages: session.messages,
+  };
+
+  // Only include tools if the mode has any
+  if (tools.length > 0) {
+    requestParams.tools = tools;
+    requestParams.tool_choice = "auto";
+  }
+
+  // Pass abort signal to OpenAI if available
+  const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
+
+  // beforeLLMCall: extensions can cancel (quota exhausted) or modify params
+  const llmHookData = {
+    userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+    model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
+  };
+  const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
+  if (llmHookResult.cancelled) {
+    throw new Error(llmHookResult.reason || "LLM call rejected");
+  }
+
   let response;
-  let iterations = 0;
 
-  while (iterations < MAX_TOOL_ITERATIONS) {
-    // Check for cancellation
-    if (ctx.signal?.aborted) {
-      throw new Error("Request cancelled");
+  // Acquire semaphore slot before LLM call. Prevents thundering herd.
+  await acquireLlmSlot(ctx.signal);
+  try {
+    const failoverResult = await callWithFailover(
+      (client, model) => client.chat.completions.create({ ...requestParams, model }, requestOpts),
+      clientEntry,
+      ctx.userId,
+    );
+    response = failoverResult.response;
+    // If a failover client was used, update tracking
+    if (failoverResult.usedClient !== clientEntry) {
+      Object.assign(clientEntry, failoverResult.usedClient);
     }
 
-    iterations++;
-
-    const requestParams = {
-      model: MODEL,
-      messages: session.messages,
-    };
-
-    // Only include tools if the mode has any
-    if (tools.length > 0) {
-      requestParams.tools = tools;
-      requestParams.tool_choice = "auto";
-    }
-
-    // Pass abort signal to OpenAI if available
-    const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
-
-    // beforeLLMCall: extensions can cancel (quota exhausted) or modify params
-    const llmHookData = {
+    // afterLLMCall: token metering, billing, analytics
+    hooks.run("afterLLMCall", {
       userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
-      model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
-    };
-    const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
-    if (llmHookResult.cancelled) {
-      throw new Error(llmHookResult.reason || "LLM call rejected");
-    }
-
-    // Acquire semaphore slot before LLM call. Prevents thundering herd.
-    await acquireLlmSlot(ctx.signal);
-    try {
-      const failoverResult = await callWithFailover(
-        (client, model) => client.chat.completions.create({ ...requestParams, model }, requestOpts),
-        clientEntry,
-        ctx.userId,
-      );
-      response = failoverResult.response;
-      // If a failover client was used, update tracking
-      if (failoverResult.usedClient !== clientEntry) {
-        Object.assign(clientEntry, failoverResult.usedClient);
+      model: failoverResult.usedClient?.model || MODEL,
+      usage: response?.usage || null,
+      hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
+    }).catch(() => {});
+  } catch (apiErr) {
+    // Handle models that invent tool names (e.g. "json") instead of using defined tools
+    if (apiErr.code === "tool_use_failed" && apiErr.error?.failed_generation) {
+      let extracted = null;
+      try {
+        const gen = JSON.parse(apiErr.error.failed_generation);
+        extracted = gen.arguments?.responseHint || gen.arguments?.response || gen.arguments?.content || gen.arguments?.summary || JSON.stringify(gen.arguments);
+      } catch {
+        // Try extracting any readable text from the failed generation
+        const raw = apiErr.error.failed_generation;
+        const hintMatch = raw.match(/"responseHint"\s*:\s*"([\s\S]*?)(?:"\s*[,}])/);
+        if (hintMatch) extracted = hintMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
       }
 
-      // afterLLMCall: token metering, billing, analytics
-      hooks.run("afterLLMCall", {
-        userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
-        model: failoverResult.usedClient?.model || MODEL,
-        usage: response?.usage || null,
-        hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
-      }).catch(() => {});
-    } catch (apiErr) {
-      // Handle models that invent tool names (e.g. "json") instead of using defined tools
-      if (apiErr.code === "tool_use_failed" && apiErr.error?.failed_generation) {
-        let extracted = null;
-        try {
-          const gen = JSON.parse(apiErr.error.failed_generation);
-          extracted = gen.arguments?.responseHint || gen.arguments?.response || gen.arguments?.content || gen.arguments?.summary || JSON.stringify(gen.arguments);
-        } catch {
-          // Try extracting any readable text from the failed generation
-          const raw = apiErr.error.failed_generation;
-          const hintMatch = raw.match(/"responseHint"\s*:\s*"([\s\S]*?)(?:"\s*[,}])/);
-          if (hintMatch) extracted = hintMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
-        }
-
-        if (extracted) {
-          log.warn("LLM", `⚠️ Model invented tool "${apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?"}". Extracted response from failed_generation.`);
-          response = { choices: [{ message: { role: "assistant", content: extracted }, finish_reason: "stop" }] };
-        } else {
-          throw apiErr;
-        }
+      if (extracted) {
+        log.warn("LLM", `⚠️ Model invented tool "${apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?"}". Extracted response from failed_generation.`);
+        response = { choices: [{ message: { role: "assistant", content: extracted }, finish_reason: "stop" }] };
       } else {
         throw apiErr;
       }
-    } finally {
-      releaseLlmSlot();
+    } else {
+      throw apiErr;
     }
+  } finally {
+    releaseLlmSlot();
+  }
 
-    const choice = response.choices?.[0];
-    if (!choice) break;
+  return response;
+}
 
-    const assistantMessage = choice.message;
+/**
+ * Detect tool-call-like text from bad models, retry without tools.
+ * Returns { earlyReturn, breakLoop } or null if no quirk detected.
+ * earlyReturn: a value to return directly from processMessage.
+ * breakLoop: true if the tool loop should break.
+ */
+async function handleModelQuirks(assistantMessage, session, tools, openai, MODEL, ctx, isInternal, isCustom, resolvedConnectionId) {
+  if (
+    !assistantMessage.tool_calls?.length &&
+    assistantMessage.content &&
+    tools.length > 0
+  ) {
+    const _content = assistantMessage.content;
+    const looksLikeToolCall =
+      /<tool_call>/i.test(_content) ||
+      /<function[=\s]/i.test(_content) ||
+      /```tool_code/i.test(_content);
 
-    // Always append assistant message for tool reasoning
-    // Always append assistant message to maintain conversation integrity.
-    // Tool results MUST follow their corresponding assistant tool_call message.
-    session.messages.push(assistantMessage);
-
-    // Detect models that return tool-call-like text instead of proper function calling
-    // (common with free/cheap models on OpenRouter that don't support tool_use)
-    if (
-      !assistantMessage.tool_calls?.length &&
-      assistantMessage.content &&
-      tools.length > 0
-    ) {
-      const _content = assistantMessage.content;
-      const looksLikeToolCall =
-        /<tool_call>/i.test(_content) ||
-        /<function[=\s]/i.test(_content) ||
-        /```tool_code/i.test(_content);
-
-      if (looksLikeToolCall) {
-        log.warn("LLM", 
-          `⚠️ Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`,
-        );
-        session.messages.pop();
-        const fallbackResponse = await openai.chat.completions.create(
-          {
+    if (looksLikeToolCall) {
+      log.warn("LLM",
+        `⚠️ Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`,
+      );
+      const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
+      session.messages.pop();
+      const fallbackResponse = await openai.chat.completions.create(
+        {
+          model: MODEL,
+          messages: [
+            ...session.messages,
+            {
+              role: "system",
+              content:
+                "Answer the user's question directly in plain text. Do not use XML, function call, or tool_call syntax.",
+            },
+          ],
+        },
+        requestOpts,
+      );
+      const fallbackChoice = fallbackResponse.choices?.[0];
+      if (fallbackChoice) {
+        session.messages.push(fallbackChoice.message);
+        if (isInternal) {
+          const raw = fallbackChoice.message.content;
+          const _llmProvider = {
+            isCustom,
             model: MODEL,
-            messages: [
-              ...session.messages,
-              {
-                role: "system",
-                content:
-                  "Answer the user's question directly in plain text. Do not use XML, function call, or tool_call syntax.",
-              },
-            ],
-          },
-          requestOpts,
-        );
-        const fallbackChoice = fallbackResponse.choices?.[0];
-        if (fallbackChoice) {
-          session.messages.push(fallbackChoice.message);
-          if (isInternal) {
-            const raw = fallbackChoice.message.content;
-            const _llmProvider = {
-              isCustom,
-              model: MODEL,
-              connectionId: resolvedConnectionId || null,
-            };
-            try {
-              const p = JSON.parse(raw);
-              p._llmProvider = _llmProvider;
-              return p;
-            } catch {
-              return {
+            connectionId: resolvedConnectionId || null,
+          };
+          try {
+            const p = JSON.parse(raw);
+            p._llmProvider = _llmProvider;
+            return { earlyReturn: p };
+          } catch {
+            return {
+              earlyReturn: {
                 action: "error",
                 reason: "Model cannot use tools",
                 raw,
                 _llmProvider,
-              };
-            }
+              },
+            };
           }
-          answer = fallbackChoice.message.content;
         }
-        break;
+        answer = fallbackChoice.message.content;
       }
-    }
-
-    // If tools are requested, continue the loop
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-      // tool execution happens below
-    } else {
-      // ✅ No tools left → now safe to return for internal mode
-      if (isInternal) {
-        const raw = assistantMessage.content;
-        const _llmProvider = {
-          isCustom,
-          model: MODEL,
-          connectionId: resolvedConnectionId || null,
-        };
-        try {
-          const parsed = JSON.parse(raw);
-          parsed._llmProvider = _llmProvider;
-          return parsed;
-        } catch (err) {
-          // Try stripping markdown fences
-          try {
-            const stripped = raw
-              .replace(/^```(?:json)?\s*\n?/i, "")
-              .replace(/\n?```\s*$/, "");
-            const parsed = JSON.parse(stripped);
-            parsed._llmProvider = _llmProvider;
-            return parsed;
-          } catch (_) {}
-
-          // Try extracting JSON object from text (LLM added preamble before JSON)
-          try {
-            const jsonMatch = raw.match(/\{[\s\S]*\}$/);
-            if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              parsed._llmProvider = _llmProvider;
-              return parsed;
-            }
-          } catch (_) {}
-
-          // If it looks like truncated JSON, return it as raw context
-          // rather than failing — the orchestrator can still use it
-          if (raw && (raw.startsWith("{") || raw.startsWith("["))) {
-            return { _raw: true, content: raw, _llmProvider };
-          }
-
-          return {
-            action: "error",
-            reason: "Internal mode returned invalid JSON",
-            raw,
-            _llmProvider,
-          };
-        }
-      }
-      break;
-    }
-
-    // Execute tool calls
-    const toolResults = [];
-    for (const toolCall of assistantMessage.tool_calls) {
-      // Check for cancellation before each tool
-      if (ctx.signal?.aborted) {
-        throw new Error("Request cancelled");
-      }
-
-      const toolName = toolCall.function.name;
-      let args;
-
-      try {
-        args = JSON.parse(toolCall.function.arguments);
-      } catch (e) {
-        log.error("LLM", `❌ Invalid tool arguments for ${toolName}:`, e.message);
-        session.messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: "Invalid arguments" }),
-        });
-        toolResults.push({
-          tool: toolName,
-          success: false,
-          error: "Invalid arguments",
-        });
-        continue;
-      }
-
-      // Auto-inject userId
-      args.userId = ctx.userId;
-
-      // Tool circuit breaker: if this tool has failed too many times in this session, skip it.
-      // The tool disappears from the AI's perspective. It adapts by using other tools.
-      // One bad API key disables one tool, not the whole tree.
-      if (!session._toolFailures) session._toolFailures = {};
-      const toolCircuitThreshold = parseInt(getLandConfigValue("toolCircuitThreshold") || "5", 10);
-      if ((session._toolFailures[toolName] || 0) >= toolCircuitThreshold) {
-        session.messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: `Tool "${toolName}" has been temporarily disabled due to repeated failures. Use a different approach.` }),
-        });
-        toolResults.push({ tool: toolName, args, success: false, error: "tool_circuit_tripped" });
-        continue;
-      }
-
-      // beforeToolCall: extensions can modify args or cancel
-      const hookData = { toolName, args, userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey };
-      const hookResult = await hooks.run("beforeToolCall", hookData);
-      if (hookResult.cancelled) {
-        const errCode = hookResult.timedOut ? "HOOK_TIMEOUT" : "HOOK_CANCELLED";
-        session.messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: hookResult.reason || "Tool call cancelled", code: errCode }),
-        });
-        toolResults.push({ tool: toolName, args, success: false, error: errCode });
-        continue;
-      }
-      args = hookData.args;
-      const resolvedToolName = hookData.toolName || toolName;
-
-      log.debug("LLM", `🔧 [${session.modeKey}] ${resolvedToolName}`, args);
-
-      // DB health check: if the database is unreachable, tell the AI immediately
-      // so it responds to the user instead of retrying blindly with broken hands.
-      if (!isDbHealthy()) {
-        const dbErr = "Database is currently unavailable. Tell the user the land is experiencing issues and to try again shortly.";
-        session.messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: dbErr }),
-        });
-        toolResults.push({ tool: toolName, args, success: false, error: "db_unavailable" });
-        continue;
-      }
-
-      try {
-        const result = await client.callTool({
-          name: resolvedToolName,
-          arguments: args,
-        });
-        const resultText =
-          result?.contents?.[0]?.text ||
-          result?.content?.[0]?.text ||
-          JSON.stringify(result);
-
-        session.messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: resultText,
-        });
-
-        toolResults.push({ tool: resolvedToolName, args, success: true });
-
-        // Tool circuit breaker: success resets failure count
-        delete session._toolFailures[resolvedToolName];
-
-        // afterToolCall (success): fire-and-forget
-        hooks.run("afterToolCall", {
-          toolName: resolvedToolName, args, result: resultText, success: true,
-          userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
-        }).catch(() => {});
-      } catch (err) {
-        log.error("LLM", `❌ Tool ${resolvedToolName} failed:`, err.message);
-
-        // Tool circuit breaker: increment failure count
-        session._toolFailures[resolvedToolName] = (session._toolFailures[resolvedToolName] || 0) + 1;
-        if (session._toolFailures[resolvedToolName] >= toolCircuitThreshold) {
-          log.warn("LLM", `Tool "${resolvedToolName}" tripped after ${toolCircuitThreshold} consecutive failures. Disabled for this session.`);
-        }
-
-        // If DB died during tool execution, tell the AI clearly
-        const errorMsg = !isDbHealthy()
-          ? "Database became unavailable during this operation. Tell the user the land is experiencing issues."
-          : err.message;
-
-        session.messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: errorMsg }),
-        });
-
-        toolResults.push({
-          tool: resolvedToolName,
-          args,
-          success: false,
-          error: err.message,
-        });
-
-        // afterToolCall (failure): fire-and-forget
-        hooks.run("afterToolCall", {
-          toolName: resolvedToolName, args, error: err.message, success: false,
-          userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
-        }).catch(() => {});
-      }
-    }
-
-    // Yield tool results for real-time frontend updates
-    if (ctx.onToolResults) {
-      ctx.onToolResults(toolResults);
+      return { breakLoop: true };
     }
   }
+  return null;
+}
 
+/**
+ * All the JSON parsing attempts for internal mode responses.
+ * Returns the parsed result object.
+ */
+function parseInternalResponse(raw, isCustom, MODEL, resolvedConnectionId) {
+  const _llmProvider = {
+    isCustom,
+    model: MODEL,
+    connectionId: resolvedConnectionId || null,
+  };
+  try {
+    const parsed = JSON.parse(raw);
+    parsed._llmProvider = _llmProvider;
+    return parsed;
+  } catch (err) {
+    // Try stripping markdown fences
+    try {
+      const stripped = raw
+        .replace(/^```(?:json)?\s*\n?/i, "")
+        .replace(/\n?```\s*$/, "");
+      const parsed = JSON.parse(stripped);
+      parsed._llmProvider = _llmProvider;
+      return parsed;
+    } catch (_) {}
+
+    // Try extracting JSON object from text (LLM added preamble before JSON)
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}$/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        parsed._llmProvider = _llmProvider;
+        return parsed;
+      }
+    } catch (_) {}
+
+    // If it looks like truncated JSON, return it as raw context
+    // rather than failing — the orchestrator can still use it
+    if (raw && (raw.startsWith("{") || raw.startsWith("["))) {
+      return { _raw: true, content: raw, _llmProvider };
+    }
+
+    return {
+      action: "error",
+      reason: "Internal mode returned invalid JSON",
+      raw,
+      _llmProvider,
+    };
+  }
+}
+
+/**
+ * Execute a single tool call: parse args, circuit breaker, beforeToolCall hook,
+ * DB health check, callTool, afterToolCall hooks, error handling.
+ * Returns { result: toolResultEntry } where toolResultEntry has { tool, args?, success, error? }.
+ */
+async function executeTool(toolCall, session, ctx, client) {
+  const toolName = toolCall.function.name;
+  let args;
+
+  try {
+    args = JSON.parse(toolCall.function.arguments);
+  } catch (e) {
+    log.error("LLM", `❌ Invalid tool arguments for ${toolName}:`, e.message);
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: "Invalid arguments" }),
+    });
+    return {
+      tool: toolName,
+      success: false,
+      error: "Invalid arguments",
+    };
+  }
+
+  // Auto-inject userId
+  args.userId = ctx.userId;
+
+  // Tool circuit breaker: if this tool has failed too many times in this session, skip it.
+  // The tool disappears from the AI's perspective. It adapts by using other tools.
+  // One bad API key disables one tool, not the whole tree.
+  if (!session._toolFailures) session._toolFailures = {};
+  const toolCircuitThreshold = parseInt(getLandConfigValue("toolCircuitThreshold") || "5", 10);
+  if ((session._toolFailures[toolName] || 0) >= toolCircuitThreshold) {
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: `Tool "${toolName}" has been temporarily disabled due to repeated failures. Use a different approach.` }),
+    });
+    return { tool: toolName, args, success: false, error: "tool_circuit_tripped" };
+  }
+
+  // beforeToolCall: extensions can modify args or cancel
+  const hookData = { toolName, args, userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey };
+  const hookResult = await hooks.run("beforeToolCall", hookData);
+  if (hookResult.cancelled) {
+    const errCode = hookResult.timedOut ? "HOOK_TIMEOUT" : "HOOK_CANCELLED";
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: hookResult.reason || "Tool call cancelled", code: errCode }),
+    });
+    return { tool: toolName, args, success: false, error: errCode };
+  }
+  args = hookData.args;
+  const resolvedToolName = hookData.toolName || toolName;
+
+  log.debug("LLM", `🔧 [${session.modeKey}] ${resolvedToolName}`, args);
+
+  // DB health check: if the database is unreachable, tell the AI immediately
+  // so it responds to the user instead of retrying blindly with broken hands.
+  if (!isDbHealthy()) {
+    const dbErr = "Database is currently unavailable. Tell the user the land is experiencing issues and to try again shortly.";
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: dbErr }),
+    });
+    return { tool: toolName, args, success: false, error: "db_unavailable" };
+  }
+
+  try {
+    const result = await client.callTool({
+      name: resolvedToolName,
+      arguments: args,
+    });
+    const resultText =
+      result?.contents?.[0]?.text ||
+      result?.content?.[0]?.text ||
+      JSON.stringify(result);
+
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: resultText,
+    });
+
+    // Tool circuit breaker: success resets failure count
+    delete session._toolFailures[resolvedToolName];
+
+    // afterToolCall (success): fire-and-forget
+    hooks.run("afterToolCall", {
+      toolName: resolvedToolName, args, result: resultText, success: true,
+      userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+    }).catch(() => {});
+
+    return { tool: resolvedToolName, args, success: true };
+  } catch (err) {
+    log.error("LLM", `❌ Tool ${resolvedToolName} failed:`, err.message);
+
+    // Tool circuit breaker: increment failure count
+    session._toolFailures[resolvedToolName] = (session._toolFailures[resolvedToolName] || 0) + 1;
+    if (session._toolFailures[resolvedToolName] >= toolCircuitThreshold) {
+      log.warn("LLM", `Tool "${resolvedToolName}" tripped after ${toolCircuitThreshold} consecutive failures. Disabled for this session.`);
+    }
+
+    // If DB died during tool execution, tell the AI clearly
+    const errorMsg = !isDbHealthy()
+      ? "Database became unavailable during this operation. Tell the user the land is experiencing issues."
+      : err.message;
+
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: errorMsg }),
+    });
+
+    // afterToolCall (failure): fire-and-forget
+    hooks.run("afterToolCall", {
+      toolName: resolvedToolName, args, error: err.message, success: false,
+      userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+    }).catch(() => {});
+
+    return {
+      tool: resolvedToolName,
+      args,
+      success: false,
+      error: err.message,
+    };
+  }
+}
+
+/**
+ * Ensure final text response, push to messages, return the result object.
+ */
+async function finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId) {
   // Ensure final text response
   if (!response?.choices?.[0]?.message?.content) {
     const finalResponse = await openai.chat.completions.create({
@@ -1160,6 +1188,83 @@ export async function processMessage(visitorId, message, ctx) {
     answer: finalAnswer,
     _internal,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CHAT PROCESSING
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Process a chat message within the current mode.
+ */
+export async function processMessage(visitorId, message, ctx) {
+  const isInternal = ctx?.meta?.internal === true;
+
+  // Phase 1: Session + ancestor snapshot
+  const { session, mode } = await ensureSession(visitorId, ctx);
+
+  // Phase 2: Circuit breaker check
+  const tripped = checkTreeCircuit(session);
+  if (tripped) return tripped;
+
+  // Phase 3: Resolve LLM client + MCP connection
+  const llmResult = await resolveLLMClient(ctx, session, visitorId);
+  if (llmResult.noLlmResponse) return llmResult.noLlmResponse;
+  const { openai, MODEL, isCustom, resolvedConnectionId, client, clientEntry } = llmResult;
+
+  // Phase 4: Prepare conversation (trim, init, add user message)
+  await prepareConversation(session, ctx, message, mode, visitorId);
+
+  // Phase 5: Resolve tools for current position
+  const { tools } = await resolveToolsForPosition(session);
+
+  // Phase 6: Tool calling loop
+  let response;
+  let iterations = 0;
+
+  while (iterations < MAX_TOOL_ITERATIONS) {
+    if (ctx.signal?.aborted) throw new Error("Request cancelled");
+    iterations++;
+
+    // LLM call with semaphore, failover, hooks
+    response = await callLLM(openai, MODEL, session, tools, ctx, clientEntry);
+
+    const choice = response.choices?.[0];
+    if (!choice) break;
+
+    const assistantMessage = choice.message;
+
+    // Always append assistant message to maintain conversation integrity.
+    // Tool results MUST follow their corresponding assistant tool_call message.
+    session.messages.push(assistantMessage);
+
+    // Detect models returning tool-call text instead of proper function calling
+    const quirk = await handleModelQuirks(assistantMessage, session, tools, openai, MODEL, ctx, isInternal, isCustom, resolvedConnectionId);
+    if (quirk?.earlyReturn) return quirk.earlyReturn;
+    if (quirk?.breakLoop) break;
+
+    // No tool calls: parse internal response or break
+    if (!assistantMessage.tool_calls?.length) {
+      if (isInternal) return parseInternalResponse(assistantMessage.content, isCustom, MODEL, resolvedConnectionId);
+      break;
+    }
+
+    // Execute tool calls
+    const toolResults = [];
+    for (const toolCall of assistantMessage.tool_calls) {
+      if (ctx.signal?.aborted) throw new Error("Request cancelled");
+      const toolResult = await executeTool(toolCall, session, ctx, client);
+      toolResults.push(toolResult);
+    }
+
+    // Yield tool results for real-time frontend updates
+    if (ctx.onToolResults) {
+      ctx.onToolResults(toolResults);
+    }
+  }
+
+  // Phase 7: Finalize response
+  return finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────

@@ -9,7 +9,11 @@ export default function securityHeaders(req, res, next) {
   const allowedFrameDomains = getLandConfigValue("allowedFrameDomains") || [];
 
   const ancestors = ["'self'"];
-  if (landUrl) ancestors.push(landUrl);
+  // CSP frame-ancestors expects origins (scheme + host + port), not full URLs with paths.
+  // Pushing a full URL like "https://example.com/api/" is invalid and browsers may ignore it.
+  if (landUrl) {
+    try { ancestors.push(new URL(landUrl).origin); } catch {}
+  }
   for (const domain of allowedFrameDomains) ancestors.push(domain);
 
   res.setHeader(

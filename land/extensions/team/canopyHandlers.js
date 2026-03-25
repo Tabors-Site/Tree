@@ -298,7 +298,7 @@ export async function handleInviteRemote(req, res, {
  * Server-rendered invites page for cross-land collaboration.
  */
 export async function handleAdminInvites(req, res, { User, Node, RemoteUser, getExtension }) {
-  if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+  if (!getExtension("html-rendering")) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
 

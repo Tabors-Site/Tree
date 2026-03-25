@@ -85,10 +85,14 @@ export async function checkTreeHealth(rootId) {
   const sampleSize = Math.min(nodeCount, 100);
   let metadataDensity = 0;
   if (sampleSize > 0) {
-    const sample = await Node.find({ rootOwner: rootId })
-      .select("metadata")
-      .limit(sampleSize)
-      .lean();
+    // Random sample to avoid insertion-order bias. Old nodes tend to have
+    // tiny metadata, new nodes accumulate extension data. Sequential sampling
+    // underestimates density.
+    const sample = await Node.aggregate([
+      { $match: { rootOwner: rootId } },
+      { $sample: { size: sampleSize } },
+      { $project: { metadata: 1 } },
+    ]);
 
     let totalSampleSize = 0;
     for (const n of sample) {

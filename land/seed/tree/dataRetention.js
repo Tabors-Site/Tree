@@ -26,7 +26,8 @@ export async function runRetentionCleanup() {
     try {
       const Chat = (await import("../models/chat.js")).default;
       const cutoff = new Date(now.getTime() - chatDays * 24 * 60 * 60 * 1000);
-      const result = await Chat.deleteMany({ createdAt: { $lt: cutoff } });
+      // Chat schema uses startMessage.time, not createdAt
+      const result = await Chat.deleteMany({ "startMessage.time": { $lt: cutoff } });
       if (result.deletedCount > 0) {
         log.info("Retention", `Deleted ${result.deletedCount} chat records older than ${chatDays} days`);
       }

@@ -33,6 +33,12 @@ const REQUIRED_INDEXES = [
   { collection: "nodes", fields: { rootOwner: 1 }, options: {} },
   // .flow partition lookup (child nodes of .flow, queried by name which is a date string)
   { collection: "nodes", fields: { parent: 1, name: 1 }, options: {} },
+  // Navigation queries: filter children by status at a given parent
+  { collection: "nodes", fields: { parent: 1, status: 1 }, options: {} },
+  // Tree-wide recency queries: find latest nodes per tree root
+  { collection: "nodes", fields: { rootOwner: 1, dateCreated: -1 }, options: {} },
+  // System node lookup within a parent (e.g., .extensions children)
+  { collection: "nodes", fields: { parent: 1, systemRole: 1 }, options: { sparse: true } },
 
   // Note queries (notes loaded by nodeId on every context build and note CRUD)
   { collection: "notes", fields: { nodeId: 1, createdAt: -1 }, options: {} },

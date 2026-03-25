@@ -10,6 +10,15 @@ import {
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
+// Stable JSON stringification: sorts object keys so {a:1,b:2} and {b:2,a:1}
+// produce the same string. Used for tool call dedup keys.
+function stableStringify(obj) {
+  if (obj === null || obj === undefined) return "null";
+  if (typeof obj !== "object") return JSON.stringify(obj);
+  if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(",")}]`;
+  return `{${Object.keys(obj).sort().map(k => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+}
+
 // ============================================================================
 // MCP SERVER (empty pipe, extensions register tools via loader)
 // ============================================================================
@@ -133,7 +142,7 @@ async function handleMcpRequest(req, res) {
         }
       }
 
-      const callKey = `${toolName}:${JSON.stringify(args)}`;
+      const callKey = `${toolName}:${stableStringify(args)}`;
 
       // Check pending requests (dedup concurrent identical calls)
       res.setHeader("Content-Type", "text/event-stream");

@@ -18,6 +18,7 @@ import {
 } from "./html.js";
 
 import Node from "../../seed/models/node.js";
+import { getExtension } from "../loader.js";
 
 async function resolveVersion(nodeId, version) {
   if (version === "latest" || version === undefined) {
@@ -161,7 +162,7 @@ router.get("/node/:nodeId/:version/transactions", authenticateOptional, async (r
     const wantHtml = "html" in req.query;
 
     // JSON MODE
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!wantHtml || !getExtension("html-rendering")) {
       return sendOk(res, {
         nodeId,
         version: parsedVersion,
@@ -341,7 +342,7 @@ router.get(
       const wantHtml = "html" in req.query;
 
       // JSON MODE
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, result);
       }
 

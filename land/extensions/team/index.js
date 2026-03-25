@@ -8,10 +8,6 @@ import { buildRouter } from "./routes.js";
 export async function init(core) {
   const { User } = core.models;
 
-  // Expose utilities that routes.js needs via core (extension-internal wiring)
-  core._utils = { escapeRegex };
-  core._canopy = { queueCanopyEvent };
-
   // ── Hook: beforeNote (rewrite @mentions to canonical usernames) ────
   core.hooks.register("beforeNote", async (hookData) => {
     if (hookData.contentType === "text" && hookData.content) {
@@ -42,7 +38,7 @@ export async function init(core) {
 
   log.verbose("Team", "Hooks registered (beforeNote, afterNote)");
 
-  const router = buildRouter(core);
+  const router = buildRouter(core, { escapeRegex, queueCanopyEvent });
 
   const { Node, Note } = core.models;
   const { logContribution } = core.contributions;

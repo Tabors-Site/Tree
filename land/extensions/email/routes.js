@@ -178,7 +178,7 @@ router.get("/user/verify/:token", async (req, res) => {
 router.get("/forgot-password", (req, res) => {
   const htmlExt = getExtension("html-rendering");
   const render = htmlExt?.exports?.renderForgotPasswordPage;
-  if (process.env.ENABLE_FRONTEND_HTML !== "true" || !render) {
+  if (!getExtension("html-rendering") || !render) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Not available");
   }
   render(req, res);

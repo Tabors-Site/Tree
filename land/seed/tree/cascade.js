@@ -207,32 +207,82 @@ function todayPartitionName() {
  */
 async function getOrCreatePartition() {
   const today = todayPartitionName();
-  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id children").lean();
+  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
   if (!flowNode) return null;
 
-  // Check if today's partition exists
-  const existing = await Node.findOne({
-    parent: flowNode._id,
-    name: today,
-  }).select("_id metadata").lean();
+  // Atomic upsert: prevents duplicate partitions when concurrent cascade
+  // writes hit the midnight boundary simultaneously.
+  const { v4: uuidv4 } = await import("uuid");
+  const partition = await Node.findOneAndUpdate(
+    { parent: flowNode._id, name: today },
+    {
+      $setOnInsert: {
+        _id: uuidv4(),
+        name: today,
+        parent: flowNode._id,
+        children: [],
+        contributors: [],
+        metadata: { results: {} },
+      },
+    },
+    { upsert: true, new: true, lean: true },
+  );
 
-  if (existing) return existing._id;
-
-  // Create today's partition
-  const partition = new Node({
-    name: today,
-    parent: flowNode._id,
-    metadata: new Map([["results", {}]]),
-  });
-  await partition.save();
-
-  // Add to .flow's children
+  // Ensure .flow's children includes this partition (idempotent)
   await Node.updateOne(
     { _id: flowNode._id },
     { $addToSet: { children: partition._id } },
   );
 
   return partition._id;
+}
+
+/**
+ * Find the result key with the earliest timestamp in a results map.
+ * Used by the circular buffer to drop the truly oldest result,
+ * not just the first Object.keys entry (which is unstable across
+ * MongoDB deserialization boundaries).
+ */
+function findOldestResultKey(results) {
+  let oldestKey = null;
+  let oldestTime = Infinity;
+  for (const [key, entries] of Object.entries(results)) {
+    const arr = Array.isArray(entries) ? entries : [entries];
+    for (const r of arr) {
+      const ts = r?.timestamp ? new Date(r.timestamp).getTime() : Infinity;
+      if (ts < oldestTime) {
+        oldestTime = ts;
+        oldestKey = key;
+      }
+    }
+  }
+  return oldestKey;
+}
+
+/**
+ * Trim a partition's results to the per-day cap.
+ * Runs asynchronously after writes to avoid racing on the count check.
+ */
+async function trimPartitionIfNeeded(partitionId, maxPerDay) {
+  const doc = await Node.findById(partitionId).select("metadata").lean();
+  if (!doc) return;
+  const results = doc.metadata instanceof Map
+    ? doc.metadata.get("results") || {}
+    : doc.metadata?.results || {};
+  const count = Object.keys(results).length;
+  if (count <= maxPerDay) return;
+
+  // Drop oldest until at cap
+  const excess = count - maxPerDay;
+  for (let i = 0; i < excess; i++) {
+    const oldestKey = findOldestResultKey(results);
+    if (!oldestKey) break;
+    delete results[oldestKey];
+    await Node.updateOne(
+      { _id: partitionId },
+      { $unset: { [`metadata.results.${oldestKey}`]: 1 } },
+    );
+  }
 }
 
 /**
@@ -259,46 +309,33 @@ async function writeResult(signalId, result) {
     });
 
     if (!sizeCheck.ok) {
-      // Partition full. Drop oldest results to make room.
+      // Partition full. Drop the result with the earliest timestamp.
       const meta = partition.metadata instanceof Map
         ? partition.metadata.get("results") || {}
         : partition.metadata?.results || {};
-      const keys = Object.keys(meta);
-      if (keys.length > 0) {
-        delete meta[keys[0]]; // drop oldest signal
-        if (partition.metadata instanceof Map) {
-          partition.metadata.set("results", meta);
-        } else {
-          partition.metadata.results = meta;
-        }
-        if (partition.markModified) partition.markModified("metadata");
-        await partition.save();
+      const oldestKey = findOldestResultKey(meta);
+      if (oldestKey) {
+        await Node.updateOne(
+          { _id: partitionId },
+          { $unset: { [`metadata.results.${oldestKey}`]: 1 } },
+        );
       }
     }
 
-    // Check per-day cap
-    const maxPerDay = parseInt(getLandConfigValue("flowMaxResultsPerDay") || "10000", 10);
-    const partitionDoc = await Node.findById(partitionId).select("metadata").lean();
-    const currentResults = partitionDoc?.metadata instanceof Map
-      ? partitionDoc.metadata.get("results") || {}
-      : partitionDoc?.metadata?.results || {};
-    const resultCount = Object.keys(currentResults).length;
-
-    if (resultCount >= maxPerDay) {
-      // Circular buffer: drop oldest signal key
-      const oldest = Object.keys(currentResults)[0];
-      await Node.updateOne(
-        { _id: partitionId },
-        { $unset: { [`metadata.results.${oldest}`]: 1 } },
-      );
-    }
-
-    // Write the result
+    // Write the result atomically. Per-day cap enforced as a soft limit:
+    // write first, then trim excess asynchronously. This avoids the race
+    // where two concurrent writes both see count < max and both write.
     await Node.findByIdAndUpdate(
       partitionId,
       { $push: { [`metadata.results.${signalId}`]: result } },
       { upsert: false },
     );
+
+    // Deferred trim: if over the per-day cap, drop the oldest
+    const maxPerDay = parseInt(getLandConfigValue("flowMaxResultsPerDay") || "10000", 10);
+    trimPartitionIfNeeded(partitionId, maxPerDay).catch((err) => {
+      log.warn("Cascade", `Trim failed for partition ${partitionId}: ${err.message}. Will retry on next write.`);
+    });
   } catch (err) {
     log.error("Cascade", "Failed to write result to .flow:", err.message);
   }

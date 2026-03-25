@@ -1,4 +1,5 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
+import mongoose from "mongoose";
 import Node from "../models/node.js";
 import { logContribution, containsHtml } from "../utils.js";
 import User from "../models/user.js";
@@ -8,6 +9,7 @@ import { isDescendant } from "./treeFetch.js";
 import { hooks } from "../hooks.js";
 import { getLandRootId } from "../landRoot.js";
 import { invalidateAll, invalidateNode } from "./ancestorCache.js";
+import log from "../log.js";
 import { NODE_STATUS, DELETED, CONTENT_TYPE, ERR, ProtocolError } from "../protocol.js";
 
 async function getUserOrThrow(userId) {
@@ -338,10 +340,45 @@ export async function updateParentRelationship(
   }
 
 
-  // Remove from old parent (atomic)
-  if (oldParent) {
-    await Node.findByIdAndUpdate(oldParent._id, { $pull: { children: nodeChildId } });
+  // The three core operations ($pull, $set parent, $addToSet) must be atomic.
+  // Use a MongoDB transaction if available (replica set). Falls back to
+  // sequential ops on standalone MongoDB with a warning.
+  let session = null;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch {
+    // Standalone MongoDB or transactions not available
+    session = null;
+    log.verbose("Tree", "MongoDB transactions not available. Node move runs without atomicity guarantees.");
+  }
 
+  const txOpts = session ? { session } : {};
+
+  try {
+    // Remove from old parent
+    if (oldParent) {
+      await Node.findByIdAndUpdate(oldParent._id, { $pull: { children: nodeChildId } }, txOpts);
+    }
+
+    // Update parent field
+    await Node.findByIdAndUpdate(nodeChildId, { $set: { parent: nodeNewParentId } }, txOpts);
+
+    // Add to new parent
+    await Node.findByIdAndUpdate(nodeNewParentId, { $addToSet: { children: nodeChildId } }, txOpts);
+
+    if (session) await session.commitTransaction();
+  } catch (err) {
+    if (session) {
+      try { await session.abortTransaction(); } catch {}
+    }
+    throw err;
+  } finally {
+    if (session) session.endSession();
+  }
+
+  // Contributions logged outside the transaction (audit trail, not structural)
+  if (oldParent) {
     await logContribution({
       userId,
       nodeId: oldParent._id.toString(),
@@ -349,18 +386,10 @@ export async function updateParentRelationship(
       chatId,
       sessionId,
       action: "updateChild",
-
-      updateChild: {
-        action: "removed",
-        childId: nodeChildId.toString(),
-      },
+      updateChild: { action: "removed", childId: nodeChildId.toString() },
     });
   }
 
-  // Update parent field (atomic)
-  await Node.findByIdAndUpdate(nodeChildId, { $set: { parent: nodeNewParentId } });
-
-  // Log updateParent
   await logContribution({
     userId,
     nodeId: nodeChildId,
@@ -368,15 +397,11 @@ export async function updateParentRelationship(
     chatId,
     sessionId,
     action: "updateParent",
-
     updateParent: {
       oldParentId: oldParentId ? oldParentId.toString() : null,
       newParentId: nodeNewParentId.toString(),
     },
   });
-
-  // Add to new parent (atomic)
-  await Node.findByIdAndUpdate(nodeNewParentId, { $addToSet: { children: nodeChildId } });
 
   await logContribution({
     userId,
@@ -385,11 +410,7 @@ export async function updateParentRelationship(
     chatId,
     sessionId,
     action: "updateChild",
-
-    updateChild: {
-      action: "added",
-      childId: nodeChildId.toString(),
-    },
+    updateChild: { action: "added", childId: nodeChildId.toString() },
   });
 
   invalidateAll(); // Parent relationship changed

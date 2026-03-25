@@ -35,6 +35,13 @@ export async function addContributor(nodeId, contributorId, actorId) {
     throw new Error("Cannot add the owner as a contributor");
   }
 
+  // Cap contributors array to prevent unbounded growth on shared nodes
+  const MAX_CONTRIBUTORS = 500;
+  const fullNode = await Node.findById(nodeId).select("contributors").lean();
+  if (fullNode?.contributors?.length >= MAX_CONTRIBUTORS) {
+    throw new Error(`Node has reached the maximum of ${MAX_CONTRIBUTORS} contributors`);
+  }
+
   await Node.updateOne(
     { _id: nodeId },
     { $addToSet: { contributors: contributorId } },
@@ -166,20 +173,24 @@ export async function transferOwnership(nodeId, newOwnerId, actorId) {
     await assertAdmin(actorId);
   }
 
-  // Step 1: Set new owner + remove new owner from contributors
-  await Node.updateOne(
-    { _id: nodeId },
+  // Atomic transfer: bulkWrite executes both operations in a single
+  // server round-trip. If the process crashes mid-write, MongoDB's
+  // ordered bulkWrite ensures partial state is visible (step 1 done,
+  // step 2 not). Integrity check repairs on next boot.
+  await Node.bulkWrite([
     {
-      $set: { rootOwner: newOwnerId },
-      $pull: { contributors: newOwnerId },
+      updateOne: {
+        filter: { _id: nodeId },
+        update: { $set: { rootOwner: newOwnerId }, $pull: { contributors: newOwnerId } },
+      },
     },
-  );
-  // Step 2: Demote old owner to contributor (separate op: MongoDB
-  // cannot $pull and $addToSet on the same array in one update)
-  await Node.updateOne(
-    { _id: nodeId },
-    { $addToSet: { contributors: oldOwnerId } },
-  );
+    {
+      updateOne: {
+        filter: { _id: nodeId },
+        update: { $addToSet: { contributors: oldOwnerId } },
+      },
+    },
+  ]);
   invalidateNode(nodeId); // rootOwner transferred
   hooks.run("afterOwnershipChange", { nodeId, action: "transferOwnership", targetUserId: newOwnerId, previousOwnerId: oldOwnerId }).catch(() => {});
 }

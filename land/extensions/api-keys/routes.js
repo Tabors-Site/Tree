@@ -20,7 +20,7 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
   }
 
   const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-  if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+  if (!wantHtml || !getExtension("html-rendering")) {
     return createApiKey(req, res);
   }
 
@@ -78,7 +78,7 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     const apiKeys = getUserMeta(user, "apiKeys") || [];
 
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!wantHtml || !getExtension("html-rendering")) {
       return sendOk(res, {
         keys: apiKeys.map((k) => ({
           id: k._id,

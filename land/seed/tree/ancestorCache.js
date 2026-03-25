@@ -282,14 +282,22 @@ export function getCacheStats() {
 }
 
 // ── Periodic cleanup ──
-// Remove entries older than 2x TTL every 4x TTL. Prevents memory leak.
+// Remove entries older than 2x TTL. Self-adjusting: re-schedules with
+// current TTL each time, so runtime config changes take effect.
 
-const _cleanupInterval = setInterval(() => {
+let _cleanupTimer = null;
+
+function scheduleCleanup() {
   const ttl = getTTL();
-  const cutoff = Date.now() - (ttl * 2);
-  for (const [key, entry] of _cache) {
-    if (entry.cachedAt < cutoff) _cache.delete(key);
-  }
-}, getTTL() * 4);
+  _cleanupTimer = setTimeout(() => {
+    const currentTtl = getTTL();
+    const cutoff = Date.now() - (currentTtl * 2);
+    for (const [key, entry] of _cache) {
+      if (entry.cachedAt < cutoff) _cache.delete(key);
+    }
+    scheduleCleanup(); // re-schedule with potentially updated TTL
+  }, ttl * 4);
+  if (_cleanupTimer.unref) _cleanupTimer.unref();
+}
 
-if (_cleanupInterval.unref) _cleanupInterval.unref();
+scheduleCleanup();

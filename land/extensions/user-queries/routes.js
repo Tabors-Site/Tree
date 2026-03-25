@@ -59,7 +59,7 @@ export default function createRouter(core) {
         content: n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
       }));
 
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, { notes, query });
       }
 
@@ -126,7 +126,7 @@ export default function createRouter(core) {
 
       const { contributions = [] } = await getContributionsByUser(userId, limit, req.query.startDate, req.query.endDate);
 
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, { userId, contributions });
       }
 
@@ -166,7 +166,7 @@ export default function createRouter(core) {
 
       const allChats = sessions.flatMap((s) => s.chats);
 
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, { userId, count: allChats.length, sessions });
       }
 

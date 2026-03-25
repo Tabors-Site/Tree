@@ -11,7 +11,11 @@ dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 const mongooseUri = process.env.MONGODB_URI;
 
 mongoose
-  .connect(mongooseUri, { serverSelectionTimeoutMS: 5000 })
+  .connect(mongooseUri, {
+    serverSelectionTimeoutMS: Number(process.env.MONGO_SELECTION_TIMEOUT) || 5000,
+    maxPoolSize: Number(process.env.MONGO_MAX_POOL_SIZE) || 50,
+    minPoolSize: Number(process.env.MONGO_MIN_POOL_SIZE) || 5,
+  })
   .then(() => log.verbose("DB", "MongoDB connected"))
   .catch((err) => {
     log.error("DB", "MongoDB connection failed:", err.message);

@@ -8,12 +8,10 @@ import { getExtension } from "../loader.js";
 
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
-export function buildRouter(core) {
+export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
   const router = express.Router();
   const { User, Node, Note } = core.models;
   const { logContribution } = core.contributions;
-  const { escapeRegex } = core._utils;
-  const { queueCanopyEvent } = core._canopy;
   const ownership = core.ownership;
 
   // ── Invite routes (moved from routes/api/root.js) ─────────────────
@@ -204,7 +202,7 @@ export function buildRouter(core) {
       const invites = await getPendingInvitesForUser(userId);
 
       const wantHtml = "html" in req.query;
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, { invites });
       }
 
@@ -278,7 +276,7 @@ export function buildRouter(core) {
         content: n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
       }));
 
-      if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+      if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, { taggedBy: result.taggedBy, notes });
       }
 

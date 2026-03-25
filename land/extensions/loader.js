@@ -222,12 +222,8 @@ function getDisabledExtensions(configFn) {
 // Validation
 // ---------------------------------------------------------------------------
 
-const AVAILABLE_SERVICES = new Set([
-  "contributions", "auth", "protocol",
-  "session", "chat", "llm", "mcp",
-  "websocket", "orchestrator",
-  "orchestrators", "cascade", "ownership", "tree",
-]);
+// Derived from buildCoreServices() at load time. Set by loadExtensions().
+let AVAILABLE_SERVICES = new Set();
 
 const AVAILABLE_MODELS = new Set([
   "User", "Node", "Contribution", "Note",
@@ -405,6 +401,14 @@ function buildScopedCore(manifest, fullCore) {
     scoped.modes = fullCore.modes;
   }
 
+  // Freeze existing kernel services so extensions can't replace core.hooks,
+  // core.llm, etc. But allow adding new properties (core.energy = {...})
+  // which is the pattern for extension-provided services.
+  for (const key of Object.keys(scoped)) {
+    if (scoped[key] && typeof scoped[key] === "object" && !Array.isArray(scoped[key])) {
+      Object.freeze(scoped[key]);
+    }
+  }
   return scoped;
 }
 
@@ -482,6 +486,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     overrides: opts.overrides || {},
   });
 
+  // Derive available services from what buildCoreServices actually produced.
+  // No hardcoded list. If services.js adds a new service, it's automatically available.
+  AVAILABLE_SERVICES = new Set(Object.keys(coreServices).filter(k => k !== "models"));
+
   // Discover manifests
   const manifests = await discoverManifests();
 
@@ -550,7 +558,21 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           ),
         ]);
       } catch (initErr) {
-        log.error("Extensions", `"${manifest.name}": ${initErr.message}. Skipped.`);
+        let hint = "";
+        // Diagnose common init failures: extension accessing a service it didn't declare
+        if (initErr.message?.includes("Cannot read properties of undefined") ||
+            initErr.message?.includes("is not extensible") ||
+            initErr.message?.includes("Cannot set property")) {
+          const declared = new Set([
+            ...(manifest.needs?.services || []),
+            ...(manifest.optional?.services || []),
+          ]);
+          const missing = [...AVAILABLE_SERVICES].filter(s => !declared.has(s) && coreServices[s]);
+          if (missing.length > 0) {
+            hint = ` Hint: add missing services to manifest needs/optional: ${missing.join(", ")}`;
+          }
+        }
+        log.error("Extensions", `"${manifest.name}": ${initErr.message}.${hint} Skipped.`);
         continue;
       }
 
@@ -767,6 +789,11 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     setExtensionNamesProvider(getLoadedExtensionNames);
   } catch {}
 
+  // All extensions loaded. Freeze the top-level core object.
+  // Extension service registration (core.energy = {...}) happened during init().
+  // No more property additions. core.hooks = "garbage" now fails.
+  if (coreServices) Object.freeze(coreServices);
+
   return loaded;
 }
 
@@ -981,8 +1008,15 @@ export async function uninstallExtension(name) {
     syncDisabledFile(updated);
   }
 
-  // Remove from loaded map if currently loaded
-  loaded.delete(name);
+  // Quiesce: mark extension as unloading so the hook system can skip it,
+  // then wait briefly for in-flight operations (hook handlers, tool calls,
+  // route handlers) to drain before removing from memory.
+  if (loaded.has(name)) {
+    const entry = loaded.get(name);
+    entry._unloading = true;
+    await new Promise(r => setTimeout(r, 2000));
+    loaded.delete(name);
+  }
 
   log.verbose("Extensions", `Uninstalled: ${name}`);
   return { found: true };
@@ -1291,6 +1325,24 @@ export async function disableExtension(name) {
   } catch {
     // DB config not available (boot time), file sync is enough
   }
+
+  // Stop jobs belonging to this extension
+  for (const job of registeredJobs) {
+    if (job.extensionName === name && typeof job.stop === "function") {
+      try {
+        job.stop();
+        log.verbose("Extensions", `Stopped job: ${job.name} (${name})`);
+      } catch (err) {
+        log.warn("Extensions", `Failed to stop job ${job.name}: ${err.message}`);
+      }
+    }
+  }
+
+  // Unregister hooks belonging to this extension
+  try {
+    const { hooks } = await import("../seed/hooks.js");
+    hooks.unregister(name);
+  } catch {}
 
   log.info("Extensions", `Disabled: ${name}`);
 }

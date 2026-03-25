@@ -51,7 +51,8 @@ router.get("/user/:userId/energy", authenticateOptional, async (req, res) => {
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    const htmlExt = getExtension("html-rendering");
+    if (!wantHtml || !htmlExt) {
       return sendOk(res, {
         userId: user._id,
         plan,

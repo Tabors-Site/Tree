@@ -397,10 +397,18 @@ async function deleteNoteAndFile({
     const filePath = path.resolve(uploadsFolder, path.basename(note.content));
 
     if (filePath.startsWith(uploadsFolder) && fs.existsSync(filePath)) {
-      const stats = fs.statSync(filePath);
-      fileSizeKB = Math.ceil(stats.size / 1024);
-      fs.unlinkSync(filePath);
-      fileDeleted = true;
+      try {
+        const stats = fs.statSync(filePath);
+        fileSizeKB = Math.ceil(stats.size / 1024);
+        fs.unlinkSync(filePath);
+        fileDeleted = true;
+      } catch (fsErr) {
+        if (fsErr.code === "ENOENT") {
+          fileDeleted = true; // already gone, treat as success
+        } else {
+          log.warn("Notes", `File delete failed: ${fsErr.message}`);
+        }
+      }
     } else {
       log.warn("Notes", `File not found: ${filePath}`);
     }

@@ -91,6 +91,15 @@ export async function checkIntegrity({ repair = true, silent = false } = {}) {
       // No parent, not a system node, not land root. Orphan.
       report.orphans.push(nodeId);
       report.details.push(`${node.name} (${nodeId}): orphan node (no parent, not system)`);
+
+      if (repair) {
+        // Soft-delete orphaned nodes: set parent to DELETED so they're recoverable
+        // via the deleted-revive extension but don't pollute the active tree.
+        const { DELETED: DEL } = await import("../protocol.js");
+        await Node.updateOne({ _id: nodeId }, { $set: { parent: DEL } });
+        report.repaired++;
+        if (!silent) log.warn("Integrity", `Repaired: soft-deleted orphan ${node.name} (${nodeId})`);
+      }
     }
 
     // 2. Check: every ID in children[] should point to an existing node whose parent points back

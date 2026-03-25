@@ -5,6 +5,7 @@ import { findNodeById } from "../../seed/utils.js";
 import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, getNodeGoals } from "./core.js";
 import { renderValues } from "./html.js";
+import { getExtension } from "../loader.js";
 
 const router = express.Router();
 
@@ -53,7 +54,7 @@ router.get("/node/:nodeId/values", authenticateOptional, async (req, res) => {
     const allKeys = Array.from(new Set([...Object.keys(values), ...Object.keys(goals)])).sort();
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!wantHtml || !getExtension("html-rendering")) {
       return sendOk(res, { nodeId, values, goals });
     }
 

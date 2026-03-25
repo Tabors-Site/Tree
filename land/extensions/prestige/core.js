@@ -81,8 +81,6 @@ async function addPrestigeToNode(node) {
   if (!prestigeData.history) prestigeData.history = [];
   prestigeData.history.push(snapshot);
 
-  node.status = "completed";
-
   const values = meta.values || {};
   const newValues = {};
   for (const key of Object.keys(values)) {
@@ -94,13 +92,14 @@ async function addPrestigeToNode(node) {
   const scheduleData = meta.schedule ? { schedule: new Date(meta.schedule), reeffectTime: meta.reeffectTime || 0 } : null;
   const newSchedule = scheduleData ? calculateNextSchedule(scheduleData) : null;
 
+  // Write all metadata atomically (each setExtMeta is a direct DB $set)
   await setExtMeta(node, "prestige", prestigeData);
   await setExtMeta(node, "version", { current: prestigeData.current });
   await setExtMeta(node, "values", newValues);
   if (newSchedule) await setExtMeta(node, "schedule", newSchedule);
 
+  // Status resets to active after prestige. Single save, single status transition.
   node.status = "active";
-
   await node.save();
 }
 

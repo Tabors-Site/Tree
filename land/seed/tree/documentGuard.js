@@ -39,10 +39,17 @@ function getMaxBytes() {
  * due to type headers, but JSON is a safe conservative estimate).
  * For lean() documents, works directly on the plain object.
  */
+// BSON overhead factor: BSON encoding adds type headers, key length bytes,
+// and 64-bit floats. For Map-heavy documents like nodes with extension metadata,
+// BSON can be 20-30% larger than JSON. Factor of 1.3 prevents the 14MB JSON
+// estimate from becoming 17MB+ BSON, which would exceed MongoDB's 16MB limit.
+const BSON_OVERHEAD_FACTOR = 1.3;
+
 function estimateDocSize(doc) {
   try {
     const obj = doc.toObject ? doc.toObject() : doc;
-    return Buffer.byteLength(JSON.stringify(obj), "utf8");
+    const jsonSize = Buffer.byteLength(JSON.stringify(obj), "utf8");
+    return Math.ceil(jsonSize * BSON_OVERHEAD_FACTOR);
   } catch {
     // Circular reference or serialization failure. Return high estimate.
     return DEFAULT_MAX_BYTES;

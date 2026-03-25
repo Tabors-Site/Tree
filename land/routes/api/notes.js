@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { getLandConfigValue } from "../../seed/landConfig.js";
 import {
   createNote as coreCreateNote,
   getNotes as coreGetNotes,
@@ -60,9 +61,11 @@ const storage = multer.diskStorage({
   },
 });
 
+// Multer fileSize must match maxUploadBytes config. The pre-upload check only
+// validates Content-Length (which can be spoofed). This is the real enforcement.
 const upload = multer({
   storage,
-  limits: { fileSize: 4 * 1024 * 1024 * 1024 },
+  limits: { fileSize: Number(getLandConfigValue("maxUploadBytes")) || 104857600 },
 });
 
 router.get(
@@ -93,9 +96,21 @@ router.get("/node/:nodeId/:version/notes", authenticate, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit: must be a positive number");
     }
 
+    // Date range validation
+    if (startDate && isNaN(Date.parse(startDate))) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid startDate format");
+    }
+    if (endDate && isNaN(Date.parse(endDate))) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid endDate format");
+    }
+    if (startDate && endDate) {
+      const span = Date.parse(endDate) - Date.parse(startDate);
+      if (span < 0) return sendError(res, 400, ERR.INVALID_INPUT, "endDate must be after startDate");
+      if (span > 365 * 24 * 60 * 60 * 1000) return sendError(res, 400, ERR.INVALID_INPUT, "Date range cannot exceed 365 days");
+    }
+
     const result = await coreGetNotes({
       nodeId,
-      version: Number(version),
       limit,
       startDate,
       endDate,

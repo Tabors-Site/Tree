@@ -45,7 +45,7 @@ router.get("/root/:nodeId/book", authenticateOptional, async (req, res) => {
       q.completed === undefined ? true : q.completed === "true";
     const isStatusTrimmed = q.trimmed === "true";
 
-    if (wantHtml && process.env.ENABLE_FRONTEND_HTML === "true") {
+    if (wantHtml && getExtension("html-rendering")) {
       const token = req.query.token || "";
       const title = book?.nodeName ?? book?.nodeId ?? `Node ${nodeId}`;
       const content = hasContent
@@ -148,7 +148,7 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
     const hasContent =
       !!book && (book.notes?.length > 0 || book.children?.length > 0);
 
-    if (wantHtml && process.env.ENABLE_FRONTEND_HTML === "true") {
+    if (wantHtml && getExtension("html-rendering")) {
       const token = req.query.token || "";
       const title = book?.nodeName ?? book?.nodeId ?? `Node ${nodeId}`;
       const content = hasContent
