@@ -11,16 +11,10 @@ export default {
   },
   provides: {
     cli: [
-      {
-        command: "backup",
-        description: "Backup and restore land data",
-        subcommands: [
-          { command: "full", description: "Full backup (all data)", bodyMap: { output: 0 } },
-          { command: "snapshot", description: "Snapshot (structure + metadata only)", bodyMap: { output: 0 } },
-          { command: "restore", description: "Restore from backup file", bodyMap: { file: 0 } },
-          { command: "list", description: "List available backups" },
-        ],
-      },
+      { command: "backup", description: "Full backup (all data)", method: "POST", endpoint: "/backup/full", bodyMap: { output: 0 } },
+      { command: "backup-snapshot", description: "Snapshot (structure + metadata only)", method: "POST", endpoint: "/backup/snapshot", bodyMap: { output: 0 } },
+      { command: "backup-restore", description: "Restore from backup file", method: "POST", endpoint: "/backup/restore", bodyMap: { file: 0 } },
+      { command: "backup-list", description: "List available backups", method: "GET", endpoint: "/backup/list" },
     ],
     env: [],
   },

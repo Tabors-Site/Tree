@@ -36,7 +36,7 @@ const logContribution = async (params) => {
     // Federation
     wasRemote = false,
     homeLand = null,
-    // Everything else goes to extensionData (energyUsed, nodeVersion, inviteAction, etc.)
+    // Everything else goes to extensionData
     ...extensionRest
   } = params;
 

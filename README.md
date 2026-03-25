@@ -212,7 +212,7 @@ land/
 
 cli/              CLI client (treeos command)
 site/             React + Vite frontend (optional)
-directory/        The Horizon (land discovery + extension registry)
+horizon/        The Horizon (land discovery + extension registry)
 ```
 
 ## Protocol

@@ -104,7 +104,7 @@ land/
 └── startup.js         # Boot sequence
 
 site/src/              # React frontend (landing page, docs, about pages)
-directory/             # The Horizon (separate standalone)
+horizon/             # The Horizon (separate standalone)
 cli/                   # CLI package
 ```
 

@@ -761,7 +761,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
       if (req.body.allow) {
         extConfig.blocked = (extConfig.blocked || []).filter(e => !req.body.allow.includes(e));
       }
-      setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
+      await setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
       await node.save();
       clearScopeCache();
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
@@ -818,7 +818,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
       for (const [key, value] of Object.entries(req.body)) {
         config[key] = value;
       }
-      setExtMeta(node, "config", config);
+      await setExtMeta(node, "config", config);
       await node.save();
       clearScopeCache();
 
