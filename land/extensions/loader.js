@@ -24,44 +24,39 @@ function toImportURL(filePath) {
 const EXT_ROUTE_TIMEOUT_MS = 5000;
 
 /**
- * Wrap an extension router mount with a timeout safety net.
- * If the extension router doesn't respond or call next within 5 seconds,
- * the wrapper calls next() automatically so the kernel route can handle it.
- * Protects against hanging extension middleware that shadows kernel routes.
+ * Wrap an extension router with a timeout safety net.
+ * If the extension doesn't respond or call next() within 5 seconds,
+ * the wrapper calls next() so kernel routes can handle the request.
+ *
+ * Uses res "finish" event instead of monkey-patching res.end.
  */
-function wrapExtensionRouter(router, extName) {
+function withExtensionTimeout(router, extName) {
   return (req, res, next) => {
-    let handled = false;
+    let done = false;
 
-    const safeNext = (...args) => {
-      if (!handled) { handled = true; next(...args); }
-    };
+    const cleanup = () => { done = true; clearTimeout(timer); };
 
-    // Detect if the extension sends a response
-    const originalEnd = res.end;
-    res.end = function (...args) {
-      handled = true;
-      return originalEnd.apply(this, args);
-    };
-
-    // Timeout: if extension hangs, fall through to kernel
     const timer = setTimeout(() => {
-      if (!handled) {
+      if (!done && !res.headersSent) {
+        done = true;
         log.warn("Loader", `Extension router "${extName}" timed out on ${req.method} ${req.path}, falling through`);
-        safeNext();
+        next();
       }
     }, EXT_ROUTE_TIMEOUT_MS);
 
-    // Run the extension router
+    // Response finished normally: clear timeout
+    res.once("finish", cleanup);
+
     try {
       router(req, res, (...args) => {
-        clearTimeout(timer);
-        safeNext(...args);
+        // Extension called next(): clear timeout, pass through
+        cleanup();
+        next(...args);
       });
     } catch (err) {
-      clearTimeout(timer);
+      cleanup();
       log.error("Loader", `Extension router "${extName}" threw on ${req.method} ${req.path}:`, err.message);
-      safeNext();
+      next();
     }
   };
 }
@@ -595,13 +590,13 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           for (const rpath of routePaths) {
             routeOwnership.set(rpath, manifest.name);
           }
-          app.use("/api/v1", instance.router);
+          app.use("/api/v1", withExtensionTimeout(instance.router, manifest.name));
         }
       }
 
       // Wire page routes (mounted at / for HTML pages like /login, /register)
       if (instance.pageRouter && typeof instance.pageRouter.use === "function") {
-        app.use("/", instance.pageRouter);
+        app.use("/", withExtensionTimeout(instance.pageRouter, manifest.name));
       }
 
       // Wire MCP tools and register in tool resolver

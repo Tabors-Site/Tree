@@ -329,9 +329,9 @@ export default function getTools() {
           if (restricted && Object.keys(restricted).length) config.restricted = restricted;
 
           if (Object.keys(config).length === 0) {
-            setExtMeta(node, "extensions", null);
+            await setExtMeta(node, "extensions", null);
           } else {
-            setExtMeta(node, "extensions", config);
+            await setExtMeta(node, "extensions", config);
           }
           await node.save();
           clearScopeCache();

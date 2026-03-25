@@ -71,7 +71,7 @@ async function setValueForNode({
   const { energyUsed } = await useEnergy({ userId, action: "editValue" });
 
   values[finalKey] = numericValue;
-  setExtMeta(node, "values", values);
+  await setExtMeta(node, "values", values);
   await node.save();
 
   await logContribution({
@@ -119,7 +119,7 @@ async function setGoalForNode({
   const { energyUsed } = await useEnergy({ userId, action: "editGoal" });
 
   goals[finalKey] = numericGoal;
-  setExtMeta(node, "goals", goals);
+  await setExtMeta(node, "goals", goals);
   await node.save();
 
   await logContribution({

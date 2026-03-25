@@ -24,8 +24,112 @@ const KernelPage = () => {
         </div>
       </section>
 
-      {/* ── SCHEMAS ── */}
+      {/* ── KERNEL COMPARISON ── */}
       <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">This Is the 90s for AI Infrastructure</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            A kernel manages hardware so applications don't have to.
+            The seed manages intelligence so extensions don't have to.
+            Same responsibilities. Different abstraction layer.
+          </p>
+          <div style={{maxWidth: 800, margin: "0 auto"}}>
+            {[
+              {
+                os: "Process Management",
+                osDesc: "Starts and stops programs. Decides which runs, when, for how long. Makes them appear to run at once.",
+                seed: "Session Management",
+                seedDesc: "AI sessions per user per position. Request queue serializes per session. Orchestrator locks prevent collisions. Session TTL, stale cleanup, 10K cap with oldest-first eviction. maxToolIterations caps runtime. Abort signal cancels mid-message.",
+              },
+              {
+                os: "Memory Management",
+                osDesc: "Allocates RAM to programs. Keeps them isolated so one can't crash another. Handles virtual memory and swapping.",
+                seed: "Metadata Isolation",
+                seedDesc: "Each extension gets its own namespace in the metadata Map. 512KB cap per namespace. 14MB document ceiling with pressure alerts at 80%. Atomic $set prevents concurrent writes from clobbering. Circuit breaker auto-disables crashing extensions. .flow partitions evict oldest data when full.",
+              },
+              {
+                os: "File System",
+                osDesc: "Reads and writes files. Organizes folders, permissions, storage structure. Finds files and hands them to apps.",
+                seed: "Tree Hierarchy",
+                seedDesc: "Nodes are folders. Notes are files. parent points up, children[] points down. Ownership chain controls who writes where. Spatial scoping controls what capabilities exist at each position. Ancestor cache makes lookups fast. Integrity check is fsck. Index verification on boot.",
+              },
+              {
+                os: "Device Drivers",
+                osDesc: "Talks to hardware. Apps say 'give me input' without knowing how a keyboard works electrically.",
+                seed: "LLM Resolution",
+                seedDesc: "LLM endpoints are devices. The resolution chain is driver priority: extension slot on tree, tree default, user slot, user default. Extensions call runChat() without knowing which model, which endpoint, which provider. MCP is the device bus. Tools are system calls. The AI says 'create a node' and MCP routes it.",
+              },
+              {
+                os: "Networking",
+                osDesc: "Sends and receives data over networks. Implements TCP/IP and sockets. How apps talk to servers.",
+                seed: "WebSockets and Canopy",
+                seedDesc: "Socket.IO for real-time client connections. Named event types as the packet format. protocol.js is TCP: shared response shapes before anyone starts talking. Canopy is the network between lands. REST, signed messages, peer discovery. Each land is a host. Canopy is the routing layer.",
+              },
+              {
+                os: "Security and Permissions",
+                osDesc: "Controls who can access what. Enforces user permissions and process isolation. Prevents unauthorized access.",
+                seed: "Auth, Ownership, Spatial Scoping",
+                seedDesc: "JWT + extension auth strategies with fallthrough. Ownership walks the parent chain: first rootOwner is the authority. Contributors accumulate. Spatial scoping blocks entire extensions at a position. Six rules: seed never imports extensions, schemas never change, extension data in metadata only. The kernel can't be injected into.",
+              },
+              {
+                os: "System Call Hooking",
+                osDesc: "Intercepts kernel operations. Powerful and dangerous. Used in security tools and rootkits.",
+                seed: "Hook System",
+                seedDesc: "24 lifecycle hooks. before hooks intercept and cancel. after hooks react in parallel. Any extension can hook any operation. beforeToolCall rewrites arguments. beforeNote blocks writes. Orchestrator replacement swaps the entire conversation flow. 5s timeout, circuit breaker, spatial filtering. Power with guardrails.",
+              },
+              {
+                os: "Inter-Process Communication",
+                osDesc: "How programs talk to each other. Shared memory, message passing, signals.",
+                seed: "Hooks, Cascade, Canopy",
+                seedDesc: "Hooks are pub/sub between extensions. Cascade is message passing between nodes. Canopy is message passing between lands. getExtension() is the direct call interface. Socket handler registry lets extensions push to clients. Every signal produces a visible result in .flow.",
+              },
+              {
+                os: "Boot and Initialization",
+                osDesc: "Brings the system up in the right order. Hardware init, driver loading, filesystem mount, service startup.",
+                seed: "Boot Sequence",
+                seedDesc: "DB connect, index verification, system nodes, config load, seed migrations, integrity check, extension discovery, dependency resolution, topological sort, init(), wire routes/tools/hooks/modes, background jobs, Canopy peering, afterBoot hook. Each step depends on the one before it.",
+              },
+            ].map(({ os, osDesc, seed, seedDesc }) => (
+              <div key={os} style={{
+                marginBottom: 32,
+                padding: "28px 32px",
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 12,
+              }}>
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                  marginBottom: 16, flexWrap: "wrap", gap: 8,
+                }}>
+                  <span style={{fontSize: "0.8rem", color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700}}>
+                    {os}
+                  </span>
+                  <span style={{fontSize: "0.8rem", color: "#4ade80", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700}}>
+                    {seed}
+                  </span>
+                </div>
+                <div className="lp-kernel-compare">
+                  <div>
+                    <p style={{fontSize: "0.85rem", color: "rgba(255,255,255,0.3)", lineHeight: 1.7, margin: 0}}>{osDesc}</p>
+                  </div>
+                  <div>
+                    <p style={{fontSize: "0.85rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.7, margin: 0}}>{seedDesc}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="lp-section-sub" style={{marginTop: 24, fontStyle: "italic", color: "rgba(255,255,255,0.35)"}}>
+            Instead of bridging hardware to software, the seed bridges LLMs to structured data.
+            The building blocks for AI operating systems. Extensions add meaning. Lands add presence.
+            Canopy adds reach. Everyone can contribute. Everyone can build their own OS on top.
+            The plumbing is done.
+          </p>
+        </div>
+      </section>
+
+      {/* ── SCHEMAS ── */}
+      <section className="lp-section lp-section-alt">
         <div className="lp-container">
           <h2 className="lp-section-title">Two Schemas</h2>
           <p className="lp-section-sub lp-section-sub-wide">
@@ -431,6 +535,9 @@ const KernelPage = () => {
               ["maxDocumentSizeBytes", "Document size ceiling (2MB headroom under MongoDB 16MB)", "14680064"],
               ["flowMaxResultsPerDay", "Max cascade results per daily partition", "10000"],
               ["allowedFrameDomains", "CSP frame-ancestors domains", "[]"],
+              ["ancestorCacheTTL", "Parent chain cache TTL (ms)", "30000"],
+              ["integrityCheckInterval", "Tree fsck interval (ms, 24h default)", "86400000"],
+              ["seedVersion", "Current seed version (set by migration runner)", "0.1.0"],
             ].map(([key, desc, def]) => (
               <div key={key} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -463,6 +570,12 @@ const KernelPage = () => {
               ["Per-namespace cap", "512KB per extension namespace per node. 20 extensions at max = 10MB, under the ceiling."],
               [".flow partitioning", "Daily partition nodes prevent unbounded growth. Retention deletes entire partitions by date."],
               ["Ownership chain", "rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify."],
+              ["Ancestor cache", "Shared cache for all six resolution chain walks. One DB walk serves all. Snapshot per message for consistency. Auto-invalidation on structural changes."],
+              ["Atomic metadata writes", "setExtMeta uses MongoDB $set per namespace. Concurrent writes to different namespaces never clobber."],
+              ["DB health check", "Before each tool call, check database readyState. If dead, tell the AI to inform the user instead of retrying."],
+              ["Seed versioning", "SEED_VERSION checked at boot. Migrations run in order. Failed migrations retry next boot."],
+              ["Tree integrity check", "On boot and daily: verify parent/children[] consistency. Auto-repair phantom refs and missing entries. Orphans logged for operator."],
+              ["Index verification", "On boot: verify all required indexes exist. Create missing ones with background builds. No collection scans."],
               ["Session cap", "10K max with oldest-first eviction."],
               ["Depth limits", "50 for status cascade, 100 for auth traversal."],
               ["Name validation", "No HTML, no dots, no slashes, max 150 chars."],
@@ -471,8 +584,10 @@ const KernelPage = () => {
               ["Semver constraints", "Dependencies declare version requirements."],
               ["Never block inbound", "Cascade signals always accepted. Always write a result to .flow."],
               ["Cascade depth limit", "cascadeMaxDepth (50). Exceeding writes rejected result. Prevents loops."],
+              ["Extension router timeout", "5s. Hanging extension routes fall through to kernel."],
+              ["Upload guard", "Pre-multer check: master switch, 100MB ceiling, MIME filter. Rejects before file reaches memory."],
               ["Upload cleanup", "Orphaned files deleted hourly with grace period."],
-              ["Graceful shutdown", "SIGTERM closes server, disconnects DB, exits clean."],
+              ["Graceful shutdown", "All interval timers use .unref(). SIGTERM closes server cleanly."],
             ].map(([name, desc]) => (
               <div key={name} style={{
                 display: "flex", gap: 12, padding: "8px 0",

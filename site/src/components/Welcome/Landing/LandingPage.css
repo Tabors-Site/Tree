@@ -595,6 +595,13 @@
   text-align: center;
 }
 
+/* ── KERNEL COMPARISON ── */
+.lp-kernel-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
 /* ── RESPONSIVE ── */
 @media (max-width: 1024px) {
   .lp-cards-3 { grid-template-columns: repeat(2, 1fr); }
@@ -614,8 +621,10 @@
   .lp-card p { font-size: 14px; }
   .lp-step-content p { font-size: 14px; }
   .lp-term-body { font-size: 13px; }
-  .lp-cards-3 { grid-template-columns: 1fr; }
-  .lp-cards-4 { grid-template-columns: 1fr; }
+  /* Force single column on all grid layouts, even with inline style overrides */
+  .lp-cards-3 { grid-template-columns: 1fr !important; }
+  .lp-cards-4 { grid-template-columns: 1fr !important; }
+  .lp-kernel-compare { grid-template-columns: 1fr; }
   .lp-split { grid-template-columns: 1fr; }
   .lp-ext-groups { grid-template-columns: 1fr; }
   .lp-cli-features { grid-template-columns: repeat(2, 1fr); }

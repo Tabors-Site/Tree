@@ -40,7 +40,7 @@ import log from "./log.js";
  * Execution rules:
  *   "before*" hooks: sequential, can modify data, return false or throw to cancel.
  *   "after*" hooks: parallel, fire-and-forget, errors logged but never block.
- *   "enrichContext": sequential (extensions may read each other's additions).
+ *   Exceptions in SEQUENTIAL_OVERRIDES: enrichContext (cumulative context), onCascade (ordered .flow writes).
  *   All other hooks: parallel by default (same as "after" behavior).
  *
  * run() returns { cancelled: false } or { cancelled: true, reason: "..." }.
@@ -62,6 +62,14 @@ import log from "./log.js";
 const HOOK_TIMEOUT_MS = 5000;
 const MAX_HANDLERS_PER_HOOK = 100;
 const CIRCUIT_BREAKER_THRESHOLD = 5; // consecutive failures before auto-disable
+
+// Hooks that run sequentially even though they're not "before" hooks.
+// Default rule: before = sequential (can cancel), after = parallel (independent reactions).
+// Add a hook here only if handlers need each other's output or ordering matters.
+const SEQUENTIAL_OVERRIDES = {
+  enrichContext: true,  // builds cumulative AI context, each handler adds to previous
+  onCascade: true,      // ordered .flow writes, result ordering matters
+};
 const _failureCounts = new Map(); // "hookName:extName" -> count
 
 // Map<hookName, Array<{ extName, handler }>>
@@ -113,9 +121,16 @@ function register(hookName, handler, extName = "unknown") {
   // Auto-create registry entry for new hook names (extensions can define their own)
   if (!registry.has(hookName)) {
     // Typo detection: warn if it looks like a misspelled core hook
-    const CORE_HOOKS = ["beforeNote", "afterNote", "beforeContribution", "afterNodeCreate",
-      "beforeStatusChange", "afterStatusChange", "beforeNodeDelete", "enrichContext",
-      "beforeRegister", "afterRegister"];
+    const CORE_HOOKS = [
+      "beforeNote", "afterNote", "beforeContribution",
+      "beforeNodeCreate", "afterNodeCreate",
+      "beforeStatusChange", "afterStatusChange", "beforeNodeDelete",
+      "enrichContext", "onCascade", "onDocumentPressure",
+      "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
+      "beforeResponse", "beforeRegister", "afterRegister",
+      "afterSessionCreate", "afterSessionEnd", "afterNavigate",
+      "afterMetadataWrite", "afterScopeChange", "afterBoot",
+    ];
     if (!hookName.includes(":")) {
       // Only check non-namespaced hooks (ext hooks use "extName:hookName")
       for (const core of CORE_HOOKS) {
@@ -180,8 +195,8 @@ async function run(hookName, data) {
   const isBefore = hookName.startsWith("before");
 
   // After hooks: run in parallel, fire-and-forget
-  // Exception: enrichContext and onCascade run sequentially (handlers may read/write shared state)
-  if (!isBefore && hookName !== "enrichContext" && hookName !== "onCascade") {
+  // Exception: SEQUENTIAL_OVERRIDES hooks run sequentially (handlers need each other's output)
+  if (!isBefore && !SEQUENTIAL_OVERRIDES[hookName]) {
     await Promise.allSettled(
       handlers
         .filter(({ extName }) => {

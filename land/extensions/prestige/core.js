@@ -79,10 +79,10 @@ async function addPrestigeToNode(node) {
   const scheduleData = meta.schedule ? { schedule: new Date(meta.schedule), reeffectTime: meta.reeffectTime || 0 } : null;
   const newSchedule = scheduleData ? calculateNextSchedule(scheduleData) : null;
 
-  setExtMeta(node, "prestige", prestigeData);
-  setExtMeta(node, "version", { current: prestigeData.current });
-  setExtMeta(node, "values", newValues);
-  if (newSchedule) setExtMeta(node, "schedule", newSchedule);
+  await setExtMeta(node, "prestige", prestigeData);
+  await setExtMeta(node, "version", { current: prestigeData.current });
+  await setExtMeta(node, "values", newValues);
+  if (newSchedule) await setExtMeta(node, "schedule", newSchedule);
 
   node.status = "active";
 

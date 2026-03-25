@@ -49,8 +49,8 @@ async function updateSchedule({
     action: "editSchedule",
   });
 
-  setExtMeta(node, "schedule", formattedDate);
-  setExtMeta(node, "reeffectTime", reeffectTime);
+  await setExtMeta(node, "schedule", formattedDate);
+  await setExtMeta(node, "reeffectTime", reeffectTime);
   await node.save();
 
   const scheduleEdited = { date: formattedDate, reeffectTime };

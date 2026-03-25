@@ -1,0 +1,139 @@
+/**
+ * Index Verification
+ *
+ * The kernel defines the indexes required for its query patterns.
+ * On boot, after database connection and before anything else,
+ * the kernel ensures those indexes exist. If they don't, it creates them.
+ *
+ * The ancestor cache solved depth. Indexes solve scale. Together the kernel
+ * is fast at ten nodes and fast at ten million. Without indexes, the cache
+ * just means you walk fast to a node and then wait forever for the query
+ * at that node to return.
+ *
+ * Mongoose schema-level indexes (in model files) are declared but not guaranteed.
+ * This module verifies them at boot and creates any that are missing.
+ * It also covers indexes that don't map to a single schema field
+ * (compound indexes, metadata path indexes, cross-collection concerns).
+ */
+
+import log from "../log.js";
+import mongoose from "mongoose";
+
+/**
+ * Required kernel indexes. Each entry specifies:
+ *   collection: MongoDB collection name (Mongoose pluralizes model names)
+ *   fields: index key specification
+ *   options: optional index options (unique, sparse, etc.)
+ */
+const REQUIRED_INDEXES = [
+  // Node queries
+  { collection: "nodes", fields: { parent: 1 }, options: {} },
+  { collection: "nodes", fields: { systemRole: 1 }, options: { sparse: true } },
+  { collection: "nodes", fields: { rootOwner: 1 }, options: {} },
+  // .flow partition lookup (child nodes of .flow, queried by name which is a date string)
+  { collection: "nodes", fields: { parent: 1, name: 1 }, options: {} },
+
+  // Note queries (notes loaded by nodeId on every context build and note CRUD)
+  { collection: "notes", fields: { nodeId: 1, createdAt: -1 }, options: {} },
+
+  // Contribution queries (audit trail by node and by user)
+  { collection: "contributions", fields: { nodeId: 1, date: -1 }, options: {} },
+  { collection: "contributions", fields: { userId: 1, date: -1 }, options: {} },
+  { collection: "contributions", fields: { sessionId: 1 }, options: { sparse: true } },
+
+  // User queries (login by username, already unique in schema but verify)
+  { collection: "users", fields: { username: 1 }, options: { unique: true } },
+
+  // AIChat queries (chat history by user, by session, by node)
+  { collection: "aichats", fields: { userId: 1, "startMessage.time": -1 }, options: {} },
+  { collection: "aichats", fields: { sessionId: 1, chainIndex: 1 }, options: {} },
+  { collection: "aichats", fields: { "treeContext.targetNodeId": 1 }, options: { sparse: true } },
+
+  // LLM connection queries (connections by user)
+  { collection: "llmconnections", fields: { userId: 1 }, options: {} },
+];
+
+/**
+ * Ensure all required indexes exist. Creates missing ones.
+ * Call after database connection, before anything else.
+ *
+ * @returns {Promise<{ verified: number, created: number, errors: string[] }>}
+ */
+export async function ensureIndexes() {
+  const report = { verified: 0, created: 0, errors: [] };
+  const db = mongoose.connection.db;
+  if (!db) {
+    report.errors.push("Database not connected");
+    return report;
+  }
+
+  for (const idx of REQUIRED_INDEXES) {
+    try {
+      const collection = db.collection(idx.collection);
+
+      // Check if this index already exists
+      const existing = await collection.indexes();
+      const fieldKeys = Object.keys(idx.fields);
+      const alreadyExists = existing.some(ex => {
+        if (!ex.key) return false;
+        const exKeys = Object.keys(ex.key);
+        if (exKeys.length !== fieldKeys.length) return false;
+        return fieldKeys.every((k, i) => exKeys[i] === k && ex.key[k] === idx.fields[k]);
+      });
+
+      if (alreadyExists) {
+        report.verified++;
+      } else {
+        await collection.createIndex(idx.fields, {
+          ...idx.options,
+          background: true, // non-blocking creation
+        });
+        report.created++;
+        log.verbose("Indexes", `Created index on ${idx.collection}: ${JSON.stringify(idx.fields)}`);
+      }
+    } catch (err) {
+      // Index creation can fail if conflicting index exists with different options
+      const msg = `${idx.collection} ${JSON.stringify(idx.fields)}: ${err.message}`;
+      report.errors.push(msg);
+      log.warn("Indexes", `Index verification failed: ${msg}`);
+    }
+  }
+
+  if (report.created > 0) {
+    log.info("Indexes", `${report.verified} verified, ${report.created} created`);
+  } else {
+    log.verbose("Indexes", `All ${report.verified} indexes verified`);
+  }
+
+  if (report.errors.length > 0) {
+    log.warn("Indexes", `${report.errors.length} index error(s)`);
+  }
+
+  return report;
+}
+
+/**
+ * Ensure extension-declared indexes exist.
+ * Called by the loader during the wire phase.
+ *
+ * @param {Array<{ collection: string, fields: object, options?: object }>} indexes
+ * @param {string} extName - for logging
+ */
+export async function ensureExtensionIndexes(indexes, extName) {
+  if (!indexes || !Array.isArray(indexes) || indexes.length === 0) return;
+  const db = mongoose.connection.db;
+  if (!db) return;
+
+  for (const idx of indexes) {
+    if (!idx.collection || !idx.fields) continue;
+    try {
+      await db.collection(idx.collection).createIndex(idx.fields, {
+        ...(idx.options || {}),
+        background: true,
+      });
+      log.verbose("Indexes", `Extension ${extName}: ensured index on ${idx.collection}`);
+    } catch (err) {
+      log.warn("Indexes", `Extension ${extName} index failed on ${idx.collection}: ${err.message}`);
+    }
+  }
+}

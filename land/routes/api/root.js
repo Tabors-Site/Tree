@@ -434,9 +434,9 @@ router.post("/root/:rootId/extensions", authenticate, async (req, res) => {
     }
 
     if (Object.keys(config).length === 0) {
-      setExtMeta(node, "extensions", null);
+      await setExtMeta(node, "extensions", null);
     } else {
-      setExtMeta(node, "extensions", config);
+      await setExtMeta(node, "extensions", config);
     }
     await node.save();
     clearScopeCache();

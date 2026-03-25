@@ -1,7 +1,7 @@
-import Node from "../models/node.js";
+import { getAncestorChain, resolveTreeAccessFromChain } from "./ancestorCache.js";
 
 /**
- * Resolve tree access by walking the parent chain.
+ * Resolve tree access by walking the parent chain via the ancestor cache.
  *
  * Ownership resolves at the first node where rootOwner is set.
  * rootOwner means "the owner from this point down." The word root
@@ -20,77 +20,14 @@ export async function resolveTreeAccess(nodeId, userId) {
     };
   }
 
-  const startNodeId = nodeId;
-  let isContributor = false;
-
-  let node = await Node.findById(nodeId)
-    .select("parent rootOwner contributors")
-    .lean()
-    .exec();
-
-  if (!node) {
+  const ancestors = await getAncestorChain(nodeId);
+  if (!ancestors) {
     return {
       ok: false,
       error: "NODE_NOT_FOUND",
-      message:
-        "Node not found. Use get-root-nodes-by-user to find a valid node.",
+      message: "Node not found. Use get-root-nodes-by-user to find a valid node.",
     };
   }
 
-  // Check contributors at start node
-  if (userId && node.contributors?.some((id) => id.toString() === userId)) {
-    isContributor = true;
-  }
-
-  let depth = 0;
-  const MAX_DEPTH = 100;
-  while (!node.rootOwner || node.rootOwner === "SYSTEM") {
-    if (++depth > MAX_DEPTH) {
-      return { ok: false, error: "BROKEN_TREE", message: "Tree depth limit exceeded (circular reference?)" };
-    }
-    if (!node.parent) {
-      return {
-        ok: false,
-        error: "INVALID_TREE",
-        message: "Invalid tree: no rootOwner found",
-      };
-    }
-
-    node = await Node.findById(node.parent)
-      .select("parent rootOwner contributors systemRole")
-      .lean()
-      .exec();
-
-    if (!node) {
-      return {
-        ok: false,
-        error: "BROKEN_TREE",
-        message: "Broken tree: parent node missing",
-      };
-    }
-
-    if (node.systemRole) {
-      return {
-        ok: false,
-        error: "INVALID_TREE",
-        message: "Invalid tree: reached system node boundary",
-      };
-    }
-
-    // Accumulate contributors at each node along the walk
-    if (!isContributor && userId && node.contributors?.some((id) => id.toString() === userId)) {
-      isContributor = true;
-    }
-  }
-
-  const isOwner = userId && node.rootOwner?.toString() === userId;
-
-  return {
-    ok: true,
-    rootId: node._id.toString(),
-    isRoot: node._id.toString() === startNodeId,
-    isOwner: !!isOwner,
-    isContributor,
-    canWrite: !!isOwner || isContributor,
-  };
+  return resolveTreeAccessFromChain(String(nodeId), userId, ancestors);
 }

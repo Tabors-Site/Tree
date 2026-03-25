@@ -193,7 +193,7 @@ router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
       if (intent) {
         delete modes[intent];
       }
-      setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : null);
+      await setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : null);
     } else {
       if (!intent || !modeKey) return sendError(res, 400, ERR.INVALID_INPUT, "intent and modeKey required");
 
@@ -205,7 +205,7 @@ router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
 
       const modes = getExtMeta(node, "modes") || {};
       modes[intent] = modeKey;
-      setExtMeta(node, "modes", modes);
+      await setExtMeta(node, "modes", modes);
     }
 
     await node.save();
@@ -272,9 +272,9 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
     if (Array.isArray(blocked)) toolConfig.blocked = blocked.filter(t => typeof t === "string");
 
     if (!toolConfig.allowed?.length && !toolConfig.blocked?.length) {
-      setExtMeta(node, "tools", null);
+      await setExtMeta(node, "tools", null);
     } else {
-      setExtMeta(node, "tools", toolConfig);
+      await setExtMeta(node, "tools", toolConfig);
     }
     await node.save();
 
@@ -359,9 +359,9 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
     }
 
     if (Object.keys(config).length === 0) {
-      setExtMeta(node, "extensions", null);
+      await setExtMeta(node, "extensions", null);
     } else {
-      setExtMeta(node, "extensions", config);
+      await setExtMeta(node, "extensions", config);
     }
     await node.save();
     clearScopeCache();

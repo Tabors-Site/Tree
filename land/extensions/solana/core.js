@@ -25,11 +25,11 @@ function getWallet(node, versionIndex) {
   return meta.wallets?.[versionIndex] || null;
 }
 
-function setWallet(node, versionIndex, walletData) {
+async function setWallet(node, versionIndex, walletData) {
   const meta = getExtMeta(node, "solana");
   if (!meta.wallets) meta.wallets = {};
   meta.wallets[versionIndex] = walletData;
-  setExtMeta(node, "solana", meta);
+  await setExtMeta(node, "solana", meta);
 }
 
 const JUP_BASE = "https://api.jup.ag/ultra/v1";
@@ -157,7 +157,7 @@ export async function syncVersionSOLBalance(node, versionIndex) {
   const { getExtMeta, setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
   const values = getExtMeta(node, "values") || {};
   values._auto__sol = lamports;
-  setExtMeta(node, "values", values);
+  await setExtMeta(node, "values", values);
   await node.save();
 
   return lamports;
@@ -509,7 +509,7 @@ export async function syncVersionTokenHoldings(node, versionIndex) {
     }
   }
 
-  setExtMeta(node, "values", values);
+  await setExtMeta(node, "values", values);
   await node.save();
 
   return {

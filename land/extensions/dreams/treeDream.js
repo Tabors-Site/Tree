@@ -222,7 +222,7 @@ async function runTreeDream(rootNode) {
     if (rootDoc) {
       const dreamMeta = rootDoc.metadata?.get?.("dreams") || rootDoc.metadata?.dreams || {};
       dreamMeta.lastDreamAt = new Date();
-      setExtMeta(rootDoc, "dreams", dreamMeta);
+      await setExtMeta(rootDoc, "dreams", dreamMeta);
       await rootDoc.save();
     }
     log.verbose("Dreams", ` Dream complete for "${rootNode.name}"`);

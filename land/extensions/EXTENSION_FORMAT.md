@@ -670,7 +670,7 @@ Convention:
 - Namespace key MUST match your manifest `name`
 - Data is `Mixed` type, so use plain objects and arrays (no Mongoose subdocument features)
 - The helpers handle `markModified("metadata")` automatically
-- Reading metadata from core code (e.g. treeDataFetching) should use:
+- Reading metadata from core code (e.g. treeData) should use:
   `(node.metadata instanceof Map ? node.metadata.get("name") : node.metadata?.name)`
 
 ### Core code fallback pattern

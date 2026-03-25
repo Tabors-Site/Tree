@@ -60,7 +60,7 @@ function getNodeValues(node) {
 
 // Write node values to metadata and save
 async function setNodeValues(node, values) {
-  setExtMeta(node, "values", values);
+  await setExtMeta(node, "values", values);
   await node.save();
 }
 
@@ -117,7 +117,7 @@ export async function setTransactionPolicy({ rootNodeId, policy, userId }) {
     throw new Error("This transaction policy is already set");
   }
 
-  setExtMeta(root, "transactions", { ...getExtMeta(root, "transactions"), policy });
+  await setExtMeta(root, "transactions", { ...getExtMeta(root, "transactions"), policy });
   await root.save();
 
   return {

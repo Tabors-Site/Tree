@@ -30,8 +30,21 @@ export function onListen() {
 
   const onDbReady = async () => {
     log.info("Land", "MongoDB connected");
+
+    // Index verification (before anything else, after DB connection)
+    const { ensureIndexes } = await import("./seed/tree/indexes.js");
+    await ensureIndexes();
+
     await ensureLandRoot();
     await initLandConfig();
+
+    // Run seed migrations (after config is loaded, before extensions)
+    const { runSeedMigrations } = await import("./seed/migrations/runner.js");
+    await runSeedMigrations();
+
+    // Tree integrity check (before extensions load, after migrations)
+    const { checkIntegrity } = await import("./seed/tree/integrityCheck.js");
+    await checkIntegrity({ repair: true });
 
     // Apply land config to kernel settings
     try {
@@ -125,6 +138,10 @@ export function onListen() {
     startExtensionJobs();
     startUploadCleanup();
     startRetentionJob();
+
+    // Periodic tree integrity check (daily by default)
+    const { startIntegrityJob } = await import("./seed/tree/integrityCheck.js");
+    startIntegrityJob();
 
     // Cascade result cleanup (every 6 hours, cleans expired signals from .flow)
     const { cleanupExpiredResults } = await import("./seed/tree/cascade.js");

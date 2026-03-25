@@ -1,5 +1,7 @@
 import { hooks } from "../hooks.js";
 import { guardMetadataWrite } from "./documentGuard.js";
+import { invalidateNode } from "./ancestorCache.js";
+import Node from "../models/node.js";
 
 /**
  * Helpers for extensions to store per-node data in node.metadata.
@@ -7,15 +9,16 @@ import { guardMetadataWrite } from "./documentGuard.js";
  * Convention: each extension gets a namespace key matching its manifest name.
  * e.g. node.metadata.get('solana'), node.metadata.get('scripts')
  *
- * metadata is Map<Mixed> in Mongoose, so markModified() is required after writes.
- *
  * Spatial extension scoping: if an extension is blocked at a node
  * (via metadata.extensions.blocked), writes are silently skipped.
  * Core namespaces (tools, modes, extensions, cascade) are never blocked.
  *
+ * Concurrency: setExtMeta uses atomic MongoDB $set on the specific namespace key.
+ * Two concurrent writes to different namespaces on the same node do not clobber each other.
+ * Two concurrent writes to the SAME namespace: last write wins (intentional, same as any $set).
+ *
  * Document size guard: every write checks total document size against
- * maxDocumentSizeBytes (default 14MB). Writes that would exceed the
- * limit are rejected with DOCUMENT_SIZE_EXCEEDED.
+ * maxDocumentSizeBytes (default 14MB). Writes exceeding the limit rejected.
  */
 
 const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade"]);
@@ -48,12 +51,15 @@ function isBlockedLocally(node, extName) {
 
 /**
  * Set an extension's metadata namespace on a node (full replace).
+ * Uses atomic MongoDB $set so concurrent writes to different namespaces
+ * on the same node do not clobber each other.
+ *
  * Silently skips if the extension is blocked at this node.
- * Handles the Mongoose Mixed type markModified requirement.
  */
-export function setExtMeta(node, extName, data) {
+export async function setExtMeta(node, extName, data) {
   if (isBlockedLocally(node, extName)) return false;
-  // Size guard: prevent extensions from writing unbounded data
+
+  // Per-namespace size guard
   if (data != null) {
     try {
       const size = Buffer.byteLength(JSON.stringify(data), "utf8");
@@ -62,33 +68,39 @@ export function setExtMeta(node, extName, data) {
       }
     } catch (e) {
       if (e.message.includes("limit")) throw e;
-      // JSON.stringify failed (circular ref, etc.) - allow but warn
     }
   }
+
   // Document size guard: check total document size before writing
   guardMetadataWrite(node, data, { documentType: "node", documentId: node._id });
 
-  if (!node.metadata) {
-    node.metadata = new Map();
-  }
+  const nodeId = node._id;
+
+  // Atomic write: MongoDB handles concurrency. No read-modify-write race.
+  await Node.updateOne(
+    { _id: nodeId },
+    { $set: { [`metadata.${extName}`]: data } },
+  );
+
+  // Update in-memory document if caller still holds it
   if (node.metadata instanceof Map) {
     node.metadata.set(extName, data);
-  } else {
+  } else if (node.metadata) {
     node.metadata[extName] = data;
   }
-  if (node.markModified) node.markModified("metadata");
-  hooks.run("afterMetadataWrite", { nodeId: node._id, extName, data }).catch(() => {});
+
+  invalidateNode(nodeId);
+  hooks.run("afterMetadataWrite", { nodeId, extName, data }).catch(() => {});
   return true;
 }
 
 /**
  * Shallow merge into an extension's metadata namespace.
- * Preserves existing keys not present in the partial update.
+ * Reads current value, merges, then writes atomically.
  * Silently skips if the extension is blocked at this node.
  */
-export function mergeExtMeta(node, extName, partial) {
+export async function mergeExtMeta(node, extName, partial) {
   if (isBlockedLocally(node, extName)) return false;
   const existing = getExtMeta(node, extName);
-  setExtMeta(node, extName, { ...existing, ...partial });
-  return true;
+  return setExtMeta(node, extName, { ...existing, ...partial });
 }

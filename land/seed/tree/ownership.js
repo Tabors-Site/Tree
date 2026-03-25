@@ -13,6 +13,7 @@
 import Node from "../models/node.js";
 import User from "../models/user.js";
 import { resolveTreeAccess } from "./treeAccess.js";
+import { invalidateNode } from "./ancestorCache.js";
 
 /**
  * Add a contributor to a node. Only the resolved owner or admin can do this.
@@ -29,6 +30,7 @@ export async function addContributor(nodeId, contributorId, actorId) {
     { _id: nodeId },
     { $addToSet: { contributors: contributorId } },
   );
+  invalidateNode(nodeId); // contributors[] changed
 }
 
 /**
@@ -49,6 +51,7 @@ export async function removeContributor(nodeId, contributorId, actorId) {
     { _id: nodeId },
     { $pull: { contributors: contributorId } },
   );
+  invalidateNode(nodeId); // contributors[] changed
 }
 
 /**
@@ -81,6 +84,7 @@ export async function setOwner(nodeId, newOwnerId, actorId) {
     { _id: nodeId },
     { $set: { rootOwner: newOwnerId } },
   );
+  invalidateNode(nodeId); // rootOwner changed
 }
 
 /**
@@ -107,6 +111,7 @@ export async function removeOwner(nodeId, actorId) {
     { _id: nodeId },
     { $set: { rootOwner: null } },
   );
+  invalidateNode(nodeId); // rootOwner removed
 }
 
 /**
@@ -128,6 +133,7 @@ export async function transferOwnership(nodeId, newOwnerId, actorId) {
     { _id: nodeId },
     { $set: { rootOwner: newOwnerId } },
   );
+  invalidateNode(nodeId); // rootOwner transferred
 }
 
 // ── Helpers ──

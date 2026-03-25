@@ -6,6 +6,7 @@ import { resolveTreeAccess } from "./treeAccess.js";
 import { isDescendant } from "./treeFetch.js";
 import { hooks } from "../hooks.js";
 import { getLandRootId } from "../landRoot.js";
+import { invalidateAll, invalidateNode } from "./ancestorCache.js";
 
 async function getUserOrThrow(userId) {
   if (!userId) {
@@ -291,6 +292,7 @@ export async function deleteNodeBranch(
       fromParentId: oldParent?.toString() ?? null,
     },
   });
+  invalidateNode(nodeId); // Deleted node and entries containing it
   return nodeToDelete;
 }
 
@@ -394,6 +396,7 @@ export async function updateParentRelationship(
     },
   });
 
+  invalidateAll(); // Parent relationship changed
   return { nodeChild, nodeNewParent };
 }
 export async function editNodeName({
@@ -519,6 +522,7 @@ export async function reviveNodeBranch({
     },
   });
 
+  invalidateAll(); // Tree structure changed
   return {
     revivedNode: deletedNodeId,
     newParent: targetParentId,
@@ -573,6 +577,7 @@ export async function reviveNodeBranchAsRoot({
     },
   });
 
+  invalidateAll(); // Tree structure changed
   return {
     revivedRoot: deletedNodeId,
   };

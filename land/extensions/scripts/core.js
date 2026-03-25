@@ -15,8 +15,8 @@ function getScripts(node) {
   return Array.isArray(meta.list) ? meta.list : [];
 }
 
-function setScripts(node, list) {
-  setExtMeta(node, "scripts", { list });
+async function setScripts(node, list) {
+  await setExtMeta(node, "scripts", { list });
 }
 
 function findScript(scripts, scriptId) {

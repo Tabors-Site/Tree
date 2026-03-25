@@ -10,6 +10,8 @@ import { fileURLToPath } from "url";
 import crypto from "crypto";
 import User from "../models/user.js";
 import Node from "../models/node.js";
+import { snapshotAncestors } from "../tree/ancestorCache.js";
+import { isDbHealthy } from "../dbConfig.js";
 import LlmConnection from "../models/llmConnection.js";
 import {
   getMode,
@@ -561,6 +563,13 @@ export async function processMessage(visitorId, message, ctx) {
 
   const mode = getMode(session.modeKey);
 
+  // Snapshot ancestor chain for consistent resolution within this message.
+  // All resolution chains (scope, tools, mode, LLM, auth) read from this snapshot.
+  const snapshotNodeId = session.currentNodeId || session.rootId || ctx.rootId;
+  if (snapshotNodeId) {
+    session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
+  }
+
   // Resolve LLM client for this user (custom or default, with root override)
   // Auto-resolve per-mode LLM override from the tree's llmAssignments
   const rootId = session.rootId || ctx.rootId;
@@ -947,6 +956,19 @@ export async function processMessage(visitorId, message, ctx) {
 
       log.debug("LLM", `🔧 [${session.modeKey}] ${toolName}`, args);
 
+      // DB health check: if the database is unreachable, tell the AI immediately
+      // so it responds to the user instead of retrying blindly with broken hands.
+      if (!isDbHealthy()) {
+        const dbErr = "Database is currently unavailable. Tell the user the land is experiencing issues and to try again shortly.";
+        session.messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: dbErr }),
+        });
+        toolResults.push({ tool: toolName, args, success: false, error: "db_unavailable" });
+        continue;
+      }
+
       try {
         const result = await client.callTool({
           name: toolName,
@@ -973,10 +995,15 @@ export async function processMessage(visitorId, message, ctx) {
       } catch (err) {
         log.error("LLM", `❌ Tool ${toolName} failed:`, err.message);
 
+        // If DB died during tool execution, tell the AI clearly
+        const errorMsg = !isDbHealthy()
+          ? "Database became unavailable during this operation. Tell the user the land is experiencing issues."
+          : err.message;
+
         session.messages.push({
           role: "tool",
           tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: err.message }),
+          content: JSON.stringify({ error: errorMsg }),
         });
 
         toolResults.push({

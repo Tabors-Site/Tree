@@ -32,18 +32,18 @@ Everything else. Values, schedules, prestige, scripts, dreams, understanding, en
 land/
 ├── seed/              # Kernel: business logic, hooks, registries. ZERO extension imports.
 │   ├── protocol.js    # Response shapes, ERR codes, WS event types, CASCADE statuses
-│   ├── hooks.js       # 8 lifecycle hooks (beforeNote, afterNote, etc.)
+│   ├── hooks.js       # 23 lifecycle hooks (see SEED.md for full list)
 │   ├── orchestratorRegistry.js  # Extensions register conversation orchestrators
 │   ├── services.js    # Core services bundle passed to extensions via init(core)
-│   ├── authenticate.js
+│   ├── auth.js        # User creation, verification, JWT generation
 │   ├── landRoot.js    # Land boot, system nodes
 │   ├── landConfig.js
-│   ├── login.js
-│   ├── llms/          # LLM connection framework, client resolution
+│   ├── version.js     # SEED_VERSION constant, checked at boot for migrations
+│   ├── middleware/     # authenticate, authenticateMCP, securityHeaders, preUploadCheck
 │   └── tree/          # Node CRUD, notes, statuses, contributions, invites, public access
 │       ├── treeManagement.js    # createNode, deleteNode
 │       ├── treeFetch.js         # getContextForAi, navigation, path building
-│       ├── treeDataFetching.js  # getTree, getNodeForAi, getTreeStructure
+│       ├── treeData.js           # getTree, getNodeForAi, getTreeStructure
 │       ├── notes.js             # Note CRUD (fires beforeNote/afterNote hooks)
 │       ├── statuses.js          # Status changes (fires beforeStatusChange/afterStatusChange hooks)
 │       ├── contributions.js     # Audit trail queries
@@ -113,7 +113,7 @@ cli/                   # CLI package
 ### Node
 ```
 _id, name, type, status, dateCreated, llmDefault, visibility,
-children, parent, rootOwner, contributors, isSystem, systemRole, metadata (Map)
+children, parent, rootOwner, contributors, systemRole, metadata (Map)
 ```
 
 ### User
@@ -227,17 +227,34 @@ Extension slot on tree (metadata.llm.slots.X)
 
 ## Hooks (lifecycle events + cascade)
 
+Two rules, no exceptions. Before hooks run sequential because they can cancel. After hooks run parallel because they react independently. Two hooks override this: enrichContext and onCascade are sequential because their handlers build cumulative output. Don't make a hook sequential without articulating why handlers depend on each other's output. If you can't, it's parallel.
+
 | Hook | Type | Purpose |
 |------|------|---------|
+| beforeNodeCreate | before | Gate node creation. Enforce naming, child limits, compliance. |
 | beforeNote | before | Modify note data, tag version |
-| afterNote | after | Flag dirty nodes |
-| beforeContribution | before | Tag nodeVersion in audit log |
+| afterNote | after | React to note create/edit/delete |
+| beforeContribution | before | Modify contribution data. Extensions add to extensionData via hook. |
 | afterNodeCreate | after | Initialize extension data |
 | beforeStatusChange | before | Validate, intercept |
-| afterStatusChange | after | React (clear schedule, etc.) |
+| afterStatusChange | after | React to status changes |
 | beforeNodeDelete | before | Cleanup extension data |
-| enrichContext | enrich | Inject extension data into AI context |
-| onCascade | cascade | Fires on content write at cascade-enabled node. Results written to .flow. |
+| enrichContext | sequential | Inject extension data into AI context |
+| beforeLLMCall | before | Before LLM API call. Cancel if quota exhausted. |
+| afterLLMCall | after | After LLM API call. Token metering, billing, analytics. |
+| beforeToolCall | before | Before MCP tool executes. Modify args, cancel. |
+| afterToolCall | after | After MCP tool executes. React to result or error. |
+| beforeResponse | before | Modify AI response before client receives it |
+| beforeRegister | before | Validate registration. Extensions own email, verification. |
+| afterRegister | after | Initialize user data (share tokens, etc.) |
+| afterSessionCreate | after | Session registered. React to { sessionId, userId, type }. |
+| afterSessionEnd | after | Session ended. React to { sessionId, userId, type }. |
+| afterNavigate | after | Fires when user navigates to a tree root. Extensions track recency. |
+| afterMetadataWrite | after | After setExtMeta succeeds. { nodeId, extName, data }. Zero overhead if no listeners. |
+| afterScopeChange | after | After extension blocking/restriction changes. { nodeId, blocked, restricted, userId } |
+| afterBoot | after | Once after all extensions loaded, config initialized, server listening. |
+| onCascade | sequential | Fires on content write at cascade-enabled node. Results written to .flow. |
+| onDocumentPressure | after | Any document exceeds 80% of maxDocumentSizeBytes. { documentType, documentId, currentSize, projectedSize, maxSize, percent } |
 
 ## Cascade
 

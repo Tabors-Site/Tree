@@ -18,4 +18,13 @@ mongoose
     process.exit(1);
   });
 
+/**
+ * Check if the database connection is healthy.
+ * Returns true if MongoDB is connected and responsive.
+ * The conversation loop checks this before entering the tool loop.
+ */
+export function isDbHealthy() {
+  return mongoose.connection.readyState === 1;
+}
+
 export default mongoose;

@@ -98,7 +98,7 @@ Same pattern. Extensions register. The kernel resolves. Failure falls back to th
 
 **Time injection.** Every AI prompt receives the current time in the land's timezone. Cannot be turned off.
 
-**Extension router timeout.** Extension routes wrapped with 5-second timeout. If an extension route hangs, the kernel route handles the request. Extensions can never permanently shadow kernel routes.
+**Extension router timeout.** Extension routes wrapped with 5-second timeout. If an extension route hangs, the kernel route handles the request. Extensions can never permanently shadow kernel routes. Uses `res.headersSent` check and native `finish` event, not res.end wrapping.
 
 **Auth fallthrough.** `authenticateOptional` tries every registered auth strategy. If none match, request continues anonymously. Extensions register share token, public access, API key strategies. The kernel pipeline handles them all.
 
@@ -112,6 +112,8 @@ Every operation at a node goes through four resolution chains. Position determin
 4. **LLM resolution**: Extension slot on tree, tree default, extension slot on user, user default.
 
 ## Hooks
+
+Two rules, no exceptions. Before hooks run sequential because they can cancel. After hooks run parallel because they react independently. Two hooks override this: enrichContext and onCascade are sequential because their handlers build cumulative output. Don't make a hook sequential without articulating why handlers depend on each other's output. If you can't, it's parallel.
 
 | Hook | Type | Purpose |
 |------|------|---------|
@@ -133,7 +135,7 @@ Every operation at a node goes through four resolution chains. Position determin
 | afterRegister | after | Initialize user data (share tokens, etc.) |
 | afterSessionCreate | after | Session registered. React to { sessionId, userId, type }. |
 | afterSessionEnd | after | Session ended. React to { sessionId, userId, type }. |
-| afterNavigate | sequential | Fires when user navigates to a tree root. Extensions track recency. |
+| afterNavigate | after | Fires when user navigates to a tree root. Extensions track recency. |
 | afterMetadataWrite | after | After setExtMeta succeeds. { nodeId, extName, data }. Zero overhead if no listeners. |
 | afterScopeChange | after | After extension blocking/restriction changes. { nodeId, blocked, restricted, userId } |
 | afterBoot | after | Once after all extensions loaded, config initialized, server listening. |
@@ -223,8 +225,16 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | maxDocumentSizeBytes | 14680064 | Document size ceiling (14MB, 2MB headroom under MongoDB's 16MB) |
 | flowMaxResultsPerDay | 10000 | Max cascade results per daily partition |
 | allowedFrameDomains | [] | Additional domains allowed in CSP frame-ancestors |
+| ancestorCacheTTL | 30000 | Milliseconds before cached ancestor chains expire |
+
+| integrityCheckInterval | 86400000 | Milliseconds between periodic tree integrity checks (24h) |
+| seedVersion | "0.1.0" | Current seed version. Compared at boot to run migrations. |
 
 Extension config (like `htmlEnabled`) lives in .config too, written by extensions on first boot, not by the kernel.
+
+## Seed Versioning
+
+`SEED_VERSION` constant in `seed/version.js`. Checked at boot against `seedVersion` in .config. If they differ, the migration runner executes every migration between the stored version and the current version in order. Migrations live in `seed/migrations/` named by version (0.1.0.js, 0.2.0.js). Each exports a default async function. If a migration fails, the stored version is not updated. Next boot retries from the failure point. Same pattern as extension schema migrations.
 
 ## Safety
 
@@ -240,6 +250,7 @@ Extension config (like `htmlEnabled`) lives in .config too, written by extension
 | Per-namespace cap | 512KB per extension namespace per node via setExtMeta. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |
 | .flow partitioning | Daily partition nodes prevent unbounded growth. flowMaxResultsPerDay cap with circular overwrite. Retention deletes entire partitions by date. |
 | Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. System nodes always rejected. |
+| Ancestor cache | Shared cache for parent chain walks. One walk serves all six resolution chains. Snapshot per message for consistency. moveNode clears entire cache. deleteNode clears entries containing the deleted node. Metadata/ownership changes clear the affected node and descendants. |
 | Session cap | 10K max with oldest-first eviction. |
 | Depth limits | 50 for status cascade. 100 for auth traversal. 50 for cascade propagation. |
 | Cascade payload limit | Oversized signals rejected. |
@@ -248,8 +259,13 @@ Extension config (like `htmlEnabled`) lives in .config too, written by extension
 | Type validation | No HTML, no dots, no slashes, max 50 chars. Free-form string. |
 | Dynamic service injection | Extensions register services on core during init(). Later extensions discover them by declaration, not by kernel naming. |
 | Auth optional | `authenticateOptional` tries all strategies, allows anonymous. Never hangs. |
+| Atomic metadata writes | setExtMeta uses MongoDB $set on the specific namespace key. Concurrent writes to different namespaces on the same node do not clobber. |
+| DB health check | Before each tool call, the conversation loop checks database readyState. If unreachable, the tool result tells the AI "database unavailable" so it responds to the user instead of retrying blindly. |
+| Seed versioning | SEED_VERSION checked at boot against .config. Migrations run in order between stored and current version. Failed migrations block version update. Next boot retries. |
 | Upload guard | Pre-multer check: master switch, size ceiling (100MB default), MIME filter. Rejects before file reaches memory. |
 | Upload cleanup | Orphaned files deleted hourly with grace period. |
+| Tree integrity check | On boot and daily: verify parent/children[] consistency. Auto-repair safe inconsistencies (phantom refs, missing children entries). Log orphans. `core.tree.checkIntegrity()` on demand. |
+| Index verification | On boot: verify all required indexes exist. Create missing ones with background builds. Extensions declare indexes in manifests. No collection scan on any kernel query path. |
 | Graceful shutdown | All interval timers use `.unref()`. SIGTERM closes server cleanly. |
 
 ## What the Seed Does NOT Do
