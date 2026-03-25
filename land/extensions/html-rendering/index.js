@@ -114,7 +114,7 @@ export async function init(core) {
   // Write default htmlEnabled to .config if not set (runtime-configurable)
   const { getLandConfigValue, setLandConfigValue } = await import("../../seed/landConfig.js");
   if (getLandConfigValue("htmlEnabled") === undefined || getLandConfigValue("htmlEnabled") === null) {
-    const envVal = process.env.ENABLE_FRONTEND_HTML === "true" ? "true" : "false";
+    const envVal = process.env.ENABLE_FRONTEND_HTML === "false" ? "false" : "true";
     await setLandConfigValue("htmlEnabled", envVal);
   }
 

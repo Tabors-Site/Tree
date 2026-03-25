@@ -8,7 +8,12 @@ import { getLandConfigValue } from "../../seed/landConfig.js";
 export function isHtmlEnabled() {
   const configVal = getLandConfigValue("htmlEnabled");
   if (configVal !== undefined && configVal !== null && configVal !== "") {
-    return String(configVal) === "true";
+    return String(configVal) !== "false";
   }
-  return process.env.ENABLE_FRONTEND_HTML === "true";
+  // If env var is explicitly set, respect it. Otherwise default to true
+  // (if html-rendering is installed, HTML is wanted).
+  if (process.env.ENABLE_FRONTEND_HTML !== undefined) {
+    return process.env.ENABLE_FRONTEND_HTML === "true";
+  }
+  return true;
 }
