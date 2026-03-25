@@ -14,7 +14,7 @@ import { resolveRootNode } from "./treeFetch.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const uploadsFolder = path.join(__dirname, "../uploads");
+const uploadsFolder = path.join(__dirname, "../../uploads");
 
 if (!fs.existsSync(uploadsFolder)) {
   fs.mkdirSync(uploadsFolder);
@@ -388,9 +388,9 @@ async function deleteNoteAndFile({
 
   // If it's a file, delete it and modify content
   if (note.contentType === "file" && note.content) {
-    const filePath = path.join(uploadsFolder, note.content);
+    const filePath = path.resolve(uploadsFolder, path.basename(note.content));
 
-    if (fs.existsSync(filePath)) {
+    if (filePath.startsWith(uploadsFolder) && fs.existsSync(filePath)) {
       const stats = fs.statSync(filePath);
       fileSizeKB = Math.ceil(stats.size / 1024);
       fs.unlinkSync(filePath);

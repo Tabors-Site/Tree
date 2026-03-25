@@ -210,7 +210,16 @@
       "Bash(grep -r \"land/core\\\\|land/middleware\" /home/tabor/github/Tree/land/seed --include=*.js)",
       "Bash(grep -r getDashboard /home/tabor/github/Tree/site --include=*.jsx --include=*.js)",
       "Bash(grep -E \"^--$|// GET|// POST|router\\\\.get|router\\\\.post|wantHtml\")",
-      "Bash(grep -n \"html\\(\\)\\\\.render\\\\|res\\\\.send.*html\\\\|wantHtml.*=\" /home/tabor/github/Tree/land/routes/api/*.js)"
+      "Bash(grep -n \"html\\(\\)\\\\.render\\\\|res\\\\.send.*html\\\\|wantHtml.*=\" /home/tabor/github/Tree/land/routes/api/*.js)",
+      "Bash(ls land/seed/orchestrators/*.js)",
+      "Bash(wc -l land/seed/ws/*.js land/seed/ws/modes/**/*.js land/seed/orchestrators/*.js)",
+      "Bash(grep -r import.*extension land/seed --include=*.js)",
+      "Bash(grep -n \"\\\\.catch\\\\\\(\\\\\\(\\\\\\) => {}\\\\\\)\" /home/tabor/github/Tree/land/seed/ws/*.js)",
+      "Bash(grep -n \"\\\\.catch\\(\\)\" /home/tabor/github/Tree/land/seed/ws/*.js)",
+      "Bash(/tmp/final_audit.sh:*)",
+      "Bash(chmod +x /tmp/final_audit.sh)",
+      "Bash(/tmp/final_audit.sh)",
+      "Bash(grep -n \"TODO\\\\|FIXME\\\\|XXX\\\\|HACK\\\\|DEPRECATED\" /home/tabor/github/Tree/land/seed/ws/*.js /home/tabor/github/Tree/land/seed/middleware/*.js /home/tabor/github/Tree/land/seed/orchestrators/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

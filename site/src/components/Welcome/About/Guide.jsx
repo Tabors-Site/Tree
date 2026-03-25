@@ -76,7 +76,7 @@ const Guide = () => {
             system-level tools: read config, list users, check peers, view extension status.
             Add the shell extension for server command execution.
             The AI becomes a land operator. Manage extensions, run diagnostics, all
-            through chat. Requires god-tier access.
+            through chat. Requires admin access.
           </P>
           <P>
             <strong>Home</strong> (<code>~</code>): Your personal space. Raw ideas, notes across

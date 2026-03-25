@@ -1,4 +1,5 @@
 import log from "../log.js";
+import { hooks } from "../hooks.js";
 // ws/sessionRegistry.js
 // Tracks all active sessions per user and gates iframe navigation so only
 // the designated "active navigator" session can redirect the user's view.
@@ -48,8 +49,6 @@ const userSessionIndex = new Map();
 // userId → sessionId  (which session controls the iframe)
 const activeNavigator = new Map();
 
-// Change listeners — dashboard subscribes to get notified of session changes
-const changeListeners = new Set();
 
 // sessionId → AbortController  (allows killing in-flight work)
 const sessionAbortControllers = new Map();
@@ -134,7 +133,7 @@ export function registerSession({ sessionId, userId, type, description = "", met
     existing.description = description || existing.description;
     existing.meta = { ...existing.meta, ...meta };
     const isNav = activeNavigator.get(uid) === sessionId;
-    for (const cb of changeListeners) cb(uid);
+  
     return { sessionId, isActiveNavigator: isNav };
   }
 
@@ -171,11 +170,12 @@ export function registerSession({ sessionId, userId, type, description = "", met
   }
 
   const isNav = activeNavigator.get(uid) === sessionId;
-  log.debug("Session", 
+  log.debug("Session",
     `📋 Session registered: ${type} [${sessionId.slice(0, 8)}] for user ${uid} (navigator: ${isNav})`,
   );
 
-  for (const cb of changeListeners) cb(uid);
+
+  hooks.run("afterSessionCreate", { sessionId, userId: uid, type, description, meta, isActiveNavigator: isNav }).catch(() => {});
   return { sessionId, isActiveNavigator: isNav };
 }
 
@@ -211,7 +211,8 @@ export function endSession(sessionId) {
     promoteNavigator(uid);
   }
 
-  for (const cb of changeListeners) cb(uid);
+
+  hooks.run("afterSessionEnd", { sessionId, userId: uid, type: session.type }).catch(() => {});
 }
 
 /**
@@ -228,7 +229,7 @@ export function clearUserSessions(userId) {
   userSessionIndex.delete(uid);
   activeNavigator.delete(uid);
 
-  for (const cb of changeListeners) cb(uid);
+
 }
 
 /**
@@ -247,17 +248,7 @@ export function updateSessionMeta(sessionId, metaUpdates) {
   if (!session) return false;
   session.meta = { ...session.meta, ...metaUpdates };
   session.lastActivity = Date.now();
-  for (const cb of changeListeners) cb(session.userId);
   return true;
-}
-
-/**
- * Subscribe to session changes. Callback receives (userId).
- * Returns an unsubscribe function.
- */
-export function onSessionChange(callback) {
-  changeListeners.add(callback);
-  return () => changeListeners.delete(callback);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -298,7 +289,6 @@ export function setActiveNavigator(userId, sessionId) {
   const session = sessions.get(sessionId);
   if (!session || session.userId !== String(userId)) return false;
   activeNavigator.set(String(userId), sessionId);
-  for (const cb of changeListeners) cb(String(userId));
   return true;
 }
 
@@ -314,7 +304,6 @@ export function getActiveNavigator(userId) {
  */
 export function clearActiveNavigator(userId) {
   activeNavigator.delete(String(userId));
-  for (const cb of changeListeners) cb(String(userId));
 }
 
 // ─────────────────────────────────────────────────────────────────────────

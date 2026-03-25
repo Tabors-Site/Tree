@@ -19,7 +19,7 @@ const linkifyNodeIds = (html, token) =>
   html.replace(
     /Placed on node ([0-9a-f-]{36})/g,
     (_, id) =>
-      `Placed on node <a class="node-link" href="/api/v1/root/${id}${token ? `?token=${token}&html` : "?html"}">${id}</a>`,
+      `Placed on node <a class="node-link" href="/api/v1/root/${id}${token ? `?token=${encodeURIComponent(token)}&html` : "?html"}">${id}</a>`,
   );
 
 const formatContent = (str) => {

@@ -82,11 +82,6 @@ async function updateNodeStatusRecursively(
   chatId = null,
   sessionId = null,
 ) {
-  if (status === "divider") {
-    await Node.findByIdAndUpdate(node._id, { $set: { status } });
-    return;
-  }
-
   const depth = arguments[6] || 0;
   if (depth > MAX_CASCADE_DEPTH) return;
 

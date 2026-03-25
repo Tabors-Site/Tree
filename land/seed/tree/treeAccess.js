@@ -1,4 +1,4 @@
-import Node from "./models/node.js";
+import Node from "../models/node.js";
 
 export async function resolveTreeAccess(nodeId, userId) {
   if (!nodeId) {
@@ -75,5 +75,3 @@ export async function resolveTreeAccess(nodeId, userId) {
     canWrite: isOwner || isContributor,
   };
 }
-
-// resolveHtmlShareAccess moved to extensions/html-rendering/shareAuth.js

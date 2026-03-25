@@ -19,6 +19,29 @@ export function esc(str) {
 // Alias for files that use the longer name
 export { esc as escapeHtml };
 
+// ─── Token sanitization ─────────────────────────
+// Share tokens contain only URL-safe characters.
+// Strip anything else to prevent injection into HTML output.
+const TOKEN_SAFE = /^[A-Za-z0-9\-_.~]+$/;
+
+/**
+ * Sanitize a share token value. Returns the token if safe, empty string otherwise.
+ * Use at every entry point where req.query.token enters the rendering pipeline.
+ */
+export function sanitizeToken(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  return TOKEN_SAFE.test(raw) ? raw : "";
+}
+
+/**
+ * Build a token query string from a sanitized token.
+ * Always safe for href/action attributes.
+ */
+export function safeTokenQS(token) {
+  const safe = sanitizeToken(token);
+  return safe ? `?token=${encodeURIComponent(safe)}&html` : "?html";
+}
+
 // ─── Truncation ──────────────────────────────────
 
 export function truncate(str, len = 200) {

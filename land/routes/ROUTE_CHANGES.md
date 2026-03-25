@@ -66,7 +66,7 @@ Dropped redundant prefixes. All chats are AI chats in TreeOS, all LLM connection
 | `land/core/log.js` | `land/seed/log.js` | |
 | `land/core/landConfig.js` | `land/seed/landConfig.js` | |
 | `land/core/landRoot.js` | `land/seed/landRoot.js` | |
-| `land/core/authenticate.js` | `land/seed/authenticate.js` | |
+| `land/core/authenticate.js` | `land/seed/treeAccess.js` | Renamed: resolveTreeAccess |
 | `land/core/orchestratorRegistry.js` | `land/seed/orchestratorRegistry.js` | |
 | `land/core/tree/*` | `land/seed/tree/*` | All tree utilities (notes, statuses, treeFetch, treeManagement, etc.) |
 | `land/core/llms/*` | `land/seed/llms/*` | LLM connection management |

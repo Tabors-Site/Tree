@@ -1,3 +1,5 @@
+import { hooks } from "../hooks.js";
+
 /**
  * Helpers for extensions to store per-node data in node.metadata.
  *
@@ -67,6 +69,7 @@ export function setExtMeta(node, extName, data) {
     node.metadata[extName] = data;
   }
   if (node.markModified) node.markModified("metadata");
+  hooks.run("afterMetadataWrite", { nodeId: node._id, extName, data }).catch(() => {});
   return true;
 }
 

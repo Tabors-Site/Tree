@@ -32,6 +32,7 @@ const STATIC_ROUTES = [
   "/decentralized",
   "/ai",
   "/kernel",
+  "/cascade",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -39,8 +40,8 @@ const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
 // Per-page metadata for SEO (title, description, og:title, og:description)
 const PAGE_META = {
   "/": {
-    title: "TreeOS . An Operating System for Context",
-    description: "Persistent, structured memory that AI can navigate. Self-hosted, modular, federated. Build living trees of knowledge.",
+    title: "The Seed . An Open Kernel for AI Agents",
+    description: "Two schemas, a conversation loop, and an extension loader. The minimum kernel an AI agent needs to live somewhere persistent. Plant the seed. Build anything on top of it.",
   },
   "/guide": {
     title: "TreeOS Guide . Everything You Need to Know",
@@ -55,8 +56,12 @@ const PAGE_META = {
     description: "Three zones, per-node tools and modes, custom orchestrators. The AI stack from simple configuration to full replacement. Build any AI product on TreeOS.",
   },
   "/kernel": {
-    title: "The Kernel . What Runs When Everything Else Is Stripped Away",
-    description: "Two schemas, five system nodes, 17 config keys, self-healing background jobs, and 14 hardening measures. The part of TreeOS that cannot change.",
+    title: "The Seed . What Runs When Everything Else Is Stripped Away",
+    description: "Two schemas, six system nodes, 28 config keys, 23 lifecycle hooks, five registries, and cascade. The kernel that never changes.",
+  },
+  "/cascade": {
+    title: "Cascade . How the Tree Communicates",
+    description: "The fourth primitive. Seven kernel additions. Two entry points. Six statuses none terminal. .flow as the water table. The nervous system of the tree.",
   },
   "/about": {
     title: "About - TreeOS",
@@ -96,7 +101,7 @@ const PAGE_META = {
   },
   "/about/node-types": {
     title: "Node Types - TreeOS",
-    description: "Semantic labels for nodes. Six core types, custom types, and how trees program their own agents.",
+    description: "Free-form semantic labels for nodes. Extensions suggest types. The kernel validates format. Custom types allowed.",
   },
   "/about/extensions": {
     title: "Extensions - TreeOS",

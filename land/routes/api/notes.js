@@ -3,7 +3,6 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
-import mime from "mime-types";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   createNote as coreCreateNote,
@@ -14,30 +13,12 @@ import {
   getNoteEditHistory,
 } from "../../seed/tree/notes.js";
 
-import getNodeName from "./helpers/getNameById.js";
 import authenticate from "../../seed/middleware/authenticate.js";
 import preUploadCheck from "../../seed/middleware/preUploadCheck.js";
 import { resolveVersion } from "../../seed/tree/treeFetch.js";
-import { getExtension } from "../../extensions/loader.js";
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
-
-function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
-  const fn = getExtension("html-rendering")?.exports?.notFoundPage;
-  if (fn) return fn(req, res, message);
-  return sendError(res, 404, ERR.NOTE_NOT_FOUND, message);
-}
-function html() { return getExtension("html-rendering")?.exports || {}; }
-import { getLandUrl } from "../../canopy/identity.js";
 
 const router = express.Router();
 
-// Resolve "latest" to actual prestige number for any route with :version
 router.param("version", async (req, res, next, val) => {
   try {
     req.params.version = String(await resolveVersion(req.params.nodeId, val));
@@ -47,7 +28,6 @@ router.param("version", async (req, res, next, val) => {
   }
 });
 
-// Middleware for versionless routes: auto-resolve to latest prestige
 async function useLatest(req, res, next) {
   try {
     req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
@@ -79,90 +59,9 @@ const upload = multer({
   limits: { fileSize: 4 * 1024 * 1024 * 1024 },
 });
 
-router.get("/node/:nodeId/:version/notes/editor", readAuth, async (req, res) => {
-  try {
-    if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled");
-    }
-
-    const { nodeId, version } = req.params;
-    const queryString = filterQuery(req);
-    const qs = queryString ? `?${queryString}` : "";
-    const token = req.query.token ?? "";
-    const tokenQS = token ? `?token=${token}&html` : "?html";
-
-    return res.send(
-      html().renderEditorPage({
-        nodeId,
-        version,
-        noteId: null,
-        noteContent: "",
-        qs,
-        tokenQS,
-        originalLength: 0,
-      }),
-    );
-  } catch (err) {
-    log.error("API", "Editor page error:", err);
-    sendError(res, 500, ERR.INTERNAL, err.message);
-  }
-});
-
-// ── EDIT EXISTING NOTE EDITOR (GET) ───────────────────────────────────
-router.get(
-  "/node/:nodeId/:version/notes/:noteId/editor",
-  readAuth,
-  async (req, res) => {
-    try {
-      if (process.env.ENABLE_FRONTEND_HTML !== "true") {
-        return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled");
-      }
-
-      const { nodeId, version, noteId } = req.params;
-      const queryString = filterQuery(req);
-      const qs = queryString ? `?${queryString}` : "";
-      const token = req.query.token ?? "";
-      const tokenQS = token ? `?token=${token}&html` : "?html";
-
-      const Note = (await import("../../seed/models/note.js")).default;
-      const note = await Note.findById(noteId).lean();
-
-      if (!note)
-        return notFoundPage(
-          req,
-          res,
-          "This note doesn't exist or may have been removed.",
-        );
-
-      // File notes can't be edited — redirect to view
-      if (note.contentType !== "text") {
-        return res.redirect(
-          `/api/v1/node/${nodeId}/${version}/notes/${noteId}${tokenQS}`,
-        );
-      }
-
-      return res.send(
-        html().renderEditorPage({
-          nodeId,
-          version,
-          noteId,
-          noteContent: note.content || "",
-          qs,
-          tokenQS,
-          originalLength: (note.content || "").length,
-        }),
-      );
-    } catch (err) {
-      log.error("API", "Editor page error:", err);
-      sendError(res, 500, ERR.INTERNAL, err.message);
-    }
-  },
-);
-
-// ── NOTE EDIT HISTORY ───────────────────────────
 router.get(
   "/node/:nodeId/:version/notes/:noteId/history",
-  readAuth,
+  authenticate,
   async (req, res) => {
     try {
       const { noteId } = req.params;
@@ -175,14 +74,7 @@ router.get(
   },
 );
 
-// Book routes moved to extensions/book
-
-/* ------------------------------------------------------------------
-   GET /:nodeId/:version/notes 
-   - JSON (default)
-   - HTML (when ?html is used)
-------------------------------------------------------------------- */
-router.get("/node/:nodeId/:version/notes", readAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/notes", authenticate, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const rawLimit = req.query.limit;
@@ -209,37 +101,12 @@ router.get("/node/:nodeId/:version/notes", readAuth, async (req, res) => {
         n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
     }));
 
-    // ---------- OPTIONAL HTML MODE ----------
-    const wantHtml = req.query.html !== undefined;
-    if (wantHtml && process.env.ENABLE_FRONTEND_HTML === "true") {
-      const token = req.query.token || "";
-      const nodeName = await getNodeName(nodeId);
-
-      // Check if we have the current user's ID (from cookie/session)
-      const currentUserId = req.userId ? req.userId.toString() : null;
-
-      return res.send(
-        html().renderNotesList({
-          nodeId,
-          version: Number(version),
-          token,
-          nodeName,
-          notes,
-          currentUserId,
-        }),
-      );
-    }
-
-    // ---------- NORMAL OLD JSON MODE ----------
     return sendOk(res, { notes });
   } catch (err) {
     return sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
-/* ------------------------------------------------------------------
-   POST /node/:nodeId/:version/notes
-------------------------------------------------------------------- */
 router.post(
   "/node/:nodeId/:version/notes",
   authenticate,
@@ -263,15 +130,6 @@ router.post(
         file: req.file,
       });
 
-      const wantHtml = "html" in req.query;
-
-      if (wantHtml) {
-        return res.redirect(
-          `/api/v1/node/${nodeId}/${version}/notes?token=${req.query.token ?? ""}&html`,
-        );
-      }
-
-      // otherwise JSON (for API clients)
       return sendOk(res, { note: result.Note });
     } catch (err) {
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -279,7 +137,6 @@ router.post(
   },
 );
 
-// ── UPDATE EXISTING NOTE (editor PUT) ─────────────────────────────────
 router.put(
   "/node/:nodeId/:version/notes/:noteId",
   authenticate,
@@ -325,43 +182,20 @@ router.put(
     }
   },
 );
-const allowedParams = ["token", "html", "error"];
 
-function filterQuery(req) {
-  return Object.entries(req.query)
-    .filter(([key]) => allowedParams.includes(key))
-    .map(([key, val]) => (val === "" ? key : `${key}=${val}`))
-    .join("&");
-}
-/* ------------------------------------------------------------------
-   GET /node/:nodeId/:version/notes/:noteId
-   - JSON (old behavior)
-   - raw file download (old behavior)
-   - HTML viewer (optional)
-------------------------------------------------------------------- */
 router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
   try {
     const { nodeId, version, noteId } = req.params;
-
-    const queryString = filterQuery(req);
-    const qs = queryString ? `?${queryString}` : "";
-
-    // Check if token exists in query
-    const hasToken = req.query.token !== undefined;
 
     const Note = (await import("../../seed/models/note.js")).default;
     const note = await Note.findById(noteId)
       .populate("userId", "username")
       .lean();
 
-    if (!note)
-      return notFoundPage(
-        req,
-        res,
-        "This note doesn't exist or may have been removed.",
-      );
+    if (!note) {
+      return sendError(res, 404, ERR.NOTE_NOT_FOUND, "This note doesn't exist or may have been removed.");
+    }
 
-    // Chain validation: every URL segment must match the actual record
     if (
       note.nodeId !== nodeId ||
       note.version !== version ||
@@ -369,81 +203,9 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
         note.userId?._id?.toString?.() ?? note.userId,
       )
     ) {
-      return notFoundPage(
-        req,
-        res,
-        "This note doesn't exist or may have been removed.",
-      );
+      return sendError(res, 404, ERR.NOTE_NOT_FOUND, "This note doesn't exist or may have been removed.");
     }
 
-    const back = hasToken
-      ? `/api/v1/node/${nodeId}/${version}/notes${qs}`
-      : getLandUrl();
-    const backText = hasToken ? "← Back to Notes" : "← Back to Home";
-    const nodeUrl = `/api/v1/node/${nodeId}${qs}`;
-    const editorUrl = `/api/v1/node/${nodeId}/${version}/notes/${noteId}/editor${qs}`;
-    const editorButton = !hasToken
-      ? ""
-      : `
-    <a
-      href="${editorUrl}"
-      class="copy-btn editor-btn"
-      title="Open editor"
-    >
-      ✏️
-    </a>
-  `;
-
-    const userLink = note.userId
-      ? `<a href="/api/v1/user/${note.userId._id}${qs}">
-     ${html().escapeHtml(note.userId.username ?? "Unknown user")}
-   </a>`
-      : html().escapeHtml(note.username ?? "Unknown user");
-
-    const wantHtml = req.query.html !== undefined;
-    if (wantHtml && process.env.ENABLE_FRONTEND_HTML === "true") {
-      if (note.contentType === "text") {
-        return res.send(
-          html().renderTextNote({
-            back,
-            backText,
-            userLink,
-            editorButton,
-            note,
-          }),
-        );
-      }
-
-      const fileDeleted = note.content === "File was deleted";
-      const fileUrl = fileDeleted ? "" : `/api/v1/uploads/${note.content}`;
-      const filePath = fileDeleted
-        ? ""
-        : path.join(uploadsFolder, note.content);
-      const mimeType = fileDeleted
-        ? ""
-        : mime.lookup(filePath) || "application/octet-stream";
-      const mediaHtml = fileDeleted
-        ? ""
-        : html().renderMedia(fileUrl, mimeType, { lazy: false });
-      const fileName = fileDeleted
-        ? "File was deleted"
-        : path.basename(note.content);
-
-      return res.send(
-        html().renderFileNote({
-          back,
-          backText,
-          userLink,
-          note,
-          fileName,
-          fileUrl,
-          mediaHtml,
-          fileDeleted,
-        }),
-      );
-    }
-
-    // ---------- DATA BEHAVIOR (NO HTML) ----------
     if (note.contentType === "text") {
       return sendOk(res, { text: note.content });
     }
@@ -461,6 +223,7 @@ router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
+
 router.delete(
   "/node/:nodeId/:version/notes/:noteId",
   authenticate,
@@ -480,7 +243,6 @@ router.delete(
   },
 );
 
-// ── TRANSFER NOTE TO ANOTHER NODE ─────────────────────────────────────
 router.post(
   "/node/:nodeId/:version/notes/:noteId/transfer",
   authenticate,
@@ -507,14 +269,7 @@ router.post(
   },
 );
 
-// NEW NOTE EDITOR
-
-// ─────────────────────────────────────────────────────────────────────────
-// Versionless aliases (protocol-compliant, auto-resolve to latest prestige)
-// These forward to the versioned route handlers by injecting the version.
-// ─────────────────────────────────────────────────────────────────────────
-
-router.get("/node/:nodeId/notes", readAuth, useLatest, (req, res, next) => {
+router.get("/node/:nodeId/notes", authenticate, useLatest, (req, res, next) => {
   req.url = `/node/${req.params.nodeId}/${req.params.version}/notes`;
   router.handle(req, res, next);
 });

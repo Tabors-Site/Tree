@@ -101,6 +101,17 @@ export function clearScopeCache() {
   _cache.clear();
 }
 
+/**
+ * Clear cache and fire afterScopeChange hook.
+ * Call this instead of clearScopeCache when you have context about what changed.
+ */
+export function notifyScopeChange({ nodeId, blocked, restricted, userId } = {}) {
+  _cache.clear();
+  import("../hooks.js").then(({ hooks }) => {
+    hooks.run("afterScopeChange", { nodeId, blocked, restricted, userId }).catch(() => {});
+  }).catch(() => {});
+}
+
 // Periodic cache eviction: remove entries older than TTL to prevent memory leak
 const _evictionTimer = setInterval(() => {
   const now = Date.now();

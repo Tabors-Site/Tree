@@ -1,15 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import authenticate from "../../seed/middleware/authenticate.js";
-import { getExtension } from "../loader.js";
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import {
   createUnderstandingRun,
   findOrCreateUnderstandingRun,
@@ -79,7 +71,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
 
 router.get(
   "/root/:nodeId/understandings/run/:runId",
-  readAuth,
+  authenticateOptional,
   async (req, res) => {
     try {
       const { runId, nodeId } = req.params;
@@ -270,7 +262,7 @@ router.get(
 
 router.get(
   "/root/:nodeId/understandings/:understandingNodeId",
-  readAuth,
+  authenticateOptional,
   async (req, res) => {
     try {
       const { understandingNodeId, nodeId } = req.params;
@@ -382,7 +374,7 @@ router.get(
     }
   },
 );
-router.get("/root/:nodeId/understandings", readAuth, async (req, res) => {
+router.get("/root/:nodeId/understandings", authenticateOptional, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const queryString = buildQueryString(req);
@@ -434,7 +426,7 @@ router.get("/root/:nodeId/understandings", readAuth, async (req, res) => {
 
 router.get(
   "/root/:nodeId/understandings/run/:runId/:understandingNodeId",
-  readAuth,
+  authenticateOptional,
   async (req, res) => {
     try {
       const { runId, understandingNodeId, nodeId } = req.params;

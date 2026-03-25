@@ -3,7 +3,7 @@ import LlmConnection from "../models/llmConnection.js";
 import Node from "../models/node.js";
 import { clearUserClientCache } from "../ws/conversation.js";
 import crypto from "crypto";
-import { getLandUrl } from "../../canopy/identity.js";
+import { getLandConfigValue } from "../landConfig.js";
 import dns from "dns/promises";
 import dotenv from "dotenv";
 import path from "path";
@@ -12,7 +12,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, "../../..", ".env") });
+dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";
@@ -50,13 +50,11 @@ const BLOCKED_HOSTS = new Set([
   "metadata.internal",
 ]);
 
-// Auto-block hostnames from configured domains
-// Block this land's own domain and creator domain
-for (const url of [getLandUrl(), process.env.CREATOR_DOMAIN, process.env.ROOT_FRONTEND_DOMAIN, process.env.VITE_TREE_API_URL]) {
-  try {
-    if (url) BLOCKED_HOSTS.add(new URL(url).hostname);
-  } catch (_) {}
-}
+// Auto-block this land's own hostname to prevent SSRF loops
+try {
+  const landUrl = getLandConfigValue("landUrl");
+  if (landUrl) BLOCKED_HOSTS.add(new URL(landUrl).hostname);
+} catch (_) {}
 
 const BLOCKED_IP_PATTERNS = [
   /^127\./, // loopback

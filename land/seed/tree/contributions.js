@@ -19,7 +19,7 @@ async function getContributions({
     throw new Error("Invalid or missing version: must be a number");
   }
 
-  const query = { nodeId, nodeVersion: version };
+  const query = { nodeId, "extensionData.nodeVersion": version };
 
   if (startDate || endDate) {
     query.date = {};

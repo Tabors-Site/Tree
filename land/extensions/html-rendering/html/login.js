@@ -2,7 +2,10 @@ import { getLandUrl } from "../../../canopy/identity.js";
 import { baseStyles } from "./baseStyles.js";
 
 export function renderLoginPage(req, res) {
-  const redirect = req.query.redirect || "";
+  // Only allow relative redirects starting with / to prevent open redirect and JS injection
+  const rawRedirect = req.query.redirect || "";
+  const redirect = (typeof rawRedirect === "string" && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//"))
+    ? rawRedirect.replace(/["\\<>]/g, "") : "";
 
   res.setHeader("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>

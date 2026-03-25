@@ -6,6 +6,20 @@
   min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.lp *, .lp *::before, .lp *::after {
+  box-sizing: border-box;
+}
+
+.lp code {
+  word-break: break-all;
+}
+
+.lp pre, .lp .lp-term-body {
+  overflow-x: auto;
+  max-width: 100%;
 }
 
 .lp-container {

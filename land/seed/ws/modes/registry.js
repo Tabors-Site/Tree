@@ -5,20 +5,7 @@ import log from "../../log.js";
 import { getLandConfigValue } from "../../landConfig.js";
 import { resolveTools } from "../tools.js";
 import { getNodeName } from "../../tree/treeData.js";
-
-// ── HOME sub-modes ──────────────────────────────────────────────────────
-import homeDefault from "./home/default.js";
-import homeReflect from "./home/reflect.js";
-
-// ── TREE sub-modes (core only, extension modes registered via init()) ───
-import treeStructure from "./tree/structure.js";
-import treeEdit from "./tree/edit.js";
-import treeBe from "./tree/be.js";
-import treeNavigate from "./tree/navigate.js";
-import treeGetContext from "./tree/getContext.js";
-import treeEditNotes from "./tree/notes.js";
-import treeRespond from "./tree/respond.js";
-import treeLibrarian from "./tree/librarian.js";
+import { treeFallback, homeFallback } from "./fallback.js";
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -36,29 +23,17 @@ export const BIG_MODES = {
 // Each mode exports: { name, emoji, label, bigMode, toolNames[], buildSystemPrompt(ctx) }
 // ─────────────────────────────────────────────────────────────────────────
 const ALL_MODES = {
-  // HOME (core)
-  "home:default": homeDefault,
-  "home:reflect": homeReflect,
-
-  // TREE (core)
-  "tree:navigate": treeNavigate,
-  "tree:structure": treeStructure,
-  "tree:edit": treeEdit,
-  "tree:be": treeBe,
-  "tree:getContext": treeGetContext,
-  "tree:notes": treeEditNotes,
-  "tree:respond": treeRespond,
-  "tree:librarian": treeLibrarian,
-
-  // Extension modes registered dynamically via registerMode()
+  // Kernel fallbacks (the floor). Extensions register everything else via registerMode().
+  "home:fallback": homeFallback,
+  "tree:fallback": treeFallback,
 };
 
 // ─────────────────────────────────────────────────────────────────────────
 // DEFAULT ENTRY MODES (when entering a big mode)
 // ─────────────────────────────────────────────────────────────────────────
 const DEFAULT_MODES = {
-  [BIG_MODES.HOME]: "home:default",
-  [BIG_MODES.TREE]: "tree:navigate",
+  [BIG_MODES.HOME]: "home:fallback",
+  [BIG_MODES.TREE]: "tree:fallback",
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -91,6 +66,19 @@ export function getSubModes(bigMode) {
  */
 export function getDefaultMode(bigMode) {
   return DEFAULT_MODES[bigMode] || null;
+}
+
+/**
+ * Set the default entry mode for a big mode.
+ * Called by extensions to upgrade from the kernel fallback.
+ */
+export function setDefaultMode(bigMode, modeKey) {
+  if (!ALL_MODES[modeKey]) {
+    log.warn("Modes", `Cannot set default for ${bigMode}: mode "${modeKey}" not registered`);
+    return false;
+  }
+  DEFAULT_MODES[bigMode] = modeKey;
+  return true;
 }
 
 /**

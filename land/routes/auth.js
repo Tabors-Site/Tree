@@ -3,7 +3,7 @@ import {
   register,
   login,
   logout,
-} from "../seed/users.js";
+} from "./users.js";
 import authenticate from "../seed/middleware/authenticate.js";
 import rateLimit from "express-rate-limit";
 import { sendError, ERR } from "../seed/protocol.js";

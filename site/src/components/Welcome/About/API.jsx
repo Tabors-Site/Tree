@@ -1521,7 +1521,7 @@ notification  — Dream notification summary and thought (falls back to placemen
             <span className="section-icon">🏔️</span> Land Management
           </div>
           <div className="section-text">
-            System-level endpoints for land configuration, status, and introspection. Most require god-tier access.
+            System-level endpoints for land configuration, status, and introspection. Most require admin access.
           </div>
 
           <div className="endpoint">
@@ -1569,7 +1569,7 @@ notification  — Dream notification summary and thought (falls back to placemen
               <span className="ep-method get">GET</span>
               <span className="ep-url">/api/v1/land/users</span>
             </div>
-            <div className="ep-desc">List all users on the land with profile types and tree counts. God-tier only. (land-manager extension)</div>
+            <div className="ep-desc">List all users on the land with roles and tree counts. Admin only. (land-manager extension)</div>
           </div>
 
           <div className="endpoint">
@@ -1601,7 +1601,7 @@ notification  — Dream notification summary and thought (falls back to placemen
               <span className="ep-method post">POST</span>
               <span className="ep-url">/api/v1/land/chat</span>
             </div>
-            <div className="ep-desc">{"Chat with the land manager AI. Body: { message }. God-tier only. (land-manager extension)"}</div>
+            <div className="ep-desc">{"Chat with the land manager AI. Body: { message }. Admin only. (land-manager extension)"}</div>
           </div>
         </div>
 

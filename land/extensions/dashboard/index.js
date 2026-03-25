@@ -4,7 +4,7 @@ import { getChats } from "../../seed/ws/chatHistory.js";
 export async function init(core) {
   const Node = core.models.Node;
   const {
-    getSessionsForUser, getActiveNavigator, onSessionChange,
+    getSessionsForUser, getActiveNavigator,
   } = core.session;
 
   // ── Dashboard tree helper ──────────────────────────────────────────
@@ -94,14 +94,16 @@ export async function init(core) {
   });
 
   // ── Subscribe to session changes for real-time dashboard push ─────
-  onSessionChange((userId) => {
+  function pushDashboard({ userId }) {
     const sessions = getSessionsForUser(userId);
     const activeNav = getActiveNavigator(userId);
     core.websocket.emitToUser(userId, "dashboardSessions", {
       sessions,
       activeNavigatorId: activeNav,
     });
-  });
+  }
+  core.hooks.register("afterSessionCreate", pushDashboard, "dashboard");
+  core.hooks.register("afterSessionEnd", pushDashboard, "dashboard");
 
   log.info("Dashboard", "Dashboard socket handlers registered");
 

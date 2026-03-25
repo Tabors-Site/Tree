@@ -7,7 +7,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 const __riDir = path.dirname(fileURLToPath(import.meta.url));
 import multer from "multer";
-import authenticate from "../../seed/middleware/authenticate.js";
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import preUploadCheck from "../../seed/middleware/preUploadCheck.js";
 import { getLandUrl } from "../../canopy/identity.js";
 import { userHasLlm } from "../../seed/ws/conversation.js";
@@ -25,13 +25,6 @@ import {
 } from "./core.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
   const fn = getExtension("html-rendering")?.exports?.notFoundPage;
@@ -101,7 +94,7 @@ router.post(
 );
 
 // GET list raw ideas
-router.get("/user/:userId/raw-ideas", readAuth, async (req, res) => {
+router.get("/user/:userId/raw-ideas", authenticateOptional, async (req, res) => {
   try {
     const userId = req.params.userId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

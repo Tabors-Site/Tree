@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import express from "express";
-import authenticate from "../../seed/middleware/authenticate.js";
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import User from "../../seed/models/user.js";
 import Node from "../../seed/models/node.js";
@@ -17,13 +17,6 @@ import {
   getExtensionManifest,
   getExtension,
 } from "../../extensions/loader.js";
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
 import { listOrchestrators } from "../../seed/orchestratorRegistry.js";
 
 const router = express.Router();
@@ -378,7 +371,7 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
  *   - Trees the user contributes to
  *   - Public trees on this land
  */
-router.get("/land/root", readAuth, async (req, res) => {
+router.get("/land/root", authenticateOptional, async (req, res) => {
   try {
     const landRootCached = await getLandRoot();
     if (!landRootCached) {

@@ -122,35 +122,51 @@ const KernelPage = () => {
             fire their own events for other extensions to listen to. Any hook name is valid.
             No whitelist. Typos are detected and warned, not blocked.
           </p>
-          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr 1fr"}}>
             <div className="lp-card">
-              <h3>Before Hooks</h3>
+              <h3>Before Hooks (7)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
-                Run sequentially before the operation. Can modify data (prestige tags version numbers).
-                Can cancel (return false or throw). If one cancels, the operation stops.
-                5 second timeout per handler.
+                Sequential. Can modify data. Can cancel. 5s timeout per handler.
               </p>
               <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "#555", marginTop: 12, lineHeight: 1.8}}>
                 beforeNote<br/>
+                beforeNodeCreate<br/>
                 beforeStatusChange<br/>
                 beforeNodeDelete<br/>
                 beforeContribution<br/>
-                beforeRegister
+                beforeRegister<br/>
+                beforeResponse
               </div>
             </div>
             <div className="lp-card">
-              <h3>After Hooks + enrichContext</h3>
+              <h3>After Hooks (12)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
-                After hooks run in parallel, fire-and-forget. Errors logged, never block.
-                enrichContext runs sequentially during AI context building so extensions
-                can inject their data (values, schedules, prestige history) for the AI to see.
+                Parallel, fire-and-forget. Errors logged, never block.
               </p>
               <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "#555", marginTop: 12, lineHeight: 1.8}}>
                 afterNote<br/>
-                afterStatusChange<br/>
                 afterNodeCreate<br/>
+                afterStatusChange<br/>
                 afterRegister<br/>
+                afterLLMCall<br/>
+                afterToolCall<br/>
+                afterSessionCreate<br/>
+                afterSessionEnd<br/>
+                afterNavigate<br/>
+                afterMetadataWrite<br/>
+                afterScopeChange<br/>
+                afterBoot
+              </div>
+            </div>
+            <div className="lp-card">
+              <h3>Sequential (4)</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                Return values captured. Handlers can read each other's additions.
+              </p>
+              <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "#555", marginTop: 12, lineHeight: 1.8}}>
                 enrichContext<br/>
+                beforeLLMCall<br/>
+                beforeToolCall<br/>
                 <span style={{color: "#4ade80"}}>onCascade</span>
               </div>
             </div>
@@ -309,6 +325,13 @@ const KernelPage = () => {
             <strong style={{color: "#e5e5e5"}}>Communication</strong>: cascade, .flow, visible results.
             Everything else is emergent behavior from these four interacting.
           </p>
+          <div style={{textAlign: "center", marginTop: 20}}>
+            <a href="/cascade" style={{
+              color: "#60a5fa", fontSize: "0.95rem", fontWeight: 600,
+              textDecoration: "none", borderBottom: "1px solid rgba(96, 165, 250, 0.3)",
+              paddingBottom: 2,
+            }}>Deep dive: Cascade and the Water Cycle</a>
+          </div>
         </div>
       </section>
 
@@ -376,6 +399,8 @@ const KernelPage = () => {
           </p>
           <div style={{maxWidth: 700, margin: "0 auto"}}>
             {[
+              ["LAND_NAME", "Display name", "My Land"],
+              ["landUrl", "Land URL for SSRF protection and headers", "auto"],
               ["llmTimeout", "Seconds per LLM API call", "900"],
               ["llmMaxRetries", "Retry count on 429/500", "3"],
               ["maxToolIterations", "Tool calls per message", "15"],
@@ -390,13 +415,18 @@ const KernelPage = () => {
               ["maxSessions", "Max concurrent sessions", "10000"],
               ["chatRetentionDays", "Auto-delete chats after N days", "90"],
               ["contributionRetentionDays", "Auto-delete contributions after N days", "365"],
-              ["canopyEventRetentionDays", "Auto-delete canopy events after N days", "30"],
+              ["canopyEventRetentionDays", "Canopy event cleanup (canopy owns this)", "30"],
               ["timezone", "Land timezone for AI prompts", "auto"],
               ["disabledExtensions", "Extensions to skip on boot", "[]"],
               ["cascadeEnabled", "Enable cascade signals on content writes", "false"],
               ["resultTTL", "Seconds before cascade results cleaned from .flow", "604800"],
               ["awaitingTimeout", "Seconds before awaiting status becomes failed", "300"],
               ["cascadeMaxDepth", "Max propagation depth per signal", "50"],
+              ["cascadeMaxPayloadBytes", "Max signal payload size", "51200"],
+              ["cascadeRateLimit", "Max signals per node per minute", "60"],
+              ["uploadEnabled", "Master switch for uploads", "true"],
+              ["maxUploadBytes", "Hard ceiling per upload", "104857600"],
+              ["allowedMimeTypes", "MIME prefix filter (null = all)", "null"],
             ].map(([key, desc, def]) => (
               <div key={key} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",

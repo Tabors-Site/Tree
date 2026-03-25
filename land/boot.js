@@ -16,7 +16,7 @@ process.on("uncaughtException", (err) => {
   if (err?.stack) console.error(err.stack);
   process.exit(1);
 });
-const envPath = path.resolve(__dirname, "../.env");
+const envPath = path.resolve(__dirname, ".env");
 
 const REQUIRED_KEYS = ["MONGODB_URI", "JWT_SECRET", "PORT", "LAND_DOMAIN"];
 

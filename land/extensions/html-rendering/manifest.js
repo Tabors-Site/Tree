@@ -16,9 +16,7 @@ export default {
     jobs: false,
     energyActions: {},
     sessionTypes: {},
-    env: [
-      { key: "ENABLE_FRONTEND_HTML", required: false, default: "true", description: "Enable server-rendered HTML and share token auth. Set to false to disable all ?html routes, share token access, and extension HTML renderers. API endpoints still return JSON." },
-    ],
+    env: [],
 
     hooks: {
       fires: [],

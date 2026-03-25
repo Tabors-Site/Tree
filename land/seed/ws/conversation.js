@@ -1,6 +1,7 @@
 // ws/conversation.js
 // Mode-aware conversation state management and chat processing
 import log from "../log.js";
+import { hooks } from "../hooks.js";
 
 import OpenAI from "openai";
 import dotenv from "dotenv";
@@ -18,7 +19,7 @@ import {
   CARRY_MESSAGES,
 } from "./modes/registry.js";
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
-import { getLandUrl } from "../../canopy/identity.js";
+import { getLandConfigValue } from "../landConfig.js";
 
 import { resolveAndValidateHost } from "../llm/connections.js";
 
@@ -198,7 +199,7 @@ async function resolveConnection(connectionId, cacheKey) {
       maxRetries: LLM_MAX_RETRIES,
       timeout: LLM_TIMEOUT_MS,
       defaultHeaders: {
-        "HTTP-Referer": getLandUrl(),
+        "HTTP-Referer": getLandConfigValue("landUrl") || `http://localhost:${process.env.PORT || 3000}`,
         "X-OpenRouter-Title": "TreeOS",
         "X-OpenRouter-Categories": "personal-agent,general-chat",
       },
@@ -590,12 +591,13 @@ export async function processMessage(visitorId, message, ctx) {
   // Ensure MCP client
   let client = mcpClients.get(visitorId);
   if (!client) {
-    client = await connectToMCP(
-      MCP_SERVER_URL,
-      visitorId,
-      ctx.username,
-      ctx.userId,
+    const jwt = (await import("jsonwebtoken")).default;
+    const mcpJwt = jwt.sign(
+      { userId: String(ctx.userId), username: ctx.username, visitorId },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" },
     );
+    client = await connectToMCP(MCP_SERVER_URL, visitorId, mcpJwt);
   }
 
   // Check for conversation length - loop if needed (BE mode)
@@ -718,6 +720,16 @@ export async function processMessage(visitorId, message, ctx) {
     // Pass abort signal to OpenAI if available
     const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
 
+    // beforeLLMCall: extensions can cancel (quota exhausted) or modify params
+    const llmHookData = {
+      userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+      model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
+    };
+    const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
+    if (llmHookResult.cancelled) {
+      throw new Error(llmHookResult.reason || "LLM call rejected");
+    }
+
     try {
       const failoverResult = await callWithFailover(
         (client, model) => client.chat.completions.create({ ...requestParams, model }, requestOpts),
@@ -729,6 +741,14 @@ export async function processMessage(visitorId, message, ctx) {
       if (failoverResult.usedClient !== clientEntry) {
         Object.assign(clientEntry, failoverResult.usedClient);
       }
+
+      // afterLLMCall: token metering, billing, analytics
+      hooks.run("afterLLMCall", {
+        userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+        model: failoverResult.usedClient?.model || MODEL,
+        usage: response?.usage || null,
+        hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
+      }).catch(() => {});
     } catch (apiErr) {
       // Handle models that invent tool names (e.g. "json") instead of using defined tools
       if (apiErr.code === "tool_use_failed" && apiErr.error?.failed_generation) {
@@ -911,6 +931,20 @@ export async function processMessage(visitorId, message, ctx) {
       // Auto-inject userId
       args.userId = ctx.userId;
 
+      // beforeToolCall: extensions can modify args or cancel
+      const hookData = { toolName, args, userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey };
+      const hookResult = await hooks.run("beforeToolCall", hookData);
+      if (hookResult.cancelled) {
+        session.messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: hookResult.reason || "Tool call cancelled" }),
+        });
+        toolResults.push({ tool: toolName, args, success: false, error: "cancelled" });
+        continue;
+      }
+      args = hookData.args;
+
       log.debug("LLM", `🔧 [${session.modeKey}] ${toolName}`, args);
 
       try {
@@ -930,6 +964,12 @@ export async function processMessage(visitorId, message, ctx) {
         });
 
         toolResults.push({ tool: toolName, args, success: true });
+
+        // afterToolCall (success): fire-and-forget
+        hooks.run("afterToolCall", {
+          toolName, args, result: resultText, success: true,
+          userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+        }).catch(() => {});
       } catch (err) {
         log.error("LLM", `❌ Tool ${toolName} failed:`, err.message);
 
@@ -945,6 +985,12 @@ export async function processMessage(visitorId, message, ctx) {
           success: false,
           error: err.message,
         });
+
+        // afterToolCall (failure): fire-and-forget
+        hooks.run("afterToolCall", {
+          toolName, args, error: err.message, success: false,
+          userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+        }).catch(() => {});
       }
     }
 

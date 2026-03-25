@@ -1,19 +1,12 @@
 import log from "../../seed/log.js";
 import express from "express";
-import authenticate from "../../seed/middleware/authenticate.js";
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { getNotifications } from "./core.js";
-import { getExtension } from "../loader.js";
-
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
 
 const router = express.Router();
 
-router.get("/user/:userId/notifications", readAuth, async (req, res) => {
+router.get("/user/:userId/notifications", authenticateOptional, async (req, res) => {
   try {
     const { userId } = req.params;
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);

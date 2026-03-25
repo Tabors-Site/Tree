@@ -10,7 +10,7 @@ import { escapeHtml, renderMedia } from "./utils.js";
 function renderBookNode(node, depth, token, version) {
   const level = Math.min(depth, 5);
   const H = `h${level}`;
-  const qs = token ? `?token=${token}&html` : `?html`;
+  const qs = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   let html = `
     <section class="book-section depth-${depth}" id="toc-${node.nodeId}">
@@ -30,7 +30,7 @@ function renderBookNode(node, depth, token, version) {
 
     if (note.type === "file") {
       const fileUrl = `/api/v1/uploads/${note.content}${
-        token ? `?token=${token}` : ""
+        token ? `?token=${encodeURIComponent(token)}` : ""
       }`;
       const mimeType = mime.lookup(note.content) || "";
 
@@ -2196,7 +2196,7 @@ export function renderBookPage({
     <div class="top-nav-content">
       <div class="nav-buttons">
         <div class="nav-left">
-          <a href="/api/v1/root/${nodeId}?token=${token ?? ""}&html" class="nav-button">
+          <a href="/api/v1/root/${nodeId}?token=${encodeURIComponent(token ?? "")}&html" class="nav-button">
             ← Back to Tree
           </a>
 
@@ -3931,16 +3931,16 @@ input[type="file"].hidden-input {
   <div class="top-nav">
     <div class="top-nav-content">
       <div class="nav-left">
-        <a href="/api/v1/root/${nodeId}?token=${token}&html" class="nav-button">
+        <a href="/api/v1/root/${nodeId}?token=${encodeURIComponent(token)}&html" class="nav-button">
           ← Back to Tree
         </a>
-        <a href="${base}?token=${token}&html" class="nav-button">
+        <a href="${base}?token=${encodeURIComponent(token)}&html" class="nav-button">
           Back to Version
         </a>
       </div>
 
       <div class="page-title">
-        Notes for <a href="${base}?token=${token}&html">${escapeHtml(nodeName)} v${version}</a>
+        Notes for <a href="${base}?token=${encodeURIComponent(token)}&html">${escapeHtml(nodeName)} v${version}</a>
       </div>
     </div>
   </div>
@@ -3962,7 +3962,7 @@ input[type="file"].hidden-input {
           const preview = escapeHtml(rawPreview);
 
           const userLabel = n.userId
-            ? `<a href="/api/v1/user/${n.userId}?token=${token}&html">${escapeHtml(n.username ?? n.userId)}</a>`
+            ? `<a href="/api/v1/user/${n.userId}?token=${encodeURIComponent(token)}&html">${escapeHtml(n.username ?? n.userId)}</a>`
             : escapeHtml(n.username ?? "Unknown user");
 
           return `
@@ -3982,7 +3982,7 @@ input[type="file"].hidden-input {
               }
               ${!isSelf ? `<div class="note-author">${userLabel}</div>` : ""}
               <div class="note-content">
-                <a href="${base}/notes/${n._id}?token=${token}&html">
+                <a href="${base}/notes/${n._id}?token=${encodeURIComponent(token)}&html">
                   ${preview}
                 </a>
               </div>
@@ -4006,7 +4006,7 @@ input[type="file"].hidden-input {
   <div class="input-bar">
     <form
       method="POST"
-      action="/api/v1/node/${nodeId}/${version}/notes?token=${token}&html"
+      action="/api/v1/node/${nodeId}/${version}/notes?token=${encodeURIComponent(token)}&html"
       enctype="multipart/form-data"
       class="input-form"
       id="noteForm"

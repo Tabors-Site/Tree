@@ -9,12 +9,13 @@ import authenticateLite from "../authenticateLite.js";
 import User from "../../../seed/models/user.js";
 import LlmConnection from "../../../seed/models/llmConnection.js";
 import { renderSetup } from "./setupPage.js";
+import { isHtmlEnabled } from "../config.js";
 
 const router = express.Router();
 
 router.get("/setup", authenticateLite, async (req, res) => {
   try {
-    if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!isHtmlEnabled()) {
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled. Use the SPA frontend.");
     }
 

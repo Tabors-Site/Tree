@@ -11,6 +11,10 @@ import {
   dashboardJS,
 } from "./sessionManagerPartial.js";
 import { getLandUrl, getLandIdentity } from "../../../canopy/identity.js";
+import { isHtmlEnabled } from "../config.js";
+import { esc } from "../html/utils.js";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const router = express.Router();
 
@@ -20,7 +24,7 @@ const router = express.Router();
  */
 router.get("/dashboard", authenticateLite, async (req, res) => {
   try {
-    if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!isHtmlEnabled()) {
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled. Use the SPA frontend.");
     }
     if (!req.userId) {
@@ -1511,7 +1515,7 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
             <span class="loading-text">Loading...</span>
           </div>
         </div>
-        <iframe id="viewport" src="${req.query.rootId ? `/api/v1/root/${req.query.rootId}?html&token=${htmlShareToken}&inApp=1` : `/api/v1/user/${req.userId}?html&token=${htmlShareToken}&inApp=1`}" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation"></iframe>
+        <iframe id="viewport" src="${req.query.rootId && UUID_RE.test(req.query.rootId) ? `/api/v1/root/${req.query.rootId}?html&token=${encodeURIComponent(htmlShareToken)}&inApp=1` : `/api/v1/user/${req.userId}?html&token=${encodeURIComponent(htmlShareToken)}&inApp=1`}" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation"></iframe>
       </div>
     </div>
   </div>
@@ -1583,12 +1587,12 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
   <script>
     // Config from server
     const CONFIG = {
-      userId: "${req.userId}",
-      username: "${username || req.userId}",
-      htmlShareToken: "${htmlShareToken}",
-      homeUrl: "/api/v1/user/${req.userId}?html&token=${htmlShareToken}&inApp=1",
-      hasLlm: ${hasLlm},
-      landName: "${landName.replace(/"/g, '\\"')}",
+      userId: "${esc(req.userId)}",
+      username: ${JSON.stringify(username || req.userId || "")},
+      htmlShareToken: "${esc(htmlShareToken)}",
+      homeUrl: "/api/v1/user/${esc(req.userId)}?html&token=${encodeURIComponent(htmlShareToken)}&inApp=1",
+      hasLlm: ${!!hasLlm},
+      landName: ${JSON.stringify(landName || "")},
     };
 
     // Elements

@@ -106,7 +106,7 @@ export function renderRootOverview({
     ? `
 <form
   method="POST"
-  action="/api/v1/root/${nodeId}/invite?token=${token}&html"
+  action="/api/v1/root/${nodeId}/invite?token=${encodeURIComponent(token)}&html"
   style="display:flex; gap:8px; max-width:420px; margin-top:12px;"
 >
   <input
@@ -131,7 +131,7 @@ export function renderRootOverview({
 
 <form
   method="POST"
-  action="/api/v1/root/${nodeId}/transaction-policy?token=${token}&html"
+  action="/api/v1/root/${nodeId}/transaction-policy?token=${encodeURIComponent(token)}&html"
   style="max-width: 420px;"
 >
   <select
@@ -199,7 +199,7 @@ ${u.isRemote ? '<span style="font-size:11px;opacity:0.5;color:white;">(remote)</
         ? `
       <form
         method="POST"
-        action="/api/v1/root/${nodeId}/transfer-owner?token=${token}&html"
+        action="/api/v1/root/${nodeId}/transfer-owner?token=${encodeURIComponent(token)}&html"
 onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
       >
         <input type="hidden" name="userReceiving" value="${u._id}" />
@@ -214,7 +214,7 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
         ? `
       <form
         method="POST"
-        action="/api/v1/root/${nodeId}/remove-user?token=${token}&html"
+        action="/api/v1/root/${nodeId}/remove-user?token=${encodeURIComponent(token)}&html"
         onsubmit="return confirm('${
           isSelf ? "Leave this root?" : `Remove ${escapeHtml(u.username)} from this root?`
         }')"
@@ -240,7 +240,7 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
     ? `
 <form
   method="POST"
-  action="/api/v1/root/${nodeId}/retire?token=${token}&html"
+  action="/api/v1/root/${nodeId}/retire?token=${encodeURIComponent(token)}&html"
   onsubmit="return confirm('This will retire the root. Continue?')"
   style="margin-top:12px;"
 >
@@ -1384,7 +1384,7 @@ ${
   </div>
   <form
     method="POST"
-    action="/api/v1/root/${nodeId}/remove-user?token=${token}&html"
+    action="/api/v1/root/${nodeId}/remove-user?token=${encodeURIComponent(token)}&html"
     onsubmit="return confirm('Are you sure you want to leave this tree?')"
   >
     <input type="hidden" name="userReceiving" value="${userId}" />

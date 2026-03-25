@@ -2,17 +2,10 @@ import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import User from "../../seed/models/user.js";
-import authenticate from "../../seed/middleware/authenticate.js";
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { getConnectionsForUser } from "../../seed/llm/connections.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
 
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
 
@@ -29,7 +22,7 @@ function buildQueryString(req) {
   return filtered ? `?${filtered}` : "";
 }
 
-router.get("/user/:userId/energy", readAuth, async (req, res) => {
+router.get("/user/:userId/energy", authenticateOptional, async (req, res) => {
   try {
     const { userId } = req.params;
     const qs = buildQueryString(req);

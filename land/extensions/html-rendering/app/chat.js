@@ -11,6 +11,7 @@ import authenticateLite from "../authenticateLite.js";
 import { getExtension } from "../../loader.js";
 import { notFoundPage } from "../notFoundPage.js";
 import { getLandUrl, getLandIdentity } from "../../../canopy/identity.js";
+import { isHtmlEnabled } from "../config.js";
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ function escapeHtml(str) {
 
 router.get("/chat", authenticateLite, async (req, res) => {
   try {
-    if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!isHtmlEnabled()) {
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled. Use the SPA frontend.");
     }
     if (!req.userId) {

@@ -19,7 +19,7 @@ import {
   abortSessionsByScope,
   SESSION_TYPES,
 } from "../../seed/ws/sessionRegistry.js";
-import { resolveTreeAccess } from "../../seed/authenticate.js";
+import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 import { nullSocket } from "../../seed/orchestrators/helpers.js";
 
 const BUSY_MESSAGE =

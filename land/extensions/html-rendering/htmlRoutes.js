@@ -21,13 +21,24 @@ import { getConnectionsForUser, getAllRootLlmSlots } from "../../seed/llm/connec
 import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { getExtension } from "../loader.js";
+import { isHtmlEnabled } from "./config.js";
 
 export default function buildHtmlRoutes({ urlAuth, renderers }) {
   const router = express.Router();
 
+  // Sanitize token on every request before it reaches any renderer.
+  // Share tokens are [A-Za-z0-9\-_.~] only. Anything else is stripped.
+  const TOKEN_SAFE = /^[A-Za-z0-9\-_.~]+$/;
+  router.use((req, _res, next) => {
+    if (req.query.token && !TOKEN_SAFE.test(req.query.token)) {
+      req.query.token = "";
+    }
+    next();
+  });
+
   // Gate: only handle if ?html is present and HTML rendering is enabled
   function htmlOnly(req, res, next) {
-    if (!("html" in req.query) || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!("html" in req.query) || !isHtmlEnabled()) {
       return next("route"); // skip to next route (kernel)
     }
     next();
@@ -37,14 +48,14 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
   function buildQS(req, allowed = ["token", "html"]) {
     const filtered = Object.entries(req.query)
       .filter(([k]) => allowed.includes(k))
-      .map(([k, v]) => (v === "" ? k : `${k}=${v}`))
+      .map(([k, v]) => (v === "" ? k : `${k}=${encodeURIComponent(v)}`))
       .join("&");
     return filtered ? `?${filtered}` : "";
   }
 
   function tokenQS(req) {
     const token = req.query.token ?? "";
-    return token ? `?token=${token}&html` : "?html";
+    return token ? `?token=${encodeURIComponent(token)}&html` : "?html";
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -142,7 +153,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
   // ═══════════════════════════════════════════════════════════════════
 
   router.get("/user/reset-password/:token", async (req, res) => {
-    if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!isHtmlEnabled()) {
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "HTML rendering disabled");
     }
     try {
@@ -159,7 +170,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
   });
 
   router.post("/user/reset-password/:token", async (req, res) => {
-    if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!isHtmlEnabled()) {
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "HTML rendering disabled");
     }
     try {
@@ -286,7 +297,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
       const allChats = sessions.flatMap(s => s.chats);
       const nodePath = await buildPathString(nodeId);
       const token = req.query.token || "";
-      const tQS = token ? `?token=${token}&html` : "?html";
+      const tQS = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
 
       return res.send(renderers.renderNodeChats({
         nodeId,
@@ -299,6 +310,312 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
       }));
     } catch (err) {
       log.error("HTML", "Node chats render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ROOT OVERVIEW
+  // ═══════════════════════════════════════════════════════════════════
+
+  router.get("/root/:nodeId", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { nodeId } = req.params;
+      const queryString = buildQS(req, ["token", "html", "trimmed", "active", "completed", "startDate", "endDate", "month", "year"]);
+
+      const allData = await getTreeStructure(nodeId, {
+        active: req.query.active !== "false",
+        trimmed: req.query.trimmed === "true",
+        completed: req.query.completed !== "false",
+      });
+
+      const rootMeta = await Node.findById(nodeId)
+        .populate("rootOwner", "username _id isAdmin metadata")
+        .populate("contributors", "username _id isRemote homeLand")
+        .select("rootOwner contributors metadata llmDefault visibility")
+        .lean().exec();
+      const rootNode = await Node.findById(nodeId).select("parent rootOwner").lean();
+      const isDeleted = rootNode.parent === "deleted";
+      const isRoot = !!rootNode.rootOwner;
+      const isPublicAccess = !!req.isPublicAccess;
+      const isOwner = rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();
+      const queryAvailable = isPublicAccess
+        ? !!((rootMeta?.llmDefault && rootMeta.llmDefault !== "none") || req.canopyVisitor)
+        : false;
+
+      const currentUserId = req.userId ? req.userId.toString() : null;
+      const token = req.query.token ?? "";
+
+      let deferredItems = [];
+      if (!isPublicAccess && mongoose.models.ShortMemory) {
+        deferredItems = await mongoose.models.ShortMemory.find({
+          rootId: nodeId, status: { $in: ["pending", "escalated"] },
+        }).sort({ createdAt: -1 }).lean();
+      }
+
+      let ownerConnections = [];
+      if (!isPublicAccess && isOwner && rootMeta?.rootOwner) {
+        ownerConnections = await getConnectionsForUser(rootMeta.rootOwner._id.toString());
+      }
+
+      return res.send(renderers.renderRootOverview({
+        allData, rootMeta, ancestors: allData.ancestors || [],
+        isOwner, isDeleted, isRoot, isPublicAccess, queryAvailable,
+        currentUserId, queryString, nodeId, userId: req.userId,
+        token, deferredItems, ownerConnections,
+      }));
+    } catch (err) {
+      log.error("HTML", "Root overview render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // QUERY PAGE
+  // ═══════════════════════════════════════════════════════════════════
+
+  router.get("/root/:rootId/query", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { rootId } = req.params;
+      const root = await Node.findById(rootId)
+        .select("name rootOwner visibility llmDefault metadata contributors")
+        .populate("rootOwner", "username").lean();
+      if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
+
+      const isAuthenticated = !!req.userId;
+      const isOwner = isAuthenticated && String(root.rootOwner?._id) === String(req.userId);
+      const isContributor = isAuthenticated && (root.contributors || []).map(String).includes(String(req.userId));
+      if (root.visibility !== "public" && !isOwner && !isContributor) {
+        return sendError(res, 403, ERR.FORBIDDEN, "This tree is not public.");
+      }
+
+      const treeHasLlm = !!(root.llmDefault && root.llmDefault !== "none");
+      return res.send(renderers.renderQueryPage({
+        treeName: root.name || "Untitled",
+        ownerUsername: root.rootOwner?.username || "unknown",
+        rootId, queryAvailable: treeHasLlm || isOwner || isContributor,
+        isAuthenticated,
+      }));
+    } catch (err) {
+      log.error("HTML", "Query page render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // GATEWAY
+  // ═══════════════════════════════════════════════════════════════════
+
+  router.get("/root/:rootId/gateway", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { rootId } = req.params;
+      const root = await Node.findById(rootId).select("name rootOwner contributors").lean();
+      if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
+      if (String(root.rootOwner) !== String(req.userId)) {
+        return sendError(res, 403, ERR.FORBIDDEN, "Owner only");
+      }
+
+      let channels = [];
+      try {
+        const gw = getExtension("gateway");
+        if (gw?.exports?.getChannelsForRoot) channels = await gw.exports.getChannelsForRoot(rootId);
+      } catch {}
+
+      return res.send(renderers.renderGateway({
+        rootId, rootName: root.name, queryString: buildQS(req), channels,
+      }));
+    } catch (err) {
+      log.error("HTML", "Gateway render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CALENDAR
+  // ═══════════════════════════════════════════════════════════════════
+
+  router.get("/root/:rootId/calendar", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { rootId } = req.params;
+      const now = new Date();
+      const month = Math.max(1, Math.min(12, Number(req.query.month) || (now.getMonth() + 1)));
+      const year = Math.max(2000, Math.min(2100, Number(req.query.year) || now.getFullYear()));
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+
+      let calendar = [];
+      try {
+        const schedules = getExtension("schedules");
+        if (schedules?.exports?.getCalendar) {
+          calendar = await schedules.exports.getCalendar({ rootNodeId: rootId, startDate, endDate });
+        }
+      } catch {}
+
+      const byDay = {};
+      for (const item of calendar) {
+        const day = new Date(item.scheduledDate).toISOString().split("T")[0];
+        (byDay[day] = byDay[day] || []).push(item);
+      }
+
+      return res.send(renderers.renderCalendar({
+        rootId, queryString: buildQS(req), month, year, byDay,
+      }));
+    } catch (err) {
+      log.error("HTML", "Calendar render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // VALUES
+  // ═══════════════════════════════════════════════════════════════════
+
+  router.get("/root/:nodeId/values", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { nodeId } = req.params;
+      let result = { flat: [], tree: {} };
+      try {
+        const values = getExtension("values");
+        if (values?.exports?.getGlobalValuesTreeAndFlat) {
+          result = await values.exports.getGlobalValuesTreeAndFlat(nodeId);
+        }
+      } catch {}
+
+      return res.send(renderers.renderValuesPage({
+        nodeId, queryString: buildQS(req), result,
+      }));
+    } catch (err) {
+      log.error("HTML", "Values page render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ROOT CHATS
+  // ═══════════════════════════════════════════════════════════════════
+
+  router.get("/root/:rootId/chats", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { rootId } = req.params;
+      const root = await Node.findById(rootId).select("name rootOwner").lean();
+      if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
+
+      const sessionLimit = Math.min(Number(req.query.limit) || 3, 10);
+      const { sessions } = await getNodeChats({
+        nodeId: rootId, sessionLimit,
+        sessionId: req.query.sessionId || null,
+        startDate: req.query.startDate || null,
+        endDate: req.query.endDate || null,
+        includeChildren: true,
+      });
+
+      const allChats = sessions.flatMap(s => s.chats);
+      const token = req.query.token || "";
+      const tQS = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
+
+      return res.send(renderers.renderRootChats({
+        rootId, rootName: root.name, sessions, allChats, token, tokenQS: tQS,
+      }));
+    } catch (err) {
+      log.error("HTML", "Root chats render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // NOTES
+  // ═══════════════════════════════════════════════════════════════════
+
+  router.get("/node/:nodeId/:version/notes/editor", urlAuth, async (req, res, next) => {
+    if (!isHtmlEnabled()) return next("route");
+    try {
+      const { nodeId, version } = req.params;
+      const qs = buildQS(req);
+      const tqs = tokenQS(req);
+      return res.send(renderers.renderEditorPage({
+        nodeId, version, noteId: null, noteContent: "", qs, tokenQS: tqs, originalLength: 0,
+      }));
+    } catch (err) {
+      log.error("HTML", "Editor page error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  router.get("/node/:nodeId/:version/notes/:noteId/editor", urlAuth, async (req, res, next) => {
+    if (!isHtmlEnabled()) return next("route");
+    try {
+      const { nodeId, version, noteId } = req.params;
+      const qs = buildQS(req);
+      const tqs = tokenQS(req);
+      const Note = (await import("../../seed/models/note.js")).default;
+      const note = await Note.findById(noteId).lean();
+      if (!note) return renderers.notFoundPage?.(req, res, "This note doesn't exist or may have been removed.") || sendError(res, 404, ERR.NOTE_NOT_FOUND, "Note not found");
+      if (note.contentType !== "text") return res.redirect(`/api/v1/node/${nodeId}/${version}/notes/${noteId}${tqs}`);
+      return res.send(renderers.renderEditorPage({
+        nodeId, version, noteId, noteContent: note.content || "", qs, tokenQS: tqs, originalLength: (note.content || "").length,
+      }));
+    } catch (err) {
+      log.error("HTML", "Editor page error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  router.get("/node/:nodeId/:version/notes", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { nodeId, version } = req.params;
+      const Note = (await import("../../seed/models/note.js")).default;
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const query = { nodeId, version: Number(version) };
+      if (req.query.startDate) query.date = { ...query.date, $gte: new Date(req.query.startDate) };
+      if (req.query.endDate) query.date = { ...query.date, $lte: new Date(req.query.endDate) };
+
+      const notes = await Note.find(query)
+        .populate("userId", "username")
+        .sort({ date: -1 }).limit(limit).lean();
+
+      const nodeName = await getNodeName(nodeId);
+      const token = req.query.token || "";
+      return res.send(renderers.renderNotesList({
+        nodeId, version: Number(version), token, nodeName,
+        notes, currentUserId: req.userId,
+      }));
+    } catch (err) {
+      log.error("HTML", "Notes list render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  router.get("/node/:nodeId/:version/notes/:noteId", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { nodeId, version, noteId } = req.params;
+      const Note = (await import("../../seed/models/note.js")).default;
+      const note = await Note.findById(noteId).populate("userId", "username").lean();
+      if (!note) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Note not found");
+
+      const qs = buildQS(req);
+      const back = `/api/v1/node/${nodeId}/${version}/notes${qs}`;
+      const backText = "Back to notes";
+      const safeUsername = renderers.escapeHtml?.(note.userId?.username || "Unknown") || (note.userId?.username || "Unknown");
+      const userLink = `<a href="/api/v1/user/${note.userId?._id || ""}${qs}">${safeUsername}</a>`;
+
+      if (note.contentType === "text") {
+        return res.send(renderers.renderTextNote({ back, backText, userLink, editorButton: true, note }));
+      }
+
+      // File note
+      const filePath = note.content;
+      const fs = await import("fs");
+      const path = await import("path");
+      const fileName = path.default.basename(filePath || "");
+      const fileUrl = `/api/v1/uploads/${fileName}`;
+      const fileDeleted = filePath ? !fs.default.existsSync(filePath) : true;
+      const mime = (await import("mime-types")).default;
+      const mimeType = mime.lookup(fileName) || "application/octet-stream";
+      const mediaHtml = renderers.renderMedia?.(fileUrl, mimeType, { lazy: false }) || "";
+
+      return res.send(renderers.renderFileNote({ back, backText, userLink, note, fileName, fileUrl, mediaHtml, fileDeleted }));
+    } catch (err) {
+      log.error("HTML", "Note detail render error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });

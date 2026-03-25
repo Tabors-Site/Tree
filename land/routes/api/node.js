@@ -3,16 +3,8 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 
-import { getExtension } from "../../extensions/loader.js";
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
 import { createNode, editNodeName } from "../../seed/tree/treeManagement.js";
-import { editNodeType } from "../../seed/tree/nodeTypes.js";
+import { editNodeType } from "../../seed/tree/treeManagement.js";
 import {
   updateParentRelationship,
   deleteNodeBranch,
@@ -21,11 +13,8 @@ import {
 import { editStatus } from "../../seed/tree/statuses.js";
 
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
-import { resolveVersion, buildPathString } from "../../seed/tree/treeFetch.js";
+import { resolveVersion } from "../../seed/tree/treeFetch.js";
 import { getNodeChats } from "../../seed/ws/chatHistory.js";
-
-function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
 
@@ -49,27 +38,13 @@ async function useLatest(req, res, next) {
   }
 }
 
-import getNodeName from "./helpers/getNameById.js";
-
-// Allowed query params for HTML mode
-const allowedParams = ["token", "html", "error"];
-
-// Utility: keep only allowed query params
-function filterQuery(req) {
-  return Object.entries(req.query)
-    .filter(([key]) => allowedParams.includes(key))
-    .map(([key, val]) => (val === "" ? key : `${key}=${val}`))
-    .join("&");
-}
-
 // ─────────────────────────────────────────────────────────────────────────
 // GET /node/:nodeId/chats
 // AI chat history for a specific node (or its entire subtree)
 // ─────────────────────────────────────────────────────────────────────────
-router.get("/node/:nodeId/chats", readAuth, async (req, res) => {
+router.get("/node/:nodeId/chats", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
     const rawLimit = req.query.limit;
     let limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
@@ -81,8 +56,6 @@ router.get("/node/:nodeId/chats", readAuth, async (req, res) => {
       limit = 10;
     }
 
-    const token = req.query.token ?? "";
-    const tokenQS = token ? `?token=${token}&html` : `?html`;
     let sessionId = req.query.sessionId;
 
     if (typeof sessionId === "string") {
@@ -104,29 +77,12 @@ router.get("/node/:nodeId/chats", readAuth, async (req, res) => {
 
     const allChats = sessions.flatMap((s) => s.chats);
 
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return sendOk(res, {
-        nodeId,
-        nodeName: node.name,
-        count: allChats.length,
-        sessions,
-      });
-    }
-
-    const nodeName = node.name || "Unknown node";
-    const nodePath = await buildPathString(nodeId);
-
-    return res.send(
-      html().renderNodeChats({
-        nodeId,
-        nodeName,
-        nodePath,
-        sessions,
-        allChats,
-        token,
-        tokenQS,
-      }),
-    );
+    return sendOk(res, {
+      nodeId,
+      nodeName: node.name,
+      count: allChats.length,
+      sessions,
+    });
   } catch (err) {
     log.error("API", "Node chats error:", err);
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -159,12 +115,6 @@ const editStatusHandler = async (req, res) => {
       userId,
     });
 
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/v1/node/${nodeId}/${version}?token=${req.query.token ?? ""}&html`,
-      );
-    }
-
     sendOk(res, result);
   } catch (err) {
     log.error("API", "editStatus error:", err);
@@ -193,13 +143,6 @@ router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
     }
 
     const result = await updateParentRelationship(nodeId, newParentId, userId);
-
-    // HTML redirect support
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`,
-      );
-    }
 
     sendOk(res, {
       nodeChild: result.nodeChild,
@@ -266,7 +209,6 @@ router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
     }
 
     await node.save();
-    if ("html" in req.query) return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
     sendOk(res, { modes: getExtMeta(node, "modes") || {} });
   } catch (err) {
     log.error("API", "editModes error:", err.message);
@@ -336,7 +278,6 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
     }
     await node.save();
 
-    if ("html" in req.query) return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
     sendOk(res, { tools: toolConfig });
   } catch (err) {
     log.error("API", "editTools error:", err.message);
@@ -425,7 +366,6 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
     await node.save();
     clearScopeCache();
 
-    if ("html" in req.query) return res.redirect(`/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`);
     sendOk(res, { blocked: blocked || [] });
   } catch (err) {
     log.error("API", "editExtensions error:", err.message);
@@ -436,38 +376,20 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
 // -----------------------------------------------------------------------------
 // GET /api/v1/node/:nodeId
 // Returns the node (flat schema, no versions)
-// Supports JSON or ?html mode
 // -----------------------------------------------------------------------------
-router.get("/node/:nodeId", readAuth, async (req, res) => {
+router.get("/node/:nodeId", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const node = await Node.findById(nodeId).lean();
 
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-    const queryString = filterQuery(req);
-    const qs = queryString ? `?${queryString}` : "";
-
     const children = await Node.find({ _id: { $in: node.children } })
       .select("name _id status")
       .lean();
     node.children = children;
 
-    const wantHtml = req.query.html !== undefined;
-
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return sendOk(res, { node });
-    }
-
-    const parentName = node.parent
-      ? (await Node.findById(node.parent, "name").lean())?.name
-      : null;
-
-    const rootUrl = `/api/v1/root/${nodeId}${qs}`;
-
-    return res.send(
-      html().renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPublicAccess: !!req.isPublicAccess }),
-    );
+    return sendOk(res, { node });
   } catch (err) {
     log.error("API", "Error fetching node:", err);
     sendError(res, 500, ERR.INTERNAL, "Internal server error");
@@ -477,11 +399,10 @@ router.get("/node/:nodeId", readAuth, async (req, res) => {
 // -----------------------------------------------------------------------------
 // GET /api/v1/node/:nodeId/:version
 // Returns a single version (includes Notes link)
-// Supports JSON or ?html mode
 // -----------------------------------------------------------------------------
-router.get("/node/:nodeId/:version", readAuth, async (req, res) => {
+router.get("/node/:nodeId/:version", authenticate, async (req, res) => {
   try {
-    const { nodeId, version, parent } = req.params;
+    const { nodeId, version } = req.params;
     const v = Number(version);
 
     const node = await Node.findById(nodeId).lean();
@@ -503,60 +424,12 @@ router.get("/node/:nodeId/:version", readAuth, async (req, res) => {
         }
       : (prestigeData.history?.find(h => h.version === v) || { status: "completed" });
 
-    const ALL_STATUSES = ["active", "completed", "trimmed"];
-    const STATUS_LABELS = {
-      active: "Activate",
-      completed: "Complete",
-      trimmed: "Trim",
-    };
-
-    const showPrestige = v === (prestigeData.current || 0);
-
-    const wantHtml = req.query.html !== undefined;
-
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
-      return sendOk(res, {
-        id: node._id,
-        name: node.name,
-        version: v,
-        data,
-      });
-    }
-
-    const queryString = filterQuery(req);
-    const qs = queryString ? `?${queryString}` : "";
-
-    const backUrl = `/api/v1/node/${nodeId}${qs}`;
-    const backTreeUrl = `/api/v1/root/${nodeId}${qs}`;
-
-    const createdDate = data.dateCreated
-      ? new Date(data.dateCreated).toLocaleString()
-      : "Unknown";
-
-    const scheduleHtml = data.schedule
-      ? new Date(data.schedule).toLocaleString()
-      : "None";
-
-    const reeffectTime =
-      data.reeffectTime !== undefined ? data.reeffectTime : "<em>None</em>";
-
-    return res.send(
-      html().renderVersionDetail({
-        node,
-        nodeId,
-        version: v,
-        data,
-        qs,
-        backUrl,
-        backTreeUrl,
-        createdDate,
-        scheduleHtml,
-        reeffectTime,
-        showPrestige,
-        ALL_STATUSES,
-        STATUS_LABELS,
-      }),
-    );
+    return sendOk(res, {
+      id: node._id,
+      name: node.name,
+      version: v,
+      data,
+    });
   } catch (err) {
     log.error("API", "Error fetching version:", err);
     sendError(res, 500, ERR.INTERNAL, "Internal server error");
@@ -596,13 +469,6 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
       type || null,
     );
 
-    // HTML redirect support (same pattern)
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`,
-      );
-    }
-
     sendOk(res, {
       childId: childNode._id,
       child: childNode,
@@ -619,12 +485,6 @@ router.post("/node/:nodeId/delete", authenticate, async (req, res) => {
     const userId = req.userId;
 
     const deletedNode = await deleteNodeBranch(nodeId, userId);
-
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/v1/user/${userId}/deleted?token=${req.query.token ?? ""}&html`,
-      );
-    }
 
     return sendOk(res, {
       deletedNode: deletedNode._id,
@@ -651,12 +511,6 @@ const editNameHandler = async (req, res) => {
       newName,
       userId,
     });
-
-    if ("html" in req.query) {
-      return res.redirect(
-        `/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`,
-      );
-    }
 
     sendOk(res, result);
   } catch (err) {
@@ -685,12 +539,6 @@ router.post(
         newType,
         userId,
       });
-
-      if ("html" in req.query) {
-        return res.redirect(
-          `/api/v1/node/${nodeId}?token=${req.query.token ?? ""}&html`,
-        );
-      }
 
       sendOk(res, result);
     } catch (err) {

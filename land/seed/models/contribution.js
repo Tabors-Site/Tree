@@ -12,24 +12,17 @@ const ContributionSchema = new mongoose.Schema({
   // Action type
   action: { type: String, required: true },
 
-  // Energy cost (passed by caller, omitted if no energy extension)
-  energyUsed: { type: Number },
-
-  // Node version at time of action (set by prestige hook, omitted if prestige not installed)
-  nodeVersion: { type: String },
-
   // Date
   date: { type: Date, default: Date.now },
 
   // ── Core action data (protocol-level operations, only the relevant one is set) ──
-  statusEdited: { type: String, enum: ["completed", "active", "trimmed", "divider"] },
+  statusEdited: { type: String },
   editName: { type: { oldName: String, newName: String, _id: false } },
   editType: { type: { oldType: String, newType: String, _id: false } },
   noteAction: { type: { action: { type: String, enum: ["add", "remove", "edit"] }, noteId: { type: String, ref: "Note" }, content: String, _id: false } },
   updateChild: { type: { action: { type: String, enum: ["added", "removed"] }, childId: { type: String, ref: "Node" }, _id: false } },
   updateParent: { type: { oldParentId: { type: String, ref: "Node" }, newParentId: { type: String, ref: "Node" }, _id: false } },
   branchLifecycle: { type: { action: { type: String, enum: ["retired", "revived", "revivedAsRoot"] }, fromParentId: { type: String, ref: "Node" }, toParentId: { type: String, ref: "Node" }, _id: false } },
-  inviteAction: { type: { action: { type: String, enum: ["invite", "acceptInvite", "denyInvite", "removeContributor", "switchOwner"] }, receivingId: { type: String, ref: "User" }, _id: false } },
 
   // Canopy federation
   wasRemote: { type: Boolean, default: false },

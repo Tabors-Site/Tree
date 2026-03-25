@@ -12,10 +12,19 @@ import {
   renderForgotPasswordPage,
 } from "./pages.js";
 import rateLimit from "express-rate-limit";
+import { isHtmlEnabled } from "./config.js";
 
 const router = express.Router();
 
 const URL_SAFE_REGEX = /^[A-Za-z0-9\-_.~]+$/;
+
+// Sanitize token query parameter before any rendering
+router.use((req, _res, next) => {
+  if (req.query.token && !URL_SAFE_REGEX.test(req.query.token)) {
+    req.query.token = "";
+  }
+  next();
+});
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -76,9 +85,9 @@ router.get("/user/:userId/shareToken", urlAuth, async (req, res) => {
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     const token = req.query.token ?? "";
-    const tokenQS = token ? `?token=${token}&html` : "?html";
+    const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
 
-    if (!wantHtml || process.env.ENABLE_FRONTEND_HTML !== "true") {
+    if (!wantHtml || !isHtmlEnabled()) {
       const htmlMeta = getUserMeta(user, "html");
       return sendOk(res, { userId, shareToken: htmlMeta?.shareToken || null });
     }
@@ -120,7 +129,7 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
 
     const token = req.query.token ?? "";
     if ("html" in req.query) {
-      return res.redirect(`/api/v1/user/${req.params.userId}/sharetoken?token=${token}&html`);
+      return res.redirect(`/api/v1/user/${req.params.userId}/sharetoken?token=${encodeURIComponent(token)}&html`);
     }
     return sendOk(res, { htmlShareToken });
   } catch (err) {
@@ -133,21 +142,21 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
 export const pageRouter = express.Router();
 
 pageRouter.get("/login", (req, res) => {
-  if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+  if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
   renderLoginPage(req, res);
 });
 
 pageRouter.get("/register", (req, res) => {
-  if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+  if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
   renderRegisterPage(req, res);
 });
 
 pageRouter.get("/forgot-password", (req, res) => {
-  if (process.env.ENABLE_FRONTEND_HTML !== "true") {
+  if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
   renderForgotPasswordPage(req, res);

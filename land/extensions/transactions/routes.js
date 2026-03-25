@@ -1,15 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import authenticate from "../../seed/middleware/authenticate.js";
-import { getExtension } from "../loader.js";
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 
 import {
   setTransactionPolicy,
@@ -134,7 +126,7 @@ function validateTransactionSemantics(normalized) {
 /**
  * LIST TRANSACTIONS FOR NODE + VERSION
  */
-router.get("/node/:nodeId/:version/transactions", readAuth, async (req, res) => {
+router.get("/node/:nodeId/:version/transactions", authenticateOptional, async (req, res) => {
   try {
     const { nodeId, version } = req.params;
     const parsedVersion = Number(version);
@@ -323,7 +315,7 @@ function normalizeTransactionBody(body) {
  */
 router.get(
   "/node/:nodeId/:version/transactions/:transactionId",
-  readAuth,
+  authenticateOptional,
   async (req, res) => {
     try {
       const { nodeId, version, transactionId } = req.params;
@@ -393,7 +385,7 @@ async function useLatest(req, res, next) {
   }
 }
 
-router.get("/node/:nodeId/transactions", readAuth, useLatest, (req, res, next) => {
+router.get("/node/:nodeId/transactions", authenticateOptional, useLatest, (req, res, next) => {
   req.url = `/node/${req.params.nodeId}/${req.params.version}/transactions`;
   router.handle(req, res, next);
 });

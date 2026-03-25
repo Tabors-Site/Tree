@@ -2,15 +2,7 @@ import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { findNodeById } from "../../seed/utils.js";
-import authenticate from "../../seed/middleware/authenticate.js";
-import { getExtension } from "../loader.js";
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, getNodeGoals } from "./core.js";
 import { renderValues } from "./html.js";
 
@@ -48,7 +40,7 @@ router.post("/node/:nodeId/goal", authenticate, async (req, res) => {
   }
 });
 
-router.get("/node/:nodeId/values", readAuth, async (req, res) => {
+router.get("/node/:nodeId/values", authenticateOptional, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -88,7 +80,7 @@ router.get("/node/:nodeId/values", readAuth, async (req, res) => {
   }
 });
 
-router.get("/root/:rootId/values", readAuth, async (req, res) => {
+router.get("/root/:rootId/values", authenticateOptional, async (req, res) => {
   try {
     const result = await getGlobalValuesTreeAndFlat(req.params.rootId);
     sendOk(res, result);

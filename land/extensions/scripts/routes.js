@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import Node from "../../seed/models/node.js";
-import authenticate from "../../seed/middleware/authenticate.js";
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   updateScript,
@@ -10,13 +10,6 @@ import {
 } from "./core.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
 
 const router = express.Router();
 
@@ -30,7 +23,7 @@ function filterQuery(req) {
 }
 
 // GET script detail
-router.get("/node/:nodeId/script/:scriptId", readAuth, async (req, res) => {
+router.get("/node/:nodeId/script/:scriptId", authenticateOptional, async (req, res) => {
   try {
     const { nodeId, scriptId } = req.params;
 
@@ -127,7 +120,7 @@ router.post(
 );
 
 // Script help/reference page
-router.get("/node/:nodeId/scripts/help", readAuth, async (req, res) => {
+router.get("/node/:nodeId/scripts/help", authenticateOptional, async (req, res) => {
   try {
     const { nodeId } = req.params;
 

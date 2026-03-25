@@ -227,8 +227,8 @@ const GatewayAbout = () => {
           <div className="gtw-section-text">
             Discord output channels use a simple webhook URL (free for all tiers).
             Discord input channels require a Discord bot that maintains a
-            persistent connection, so they are gated to Standard, Premium, and
-            God tier subscribers. Telegram input channels are available to all
+            persistent connection, so they require a paid tier (Standard or Premium).
+            Telegram input channels are available to all
             tiers since they use lightweight HTTP webhooks.
           </div>
         </div>

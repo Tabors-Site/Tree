@@ -2,7 +2,7 @@ import Node from "../models/node.js";
 import { logContribution, containsHtml } from "../utils.js";
 import User from "../models/user.js";
 import { createNote } from "./notes.js";
-import { resolveTreeAccess } from "../authenticate.js";
+import { resolveTreeAccess } from "./treeAccess.js";
 import { isDescendant } from "./treeFetch.js";
 import { hooks } from "../hooks.js";
 // Energy: dynamic import, no-op if extension not installed
@@ -59,6 +59,20 @@ export async function createNode(
 
   values = values && typeof values === "object" ? values : {};
   goals = goals && typeof goals === "object" ? goals : {};
+
+  // beforeNodeCreate: extensions can modify or cancel
+  const hookData = { name, type, parentNodeID, isRoot, userId, values, goals, schedule, reeffectTime };
+  const hookResult = await hooks.run("beforeNodeCreate", hookData);
+  if (hookResult.cancelled) {
+    throw new Error(hookResult.reason || "Node creation blocked");
+  }
+  // Apply any modifications from hooks
+  name = hookData.name;
+  type = hookData.type;
+  values = hookData.values;
+  goals = hookData.goals;
+  schedule = hookData.schedule;
+  reeffectTime = hookData.reeffectTime;
 
   // Build metadata from extension-specific params
   // Extensions own their metadata keys. Core just passes them through.
@@ -478,8 +492,7 @@ export async function reviveNodeBranch({
   deletedNode.rootOwner = null;
   await deletedNode.save();
 
-  targetParent.children.addToSet(deletedNodeId);
-  await targetParent.save();
+  await Node.findByIdAndUpdate(targetParentId, { $addToSet: { children: deletedNodeId } });
 
   // 6️⃣ Log contributions
   await logContribution({
@@ -564,4 +577,58 @@ export async function reviveNodeBranchAsRoot({
   return {
     revivedRoot: deletedNodeId,
   };
+}
+
+export async function editNodeType({
+  nodeId,
+  newType,
+  userId,
+  wasAi = false,
+  chatId = null,
+  sessionId = null,
+}) {
+  if (newType !== null) {
+    if (typeof newType !== "string") {
+      throw new Error("Type must be a string or null");
+    }
+    newType = newType.trim();
+    if (!newType) {
+      newType = null;
+    } else {
+      if (newType.length > 50) {
+        throw new Error("Type must be 50 characters or fewer");
+      }
+      if (containsHtml(newType)) {
+        throw new Error("Type cannot contain HTML tags");
+      }
+      if (newType.startsWith(".")) {
+        throw new Error("Type cannot start with a dot");
+      }
+      if (newType.startsWith("/")) {
+        throw new Error("Type cannot start with a /");
+      }
+      if (newType.startsWith("@")) {
+        throw new Error("Type cannot start with @");
+      }
+    }
+  }
+
+  const node = await Node.findById(nodeId);
+  if (!node) throw new Error("Node not found");
+  if (node.systemRole) throw new Error("Cannot modify system nodes");
+
+  const oldType = node.type;
+  await Node.findByIdAndUpdate(nodeId, { $set: { type: newType } });
+
+  await logContribution({
+    userId,
+    nodeId,
+    action: "editType",
+    wasAi,
+    chatId,
+    sessionId,
+    editType: { oldType, newType },
+  });
+
+  return { node, oldType, newType };
 }

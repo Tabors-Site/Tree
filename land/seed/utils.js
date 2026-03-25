@@ -24,8 +24,6 @@ const logContribution = async (params) => {
     chatId: inputChatId = null,
     sessionId: inputSessionId = null,
     action,
-    nodeVersion,
-    energyUsed = null,
     // Core action data
     statusEdited,
     editName,
@@ -34,22 +32,19 @@ const logContribution = async (params) => {
     updateChild,
     updateParent,
     branchLifecycle,
-    inviteAction,
     // Federation
     wasRemote = false,
     homeLand = null,
-    // Everything else goes to extensionData
+    // Everything else goes to extensionData (energyUsed, nodeVersion, inviteAction, etc.)
     ...extensionRest
   } = params;
 
-  // Let extensions modify contribution data (prestige sets nodeVersion via hook)
-  const hookData = { nodeId, nodeVersion, action, userId, energyUsed };
+  // Let extensions modify contribution data via hook
+  const hookData = { nodeId, action, userId, ...extensionRest };
   const hookResult = await hooks.run("beforeContribution", hookData);
   if (hookResult.cancelled) {
     throw new Error(`Contribution cancelled: ${hookResult.reason || "extension"}`);
   }
-  const finalNodeVersion = hookData.nodeVersion ?? nodeVersion ?? null;
-  const finalEnergyUsed = hookData.energyUsed ?? energyUsed;
 
   if (!userId || !nodeId || !action) {
     throw new Error("Missing required fields");
@@ -64,10 +59,17 @@ const logContribution = async (params) => {
     sessionId = ctx.sessionId;
   }
 
-  // Build extension data from remaining params
+  // Build extension data from remaining params (includes energyUsed, nodeVersion, inviteAction, etc.)
   const extKeys = Object.keys(extensionRest).filter(k =>
     extensionRest[k] !== undefined && extensionRest[k] !== null
   );
+  // Also include anything extensions added via hook
+  for (const k of Object.keys(hookData)) {
+    if (!["nodeId", "action", "userId"].includes(k) && hookData[k] !== undefined && hookData[k] !== null) {
+      if (!extKeys.includes(k)) extKeys.push(k);
+      extensionRest[k] = hookData[k];
+    }
+  }
   const extensionData = extKeys.length > 0
     ? Object.fromEntries(extKeys.map(k => [k, extensionRest[k]]))
     : undefined;
@@ -78,8 +80,6 @@ const logContribution = async (params) => {
     if (wasAi) doc.wasAi = true;
     if (chatId) doc.chatId = chatId;
     if (sessionId) doc.sessionId = sessionId;
-    if (finalEnergyUsed) doc.energyUsed = finalEnergyUsed;
-    if (finalNodeVersion) doc.nodeVersion = finalNodeVersion;
     if (statusEdited) doc.statusEdited = statusEdited;
     if (editName) doc.editName = editName;
     if (editType) doc.editType = editType;
@@ -87,7 +87,6 @@ const logContribution = async (params) => {
     if (updateChild) doc.updateChild = updateChild;
     if (updateParent) doc.updateParent = updateParent;
     if (branchLifecycle) doc.branchLifecycle = branchLifecycle;
-    if (inviteAction) doc.inviteAction = inviteAction;
     if (wasRemote) doc.wasRemote = true;
     if (homeLand) doc.homeLand = homeLand;
     if (extensionData) doc.extensionData = extensionData;

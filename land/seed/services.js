@@ -4,7 +4,7 @@
 // have a safe interface to call.
 
 import { hooks as hooksModule } from "./hooks.js";
-import { registerMode } from "./ws/modes/registry.js";
+import { registerMode, setDefaultMode } from "./ws/modes/registry.js";
 import { registerOrchestrator, getOrchestrator } from "./orchestratorRegistry.js";
 import User from "./models/user.js";
 import Node from "./models/node.js";
@@ -12,12 +12,13 @@ import Contribution from "./models/contribution.js";
 import Note from "./models/note.js";
 
 import { logContribution } from "./utils.js";
-import { resolveTreeAccess } from "./authenticate.js";
+import { resolveTreeAccess } from "./tree/treeAccess.js";
+import { createUser, verifyPassword, generateToken, isFirstUser, findUserByUsername } from "./auth.js";
 
 import {
   createSession, endSession, registerSession,
   touchSession, updateSessionMeta,
-  onSessionChange, setActiveNavigator, clearActiveNavigator,
+  getActiveNavigator, setActiveNavigator, clearActiveNavigator,
   getSession, getSessionsForUser,
   setSessionAbort, abortSession, clearSessionAbort,
   SESSION_TYPES, registerSessionType,
@@ -57,10 +58,6 @@ const authStrategies = [];
 // doesn't have the real implementation loaded.
 // ---------------------------------------------------------------------------
 
-const NOOP_CONTRIBUTIONS = {
-  logContribution: async () => null,
-};
-
 const NOOP_WEBSOCKET = {
   emitNavigate: () => {},
   emitToUser: () => {},
@@ -88,6 +85,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     contributions: { logContribution },
     auth: {
       resolveTreeAccess,
+      createUser, verifyPassword, generateToken, isFirstUser, findUserByUsername,
       registerStrategy: (name, handler) => authStrategies.push({ name, handler }),
       getStrategies: () => authStrategies,
     },
@@ -95,7 +93,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     session: {
       createSession, endSession, registerSession,
       touchSession, updateSessionMeta,
-      onSessionChange, setActiveNavigator, clearActiveNavigator,
+      getActiveNavigator, setActiveNavigator, clearActiveNavigator,
       getSession, getSessionsForUser,
       setSessionAbort, abortSession, clearSessionAbort,
       SESSION_TYPES, registerSessionType,
@@ -127,12 +125,9 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     // --- Shared models (core protocol, always available) ---
     models: { User, Node, Contribution, Note },
 
-    // --- Middleware ---
-    middleware: { resolveTreeAccess },
-
     // --- Hook system ---
     hooks: hooksModule,
-    modes: { registerMode },
+    modes: { registerMode, setDefaultMode },
     orchestrators: { register: registerOrchestrator, get: getOrchestrator },
 
     // --- Cascade (extensions call deliverCascade to propagate signals) ---
@@ -154,4 +149,4 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
   return core;
 }
 
-export { NOOP_CONTRIBUTIONS, NOOP_WEBSOCKET, authStrategies };
+export { NOOP_WEBSOCKET, authStrategies };

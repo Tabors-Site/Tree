@@ -1,5 +1,5 @@
 import express from "express";
-import authenticate from "../../seed/middleware/authenticate.js";
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { createInvite, respondToInvite, getPendingInvitesForUser } from "./invites.js";
 import { sendRemoteInvite } from "./remoteInvites.js";
@@ -7,13 +7,6 @@ import { getAllTagsForUser } from "./tags.js";
 import { getExtension } from "../loader.js";
 
 function html() { return getExtension("html-rendering")?.exports || {}; }
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
 
 export function buildRouter(core) {
   const router = express.Router();
@@ -195,7 +188,7 @@ export function buildRouter(core) {
 
   // ── Invite list + respond (moved from routes/api/user.js) ─────────
 
-  router.get("/user/:userId/invites", readAuth, async (req, res) => {
+  router.get("/user/:userId/invites", authenticateOptional, async (req, res) => {
     try {
       const { userId } = req.params;
 
@@ -257,7 +250,7 @@ export function buildRouter(core) {
 
   // ── Tags (moved from extensions/user-queries) ─────────────────────
 
-  router.get("/user/:userId/tags", readAuth, async (req, res) => {
+  router.get("/user/:userId/tags", authenticateOptional, async (req, res) => {
     try {
       const userId = req.params.userId;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

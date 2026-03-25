@@ -143,6 +143,9 @@ Examples:
         if (m.provides) {
           console.log(chalk.bold("Provides:"));
           if (m.provides.routes) console.log("  routes");
+          if (m.provides.tools) console.log("  tools");
+          if (m.provides.modes) console.log("  modes");
+          if (m.provides.jobs) console.log("  jobs");
           if (m.provides.models && Object.keys(m.provides.models).length) {
             console.log(`  models: ${Object.keys(m.provides.models).join(", ")}`);
           }
@@ -151,6 +154,21 @@ Examples:
           }
           if (m.provides.sessionTypes && Object.keys(m.provides.sessionTypes).length) {
             console.log(`  session types: ${Object.keys(m.provides.sessionTypes).join(", ")}`);
+          }
+          if (m.provides.cli?.length) {
+            console.log(chalk.bold("\nCLI Commands:"));
+            for (const cmd of m.provides.cli) {
+              console.log(`  ${chalk.cyan(cmd.command)} ${chalk.dim(cmd.description || "")}`);
+            }
+          }
+          if (m.provides.env?.length) {
+            console.log(chalk.bold("\nRequired env vars:"));
+            for (const e of m.provides.env) {
+              const envDecl = typeof e === "string" ? { key: e } : e;
+              const req = envDecl.required === false ? chalk.dim(" (optional)") : "";
+              console.log(`  ${chalk.yellow(envDecl.key)}${req}`);
+              if (envDecl.description) console.log(`    ${chalk.dim(envDecl.description)}`);
+            }
           }
         }
       } catch (err) {

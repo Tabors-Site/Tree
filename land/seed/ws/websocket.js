@@ -66,7 +66,6 @@ import {
   getSession,
   getSessionsForUser,
   updateSessionMeta,
-  onSessionChange,
   SESSION_TYPES,
   registeredSessionCount,
 } from "./sessionRegistry.js";
@@ -630,6 +629,20 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             }
 
             if (response && !abort.signal.aborted) {
+              // beforeResponse hook: extensions can modify content before client receives it
+              const rawContent = response.content || response.answer || null;
+              let finalContent = rawContent;
+              if (rawContent && safeChatMode !== "place") {
+                const hookData = {
+                  content: rawContent,
+                  userId: socket.userId,
+                  rootId: getRootId(visitorId),
+                  mode: getCurrentMode(visitorId),
+                };
+                await hooks.run("beforeResponse", hookData);
+                finalContent = hookData.content;
+              }
+
               // Only send public data to client
               if (safeChatMode === "place") {
                 socket.emit(WS.PLACE_RESULT, {
@@ -641,7 +654,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
               } else {
                 socket.emit(WS.CHAT_RESPONSE, {
                   success: response.success,
-                  answer: response.content || response.answer || null,
+                  answer: finalContent,
                   generation,
                 });
               }
@@ -903,12 +916,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
   });
 
-  // Subscribe to session registry changes → sync navigator badge
-  onSessionChange((userId) => {
+  // Subscribe to session changes → sync navigator badge
+  function syncNavigatorOnSessionChange({ userId }) {
     const socketId = authSessions.get(userId);
     const userSocket = socketId ? io.sockets.sockets.get(socketId) : null;
     if (userSocket) emitNavigatorStatus(userSocket);
-  });
+  }
+  hooks.register("afterSessionCreate", syncNavigatorOnSessionChange, "_kernel-ws");
+  hooks.register("afterSessionEnd", syncNavigatorOnSessionChange, "_kernel-ws");
 
   log.info("WS", "WebSocket server initialized");
   return io;

@@ -21,6 +21,51 @@ function toImportURL(filePath) {
   return pathToFileURL(filePath).href;
 }
 
+const EXT_ROUTE_TIMEOUT_MS = 5000;
+
+/**
+ * Wrap an extension router mount with a timeout safety net.
+ * If the extension router doesn't respond or call next within 5 seconds,
+ * the wrapper calls next() automatically so the kernel route can handle it.
+ * Protects against hanging extension middleware that shadows kernel routes.
+ */
+function wrapExtensionRouter(router, extName) {
+  return (req, res, next) => {
+    let handled = false;
+
+    const safeNext = (...args) => {
+      if (!handled) { handled = true; next(...args); }
+    };
+
+    // Detect if the extension sends a response
+    const originalEnd = res.end;
+    res.end = function (...args) {
+      handled = true;
+      return originalEnd.apply(this, args);
+    };
+
+    // Timeout: if extension hangs, fall through to kernel
+    const timer = setTimeout(() => {
+      if (!handled) {
+        log.warn("Loader", `Extension router "${extName}" timed out on ${req.method} ${req.path}, falling through`);
+        safeNext();
+      }
+    }, EXT_ROUTE_TIMEOUT_MS);
+
+    // Run the extension router
+    try {
+      router(req, res, (...args) => {
+        clearTimeout(timer);
+        safeNext(...args);
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      log.error("Loader", `Extension router "${extName}" threw on ${req.method} ${req.path}:`, err.message);
+      safeNext();
+    }
+  };
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DISABLED_FILE = path.join(__dirname, ".disabled");
 
@@ -181,10 +226,6 @@ const AVAILABLE_MODELS = new Set([
   "User", "Node", "Contribution", "Note",
 ]);
 
-const AVAILABLE_MIDDLEWARE = new Set([
-  "resolveTreeAccess",
-]);
-
 function validateNeeds(manifest, core) {
   const missing = [];
 
@@ -200,14 +241,6 @@ function validateNeeds(manifest, core) {
     for (const model of manifest.needs.models) {
       if (!AVAILABLE_MODELS.has(model) && !core.models[model]) {
         missing.push(`model:${model}`);
-      }
-    }
-  }
-
-  if (manifest.needs?.middleware) {
-    for (const mw of manifest.needs.middleware) {
-      if (!AVAILABLE_MIDDLEWARE.has(mw) && !core.middleware[mw]) {
-        missing.push(`middleware:${mw}`);
       }
     }
   }
@@ -328,10 +361,6 @@ function buildScopedCore(manifest, fullCore) {
   const allowedModels = new Set(manifest.needs?.models || []);
   for (const m of manifest.optional?.models || []) allowedModels.add(m);
 
-  // Collect declared middleware
-  const allowedMiddleware = new Set(manifest.needs?.middleware || []);
-  for (const m of manifest.optional?.middleware || []) allowedMiddleware.add(m);
-
   // Build scoped object
   const scoped = {};
 
@@ -356,14 +385,6 @@ function buildScopedCore(manifest, fullCore) {
   for (const name of allowedModels) {
     if (fullCore.models[name]) {
       scoped.models[name] = fullCore.models[name];
-    }
-  }
-
-  // Middleware: only inject declared ones
-  scoped.middleware = {};
-  for (const name of allowedMiddleware) {
-    if (fullCore.middleware[name]) {
-      scoped.middleware[name] = fullCore.middleware[name];
     }
   }
 
@@ -531,6 +552,21 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         log.warn("Extensions", `"${manifest.name}": jobs must be an array. Skipped.`);
         continue;
       }
+      if (instance.middleware !== undefined && !Array.isArray(instance.middleware)) {
+        log.warn("Extensions", `"${manifest.name}": middleware must be an array. Skipped.`);
+        continue;
+      }
+
+      // Wire middleware (runs before kernel routes on matching paths)
+      if (instance.middleware) {
+        for (const mw of instance.middleware) {
+          if (!mw.path || typeof mw.handler !== "function") {
+            log.warn("Extensions", `"${manifest.name}": middleware entry missing path or handler. Skipped.`);
+            continue;
+          }
+          app.use(mw.path, mw.handler);
+        }
+      }
 
       // Wire routes (with collision detection)
       if (instance.router) {
@@ -559,13 +595,13 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           for (const rpath of routePaths) {
             routeOwnership.set(rpath, manifest.name);
           }
-          app.use("/api/v1", instance.router);
+          app.use("/api/v1", wrapExtensionRouter(instance.router, manifest.name));
         }
       }
 
       // Wire page routes (mounted at / for HTML pages like /login, /register)
       if (instance.pageRouter && typeof instance.pageRouter.use === "function") {
-        app.use("/", instance.pageRouter);
+        app.use("/", wrapExtensionRouter(instance.pageRouter, manifest.name));
       }
 
       // Wire MCP tools and register in tool resolver
@@ -576,13 +612,19 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
         for (const tool of instance.tools) {
           registerToolOwner(tool.name, manifest.name, tool.annotations?.readOnlyHint ?? false);
-          mcpServer.tool(
-            tool.name,
-            tool.description,
-            tool.schema,
-            tool.annotations || {},
-            tool.handler
-          );
+          try {
+            mcpServer.tool(
+              tool.name,
+              tool.description,
+              tool.schema,
+              tool.annotations || {},
+              tool.handler
+            );
+          } catch (toolErr) {
+            // Tool already registered by core MCP server. Extension definition takes precedence
+            // for tool ownership and mode resolution, but the MCP handler stays as-is.
+            log.debug("Extensions", `${manifest.name}: tool "${tool.name}" already registered on MCP server, skipping MCP registration`);
+          }
 
           // Convert Zod schema to JSON Schema for OpenAI function calling format
           let jsonSchema;
@@ -681,6 +723,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (instance.tools?.length) parts.push(`${instance.tools.length} tools`);
       if (instance.jobs?.length) parts.push(`${instance.jobs.length} jobs`);
       if (instance.modeTools?.length) parts.push(`${instance.modeTools.length} mode injections`);
+      if (instance.middleware?.length) parts.push(`${instance.middleware.length} middleware`);
       log.verbose("Extensions", `Loaded: ${parts.join(" | ")}`);
 
     } catch (err) {

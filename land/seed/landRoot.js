@@ -1,6 +1,5 @@
 import log from "./log.js";
 import Node from "./models/node.js";
-import { getLandIdentity } from "../canopy/identity.js";
 
 let landRootCache = null;
 
@@ -16,10 +15,11 @@ export async function ensureLandRoot() {
     return existing;
   }
 
-  const identity = getLandIdentity();
+  const landName = process.env.LAND_NAME || "My Land";
+  const landDomain = process.env.LAND_DOMAIN || "localhost";
 
   const landRoot = new Node({
-    name: identity.name || "My Land",
+    name: landName,
     rootOwner: "SYSTEM",
     parent: null,
     systemRole: "land-root",
@@ -37,9 +37,7 @@ export async function ensureLandRoot() {
     contributors: [],
     status: "active",
     metadata: new Map([
-      ["landId", identity.landId],
-      ["domain", identity.domain],
-      ["publicKey", identity.publicKey],
+      ["domain", landDomain],
     ]),
   });
   await identityNode.save();
@@ -52,11 +50,8 @@ export async function ensureLandRoot() {
     contributors: [],
     status: "active",
     metadata: new Map([
-      ["LAND_NAME", identity.name || "My Land"],
-      ["LAND_DEFAULT_TIER", process.env.LAND_DEFAULT_TIER || "basic"],
-      ["ENABLE_FRONTEND_HTML", process.env.ENABLE_FRONTEND_HTML || ""],
-      ["DIRECTORY_URL", process.env.DIRECTORY_URL || ""],
-      ["REQUIRE_EMAIL", process.env.REQUIRE_EMAIL || "true"],
+      ["LAND_NAME", landName],
+      ["landUrl", `http://${landDomain}:${process.env.PORT || 3000}`],
     ]),
   });
   await configNode.save();

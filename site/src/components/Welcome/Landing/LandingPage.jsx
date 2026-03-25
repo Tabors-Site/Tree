@@ -19,55 +19,62 @@ const LandingPage = () => {
       {/* ── HERO ── */}
       <section className="lp-hero">
         <div className="lp-hero-inner">
-          <div className="lp-tree-icon">🌳</div>
-          <h1 className="lp-title">TreeOS</h1>
-          <p className="lp-subtitle">An Operating System for Context</p>
+          <div className="lp-tree-icon">🌱</div>
+          <h1 className="lp-title">The Seed</h1>
+          <p className="lp-subtitle">An Open Kernel for AI Agents</p>
           <p className="lp-tagline">
-            A public orchestration system where people build, share, and run
-            LLM complexity on a federated network. Not another chat window.
-            Infrastructure where AI agents live, persist, and compound intelligence.
+            Two schemas, a conversation loop, a hook system, and an extension loader.
+            The minimum kernel an AI agent needs to live somewhere persistent, think at every
+            position, and grow through extensions. Plant the seed. Build anything on top of it.
           </p>
           <div className="lp-hero-ctas">
             <button className="lp-btn lp-btn-primary" onClick={scrollToInstall}>Get Started</button>
-            <a className="lp-btn lp-btn-secondary" href="/guide">Learn More</a>
+            <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the Seed</a>
           </div>
-          <a className="lp-hero-example" href="/app">
-            Example App <span>built on the protocol</span>
-          </a>
+          <p style={{color: "#666", fontSize: "0.85rem", marginTop: 20}}>
+            <a href="/guide" style={{color: "#888", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.1)"}}>
+              TreeOS
+            </a> is the first operating system built on the seed. It ships with 25+ extensions.
+          </p>
         </div>
       </section>
 
-      {/* ── THE GAP ── */}
+      {/* ── THE RELATIONSHIP ── */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">The Problem</h2>
+          <h2 className="lp-section-title">Kernel and Implementation</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Every useful pattern for making AI agents smarter is locked inside private codebases.
-            Memory compression, tool pipelines, orchestration chains. Every AI product runs the
-            agent on their infrastructure, behind their API, inside their product. You use their
-            agent in their house. Nobody is building the public orchestration layer.
+            The seed is the kernel. It defines the data contract, the conversation loop, the hook
+            system, and the extension loader. It never changes. It never imports from extensions.
+            It boots clean with zero extensions installed.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            TreeOS says: here is the kernel. Run your own house. Your agent lives with you. Connect to
-            other houses through an open protocol. Share what you build. Install what others build.
-            The intelligence compounds across the network.
+            TreeOS is one implementation built on the seed. It ships with extensions for AI modes,
+            tool definitions, billing, federation, HTML rendering, and more. But those are all
+            extensions. Someone else could build a completely different system on the same kernel.
+            A medical platform. A code review pipeline. A research assistant. The seed provides
+            structure. Extensions provide meaning.
+          </p>
+          <p className="lp-section-sub lp-section-sub-wide" style={{color: "#666"}}>
+            Same relationship as Linux and Ubuntu. The kernel is the contract. The distribution
+            is the interpretation. TreeOS is the first distribution. The seed is what we are
+            giving to the world.
           </p>
         </div>
       </section>
 
-      {/* ── WHAT IS TREEOS ── */}
+      {/* ── THREE LAYERS ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Core Concepts</h2>
+          <h2 className="lp-section-title">Three Layers</h2>
           <div className="lp-cards-3">
             <div className="lp-card">
-              <h3>The Seed</h3>
+              <h3 style={{color: "#f97316"}}>The Seed (Kernel)</h3>
               <p>
-                Two schemas, five system nodes, and the AI conversation loop.
-                The minimum structure an agent needs to live somewhere persistent.
-                17 config keys tunable from the land's .config node. Self-healing
-                background jobs. Circuit breakers, depth limits, size guards.
-                The part that never changes.
+                Two schemas (Node and User), an AI conversation loop, five registries
+                (hooks, modes, orchestrators, socket handlers, auth strategies), cascade
+                signals, and a response protocol. 28 config keys. 23 lifecycle hooks.
+                The part that never changes. Build on it.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/kernel" style={{
@@ -78,12 +85,12 @@ const LandingPage = () => {
               </div>
             </div>
             <div className="lp-card">
-              <h3>Extensions</h3>
+              <h3 style={{color: "#a78bfa"}}>Extensions</h3>
               <p>
-                Install an extension and it just works. Fitness coaching, food tracking,
-                workout logging, Solana wallets, scripts, understanding runs. Each
-                extension adds its own commands and AI behavior. Block extensions on
-                branches where you don't want them. The tree controls what's active
+                Everything else. AI modes, tool definitions, billing, HTML rendering,
+                fitness, food, scripts, wallets, gateways, dreams, understanding.
+                Install what you need. Build your own. Each extension adds commands,
+                tools, hooks, and AI behavior. The tree controls what is active
                 at every position.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
@@ -91,23 +98,23 @@ const LandingPage = () => {
                   color: "#a78bfa", fontSize: "0.95rem", fontWeight: 600,
                   textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)",
                   paddingBottom: 2,
-                }}>How AI works in TreeOS</a>
+                }}>How AI works</a>
               </div>
             </div>
             <div className="lp-card">
-              <h3>Lands</h3>
+              <h3 style={{color: "#4ade80"}}>Federation</h3>
               <p>
-                Sovereign instances of TreeOS. You run yours. Someone else runs theirs.
-                Lands peer directly through signed requests. No middleman. The public
-                directory at dir.treeos.ai helps lands find each other, but anyone can
-                run their own directory. No single point of control.
+                Every land is sovereign. You run yours. Someone else runs theirs.
+                Lands peer directly through signed requests. Share trees, proxy LLM
+                calls, propagate cascade signals. The public directory helps lands
+                find each other. Anyone can run their own directory.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/decentralized" style={{
                   color: "#4ade80", fontSize: "0.95rem", fontWeight: 600,
                   textDecoration: "none", borderBottom: "1px solid rgba(74, 222, 128, 0.3)",
                   paddingBottom: 2,
-                }}>Explore the network</a>
+                }}>The network</a>
               </div>
             </div>
           </div>
@@ -185,7 +192,7 @@ const LandingPage = () => {
                 The root. Manage extensions, configuration, users, peers.
                 The AI becomes a land operator. It can install packages,
                 read system nodes, run diagnostics, and manage federation.
-                God-tier access required.
+                Admin access required.
               </p>
             </div>
             <div className="lp-card">

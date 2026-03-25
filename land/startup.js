@@ -8,6 +8,7 @@ import { startRetentionJob } from "./seed/tree/dataRetention.js";
 import { getBlockedExtensionsAtNode } from "./seed/tree/extensionScope.js";
 import { hooks } from "./seed/hooks.js";
 import { syncExtensionsToTree } from "./seed/landRoot.js";
+import { registerCanopyAuth } from "./canopy/auth.js";
 import { startHeartbeatJob } from "./canopy/peers.js";
 import { startOutboxJob, startCanopyRetentionJob } from "./canopy/events.js";
 import { startDirectoryRegistration } from "./canopy/directory.js";
@@ -131,22 +132,16 @@ export function onListen() {
 
     log.verbose("Land", "Background jobs started (includes daily data retention)");
 
+    const { authStrategies } = await import("./seed/services.js");
+    registerCanopyAuth(authStrategies);
     startHeartbeatJob();
     startOutboxJob();
     startCanopyRetentionJob();
     startDirectoryRegistration();
     log.verbose("Canopy", "Peering, outbox, directory, retention ready");
 
-    import("./extensions/gateway/discordBotManager.js")
-      .then(({ startupScan }) => {
-        startupScan();
-        log.verbose("Gateway", "Channel scan complete");
-        printReady();
-      })
-      .catch((err) => {
-        log.debug("Gateway", `Scan skipped: ${err.message}`);
-        printReady();
-      });
+    hooks.run("afterBoot", {}).catch(() => {});
+    printReady();
   };
 
   mongoose.connection.on("connected", onDbReady);

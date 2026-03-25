@@ -23,11 +23,9 @@ import rateLimit from "express-rate-limit";
 import { sendOk, sendError, ERR } from "../seed/protocol.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-import { loadExtensions, getLoadedExtensionNames, getLoadedManifests, getExtension } from "../extensions/loader.js";
+import { loadExtensions, getLoadedExtensionNames, getLoadedManifests } from "../extensions/loader.js";
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
-  const fn = getExtension("html-rendering")?.exports?.notFoundPage;
-  if (fn) return fn(req, res, message);
   return sendError(res, 404, ERR.NODE_NOT_FOUND, message);
 }
 import { getLandConfigValue } from "../seed/landConfig.js";

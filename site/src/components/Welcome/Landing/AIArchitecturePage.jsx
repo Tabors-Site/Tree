@@ -39,7 +39,7 @@ const AIArchitecturePage = () => {
                 The root of everything. Here the AI manages the land itself: install extensions,
                 configure settings, monitor users and peers, run diagnostics. With the shell
                 extension, it can execute server commands. This is your operations center.
-                God-tier access required.
+                Admin access required.
               </p>
             </div>
             <div className="lp-card">
@@ -295,8 +295,8 @@ const AIArchitecturePage = () => {
             <div className="lp-card lp-card-sm">
               <h4>Configurable</h4>
               <p>
-                11 kernel tunables from land config. Timeouts, retries, context window,
-                tool iterations, session limits. No code changes needed.
+                28 kernel config keys. Timeouts, retries, context window,
+                tool iterations, session limits, cascade, uploads. No code changes needed.
               </p>
             </div>
           </div>
@@ -306,22 +306,37 @@ const AIArchitecturePage = () => {
       {/* ── HOOKS ── */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">8 Lifecycle Hooks</h2>
+          <h2 className="lp-section-title">23 Lifecycle Hooks</h2>
           <p className="lp-section-sub lp-section-sub-wide">
             Extensions modify kernel behavior without touching kernel code. Register a handler.
-            The kernel fires it at the right moment. Before hooks can cancel operations.
-            After hooks react. Enrich hooks inject data into AI context.
+            The kernel fires it at the right moment. Before hooks can cancel. After hooks react.
+            Sequential hooks capture return values. Open bus: any hook name is valid.
           </p>
           <div style={{maxWidth: 600, margin: "0 auto", fontSize: "0.9rem"}}>
             {[
               ["beforeNote", "Modify note data before save"],
               ["afterNote", "React after note create/edit/delete"],
-              ["beforeContribution", "Tag audit log entries"],
+              ["beforeNodeCreate", "Modify or cancel node creation"],
               ["afterNodeCreate", "Initialize extension data"],
               ["beforeStatusChange", "Validate or intercept"],
               ["afterStatusChange", "React to status changes"],
               ["beforeNodeDelete", "Clean up extension data"],
+              ["beforeContribution", "Modify contribution data"],
               ["enrichContext", "Inject data into AI context"],
+              ["beforeLLMCall", "Cancel or modify LLM calls"],
+              ["afterLLMCall", "React to LLM usage"],
+              ["beforeToolCall", "Modify or cancel tool execution"],
+              ["afterToolCall", "React to tool results"],
+              ["beforeResponse", "Modify AI response before client"],
+              ["beforeRegister", "Validate registration (email, etc.)"],
+              ["afterRegister", "Initialize user data"],
+              ["afterNavigate", "React to tree navigation"],
+              ["afterMetadataWrite", "React to metadata changes"],
+              ["afterScopeChange", "React to extension scope changes"],
+              ["afterBoot", "One-time setup after everything is ready"],
+              ["afterSessionCreate", "React to new sessions"],
+              ["afterSessionEnd", "React to ended sessions"],
+              ["onCascade", "Handle cascade signals, results to .flow"],
             ].map(([name, desc]) => (
               <div key={name} style={{
                 display: "flex", justifyContent: "space-between", padding: "8px 0",

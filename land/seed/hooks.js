@@ -8,15 +8,26 @@ import log from "./log.js";
  * Core hooks (fired by kernel):
  *   beforeNote         - Before note save. Modify { nodeId, version, content, userId, contentType }
  *   afterNote          - After note saved. React to { note, nodeId, userId, sizeKB, action }
- *   beforeContribution - Before contribution log. Modify { nodeId, nodeVersion, action, userId }
+ *   beforeContribution - Before contribution log. Modify { nodeId, action, userId, ...extensionData }
+ *   beforeNodeCreate   - Before node creation. Modify/cancel { name, type, parentNodeID, isRoot, userId }
  *   afterNodeCreate    - After node saved. React to { node, userId }
  *   beforeStatusChange - Before status write. Modify/validate { node, status, userId }
  *   afterStatusChange  - After status saved. React to { node, status, userId }
  *   beforeNodeDelete   - Before deletion. Cleanup { node, userId }
  *   enrichContext      - During AI context build. Enrich { context, node, meta }
+ *   beforeLLMCall      - Before LLM API call. Cancel { userId, rootId, mode, model, messageCount, hasTools }
+ *   afterLLMCall       - After LLM API call. React to { userId, rootId, mode, model, usage, hasToolCalls }
+ *   beforeToolCall     - Before MCP tool executes. Modify/cancel { toolName, args, userId, rootId, mode }
+ *   afterToolCall      - After MCP tool executes. React to { toolName, args, result|error, success, userId, rootId, mode }
+ *   beforeResponse     - Before AI response reaches client. Modify { content, userId, rootId, mode }
  *   beforeRegister     - Before user registration
  *   afterRegister      - After user registration
+ *   afterSessionCreate - After session registered. { sessionId, userId, type, description, meta }
+ *   afterSessionEnd    - After session ended. { sessionId, userId, type }
  *   afterNavigate      - After user navigates to a tree root. { userId, rootId, nodeId, socket }
+ *   afterMetadataWrite - After setExtMeta succeeds. { nodeId, extName, data }. Opt-in: zero overhead if no listeners.
+ *   afterScopeChange   - After metadata.extensions.blocked/restricted changes. { nodeId, blocked, restricted, userId }
+ *   afterBoot          - Once after all extensions loaded, config initialized, server listening. Fires once.
  *
  * Extension hooks (examples, extensions define their own):
  *   gateway:beforeDispatch    - Before notification dispatch

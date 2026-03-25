@@ -69,7 +69,7 @@ async function getChats({
       .populate({
         path: "contributions",
         select:
-          "_id action nodeId nodeVersion wasAi energyUsed date extensionData",
+          "_id action nodeId wasAi date extensionData",
         populate: { path: "nodeId", select: "name" },
       })
       .populate({
@@ -91,7 +91,7 @@ async function getChats({
       chatId: { $in: chatIds },
     })
       .select(
-        "_id action nodeId nodeVersion wasAi energyUsed date understandingMeta chatId",
+        "_id action nodeId wasAi date extensionData chatId",
       )
       .populate({ path: "nodeId", select: "name" })
       .lean();
@@ -248,7 +248,7 @@ async function getNodeChats({
       .populate({
         path: "contributions",
         select:
-          "_id action nodeId nodeVersion wasAi energyUsed date extensionData",
+          "_id action nodeId wasAi date extensionData",
         populate: { path: "nodeId", select: "name" },
       })
       .populate({
@@ -270,7 +270,7 @@ async function getNodeChats({
       chatId: { $in: chatIds },
     })
       .select(
-        "_id action nodeId nodeVersion wasAi energyUsed date understandingMeta chatId",
+        "_id action nodeId wasAi date extensionData chatId",
       )
       .populate({ path: "nodeId", select: "name" })
       .lean();

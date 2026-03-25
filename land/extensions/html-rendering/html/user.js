@@ -1210,7 +1210,7 @@ text-decoration: none;
 // 2. Notes Page - GET /user/:userId/notes
 // ═══════════════════════════════════════════════════════════════════
 export function renderUserNotes({ userId, user, notes, processedNotes, query, token }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
     return (`
 <!DOCTYPE html>
 <html lang="en">
@@ -1511,7 +1511,7 @@ ${responsiveBase}
 
       <!-- Search Form -->
       <form method="GET" action="/api/v1/user/${userId}/notes" class="search-form">
-        <input type="hidden" name="token" value="${token}">
+        <input type="hidden" name="token" value="${esc(token)}">
         <input type="hidden" name="html" value="">
         <input
           type="text"
@@ -1595,7 +1595,7 @@ value="${escapeHtml(query)}"
 // 3. Tags/Mail Page - GET /user/:userId/tags
 // ═══════════════════════════════════════════════════════════════════
 export async function renderUserTags({ userId, user, notes, getNodeName, token }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
     return (`
 <!DOCTYPE html>
 <html lang="en">
@@ -1766,7 +1766,7 @@ ${responsiveBase}
 // 4. User Contributions Page - GET /user/:userId/contributions
 // ═══════════════════════════════════════════════════════════════════
 export async function renderUserContributions({ userId, contributions, username, getNodeName, token }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const link = (id, label) =>
     id
@@ -2594,7 +2594,7 @@ body {
     <h2>Reset Password</h2>
     <p class="subtitle">Enter your new password below</p>
 
-    <form id="resetForm">
+    <form id="resetForm" data-token="${esc(token)}">
       <div class="input-group">
         <label for="password">New Password</label>
         <input
@@ -2679,7 +2679,7 @@ body {
         const res = await fetch("/api/v1/user/reset-password", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: "${token}", password }),
+          body: JSON.stringify({ token: form.dataset.token, password }),
         });
 
         const data = await res.json();
@@ -2719,7 +2719,7 @@ export function renderResetPasswordMismatch({ token }) {
       return (`
         <html><body style="font-family:sans-serif; padding:20px;">
         <h2>Passwords Do Not Match</h2>
-        <p><a href="/api/v1/user/reset-password/${token}">Try Again</a></p>
+        <p><a href="/api/v1/user/reset-password/${encodeURIComponent(token)}">Try Again</a></p>
         </body></html>
       `);
 }
@@ -2746,7 +2746,7 @@ export function renderResetPasswordSuccess() {
 // 7. Raw Ideas List - GET /user/:userId/raw-ideas
 // ═══════════════════════════════════════════════════════════════════
 export function renderRawIdeasList({ userId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
     return (`
 <!DOCTYPE html>
 <html lang="en">
@@ -3298,7 +3298,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
 
       <!-- Search Form -->
       <form method="GET" action="/api/v1/user/${userId}/raw-ideas" class="search-form">
-        <input type="hidden" name="token" value="${token}">
+        <input type="hidden" name="token" value="${esc(token)}">
         <input type="hidden" name="html" value="">
         ${statusFilter !== "pending" ? `<input type="hidden" name="status" value="${statusFilter}">` : ""}
         <input
@@ -3346,16 +3346,16 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
           ${
             r.status === "succeeded"
               ? `
-          <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>
+          <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${encodeURIComponent(token)}` : ""}&html">View AI chat →</a>` : ""}</div>
           `
               : r.status === "processing"
                 ? `
-          <div class="processing-notice">Being processed by AI — please wait.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>
+          <div class="processing-notice">Being processed by AI — please wait.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${encodeURIComponent(token)}` : ""}&html">View AI chat →</a>` : ""}</div>
           `
                 : r.status === "deleted"
                   ? ``
                   : `
-          ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed — place manually below.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${token}` : ""}&html">View AI chat →</a>` : ""}</div>` : ""}
+          ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed — place manually below.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${encodeURIComponent(token)}` : ""}&html">View AI chat →</a>` : ""}</div>` : ""}
 
           ${
             (!r.status || r.status === "pending") && r.contentType !== "file"
@@ -3363,7 +3363,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
           <button
             class="auto-place-btn"
             data-raw-idea-id="${r._id}"
-            data-token="${token}"
+            data-token="${esc(token)}"
             data-user-id="${userId}"
           >✨ Auto-place</button>
           `
@@ -3374,7 +3374,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
             method="POST"
             action="/api/v1/user/${userId}/raw-ideas/${
               r._id
-            }/transfer?token=${token}&html"
+            }/transfer?token=${encodeURIComponent(token)}&html"
             class="transfer-form"
           >
             <input
@@ -3524,7 +3524,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
 // 8a. Single Raw Idea (text) - GET /user/:userId/raw-ideas/:rawIdeaId
 // ═══════════════════════════════════════════════════════════════════
 export function renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
         return (`
 <!DOCTYPE html>
 <html lang="en">
@@ -3811,7 +3811,7 @@ ${responsiveBase}
         <span class="status-badge status-badge--${rawIdea.status || "pending"}">
           ${rawIdea.status === "processing" ? "⏳ processing" : rawIdea.status === "succeeded" ? "✓ placed by AI" : rawIdea.status === "stuck" ? "⚠ stuck" : rawIdea.status === "deleted" ? "deleted" : "pending"}
         </span>
-        ${rawIdea.aiSessionId && (rawIdea.status === "succeeded" || rawIdea.status === "stuck" || rawIdea.status === "processing") ? `<a class="ai-chat-link" href="/api/v1/user/${userId}/chats?sessionId=${rawIdea.aiSessionId}&token=${token}&html">View AI chat →</a>` : ""}
+        ${rawIdea.aiSessionId && (rawIdea.status === "succeeded" || rawIdea.status === "stuck" || rawIdea.status === "processing") ? `<a class="ai-chat-link" href="/api/v1/user/${userId}/chats?sessionId=${rawIdea.aiSessionId}&token=${encodeURIComponent(token)}&html">View AI chat →</a>` : ""}
       </div>`
           : ""
       }
@@ -3867,7 +3867,7 @@ ${responsiveBase}
 // 8b. Single Raw Idea (file) - GET /user/:userId/raw-ideas/:rawIdeaId
 // ═══════════════════════════════════════════════════════════════════
 export function renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
   const fileDeleted = rawIdea.content === "File was deleted";
   const fileUrl = fileDeleted ? "" : `/api/v1/uploads/${rawIdea.content}`;
   const mimeType = fileDeleted
@@ -4167,7 +4167,7 @@ ${responsiveBase}
 // 9. Invites Page - GET /user/:userId/invites
 // ═══════════════════════════════════════════════════════════════════
 export function renderInvites({ userId, invites, token }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
     return (`
 <!DOCTYPE html>
 <html lang="en">
@@ -4459,7 +4459,7 @@ ${responsiveBase}
 // 10. Deleted Branches Page - GET /user/:userId/deleted
 // ═══════════════════════════════════════════════════════════════════
 export function renderDeletedBranches({ userId, user, deleted, token }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
     return (`
 <!DOCTYPE html>
 <html lang="en">
@@ -4731,7 +4731,7 @@ ${responsiveBase}
             <!-- Revive as Root -->
             <form
               method="POST"
-              action="/api/v1/user/${userId}/deleted/${_id}/reviveAsRoot?token=${token}&html"
+              action="/api/v1/user/${userId}/deleted/${_id}/reviveAsRoot?token=${encodeURIComponent(token)}&html"
               class="revive-as-root-form"
             >
               <button type="submit">Revive as Root</button>
@@ -4740,7 +4740,7 @@ ${responsiveBase}
             <!-- Revive into Branch -->
             <form
               method="POST"
-              action="/api/v1/user/${userId}/deleted/${_id}/revive?token=${token}&html"
+              action="/api/v1/user/${userId}/deleted/${_id}/revive?token=${encodeURIComponent(token)}&html"
               class="revive-into-branch-form"
             >
               <input
@@ -4806,7 +4806,7 @@ ${responsiveBase}
 // 11a. API Key Created Page - POST /user/:userId/api-keys
 // ═══════════════════════════════════════════════════════════════════
 export function renderApiKeyCreated({ userId, safeName, rawKey, token }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
     return (`
 <!DOCTYPE html>
@@ -4923,7 +4923,7 @@ ${backNavStyles}
 // 11b. API Keys List Page - GET /user/:userId/api-keys
 // ═══════════════════════════════════════════════════════════════════
 export function renderApiKeysList({ userId, user, apiKeys, token, errorParam }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
     return (`
 <!DOCTYPE html>
 <html lang="en">
@@ -5269,7 +5269,7 @@ ${responsiveBase}
     <div class="create-card">
       <form class="create-form" method="POST" action="/api/v1/user/${
         userId
-      }/api-keys?token=${token}&html">
+      }/api-keys?token=${encodeURIComponent(token)}&html">
         <input type="text" name="name" placeholder="Key name (optional)" />
         <button type="submit">Create Key</button>
       </form>
@@ -5399,7 +5399,7 @@ export function renderShareToken({ userId, user, token, tokenQS }) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#667eea">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Share Token — @${user.username}</title>
+  <title>Share Token — @${esc(user.username)}</title>
   <style>
 ${baseStyles}
 ${responsiveBase}
@@ -5781,7 +5781,7 @@ input:focus {
           <div class="token-section">
             <div class="token-label">Your Token</div>
             <div class="token-display">
-              <div class="token-text" id="tokenText">${token}</div>
+              <div class="token-text" id="tokenText">${esc(token)}</div>
               <button class="btn-copy" onclick="copyToken()">Copy</button>
             </div>
           </div>
@@ -7675,13 +7675,13 @@ renderCheckout();
 // 14. AI Chats Page - GET /user/:userId/chats
 // ═══════════════════════════════════════════════════════════════════
 export function renderChats({ userId, chats, sessions, username, token, sessionId }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const linkifyNodeIds = (html) =>
     html.replace(
       /Placed on node ([0-9a-f-]{36})/g,
       (_, id) =>
-        `Placed on node <a class="node-link" href="/api/v1/root/${id}${token ? `?token=${token}&html` : "?html"}">${id}</a>`,
+        `Placed on node <a class="node-link" href="/api/v1/root/${id}${token ? `?token=${encodeURIComponent(token)}&html` : "?html"}">${id}</a>`,
     );
 
   const formatContent = (str) => {
@@ -8504,7 +8504,7 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
 // 15. Notifications Page - GET /user/:userId/notifications
 // ═══════════════════════════════════════════════════════════════════
 export function renderNotifications({ userId, notifications, total, username, token }) {
-  const tokenQS = token ? `?token=${token}&html` : `?html`;
+  const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
     const items = notifications
       .map((n) => {

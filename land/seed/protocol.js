@@ -16,6 +16,8 @@
 // 403: FORBIDDEN, EXTENSION_BLOCKED, SESSION_EXPIRED
 // 404: NODE_NOT_FOUND, USER_NOT_FOUND, NOTE_NOT_FOUND, TREE_NOT_FOUND, PEER_NOT_FOUND, EXTENSION_NOT_FOUND, ORCHESTRATOR_NOT_FOUND
 // 409: ORCHESTRATOR_LOCKED
+// 413: INVALID_INPUT (payload too large)
+// 415: INVALID_INPUT (unsupported media type)
 // 429: RATE_LIMITED
 // 500: INTERNAL, TIMEOUT, HOOK_TIMEOUT, HOOK_CANCELLED
 // 502: PEER_UNREACHABLE
@@ -156,7 +158,6 @@ export const WS = {
   // Infrastructure
   REGISTERED:           "registered",
   NAVIGATOR_SESSION:    "navigatorSession",
-  RECENT_ROOTS:         "recentRoots",
   AVAILABLE_MODES:      "availableModes",
   CONVERSATION_CLEARED: "conversationCleared",
   NAVIGATE:             "navigate",

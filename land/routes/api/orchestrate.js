@@ -1,5 +1,6 @@
 import log from "../../seed/log.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { hooks } from "../../seed/hooks.js";
 // LLM orchestration routes: tree chat/place/query, raw idea chat/place, understanding.
 
 import express from "express";
@@ -10,20 +11,13 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, "../../..", ".env") });
+dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;
 
-import authenticate from "../../seed/middleware/authenticate.js";
+import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { getExtension } from "../../extensions/loader.js";
-
-// readAuth: delegates to html-rendering's urlAuth if installed, otherwise requires hard auth
-function readAuth(req, res, next) {
-  const handler = getExtension("html-rendering")?.exports?.urlAuth;
-  if (handler) return handler(req, res, next);
-  return authenticate(req, res, next);
-}
 import { createCanopyLlmProxyClient } from "../../canopy/llmProxy.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
 import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
@@ -51,7 +45,7 @@ import {
 } from "../../seed/ws/sessionRegistry.js";
 import User from "../../seed/models/user.js";
 import Node from "../../seed/models/node.js";
-import { resolveTreeAccess } from "../../seed/authenticate.js";
+import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 import { nullSocket } from "../../seed/orchestrators/helpers.js";
 
 const router = express.Router();
@@ -213,8 +207,17 @@ async function runTreeOrchestration(opts, res) {
         });
       }
 
+      // beforeResponse hook: extensions can modify content before client receives it
+      const hookData = {
+        content: result.answer,
+        userId: req.userId,
+        rootId: req.params.rootId,
+        mode,
+      };
+      await hooks.run("beforeResponse", hookData);
+
       return sendOk(res, {
-        answer: result.answer,
+        answer: hookData.content,
       });
     } catch (err) {
       clearTimeout(timer);
@@ -456,8 +459,8 @@ setInterval(() => {
   }
 }, PQ_WINDOW_MS);
 
-router.post("/root/:rootId/query", readAuth, handleQuery);
-router.get("/root/:rootId/query", readAuth, handleQuery);
+router.post("/root/:rootId/query", authenticateOptional, handleQuery);
+router.get("/root/:rootId/query", authenticateOptional, handleQuery);
 
 // Raw idea and understanding orchestration endpoints moved to their extensions.
 

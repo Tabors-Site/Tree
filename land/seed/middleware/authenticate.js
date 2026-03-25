@@ -4,9 +4,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import User from "../models/user.js";
-import { resolveTreeAccess } from "../authenticate.js";
-import { verifyCanopyToken, getLandIdentity } from "../../canopy/identity.js";
-import { getPeerByDomain } from "../../canopy/peers.js";
+import { resolveTreeAccess } from "../tree/treeAccess.js";
 import { authStrategies } from "../services.js";
 import { sendError, ERR } from "../protocol.js";
 
@@ -20,69 +18,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 export default async function authenticate(req, res, next) {
   try {
-    /* ===========================
-        0. CANOPY TOKEN AUTH (remote land users)
-    ============================ */
     const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith("CanopyToken ")) {
-      const canopyToken = authHeader.slice("CanopyToken ".length);
-
-      // Decode to get issuer
-      let unverified;
-      try {
-        const parts = canopyToken.split(".");
-        unverified = JSON.parse(Buffer.from(parts[1], "base64url").toString());
-      } catch {
-        return sendError(res, 401, ERR.UNAUTHORIZED, "Malformed CanopyToken");
-      }
-
-      const peer = await getPeerByDomain(unverified.iss);
-      if (!peer) {
-        return sendError(res, 403, ERR.FORBIDDEN, "Unknown land: " + unverified.iss);
-      }
-      if (peer.status === "blocked") {
-        return sendError(res, 403, ERR.FORBIDDEN, "Land " + unverified.iss + " is blocked");
-      }
-
-      const { valid, payload, error } = await verifyCanopyToken(canopyToken, peer.publicKey);
-      if (!valid) {
-        return sendError(res, 401, ERR.UNAUTHORIZED, "Invalid CanopyToken: " + error);
-      }
-
-      // Verify token was intended for this land (prevent replay across lands)
-      const myDomain = getLandIdentity().domain;
-      if (payload.aud && payload.aud !== myDomain) {
-        return sendError(res, 401, ERR.UNAUTHORIZED, "CanopyToken audience mismatch");
-      }
-
-      // Verify the verified issuer matches what we used for peer lookup
-      if (payload.iss && payload.iss !== unverified.iss) {
-        return sendError(res, 401, ERR.UNAUTHORIZED, "CanopyToken issuer mismatch");
-      }
-
-      // The sub is the remote user's ID. Must be a ghost user from the claiming land.
-      // SECURITY: Verify isRemote and homeLand match to prevent UUID collision attacks.
-      const ghostUser = await User.findOne({
-        _id: payload.sub,
-        isRemote: true,
-        homeLand: payload.iss,
-      });
-      if (!ghostUser) {
-        return sendError(res, 403, ERR.FORBIDDEN, "Remote user not registered on this land");
-      }
-
-      req.userId = ghostUser._id;
-      req.username = ghostUser.username;
-      req.authType = "canopy";
-      req.canopy = {
-        sourceLandDomain: unverified.iss,
-        sourceLandId: payload.landId,
-        peer,
-      };
-
-      await attachTreeAccess(req);
-      return next();
-    }
 
     /* ===========================
         1. JWT AUTH (preferred)
@@ -121,7 +57,7 @@ export default async function authenticate(req, res, next) {
       req.username = decoded.username;
       req.authType = "jwt";
 
-      await attachTreeAccess(req);
+      if (!await attachTreeAccess(req, res)) return;
       return next();
     }
 
@@ -136,7 +72,7 @@ export default async function authenticate(req, res, next) {
           req.username = result.username;
           req.authType = name;
           if (result.extra) Object.assign(req, result.extra);
-          await attachTreeAccess(req);
+          if (!await attachTreeAccess(req, res)) return;
           return next();
         }
       } catch (strategyErr) {
@@ -154,21 +90,97 @@ export default async function authenticate(req, res, next) {
   }
 }
 
+/**
+ * Optional auth: same pipeline as authenticate but doesn't reject.
+ * If no credentials match, req.userId stays null and the request continues.
+ * Use for routes that serve both authenticated users and anonymous/public access.
+ */
+export async function authenticateOptional(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+
+    // JWT
+    let token = null;
+    if (authHeader?.startsWith("Bearer ")) token = authHeader.slice(7).trim();
+    if (!token && req.cookies?.token) token = req.cookies.token;
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = await User.findById(decoded.userId).lean();
+        if (user) {
+          const authMeta = user.metadata instanceof Map
+            ? user.metadata.get("auth")
+            : user.metadata?.auth;
+          const invalidBefore = authMeta?.tokensInvalidBefore
+            ? new Date(authMeta.tokensInvalidBefore).getTime() / 1000 : 0;
+          if (!decoded.iat || decoded.iat >= invalidBefore) {
+            req.userId = decoded.userId;
+            req.username = decoded.username;
+            req.authType = "jwt";
+            return next();
+          }
+        }
+      } catch {}
+    }
+
+    // Extension strategies
+    for (const { name, handler } of authStrategies) {
+      try {
+        const result = await handler(req);
+        if (result) {
+          req.userId = result.userId;
+          req.username = result.username;
+          req.authType = name;
+          if (result.extra) Object.assign(req, result.extra);
+          return next();
+        }
+      } catch {}
+    }
+
+    // No auth matched. Continue anonymously.
+    return next();
+  } catch {
+    return next();
+  }
+}
+
 /* ===========================
     TREE ACCESS HELPER
 =========================== */
-async function attachTreeAccess(req) {
+
+// Map resolveTreeAccess error strings to protocol codes and HTTP statuses
+const TREE_ACCESS_ERRORS = {
+  NODE_NOT_FOUND: { http: 404, code: ERR.NODE_NOT_FOUND },
+  BROKEN_TREE:    { http: 500, code: ERR.INTERNAL },
+  INVALID_TREE:   { http: 500, code: ERR.INTERNAL },
+};
+
+/**
+ * Resolve tree access for the request. Sends error response and returns false
+ * if access is denied or the node doesn't exist. Returns true on success or
+ * when no nodeId is present (nothing to check).
+ */
+async function attachTreeAccess(req, res) {
   const nodeId = req.body?.nodeId || req.params?.nodeId || req.query?.nodeId;
 
-  if (!nodeId) return;
+  if (!nodeId) return true;
 
   const access = await resolveTreeAccess(nodeId, req.userId);
 
-  if (!access.canWrite && !access.isOwner && !access.isContributor) {
-    throw new Error("TREE_ACCESS_DENIED");
+  if (!access.ok) {
+    const mapped = TREE_ACCESS_ERRORS[access.error] || { http: 500, code: ERR.INTERNAL };
+    sendError(res, mapped.http, mapped.code, access.message);
+    return false;
+  }
+
+  if (!access.canWrite) {
+    sendError(res, 403, ERR.FORBIDDEN, "You do not have write access to this tree");
+    return false;
   }
 
   req.rootId = access.rootId;
   req.treeAccess = access;
+  return true;
 }
 

@@ -26,7 +26,7 @@ import { onListen } from "./startup.js";
 import { getLandUrl } from "./canopy/identity.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 const app = express();
 

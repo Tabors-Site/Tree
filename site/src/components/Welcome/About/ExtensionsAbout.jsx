@@ -225,7 +225,7 @@ if (other?.exports?.myFunction) {
               { name: "blog", desc: "Land-level blog for posts and updates" },
               { name: "book", desc: "Export tree notes as shareable documents" },
               { name: "solana", desc: "On-chain wallets and token operations per node" },
-              { name: "shell", desc: "Execute shell commands from AI (god-tier only)" },
+              { name: "shell", desc: "Execute shell commands from AI (admin only)" },
               { name: "land-manager", desc: "Autonomous land management agent for system operations" },
               { name: "api-keys", desc: "User-generated API keys for programmatic access" },
               { name: "user-llm", desc: "Custom LLM connections and per-user model routing" },
