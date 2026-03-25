@@ -2,7 +2,10 @@
  * User metadata helpers.
  * Same pattern as extensionMetadata.js but for User documents.
  * Extensions own their data in metadata. Core provides read/write only.
+ * Document size guard protects against 16MB BSON limit.
  */
+
+import { guardMetadataWrite } from "./documentGuard.js";
 
 /**
  * Read from user metadata. Works with both Mongoose docs and .lean() plain objects.
@@ -16,6 +19,9 @@ export function getUserMeta(user, key) {
 }
 
 export function setUserMeta(user, key, data) {
+  // Document size guard
+  guardMetadataWrite(user, data, { documentType: "user", documentId: user._id });
+
   if (!user.metadata) {
     user.metadata = new Map();
   }

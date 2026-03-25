@@ -139,7 +139,7 @@ const KernelPage = () => {
               </div>
             </div>
             <div className="lp-card">
-              <h3>After Hooks (12)</h3>
+              <h3>After Hooks (13)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
                 Parallel, fire-and-forget. Errors logged, never block.
               </p>
@@ -155,7 +155,8 @@ const KernelPage = () => {
                 afterNavigate<br/>
                 afterMetadataWrite<br/>
                 afterScopeChange<br/>
-                afterBoot
+                afterBoot<br/>
+                <span style={{color: "#fbbf24"}}>onDocumentPressure</span>
               </div>
             </div>
             <div className="lp-card">
@@ -383,7 +384,7 @@ const KernelPage = () => {
               <div className="lp-step-num" style={{background: "#666", color: "#fff", fontSize: "0.7rem"}}>.f</div>
               <div className="lp-step-content">
                 <h4>.flow</h4>
-                <p>Cascade result store. Holds signal outcomes keyed by signalId. Cleaned by resultTTL. The land's short-term memory of what moved and what happened.</p>
+                <p>Cascade result store. Daily partition children hold results by date. Retention deletes entire partitions. flowMaxResultsPerDay caps growth per day. The land's short-term memory of what moved and what happened.</p>
               </div>
             </div>
           </div>
@@ -427,6 +428,9 @@ const KernelPage = () => {
               ["uploadEnabled", "Master switch for uploads", "true"],
               ["maxUploadBytes", "Hard ceiling per upload", "104857600"],
               ["allowedMimeTypes", "MIME prefix filter (null = all)", "null"],
+              ["maxDocumentSizeBytes", "Document size ceiling (2MB headroom under MongoDB 16MB)", "14680064"],
+              ["flowMaxResultsPerDay", "Max cascade results per daily partition", "10000"],
+              ["allowedFrameDomains", "CSP frame-ancestors domains", "[]"],
             ].map(([key, desc, def]) => (
               <div key={key} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -454,7 +458,11 @@ const KernelPage = () => {
               ["Hook timeout", "5s per handler. Hanging handlers killed and logged."],
               ["Hook cap", "100 handlers per hook. Flooding rejected."],
               ["Circuit breaker", "5 consecutive failures auto-disables the handler."],
-              ["Metadata guard", "Blocked extensions can't write to nodes."],
+              ["Metadata guard", "Blocked extensions can't write to nodes. Four core namespaces bypass blocking."],
+              ["Document size guard", "Every metadata write checks total size against 14MB ceiling. Rejects with DOCUMENT_SIZE_EXCEEDED. onDocumentPressure fires at 80%."],
+              ["Per-namespace cap", "512KB per extension namespace per node. 20 extensions at max = 10MB, under the ceiling."],
+              [".flow partitioning", "Daily partition nodes prevent unbounded growth. Retention deletes entire partitions by date."],
+              ["Ownership chain", "rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify."],
               ["Session cap", "10K max with oldest-first eviction."],
               ["Depth limits", "50 for status cascade, 100 for auth traversal."],
               ["Name validation", "No HTML, no dots, no slashes, max 150 chars."],

@@ -1,4 +1,5 @@
 import { hooks } from "../hooks.js";
+import { guardMetadataWrite } from "./documentGuard.js";
 
 /**
  * Helpers for extensions to store per-node data in node.metadata.
@@ -10,7 +11,11 @@ import { hooks } from "../hooks.js";
  *
  * Spatial extension scoping: if an extension is blocked at a node
  * (via metadata.extensions.blocked), writes are silently skipped.
- * Core namespaces (tools, modes, extensions, storage) are never blocked.
+ * Core namespaces (tools, modes, extensions, cascade) are never blocked.
+ *
+ * Document size guard: every write checks total document size against
+ * maxDocumentSizeBytes (default 14MB). Writes that would exceed the
+ * limit are rejected with DOCUMENT_SIZE_EXCEEDED.
  */
 
 const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade"]);
@@ -60,6 +65,9 @@ export function setExtMeta(node, extName, data) {
       // JSON.stringify failed (circular ref, etc.) - allow but warn
     }
   }
+  // Document size guard: check total document size before writing
+  guardMetadataWrite(node, data, { documentType: "node", documentId: node._id });
+
   if (!node.metadata) {
     node.metadata = new Map();
   }

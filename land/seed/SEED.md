@@ -67,7 +67,7 @@ Created at boot by `ensureLandRoot()`. They hold infrastructure state, not user 
 | .config | config | All runtime configuration as metadata keys. CLI, API, or AI writable. |
 | .peers | peers | Canopy federation peer list. |
 | .extensions | extensions | Extension registry. Loaded extensions tracked as child nodes. |
-| .flow | flow | Cascade result store. Signal outcomes keyed by signalId. |
+| .flow | flow | Cascade result store. Daily partition children hold results. Retention deletes entire partitions. |
 
 ## Five Registries
 
@@ -138,6 +138,25 @@ Every operation at a node goes through four resolution chains. Position determin
 | afterScopeChange | after | After extension blocking/restriction changes. { nodeId, blocked, restricted, userId } |
 | afterBoot | after | Once after all extensions loaded, config initialized, server listening. |
 | onCascade | sequential | Fires on content write at cascade-enabled node. Results written to .flow. |
+| onDocumentPressure | after | Any document exceeds 80% of maxDocumentSizeBytes. { documentType, documentId, currentSize, projectedSize, maxSize, percent } |
+
+## Ownership
+
+Ownership resolves by walking the parent chain. The first node with `rootOwner` set is the ownership boundary. `rootOwner` means "the owner from this point down." Setting rootOwner on a branch delegates that sub-tree to a new owner.
+
+Contributors accumulate along the walk. If a user is in `contributors[]` at any node between the current position and the ownership boundary, they have write access.
+
+Five ownership mutation functions in `seed/tree/ownership.js`, all chain-validated:
+
+| Function | Rule |
+|----------|------|
+| addContributor | Resolved owner or admin. Atomic $addToSet. |
+| removeContributor | Resolved owner, admin, or self-removal. |
+| setOwner | Owner above or admin can delegate. |
+| removeOwner | Owner above or admin can revoke. Section falls back to next owner up. |
+| transferOwnership | Current owner or admin can transfer. |
+
+All reject on system nodes. Extensions use `core.ownership.*`.
 
 ## Cascade
 
@@ -147,6 +166,16 @@ When content is written at a node with `metadata.cascade.enabled = true` and `ca
 - `deliverCascade({ nodeId, signalId, payload, source, depth })`: extension-external. Extensions propagate signals. The seed never blocks it.
 
 Result shape: `{ status, source, payload, timestamp, signalId, extName }`. Six statuses: succeeded, failed, rejected, queued, partial, awaiting. None terminal.
+
+### .flow Partitioning
+
+Results are stored in daily partition nodes under .flow. Each partition is a child node named by date (YYYY-MM-DD). The kernel creates today's partition on first cascade write of the day.
+
+Retention deletes entire partition nodes older than resultTTL. No scanning individual keys. Drop the node.
+
+`flowMaxResultsPerDay` (default 10,000) caps results per partition. When the cap is hit, the oldest signal in that partition is overwritten. Circular buffer. The land never stops recording. It just forgets the oldest when pressure is high.
+
+Query functions (`getCascadeResults`, `getAllCascadeResults`) search across partitions transparently. Extensions never know partitions exist.
 
 ## Protocol
 
@@ -191,6 +220,9 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | uploadEnabled | true | Master switch for uploads |
 | maxUploadBytes | 104857600 | Hard ceiling per upload (100MB) |
 | allowedMimeTypes | null | Allowed MIME prefixes, null means all |
+| maxDocumentSizeBytes | 14680064 | Document size ceiling (14MB, 2MB headroom under MongoDB's 16MB) |
+| flowMaxResultsPerDay | 10000 | Max cascade results per daily partition |
+| allowedFrameDomains | [] | Additional domains allowed in CSP frame-ancestors |
 
 Extension config (like `htmlEnabled`) lives in .config too, written by extensions on first boot, not by the kernel.
 
@@ -204,6 +236,10 @@ Extension config (like `htmlEnabled`) lives in .config too, written by extension
 | Circuit breaker | 5 consecutive failures auto-disables the handler. |
 | Extension router timeout | 5s. Hanging extension routes fall through to kernel. |
 | Metadata guard | Blocked extensions can't write to nodes. Four core namespaces (cascade, extensions, tools, modes) bypass blocking. |
+| Document size guard | Every metadata write checks total document size against maxDocumentSizeBytes (14MB default). Writes exceeding the limit rejected with DOCUMENT_SIZE_EXCEEDED. onDocumentPressure fires at 80% capacity. |
+| Per-namespace cap | 512KB per extension namespace per node via setExtMeta. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |
+| .flow partitioning | Daily partition nodes prevent unbounded growth. flowMaxResultsPerDay cap with circular overwrite. Retention deletes entire partitions by date. |
+| Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. System nodes always rejected. |
 | Session cap | 10K max with oldest-first eviction. |
 | Depth limits | 50 for status cascade. 100 for auth traversal. 50 for cascade propagation. |
 | Cascade payload limit | Oversized signals rejected. |

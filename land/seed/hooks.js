@@ -28,6 +28,7 @@ import log from "./log.js";
  *   afterMetadataWrite - After setExtMeta succeeds. { nodeId, extName, data }. Opt-in: zero overhead if no listeners.
  *   afterScopeChange   - After metadata.extensions.blocked/restricted changes. { nodeId, blocked, restricted, userId }
  *   afterBoot          - Once after all extensions loaded, config initialized, server listening. Fires once.
+ *   onDocumentPressure - Any document exceeds 80% of maxDocumentSizeBytes on a write. { documentType, documentId, currentSize, projectedSize, maxSize, percent }
  *
  * Extension hooks (examples, extensions define their own):
  *   gateway:beforeDispatch    - Before notification dispatch

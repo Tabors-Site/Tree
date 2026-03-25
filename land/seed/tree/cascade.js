@@ -23,6 +23,7 @@ import { hooks } from "../hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { CASCADE } from "../protocol.js";
 import { v4 as uuidv4 } from "uuid";
+import { checkWriteSize, estimateWriteSize } from "./documentGuard.js";
 
 /**
  * Check if cascade should fire for a content write at a node.
@@ -138,15 +139,111 @@ export async function deliverCascade({ nodeId, signalId, payload = {}, source, d
   return result;
 }
 
+// ── .flow Partitioning ──
+// Results are stored in daily partition nodes under .flow.
+// Each partition is a child of .flow named by date (YYYY-MM-DD).
+// This prevents any single document from growing unbounded.
+// Retention deletes entire partition nodes older than resultTTL.
+
+function todayPartitionName() {
+  return new Date().toISOString().slice(0, 10); // "2026-03-25"
+}
+
 /**
- * Write a cascade result to the .flow system node.
+ * Get or create today's partition node under .flow.
+ * Creates the partition on first cascade write of the day.
+ */
+async function getOrCreatePartition() {
+  const today = todayPartitionName();
+  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id children").lean();
+  if (!flowNode) return null;
+
+  // Check if today's partition exists
+  const existing = await Node.findOne({
+    parent: flowNode._id,
+    name: today,
+  }).select("_id metadata").lean();
+
+  if (existing) return existing._id;
+
+  // Create today's partition
+  const partition = new Node({
+    name: today,
+    parent: flowNode._id,
+    metadata: new Map([["results", {}]]),
+  });
+  await partition.save();
+
+  // Add to .flow's children
+  await Node.updateOne(
+    { _id: flowNode._id },
+    { $addToSet: { children: partition._id } },
+  );
+
+  return partition._id;
+}
+
+/**
+ * Write a cascade result to today's .flow partition.
+ * Guarded against document size limit. When today's partition hits
+ * flowMaxResultsPerDay, oldest results are dropped (circular buffer).
  */
 async function writeResult(signalId, result) {
   try {
-    // Atomic push to avoid concurrent read-modify-write races.
-    // Uses MongoDB $set on the specific signalId key to minimize conflict surface.
-    await Node.findOneAndUpdate(
-      { systemRole: "flow" },
+    const partitionId = await getOrCreatePartition();
+    if (!partitionId) {
+      log.error("Cascade", "No .flow system node found. Cannot write result.");
+      return;
+    }
+
+    // Load partition to check size
+    const partition = await Node.findById(partitionId);
+    if (!partition) return;
+
+    const writeSize = estimateWriteSize(result);
+    const sizeCheck = checkWriteSize(partition, writeSize, {
+      documentType: "system",
+      documentId: partitionId,
+    });
+
+    if (!sizeCheck.ok) {
+      // Partition full. Drop oldest results to make room.
+      const meta = partition.metadata instanceof Map
+        ? partition.metadata.get("results") || {}
+        : partition.metadata?.results || {};
+      const keys = Object.keys(meta);
+      if (keys.length > 0) {
+        delete meta[keys[0]]; // drop oldest signal
+        if (partition.metadata instanceof Map) {
+          partition.metadata.set("results", meta);
+        } else {
+          partition.metadata.results = meta;
+        }
+        if (partition.markModified) partition.markModified("metadata");
+        await partition.save();
+      }
+    }
+
+    // Check per-day cap
+    const maxPerDay = parseInt(getLandConfigValue("flowMaxResultsPerDay") || "10000", 10);
+    const partitionDoc = await Node.findById(partitionId).select("metadata").lean();
+    const currentResults = partitionDoc?.metadata instanceof Map
+      ? partitionDoc.metadata.get("results") || {}
+      : partitionDoc?.metadata?.results || {};
+    const resultCount = Object.keys(currentResults).length;
+
+    if (resultCount >= maxPerDay) {
+      // Circular buffer: drop oldest signal key
+      const oldest = Object.keys(currentResults)[0];
+      await Node.updateOne(
+        { _id: partitionId },
+        { $unset: { [`metadata.results.${oldest}`]: 1 } },
+      );
+    }
+
+    // Write the result
+    await Node.findByIdAndUpdate(
+      partitionId,
       { $push: { [`metadata.results.${signalId}`]: result } },
       { upsert: false },
     );
@@ -157,10 +254,26 @@ async function writeResult(signalId, result) {
 
 /**
  * Get cascade results for a signal.
+ * Searches across all partitions (most recent first).
  */
 export async function getCascadeResults(signalId) {
-  const flowNode = await Node.findOne({ systemRole: "flow" }).select("metadata").lean();
+  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id children").lean();
   if (!flowNode) return [];
+
+  // Search partitions newest first
+  const partitions = await Node.find({ parent: flowNode._id })
+    .select("metadata")
+    .sort({ name: -1 })
+    .lean();
+
+  for (const p of partitions) {
+    const results = p.metadata instanceof Map
+      ? p.metadata.get("results") || {}
+      : p.metadata?.results || {};
+    if (results[signalId]) return results[signalId];
+  }
+
+  // Fallback: check .flow itself for pre-partition results
   const results = flowNode.metadata instanceof Map
     ? flowNode.metadata.get("results") || {}
     : flowNode.metadata?.results || {};
@@ -168,57 +281,73 @@ export async function getCascadeResults(signalId) {
 }
 
 /**
- * Get all recent cascade results.
+ * Get all recent cascade results across partitions.
  */
 export async function getAllCascadeResults(limit = 50) {
-  const flowNode = await Node.findOne({ systemRole: "flow" }).select("metadata").lean();
+  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id").lean();
   if (!flowNode) return {};
-  const results = flowNode.metadata instanceof Map
-    ? flowNode.metadata.get("results") || {}
-    : flowNode.metadata?.results || {};
 
-  const entries = Object.entries(results);
-  const sorted = entries.sort((a, b) => {
-    const aTime = a[1][a[1].length - 1]?.timestamp || 0;
-    const bTime = b[1][b[1].length - 1]?.timestamp || 0;
-    return new Date(bTime) - new Date(aTime);
-  });
-  return Object.fromEntries(sorted.slice(0, limit));
+  const partitions = await Node.find({ parent: flowNode._id })
+    .select("metadata")
+    .sort({ name: -1 })
+    .lean();
+
+  const all = {};
+  let count = 0;
+
+  for (const p of partitions) {
+    if (count >= limit) break;
+    const results = p.metadata instanceof Map
+      ? p.metadata.get("results") || {}
+      : p.metadata?.results || {};
+
+    const entries = Object.entries(results).sort((a, b) => {
+      const aTime = a[1][a[1].length - 1]?.timestamp || 0;
+      const bTime = b[1][b[1].length - 1]?.timestamp || 0;
+      return new Date(bTime) - new Date(aTime);
+    });
+
+    for (const [signalId, results] of entries) {
+      if (count >= limit) break;
+      all[signalId] = results;
+      count++;
+    }
+  }
+
+  return all;
 }
 
 /**
- * Clean up expired results from .flow based on resultTTL config.
+ * Clean up expired partition nodes from .flow based on resultTTL config.
+ * Deletes entire partition nodes older than the cutoff. No scanning individual keys.
  */
 export async function cleanupExpiredResults() {
   const ttl = parseInt(getLandConfigValue("resultTTL") || "604800", 10);
   const cutoff = new Date(Date.now() - ttl * 1000);
+  const cutoffDate = cutoff.toISOString().slice(0, 10); // "2026-03-18"
 
-  const flowNode = await Node.findOne({ systemRole: "flow" });
+  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id children").lean();
   if (!flowNode) return 0;
 
-  const results = flowNode.metadata instanceof Map
-    ? flowNode.metadata.get("results") || {}
-    : flowNode.metadata?.results || {};
+  // Find partitions older than cutoff (partition name is date string, lexicographic compare works)
+  const expired = await Node.find({
+    parent: flowNode._id,
+    name: { $lt: cutoffDate },
+  }).select("_id name");
 
-  let cleaned = 0;
-  for (const [signalId, entries] of Object.entries(results)) {
-    const newest = entries[entries.length - 1];
-    if (newest?.timestamp && new Date(newest.timestamp) < cutoff) {
-      delete results[signalId];
-      cleaned++;
-    }
-  }
+  if (expired.length === 0) return 0;
 
-  if (cleaned > 0) {
-    if (flowNode.metadata instanceof Map) {
-      flowNode.metadata.set("results", results);
-    } else {
-      flowNode.metadata.results = results;
-    }
-    if (flowNode.markModified) flowNode.markModified("metadata");
-    await flowNode.save();
-    log.verbose("Cascade", `Cleaned ${cleaned} expired signal(s) from .flow`);
-  }
+  const expiredIds = expired.map(p => p._id);
 
-  return cleaned;
+  // Remove from .flow children
+  await Node.updateOne(
+    { _id: flowNode._id },
+    { $pullAll: { children: expiredIds } },
+  );
+
+  // Delete partition nodes
+  await Node.deleteMany({ _id: { $in: expiredIds } });
+
+  log.verbose("Cascade", `Cleaned ${expired.length} expired partition(s) from .flow: ${expired.map(p => p.name).join(", ")}`);
+  return expired.length;
 }
