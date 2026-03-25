@@ -10,7 +10,6 @@ import { logContribution, escapeRegex } from "../utils.js";
 import { hooks } from "../hooks.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
-// Energy: dynamic import, no-op if extension not installed
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

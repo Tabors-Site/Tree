@@ -1080,10 +1080,6 @@ export function clearSession(visitorId) {
   sessions.delete(visitorId);
 }
 
-export function conversationSessionCount() {
-  return sessions.size;
-}
-
 /**
  * Reset conversation messages but keep mode and rootId intact.
  * Rebuilds system prompt for the current mode.
@@ -1102,20 +1098,6 @@ export async function resetConversation(visitorId, ctx) {
   log.debug("LLM", 
     `🔄 Reset conversation for ${visitorId} (mode: ${session.modeKey}, root: ${session.rootId})`,
   );
-}
-
-export function getConversation(visitorId) {
-  return getSession(visitorId).messages;
-}
-
-export function getSessionInfo(visitorId) {
-  const s = getSession(visitorId);
-  return {
-    modeKey: s.modeKey,
-    bigMode: s.bigMode,
-    rootId: s.rootId,
-    messageCount: s.messages.length,
-  };
 }
 
 export function sessionCount() {

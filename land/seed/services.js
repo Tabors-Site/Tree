@@ -45,6 +45,10 @@ import { OrchestratorRuntime } from "./orchestrators/runtime.js";
 import { acquireLock, releaseLock, isLocked } from "./orchestrators/locks.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE, STATUS } from "./protocol.js";
 import { deliverCascade } from "./tree/cascade.js";
+import {
+  addContributor, removeContributor,
+  setOwner, removeOwner, transferOwnership,
+} from "./tree/ownership.js";
 
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)
@@ -129,6 +133,9 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     hooks: hooksModule,
     modes: { registerMode, setDefaultMode },
     orchestrators: { register: registerOrchestrator, get: getOrchestrator },
+
+    // --- Ownership (contributor and rootOwner mutations, chain-validated) ---
+    ownership: { addContributor, removeContributor, setOwner, removeOwner, transferOwnership },
 
     // --- Cascade (extensions call deliverCascade to propagate signals) ---
     cascade: { deliverCascade },

@@ -4,7 +4,6 @@ import {
 } from "../utils.js";
 import { hooks } from "../hooks.js";
 import Node from "../models/node.js";
-// Energy: dynamic import, no-op if extension not installed
 
 async function editStatus({
   nodeId,

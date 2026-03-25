@@ -5,9 +5,8 @@ import { createNote } from "./notes.js";
 import { resolveTreeAccess } from "./treeAccess.js";
 import { isDescendant } from "./treeFetch.js";
 import { hooks } from "../hooks.js";
-// Energy: dynamic import, no-op if extension not installed
 import { getLandRootId } from "../landRoot.js";
-//validate once during recursive branches
+
 async function getUserOrThrow(userId) {
   if (!userId) {
     throw new Error("User ID is required");

@@ -16,7 +16,6 @@ import {
   mcpClients,
   MCP_SERVER_URL,
 } from "./mcp.js";
-// Energy: dynamic import, no-op if extension not installed
 import { getNodeName } from "../tree/treeData.js";
 import Node from "../models/node.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
@@ -32,7 +31,6 @@ import {
   getCurrentMode,
   clearSession,
   resetConversation,
-  getConversation,
   sessionCount,
   setCurrentNodeId,
   getCurrentNodeId,

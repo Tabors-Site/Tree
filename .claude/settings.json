@@ -219,7 +219,15 @@
       "Bash(/tmp/final_audit.sh:*)",
       "Bash(chmod +x /tmp/final_audit.sh)",
       "Bash(/tmp/final_audit.sh)",
-      "Bash(grep -n \"TODO\\\\|FIXME\\\\|XXX\\\\|HACK\\\\|DEPRECATED\" /home/tabor/github/Tree/land/seed/ws/*.js /home/tabor/github/Tree/land/seed/middleware/*.js /home/tabor/github/Tree/land/seed/orchestrators/*.js)"
+      "Bash(grep -n \"TODO\\\\|FIXME\\\\|XXX\\\\|HACK\\\\|DEPRECATED\" /home/tabor/github/Tree/land/seed/ws/*.js /home/tabor/github/Tree/land/seed/middleware/*.js /home/tabor/github/Tree/land/seed/orchestrators/*.js)",
+      "Bash(grep -r from.*seed/ /home/tabor/github/Tree/land/routes /home/tabor/github/Tree/land/extensions/loader.js /home/tabor/github/Tree/land/startup.js)",
+      "Bash(grep -r \"conversationSessionCount\\\\|getConversation\\\\|getSessionInfo\" /home/tabor/github/Tree/land --include=*.js)",
+      "Bash(grep -r getConversation /home/tabor/github/Tree/land --include=*.js)",
+      "Bash(grep -r \"collectSubtreeNodeIds\\\\|nodeMatchesStatus\\\\|getAllNotesByUser\\\\|transferNote\\\\|getNoteEditHistory\" /home/tabor/github/Tree/land --include=*.js)",
+      "Bash(grep -r unregisterSessionType /home/tabor/github/Tree/land --include=*.js)",
+      "Bash(/tmp/dead_code_check.txt:*)",
+      "Bash(grep -l \"Energy: dynamic import\" /home/tabor/github/Tree/land/seed/**/*.js)",
+      "Bash(grep -r \"conversationSessionCount\\\\|getSessionInfo\" /home/tabor/github/Tree/land --include=*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

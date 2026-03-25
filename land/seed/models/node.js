@@ -36,40 +36,7 @@ const NodeSchema = new mongoose.Schema({
 });
 
 // No virtuals. Extension data lives in metadata. Callers use getExtMeta/setExtMeta.
-
-NodeSchema.methods.addContributor = function (userId, removerId) {
-  if (!this.rootOwner)
-    throw new Error("Only nodes with an rootOwner can have contributors.");
-
-  if (this.rootOwner.toString() !== removerId) {
-    throw new Error("Only the rootOwner can add contributors.");
-  }
-  if (!this.contributors.includes(userId)) {
-    this.contributors.push(userId);
-  }
-};
-
-NodeSchema.methods.removeContributor = function (userId, removerId) {
-  if (
-    this.rootOwner.toString() !== removerId &&
-    !this.contributors.includes(removerId)
-  ) {
-    throw new Error(
-      "Only the rootOwner or a contributor can remove contributors."
-    );
-  }
-  this.contributors = this.contributors.filter(
-    (contributor) => contributor !== userId
-  );
-};
-
-NodeSchema.methods.transferOwnership = function (newOwnerId, removerId) {
-  if (this.rootOwner.toString() !== removerId) {
-    throw new Error("Only the rootOwner can transfer ownership.");
-  }
-  if (!this.rootOwner) throw new Error("Node does not have an owner.");
-  this.rootOwner = newOwnerId;
-};
+// Ownership and contributor mutations live in seed/tree/ownership.js (uses resolveTreeAccess).
 
 NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
   if (this.systemRole) {
@@ -104,7 +71,7 @@ NodeSchema.methods.deleteWithChildrenBottomUp = async function () {
   }
 };
 
-//attach the delete script whenever a node is deleted
+// Cascade delete: remove children bottom-up when a node is deleted
 NodeSchema.pre("findOneAndDelete", async function (next) {
   const Node = mongoose.model("Node");
 

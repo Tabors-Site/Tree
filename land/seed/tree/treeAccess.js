@@ -1,5 +1,16 @@
 import Node from "../models/node.js";
 
+/**
+ * Resolve tree access by walking the parent chain.
+ *
+ * Ownership resolves at the first node where rootOwner is set.
+ * rootOwner means "the owner from this point down." The word root
+ * refers to the subtree root, not necessarily the tree root.
+ *
+ * Contributors accumulate along the walk. If the user is in
+ * contributors[] at ANY node between the current position and
+ * the ownership boundary, they have write access.
+ */
 export async function resolveTreeAccess(nodeId, userId) {
   if (!nodeId) {
     return {
@@ -10,6 +21,7 @@ export async function resolveTreeAccess(nodeId, userId) {
   }
 
   const startNodeId = nodeId;
+  let isContributor = false;
 
   let node = await Node.findById(nodeId)
     .select("parent rootOwner contributors")
@@ -23,6 +35,11 @@ export async function resolveTreeAccess(nodeId, userId) {
       message:
         "Node not found. Use get-root-nodes-by-user to find a valid node.",
     };
+  }
+
+  // Check contributors at start node
+  if (userId && node.contributors?.some((id) => id.toString() === userId)) {
+    isContributor = true;
   }
 
   let depth = 0;
@@ -59,19 +76,21 @@ export async function resolveTreeAccess(nodeId, userId) {
         message: "Invalid tree: reached system node boundary",
       };
     }
+
+    // Accumulate contributors at each node along the walk
+    if (!isContributor && userId && node.contributors?.some((id) => id.toString() === userId)) {
+      isContributor = true;
+    }
   }
 
-  const isRoot = node._id.toString() === startNodeId;
-  const isOwner = node.rootOwner?.toString() === userId;
-  const isContributor =
-    node.contributors?.some((id) => id.toString() === userId) ?? false;
+  const isOwner = userId && node.rootOwner?.toString() === userId;
 
   return {
     ok: true,
     rootId: node._id.toString(),
-    isRoot,
-    isOwner,
+    isRoot: node._id.toString() === startNodeId,
+    isOwner: !!isOwner,
     isContributor,
-    canWrite: isOwner || isContributor,
+    canWrite: !!isOwner || isContributor,
   };
 }
