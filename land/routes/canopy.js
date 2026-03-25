@@ -1,5 +1,5 @@
 import log from "../seed/log.js";
-import { sendOk, sendError, ERR } from "../seed/protocol.js";
+import { sendOk, sendError, ERR, NODE_STATUS } from "../seed/protocol.js";
 import express from "express";
 import { getLandInfoPayload, getLandIdentity, signCanopyToken } from "../canopy/identity.js";
 import {
@@ -288,7 +288,7 @@ router.post("/canopy/peer/register", async (req, res) => {
         protocolVersion,
         name: name || "",
         extensions: req.body.extensions || [],
-        status: "active",
+        status: NODE_STATUS.ACTIVE,
       });
     }
 

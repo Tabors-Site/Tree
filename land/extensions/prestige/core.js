@@ -3,6 +3,21 @@ import {
   findNodeById,
 } from "../../seed/utils.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
+import Node from "../../seed/models/node.js";
+
+/**
+ * Resolve "latest" to the current prestige level for a node.
+ * Without prestige data, returns 0.
+ */
+export async function resolveVersion(nodeId, version) {
+  if (version === "latest") {
+    const node = await Node.findById(nodeId).select("metadata").lean();
+    if (!node) throw new Error("Node not found");
+    const prestige = getExtMeta(node, "prestige");
+    return prestige?.current || 0;
+  }
+  return Number(version);
+}
 
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }

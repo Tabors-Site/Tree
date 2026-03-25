@@ -2,6 +2,7 @@
 // Automates raw idea placement: chooseRoot -> delegate to treeOrchestrator -> record result.
 
 import log from "../../seed/log.js";
+import { DELETED } from "../../seed/protocol.js";
 import { OrchestratorRuntime, parseJsonSafe } from "../../seed/orchestrators/runtime.js";
 import { SESSION_TYPES, updateSessionMeta } from "../../seed/ws/sessionRegistry.js";
 import { setRootId, getClientForUser } from "../../seed/ws/conversation.js";
@@ -46,7 +47,7 @@ export async function orchestrateRawIdeaPlacement({
 }) {
   // Load and validate raw idea before creating runtime
   const rawIdea = await RawIdea.findById(rawIdeaId);
-  if (!rawIdea || rawIdea.userId === "deleted") {
+  if (!rawIdea || rawIdea.userId === DELETED) {
  log.warn("Raw Ideas", `Raw idea ${rawIdeaId} not found or already placed`);
     return withResponse ? { success: false, reason: "Raw idea not found" } : undefined;
   }
@@ -103,7 +104,7 @@ export async function orchestrateRawIdeaPlacement({
   // Log contribution: AI started processing
   await logContribution({
     userId,
-    nodeId: "deleted",
+    nodeId: DELETED,
     wasAi: true,
     sessionId: rt.sessionId,
     action: "rawIdea",
@@ -125,7 +126,7 @@ export async function orchestrateRawIdeaPlacement({
     });
     logContribution({
       userId,
-      nodeId: "deleted",
+      nodeId: DELETED,
       wasAi: true,
       chatId: rt.mainChatId,
       sessionId: rt.sessionId,
@@ -245,7 +246,7 @@ export async function orchestrateRawIdeaPlacement({
     while (cursor) {
       if (cursor.systemRole) break;
       targetNodePath.unshift({ _id: cursor._id, name: cursor.name });
-      if (!cursor.parent || cursor.parent === "deleted") break;
+      if (!cursor.parent || cursor.parent === DELETED) break;
       cursor = await Node.findById(cursor.parent).select("_id name parent systemRole").lean();
     }
 
@@ -293,7 +294,7 @@ export async function orchestrateRawIdeaPlacement({
       });
       logContribution({
         userId,
-        nodeId: "deleted",
+        nodeId: DELETED,
         wasAi: true,
         chatId: rt.mainChatId,
         sessionId: rt.sessionId,

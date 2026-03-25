@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import express from "express";
-import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { sendOk, sendError, ERR, DELETED } from "../../seed/protocol.js";
 import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
@@ -377,7 +377,7 @@ router.post("/user/:userId/raw-ideas/:rawIdeaId/place", authenticate, async (req
     const { rawIdeaId } = req.params;
     if (req.userId.toString() !== req.params.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     const rawIdea = await RawIdea.findById(rawIdeaId);
-    if (!rawIdea || rawIdea.userId === "deleted") return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
+    if (!rawIdea || rawIdea.userId === DELETED) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
     if (rawIdea.userId.toString() !== req.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     if (rawIdea.contentType === "file") return sendError(res, 400, ERR.INVALID_TYPE, "File ideas cannot be auto-placed");
     if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.RESOURCE_CONFLICT, `Already ${rawIdea.status}`);
@@ -399,7 +399,7 @@ router.post("/user/:userId/raw-ideas/:rawIdeaId/chat", authenticate, async (req,
     const { rawIdeaId } = req.params;
     if (req.userId.toString() !== req.params.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     const rawIdea = await RawIdea.findById(rawIdeaId);
-    if (!rawIdea || rawIdea.userId === "deleted") return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
+    if (!rawIdea || rawIdea.userId === DELETED) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
     if (rawIdea.userId.toString() !== req.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     if (rawIdea.contentType === "file") return sendError(res, 400, ERR.INVALID_TYPE, "File ideas cannot be auto-placed");
     if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.RESOURCE_CONFLICT, `Already ${rawIdea.status}`);

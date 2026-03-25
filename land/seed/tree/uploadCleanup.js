@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import log from "../log.js";
 import Note from "../models/note.js";
+import { getLandConfigValue } from "../landConfig.js";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -94,7 +95,10 @@ export async function cleanOrphanedUploads({ graceMs = DEFAULT_GRACE_MS } = {}) 
  * @param {number} [opts.intervalMs] - how often to run (default: 6 hours)
  * @param {number} [opts.graceMs] - minimum file age before deletion (default: 1 hour)
  */
-export function startUploadCleanup({ intervalMs = DEFAULT_INTERVAL_MS, graceMs = DEFAULT_GRACE_MS } = {}) {
+export function startUploadCleanup({
+  intervalMs = Number(getLandConfigValue("uploadCleanupInterval")) || DEFAULT_INTERVAL_MS,
+  graceMs    = Number(getLandConfigValue("uploadGracePeriodMs"))   || DEFAULT_GRACE_MS,
+} = {}) {
   if (cleanupTimer) clearInterval(cleanupTimer);
   cleanupTimer = setInterval(() => {
     cleanOrphanedUploads({ graceMs }).catch((err) =>

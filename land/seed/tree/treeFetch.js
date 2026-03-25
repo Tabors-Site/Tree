@@ -5,19 +5,8 @@ import Node from "../models/node.js";
 import Note from "../models/note.js";
 import User from "../models/user.js";
 import { hooks } from "../hooks.js";
+import { NODE_STATUS, DELETED, CONTENT_TYPE } from "../protocol.js";
 
-// Resolve "latest" to the current version number from metadata.version.current.
-// Any versioning extension writes to this kernel-level key (metadata.version.current).
-// Without a versioning extension, always returns 0.
-export async function resolveVersion(nodeId, version) {
-  if (version === "latest") {
-    const node = await Node.findById(nodeId).select("metadata").lean();
-    if (!node) throw new Error("Node not found");
-    const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
-    return meta.version?.current || 0;
-  }
-  return Number(version);
-}
 
 export async function buildPathString(nodeId) {
   const segments = [];
@@ -135,7 +124,7 @@ export async function getDeletedBranchesForUser(userId) {
   }
 
   const deletedNodes = await Node.find({
-    parent: "deleted",
+    parent: DELETED,
     rootOwner: userId,
   })
     .select("_id name")
@@ -166,7 +155,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
 
   // ---- TRUE DFS (post-order) ----
   async function traverse(node, depth, path) {
-    if ((node.status || "active") !== "active") {
+    if ((node.status || NODE_STATUS.ACTIVE) !== NODE_STATUS.ACTIVE) {
       return false;
     }
 
@@ -203,7 +192,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
         name: node.name,
         path,
         depth,
-        status: node.status || "active",
+        status: node.status || NODE_STATUS.ACTIVE,
         next: false,
       });
     }
@@ -412,7 +401,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
   let parent = null;
   let siblings = [];
 
-  if (current.parent && current.parent !== "deleted") {
+  if (current.parent && current.parent !== DELETED) {
     const parentCandidate = await Node.findById(current.parent)
       .select("_id name children systemRole")
       .lean()
@@ -589,7 +578,7 @@ export async function getContextForAi(nodeId, options = {}) {
   const context = {
     id: node._id.toString(),
     name: node.name,
-    status: node.status || "active",
+    status: node.status || NODE_STATUS.ACTIVE,
     isRoot: !!node.rootOwner && node.rootOwner !== "SYSTEM",
     dateCreated: node.dateCreated,
   };
@@ -605,7 +594,7 @@ export async function getContextForAi(nodeId, options = {}) {
   if (includeNotes) {
     const noteCount = await Note.countDocuments({
       nodeId: node._id,
-      contentType: "text",
+      contentType: CONTENT_TYPE.TEXT,
     });
 
     context.noteCount = noteCount;
@@ -613,7 +602,7 @@ export async function getContextForAi(nodeId, options = {}) {
     if (noteCount > 0) {
       const recentNotes = await Note.find({
         nodeId: node._id,
-        contentType: "text",
+        contentType: CONTENT_TYPE.TEXT,
       })
         .sort({ _id: -1 })
         .limit(3)

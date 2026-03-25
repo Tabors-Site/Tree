@@ -2,7 +2,7 @@ import router from "./routes.js";
 import tools from "./tools.js";
 import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import Node from "../../seed/models/node.js";
-import { setEnergyService, addPrestige } from "./core.js";
+import { setEnergyService, addPrestige, resolveVersion } from "./core.js";
 
 export async function init(core) {
   if (core.energy) setEnergyService(core.energy);
@@ -10,9 +10,8 @@ export async function init(core) {
     const node = await Node.findById(data.nodeId).select("metadata").lean();
     if (!node) return;
     const prestige = getExtMeta(node, "prestige");
-    if (prestige?.current) {
-      data.version = prestige.current;
-    }
+    if (!data.metadata) data.metadata = {};
+    data.metadata.version = prestige?.current || 0;
   }, "prestige");
 
   core.hooks.register("beforeContribution", async (data) => {
@@ -38,6 +37,6 @@ export async function init(core) {
     modeTools: [
       { modeKey: "tree:edit", toolNames: ["add-node-prestige"] },
     ],
-    exports: { addPrestige },
+    exports: { addPrestige, resolveVersion },
   };
 }

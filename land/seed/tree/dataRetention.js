@@ -11,7 +11,7 @@
 import log from "../log.js";
 import { getLandConfigValue } from "../landConfig.js";
 import Node from "../models/node.js";
-import { CASCADE } from "../protocol.js";
+import { CASCADE, SYSTEM_ROLE } from "../protocol.js";
 
 let cleanupTimer = null;
 
@@ -39,7 +39,7 @@ export async function runRetentionCleanup() {
   try {
     const awaitingTimeout = parseInt(getLandConfigValue("awaitingTimeout") || "300", 10);
     const cutoffMs = Date.now() - awaitingTimeout * 1000;
-    const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id").lean();
+    const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
     if (flowNode) {
       const partitions = await Node.find({ parent: flowNode._id }).select("_id metadata");
       for (const partition of partitions) {
@@ -88,11 +88,12 @@ export async function runRetentionCleanup() {
 }
 
 export function startRetentionJob() {
-  // Run once at boot, then daily
+  // Run once at boot, then at configured interval (default: daily)
+  const intervalMs = Number(getLandConfigValue("retentionCleanupInterval")) || 24 * 60 * 60 * 1000;
   runRetentionCleanup().catch(() => {});
   cleanupTimer = setInterval(() => {
     runRetentionCleanup().catch(() => {});
-  }, 24 * 60 * 60 * 1000);
+  }, intervalMs);
   cleanupTimer.unref();
 }
 

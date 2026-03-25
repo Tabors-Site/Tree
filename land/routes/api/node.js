@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
-import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { sendOk, sendError, ERR, NODE_STATUS } from "../../seed/protocol.js";
 
 import { createNode, editNodeName } from "../../seed/tree/treeManagement.js";
 import { editNodeType } from "../../seed/tree/treeManagement.js";
@@ -13,12 +13,18 @@ import {
 import { editStatus } from "../../seed/tree/statuses.js";
 
 import Node from "../../seed/models/node.js";
-import { resolveVersion } from "../../seed/tree/treeFetch.js";
 import { getNodeChats } from "../../seed/ws/chatHistory.js";
+import { getExtension } from "../../extensions/loader.js";
 
 const router = express.Router();
 
-// Resolve "latest" to actual prestige number for any route with :version
+// Resolve version via prestige extension. Without prestige, version is always 0.
+async function resolveVersion(nodeId, version) {
+  const resolve = getExtension("prestige")?.exports?.resolveVersion;
+  if (resolve) return resolve(nodeId, version);
+  return version === "latest" ? 0 : Number(version);
+}
+
 router.param("version", async (req, res, next, val) => {
   try {
     req.params.version = String(await resolveVersion(req.params.nodeId, val));
@@ -28,7 +34,6 @@ router.param("version", async (req, res, next, val) => {
   }
 });
 
-// Middleware for versionless routes: auto-resolve to latest prestige
 async function useLatest(req, res, next) {
   try {
     req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
@@ -415,14 +420,14 @@ router.get("/node/:nodeId/:version", authenticate, async (req, res) => {
 
     const data = (v === (prestigeData.current || 0))
       ? {
-          status: node.status || "active",
+          status: node.status || NODE_STATUS.ACTIVE,
           values: meta.values || {},
           goals: meta.goals || {},
           schedule: meta.schedule || null,
           reeffectTime: meta.reeffectTime || 0,
           dateCreated: node.dateCreated,
         }
-      : (prestigeData.history?.find(h => h.version === v) || { status: "completed" });
+      : (prestigeData.history?.find(h => h.version === v) || { status: NODE_STATUS.COMPLETED });
 
     return sendOk(res, {
       id: node._id,

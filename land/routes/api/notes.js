@@ -15,9 +15,15 @@ import {
 
 import authenticate from "../../seed/middleware/authenticate.js";
 import preUploadCheck from "../../seed/middleware/preUploadCheck.js";
-import { resolveVersion } from "../../seed/tree/treeFetch.js";
+import { getExtension } from "../../extensions/loader.js";
 
 const router = express.Router();
+
+async function resolveVersion(nodeId, version) {
+  const resolve = getExtension("prestige")?.exports?.resolveVersion;
+  if (resolve) return resolve(nodeId, version);
+  return version === "latest" ? 0 : Number(version);
+}
 
 router.param("version", async (req, res, next, val) => {
   try {
@@ -118,15 +124,12 @@ router.post(
       const { nodeId, version } = req.params;
 
       const contentType = req.file ? "file" : "text";
-      const isReflection = req.body.isReflection === "true";
 
       const result = await coreCreateNote({
         contentType,
         content: contentType === "file" ? req.file.filename : req.body.content,
         userId: req.userId,
         nodeId,
-        version: Number(version),
-        isReflection,
         file: req.file,
       });
 
@@ -152,8 +155,6 @@ router.put(
         noteId,
         content: content ?? "",
         userId,
-        version,
-        isReflection: false,
         wasAi: false,
       });
 

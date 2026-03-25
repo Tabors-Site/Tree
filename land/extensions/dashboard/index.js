@@ -1,4 +1,5 @@
 import log from "../../seed/log.js";
+import { DELETED, NODE_STATUS } from "../../seed/protocol.js";
 import { getChats } from "../../seed/ws/chatHistory.js";
 
 export async function init(core) {
@@ -28,7 +29,7 @@ export async function init(core) {
           simplify(
             typeof c === "object" && c !== null
               ? c
-              : { _id: c, name: "?", children: [], status: "active" },
+              : { _id: c, name: "?", children: [], status: NODE_STATUS.ACTIVE },
           ),
         ),
       };
@@ -64,7 +65,7 @@ export async function init(core) {
     try {
       const roots = await Node.find({
         rootOwner: userId,
-        parent: { $ne: "deleted" },
+        parent: { $ne: DELETED },
       }).select("_id name children");
       const simplified = roots.map((r) => ({
         id: String(r._id),

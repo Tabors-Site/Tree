@@ -34,11 +34,16 @@ function withExtensionTimeout(router, extName) {
   return (req, res, next) => {
     let done = false;
 
-    const cleanup = () => { done = true; clearTimeout(timer); };
+    const cleanup = () => {
+      done = true;
+      clearTimeout(timer);
+      res.removeListener("finish", cleanup);
+    };
 
     const timer = setTimeout(() => {
       if (!done && !res.headersSent) {
         done = true;
+        res.removeListener("finish", cleanup);
         log.warn("Loader", `Extension router "${extName}" timed out on ${req.method} ${req.path}, falling through`);
         next();
       }
@@ -49,7 +54,7 @@ function withExtensionTimeout(router, extName) {
 
     try {
       router(req, res, (...args) => {
-        // Extension called next(): clear timeout, pass through
+        // Extension called next(): clear timeout and listener, pass through
         cleanup();
         next(...args);
       });
@@ -591,7 +596,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           for (const rpath of routePaths) {
             routeOwnership.set(rpath, manifest.name);
           }
-          app.use("/api/v1", withExtensionTimeout(instance.router, manifest.name));
+          app.use("/api/v1", instance.router);
         }
       }
 
@@ -609,17 +614,19 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         for (const tool of instance.tools) {
           registerToolOwner(tool.name, manifest.name, tool.annotations?.readOnlyHint ?? false);
           try {
-            mcpServer.tool(
-              tool.name,
-              tool.description,
-              tool.schema,
-              tool.annotations || {},
-              tool.handler
-            );
+            if (tool.handler) {
+              // Full tool with handler: register on MCP server
+              // SDK signature: tool(name, description, schema, cb) - max 4 args
+              // Annotations go into the schema object if needed
+              mcpServer.tool(
+                tool.name,
+                tool.description,
+                tool.schema,
+                tool.handler
+              );
+            }
           } catch (toolErr) {
-            // Tool already registered by core MCP server. Extension definition takes precedence
-            // for tool ownership and mode resolution, but the MCP handler stays as-is.
-            log.debug("Extensions", `${manifest.name}: tool "${tool.name}" already registered on MCP server, skipping MCP registration`);
+            log.warn("Extensions", `${manifest.name}: tool "${tool.name}" MCP registration failed: ${toolErr.message}`);
           }
 
           // Convert Zod schema to JSON Schema for OpenAI function calling format
@@ -977,15 +984,22 @@ export async function installExtensionFiles(name, files) {
     fs.mkdirSync(extDir, { recursive: true });
   }
 
+  const resolvedExtDir = path.resolve(extDir);
+
   let filesWritten = 0;
   for (const file of files) {
-    // Safety: prevent path traversal
-    const normalized = path.normalize(file.path);
-    if (normalized.startsWith("..") || path.isAbsolute(normalized)) {
-      throw new Error(`Invalid file path: ${file.path}`);
+    // Safety: resolve to absolute and verify it stays inside the extension directory.
+    // path.normalize alone is insufficient (backslash tricks, mixed separators).
+    const filePath = path.resolve(extDir, file.path);
+    if (!filePath.startsWith(resolvedExtDir + path.sep) && filePath !== resolvedExtDir) {
+      throw new Error(`Path traversal blocked: ${file.path}`);
     }
 
-    const filePath = path.join(extDir, normalized);
+    // Block null bytes (filesystem injection)
+    if (file.path.includes("\0")) {
+      throw new Error(`Null byte in file path: ${file.path}`);
+    }
+
     const fileDir = path.dirname(filePath);
 
     // Create subdirectories if needed
@@ -1181,14 +1195,15 @@ export async function installExtension(name, version) {
     throw new Error("Extension has no files and no repoUrl");
   }
 
-  // Verify integrity if checksum provided
-  if (ext.checksum) {
-    const computed = computeChecksum(ext.files);
-    if (computed !== ext.checksum) {
-      throw new Error(`Integrity check failed: expected ${ext.checksum.slice(0, 12)}..., got ${computed.slice(0, 12)}...`);
-    }
-    log.verbose("Extensions", `Integrity verified: ${name} v${ext.version} (${ext.checksum.slice(0, 12)}...)`);
+  // Verify integrity. Checksum is required for registry installs.
+  if (!ext.checksum) {
+    throw new Error(`Registry extension "${name}" v${ext.version} has no checksum. Refusing to install.`);
   }
+  const computed = computeChecksum(ext.files);
+  if (computed !== ext.checksum) {
+    throw new Error(`Integrity check failed for "${name}" v${ext.version}: expected ${ext.checksum.slice(0, 12)}..., got ${computed.slice(0, 12)}...`);
+  }
+  log.verbose("Extensions", `Integrity verified: ${name} v${ext.version} (${ext.checksum.slice(0, 12)}...)`);
 
   // Write files to disk
   const result = await installExtensionFiles(ext.name || name, ext.files);

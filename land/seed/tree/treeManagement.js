@@ -8,6 +8,7 @@ import { isDescendant } from "./treeFetch.js";
 import { hooks } from "../hooks.js";
 import { getLandRootId } from "../landRoot.js";
 import { invalidateAll, invalidateNode } from "./ancestorCache.js";
+import { NODE_STATUS, DELETED, CONTENT_TYPE, ERR, ProtocolError } from "../protocol.js";
 
 async function getUserOrThrow(userId) {
   if (!userId) {
@@ -65,7 +66,8 @@ export async function createNode(
   const hookData = { name, type, parentNodeID, isRoot, userId, values, goals, schedule, reeffectTime };
   const hookResult = await hooks.run("beforeNodeCreate", hookData);
   if (hookResult.cancelled) {
-    throw new Error(hookResult.reason || "Node creation blocked");
+    const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
+    throw new ProtocolError(500, code, hookResult.reason || "Node creation blocked");
   }
   // Apply any modifications from hooks
   name = hookData.name;
@@ -86,7 +88,7 @@ export async function createNode(
   const newNode = new Node({
     name,
     type,
-    status: "active",
+    status: NODE_STATUS.ACTIVE,
     children: [],
     parent: isRoot ? getLandRootId() : (parentNodeID || null),
     rootOwner: isRoot ? user._id : null,
@@ -136,12 +138,10 @@ export async function createNode(
 
   if (note?.trim()) {
     await createNote({
-      contentType: "text",
+      contentType: CONTENT_TYPE.TEXT,
       content: note,
       userId: user._id,
       nodeId: newNode._id,
-      version: 0,
-      isReflection: false,
       wasAi,
       chatId,
       sessionId,
@@ -243,7 +243,7 @@ export async function deleteNodeBranch(
   if (nodeToDelete.rootOwner && nodeToDelete.rootOwner !== "SYSTEM") {
     throw new Error("Root nodes can only be retired on root view");
   }
-  if (nodeToDelete.parent === "deleted") {
+  if (nodeToDelete.parent === DELETED) {
     throw new Error("Node has already been deleted");
   }
   // beforeNodeDelete hook
@@ -252,11 +252,11 @@ export async function deleteNodeBranch(
 
   nodeToDelete.rootOwner = userId;
   const oldParent = nodeToDelete.parent;
-  nodeToDelete.parent = "deleted";
+  nodeToDelete.parent = DELETED;
 
   await nodeToDelete.save();
 
-  if (oldParent && oldParent !== "deleted") {
+  if (oldParent && oldParent !== DELETED) {
     await Node.findByIdAndUpdate(oldParent, {
       $pull: { children: nodeId },
     });
@@ -462,11 +462,11 @@ export async function reviveNodeBranch({
   const targetParent = await Node.findById(targetParentId);
   if (!targetParent) throw new Error("Target parent node not found");
 
-  if (deletedNode.parent !== "deleted") {
+  if (deletedNode.parent !== DELETED) {
     throw new Error("Node is not deleted and cannot be revived");
   }
 
-  if (targetParent.parent === "deleted") {
+  if (targetParent.parent === DELETED) {
     throw new Error("Cannot revive into a deleted branch");
   }
 
@@ -512,7 +512,7 @@ export async function reviveNodeBranch({
 
     branchLifecycle: {
       action: "revived",
-      fromParentId: "deleted",
+      fromParentId: DELETED,
 
       toParentId: targetParentId.toString(),
     },
@@ -532,7 +532,7 @@ export async function reviveNodeBranchAsRoot({
   const deletedNode = await Node.findById(deletedNodeId);
   if (!deletedNode) throw new Error("Deleted node not found");
 
-  if (deletedNode.parent !== "deleted") {
+  if (deletedNode.parent !== DELETED) {
     throw new Error("Node is not deleted and cannot be revived");
   }
 

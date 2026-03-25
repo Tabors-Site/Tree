@@ -149,8 +149,11 @@ function decrypt(encryptedText) {
 
 // Cache: userId → { client, model, fetchedAt }
 const userClientCache = new Map();
-const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
-const PROXY_CACHE_TTL = 60 * 1000; // 1 min for canopy proxy clients
+let CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
+let PROXY_CACHE_TTL = 60 * 1000; // 1 min for canopy proxy clients
+
+export function setClientCacheTtl(ms) { CLIENT_CACHE_TTL = ms; }
+export function setProxyCacheTtl(ms) { PROXY_CACHE_TTL = ms; }
 
 // Periodic cache cleanup (every 10 minutes)
 setInterval(() => {
@@ -788,8 +791,7 @@ export async function processMessage(visitorId, message, ctx) {
 
         if (extracted) {
           log.warn("LLM", `⚠️ Model invented tool "${apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?"}". Extracted response from failed_generation.`);
-          session.messages.push({ role: "assistant", content: extracted });
-          response = { choices: [{ message: { content: extracted }, finish_reason: "stop" }] };
+          response = { choices: [{ message: { role: "assistant", content: extracted }, finish_reason: "stop" }] };
         } else {
           throw apiErr;
         }
@@ -973,17 +975,19 @@ export async function processMessage(visitorId, message, ctx) {
       const hookData = { toolName, args, userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey };
       const hookResult = await hooks.run("beforeToolCall", hookData);
       if (hookResult.cancelled) {
+        const errCode = hookResult.timedOut ? "HOOK_TIMEOUT" : "HOOK_CANCELLED";
         session.messages.push({
           role: "tool",
           tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: hookResult.reason || "Tool call cancelled" }),
+          content: JSON.stringify({ error: hookResult.reason || "Tool call cancelled", code: errCode }),
         });
-        toolResults.push({ tool: toolName, args, success: false, error: "cancelled" });
+        toolResults.push({ tool: toolName, args, success: false, error: errCode });
         continue;
       }
       args = hookData.args;
+      const resolvedToolName = hookData.toolName || toolName;
 
-      log.debug("LLM", `🔧 [${session.modeKey}] ${toolName}`, args);
+      log.debug("LLM", `🔧 [${session.modeKey}] ${resolvedToolName}`, args);
 
       // DB health check: if the database is unreachable, tell the AI immediately
       // so it responds to the user instead of retrying blindly with broken hands.
@@ -1000,7 +1004,7 @@ export async function processMessage(visitorId, message, ctx) {
 
       try {
         const result = await client.callTool({
-          name: toolName,
+          name: resolvedToolName,
           arguments: args,
         });
         const resultText =
@@ -1014,23 +1018,23 @@ export async function processMessage(visitorId, message, ctx) {
           content: resultText,
         });
 
-        toolResults.push({ tool: toolName, args, success: true });
+        toolResults.push({ tool: resolvedToolName, args, success: true });
 
         // Tool circuit breaker: success resets failure count
-        delete session._toolFailures[toolName];
+        delete session._toolFailures[resolvedToolName];
 
         // afterToolCall (success): fire-and-forget
         hooks.run("afterToolCall", {
-          toolName, args, result: resultText, success: true,
+          toolName: resolvedToolName, args, result: resultText, success: true,
           userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
         }).catch(() => {});
       } catch (err) {
-        log.error("LLM", `❌ Tool ${toolName} failed:`, err.message);
+        log.error("LLM", `❌ Tool ${resolvedToolName} failed:`, err.message);
 
         // Tool circuit breaker: increment failure count
-        session._toolFailures[toolName] = (session._toolFailures[toolName] || 0) + 1;
-        if (session._toolFailures[toolName] >= toolCircuitThreshold) {
-          log.warn("LLM", `Tool "${toolName}" tripped after ${toolCircuitThreshold} consecutive failures. Disabled for this session.`);
+        session._toolFailures[resolvedToolName] = (session._toolFailures[resolvedToolName] || 0) + 1;
+        if (session._toolFailures[resolvedToolName] >= toolCircuitThreshold) {
+          log.warn("LLM", `Tool "${resolvedToolName}" tripped after ${toolCircuitThreshold} consecutive failures. Disabled for this session.`);
         }
 
         // If DB died during tool execution, tell the AI clearly
@@ -1045,7 +1049,7 @@ export async function processMessage(visitorId, message, ctx) {
         });
 
         toolResults.push({
-          tool: toolName,
+          tool: resolvedToolName,
           args,
           success: false,
           error: err.message,
@@ -1053,7 +1057,7 @@ export async function processMessage(visitorId, message, ctx) {
 
         // afterToolCall (failure): fire-and-forget
         hooks.run("afterToolCall", {
-          toolName, args, error: err.message, success: false,
+          toolName: resolvedToolName, args, error: err.message, success: false,
           userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
         }).catch(() => {});
       }

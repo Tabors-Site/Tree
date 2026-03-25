@@ -30,10 +30,10 @@ import {
   getActiveLeafExecutionFrontier,
   getNavigationContext,
   getContextForAi,
-  resolveVersion,
 } from "../../seed/tree/treeFetch.js";
 import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
+import { DELETED } from "../../seed/protocol.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -823,18 +823,16 @@ export function buildTools() {
         chatId,
         sessionId,
       }) => {
-        const version = await resolvePrestige({ nodeId, prestige });
         try {
           const result = await createNote({
             contentType: "text",
             content,
             userId,
             nodeId,
-            version,
-            isReflection: true,
             wasAi: true,
             chatId,
             sessionId,
+            metadata: { treeos: { isReflection: true } },
           });
           return json(result);
         } catch (err) {
@@ -1312,7 +1310,7 @@ export function buildTools() {
           return text(
             `Node branch retired successfully.\n\n` +
               `Node ID: ${deletedNode._id.toString()}\n` +
-              `Previous Parent: ${deletedNode.parent === "deleted" ? "N/A" : deletedNode.parent}`,
+              `Previous Parent: ${deletedNode.parent === DELETED ? "N/A" : deletedNode.parent}`,
           );
         } catch (err) {
           return text(

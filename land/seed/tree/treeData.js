@@ -10,6 +10,7 @@ import log from "../log.js";
 import Node from "../models/node.js";
 import Note from "../models/note.js";
 import Contribution from "../models/contribution.js";
+import { NODE_STATUS, CONTENT_TYPE } from "../protocol.js";
 
 /**
  * Get a node's name by ID.
@@ -29,7 +30,7 @@ export async function getNodeForAi(nodeId) {
   const node = await Node.findById(nodeId).lean().exec();
   if (!node) throw new Error(`Node ${nodeId} not found`);
 
-  const notes = await Note.find({ nodeId: node._id, contentType: "text" })
+  const notes = await Note.find({ nodeId: node._id, contentType: CONTENT_TYPE.TEXT })
     .populate("userId", "username -_id")
     .lean()
     .exec();
@@ -53,7 +54,7 @@ export async function getNodeForAi(nodeId) {
   const result = {
     id: node._id.toString(),
     name: node.name,
-    status: node.status || "active",
+    status: node.status || NODE_STATUS.ACTIVE,
     parentNodeId,
     parentName,
     children,
@@ -81,8 +82,8 @@ export async function getTreeForAi(rootId, filter = null) {
   if (!rootNode) throw new Error("Node not found");
 
   const filters = !filter
-    ? { active: true, trimmed: false, completed: true }
-    : { active: !!filter.active, trimmed: !!filter.trimmed, completed: !!filter.completed };
+    ? { [NODE_STATUS.ACTIVE]: true, [NODE_STATUS.TRIMMED]: false, [NODE_STATUS.COMPLETED]: true }
+    : { [NODE_STATUS.ACTIVE]: !!filter.active, [NODE_STATUS.TRIMMED]: !!filter.trimmed, [NODE_STATUS.COMPLETED]: !!filter.completed };
 
   const populateChildrenRecursive = async (node) => {
     if (node.children?.length > 0) {
@@ -162,12 +163,12 @@ export async function getTreeStructure(rootId, filters = {}) {
   rootNode.ancestors = ancestors;
 
   const allowedStatuses = [];
-  if (filters.active !== false) allowedStatuses.push("active");
-  if (filters.trimmed === true) allowedStatuses.push("trimmed");
-  if (filters.completed !== false) allowedStatuses.push("completed");
+  if (filters.active !== false) allowedStatuses.push(NODE_STATUS.ACTIVE);
+  if (filters.trimmed === true) allowedStatuses.push(NODE_STATUS.TRIMMED);
+  if (filters.completed !== false) allowedStatuses.push(NODE_STATUS.COMPLETED);
 
   const filterAndFlatten = (node, isRoot = false) => {
-    const status = node.status || "active";
+    const status = node.status || NODE_STATUS.ACTIVE;
     const children = (node.children || []).map((c) => filterAndFlatten(c, false)).filter(Boolean);
     if (!isRoot && !allowedStatuses.includes(status) && children.length === 0) return null;
     return { _id: node._id, name: node.name, type: node.type || null, status, parent: node.parent, children };
@@ -192,7 +193,7 @@ export async function getAllNodeData(rootId, filters = {}) {
     const contributions = await Contribution.find({ nodeId: node._id }).exec();
     node.contributions = contributions;
 
-    const notes = await Note.find({ nodeId: node._id, contentType: "text" })
+    const notes = await Note.find({ nodeId: node._id, contentType: CONTENT_TYPE.TEXT })
       .populate("userId", "username -_id").lean().exec();
     node.notes = notes.map((n) => ({ username: n.userId?.username || "Unknown", content: n.content }));
 
@@ -237,14 +238,14 @@ export function filterTreeByStatus(node, filters) {
   if (!node) return null;
 
   const allowedStatuses = [];
-  if (filters.active === true) allowedStatuses.push("active");
-  if (filters.trimmed === true) allowedStatuses.push("trimmed");
-  if (filters.completed === true) allowedStatuses.push("completed");
+  if (filters[NODE_STATUS.ACTIVE] === true) allowedStatuses.push(NODE_STATUS.ACTIVE);
+  if (filters[NODE_STATUS.TRIMMED] === true) allowedStatuses.push(NODE_STATUS.TRIMMED);
+  if (filters[NODE_STATUS.COMPLETED] === true) allowedStatuses.push(NODE_STATUS.COMPLETED);
 
   const filteringEnabled =
-    filters.active !== undefined || filters.trimmed !== undefined || filters.completed !== undefined;
+    filters[NODE_STATUS.ACTIVE] !== undefined || filters[NODE_STATUS.TRIMMED] !== undefined || filters[NODE_STATUS.COMPLETED] !== undefined;
 
-  const status = node.status || "active";
+  const status = node.status || NODE_STATUS.ACTIVE;
   const filteredChildren = node.children?.map((child) => filterTreeByStatus(child, filters)).filter(Boolean) || [];
 
   if (!filteringEnabled) return { ...node, children: filteredChildren };

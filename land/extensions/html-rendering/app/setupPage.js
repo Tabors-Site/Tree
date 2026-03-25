@@ -307,12 +307,12 @@ export function renderSetup({ userId, username, needsLlm, needsTree }) {
         });
         var createData = await createRes.json();
 
-        if (!createRes.ok || !createData.success) {
-          throw new Error(createData.error || "Failed to create connection");
+        if (!createRes.ok || createData.status === "error") {
+          throw new Error((createData.error && createData.error.message) || createData.error || "Failed to create connection");
         }
 
         // Set as default
-        var connId = createData.connection._id;
+        var connId = (createData.data && createData.data.connection && createData.data.connection._id) || (createData.connection && createData.connection._id);
         var assignRes = await fetch("/api/v1/user/" + CONFIG.userId + "/llm-assign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -320,8 +320,8 @@ export function renderSetup({ userId, username, needsLlm, needsTree }) {
           body: JSON.stringify({ slot: "main", connectionId: connId }),
         });
         var assignData = await assignRes.json();
-        if (!assignRes.ok || !assignData.success) {
-          throw new Error(assignData.error || "Failed to set as default");
+        if (!assignRes.ok || assignData.status === "error") {
+          throw new Error((assignData.error && assignData.error.message) || assignData.error || "Failed to set as default");
         }
 
         showStatus("llmStatus", "Connected!", "success");
@@ -363,8 +363,8 @@ export function renderSetup({ userId, username, needsLlm, needsTree }) {
         });
         var data = await res.json();
 
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Failed to create tree");
+        if (!res.ok || data.status === "error") {
+          throw new Error((data.error && data.error.message) || data.error || "Failed to create tree");
         }
 
         finish();

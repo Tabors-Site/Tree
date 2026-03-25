@@ -1,6 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "./log.js";
 import Node from "./models/node.js";
+import { SYSTEM_ROLE } from "./protocol.js";
 
 let configCache = null;
 let initialized = false;
@@ -16,7 +17,7 @@ const PROTECTED_KEYS = new Set(["seedVersion"]);
  * Load config values from the .config system node into cache.
  */
 async function loadConfigFromDb() {
-  const configNode = await Node.findOne({ systemRole: "config" }).lean();
+  const configNode = await Node.findOne({ systemRole: SYSTEM_ROLE.CONFIG }).lean();
   if (!configNode || !configNode.metadata) {
     configCache = {};
     return;
@@ -51,7 +52,7 @@ export async function setLandConfigValue(key, value, { internal } = {}) {
     throw new Error(`Config key "${key}" is protected and cannot be modified manually`);
   }
   await Node.updateOne(
-    { systemRole: "config" },
+    { systemRole: SYSTEM_ROLE.CONFIG },
     { $set: { [`metadata.${key}`]: value } }
   );
   if (!configCache) configCache = {};

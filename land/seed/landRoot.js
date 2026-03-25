@@ -1,6 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "./log.js";
 import Node from "./models/node.js";
+import { NODE_STATUS, SYSTEM_ROLE } from "./protocol.js";
 
 let landRootCache = null;
 
@@ -9,7 +10,7 @@ let landRootCache = null;
  * Called once at startup after DB connects.
  */
 export async function ensureLandRoot() {
-  const existing = await Node.findOne({ systemRole: "land-root" });
+  const existing = await Node.findOne({ systemRole: SYSTEM_ROLE.LAND_ROOT });
   if (existing) {
     landRootCache = existing;
     log.verbose("Land", "Land root found:", existing._id);
@@ -23,20 +24,20 @@ export async function ensureLandRoot() {
     name: landName,
     rootOwner: "SYSTEM",
     parent: null,
-    systemRole: "land-root",
+    systemRole: SYSTEM_ROLE.LAND_ROOT,
     children: [],
     contributors: [],
-    status: "active",
+    status: NODE_STATUS.ACTIVE,
   });
   await landRoot.save();
 
   const identityNode = new Node({
     name: ".identity",
     parent: landRoot._id,
-    systemRole: "identity",
+    systemRole: SYSTEM_ROLE.IDENTITY,
     children: [],
     contributors: [],
-    status: "active",
+    status: NODE_STATUS.ACTIVE,
     metadata: new Map([
       ["domain", landDomain],
     ]),
@@ -46,10 +47,10 @@ export async function ensureLandRoot() {
   const configNode = new Node({
     name: ".config",
     parent: landRoot._id,
-    systemRole: "config",
+    systemRole: SYSTEM_ROLE.CONFIG,
     children: [],
     contributors: [],
-    status: "active",
+    status: NODE_STATUS.ACTIVE,
     metadata: new Map([
       ["LAND_NAME", landName],
       ["landUrl", `http://${landDomain}:${process.env.PORT || 3000}`],
@@ -60,30 +61,30 @@ export async function ensureLandRoot() {
   const peersNode = new Node({
     name: ".peers",
     parent: landRoot._id,
-    systemRole: "peers",
+    systemRole: SYSTEM_ROLE.PEERS,
     children: [],
     contributors: [],
-    status: "active",
+    status: NODE_STATUS.ACTIVE,
   });
   await peersNode.save();
 
   const extensionsNode = new Node({
     name: ".extensions",
     parent: landRoot._id,
-    systemRole: "extensions",
+    systemRole: SYSTEM_ROLE.EXTENSIONS,
     children: [],
     contributors: [],
-    status: "active",
+    status: NODE_STATUS.ACTIVE,
   });
   await extensionsNode.save();
 
   const flowNode = new Node({
     name: ".flow",
     parent: landRoot._id,
-    systemRole: "flow",
+    systemRole: SYSTEM_ROLE.FLOW,
     children: [],
     contributors: [],
-    status: "active",
+    status: NODE_STATUS.ACTIVE,
   });
   await flowNode.save();
 
@@ -115,7 +116,7 @@ export async function ensureLandRoot() {
  */
 export async function getLandRoot() {
   if (landRootCache) return landRootCache;
-  landRootCache = await Node.findOne({ systemRole: "land-root" });
+  landRootCache = await Node.findOne({ systemRole: SYSTEM_ROLE.LAND_ROOT });
   return landRootCache;
 }
 
@@ -140,7 +141,7 @@ export function isUserRoot(node) {
  * Called after extension loading is complete.
  */
 export async function syncExtensionsToTree(manifests) {
-  const extNode = await Node.findOne({ systemRole: "extensions" });
+  const extNode = await Node.findOne({ systemRole: SYSTEM_ROLE.EXTENSIONS });
   if (!extNode) return; // Land root not bootstrapped yet
 
   // Get existing extension child nodes
@@ -173,7 +174,7 @@ export async function syncExtensionsToTree(manifests) {
       await Node.findByIdAndUpdate(nodeId, {
         $set: {
           type: "resource",
-          status: "active",
+          status: NODE_STATUS.ACTIVE,
           metadata,
         },
       });
@@ -183,7 +184,7 @@ export async function syncExtensionsToTree(manifests) {
         name: manifest.name,
         parent: extNode._id,
         type: "resource",
-        status: "active",
+        status: NODE_STATUS.ACTIVE,
         children: [],
         contributors: [],
         metadata,
@@ -197,7 +198,7 @@ export async function syncExtensionsToTree(manifests) {
   for (const [name, nodeId] of existingByName) {
     if (!currentNames.has(name)) {
       await Node.findByIdAndUpdate(nodeId, {
-        $set: { status: "trimmed" },
+        $set: { status: NODE_STATUS.TRIMMED },
       });
     }
   }

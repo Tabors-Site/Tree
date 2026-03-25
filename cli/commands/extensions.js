@@ -16,7 +16,8 @@ async function refreshProtocolCache() {
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     const res = await fetch(`${url}/api/v1/protocol`);
     if (res.ok) {
-      cfg.landProtocol = await res.json();
+      const raw = await res.json();
+      cfg.landProtocol = raw.data || raw;
       save(cfg);
     }
   } catch {}

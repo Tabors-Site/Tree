@@ -1,8 +1,289 @@
 import { Router } from "express";
 import crypto from "crypto";
 import Extension from "../db/models/extension.js";
+import ExtensionTombstone from "../db/models/extensionTombstone.js";
 import Land from "../db/models/land.js";
 import { verifyHorizonAuth } from "../auth.js";
+
+// ---------------------------------------------------------------------------
+// Semver utilities (mirrored from land/extensions/loader.js)
+// ---------------------------------------------------------------------------
+
+function parseDepString(dep) {
+  const atIdx = dep.indexOf("@");
+  if (atIdx <= 0) return { name: dep, constraint: null };
+  return { name: dep.slice(0, atIdx), constraint: dep.slice(atIdx + 1) };
+}
+
+function parseSemver(v) {
+  const match = String(v).match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function semverSatisfies(version, constraint) {
+  const v = parseSemver(version);
+  if (!v) return true;
+
+  if (constraint.includes("x")) {
+    const parts = constraint.split(".");
+    if (parts[0] !== "x" && Number(parts[0]) !== v[0]) return false;
+    if (parts[1] && parts[1] !== "x" && Number(parts[1]) !== v[1]) return false;
+    return true;
+  }
+
+  if (constraint.startsWith(">=")) {
+    const c = parseSemver(constraint.slice(2));
+    if (!c) return true;
+    if (v[0] !== c[0]) return v[0] > c[0];
+    if (v[1] !== c[1]) return v[1] > c[1];
+    return v[2] >= c[2];
+  }
+
+  if (constraint.startsWith(">") && !constraint.startsWith(">=")) {
+    const c = parseSemver(constraint.slice(1));
+    if (!c) return true;
+    if (v[0] !== c[0]) return v[0] > c[0];
+    if (v[1] !== c[1]) return v[1] > c[1];
+    return v[2] > c[2];
+  }
+
+  if (constraint.startsWith("^")) {
+    const c = parseSemver(constraint.slice(1));
+    if (!c) return true;
+    if (v[0] !== c[0]) return false;
+    if (v[1] !== c[1]) return v[1] > c[1];
+    return v[2] >= c[2];
+  }
+
+  const exact = constraint.startsWith("=") ? constraint.slice(1) : constraint;
+  const c = parseSemver(exact);
+  if (!c) return true;
+  return v[0] === c[0] && v[1] === c[1] && v[2] === c[2];
+}
+
+/**
+ * Validate that all required extension dependencies (manifest.needs.extensions)
+ * exist in the directory. Optional dependencies are skipped.
+ *
+ * Returns { valid: true } or { valid: false, missing: [...] }
+ */
+async function validateRequiredDeps(manifest) {
+  const requiredDeps = manifest?.needs?.extensions;
+  if (!Array.isArray(requiredDeps) || requiredDeps.length === 0) {
+    return { valid: true };
+  }
+
+  const missing = [];
+
+  for (const dep of requiredDeps) {
+    const { name, constraint } = parseDepString(dep);
+
+    // Find all published versions of this dependency
+    const versions = await Extension.find({ name }).select("version").lean();
+
+    if (versions.length === 0) {
+      missing.push({ dep, reason: `dependency "${name}" not found in directory` });
+      continue;
+    }
+
+    // If a version constraint is specified, check that at least one version satisfies it
+    if (constraint) {
+      const satisfied = versions.some((v) => semverSatisfies(v.version, constraint));
+      if (!satisfied) {
+        const available = versions.map((v) => v.version).join(", ");
+        missing.push({ dep, reason: `no published version of "${name}" satisfies "${constraint}" (available: ${available})` });
+      }
+    }
+  }
+
+  if (missing.length > 0) {
+    return { valid: false, missing };
+  }
+  return { valid: true };
+}
+
+// ---------------------------------------------------------------------------
+// Name and version validation
+// ---------------------------------------------------------------------------
+
+// Lowercase alphanumeric + hyphens, 2-50 chars, starts with letter, no double hyphens, no trailing hyphen
+const NAME_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const NAME_MIN = 2;
+const NAME_MAX = 50;
+
+function validateName(name) {
+  if (typeof name !== "string") return "name must be a string";
+  if (name.length < NAME_MIN) return `name must be at least ${NAME_MIN} characters`;
+  if (name.length > NAME_MAX) return `name must be at most ${NAME_MAX} characters`;
+  if (!NAME_RE.test(name)) return "name must be lowercase alphanumeric with hyphens, start with a letter, no consecutive or trailing hyphens";
+  return null;
+}
+
+function validateVersion(version) {
+  if (typeof version !== "string") return "version must be a string";
+  if (!parseSemver(version)) return `version "${version}" is not valid semver (expected X.Y.Z)`;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Reserved names: kernel components and built-in extensions that ship with
+// every land. Prevents confusion and impersonation on the public registry.
+// ---------------------------------------------------------------------------
+
+const RESERVED_NAMES = new Set([
+  // Kernel / core terms
+  "seed", "kernel", "treeos", "canopy", "horizon", "core", "land", "tree",
+  // Built-in extensions that ship with the reference implementation
+  "tree-orchestrator", "land-manager",
+  // Loader internals
+  "loader", "_template",
+]);
+
+// ---------------------------------------------------------------------------
+// Typosquatting detection (Levenshtein distance)
+// ---------------------------------------------------------------------------
+
+function levenshtein(a, b) {
+  const m = a.length;
+  const n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/**
+ * Check if a new extension name is suspiciously similar to existing names.
+ * Only runs for brand new names (first publish). Threshold: distance 1 for
+ * short names (<8 chars), distance 2 for longer names.
+ */
+async function checkTyposquatting(name) {
+  // Get all distinct published extension names
+  const existingNames = await Extension.distinct("name");
+
+  const threshold = name.length < 8 ? 1 : 2;
+  const suspicious = [];
+
+  for (const existing of existingNames) {
+    // Skip exact match (same name is fine, ownership check handles it)
+    if (existing === name) continue;
+    const dist = levenshtein(name, existing);
+    if (dist <= threshold) {
+      suspicious.push(existing);
+    }
+  }
+
+  // Also check against reserved names
+  for (const reserved of RESERVED_NAMES) {
+    if (reserved === name) continue;
+    const dist = levenshtein(name, reserved);
+    if (dist <= threshold) {
+      suspicious.push(`${reserved} (reserved)`);
+    }
+  }
+
+  return suspicious;
+}
+
+// ---------------------------------------------------------------------------
+// File path sanitization
+// ---------------------------------------------------------------------------
+
+function validateFilePaths(files) {
+  const errors = [];
+  for (const file of files) {
+    const p = file.path;
+    if (typeof p !== "string" || p.length === 0) {
+      errors.push("empty file path");
+      continue;
+    }
+    // No absolute paths
+    if (p.startsWith("/") || p.startsWith("\\")) {
+      errors.push(`absolute path not allowed: "${p}"`);
+    }
+    // No traversal
+    if (p.includes("..")) {
+      errors.push(`path traversal not allowed: "${p}"`);
+    }
+    // No null bytes
+    if (p.includes("\0")) {
+      errors.push(`null byte in path: "${p}"`);
+    }
+    // Reasonable length
+    if (p.length > 256) {
+      errors.push(`path too long (${p.length} chars): "${p.slice(0, 40)}..."`);
+    }
+  }
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Name ownership: the first land to publish a name owns it
+// ---------------------------------------------------------------------------
+
+async function checkNameOwnership(name, landId, landDomain) {
+  const existing = await Extension.findOne({ name }).select("authorLandId maintainers").lean();
+  if (!existing) return null; // New name, no conflict
+  const isAuthor = existing.authorLandId === landId;
+  const isMaintainer = landDomain && (existing.maintainers || []).includes(landDomain);
+  if (!isAuthor && !isMaintainer) {
+    return `extension "${name}" is owned by another land. Only the author or maintainers can publish new versions.`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Content limits
+// ---------------------------------------------------------------------------
+
+const MAX_DESCRIPTION_LENGTH = 500;
+const MAX_README_LENGTH = 100000; // 100KB
+const MAX_TAG_LENGTH = 30;
+const MAX_TAGS = 20;
+const MAX_FILES = 200;
+const MAX_MANIFEST_BYTES = 50000; // 50KB serialized manifest
+const MAX_VERSIONS_PER_NAME = 100; // Prevent version flooding
+
+function validateContentLimits(manifest, files, readme, tags) {
+  const errors = [];
+  // Manifest is stored as Mixed. Cap the serialized size.
+  const manifestSize = JSON.stringify(manifest).length;
+  if (manifestSize > MAX_MANIFEST_BYTES) {
+    errors.push(`manifest exceeds ${MAX_MANIFEST_BYTES} bytes when serialized (got ${manifestSize})`);
+  }
+  if (manifest.description && manifest.description.length > MAX_DESCRIPTION_LENGTH) {
+    errors.push(`description exceeds ${MAX_DESCRIPTION_LENGTH} characters`);
+  }
+  if (readme && readme.length > MAX_README_LENGTH) {
+    errors.push(`readme exceeds ${MAX_README_LENGTH} characters`);
+  }
+  if (tags) {
+    if (!Array.isArray(tags)) {
+      errors.push("tags must be an array");
+    } else {
+      if (tags.length > MAX_TAGS) errors.push(`maximum ${MAX_TAGS} tags allowed`);
+      for (const tag of tags) {
+        if (typeof tag !== "string") errors.push("each tag must be a string");
+        else if (tag.length > MAX_TAG_LENGTH) errors.push(`tag "${tag.slice(0, 10)}..." exceeds ${MAX_TAG_LENGTH} characters`);
+        else if (!NAME_RE.test(tag)) errors.push(`tag "${tag}" must be lowercase alphanumeric with hyphens`);
+      }
+    }
+  }
+  if (files.length > MAX_FILES) {
+    errors.push(`maximum ${MAX_FILES} files allowed (got ${files.length})`);
+  }
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
 
 function computeChecksum(files) {
   const hash = crypto.createHash("sha256");
@@ -179,7 +460,11 @@ router.get("/:name", async (req, res) => {
 /**
  * GET /extensions/:name/:version
  * Get a specific version with full file contents for installation.
+ * Download count is deduplicated per IP per extension per hour to prevent inflation.
  */
+const downloadSeen = new Map(); // key -> timestamp. Pruned lazily.
+const DOWNLOAD_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
 router.get("/:name/:version", async (req, res) => {
   try {
     const { name, version } = req.params;
@@ -189,8 +474,23 @@ router.get("/:name/:version", async (req, res) => {
       return res.status(404).json({ error: "Extension version not found" });
     }
 
-    // Increment download count
-    await Extension.updateOne({ _id: ext._id }, { $inc: { downloads: 1 } });
+    // Deduplicate download count: same IP + same extension = one count per hour
+    const ip = req.ip || req.socket?.remoteAddress || "unknown";
+    const dedupKey = `${ip}:${name}:${version}`;
+    const now = Date.now();
+    const lastSeen = downloadSeen.get(dedupKey);
+
+    if (!lastSeen || now - lastSeen > DOWNLOAD_WINDOW_MS) {
+      downloadSeen.set(dedupKey, now);
+      await Extension.updateOne({ _id: ext._id }, { $inc: { downloads: 1 } });
+
+      // Lazy prune: clear old entries when map gets large
+      if (downloadSeen.size > 10000) {
+        for (const [key, ts] of downloadSeen) {
+          if (now - ts > DOWNLOAD_WINDOW_MS) downloadSeen.delete(key);
+        }
+      }
+    }
 
     res.json({
       name: ext.name,
@@ -212,10 +512,20 @@ router.get("/:name/:version", async (req, res) => {
  * POST /extensions
  * Publish an extension. Requires land authentication.
  * Body: { manifest, files, readme, tags, repoUrl }
+ *
+ * Validation order:
+ *   1. Structural  (manifest exists, files exist)
+ *   2. Format      (name regex, semver, paths, content limits)
+ *   3. Policy      (reserved names, ownership, typosquatting, deps)
+ *   4. Persistence (upsert)
  */
 router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => {
   try {
     const { manifest, files, readme, tags, repoUrl, maintainers } = req.body;
+
+    // -----------------------------------------------------------------------
+    // 1. Structural checks
+    // -----------------------------------------------------------------------
 
     if (!manifest || !manifest.name || !manifest.version) {
       return res.status(400).json({ error: "manifest with name and version is required" });
@@ -225,7 +535,6 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       return res.status(400).json({ error: "files array is required (at least manifest.js and index.js)" });
     }
 
-    // Validate required files
     const filePaths = new Set(files.map((f) => f.path));
     if (!filePaths.has("manifest.js")) {
       return res.status(400).json({ error: "manifest.js is required in files" });
@@ -234,44 +543,112 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       return res.status(400).json({ error: "index.js is required in files" });
     }
 
+    // -----------------------------------------------------------------------
+    // 2. Format validation
+    // -----------------------------------------------------------------------
+
+    const nameErr = validateName(manifest.name);
+    if (nameErr) {
+      return res.status(400).json({ error: nameErr });
+    }
+
+    const versionErr = validateVersion(manifest.version);
+    if (versionErr) {
+      return res.status(400).json({ error: versionErr });
+    }
+
+    const pathErrors = validateFilePaths(files);
+    if (pathErrors.length > 0) {
+      return res.status(400).json({ error: "Invalid file paths", details: pathErrors });
+    }
+
+    const contentErrors = validateContentLimits(manifest, files, readme, tags);
+    if (contentErrors.length > 0) {
+      return res.status(400).json({ error: "Content validation failed", details: contentErrors });
+    }
+
     // Size limit: 3MB total (large extensions like html-rendering have big template files)
     const totalSize = files.reduce((sum, f) => sum + (f.content?.length || 0), 0);
     if (totalSize > 3000000) {
       return res.status(400).json({ error: "Total file size exceeds 3MB limit" });
     }
 
-    // Check if this version already exists
+    // -----------------------------------------------------------------------
+    // 3. Policy checks
+    // -----------------------------------------------------------------------
+
+    // Reserved names: kernel, core, and built-in extensions
+    if (RESERVED_NAMES.has(manifest.name)) {
+      return res.status(403).json({ error: `"${manifest.name}" is a reserved name and cannot be published` });
+    }
+
+    // Name ownership: first publisher owns the name
+    const ownershipErr = await checkNameOwnership(manifest.name, req.landId, req.landDomain);
+    if (ownershipErr) {
+      return res.status(403).json({ error: ownershipErr });
+    }
+
+    // Typosquatting: only for brand new names (no existing versions)
+    const existingAny = await Extension.findOne({ name: manifest.name }).select("_id").lean();
+    if (!existingAny) {
+      const suspicious = await checkTyposquatting(manifest.name);
+      if (suspicious.length > 0) {
+        return res.status(409).json({
+          error: `Name "${manifest.name}" is suspiciously similar to existing extensions: ${suspicious.join(", ")}. If this is intentional, contact the directory maintainers.`,
+        });
+      }
+    }
+
+    // Required extension dependencies must exist in the directory
+    const depCheck = await validateRequiredDeps(manifest);
+    if (!depCheck.valid) {
+      const reasons = depCheck.missing.map((m) => m.reason);
+      return res.status(400).json({
+        error: "Required extension dependencies not found in directory",
+        missing: reasons,
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. Persist (versions are immutable once published)
+    // -----------------------------------------------------------------------
+
+    // Immutable versions: once published, code cannot be replaced.
+    // Publish a new version instead. This prevents silent supply chain injection.
     const existing = await Extension.findOne({
       name: manifest.name,
       version: manifest.version,
     });
 
     if (existing) {
-      // Update existing version (author land or maintainer lands can update)
-      const isAuthor = existing.authorLandId === req.landId;
-      const isMaintainer = (existing.maintainers || []).includes(req.landDomain);
-      if (!isAuthor && !isMaintainer) {
-        return res.status(403).json({ error: "Only the author or maintainers can update this extension" });
-      }
-
-      existing.manifest = manifest;
-      existing.files = files;
-      existing.checksum = computeChecksum(files);
-      existing.fileCount = files.length;
-      existing.totalBytes = files.reduce((sum, f) => sum + (f.content?.length || 0), 0);
-      existing.totalLines = files.reduce((sum, f) => sum + (f.content?.split("\n").length || 0), 0);
-      existing.description = manifest.description || existing.description;
-      existing.readme = readme || existing.readme;
-      existing.tags = tags || existing.tags;
-      existing.repoUrl = repoUrl || existing.repoUrl;
-      if (maintainers && isAuthor) existing.maintainers = maintainers;
-      existing.updatedAt = new Date();
-      await existing.save();
-
-      return res.json({ published: true, updated: true, name: manifest.name, version: manifest.version, checksum: existing.checksum });
+      return res.status(409).json({
+        error: `Version ${manifest.version} of "${manifest.name}" is already published. Versions are immutable. Publish a new version instead.`,
+      });
     }
 
-    // Create new
+    // Burned version check: version numbers are append-only. Once a version
+    // has been published and then unpublished, the version number is burned
+    // forever. This closes the unpublish-republish loophole where an attacker
+    // unpublishes, then republishes the same version with different code.
+    const tombstone = await ExtensionTombstone.findOne({
+      name: manifest.name,
+      version: manifest.version,
+    });
+
+    if (tombstone) {
+      return res.status(409).json({
+        error: `Version ${manifest.version} of "${manifest.name}" was previously published and unpublished. Version numbers cannot be reused. Publish a new version instead.`,
+      });
+    }
+
+    // Version flood protection: cap total versions per extension name
+    const versionCount = await Extension.countDocuments({ name: manifest.name });
+    if (versionCount >= MAX_VERSIONS_PER_NAME) {
+      return res.status(400).json({
+        error: `Extension "${manifest.name}" has reached the maximum of ${MAX_VERSIONS_PER_NAME} versions. Unpublish old versions before publishing new ones.`,
+      });
+    }
+
     const checksum = computeChecksum(files);
     const ext = new Extension({
       name: manifest.name,
@@ -312,6 +689,8 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
 /**
  * DELETE /extensions/:name/:version
  * Unpublish a version. Requires land authentication (author only).
+ * Blocked if other published extensions have a hard dependency on this
+ * extension and no other version would satisfy the constraint.
  */
 router.delete("/:name/:version", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => {
   try {
@@ -327,6 +706,57 @@ router.delete("/:name/:version", verifyHorizonAuth(), attachLandIdentity(), asyn
     if (!isAuthor && !isMaintainer) {
       return res.status(403).json({ error: "Only the author or maintainers can unpublish" });
     }
+
+    // Check if removing this version would break any published extension's
+    // required dependency. Only block if this is the LAST version that
+    // satisfies the constraint (other versions of the same name may cover it).
+    const otherVersions = await Extension.find({ name, version: { $ne: version } }).select("version").lean();
+
+    // Find all extensions that depend on this name.
+    // Escape name for regex safety (names are validated on publish, but
+    // this param comes from the URL path, not a validated manifest).
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const dependents = await Extension.find({
+      "manifest.needs.extensions": { $regex: `^${escapedName}(@|$)` },
+      name: { $ne: name }, // skip self-deps
+    }).select("name version manifest.needs.extensions").lean();
+
+    const blocked = [];
+    for (const dep of dependents) {
+      const depEntries = dep.manifest?.needs?.extensions || [];
+      for (const entry of depEntries) {
+        const parsed = parseDepString(entry);
+        if (parsed.name !== name) continue;
+
+        if (!parsed.constraint) {
+          // Bare dependency (no version constraint). Blocked only if this is the last version.
+          if (otherVersions.length === 0) {
+            blocked.push(`${dep.name}@${dep.version} requires "${name}"`);
+          }
+        } else {
+          // Check if any remaining version satisfies the constraint
+          const stillSatisfied = otherVersions.some((v) => semverSatisfies(v.version, parsed.constraint));
+          if (!stillSatisfied) {
+            blocked.push(`${dep.name}@${dep.version} requires "${entry}"`);
+          }
+        }
+      }
+    }
+
+    if (blocked.length > 0) {
+      return res.status(409).json({
+        error: "Cannot unpublish: other extensions depend on this version",
+        dependents: blocked,
+      });
+    }
+
+    // Burn the version number. This tombstone is permanent: the same
+    // name+version can never be republished, even by the original author.
+    await ExtensionTombstone.findOneAndUpdate(
+      { name, version },
+      { name, version, checksum: ext.checksum, authorLandId: ext.authorLandId, unpublishedAt: new Date() },
+      { upsert: true },
+    );
 
     await ext.deleteOne();
     res.json({ unpublished: true, name, version });

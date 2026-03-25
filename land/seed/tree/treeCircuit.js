@@ -27,6 +27,7 @@ import Contribution from "../models/contribution.js";
 import { hooks } from "../hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { invalidateNode } from "./ancestorCache.js";
+import { CASCADE, SYSTEM_ROLE } from "../protocol.js";
 
 /**
  * Check if the tree circuit breaker feature is enabled.
@@ -62,8 +63,8 @@ export async function isTreeAlive(rootId) {
  * Returns a score where > 1.0 means the tree should trip.
  *
  * Error rate reads from BOTH sources:
- *   - Contribution log: tool call failures, write errors
- *   - .flow partitions: cascade failures and rejections
+ *   - Contribution log: extensionData.error on this tree's nodes
+ *   - .flow partitions: CASCADE.FAILED and CASCADE.REJECTED with source in this tree
  *
  * @param {string} rootId
  * @returns {Promise<{ total: number, nodeCount: number, metadataDensity: number, errorRate: number, raw: object }>}
@@ -106,20 +107,21 @@ export async function checkTreeHealth(rootId) {
   const checkInterval = parseInt(getLandConfigValue("circuitCheckInterval") || "3600000", 10);
   const since = new Date(Date.now() - checkInterval);
 
-  // Source A: Contribution log failures
+  // Collect node IDs in this tree for scoped queries
+  const treeNodeIds = await Node.find({ rootOwner: rootId }).select("_id").lean();
+  const nodeIdSet = new Set(treeNodeIds.map(n => String(n._id)));
+
+  // Source A: Contribution log failures (extensionData.error on this tree's nodes)
   const contributionErrors = await Contribution.countDocuments({
-    nodeId: { $exists: true },
+    nodeId: { $in: [...nodeIdSet] },
     date: { $gte: since },
-    $or: [
-      { "extensionData.error": { $exists: true } },
-      { action: { $in: ["error", "toolError", "writeError"] } },
-    ],
+    "extensionData.error": { $exists: true },
   });
 
-  // Source B: .flow cascade failures and rejections for nodes in this tree
+  // Source B: .flow cascade failures and rejections sourced from this tree's nodes
   let flowErrors = 0;
   try {
-    const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id").lean();
+    const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
     if (flowNode) {
       const today = new Date().toISOString().slice(0, 10);
       const partitions = await Node.find({ parent: flowNode._id, name: { $gte: since.toISOString().slice(0, 10), $lte: today } })
@@ -134,7 +136,7 @@ export async function checkTreeHealth(rootId) {
         for (const entries of Object.values(results)) {
           if (!Array.isArray(entries)) continue;
           for (const entry of entries) {
-            if (entry.status === "failed" || entry.status === "rejected") {
+            if ((entry.status === CASCADE.FAILED || entry.status === CASCADE.REJECTED) && nodeIdSet.has(String(entry.source))) {
               flowErrors++;
             }
           }

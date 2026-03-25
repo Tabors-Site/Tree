@@ -5,6 +5,7 @@ import {
 } from "../utils.js";
 import { hooks } from "../hooks.js";
 import Node from "../models/node.js";
+import { NODE_STATUS, ERR, ProtocolError } from "../protocol.js";
 
 async function editStatus({
   nodeId,
@@ -19,18 +20,21 @@ async function editStatus({
   if (!node) throw new Error("Node not found");
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 
-  const VALID_STATUSES = ["active", "trimmed", "completed"];
+  const VALID_STATUSES = Object.values(NODE_STATUS);
   if (!VALID_STATUSES.includes(status)) {
     throw new Error("Invalid Status");
   }
 
-  if (status === "completed") {
+  if (status === NODE_STATUS.COMPLETED) {
     isInherited = true;
   }
 
   const beforeData = { node, status, userId };
   const hookResult = await hooks.run("beforeStatusChange", beforeData);
-  if (hookResult.cancelled) return { error: hookResult.reason || "Status change cancelled by extension" };
+  if (hookResult.cancelled) {
+    const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
+    throw new ProtocolError(500, code, hookResult.reason || "Status change cancelled by extension");
+  }
 
   node.status = status;
   await node.save();
@@ -85,7 +89,7 @@ async function updateNodeStatusRecursively(
   const depth = arguments[6] || 0;
   if (depth > MAX_CASCADE_DEPTH) return;
 
-  if (["active", "trimmed", "completed"].includes(status)) {
+  if (Object.values(NODE_STATUS).includes(status)) {
     for (const childId of node.children) {
       await Node.findByIdAndUpdate(childId, { $set: { status } });
       const childNode = await Node.findById(childId).select("_id children").lean();

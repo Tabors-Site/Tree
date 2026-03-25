@@ -195,7 +195,7 @@ export async function addLlmConnection(
 
   if (!user) throw new Error("User not found");
 
-  var isGod = user.isAdmin === true;
+  const isAdmin = user.isAdmin === true;
 
   var count = await LlmConnection.countDocuments({ userId });
   if (count >= 15) throw new Error("Maximum of 15 connections reached");
@@ -205,7 +205,7 @@ export async function addLlmConnection(
   }
 
   var safeModel = validateInputs(baseUrl, apiKey, model, true);
-  // Basic format check for all users (including god)
+  // Basic format check for all users (including admin)
   var parsed;
   try {
     parsed = new URL(baseUrl);
@@ -219,12 +219,12 @@ export async function addLlmConnection(
     throw new Error("URLs with credentials are not allowed");
   }
 
-  // God users skip SSRF/host blocking but still get format validation above
-  var safeBaseUrl = isGod
+  // Admin users skip SSRF/host blocking but still get format validation above
+  var safeBaseUrl = isAdmin
     ? parsed.href.replace(/\/+$/, "")
     : validateCustomBaseUrl(baseUrl);
 
-  if (!isGod) {
+  if (!isAdmin) {
     var hostname = new URL(safeBaseUrl).hostname;
     await resolveAndValidateHost(hostname);
   }

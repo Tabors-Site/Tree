@@ -4,6 +4,7 @@ import Contribution from "./models/contribution.js";
 import Node from "./models/node.js";
 import { getChatContext } from "./ws/chatTracker.js";
 import { hooks } from "./hooks.js";
+import { ERR, ProtocolError } from "./protocol.js";
 
 async function findNodeById(nodeId) {
   try {
@@ -44,7 +45,8 @@ const logContribution = async (params) => {
   const hookData = { nodeId, action, userId, ...extensionRest };
   const hookResult = await hooks.run("beforeContribution", hookData);
   if (hookResult.cancelled) {
-    throw new Error(`Contribution cancelled: ${hookResult.reason || "extension"}`);
+    const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
+    throw new ProtocolError(500, code, `Contribution cancelled: ${hookResult.reason || "extension"}`);
   }
 
   if (!userId || !nodeId || !action) {

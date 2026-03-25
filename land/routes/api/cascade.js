@@ -21,6 +21,12 @@ router.post("/node/:nodeId/cascade", authenticate, async (req, res) => {
     const { nodeId } = req.params;
     const { payload, source, signalId: existingSignalId, depth } = req.body;
 
+    const { getLandConfigValue } = await import("../../seed/landConfig.js");
+    const enabled = getLandConfigValue("cascadeEnabled");
+    if (enabled === false || enabled === "false") {
+      return sendError(res, 403, ERR.CASCADE_DISABLED, "Cascade is disabled on this land");
+    }
+
     const { deliverCascade } = await import("../../seed/tree/cascade.js");
     const signalId = existingSignalId || uuidv4();
 

@@ -11,7 +11,19 @@
  * cleans up expired entries.
  */
 
-const LOCK_TTL_MS = 30 * 60 * 1000; // 30 minutes
+import { getLandConfigValue } from "../landConfig.js";
+
+let LOCK_TTL_MS = 30 * 60 * 1000; // 30 minutes
+let LOCK_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Read lock config from land config. Called from startup after config loads.
+ */
+export function initLockConfig() {
+  LOCK_TTL_MS            = Number(getLandConfigValue("orchestratorLockTtlMs"))  || LOCK_TTL_MS;
+  LOCK_SWEEP_INTERVAL_MS = Number(getLandConfigValue("lockSweepInterval"))      || LOCK_SWEEP_INTERVAL_MS;
+  startSweep(); // Restart sweep with configured interval
+}
 
 // Map<namespace, Map<key, timestamp>>
 const locks = new Map();
@@ -42,14 +54,24 @@ export function isLocked(namespace, key) {
   return true;
 }
 
-// Periodic sweep: clean expired locks every 5 minutes
-const _sweepTimer = setInterval(() => {
-  const now = Date.now();
-  for (const [ns, map] of locks) {
-    for (const [key, ts] of map) {
-      if ((now - ts) >= LOCK_TTL_MS) map.delete(key);
+// Periodic sweep: clean expired locks
+let _sweepTimer = null;
+
+function startSweep() {
+  if (_sweepTimer) clearInterval(_sweepTimer);
+  _sweepTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [ns, map] of locks) {
+      for (const [key, ts] of map) {
+        if ((now - ts) >= LOCK_TTL_MS) map.delete(key);
+      }
+      if (map.size === 0) locks.delete(ns);
     }
-    if (map.size === 0) locks.delete(ns);
-  }
-}, 5 * 60 * 1000);
-if (_sweepTimer.unref) _sweepTimer.unref();
+  }, LOCK_SWEEP_INTERVAL_MS);
+  if (_sweepTimer.unref) _sweepTimer.unref();
+}
+
+// Start with defaults; initLockConfig() restarts with configured values
+startSweep();
+
+export { startSweep };

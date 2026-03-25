@@ -5,6 +5,7 @@ import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
 import User from "../../seed/models/user.js";
 import { logContribution } from "../../seed/utils.js";
+import { DELETED } from "../../seed/protocol.js";
 import { createNote } from "../../seed/tree/notes.js";
 import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 import { getExtension } from "../loader.js";
@@ -145,7 +146,7 @@ async function createRawIdea({
   // ── LOG ────────────────────────────────────────
   await logContribution({
     userId,
-    nodeId: "deleted",
+    nodeId: DELETED,
     wasAi,
     action: "rawIdea",
     nodeVersion: "0",
@@ -194,8 +195,6 @@ async function convertRawIdeaToNote({
     content: rawIdea.content,
     userId,
     nodeId,
-    version: 0,
-    isReflection: false,
     file: rawIdea.contentType === "file" ? { filename: rawIdea.content, size: 0 } : null,
     wasAi,
     chatId,
@@ -293,10 +292,10 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
   // --- LOG CONTRIBUTION ---
   await logContribution({
     userId,
-    nodeId: "deleted",
+    nodeId: DELETED,
     wasAi,
     action: "rawIdea",
-    nodeVersion: "deleted",
+    nodeVersion: DELETED,
     rawIdeaAction: {
       action: "delete",
       rawIdeaId: rawIdeaId.toString(),

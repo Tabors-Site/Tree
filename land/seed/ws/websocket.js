@@ -18,6 +18,7 @@ import {
   MCP_SERVER_URL,
 } from "./mcp.js";
 import { getNodeName } from "../tree/treeData.js";
+import { getLandConfigValue } from "../landConfig.js";
 import Node from "../models/node.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
 import { getOrchestrator } from "../orchestratorRegistry.js";
@@ -142,15 +143,15 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       credentials: true,
     },
     transports: ["websocket", "polling"],
-    maxHttpBufferSize: 1e6,       // 1MB max message size
-    pingTimeout: 30000,           // 30s ping timeout
-    pingInterval: 25000,          // 25s ping interval
-    connectTimeout: 10000,        // 10s connection timeout
+    maxHttpBufferSize: Number(getLandConfigValue("socketMaxBufferSize")) || 1048576,
+    pingTimeout:       Number(getLandConfigValue("socketPingTimeout"))   || 30000,
+    pingInterval:      Number(getLandConfigValue("socketPingInterval"))  || 25000,
+    connectTimeout:    Number(getLandConfigValue("socketConnectTimeout"))|| 10000,
   });
 
   // Per-IP connection limit
   const ipConnectionCounts = new Map();
-  const MAX_CONNECTIONS_PER_IP = 20;
+  const MAX_CONNECTIONS_PER_IP = Number(getLandConfigValue("maxConnectionsPerIp")) || 20;
 
   // Auth middleware
   io.use((socket, next) => {

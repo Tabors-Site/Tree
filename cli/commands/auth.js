@@ -127,6 +127,9 @@ module.exports = (program) => {
     .option("--email <email>", "Email (non-interactive, optional)")
     .action(async (opts) => {
       const cfg = load();
+      if (cfg.apiKey && cfg.username) {
+        return console.log(chalk.yellow(`Already logged in as ${cfg.username}. Run: logout first.`));
+      }
       const landUrl = (cfg.landUrl || "https://treeOS.ai").replace(/\/+$/, "");
       const nonInteractive = !!(opts.username && opts.password);
 
@@ -288,6 +291,9 @@ module.exports = (program) => {
     .option("--password <password>", "Password (non-interactive, wrap in single quotes if it has special chars)")
     .action(async (opts) => {
       const cfg = load();
+      if (cfg.apiKey && cfg.username && !opts.key) {
+        return console.log(chalk.yellow(`Already logged in as ${cfg.username}. Run: logout first.`));
+      }
       const landUrl = (cfg.landUrl || "https://treeOS.ai").replace(/\/+$/, "");
 
       // --browser: open login page

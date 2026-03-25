@@ -3,6 +3,7 @@ import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
 import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import log from "../../seed/log.js";
+import { SYSTEM_ROLE, DELETED } from "../../seed/protocol.js";
 
 async function requireAdmin(userId) {
   const user = await User.findById(userId).select("isAdmin").lean();
@@ -27,7 +28,7 @@ export default function getTools() {
           const loaded = getLoadedExtensionNames();
           const manifests = getLoadedManifests();
           const userCount = await User.countDocuments({ isRemote: { $ne: true } });
-          const treeCount = await Node.countDocuments({ rootOwner: { $ne: null }, parent: { $ne: "deleted" } });
+          const treeCount = await Node.countDocuments({ rootOwner: { $ne: null }, parent: { $ne: DELETED } });
 
           let peerCount = 0;
           try {
@@ -58,7 +59,7 @@ export default function getTools() {
       annotations: { readOnlyHint: true },
       async handler({ key, userId }) {
         try {
-          const configNode = await Node.findOne({ systemRole: "config" }).lean();
+          const configNode = await Node.findOne({ systemRole: SYSTEM_ROLE.CONFIG }).lean();
           if (!configNode) return { content: [{ type: "text", text: "No .config node found." }] };
           const meta = configNode.metadata instanceof Map ? Object.fromEntries(configNode.metadata) : (configNode.metadata || {});
           if (key) return { content: [{ type: "text", text: `${key} = ${JSON.stringify(meta[key] ?? null)}` }] };
@@ -83,7 +84,7 @@ export default function getTools() {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
-          const configNode = await Node.findOne({ systemRole: "config" });
+          const configNode = await Node.findOne({ systemRole: SYSTEM_ROLE.CONFIG });
           if (!configNode) return { content: [{ type: "text", text: "No .config node found." }] };
           if (!configNode.metadata) configNode.metadata = new Map();
           if (configNode.metadata instanceof Map) { configNode.metadata.set(key, value); }

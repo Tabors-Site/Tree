@@ -1,6 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
+import { CONTENT_TYPE } from "../protocol.js";
 
 const NoteSchema = new mongoose.Schema({
   _id: {
@@ -9,7 +10,7 @@ const NoteSchema = new mongoose.Schema({
   },
   contentType: {
     type: String,
-    enum: ["file", "text"],
+    enum: Object.values(CONTENT_TYPE),
     required: true,
   },
   content: {
@@ -26,13 +27,10 @@ const NoteSchema = new mongoose.Schema({
     ref: "Node",
     required: true,
   },
-  version: {
-    type: String,
-    required: true,
-  },
-  isReflection: {
-    type: Boolean,
-    required: true,
+  metadata: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: () => new Map(),
   },
   createdAt: {
     type: Date,

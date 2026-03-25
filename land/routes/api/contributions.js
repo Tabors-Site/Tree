@@ -3,31 +3,15 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { getContributions } from "../../seed/tree/contributions.js";
-import { resolveVersion } from "../../seed/tree/treeFetch.js";
 
 const router = express.Router();
 
-// Resolve "latest" to actual prestige number for any route with :version
-router.param("version", async (req, res, next, val) => {
-  try {
-    req.params.version = String(await resolveVersion(req.params.nodeId, val));
-    next();
-  } catch (err) {
-    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
-  }
-});
-
 router.get(
-  "/node/:nodeId/:version/contributions",
+  "/node/:nodeId/contributions",
   authenticate,
   async (req, res) => {
     try {
-      const { nodeId, version } = req.params;
-      const parsedVersion = Number(version);
-
-      if (isNaN(parsedVersion)) {
-        return sendError(res, 400, ERR.INVALID_INPUT, "Invalid version");
-      }
+      const { nodeId } = req.params;
 
       const rawLimit = req.query.limit;
       const limit = rawLimit !== undefined ? Number(rawLimit) : undefined;
@@ -38,29 +22,17 @@ router.get(
 
       const result = await getContributions({
         nodeId,
-        version: parsedVersion,
         limit,
         startDate: req.query.startDate,
         endDate: req.query.endDate,
       });
 
-      sendOk(res, { nodeId, version: parsedVersion, ...result });
+      sendOk(res, { nodeId, ...result });
     } catch (err) {
       log.error("API", err);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
 );
-
-// Versionless alias (protocol-compliant)
-router.get("/node/:nodeId/contributions", authenticate, async (req, res, next) => {
-  try {
-    req.params.version = String(await resolveVersion(req.params.nodeId, "latest"));
-    req.url = `/node/${req.params.nodeId}/${req.params.version}/contributions`;
-    router.handle(req, res, next);
-  } catch (err) {
-    return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
-  }
-});
 
 export default router;

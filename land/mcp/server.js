@@ -28,7 +28,9 @@ function getMcpServer() {
 
 const server = getMcpServer();
 const transport = new StreamableHTTPServerTransport({});
-await server.connect(transport);
+// NOTE: server.connect(transport) is called AFTER extensions register tools.
+// The MCP SDK locks capabilities after connect. Extensions must register first.
+// Call connectMcpTransport() after loadExtensions() completes.
 
 // ============================================================================
 // REQUEST HANDLER (pipe: auth, tree access, context injection, dispatch)
@@ -208,4 +210,8 @@ async function handleMcpRequest(req, res) {
   }
 }
 
-export { server as mcpServerInstance, getMcpServer, handleMcpRequest };
+async function connectMcpTransport() {
+  await server.connect(transport);
+}
+
+export { server as mcpServerInstance, getMcpServer, handleMcpRequest, connectMcpTransport };

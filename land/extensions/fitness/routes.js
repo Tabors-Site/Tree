@@ -46,10 +46,10 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
       res,
     });
 
-    sendOk(res, { answer, chatId, mode });
+    if (!res.headersSent) sendOk(res, { answer, chatId, mode });
   } catch (err) {
     log.error("Fitness", "Chat error:", err.message);
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    if (!res.headersSent) sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

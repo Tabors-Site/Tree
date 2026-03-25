@@ -11,6 +11,7 @@ import { logContribution, escapeRegex } from "../utils.js";
 import { hooks } from "../hooks.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
+import { CONTENT_TYPE, DELETED, NODE_STATUS, ERR, ProtocolError } from "../protocol.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,14 +53,13 @@ async function createNote({
   content,
   userId,
   nodeId,
-  version,
-  isReflection,
   file,
   wasAi = false,
   chatId = null,
   sessionId = null,
+  metadata = {},
 }) {
-  if (!contentType || !["file", "text"].includes(contentType)) {
+  if (!contentType || !Object.values(CONTENT_TYPE).includes(contentType)) {
     throw new Error("Invalid content type");
   }
   if (!userId || !nodeId) {
@@ -70,23 +70,22 @@ async function createNote({
   if (targetNode?.systemRole) throw new Error("Cannot modify system nodes");
 
   let filePath = null;
-  if (contentType === "file") {
+  if (contentType === CONTENT_TYPE.FILE) {
     if (!file) throw new Error("File is required for file content type");
     filePath = file.filename;
   } else {
-    // ⬅️ ADD HERE
     await assertNoteTextWithinLimit(content || "", userId);
   }
 
-  const isReflectionBool = isReflection === "true" || isReflection === true;
   let finalContent = content;
 
   // ── HOOKS ────────────────────────────────────────
-  const hookData = { nodeId, version, content: finalContent, userId, contentType };
+  const hookData = { nodeId, content: finalContent, userId, contentType, metadata: { ...metadata } };
   const hookResult = await hooks.run("beforeNote", hookData);
-  if (hookResult.cancelled) return { error: hookResult.reason || "Note creation cancelled by extension" };
-  // Extensions may have modified version via beforeNote hook
-  version = hookData.version;
+  if (hookResult.cancelled) {
+    const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
+    throw new ProtocolError(500, code, hookResult.reason || "Note creation cancelled by extension");
+  }
 
   // Extensions may rewrite content via beforeNote (e.g. @mention canonicalization)
   finalContent = hookData.content;
@@ -94,17 +93,16 @@ async function createNote({
   // ── SAVE ────────────────────────────────────────
   const newNote = new Note({
     contentType,
-    content: contentType === "file" ? filePath : finalContent,
+    content: contentType === CONTENT_TYPE.FILE ? filePath : finalContent,
     userId,
     nodeId,
-    version,
-    isReflection: isReflectionBool,
+    metadata: hookData.metadata,
   });
 
   await newNote.save();
 
   // Storage tracking (core concern, per-user disk usage)
-  const sizeKB = contentType === "file" && file
+  const sizeKB = contentType === CONTENT_TYPE.FILE && file
     ? Math.ceil(file.size / 1024)
     : Math.ceil(Buffer.byteLength(finalContent || "", "utf8") / 1024);
   if (sizeKB > 0) {
@@ -131,7 +129,7 @@ async function createNote({
     noteAction: {
       action: "add",
       noteId: newNote._id.toString(),
-      content: contentType === "text" ? finalContent || "" : null,
+      content: contentType === CONTENT_TYPE.TEXT ? finalContent || "" : null,
     },
   });
 
@@ -145,7 +143,6 @@ async function editNote({
   lineStart = null,
   lineEnd = null,
   wasAi = false,
-  isReflection = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -160,7 +157,7 @@ async function editNote({
     throw new Error("Unauthorized");
   }
 
-  if (note.contentType !== "text") {
+  if (note.contentType !== CONTENT_TYPE.TEXT) {
     throw new Error("File notes cannot be edited");
   }
 
@@ -211,7 +208,7 @@ async function editNote({
   // ── HOOKS (rewrite content, e.g. @mention canonicalization) ────────
   let finalContent = newContent;
   {
-    const hookData = { nodeId: note.nodeId, version: note.version, content: newContent, userId, contentType: note.contentType };
+    const hookData = { nodeId: note.nodeId, content: newContent, userId, contentType: note.contentType, metadata: {} };
     await hooks.run("beforeNote", hookData);
     finalContent = hookData.content;
   }
@@ -225,7 +222,6 @@ async function editNote({
 
   // ── APPLY ───────────────────────────────────────
   note.content = finalContent;
-  note.isReflection = isReflection === "true" || isReflection === true;
   note.sizeKB = newSizeKB;
 
   await note.save();
@@ -262,7 +258,7 @@ async function editNote({
   return { message: "Note updated successfully", Note: note };
 }
 
-async function getNotes({ nodeId, version, limit, startDate, endDate }) {
+async function getNotes({ nodeId, limit, startDate, endDate }) {
   try {
     if (!nodeId) {
       throw new Error("Missing required parameter: nodeId");
@@ -273,10 +269,6 @@ async function getNotes({ nodeId, version, limit, startDate, endDate }) {
     }
 
     const query = { nodeId };
-    // Only filter by version if explicitly provided
-    if (version !== undefined && version !== null) {
-      query.version = version;
-    }
 
     if (startDate || endDate) {
       query.createdAt = {};
@@ -298,7 +290,7 @@ async function getNotes({ nodeId, version, limit, startDate, endDate }) {
 
     if (!notes || notes.length === 0) {
       return {
-        message: `No notes found for node ${nodeId} (version ${version})`,
+        message: `No notes found for node ${nodeId}`,
         notes: [],
       };
     }
@@ -310,8 +302,7 @@ async function getNotes({ nodeId, version, limit, startDate, endDate }) {
       username: note.userId ? note.userId.username : null,
       userId: note.userId?._id?.toString(),
       nodeId: note.nodeId?._id,
-      version: note.version,
-      isReflection: note.isReflection,
+      metadata: note.metadata,
       createdAt: note.createdAt,
     }));
 
@@ -382,12 +373,12 @@ async function deleteNoteAndFile({
   }
   const fileOwnerId = note.userId?.toString();
 
-  const { nodeId, version } = note; // original nodeId for logging
+  const { nodeId } = note; // original nodeId for logging
   let fileDeleted = false;
   let fileSizeKB = 0;
 
   // If it's a file, delete it and modify content
-  if (note.contentType === "file" && note.content) {
+  if (note.contentType === CONTENT_TYPE.FILE && note.content) {
     const filePath = path.resolve(uploadsFolder, path.basename(note.content));
 
     if (filePath.startsWith(uploadsFolder) && fs.existsSync(filePath)) {
@@ -401,24 +392,24 @@ async function deleteNoteAndFile({
 
     // update note fields
     note.content = "File was deleted";
-    note.nodeId = "deleted";
-    note.userId = "deleted";
+    note.nodeId = DELETED;
+    note.userId = DELETED;
   } else {
     // text note: keep content, just move nodeId
-    note.nodeId = "deleted";
-    note.userId = "deleted";
+    note.nodeId = DELETED;
+    note.userId = DELETED;
   }
   await note.save();
 
   // Storage tracking (core concern, decrement on file delete)
-  if (fileDeleted && fileSizeKB > 0 && fileOwnerId && fileOwnerId !== "deleted") {
+  if (fileDeleted && fileSizeKB > 0 && fileOwnerId && fileOwnerId !== DELETED) {
     User.findByIdAndUpdate(fileOwnerId, [
       { $set: { "metadata.storage.usageKB": { $max: [{ $subtract: [{ $ifNull: ["$metadata.storage.usageKB", 0] }, fileSizeKB] }, 0] } } },
     ]).catch(() => {});
   }
 
   // afterNote hook for delete (fire-and-forget)
-  if (fileOwnerId && fileOwnerId !== "deleted") {
+  if (fileOwnerId && fileOwnerId !== DELETED) {
     hooks.run("afterNote", {
       note, nodeId, userId: fileOwnerId,
       contentType: note.contentType, fileSizeKB,
@@ -502,7 +493,7 @@ async function searchNotesByUser({ userId, query, limit, startDate, endDate }) {
 
   const mongoQueryObj = {
     userId,
-    contentType: "text",
+    contentType: CONTENT_TYPE.TEXT,
     $and: conditions,
   };
 
@@ -543,20 +534,20 @@ async function collectSubtreeNodeIds(rootId) {
   return ids;
 }
 function nodeMatchesStatus(node, filters) {
-  const status = node.status || "active";
+  const status = node.status || NODE_STATUS.ACTIVE;
   if (!status) return false;
 
-  // ✅ DEFAULTS (only when no filters provided)
+  // DEFAULTS (only when no filters provided)
   if (!filters) {
-    return status === "active" || status === "completed";
+    return status === NODE_STATUS.ACTIVE || status === NODE_STATUS.COMPLETED;
   }
 
-  // ✅ EXPLICIT OVERRIDES
+  // EXPLICIT OVERRIDES
   if (filters[status] === true) return true;
   if (filters[status] === false) return false;
 
-  // ✅ FALLBACK TO DEFAULTS
-  return status === "active" || status === "completed";
+  // FALLBACK TO DEFAULTS
+  return status === NODE_STATUS.ACTIVE || status === NODE_STATUS.COMPLETED;
 }
 
 
@@ -575,7 +566,7 @@ async function transferNote({
   const note = await Note.findById(noteId);
   if (!note) throw new Error("Note not found");
 
-  if (note.nodeId === "deleted") {
+  if (note.nodeId === DELETED) {
     throw new Error("Cannot transfer a deleted note");
   }
 
@@ -601,18 +592,11 @@ async function transferNote({
     throw new Error("Cannot transfer notes between different trees");
   }
 
-  // Resolve target version via beforeNote hook
-  const hookData = { nodeId: targetNodeId, version: 0, content: "", userId, contentType: "text" };
-  await hooks.run("beforeNote", hookData);
-  const targetVersion = hookData.version;
-
   // Save original location for contribution logging
   const sourceNodeId = note.nodeId;
-  const sourceVersion = note.version;
 
   // Move the note
   note.nodeId = targetNodeId;
-  note.version = String(targetVersion);
   await note.save();
 
   // Log "remove" contribution on source node
@@ -642,15 +626,15 @@ async function transferNote({
     noteAction: {
       action: "add",
       noteId: noteId.toString(),
-      content: note.contentType === "text" ? note.content || "" : null,
+      content: note.contentType === CONTENT_TYPE.TEXT ? note.content || "" : null,
     },
   });
 
   return {
     message: "Note transferred successfully",
     noteId: noteId.toString(),
-    from: { nodeId: sourceNodeId, version: Number(sourceVersion) },
-    to: { nodeId: targetNodeId, version: targetVersion },
+    from: { nodeId: sourceNodeId },
+    to: { nodeId: targetNodeId },
   };
 }
 

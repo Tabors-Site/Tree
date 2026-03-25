@@ -3,7 +3,7 @@ import authenticate from "../../seed/middleware/authenticate.js";
 import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
 import log from "../../seed/log.js";
-import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { sendOk, sendError, ERR, DELETED } from "../../seed/protocol.js";
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
 
 const router = express.Router();
@@ -23,7 +23,7 @@ router.get("/land/status", authenticate, async (req, res) => {
     const loaded = getLoadedExtensionNames();
     const manifests = getLoadedManifests();
     const userCount = await User.countDocuments({ isRemote: { $ne: true } });
-    const treeCount = await Node.countDocuments({ rootOwner: { $ne: null }, parent: { $ne: "deleted" } });
+    const treeCount = await Node.countDocuments({ rootOwner: { $ne: null }, parent: { $ne: DELETED } });
 
     let peerCount = 0;
     try {

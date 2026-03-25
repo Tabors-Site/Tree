@@ -1,5 +1,5 @@
 import log from "../../seed/log.js";
-import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { sendOk, sendError, ERR, ProtocolError, sendCaughtError } from "../../seed/protocol.js";
 import { hooks } from "../../seed/hooks.js";
 // LLM orchestration routes: tree chat/place/query, raw idea chat/place, understanding.
 
@@ -48,8 +48,10 @@ import Node from "../../seed/models/node.js";
 import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 import { nullSocket } from "../../seed/orchestrators/helpers.js";
 
+import { getLandConfigValue } from "../../seed/landConfig.js";
+
 const router = express.Router();
-const TIMEOUT_MS = 19 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 19 * 60 * 1000;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared orchestration runner
@@ -104,6 +106,7 @@ async function runTreeOrchestration(opts, res) {
   let timedOut = false;
   let chat = null;
 
+  const TIMEOUT_MS = Number(getLandConfigValue("apiOrchestrationTimeout")) || DEFAULT_TIMEOUT_MS;
   const timer = setTimeout(() => {
     timedOut = true;
     log.error("API", `Tree ${mode} timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
@@ -171,7 +174,7 @@ async function runTreeOrchestration(opts, res) {
       };
 
       const orch = getOrchestrator("tree");
-      if (!orch) throw new Error("No tree orchestrator installed.");
+      if (!orch) throw new ProtocolError(404, ERR.ORCHESTRATOR_NOT_FOUND, "No tree orchestrator installed.");
       const result = await orch.handle(orchArgs);
 
       clearTimeout(timer);
@@ -210,8 +213,8 @@ async function runTreeOrchestration(opts, res) {
       // beforeResponse hook: extensions can modify content before client receives it
       const hookData = {
         content: result.answer,
-        userId: req.userId,
-        rootId: req.params.rootId,
+        userId,
+        rootId,
         mode,
       };
       await hooks.run("beforeResponse", hookData);
@@ -233,11 +236,17 @@ async function runTreeOrchestration(opts, res) {
       }
 
       if (!res.headersSent) {
+        if (err.errCode) {
+          return sendError(res, err.httpStatus, err.errCode, err.message);
+        }
         if (err.message?.includes("No LLM connection")) {
           const msg = isPublicQuery
             ? "This tree has no AI configured for public queries."
             : err.message;
           return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, msg);
+        }
+        if (err.message?.includes("timed out") || err.message?.includes("All LLM connections failed")) {
+          return sendError(res, 503, ERR.LLM_TIMEOUT, err.message);
         }
         return sendError(res, 500, ERR.INTERNAL, err.message || "Something went wrong.");
       }

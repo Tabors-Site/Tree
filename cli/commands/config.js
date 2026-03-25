@@ -1,6 +1,7 @@
 const chalk = require("chalk");
 const TreeAPI = require("../api");
 const { load, save, requireAuth } = require("../config");
+const { registerDynamic } = require("./dynamic");
 
 function getApi() {
   const cfg = requireAuth();
@@ -42,7 +43,8 @@ module.exports = (program) => {
         try {
           const res = await fetch(`${cfg.landUrl}/api/v1/protocol`);
           if (res.ok) {
-            const protocol = await res.json();
+            const raw = await res.json();
+            const protocol = raw.data || raw;
             cfg.landProtocol = protocol;
             console.log(
               chalk.green(`Connected to ${cfg.landUrl}`) +
@@ -61,6 +63,13 @@ module.exports = (program) => {
         save(cfg);
         if (!cfg.apiKey) {
           console.log(chalk.dim("Next: treeos register or treeos login"));
+        } else {
+          console.log(chalk.dim(`  Logged in as ${cfg.username || "unknown"}`));
+        }
+        if (cfg.landProtocol?.cli && Object.keys(cfg.landProtocol.cli).length > 0) {
+          const cmdCount = Object.keys(cfg.landProtocol.cli).reduce((n, k) => n + cfg.landProtocol.cli[k].length, 0);
+          registerDynamic(program, cfg);
+          console.log(chalk.dim(`  ${cmdCount} extension commands loaded.`));
         }
       } catch (e) {
         console.error(chalk.red("Error:"), e.message);
@@ -79,7 +88,8 @@ module.exports = (program) => {
         if (!res.ok) {
           return console.log(chalk.yellow(`Land at ${landUrl} does not serve /protocol (HTTP ${res.status})`));
         }
-        const protocol = await res.json();
+        const raw = await res.json();
+        const protocol = raw.data || raw;
 
         // Cache it
         cfg.landProtocol = protocol;

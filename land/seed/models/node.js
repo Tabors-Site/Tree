@@ -1,6 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
+import { NODE_STATUS, SYSTEM_ROLE, DELETED } from "../protocol.js";
 
 const NodeSchema = new mongoose.Schema({
   _id: {
@@ -9,7 +10,7 @@ const NodeSchema = new mongoose.Schema({
   },
   name: { type: String, required: true },
   type: { type: String, default: null },
-  status: { type: String, default: "active" },
+  status: { type: String, default: NODE_STATUS.ACTIVE },
   dateCreated: { type: Date, default: Date.now },
   // Core LLM assignment: tree-wide default. Extension slots live in metadata.
   llmDefault: { type: String, ref: "LlmConnection", default: null },
@@ -29,7 +30,7 @@ const NodeSchema = new mongoose.Schema({
   // Land system nodes. If systemRole is set, node is a system node.
   systemRole: {
     type: String,
-    enum: [null, "land-root", "identity", "config", "peers", "extensions", "flow"],
+    enum: [null, ...Object.values(SYSTEM_ROLE)],
     default: null,
   },
   metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
@@ -38,7 +39,7 @@ const NodeSchema = new mongoose.Schema({
 // No virtuals. Extension data lives in metadata. Callers use getExtMeta/setExtMeta.
 // Ownership and contributor mutations live in seed/tree/ownership.js (uses resolveTreeAccess).
 
-// Node deletion is soft-delete only (parent set to "deleted" in treeManagement.js).
+// Node deletion is soft-delete only (parent set to DELETED in treeManagement.js).
 // The deleted-revive extension can bring them back. No hard delete on nodes.
 
 NodeSchema.index({ parent: 1 });

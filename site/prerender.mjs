@@ -140,9 +140,11 @@ const PAGE_META = {
 async function fetchBlogPosts() {
   try {
     const res = await fetch(`${BLOG_API}/blog/posts`);
-    const data = await res.json();
-    if (data.success && data.posts) {
-      return data.posts.map((p) => ({
+    const raw = await res.json();
+    const data = raw.data || raw;
+    const posts = data.posts || data;
+    if (Array.isArray(posts) && posts.length > 0) {
+      return posts.map((p) => ({
         route: `/blog/${p.slug}`,
         title: p.title,
         summary: p.summary || "",

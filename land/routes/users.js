@@ -35,7 +35,9 @@ const register = async (req, res) => {
     const hookData = { username, password, req, res, handled: false };
     const hookResult = await hooks.run("beforeRegister", hookData);
     if (hookResult.cancelled) {
-      return sendError(res, 403, ERR.FORBIDDEN, hookResult.reason || "Registration blocked");
+      const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
+      const http = hookResult.timedOut ? 500 : 403;
+      return sendError(res, http, code, hookResult.reason || "Registration blocked");
     }
     if (hookData.handled) return;
 

@@ -13,7 +13,7 @@ import orchestrate from "./api/orchestrate.js";
 import landConfig from "./api/config.js";
 import canopy from "./canopy.js";
 
-import { handleMcpRequest, mcpServerInstance } from "../mcp/server.js";
+import { handleMcpRequest, mcpServerInstance, connectMcpTransport } from "../mcp/server.js";
 import authenticateMCP from "../seed/middleware/authenticateMCP.js";
 
 import express from "express";
@@ -63,6 +63,9 @@ export default async function registerURLRoutes(app) {
 
   // Load extensions (manifests discovered, deps validated, routes wired)
   await loadExtensions(app, mcpServerInstance, { getConfigValue: getLandConfigValue });
+
+  // Connect MCP transport AFTER extensions register tools (SDK locks after connect)
+  await connectMcpTransport();
 
   app.post("/mcp", authenticateMCP, handleMcpRequest);
 

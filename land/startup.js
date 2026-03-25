@@ -1,7 +1,7 @@
 import mongoose from "./seed/dbConfig.js";
 import { getLandIdentity, getLandUrl } from "./canopy/identity.js";
 import { ensureLandRoot } from "./seed/landRoot.js";
-import { initLandConfig } from "./seed/landConfig.js";
+import { initLandConfig, getLandConfigValue } from "./seed/landConfig.js";
 import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames } from "./extensions/loader.js";
 import { startUploadCleanup } from "./seed/tree/uploadCleanup.js";
 import { startRetentionJob } from "./seed/tree/dataRetention.js";
@@ -17,6 +17,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import log from "./seed/log.js";
+import { SYSTEM_ROLE } from "./seed/protocol.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -65,6 +66,8 @@ export function onListen() {
         sessionTTL:              { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
         staleSessionTimeout:     { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
         maxSessions:             { load: () => import("./seed/ws/sessionRegistry.js").then(m => m.setMaxSessions) },
+        llmClientCacheTtl:       { load: () => import("./seed/ws/conversation.js").then(m => (v) => m.setClientCacheTtl(v * 1000)) },
+        canopyProxyCacheTtl:     { load: () => import("./seed/ws/conversation.js").then(m => (v) => m.setProxyCacheTtl(v * 1000)) },
       };
 
       for (const [key, cfg] of Object.entries(KERNEL_CONFIG)) {
@@ -83,10 +86,15 @@ export function onListen() {
       }
     } catch {}
 
+    // Initialize orchestrator lock config from land config
+    try {
+      const { initLockConfig } = await import("./seed/orchestrators/locks.js");
+      initLockConfig();
+    } catch {}
 
     // Ensure .extensions system node exists (for lands created before this feature)
     const Node = (await import("./seed/models/node.js")).default;
-    const extNode = await Node.findOne({ systemRole: "extensions" });
+    const extNode = await Node.findOne({ systemRole: SYSTEM_ROLE.EXTENSIONS });
     if (!extNode) {
       const { getLandRoot } = await import("./seed/landRoot.js");
       const landRoot = await getLandRoot();
@@ -94,7 +102,7 @@ export function onListen() {
         const newExtNode = new Node({
           name: ".extensions",
           parent: landRoot._id,
-          systemRole: "extensions",
+          systemRole: SYSTEM_ROLE.EXTENSIONS,
           children: [],
           contributors: [],
         });
@@ -106,7 +114,7 @@ export function onListen() {
     }
 
     // Ensure .flow system node exists (for lands created before cascade)
-    const flowNode = await Node.findOne({ systemRole: "flow" });
+    const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW });
     if (!flowNode) {
       const { getLandRoot } = await import("./seed/landRoot.js");
       const landRoot = await getLandRoot();
@@ -114,7 +122,7 @@ export function onListen() {
         const newFlowNode = new Node({
           name: ".flow",
           parent: landRoot._id,
-          systemRole: "flow",
+          systemRole: SYSTEM_ROLE.FLOW,
           children: [],
           contributors: [],
         });
@@ -147,9 +155,10 @@ export function onListen() {
     const { startCircuitJob } = await import("./seed/tree/treeCircuit.js");
     startCircuitJob();
 
-    // Cascade result cleanup (every 6 hours, cleans expired signals from .flow)
+    // Cascade result cleanup (configurable, default: every 6 hours)
     const { cleanupExpiredResults } = await import("./seed/tree/cascade.js");
-    const cascadeCleanupTimer = setInterval(() => cleanupExpiredResults().catch(() => {}), 6 * 60 * 60 * 1000);
+    const cascadeCleanupMs = Number(getLandConfigValue("cascadeCleanupInterval")) || 6 * 60 * 60 * 1000;
+    const cascadeCleanupTimer = setInterval(() => cleanupExpiredResults().catch(() => {}), cascadeCleanupMs);
     cascadeCleanupTimer.unref();
 
     log.verbose("Land", "Background jobs started (includes daily data retention)");

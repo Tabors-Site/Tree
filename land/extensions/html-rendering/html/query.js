@@ -365,12 +365,13 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
       if (res.status === 429) {
         loadingDiv.className = "message error";
         loadingDiv.innerHTML = "<p>Rate limit reached. Please wait a few minutes before trying again.</p>";
-      } else if (!res.ok || !data.success) {
-        var errMsg = data.answer || data.error || data.message || "Error (HTTP " + res.status + ")";
+      } else if (!res.ok || data.status === "error") {
+        var errMsg = (data.data && data.data.answer) || (data.error && data.error.message) || data.error || data.message || "Error (HTTP " + res.status + ")";
         loadingDiv.className = "message error";
         loadingDiv.innerHTML = "<p>" + errMsg + "</p>";
       } else {
-        loadingDiv.innerHTML = markdownToHtml(data.answer);
+        var result = data.data || data;
+        loadingDiv.innerHTML = markdownToHtml(result.answer);
       }
     } catch (err) {
       loadingDiv.className = "message error";

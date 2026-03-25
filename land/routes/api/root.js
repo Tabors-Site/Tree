@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
-import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { sendOk, sendError, ERR, DELETED } from "../../seed/protocol.js";
 
 import { getAllNodeData, getTreeStructure } from "../../seed/tree/treeData.js";
 import { getExtension } from "../../extensions/loader.js";
@@ -34,7 +34,7 @@ router.get("/root/:nodeId", authenticate, async (req, res) => {
       .lean()
       .exec();
     const rootNode = await Node.findById(nodeId).select("parent rootOwner").lean();
-    const isDeleted = rootNode.parent === "deleted";
+    const isDeleted = rootNode.parent === DELETED;
 
     const isPublicAccess = !!req.isPublicAccess;
     const isOwner =

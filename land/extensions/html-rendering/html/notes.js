@@ -3968,11 +3968,10 @@ input[type="file"].hidden-input {
           return `
           <li
             class="note-item ${isSelf ? "self" : "other"} ${
-              n.isReflection ? "reflection" : ""
+              n.metadata?.treeos?.isReflection ? "reflection" : ""
             }"
             data-note-id="${n._id}"
             data-node-id="${n.nodeId}"
-            data-version="${n.version}"
           >
             <div class="note-bubble">
               ${

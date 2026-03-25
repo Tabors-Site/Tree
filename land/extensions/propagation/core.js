@@ -11,13 +11,14 @@ import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import { deliverCascade, getCascadeResults } from "../../seed/tree/cascade.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
+import { SYSTEM_ROLE } from "../../seed/protocol.js";
 
 /**
  * Get propagation config from .config node metadata.propagation.
  * These are NOT kernel configs. They are propagation's own settings.
  */
 export async function getPropagationConfig() {
-  const configNode = await Node.findOne({ systemRole: "config" }).select("metadata").lean();
+  const configNode = await Node.findOne({ systemRole: SYSTEM_ROLE.CONFIG }).select("metadata").lean();
   if (!configNode) return defaults();
 
   const meta = configNode.metadata instanceof Map
@@ -209,7 +210,7 @@ export async function retryFailedHops() {
   const config = await getPropagationConfig();
 
   // Load .flow results
-  const flowNode = await Node.findOne({ systemRole: "flow" }).select("metadata").lean();
+  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("metadata").lean();
   if (!flowNode) return { retried: 0, succeeded: 0 };
 
   const allResults = flowNode.metadata instanceof Map

@@ -86,6 +86,34 @@ export function sendError(res, httpStatus, code, message, detail) {
 }
 
 // ============================================================================
+// PROTOCOL ERROR (throwable Error with ERR code + HTTP status)
+// ============================================================================
+
+/**
+ * An error that carries a semantic ERR code and HTTP status.
+ * Throw from seed functions. Route catch blocks detect via err.errCode
+ * and call sendError(res, err.httpStatus, err.errCode, err.message).
+ */
+export class ProtocolError extends Error {
+  constructor(httpStatus, code, message) {
+    super(message);
+    this.httpStatus = httpStatus;
+    this.errCode = code;
+  }
+}
+
+/**
+ * Route-level catch helper. If the error is a ProtocolError, sends the
+ * proper response. Otherwise falls back to 500 INTERNAL.
+ */
+export function sendCaughtError(res, err) {
+  if (err instanceof ProtocolError) {
+    return sendError(res, err.httpStatus, err.errCode, err.message);
+  }
+  return sendError(res, 500, "INTERNAL", err.message || "Something went wrong.");
+}
+
+// ============================================================================
 // SEMANTIC ERROR CODES
 // ============================================================================
 
@@ -192,3 +220,41 @@ export const CASCADE = {
   PARTIAL:   "partial",
   AWAITING:  "awaiting",
 };
+
+// ============================================================================
+// NODE STATUSES
+// ============================================================================
+
+export const NODE_STATUS = {
+  ACTIVE:    "active",
+  COMPLETED: "completed",
+  TRIMMED:   "trimmed",
+};
+
+// ============================================================================
+// SYSTEM ROLES (system node identifiers)
+// ============================================================================
+
+export const SYSTEM_ROLE = {
+  LAND_ROOT:  "land-root",
+  IDENTITY:   "identity",
+  CONFIG:     "config",
+  PEERS:      "peers",
+  EXTENSIONS: "extensions",
+  FLOW:       "flow",
+};
+
+// ============================================================================
+// CONTENT TYPES (note content classification)
+// ============================================================================
+
+export const CONTENT_TYPE = {
+  TEXT: "text",
+  FILE: "file",
+};
+
+// ============================================================================
+// SENTINEL VALUES
+// ============================================================================
+
+export const DELETED = "deleted";

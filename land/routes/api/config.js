@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
-import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import { sendOk, sendError, ERR, NODE_STATUS } from "../../seed/protocol.js";
 import User from "../../seed/models/user.js";
 import Node from "../../seed/models/node.js";
 import { getLandRoot } from "../../seed/landRoot.js";
@@ -88,7 +88,7 @@ router.get("/land/extensions", authenticate, async (req, res) => {
         name: m.name,
         version: m.version,
         description: m.description,
-        status: "active",
+        status: NODE_STATUS.ACTIVE,
         needs: m.needs || {},
         optional: m.optional || {},
         provides: {
@@ -120,7 +120,7 @@ router.get("/land/extensions/:name", authenticate, async (req, res) => {
     // Check loaded extensions first
     if (hasExtension(name)) {
       const manifest = getExtensionManifest(name);
-      return sendOk(res, { name, manifest, status: "active" });
+      return sendOk(res, { name, manifest, status: NODE_STATUS.ACTIVE });
     }
 
     // Check if it's disabled (exists on disk but not loaded)

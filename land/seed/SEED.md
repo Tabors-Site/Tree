@@ -98,7 +98,9 @@ Same pattern. Extensions register. The kernel resolves. Failure falls back to th
 
 **Time injection.** Every AI prompt receives the current time in the land's timezone. Cannot be turned off.
 
-**Extension router timeout.** Extension routes wrapped with 5-second timeout. If an extension route hangs, the kernel route handles the request. Extensions can never permanently shadow kernel routes. Uses `res.headersSent` check and native `finish` event, not res.end wrapping.
+**Extension router timeout.** Extension page routes (mounted at /) wrapped with 5-second timeout. If an extension page route hangs, the kernel handles the request. API routes (/api/v1) are not wrapped because AI chat routes can take 30+ seconds.
+
+**MCP transport ordering.** The MCP SDK locks tool registration after `server.connect(transport)`. Extensions register tools during the wire phase. Transport connects after wire completes. Reordering breaks silently: the AI has no tools and nothing errors.
 
 **Auth fallthrough.** `authenticateOptional` tries every registered auth strategy. If none match, request continues anonymously. Extensions register share token, public access, API key strategies. The kernel pipeline handles them all.
 
@@ -243,6 +245,35 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 
 Extension config (like `htmlEnabled`) lives in .config too, written by extensions on first boot, not by the kernel.
 
+### Internal Tuning
+
+Advanced operators can adjust these values via `treeos config set`. Most lands never need to. Defaults are safe.
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
+| socketMaxBufferSize | 1048576 | Max WS message size (bytes) |
+| socketPingTimeout | 30000 | WS ping timeout (ms) |
+| socketPingInterval | 25000 | WS ping interval (ms) |
+| socketConnectTimeout | 10000 | WS connection timeout (ms) |
+| maxConnectionsPerIp | 20 | Per-IP WS connection cap |
+| llmClientCacheTtl | 300 | User LLM client cache lifetime (seconds) |
+| canopyProxyCacheTtl | 60 | Canopy proxy client cache lifetime (seconds) |
+| apiOrchestrationTimeout | 1140000 | API request timeout (ms) |
+| canopyHeartbeatInterval | 300000 | Heartbeat frequency (ms) |
+| canopyDegradedThreshold | 2 | Failed heartbeats before degraded |
+| canopyUnreachableThreshold | 12 | Failed heartbeats before unreachable |
+| canopyDeadThresholdDays | 30 | Days before dead peer cleanup |
+| canopyOutboxInterval | 60000 | Outbox processing frequency (ms) |
+| canopyMaxRetries | 5 | Event delivery retries |
+| canopyEventDeliveryTimeout | 15000 | Per-event delivery timeout (ms) |
+| canopyDestLimitPerCycle | 10 | Events per destination per cycle |
+| orchestratorLockTtlMs | 1800000 | Lock TTL before auto-expire (ms) |
+| lockSweepInterval | 300000 | Lock cleanup sweep (ms) |
+| uploadCleanupInterval | 21600000 | Cleanup frequency (ms) |
+| uploadGracePeriodMs | 3600000 | File age before deletion (ms) |
+| retentionCleanupInterval | 86400000 | Retention job frequency (ms) |
+| cascadeCleanupInterval | 21600000 | Cascade result cleanup frequency (ms) |
+
 ## Tree Circuit Breaker
 
 When a tree exceeds health thresholds, its circuit trips. No AI interactions. No cascade. No writes. Read access stays open. The data is intact. The tree is sleeping.
@@ -268,7 +299,7 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Hook cap | 100 handlers per hook. |
 | Hook circuit breaker | 5 consecutive failures auto-disables the hook handler. |
 | Tool circuit breaker | 5 consecutive failures disables the tool for that session. AI adapts to other tools. One bad API key disables one tool, not the whole tree. |
-| Extension router timeout | 5s. Hanging extension routes fall through to kernel. |
+| Extension router timeout | 5s on page routes (/). API routes (/api/v1) not wrapped. AI chat routes take as long as the LLM needs. |
 | Metadata guard | Blocked extensions can't write to nodes. Four core namespaces (cascade, extensions, tools, modes) bypass blocking. |
 | Document size guard | Every metadata write checks total document size against maxDocumentSizeBytes (14MB default). Writes exceeding the limit rejected with DOCUMENT_SIZE_EXCEEDED. onDocumentPressure fires at 80% capacity. |
 | Per-namespace cap | 512KB per extension namespace per node via setExtMeta. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |

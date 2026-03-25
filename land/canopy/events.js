@@ -2,9 +2,12 @@ import log from "../seed/log.js";
 import CanopyEvent from "./models/canopyEvent.js";
 import { signCanopyToken } from "./identity.js";
 import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
+import { getLandConfigValue } from "../seed/landConfig.js";
 
-const OUTBOX_INTERVAL_MS = 60 * 1000; // Process outbox every 60 seconds
-const MAX_RETRIES = 5;
+let OUTBOX_INTERVAL_MS = 60 * 1000; // Process outbox every 60 seconds
+let MAX_RETRIES = 5;
+let EVENT_DELIVERY_TIMEOUT_MS = 15000;
+let DEST_LIMIT_PER_CYCLE = 10;
 
 let outboxTimer = null;
 
@@ -71,7 +74,7 @@ async function processEvent(event) {
         Authorization: `CanopyToken ${token}`,
       },
       body: JSON.stringify(event.payload),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(EVENT_DELIVERY_TIMEOUT_MS),
     });
 
     event.lastAttemptAt = new Date();
@@ -121,8 +124,7 @@ export async function processOutbox() {
   if (events.length === 0) return { processed: 0, sent: 0, failed: 0 };
 
   const results = { processed: 0, sent: 0, failed: 0 };
-  const destCounts = new Map(); // Per-destination rate limit (max 10 per cycle)
-  const DEST_LIMIT_PER_CYCLE = 10;
+  const destCounts = new Map(); // Per-destination rate limit
 
   for (const event of events) {
     // Exponential backoff: wait 1min, 2min, 4min, 8min, 16min between retries
@@ -150,6 +152,12 @@ export async function processOutbox() {
  */
 export function startOutboxJob() {
   if (outboxTimer) return;
+
+  // Read canopy event config from land config at job start time
+  OUTBOX_INTERVAL_MS        = Number(getLandConfigValue("canopyOutboxInterval"))        || OUTBOX_INTERVAL_MS;
+  MAX_RETRIES               = Number(getLandConfigValue("canopyMaxRetries"))             || MAX_RETRIES;
+  EVENT_DELIVERY_TIMEOUT_MS = Number(getLandConfigValue("canopyEventDeliveryTimeout"))   || EVENT_DELIVERY_TIMEOUT_MS;
+  DEST_LIMIT_PER_CYCLE      = Number(getLandConfigValue("canopyDestLimitPerCycle"))      || DEST_LIMIT_PER_CYCLE;
 
   outboxTimer = setInterval(async () => {
     try {

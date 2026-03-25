@@ -52,10 +52,10 @@ class TreeAPI {
     }
 
     if (!res.ok) {
-      const msg = json.error || json.message || json.answer || `HTTP ${res.status}`;
+      const msg = json.error?.message || json.error?.code || json.message || json.answer || `HTTP ${res.status}`;
       throw new Error(msg);
     }
-    return json;
+    return json.data !== undefined ? json.data : json;
   }
 
   async _canopyReq(method, path, body) {
@@ -84,10 +84,10 @@ class TreeAPI {
     }
 
     if (!res.ok) {
-      const msg = json.error || json.message || json.answer || `HTTP ${res.status}`;
+      const msg = json.error?.message || json.error?.code || json.message || json.answer || `HTTP ${res.status}`;
       throw new Error(msg);
     }
-    return json;
+    return json.data !== undefined ? json.data : json;
   }
 
   get(path, opts) {
@@ -383,9 +383,9 @@ class TreeAPI {
       throw new Error(`Server returned non-JSON response (HTTP ${res.status})`);
     }
     if (!res.ok) {
-      throw new Error(json.error || json.message || `HTTP ${res.status}`);
+      throw new Error(json.error?.message || json.error?.code || json.message || `HTTP ${res.status}`);
     }
-    return json;
+    return json.data !== undefined ? json.data : json;
   }
   editNote(nodeId, noteId, content) {
     return this.put(`/node/${nodeId}/notes/${noteId}`, { content });
@@ -574,8 +574,8 @@ async function unauthPost(path, body) {
   try { json = JSON.parse(text); } catch {
     throw new Error(`Server returned non-JSON response (HTTP ${res.status}). Is the Land running the latest version?`);
   }
-  if (!res.ok) throw new Error(json.error || json.message || `HTTP ${res.status}`);
-  return json;
+  if (!res.ok) throw new Error(json.error?.message || json.error?.code || json.message || `HTTP ${res.status}`);
+  return json.data !== undefined ? json.data : json;
 }
 
 /** POST with JWT Bearer token (for creating API key after login) */
@@ -593,8 +593,8 @@ async function jwtPost(token, path, body) {
   try { json = JSON.parse(text); } catch {
     throw new Error(`Server returned non-JSON response (HTTP ${res.status}).`);
   }
-  if (!res.ok) throw new Error(json.error || json.message || `HTTP ${res.status}`);
-  return json;
+  if (!res.ok) throw new Error(json.error?.message || json.error?.code || json.message || `HTTP ${res.status}`);
+  return json.data !== undefined ? json.data : json;
 }
 
 /** GET with JWT Bearer token (for /me after login) */
@@ -608,8 +608,8 @@ async function jwtGet(token, path) {
   try { json = JSON.parse(text); } catch {
     throw new Error(`Server returned non-JSON response (HTTP ${res.status}).`);
   }
-  if (!res.ok) throw new Error(json.error || json.message || `HTTP ${res.status}`);
-  return json;
+  if (!res.ok) throw new Error(json.error?.message || json.error?.code || json.message || `HTTP ${res.status}`);
+  return json.data !== undefined ? json.data : json;
 }
 
 module.exports = TreeAPI;

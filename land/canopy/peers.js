@@ -3,11 +3,12 @@ import LandPeer from "./models/landPeer.js";
 import { getLandIdentity, getLandInfoPayload } from "./identity.js";
 import { isCompatibleVersion } from "./protocol.js";
 import { isPrivateHost } from "./security.js";
+import { getLandConfigValue } from "../seed/landConfig.js";
 
-const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const DEGRADED_THRESHOLD = 2;
-const UNREACHABLE_THRESHOLD = 12; // ~1 hour of missed heartbeats
-const DEAD_THRESHOLD_DAYS = 30;
+let HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+let DEGRADED_THRESHOLD = 2;
+let UNREACHABLE_THRESHOLD = 12; // ~1 hour of missed heartbeats
+let DEAD_THRESHOLD_DAYS = 30;
 
 let heartbeatTimer = null;
 
@@ -297,6 +298,12 @@ export async function runHeartbeat() {
  */
 export function startHeartbeatJob() {
   if (heartbeatTimer) return;
+
+  // Read canopy peer config from land config at job start time
+  HEARTBEAT_INTERVAL_MS    = Number(getLandConfigValue("canopyHeartbeatInterval"))    || HEARTBEAT_INTERVAL_MS;
+  DEGRADED_THRESHOLD       = Number(getLandConfigValue("canopyDegradedThreshold"))    || DEGRADED_THRESHOLD;
+  UNREACHABLE_THRESHOLD    = Number(getLandConfigValue("canopyUnreachableThreshold")) || UNREACHABLE_THRESHOLD;
+  DEAD_THRESHOLD_DAYS      = Number(getLandConfigValue("canopyDeadThresholdDays"))    || DEAD_THRESHOLD_DAYS;
 
   heartbeatTimer = setInterval(async () => {
     try {

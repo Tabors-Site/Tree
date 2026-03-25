@@ -1,6 +1,7 @@
 import { Invite } from "./model.js";
 import { invalidateNode } from "../../seed/tree/ancestorCache.js";
 import { getExtension } from "../loader.js";
+import { DELETED } from "../../seed/protocol.js";
 
 // EXACT UUID REGEX FROM OLD CODE
 const isValidUUID = (id) =>
@@ -39,7 +40,7 @@ export async function createInvite({
 }) {
   const node = await Node.findById(rootId).populate("rootOwner contributors");
   if (!node) throw new Error("Root node not found");
-  if (node.parent === "deleted") {
+  if (node.parent === DELETED) {
     throw new Error(
       "You can't invite users or delete a root that's already deleted..",
     );
@@ -187,7 +188,7 @@ export async function createInvite({
       receivingUser._id.toString() === userInvitingId &&
       node.contributors.length === 0
     ) {
-      node.parent = "deleted";
+      node.parent = DELETED;
       await node.save();
       invalidateNode(rootId);
 

@@ -318,7 +318,7 @@ const AIArchitecturePage = () => {
       {/* ── HOOKS ── */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">26 Lifecycle Hooks</h2>
+          <h2 className="lp-section-title">27 Lifecycle Hooks</h2>
           <p className="lp-section-sub lp-section-sub-wide">
             Extensions modify kernel behavior without touching kernel code. Register a handler.
             The kernel fires it at the right moment. Before hooks can cancel. After hooks react.
@@ -345,6 +345,7 @@ const AIArchitecturePage = () => {
               ["afterNavigate", "React to tree navigation"],
               ["afterMetadataWrite", "React to metadata changes"],
               ["afterScopeChange", "React to extension scope changes"],
+              ["afterOwnershipChange", "React to ownership or contributor changes"],
               ["afterBoot", "One-time setup after everything is ready"],
               ["afterSessionCreate", "React to new sessions"],
               ["afterSessionEnd", "React to ended sessions"],

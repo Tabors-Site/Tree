@@ -39,8 +39,8 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       return notFoundPage(req, res, "This user doesn't exist.");
     }
 
-    const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
-    const nav = getUserMeta(user, "nav");
+    const userMetaModule = await import("../../../seed/tree/userMetadata.js");
+    const nav = userMetaModule.getUserMeta(user, "nav");
     const userRoots = Array.isArray(nav.roots) ? nav.roots : [];
 
     // Redirect to setup if user needs LLM or first tree (unless they skipped recently)

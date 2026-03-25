@@ -1,4 +1,5 @@
 import { Invite } from "./model.js";
+import { DELETED } from "../../seed/protocol.js";
 
 /**
  * Send an invite to a remote user (username@domain format).
@@ -24,7 +25,7 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId, Node,
   // Validate the tree exists and inviting user has access
   const rootNode = await Node.findById(rootId).lean();
   if (!rootNode) throw new Error("Root node not found");
-  if (rootNode.parent === "deleted") throw new Error("This tree has been deleted");
+  if (rootNode.parent === DELETED) throw new Error("This tree has been deleted");
 
   const isOwner = rootNode.rootOwner?.toString() === userInvitingId;
   const isContributor = rootNode.contributors?.some(

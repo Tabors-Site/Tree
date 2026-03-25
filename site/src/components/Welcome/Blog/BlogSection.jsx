@@ -13,8 +13,10 @@ const BlogSection = () => {
   useEffect(() => {
     fetch(`${API_BASE}/api/v1/blog/posts`)
       .then((r) => r.json())
-      .then((data) => {
-        if (data.success) setPosts(data.posts);
+      .then((raw) => {
+        const data = raw.data || raw;
+        const posts = data.posts || data;
+        if (Array.isArray(posts)) setPosts(posts);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -29,8 +31,10 @@ const BlogSection = () => {
     setPostNotFound(false);
     fetch(`${API_BASE}/api/v1/blog/posts/${targetSlug}`)
       .then((r) => r.json())
-      .then((data) => {
-        if (data.success) setActivePost(data.post);
+      .then((raw) => {
+        const data = raw.data || raw;
+        const post = data.post || data;
+        if (post && post.slug) setActivePost(post);
         else setPostNotFound(true);
       })
       .catch(() => setPostNotFound(true));

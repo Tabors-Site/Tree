@@ -450,6 +450,7 @@ treeos config set treeCircuitEnabled true`}</Code>
               ["Index verification", "On boot. Create missing indexes. No collection scans."],
               ["Seed versioning", "Migrations run in order. Failed migrations retry next boot."],
               ["Ownership chain", "rootOwner/contributor mutations validate the parent chain."],
+              ["Extension route timeout", "Page routes (/) wrapped with 5s timeout. API routes (/api/v1) are not. AI chat routes can take as long as the LLM needs."],
               ["Graceful shutdown", "All timers .unref(). SIGTERM closes clean."],
             ].map(([name, desc]) => (
               <div key={name} style={{
@@ -561,6 +562,7 @@ export async function init(core) {
             <li>Dependency resolution (topological sort)</li>
             <li>Extension init (call init(core) in order)</li>
             <li>Wire (routes, tools, hooks, modes, jobs, indexes)</li>
+            <li>MCP transport connect (must be after wire. Tools register during wire. SDK locks after connect. Reordering this breaks silently.)</li>
             <li>Background jobs (retention, upload cleanup, integrity, circuit breaker)</li>
             <li>Canopy peering, heartbeat, outbox, Horizon registration</li>
             <li>afterBoot hook fires</li>
@@ -730,6 +732,54 @@ export async function init(core) {
             <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
             <a className="lp-btn lp-btn-secondary" href="https://github.com/Tabors-Site/Tree">GitHub</a>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* INTERNAL TUNING */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section" style={{paddingTop: 40}}>
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title" style={{fontSize: "1.2rem", color: "rgba(255,255,255,0.6)"}}>Internal Tuning</h2>
+          <P style={{color: "rgba(255,255,255,0.45)", fontSize: "0.85rem"}}>
+            Advanced operators can adjust these values via <code>treeos config set</code>.
+            Most lands never need to. Defaults are safe.
+          </P>
+          <div style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.4)"}}>
+            {[
+              ["socketMaxBufferSize", "1048576", "Max WS message size (bytes)"],
+              ["socketPingTimeout", "30000", "WS ping timeout (ms)"],
+              ["socketPingInterval", "25000", "WS ping interval (ms)"],
+              ["socketConnectTimeout", "10000", "WS connection timeout (ms)"],
+              ["maxConnectionsPerIp", "20", "Per-IP WS connection cap"],
+              ["llmClientCacheTtl", "300", "User LLM client cache lifetime (seconds)"],
+              ["canopyProxyCacheTtl", "60", "Canopy proxy client cache lifetime (seconds)"],
+              ["apiOrchestrationTimeout", "1140000", "API request timeout (ms)"],
+              ["canopyHeartbeatInterval", "300000", "Heartbeat frequency (ms)"],
+              ["canopyDegradedThreshold", "2", "Failed heartbeats before degraded"],
+              ["canopyUnreachableThreshold", "12", "Failed heartbeats before unreachable"],
+              ["canopyDeadThresholdDays", "30", "Days before dead peer cleanup"],
+              ["canopyOutboxInterval", "60000", "Outbox processing frequency (ms)"],
+              ["canopyMaxRetries", "5", "Event delivery retries"],
+              ["canopyEventDeliveryTimeout", "15000", "Per-event delivery timeout (ms)"],
+              ["canopyDestLimitPerCycle", "10", "Events per destination per cycle"],
+              ["orchestratorLockTtlMs", "1800000", "Lock TTL before auto-expire (ms)"],
+              ["lockSweepInterval", "300000", "Lock cleanup sweep (ms)"],
+              ["uploadCleanupInterval", "21600000", "Upload cleanup frequency (ms)"],
+              ["uploadGracePeriodMs", "3600000", "File age before deletion (ms)"],
+              ["retentionCleanupInterval", "86400000", "Retention job frequency (ms)"],
+              ["cascadeCleanupInterval", "21600000", "Cascade result cleanup frequency (ms)"],
+            ].map(([key, def, desc]) => (
+              <div key={key} style={{
+                display: "flex", gap: 8, padding: "3px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.02)",
+              }}>
+                <code style={{color: "rgba(255,255,255,0.5)", minWidth: 220, fontSize: "0.7rem"}}>{key}</code>
+                <span style={{minWidth: 80, fontFamily: "monospace", color: "rgba(255,255,255,0.3)"}}>{def}</span>
+                <span style={{color: "rgba(255,255,255,0.4)"}}>{desc}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>

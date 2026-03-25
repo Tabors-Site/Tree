@@ -245,7 +245,18 @@
       "Bash(bash /tmp/analyze_errors.sh)",
       "Bash(grep -rn \"res\\\\.status.*\\\\.json\\\\|res\\\\.json.*{\" /home/tabor/github/Tree/land/extensions --include=*.js)",
       "Bash(find /home/tabor/github/Tree/land/seed -name \"*.js\" -exec wc -l {})",
-      "Bash(grep -r \"const.*=.*[0-9]{4,}\" /home/tabor/github/Tree/land/seed --include=\"*.js\")"
+      "Bash(grep -r \"const.*=.*[0-9]{4,}\" /home/tabor/github/Tree/land/seed --include=\"*.js\")",
+      "Bash(find node_modules/@modelcontextprotocol -name mcp.* -type f)",
+      "Bash(find /home/tabor/github/Tree -path */node_modules/@modelcontextprotocol/sdk -type d)",
+      "Bash(ls -la /home/tabor/github/Tree/cli/*.js /home/tabor/github/Tree/cli/*.json)",
+      "Bash(grep -E \"\\\\.\\(js|ts\\)$\")",
+      "Bash(grep -l \"extension\" /home/tabor/github/Tree/horizon/routes/*.js)",
+      "Bash(echo \"systemRole values QUERIED FOR:\" grep -r \"systemRole:\" /home/tabor/github/Tree/land/seed --include=\"*.js\")",
+      "Bash(uniq __NEW_LINE_c3699ac384874b4d__ echo \"\" echo \"systemRole values SET:\" grep -r \"systemRole\" /home/tabor/github/Tree/land/seed --include=\"*.js\")",
+      "Bash(grep -E \"$set.*systemRole|systemRole.*:\")",
+      "Bash(bash /tmp/check_exports.sh)",
+      "Bash(bash /tmp/check_ws.sh)",
+      "Bash(find /home/tabor/github/Tree/land/seed /home/tabor/github/Tree/land/ws /home/tabor/github/Tree/land/orchestrators /home/tabor/github/Tree/land/canopy /home/tabor/github/Tree/land/mcp /home/tabor/github/Tree/land/routes /home/tabor/github/Tree/land/middleware -type f -name *.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

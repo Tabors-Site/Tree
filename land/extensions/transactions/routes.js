@@ -17,7 +17,16 @@ import {
   renderTransactionDetail,
 } from "./html.js";
 
-import { resolveVersion } from "../../seed/tree/treeFetch.js";
+import Node from "../../seed/models/node.js";
+
+async function resolveVersion(nodeId, version) {
+  if (version === "latest" || version === undefined) {
+    const node = await Node.findById(nodeId).select("metadata").lean();
+    const meta = node?.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node?.metadata || {});
+    return meta.version?.current || 0;
+  }
+  return Number(version);
+}
 
 const router = express.Router();
 const allowedParams = ["token", "html"];

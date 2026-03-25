@@ -117,8 +117,8 @@ function printResponse(data) {
  * Skips commands that match already-registered command names
  * (hardcoded commands take priority).
  */
-module.exports = (program) => {
-  const cfg = load();
+function registerDynamic(program, cfgOverride) {
+  const cfg = cfgOverride || load();
   const cliDeclarations = getProtocolCli(cfg);
 
   if (!cliDeclarations || Object.keys(cliDeclarations).length === 0) return;
@@ -252,4 +252,7 @@ module.exports = (program) => {
       existing.add(cmdName);
     }
   }
-};
+}
+
+module.exports = (program) => registerDynamic(program);
+module.exports.registerDynamic = registerDynamic;

@@ -7,7 +7,7 @@ import log from "./log.js";
  * Core fires kernel hooks. Extensions fire their own and listen to each other's.
  *
  * Core hooks (fired by kernel):
- *   beforeNote         - Before note save. Modify { nodeId, version, content, userId, contentType }
+ *   beforeNote         - Before note save. Modify { nodeId, content, userId, contentType, metadata }
  *   afterNote          - After note saved. React to { note, nodeId, userId, sizeKB, action }
  *   beforeContribution - Before contribution log. Modify { nodeId, action, userId, ...extensionData }
  *   beforeNodeCreate   - Before node creation. Modify/cancel { name, type, parentNodeID, isRoot, userId }
@@ -246,8 +246,9 @@ async function run(hookName, data) {
         log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open.`);
       }
       if (isBefore) {
-        log.error("Hooks", `${hookName} from "${extName}" threw, cancelling:`, err.message);
-        return { cancelled: true, reason: err.message };
+        const isTimeout = err.message?.includes("timed out");
+        log.error("Hooks", `${hookName} from "${extName}" ${isTimeout ? "timed out" : "threw"}, cancelling:`, err.message);
+        return { cancelled: true, reason: err.message, timedOut: isTimeout };
       }
       log.warn("Hooks", `${hookName} from "${extName}" failed:`, err.message);
     }

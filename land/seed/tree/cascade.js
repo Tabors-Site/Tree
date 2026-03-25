@@ -22,7 +22,7 @@ import log from "../log.js";
 import Node from "../models/node.js";
 import { hooks } from "../hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { CASCADE } from "../protocol.js";
+import { CASCADE, SYSTEM_ROLE } from "../protocol.js";
 import { v4 as uuidv4 } from "uuid";
 import { checkWriteSize, estimateWriteSize } from "./documentGuard.js";
 
@@ -172,7 +172,7 @@ export async function deliverCascade({ nodeId, signalId, payload = {}, source, d
  * Reads today's .flow partition and counts results where source matches.
  */
 async function countRecentSignals(nodeId) {
-  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id").lean();
+  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
   if (!flowNode) return 0;
   const today = todayPartitionName();
   const partition = await Node.findOne({ parent: flowNode._id, name: today }).select("metadata").lean();
@@ -207,7 +207,7 @@ function todayPartitionName() {
  */
 async function getOrCreatePartition() {
   const today = todayPartitionName();
-  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id children").lean();
+  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id children").lean();
   if (!flowNode) return null;
 
   // Check if today's partition exists
@@ -309,7 +309,7 @@ async function writeResult(signalId, result) {
  * Searches across all partitions (most recent first).
  */
 export async function getCascadeResults(signalId) {
-  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id children").lean();
+  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id children").lean();
   if (!flowNode) return [];
 
   // Search partitions newest first
@@ -336,7 +336,7 @@ export async function getCascadeResults(signalId) {
  * Get all recent cascade results across partitions.
  */
 export async function getAllCascadeResults(limit = 50) {
-  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id").lean();
+  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
   if (!flowNode) return {};
 
   const partitions = await Node.find({ parent: flowNode._id })
@@ -378,7 +378,7 @@ export async function cleanupExpiredResults() {
   const cutoff = new Date(Date.now() - ttl * 1000);
   const cutoffDate = cutoff.toISOString().slice(0, 10); // "2026-03-18"
 
-  const flowNode = await Node.findOne({ systemRole: "flow" }).select("_id children").lean();
+  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id children").lean();
   if (!flowNode) return 0;
 
   // Find partitions older than cutoff (partition name is date string, lexicographic compare works)

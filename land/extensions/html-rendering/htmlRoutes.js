@@ -10,12 +10,22 @@ import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
 import mongoose from "mongoose";
-import { sendError, ERR } from "../../seed/protocol.js";
+import { sendError, ERR, DELETED } from "../../seed/protocol.js";
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
 import { getTreeStructure } from "../../seed/tree/treeData.js";
 import { getContributions } from "../../seed/tree/contributions.js";
-import { resolveVersion } from "../../seed/tree/treeFetch.js";
 import { buildPathString } from "../../seed/tree/treeFetch.js";
+
+// Resolve "latest" to current version from metadata. Prestige extension owns versioning.
+// Inlined here to avoid cross-extension dependency.
+async function resolveVersion(nodeId, version) {
+  if (version === "latest" || version === undefined) {
+    const node = await Node.findById(nodeId).select("metadata").lean();
+    const meta = node?.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node?.metadata || {});
+    return meta.version?.current || 0;
+  }
+  return Number(version);
+}
 import { getNodeChats } from "../../seed/ws/chatHistory.js";
 import { getConnectionsForUser, getAllRootLlmSlots } from "../../seed/llm/connections.js";
 import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
@@ -335,7 +345,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
         .select("rootOwner contributors metadata llmDefault visibility")
         .lean().exec();
       const rootNode = await Node.findById(nodeId).select("parent rootOwner").lean();
-      const isDeleted = rootNode.parent === "deleted";
+      const isDeleted = rootNode.parent === DELETED;
       const isRoot = !!rootNode.rootOwner;
       const isPublicAccess = !!req.isPublicAccess;
       const isOwner = rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();

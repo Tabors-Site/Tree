@@ -2,12 +2,11 @@
 import Contribution from "../models/contribution.js";
 
 /**
- * Get contributions for a node at a specific version.
+ * Get contributions for a node.
  * Returns raw contribution documents. Extensions interpret meaning.
  */
 async function getContributions({
   nodeId,
-  version,
   limit,
   startDate,
   endDate,
@@ -16,11 +15,7 @@ async function getContributions({
     throw new Error("Missing required parameter: nodeId");
   }
 
-  if (typeof version !== "number" || isNaN(version)) {
-    throw new Error("Invalid or missing version: must be a number");
-  }
-
-  const query = { nodeId, "extensionData.nodeVersion": version };
+  const query = { nodeId };
 
   if (startDate || endDate) {
     query.date = {};
