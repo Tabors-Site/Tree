@@ -2,6 +2,12 @@
 
 The kernel is called the seed. You plant it on a land. It grows trees. The full specification lives in [land/seed/SEED.md](land/seed/SEED.md).
 
+
+# NEVER MODIFY THE SEED WHEN BUILDING EXTENSIONS. ALL EXTENSIONS MUST BE DECOUPLED FROM KERNEL AND ONLY DEPEND ON EACHOTHER
+AND USE ALL APPROPRIATE HOOKS/TOOLS/ETC SEED
+PROVIDES TO TAKE MOST DIRECT DATA PATH
+TO MAKE WHAT IS NEEDED.
+
 ## Quick Reference
 
 Four primitives: **structure** (two schemas, nodes in hierarchies, metadata Maps), **intelligence** (conversation loop, LLM/tool/mode/position resolution), **extensibility** (loader, hooks, pub/sub, spatial scoping), **communication** (cascade, .flow, visible results, response protocol).

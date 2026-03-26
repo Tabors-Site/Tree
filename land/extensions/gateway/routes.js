@@ -10,15 +10,8 @@ import {
   getChannelWithSecrets,
 } from "./core.js";
 import { dispatchTestNotification } from "./dispatch.js";
-import webhookRouter from "./webhooks.js";
 
 const router = express.Router();
-
-// ─────────────────────────────────────────────────────────────────────────
-// UNAUTHENTICATED: Webhook endpoints (Telegram/Discord call these directly)
-// ─────────────────────────────────────────────────────────────────────────
-
-router.use(webhookRouter);
 
 // ─────────────────────────────────────────────────────────────────────────
 // AUTHENTICATED: Channel CRUD

@@ -3,11 +3,14 @@ export default {
   version: "1.0.0",
   description: "Default node type suggestions for the AI. Configurable per land.",
 
-  needs: {},
+  needs: {
+    services: ["hooks"],
+  },
 
   optional: {},
 
   provides: {
+    models: {},
     routes: false,
     tools: true,
     modes: false,

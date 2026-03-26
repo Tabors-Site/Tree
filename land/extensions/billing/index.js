@@ -9,5 +9,16 @@ export async function init(core) {
 
   router.post("/user/:userId/purchase", authenticate, createPurchaseSession);
 
-  return { router };
+  // Register Stripe webhook handler. The server exports registerWebhook()
+  // for extensions that need raw-body routes mounted before express.json().
+  let webhookHandler = null;
+  try {
+    const { stripeWebhook } = await import("./webhook.js");
+    webhookHandler = stripeWebhook;
+  } catch {}
+
+  return {
+    router,
+    rawWebhook: webhookHandler, // loader mounts this at /billing/webhook with raw body
+  };
 }

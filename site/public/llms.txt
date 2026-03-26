@@ -6,7 +6,7 @@
 
 The seed is a kernel. Not an application. Not an OS. The contract that applications and operating systems are built on.
 
-It defines: two database schemas (Node with 12 fields, User with 7 fields), an AI conversation loop with MCP tool execution, 27 lifecycle hooks, a cascade engine for signal flow between nodes, five registries (hooks, modes, orchestrators, socket handlers, auth strategies), spatial extension scoping, and a response protocol. 42 config keys. All runtime-configurable.
+It defines: two database schemas (Node with 12 fields, User with 7 fields), an AI conversation loop with MCP tool execution, 27 lifecycle hooks, a cascade engine for signal flow between nodes, five registries (hooks, modes, orchestrators, socket handlers, auth strategies), spatial extension scoping, and a response protocol. 77 config keys + 28 internal tuning keys. All runtime-configurable.
 
 Remove every extension and the seed still boots. It provides structure. Extensions provide meaning.
 
@@ -99,7 +99,7 @@ Heartbeats exchange extension lists and health. Not user data. Cascade signals f
 
 ## Safety
 
-42 documented config keys + 22 internal tuning keys (advanced, safe defaults). 27 hooks. Six system nodes. And these protections:
+77 documented config keys + 28 internal tuning keys (advanced, safe defaults). 27 hooks. Six system nodes. And these protections:
 
 - Hook circuit breaker (5 failures disables handler)
 - Tool circuit breaker (5 failures disables tool per session)

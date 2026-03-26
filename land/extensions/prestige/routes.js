@@ -3,13 +3,15 @@ import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { addPrestige } from "./core.js";
-import Node from "../../seed/models/node.js";
+
+let _Node = null;
+export function setNodeModel(Node) { _Node = Node; }
 
 const router = express.Router();
 
 async function useLatest(req, res, next) {
   try {
-    const node = await Node.findById(req.params.nodeId).select("prestige").lean();
+    const node = await _Node.findById(req.params.nodeId).select("prestige").lean();
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
     req.params.version = String(0);
     next();

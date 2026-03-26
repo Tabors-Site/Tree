@@ -1,31 +1,61 @@
-import dotenv from "dotenv";
+import log from "../../seed/log.js";
+import jwt from "jsonwebtoken";
 import path from "path";
 import { fileURLToPath } from "url";
-import jwt from "jsonwebtoken";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { resolveHtmlShareAccess } from "./shareAuth.js";
 
-dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
-// Optional JWT decode for HTML pages. Never rejects. Sets req.userId if valid token present.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;
-export default function authenticateLite(req, res, next) {
+
+/**
+ * Lightweight auth for HTML page API calls. Never rejects (always calls next).
+ * Sets req.userId if a valid JWT cookie, Bearer token, or share token is present.
+ * Share token support lets embedded fetch() calls work when the page was loaded
+ * via a share URL (no cookie, no JWT).
+ */
+export default async function authenticateLite(req, res, next) {
   try {
+    // 1. JWT from cookie or Bearer header
     const token =
       req.cookies?.token ||
       req.headers.authorization?.replace("Bearer ", "");
 
-    if (!token) return next();
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.userId = decoded.userId || decoded.id || decoded._id;
+        req.username = decoded.username;
+        req.authType = "jwt";
+        return next();
+      } catch {
+        // Invalid JWT, fall through to share token
+      }
+    }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    // 2. Share token from query string (?token=...)
+    const shareToken = req.query?.token;
+    if (shareToken) {
+      const userId = req.params?.userId || req.query?.userId || null;
+      const nodeId = req.params?.nodeId || req.params?.rootId || req.query?.nodeId || null;
 
-    req.userId =
-      decoded.userId || decoded.id || decoded._id;
+      if (userId || nodeId) {
+        const result = await resolveHtmlShareAccess({ userId, nodeId, shareToken });
+        if (result.allowed) {
+          req.userId = result.matchedUserId;
+          req.username = result.matchedUsername;
+          req.authType = "share-token";
+          req.isHtmlShare = true;
+          return next();
+        }
+      }
+    }
 
-    req.username = decoded.username;
-
+    // No auth matched. Continue without userId.
     next();
-  } catch {
+  } catch (err) {
+    log.debug("AuthLite", `Auth failed: ${err.message}`);
     next();
   }
 }

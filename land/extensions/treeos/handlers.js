@@ -31,9 +31,12 @@ import {
   getNavigationContext,
   getContextForAi,
 } from "../../seed/tree/treeFetch.js";
-import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
 import { DELETED } from "../../seed/protocol.js";
+
+// Models wired from init via setModels
+let Node = null;
+let User = null;
+export function setModels(models) { Node = models.Node; User = models.User; }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

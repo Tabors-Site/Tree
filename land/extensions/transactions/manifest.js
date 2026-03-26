@@ -4,8 +4,8 @@ export default {
   description: "Value transactions between nodes with configurable approval policies",
 
   needs: {
+    services: ["contributions", "auth"],
     models: ["Node", "Contribution"],
-    middleware: ["resolveTreeAccess"],
   },
 
   optional: {

@@ -2,9 +2,6 @@ import express from "express";
 import cors from "cors";
 import http from "http";
 import cookieParser from "cookie-parser";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 
 import registerURLRoutes from "./routes/handler.js";
@@ -22,20 +19,15 @@ function notFoundPage(req, res, message = "This page doesn't exist or may have b
   return sendError(res, 404, ERR.NODE_NOT_FOUND, message);
 }
 
-// Billing webhook loaded dynamically (extension-owned).
-// Must be mounted BEFORE express.json() because Stripe needs the raw body.
-let stripeWebhook = (req, res) => sendError(res, 500, ERR.INTERNAL, "Billing extension not loaded");
-try {
-  const mod = await import("./extensions/billing/webhook.js");
-  stripeWebhook = mod.stripeWebhook;
-} catch (err) {
-  if (err.code !== "ERR_MODULE_NOT_FOUND") {
-    log.warn("Server", `Billing webhook failed to load: ${err.message}`);
-  }
+// Raw-body webhook slot. Extensions that need raw body (Stripe signature verification)
+// return rawWebhook from init(). The loader calls registerRawWebhook() during wire phase.
+let rawWebhookHandler = (_req, res) => sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "No webhook handler registered");
+
+export function registerRawWebhook(handler) {
+  if (typeof handler === "function") rawWebhookHandler = handler;
 }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, ".env") });
+// .env is loaded by boot.js before this module is imported.
 
 const app = express();
 
@@ -62,8 +54,8 @@ app.use(
 );
 app.use(cookieParser());
 
-// Billing webhook MUST be before express.json (needs raw body for signature verification)
-app.post("/billing/webhook", express.raw({ type: "application/json" }), stripeWebhook);
+// Raw-body webhook route. Must be before express.json. Handler registered by extension during boot.
+app.post("/billing/webhook", express.raw({ type: "application/json" }), (req, res) => rawWebhookHandler(req, res));
 
 app.use(express.static("public"));
 app.use(express.json({ limit: "10mb" })); // Extension install sends file contents up to 3MB
@@ -96,21 +88,21 @@ server.listen(PORT, "0.0.0.0", () => onListen());
 const SHUTDOWN_TIMEOUT_MS = 15000;
 
 async function shutdown(signal) {
-  log.info("Kernel", `${signal} received. Shutting down...`);
+  log.info("Seed", `${signal} received. Shutting down...`);
 
   // Stop accepting new connections
   server.close(async () => {
     try {
       await mongoose.connection.close();
-      log.info("Kernel", "Database connection closed.");
+      log.info("Seed", "Database connection closed.");
     } catch {}
-    log.info("Kernel", "Server closed.");
+    log.info("Seed", "Server closed.");
     process.exit(0);
   });
 
   // Force exit if graceful shutdown hangs
   setTimeout(() => {
-    log.warn("Kernel", "Forced exit after timeout.");
+    log.warn("Seed", "Forced exit after timeout.");
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS).unref();
 }

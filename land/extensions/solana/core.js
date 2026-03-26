@@ -13,8 +13,11 @@ import {
   createTransferInstruction,
 } from "@solana/spl-token";
 import crypto from "crypto";
-import Node from "../../seed/models/node.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
+
+// Node model wired from init via setModels
+let Node = null;
+export function setModels(models) { Node = models.Node; }
 
 /* ------------------------------------------------------------------ */
 /*  Wallet metadata helpers                                            */
@@ -115,8 +118,6 @@ export async function ensureVersionWallet(nodeId, versionIndex) {
     createdAt: new Date(),
   });
 
-  await node.save();
-
   return {
     publicKey: keypair.publicKey.toBase58(),
     created: true,
@@ -157,8 +158,9 @@ export async function syncVersionSOLBalance(node, versionIndex) {
   const { getExtMeta, setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
   const values = getExtMeta(node, "values") || {};
   values._auto__sol = lamports;
+  // Note: cross-namespace write to "values" for auto-SOL balance display.
+  // Uses _auto__ prefix convention to distinguish from user-set values.
   await setExtMeta(node, "values", values);
-  await node.save();
 
   return lamports;
 }
@@ -397,9 +399,6 @@ export async function sendSPLTokenFromVersion({
   await syncVersionSOLBalance(node, versionIndex);
   await syncVersionTokenHoldings(node, versionIndex);
 
-  node.markModified("metadata");
-  await node.save();
-
   return {
     signature: sig,
     tokenMint: mintAddress,
@@ -510,7 +509,6 @@ export async function syncVersionTokenHoldings(node, versionIndex) {
   }
 
   await setExtMeta(node, "values", values);
-  await node.save();
 
   return {
     tokens: seenMints.length,

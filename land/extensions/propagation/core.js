@@ -8,8 +8,11 @@
  */
 
 import log from "../../seed/log.js";
-import Node from "../../seed/models/node.js";
 import { deliverCascade, getCascadeResults } from "../../seed/tree/cascade.js";
+
+// Node model wired from init via setModels
+let Node = null;
+export function setModels(models) { Node = models.Node; }
 import { getLandConfigValue } from "../../seed/landConfig.js";
 import { SYSTEM_ROLE } from "../../seed/protocol.js";
 
@@ -82,7 +85,7 @@ export async function propagateOutward({ node, nodeId, signalId, payload, depth,
     const childIdStr = childId.toString();
 
     // Load child to check its cascade willingness
-    const child = await Node.findById(childIdStr).select("name metadata systemRole").lean();
+    const child = await Node.findById(childIdStr).select("name metadata systemRole children").lean();
     if (!child || child.systemRole) continue;
 
     const childMeta = child.metadata instanceof Map
@@ -94,6 +97,19 @@ export async function propagateOutward({ node, nodeId, signalId, payload, depth,
     // In sealed mode, skip children that don't accept sealed signals
     if (mode === "sealed" && !childCascade?.acceptSealed) continue;
 
+    // Perspective filter: if installed, check whether this child's perspective accepts the signal
+    try {
+      const { getExtension } = await import("../loader.js");
+      const perspectiveExt = getExtension("perspective-filter");
+      if (perspectiveExt?.exports?.shouldDeliver) {
+        const accepted = await perspectiveExt.exports.shouldDeliver(child, payload);
+        if (!accepted) {
+          log.debug("Propagation", `Signal ${signalId.slice(0, 8)} rejected by perspective at "${child.name}"`);
+          continue;
+        }
+      }
+    } catch {}
+
     // Filter: if child has cascade.filters, check them
     if (childCascade?.filters) {
       const accepted = evaluateFilters(childCascade.filters, payload);
@@ -104,6 +120,20 @@ export async function propagateOutward({ node, nodeId, signalId, payload, depth,
     }
 
     try {
+      // Sealed transport: if signal is sealed, intermediary nodes get redacted payload.
+      // Destination nodes (leaves with no cascade-enabled children) get the full payload.
+      let deliveryPayload = payload;
+      try {
+        const { getExtension } = await import("../loader.js");
+        const sealedExt = getExtension("sealed-transport");
+        if (sealedExt?.exports?.isSealed?.(cascadeConfig, payload)) {
+          const hasChildren = child.children && child.children.length > 0;
+          if (hasChildren) {
+            deliveryPayload = sealedExt.exports.sealPayload(payload);
+          }
+        }
+      } catch {}
+
       // deliverCascade writes to .flow and fires onCascade at the child.
       // If the child has cascade.enabled, our handler fires again (recursion).
       // If not, the child receives the signal but does not propagate deeper.
@@ -111,7 +141,7 @@ export async function propagateOutward({ node, nodeId, signalId, payload, depth,
         deliverCascade({
           nodeId: childIdStr,
           signalId,
-          payload,
+          payload: deliveryPayload,
           source: nodeId,
           depth: depth + 1,
         }),

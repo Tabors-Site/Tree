@@ -4,7 +4,8 @@ export default {
   description: "Sandboxed JavaScript execution on nodes with safe functions for values, goals, and status",
 
   needs: {
-    models: ["Node"],
+    services: ["contributions", "hooks"],
+    models: ["Node", "Contribution"],
   },
 
   optional: {

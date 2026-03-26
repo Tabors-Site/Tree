@@ -177,6 +177,10 @@ function register(hookName, handler, extName = "unknown") {
 function unregister(extName) {
   for (const [hookName, handlers] of registry.entries()) {
     registry.set(hookName, handlers.filter(h => h.extName !== extName));
+    // Clean up circuit breaker state for removed handlers
+    const key = `${hookName}:${extName}`;
+    _failureCounts.delete(key);
+    _circuitOpenedAt.delete(key);
   }
 }
 

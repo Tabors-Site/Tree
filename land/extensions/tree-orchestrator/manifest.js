@@ -4,6 +4,7 @@ export default {
   description: "Core conversation orchestrator. Handles chat, place, and query with intent classification and step execution.",
 
   needs: {
+    services: ["llm", "session", "chat", "mcp", "websocket", "hooks", "orchestrator"],
     models: ["Node"],
   },
 
@@ -11,5 +12,6 @@ export default {
     routes: false,
     tools: false,
     jobs: false,
+    orchestrator: { bigMode: "tree" },
   },
 };

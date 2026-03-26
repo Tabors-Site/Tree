@@ -34,7 +34,7 @@ const LandingPage = () => {
             <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the Seed</a>
           </div>
           <p style={{color: "#666", fontSize: "0.85rem", marginTop: 20}}>
-            <a href="/guide" style={{color: "#888", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.1)"}}>
+            <a href="/app" style={{color: "#888", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.1)"}}>
               TreeOS
             </a> is the first operating system built on the seed. It ships with 25+ extensions.
           </p>

@@ -1,8 +1,14 @@
-import Node from "../../seed/models/node.js";
-import { logContribution } from "../../seed/tree/contributions.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
+// Services wired from init() via setServices()
+let Node = null;
+let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+
+export function setServices({ models, contributions }) {
+  Node = models.Node;
+  logContribution = contributions.logContribution;
+}
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 async function updateSchedule({
@@ -49,9 +55,11 @@ async function updateSchedule({
     action: "editSchedule",
   });
 
+  // Legacy top-level metadata keys (pre-extension namespace convention).
+  // These keys are read by kernel (treeManagement), prestige, html-rendering, scripts.
+  // Do not consolidate without a full data migration.
   await setExtMeta(node, "schedule", formattedDate);
   await setExtMeta(node, "reeffectTime", reeffectTime);
-  await node.save();
 
   const scheduleEdited = { date: formattedDate, reeffectTime };
 

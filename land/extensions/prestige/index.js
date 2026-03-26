@@ -1,11 +1,16 @@
-import router from "./routes.js";
 import tools from "./tools.js";
 import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
-import Node from "../../seed/models/node.js";
-import { setEnergyService, addPrestige, resolveVersion } from "./core.js";
+import { setServices, setEnergyService, addPrestige, resolveVersion } from "./core.js";
 
 export async function init(core) {
+  setServices({ models: core.models, contributions: core.contributions });
   if (core.energy) setEnergyService(core.energy);
+
+  const { default: router, setNodeModel } = await import("./routes.js");
+  setNodeModel(core.models.Node);
+
+  const Node = core.models.Node;
+
   core.hooks.register("beforeNote", async (data) => {
     const node = await Node.findById(data.nodeId).select("metadata").lean();
     if (!node) return;

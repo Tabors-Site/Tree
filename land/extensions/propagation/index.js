@@ -20,6 +20,8 @@ import { propagateOutward, propagateToPeers } from "./core.js";
 import { startRetryJob, stopRetryJob } from "./retryJob.js";
 
 export async function init(core) {
+  const { setModels } = await import("./core.js");
+  setModels(core.models);
   // ── The one hook: onCascade ──────────────────────────────────────────
   //
   // When the kernel fires onCascade, we receive the node, the signal,

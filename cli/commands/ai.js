@@ -33,7 +33,7 @@ module.exports = (program) => {
 
   program
     .command("chat [message...]")
-    .description("Chat with AI. In a tree: about the branch. At land root: land management.")
+    .description("Chat with AI. In a tree: about the branch. At home: personal. At land root: land management (admin).")
     .action(async (parts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: chat <message>"));
       const message = parts.join(" ");
@@ -42,10 +42,16 @@ module.exports = (program) => {
 
       try {
         global._treeosInFlight = new AbortController();
-        if (!cfg.activeRootId || cfg.isSystemRoot) {
+        if (!cfg.activeRootId && !cfg.atHome) {
+          // At land root (/): land manager, admin only
           console.log(chalk.dim("Land Manager…"));
           const data = await api.post("/land/chat", { message }, { signal: global._treeosInFlight.signal });
           console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
+        } else if (!cfg.activeRootId) {
+          // At home (~): personal chat, any user
+          console.log(chalk.dim("Thinking…"));
+          const data = await api.post("/home/chat", { message }, { signal: global._treeosInFlight.signal });
+          console.log(chalk.bold("\nHome:") + " " + (data.answer || "No response."));
         } else {
           console.log(chalk.dim("Thinking…"));
           const nodeId = currentNodeId(cfg);

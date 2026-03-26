@@ -1,10 +1,15 @@
-import router from "./routes.js";
 import tools from "./tools.js";
-import { setEnergyService, updateSchedule, getCalendar } from "./core.js";
+import { setServices, setEnergyService, updateSchedule, getCalendar } from "./core.js";
 
 export async function init(core) {
+  setServices({ models: core.models, contributions: core.contributions });
   if (core.energy) setEnergyService(core.energy);
+
+  const { default: router, setNodeModel } = await import("./routes.js");
+  setNodeModel(core.models.Node);
+
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
+    // Legacy top-level metadata keys (see core.js comment)
     if (meta.schedule) context.schedule = meta.schedule;
     if (meta.reeffectTime) context.reeffectTime = meta.reeffectTime;
   }, "schedules");

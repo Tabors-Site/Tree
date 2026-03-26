@@ -114,6 +114,14 @@ export async function orchestrateDreamNotify({
       for (const c of rootNode.contributors) recipients.add(c);
     }
 
+    // Strip HTML tags from LLM output. The prompt asks for plain text
+    // but models sometimes return HTML/markdown. Notifications render
+    // as escaped text, so tags would show as literal <h1>, <strong>, etc.
+    function stripTags(str) {
+      if (typeof str !== "string") return str;
+      return str.replace(/<[^>]*>/g, "").trim();
+    }
+
     const notifications = [];
 
     for (const recipientId of recipients) {
@@ -122,8 +130,8 @@ export async function orchestrateDreamNotify({
           userId: recipientId,
           rootId,
           type: "dream-summary",
-          title: summary.title,
-          content: summary.content,
+          title: stripTags(summary.title),
+          content: stripTags(summary.content),
           dreamSessionIds,
         });
       }
@@ -133,8 +141,8 @@ export async function orchestrateDreamNotify({
           userId: recipientId,
           rootId,
           type: "dream-thought",
-          title: thought.title,
-          content: thought.content,
+          title: stripTags(thought.title),
+          content: stripTags(thought.content),
           dreamSessionIds,
         });
       }

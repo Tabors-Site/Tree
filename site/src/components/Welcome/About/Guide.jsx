@@ -415,7 +415,7 @@ treeos config set llmTimeout 900
 treeos config set cascadeEnabled true
 treeos config set treeCircuitEnabled true`}</Code>
           <P>
-            <strong>42</strong> config keys. The kernel owns every one.
+            <strong>77</strong> config keys. The kernel owns every one.
           </P>
           <P>
             Covering: LLM (timeout, retries, model), conversation (tool iterations,

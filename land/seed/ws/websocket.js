@@ -504,6 +504,11 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       clearActiveChat(socket);
     }
 
+    // ── Per-socket message rate limiter ──────────────────────────────────
+    const CHAT_RATE_LIMIT = Number(getLandConfigValue("chatRateLimit")) || 10; // msgs per window
+    const CHAT_RATE_WINDOW_MS = Number(getLandConfigValue("chatRateWindowMs")) || 60000; // 1 min
+    const _chatTimestamps = [];
+
     socket.on("chat", async ({ message, username, generation, mode: chatMode }) => {
       if (!message || typeof message !== "string" || !username) {
         return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
@@ -511,6 +516,16 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (message.length > 5000) {
         return socket.emit(WS.CHAT_ERROR, { error: "Message must be under 5000 characters.", generation });
       }
+
+      // Rate limit: sliding window per socket
+      const now = Date.now();
+      while (_chatTimestamps.length > 0 && _chatTimestamps[0] <= now - CHAT_RATE_WINDOW_MS) {
+        _chatTimestamps.shift();
+      }
+      if (_chatTimestamps.length >= CHAT_RATE_LIMIT) {
+        return socket.emit(WS.CHAT_ERROR, { error: "Too many messages. Please wait before sending another.", generation });
+      }
+      _chatTimestamps.push(now);
 
       const safeChatMode = ["chat", "place", "query"].includes(chatMode) ? chatMode : "chat";
       const visitorId = socket.visitorId || `user:${socket.userId}`;

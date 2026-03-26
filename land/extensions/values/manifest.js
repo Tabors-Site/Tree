@@ -4,17 +4,21 @@ export default {
   description: "Numeric values and goals on nodes with tree wide accumulation",
 
   needs: {
-    models: ["Node", "Contribution"],
+    services: ["contributions", "hooks"],
+    models: ["Node"],
   },
 
   optional: {
-    extensions: ["energy"],
+    extensions: ["energy", "html-rendering"],
   },
 
   provides: {
+    models: {},
     routes: "./routes.js",
-    tools: "./tools.js",
+    tools: true,
     jobs: false,
+    orchestrator: false,
+    sessionTypes: {},
 
     energyActions: {
       editValue: { cost: 1 },

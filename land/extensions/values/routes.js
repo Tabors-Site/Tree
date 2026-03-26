@@ -1,12 +1,16 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import Node from "../../seed/models/node.js";
-async function findNodeById(id) { return Node.findById(id).populate("children"); }
 import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, getNodeGoals } from "./core.js";
 import { renderValues } from "./html.js";
 import { getExtension } from "../loader.js";
+
+// Node model is wired via setServices() in core.js before routes are used.
+// Import here for the findNodeById helper used in GET routes.
+let _Node = null;
+export function setNodeModel(Node) { _Node = Node; }
+async function findNodeById(id) { return _Node.findById(id).populate("children"); }
 
 const router = express.Router();
 

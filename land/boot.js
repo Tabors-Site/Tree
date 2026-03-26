@@ -286,7 +286,12 @@ async function boot() {
     const missing = REQUIRED_KEYS.filter((k) => !existingEnv[k]);
 
     if (missing.length === 0) {
-      // All good, boot normally
+      // Load .env into process.env BEFORE importing server.js.
+      // ES modules resolve all static imports before executing module code,
+      // so seed files that check process.env at import time need it set first.
+      for (const [key, value] of Object.entries(existingEnv)) {
+        if (!process.env[key]) process.env[key] = value;
+      }
       await import("./server.js");
       return;
     }
@@ -299,7 +304,11 @@ async function boot() {
     await interactiveSetup();
   }
 
-  // Reload env and boot
+  // Reload env and boot. Set process.env before import (same reason as above).
+  const freshEnv = parseEnv(fs.readFileSync(envPath, "utf8"));
+  for (const [key, value] of Object.entries(freshEnv)) {
+    if (!process.env[key]) process.env[key] = value;
+  }
   await import("./server.js");
 }
 

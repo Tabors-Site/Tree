@@ -10,6 +10,8 @@ import chooseRoot from "./modes/chooseRoot.js";
 import rawIdeaPlacement from "./modes/raw-idea-placement.js";
 
 export async function init(core) {
+  const { setServices } = await import("./core.js");
+  setServices({ models: core.models, contributions: core.contributions });
   if (core.energy) setEnergyService(core.energy);
   core.modes.registerMode("home:raw-idea-choose-root", chooseRoot, "raw-ideas");
   core.modes.registerMode("home:raw-idea-placement", rawIdeaPlacement, "raw-ideas");

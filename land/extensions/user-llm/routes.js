@@ -2,6 +2,7 @@ import log from "../../seed/log.js";
 import express from "express";
 import User from "../../seed/models/user.js";
 import authenticate from "../../seed/middleware/authenticate.js";
+import authenticateLite from "../html-rendering/authenticateLite.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   addLlmConnection,
@@ -112,8 +113,9 @@ router.delete(
 
 // ── Failover Stack ──
 
-router.get("/user/:userId/llm-failover", authenticate, async (req, res) => {
+router.get("/user/:userId/llm-failover", authenticateLite, async (req, res) => {
   try {
+    if (!req.userId) return sendError(res, 401, ERR.UNAUTHORIZED, "Authentication required");
     const user = await User.findById(req.userId).select("metadata").lean();
     const meta = user?.metadata instanceof Map ? Object.fromEntries(user.metadata) : (user?.metadata || {});
     const stack = meta.llm?.failoverStack || [];

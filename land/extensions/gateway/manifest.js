@@ -1,9 +1,10 @@
 export default {
   name: "gateway",
-  version: "1.1.0",
-  description: "External channel integration for Telegram, Discord, and web widgets",
+  version: "2.0.0",
+  description: "Gateway core: channel model, CRUD, dispatch, and type registry. Install gateway-telegram, gateway-discord, or gateway-webhook for platform support.",
 
   needs: {
+    services: ["session"],
     models: ["Node", "User"],
   },
 
@@ -30,7 +31,7 @@ export default {
             method: "POST",
             endpoint: "/root/:rootId/gateway",
             args: ["name", "type", "direction", "mode"],
-            description: "Add a channel. Usage: gateway add <name> <telegram|discord|webapp> <input|output|input-output> <read|write|read-write>",
+            description: "Add a channel. Usage: gateway add <name> <type> <direction> <mode>",
           },
           "update": {
             method: "PUT",

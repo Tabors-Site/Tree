@@ -1,11 +1,18 @@
 import vm from "node:vm";
 import { v4 as uuidv4 } from "uuid";
-import Node from "../../seed/models/node.js";
-import { logContribution } from "../../seed/tree/contributions.js";
-import Contribution from "../../seed/models/contribution.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
+// Services wired from init() via setServices()
+let Node = null;
+let Contribution = null;
+let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+
+export function setServices({ models, contributions }) {
+  Node = models.Node;
+  Contribution = models.Contribution;
+  logContribution = contributions.logContribution;
+}
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";
@@ -135,8 +142,7 @@ export async function updateScript({
   // ---------------------------------------------------------
   // Persist
   // ---------------------------------------------------------
-  setScripts(node, scripts);
-  await node.save();
+  await setScripts(node, scripts);
 
   // ---------------------------------------------------------
   // Log contribution

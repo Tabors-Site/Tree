@@ -1,9 +1,17 @@
 import log from "../../seed/log.js";
 import fs from "fs";
-import User from "../../seed/models/user.js";
-import { assignConnection } from "../../seed/llm/connections.js";
-import Node from "../../seed/models/node.js";
 import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+
+// Services wired from init() via setServices()
+let User = null;
+let Node = null;
+let assignConnection = async () => {};
+
+export function setServices({ models, llmConnections }) {
+  User = models.User;
+  Node = models.Node;
+  if (llmConnections) assignConnection = llmConnections;
+}
 
 const TEXT_NOTE_CHARS_PER_ENERGY = 1000;
 const TEXT_NOTE_MIN = 1;

@@ -5,11 +5,11 @@ export default {
 
   needs: {
     models: ["Node"],
-    middleware: ["resolveTreeAccess"],
   },
 
   optional: {
     services: ["energy"],
+    extensions: ["html-rendering"],
   },
 
   provides: {

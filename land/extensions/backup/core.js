@@ -125,8 +125,14 @@ export async function snapshotLand(opts = {}) {
 export async function importLand(input) {
   let data;
   if (typeof input === "string") {
-    if (!fs.existsSync(input)) throw new Error(`Backup file not found: ${input}`);
-    const raw = fs.readFileSync(input, "utf8");
+    // Path traversal guard: resolve to absolute and verify it's within the backup directory
+    const backupPath = path.resolve(getLandConfigValue("backupPath") || "./backups");
+    const resolved = path.resolve(backupPath, path.basename(input));
+    if (!resolved.startsWith(backupPath)) {
+      throw new Error("Invalid backup path: must be within the backup directory");
+    }
+    if (!fs.existsSync(resolved)) throw new Error(`Backup file not found: ${path.basename(input)}`);
+    const raw = fs.readFileSync(resolved, "utf8");
     data = JSON.parse(raw);
   } else {
     data = input;

@@ -1,12 +1,18 @@
-import Node from "../../seed/models/node.js";
-import Contribution from "../../seed/models/contribution.js";
-
 import Transaction from "./model.js";
-import { logContribution } from "../../seed/tree/contributions.js";
 import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
+// Services wired from init() via setServices()
+let Node = null;
+let Contribution = null;
+let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+
+export function setServices({ models, contributions }) {
+  Node = models.Node;
+  Contribution = models.Contribution;
+  logContribution = contributions.logContribution;
+}
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 function getPolicy(node) {

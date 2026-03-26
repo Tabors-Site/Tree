@@ -7,10 +7,17 @@ export default {
     models: ["Node"],
   },
 
+  optional: {},
+
   provides: {
     models: {
       Notification: "./model.js",
     },
     routes: "./routes.js",
+    tools: false,
+    jobs: false,
+    orchestrator: false,
+    energyActions: {},
+    sessionTypes: {},
   },
 };

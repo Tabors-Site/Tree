@@ -4,6 +4,7 @@ export default {
   description: "Date scheduling and calendar views for nodes",
 
   needs: {
+    services: ["contributions", "hooks"],
     models: ["Node"],
   },
 

@@ -4,7 +4,7 @@ export default {
   description: "Compile notes into shareable documents per node",
 
   needs: {
-    models: ["Node"],
+    models: ["Node", "Note"],
   },
 
   optional: {},

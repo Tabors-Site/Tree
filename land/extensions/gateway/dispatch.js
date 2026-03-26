@@ -1,5 +1,6 @@
 import log from "../../seed/log.js";
 import GatewayChannel from "./model.js";
+import { getChannelType } from "./registry.js";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import path from "path";
@@ -32,119 +33,7 @@ function decryptChannelSecrets(channel) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// SENDERS
-// ─────────────────────────────────────────────────────────────────────────
-
-async function sendTelegram(secrets, metadata, notification) {
-  var { botToken } = secrets;
-  var chatId = metadata.chatId;
-
-  var text = `*${notification.title}*\n\n${notification.content}`;
-
-  var res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "Markdown",
-    }),
-  });
-
-  if (!res.ok) {
-    var body = await res.text();
-    throw new Error(`Telegram API error ${res.status}: ${body}`);
-  }
-}
-
-async function sendDiscord(secrets, metadata, notification) {
-  var content = `**${notification.title}**\n\n${notification.content}`;
-  if (content.length > 2000) {
-    content = content.slice(0, 1997) + "...";
-  }
-
-  if (secrets.webhookUrl) {
-    // Output via webhook
-    var res = await fetch(secrets.webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-
-    if (!res.ok) {
-      var body = await res.text();
-      throw new Error(`Discord webhook error ${res.status}: ${body}`);
-    }
-  } else if (secrets.botToken && metadata.discordChannelId) {
-    // Input channel - send via bot API
-    var res = await fetch(`https://discord.com/api/v10/channels/${metadata.discordChannelId}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bot ${secrets.botToken}`,
-      },
-      body: JSON.stringify({ content }),
-    });
-
-    if (!res.ok) {
-      var body = await res.text();
-      throw new Error(`Discord bot API error ${res.status}: ${body}`);
-    }
-  } else {
-    throw new Error("Discord channel has no webhookUrl or botToken configured");
-  }
-}
-
-async function sendWebPush(secrets, metadata, notification) {
-  var { subscription } = secrets;
-
-  var webpush;
-  try {
-    webpush = await import("web-push");
-    webpush = webpush.default || webpush;
-  } catch {
-    throw new Error("web-push package not installed");
-  }
-
-  var vapidPublic = process.env.VAPID_PUBLIC_KEY;
-  var vapidPrivate = process.env.VAPID_PRIVATE_KEY;
-  var vapidEmail = process.env.VAPID_EMAIL;
-
-  if (!vapidPublic || !vapidPrivate || !vapidEmail) {
-    throw new Error("VAPID keys not configured");
-  }
-
-  var email = vapidEmail.startsWith("mailto:") ? vapidEmail : "mailto:" + vapidEmail;
-  webpush.setVapidDetails(email, vapidPublic, vapidPrivate);
-
-  var payload = JSON.stringify({
-    title: notification.title,
-    body: notification.content,
-    type: notification.type,
-  });
-
-  try {
-    await webpush.sendNotification(subscription, payload);
-  } catch (err) {
-    if (err.statusCode === 410) {
-      // Subscription expired, disable the channel
-      await GatewayChannel.findByIdAndUpdate(notification._channelId, {
-        $set: { enabled: false, lastError: "Push subscription expired (410 Gone)" },
-      });
-      throw new Error("Push subscription expired");
-    }
-    throw err;
-  }
-}
-
-const SENDERS = {
-  telegram: sendTelegram,
-  discord: sendDiscord,
-  webapp: sendWebPush,
-};
-
-// ─────────────────────────────────────────────────────────────────────────
-// DISPATCH
+// DISPATCH (delegates to registered channel type senders)
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function dispatchNotifications(rootId, notifications) {
@@ -169,22 +58,22 @@ export async function dispatchNotifications(rootId, notifications) {
 
     var secrets = decryptChannelSecrets(channel);
     if (!secrets) {
- log.error("Gateway", `Gateway: failed to decrypt secrets for channel ${channel._id}`);
+      log.error("Gateway", `Failed to decrypt secrets for channel ${channel._id}`);
       await GatewayChannel.findByIdAndUpdate(channel._id, {
         $set: { lastError: "Failed to decrypt channel secrets" },
       });
       continue;
     }
 
-    var sender = SENDERS[channel.type];
-    if (!sender) {
- log.error("Gateway", `Gateway: no sender for channel type "${channel.type}"`);
+    var handler = getChannelType(channel.type);
+    if (!handler || !handler.send) {
+      log.error("Gateway", `No registered sender for channel type "${channel.type}"`);
       continue;
     }
 
     for (var notification of matching) {
       try {
-        await sender(secrets, channel.config.metadata || {}, {
+        await handler.send(secrets, channel.config.metadata || {}, {
           ...notification,
           _channelId: channel._id,
         });
@@ -195,7 +84,7 @@ export async function dispatchNotifications(rootId, notifications) {
 
         results.push({ channelId: channel._id, type: channel.type, status: "ok" });
       } catch (err) {
- log.error("Gateway", `Gateway: dispatch error for channel ${channel._id} (${channel.type}):`, err.message);
+        log.error("Gateway", `Dispatch error for channel ${channel._id} (${channel.type}):`, err.message);
 
         await GatewayChannel.findByIdAndUpdate(channel._id, {
           $set: { lastError: err.message },
@@ -209,7 +98,7 @@ export async function dispatchNotifications(rootId, notifications) {
   if (results.length > 0) {
     var ok = results.filter((r) => r.status === "ok").length;
     var fail = results.filter((r) => r.status === "error").length;
- log.verbose("Gateway", `Gateway: dispatched ${ok} ok, ${fail} failed for root ${rootId}`);
+    log.verbose("Gateway", `Dispatched ${ok} ok, ${fail} failed for root ${rootId}`);
   }
 
   return results;
@@ -223,8 +112,8 @@ export async function dispatchTestNotification(channelId) {
   var secrets = decryptChannelSecrets(channel);
   if (!secrets) throw new Error("Failed to decrypt channel secrets");
 
-  var sender = SENDERS[channel.type];
-  if (!sender) throw new Error("No sender for channel type: " + channel.type);
+  var handler = getChannelType(channel.type);
+  if (!handler || !handler.send) throw new Error("No sender for channel type: " + channel.type);
 
   var testNotification = {
     type: "test",
@@ -233,7 +122,7 @@ export async function dispatchTestNotification(channelId) {
     _channelId: channel._id,
   };
 
-  await sender(secrets, channel.config.metadata || {}, testNotification);
+  await handler.send(secrets, channel.config.metadata || {}, testNotification);
 
   await GatewayChannel.findByIdAndUpdate(channel._id, {
     $set: { lastDispatchAt: new Date(), lastError: null },

@@ -1,13 +1,15 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import User from "../../seed/models/user.js";
 import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
-import { getConnectionsForUser } from "../../seed/llm/connections.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
+
+// Models wired from init via setModels
+let _User = null;
+export function setModels(models) { _User = models.User; }
 
 const router = express.Router();
 
@@ -26,7 +28,7 @@ router.get("/user/:userId/energy", authenticateOptional, async (req, res) => {
   try {
     const { userId } = req.params;
     const qs = buildQueryString(req);
-    let user = await User.findById(userId).exec();
+    let user = await _User.findById(userId).exec();
     if (!user) {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }

@@ -1,10 +1,18 @@
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
-import Node from "../../seed/models/node.js";
-import Contribution from "../../seed/models/contribution.js";
 import { getNotes } from "../../seed/tree/notes.js";
-import { logContribution } from "../../seed/tree/contributions.js";
+
+// Services wired from init() via setServices()
+let Node = null;
+let Contribution = null;
+let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+
+export function setServices({ models, contributions }) {
+  Node = models.Node;
+  Contribution = models.Contribution;
+  if (contributions?.logContribution) logContribution = contributions.logContribution;
+}
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 function containsHtml(str) {
   return /<[a-zA-Z\/][^>]*>/.test(str);

@@ -103,8 +103,9 @@ export default async function registerURLRoutes(app) {
 
   app.post("/mcp", authenticateMCP, handleMcpRequest);
 
-  // Serve uploaded files
-  app.use("/api/v1/uploads", express.static(path.join(__dirname, "../uploads")));
+  // Serve uploaded files (path matches seed/tree/notes.js and uploadCleanup.js)
+  const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "../uploads");
+  app.use("/api/v1/uploads", express.static(uploadsDir));
 
   app.use("/api/v1", me);
   app.use("/api/v1", authApiRouter);

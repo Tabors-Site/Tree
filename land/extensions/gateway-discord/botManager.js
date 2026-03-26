@@ -1,10 +1,7 @@
-// core/discordBotManager.js
 // Manages persistent Discord bot connections for gateway input channels.
 // One bot client per unique bot token. Multiple channels can share a bot.
 
 import log from "../../seed/log.js";
-import { processGatewayMessage } from "./input.js";
-import { getChannelWithSecrets } from "./core.js";
 
 var Client, GatewayIntentBits;
 var discordLoaded = false;
@@ -45,8 +42,8 @@ export async function connectBot(
   if (entry) {
     // Bot already connected, just add this channel to its map
     entry.channelMap.set(channelId, { discordChannelId, rootId });
- log.debug("Gateway",
-      `Discord bot manager: added channel ${channelId} to existing bot (${entry.channelMap.size} channels)`,
+    log.debug("GatewayDiscord",
+      `Bot manager: added channel ${channelId} to existing bot (${entry.channelMap.size} channels)`,
     );
     return;
   }
@@ -79,12 +76,20 @@ export async function connectBot(
 
       if (!messageText || !messageText.trim()) continue;
 
- log.debug("Gateway",
-      `Discord bot: message on gw channel ${gwChannelId} from ${senderName}: "${messageText.slice(0, 80)}"`,
+      log.debug("GatewayDiscord",
+        `Bot: message on gw channel ${gwChannelId} from ${senderName}: "${messageText.slice(0, 80)}"`,
       );
 
       try {
-        var result = await processGatewayMessage(gwChannelId, {
+        // Process via gateway core
+        var { getExtension } = await import("../loader.js");
+        var gateway = getExtension("gateway");
+        if (!gateway?.exports?.processGatewayMessage) {
+          log.error("GatewayDiscord", "Gateway core not loaded");
+          continue;
+        }
+
+        var result = await gateway.exports.processGatewayMessage(gwChannelId, {
           senderName,
           senderPlatformId,
           messageText,
@@ -99,8 +104,8 @@ export async function connectBot(
           await message.channel.send(replyText);
         }
       } catch (err) {
- log.error("Gateway", 
-          `Discord bot: error processing message for channel ${gwChannelId}:`,
+        log.error("GatewayDiscord",
+          `Bot: error processing message for channel ${gwChannelId}:`,
           err.message,
         );
       }
@@ -108,21 +113,21 @@ export async function connectBot(
   });
 
   client.on("error", (err) => {
- log.error("Gateway", "Discord bot: client error:", err.message);
+    log.error("GatewayDiscord", "Bot client error:", err.message);
   });
 
   client.on("warn", (msg) => {
- log.warn("Gateway", "Discord bot: warning:", msg);
+    log.warn("GatewayDiscord", "Bot warning:", msg);
   });
 
   // Login
   try {
     await client.login(botToken);
- log.verbose("Gateway", 
-      `Discord bot manager: bot connected as ${client.user?.tag}, ${channelMap.size} channel(s)`,
+    log.verbose("GatewayDiscord",
+      `Bot manager: bot connected as ${client.user?.tag}, ${channelMap.size} channel(s)`,
     );
   } catch (err) {
- log.error("Gateway", "Discord bot manager: login failed:", err.message);
+    log.error("GatewayDiscord", "Bot manager: login failed:", err.message);
     throw new Error("Discord bot login failed: " + err.message);
   }
 
@@ -133,8 +138,8 @@ export async function disconnectBot(channelId) {
   for (var [key, entry] of activeBots) {
     if (entry.channelMap.has(channelId)) {
       entry.channelMap.delete(channelId);
- log.debug("Gateway",
-      `Discord bot manager: removed channel ${channelId} (${entry.channelMap.size} remaining)`,
+      log.debug("GatewayDiscord",
+        `Bot manager: removed channel ${channelId} (${entry.channelMap.size} remaining)`,
       );
 
       // If no more channels, destroy the bot client
@@ -143,8 +148,8 @@ export async function disconnectBot(channelId) {
           entry.client.destroy();
         } catch {}
         activeBots.delete(key);
- log.verbose("Gateway", 
-          "Discord bot manager: bot client destroyed (no channels left)",
+        log.verbose("GatewayDiscord",
+          "Bot manager: bot client destroyed (no channels left)",
         );
       }
       return;
@@ -159,7 +164,7 @@ export async function disconnectAllBots() {
     } catch {}
   }
   activeBots.clear();
- log.verbose("Gateway", "Discord bot manager: all bots disconnected");
+  log.verbose("GatewayDiscord", "Bot manager: all bots disconnected");
 }
 
 export function getActiveBotCount() {
@@ -172,8 +177,9 @@ export function getActiveBotCount() {
  */
 export async function startupScan() {
   try {
-    var GatewayChannel = (await import("./model.js"))
-      .default;
+    var GatewayChannel = (await import("../gateway/model.js")).default;
+    var { getChannelWithSecrets } = await import("../gateway/core.js");
+
     var channels = await GatewayChannel.find({
       type: "discord",
       direction: { $in: ["input", "input-output"] },
@@ -181,20 +187,20 @@ export async function startupScan() {
     }).lean();
 
     if (channels.length === 0) {
- log.debug("Gateway", "Discord bot manager: no Discord input channels to connect");
+      log.debug("GatewayDiscord", "Bot manager: no Discord input channels to connect");
       return;
     }
 
- log.verbose("Gateway", 
-      `Discord bot manager: found ${channels.length} Discord input channel(s) to connect`,
+    log.verbose("GatewayDiscord",
+      `Bot manager: found ${channels.length} Discord input channel(s) to connect`,
     );
 
     for (var channel of channels) {
       try {
         var full = await getChannelWithSecrets(channel._id);
         if (!full?.config?.decryptedSecrets?.botToken) {
- log.error("Gateway", 
-            `Discord bot manager: no bot token for channel ${channel._id}`,
+          log.error("GatewayDiscord",
+            `Bot manager: no bot token for channel ${channel._id}`,
           );
           continue;
         }
@@ -206,13 +212,13 @@ export async function startupScan() {
           channel.rootId,
         );
       } catch (err) {
- log.error("Gateway", 
-          `Discord bot manager: failed to connect channel ${channel._id}:`,
+        log.error("GatewayDiscord",
+          `Bot manager: failed to connect channel ${channel._id}:`,
           err.message,
         );
       }
     }
   } catch (err) {
- log.error("Gateway", "Discord bot manager: startup scan failed:", err.message);
+    log.error("GatewayDiscord", "Bot manager: startup scan failed:", err.message);
   }
 }

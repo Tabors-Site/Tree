@@ -8,6 +8,7 @@ import understandSummarize from "./modes/understandSummarize.js";
 
 export async function init(core) {
   const understanding = await import("./core.js");
+  understanding.setServices({ models: core.models, contributions: core.contributions });
   if (core.energy) understanding.setEnergyService(core.energy);
   const orchestrator = await import("./pipeline.js");
 

@@ -1,7 +1,10 @@
 import log from "../../seed/log.js";
 import express from "express";
-import Node from "../../seed/models/node.js";
 import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+
+// Node model wired from init via setNodeModel
+let _Node = null;
+export function setNodeModel(Node) { _Node = Node; }
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   updateScript,
@@ -124,7 +127,7 @@ router.get("/node/:nodeId/scripts/help", authenticateOptional, async (req, res) 
   try {
     const { nodeId } = req.params;
 
-    const node = await Node.findById(nodeId).lean();
+    const node = await _Node.findById(nodeId).lean();
     if (!node) {
       return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
     }

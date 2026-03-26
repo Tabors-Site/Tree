@@ -1,8 +1,17 @@
+# NEVER MODIFY THE SEED WHEN BUILDING EXTENSIONS. ALL EXTENSIONS MUST BE OUTSIDE AND ONLY DEPENDENT FROM KERNEL THE KERNEL
+# CAN NOT AND DOES NOT ADAPT. IT IS THE SEED
+
+AND USE ALL APPROPRIATE HOOKS/TOOLS/ETC SEED
+PROVIDES TO TAKE MOST DIRECT DATA PATH
+TO MAKE WHAT IS NEEDED with extensions.
+
+
 # The Seed
 
 The kernel is called the seed. You plant it on a land. It grows trees.
 
 Two schemas, a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible.
+
 
 ## Four Primitives
 
@@ -227,6 +236,7 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | cascadeMaxDepth | 50 | Max propagation depth |
 | cascadeMaxPayloadBytes | 51200 | Max signal payload (50KB) |
 | cascadeRateLimit | 60 | Max signals per node per minute |
+| cascadeMaxDeliveriesPerSignal | 500 | Max child deliveries per cascade signal. Limits fan-out on wide trees. |
 | uploadEnabled | true | Master switch for uploads |
 | maxUploadBytes | 104857600 | Hard ceiling per upload (100MB) |
 | allowedMimeTypes | null | Allowed MIME prefixes, null means all |
@@ -250,6 +260,8 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | toolResultMaxBytes | 50000 | Max tool result size before truncation (bytes) |
 | maxConversationSessions | 50000 | Hard cap on in-memory conversation sessions. Evicts oldest on overflow. |
 | staleConversationTimeout | 1800 | Seconds before an idle conversation session is swept (default 30 min) |
+| chatRateLimit | 10 | Max chat messages per rate window per user. Prevents spam via WebSocket. |
+| chatRateWindowMs | 60000 | Chat rate limit window in milliseconds (default 1 minute). |
 | maxNotesPerNode | 1000 | Max notes per node. Prevents runaway extension note floods. |
 | maxRegisteredTools | 500 | Max tool definitions in the registry. Raise for lands with many extensions. |
 | maxRegisteredModes | 200 | Max mode definitions in the registry. Raise for lands with many extensions. |

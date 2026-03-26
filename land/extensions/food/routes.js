@@ -1,9 +1,11 @@
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
 import log from "../../seed/log.js";
+
+let Node = null;
+let User = null;
+export function setModels(models) { Node = models.Node; User = models.User; }
 
 const router = express.Router();
 

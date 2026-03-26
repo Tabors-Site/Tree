@@ -1,10 +1,17 @@
-import { logContribution } from "../../seed/tree/contributions.js";
-import Node from "../../seed/models/node.js";
-async function findNodeById(id) { return Node.findById(id).populate("children"); }
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
+// Services wired from init() via setServices()
+let Node = null;
+let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+
+export function setServices({ models, contributions }) {
+  Node = models.Node;
+  logContribution = contributions.logContribution;
+}
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
+
+async function findNodeById(id) { return Node.findById(id).populate("children"); }
 
 const SYSTEM_KEY_PREFIX = "_auto";
 
@@ -74,7 +81,6 @@ async function setValueForNode({
 
   values[finalKey] = numericValue;
   await setExtMeta(node, "values", values);
-  await node.save();
 
   await logContribution({
     userId, nodeId, wasAi, chatId, sessionId,
@@ -122,7 +128,6 @@ async function setGoalForNode({
 
   goals[finalKey] = numericGoal;
   await setExtMeta(node, "goals", goals);
-  await node.save();
 
   await logContribution({
     userId, nodeId, wasAi, chatId, sessionId,

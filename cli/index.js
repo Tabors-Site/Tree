@@ -110,6 +110,7 @@ require("./commands/canopy")(program);
 require("./commands/apikeys")(program);
 require("./commands/llm")(program);
 require("./commands/extensions")(program);
+require("./commands/flow")(program);
 
 // Dynamic commands from connected land's protocol (must be last)
 require("./commands/dynamic")(program);

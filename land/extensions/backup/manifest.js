@@ -4,7 +4,6 @@ export default {
   description: "Full and snapshot backup/restore for lands",
   needs: {
     models: ["Node", "User", "Note", "Contribution"],
-    services: ["hooks", "protocol"],
   },
   optional: {
     models: ["Chat"],

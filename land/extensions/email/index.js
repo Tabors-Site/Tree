@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import router from "./routes.js";
 import TempUser from "./model.js";
 import { sendVerificationEmail } from "./core.js";
 import { getLandUrl } from "../../canopy/identity.js";
@@ -13,6 +12,8 @@ function escapeRegex(str) {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function init(core) {
+  const { default: router, setModels } = await import("./routes.js");
+  setModels(core.models);
   const User = core.models.User;
 
   core.hooks.register("beforeRegister", async (data) => {

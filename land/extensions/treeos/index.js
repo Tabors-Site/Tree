@@ -20,6 +20,8 @@ import homeReflect from "./modes/home/reflect.js";
 import TOOL_DEFS from "./tools.js";
 
 export async function init(core) {
+  const { setModels } = await import("./handlers.js");
+  setModels(core.models);
   // Register all tree modes
   core.modes.registerMode("tree:navigate", treeNavigate, "treeos");
   core.modes.registerMode("tree:structure", treeStructure, "treeos");

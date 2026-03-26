@@ -4,13 +4,19 @@ export default {
   description: "Daily energy budget with tier-based limits. Registers lifecycle hooks for automatic metering. Other extensions use core.energy if available.",
 
   needs: {
-    models: ["User"],
+    services: ["hooks"],
+    models: ["User", "Node"],
   },
 
   optional: {},
 
   provides: {
+    models: {},
     routes: "./routes.js",
+    tools: false,
+    jobs: false,
+    orchestrator: false,
+    sessionTypes: {},
     cli: [
       { command: "energy", description: "Show your energy balance and reset time", method: "GET", endpoint: "/user/:userId/energy" },
     ],

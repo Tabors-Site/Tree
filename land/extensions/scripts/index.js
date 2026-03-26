@@ -1,11 +1,14 @@
-import router from "./routes.js";
 import tools from "./tools.js";
-import { setEnergyService } from "./core.js";
+import { setServices, setEnergyService } from "./core.js";
 import { setExtensions } from "./scriptsFunctions/safeFunctions.js";
 import { getExtension } from "../loader.js";
 
 export async function init(core) {
+  setServices({ models: core.models, contributions: core.contributions });
   if (core.energy) setEnergyService(core.energy);
+
+  const { default: router, setNodeModel } = await import("./routes.js");
+  setNodeModel(core.models.Node);
 
   // Wire optional extension functions for sandboxed scripts
   setExtensions({

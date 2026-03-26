@@ -5,7 +5,7 @@ export default {
 
   needs: {
     models: ["User", "Node"],
-    services: ["auth", "hooks"],
+    services: ["auth"],
   },
 
   optional: {},

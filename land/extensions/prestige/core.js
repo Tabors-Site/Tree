@@ -1,6 +1,16 @@
-import { logContribution } from "../../seed/tree/contributions.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
-import Node from "../../seed/models/node.js";
+import { getExtension } from "../loader.js";
+
+// Services wired from init() via setServices()
+let Node = null;
+let logContribution = async () => {};
+let useEnergy = async () => ({ energyUsed: 0 });
+
+export function setServices({ models, contributions }) {
+  Node = models.Node;
+  logContribution = contributions.logContribution;
+}
+export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 /**
  * Resolve "latest" to the current prestige level for a node.
@@ -15,9 +25,6 @@ export async function resolveVersion(nodeId, version) {
   }
   return Number(version);
 }
-
-let useEnergy = async () => ({ energyUsed: 0 });
-export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 function calculateNextSchedule(scheduleData) {
   if (scheduleData.schedule === null) return null;
@@ -86,18 +93,38 @@ async function addPrestigeToNode(node) {
 
   prestigeData.current = currentLevel + 1;
 
-  const scheduleData = meta.schedule ? { schedule: new Date(meta.schedule), reeffectTime: meta.reeffectTime || 0 } : null;
-  const newSchedule = scheduleData ? calculateNextSchedule(scheduleData) : null;
-
-  // Write all metadata atomically (each setExtMeta is a direct DB $set)
+  // Write prestige metadata (own namespace only)
   await setExtMeta(node, "prestige", prestigeData);
-  await setExtMeta(node, "version", { current: prestigeData.current });
-  await setExtMeta(node, "values", newValues);
-  if (newSchedule) await setExtMeta(node, "schedule", newSchedule);
 
-  // Status resets to active after prestige. Single save, single status transition.
-  node.status = "active";
-  await node.save();
+  // Reset values via the values extension's export (not direct namespace write)
+  const valuesExt = getExtension("values");
+  if (valuesExt?.exports?.setValueForNode) {
+    for (const key of Object.keys(newValues)) {
+      try {
+        await valuesExt.exports.setValueForNode({
+          nodeId: node._id.toString(), key, value: 0,
+          userId: node.rootOwner?.toString() || "system",
+        });
+      } catch {}
+    }
+  }
+
+  // Advance schedule via the schedules extension's export (not direct namespace write)
+  const schedulesExt = getExtension("schedules");
+  if (schedulesExt?.exports?.updateSchedule && meta.schedule) {
+    const scheduleData = { schedule: new Date(meta.schedule), reeffectTime: meta.reeffectTime || 0 };
+    const newSchedule = calculateNextSchedule(scheduleData);
+    if (newSchedule) {
+      try {
+        await schedulesExt.exports.updateSchedule(node._id.toString(), { schedule: newSchedule });
+      } catch {}
+    }
+  }
+
+  // Reset status to active via direct DB update.
+  // Note: this bypasses beforeStatusChange/afterStatusChange hooks intentionally.
+  // Prestige is a kernel-level reset, not a user status change.
+  await Node.updateOne({ _id: node._id }, { $set: { status: "active" } });
 }
 
 export { addPrestige, addPrestigeToNode };

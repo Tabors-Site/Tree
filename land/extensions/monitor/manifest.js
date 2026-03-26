@@ -4,6 +4,7 @@ export default {
   description: "Land activity monitoring. Summarizes AI usage, hook activity, sessions, and extension health.",
 
   needs: {
+    services: ["hooks"],
     models: ["Node", "User", "Contribution"],
   },
 
@@ -12,9 +13,13 @@ export default {
   },
 
   provides: {
+    models: {},
     routes: "./routes.js",
     tools: false,
     jobs: false,
+    orchestrator: false,
+    energyActions: {},
+    sessionTypes: {},
 
     hooks: {
       fires: [],

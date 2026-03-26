@@ -1,9 +1,12 @@
-import router from "./routes.js";
 import getTools from "./tools.js";
-import { setEnergyService, setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat } from "./core.js";
+import { setServices, setEnergyService, setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat } from "./core.js";
 
 export async function init(core) {
+  setServices({ models: core.models, contributions: core.contributions });
   if (core.energy) setEnergyService(core.energy);
+
+  const { default: router, setNodeModel } = await import("./routes.js");
+  setNodeModel(core.models.Node);
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
     const values = meta.values || {};
     const goals = meta.goals || {};

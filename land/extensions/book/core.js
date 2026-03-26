@@ -1,8 +1,11 @@
 import crypto from "crypto";
-import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
 import Book from "./model.js";
 import { collectSubtreeNodeIds, nodeMatchesStatus } from "../../seed/tree/notes.js";
+
+// Models wired from init() via setModels()
+let Node = null;
+let Note = null;
+export function setModels(models) { Node = models.Node; Note = models.Note; }
 
 function hashBookSettings(settings) {
   return crypto

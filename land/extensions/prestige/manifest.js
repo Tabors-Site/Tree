@@ -4,11 +4,13 @@ export default {
   description: "Node versioning. Complete a version and start a new generation.",
 
   needs: {
-    models: ["Node", "Contribution"],
+    services: ["contributions", "hooks"],
+    models: ["Node"],
   },
 
   optional: {
     services: ["energy"],
+    extensions: ["values", "schedules"],
   },
 
   provides: {

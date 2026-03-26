@@ -1,15 +1,24 @@
 import path from "path";
 import fs from "fs";
 import RawIdea from "./model.js";
-import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import User from "../../seed/models/user.js";
-import { logContribution } from "../../seed/tree/contributions.js";
 import { DELETED } from "../../seed/protocol.js";
 import { createNote } from "../../seed/tree/notes.js";
 import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 import { getExtension } from "../loader.js";
+
+// Services wired from init() via setServices()
+let Node = null;
+let Note = null;
+let User = null;
+let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+
+export function setServices({ models, contributions }) {
+  Node = models.Node;
+  Note = models.Note;
+  User = models.User;
+  if (contributions?.logContribution) logContribution = contributions.logContribution;
+}
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 import { fileURLToPath } from "url";

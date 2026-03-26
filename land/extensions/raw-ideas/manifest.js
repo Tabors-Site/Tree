@@ -4,8 +4,8 @@ export default {
   description: "Quick capture of unstructured ideas with automatic tree placement",
 
   needs: {
-    services: ["llm", "session", "chat", "orchestrator"],
-    models: ["Node", "User"],
+    services: ["llm", "session", "chat", "orchestrator", "contributions", "hooks"],
+    models: ["Node", "User", "Note"],
   },
 
   optional: {

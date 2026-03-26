@@ -5,14 +5,8 @@ import { hooks } from "../../seed/hooks.js";
 
 import express from "express";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
-
+// .env loaded by boot.js before any imports.
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -305,6 +299,32 @@ async function checkLlmAccess(rootId, userId, res) {
   }
   return rootCheck;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// POST /home/chat
+// Home zone chat. Any authenticated user. No tree context. Uses home:default mode.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post("/home/chat", authenticate, async (req, res) => {
+  const { message } = req.body;
+  if (!validateMessage(message, res)) return;
+
+  try {
+    const { runChat } = await import("../../seed/ws/conversation.js");
+    const { answer, chatId } = await runChat({
+      userId: req.userId,
+      username: req.username,
+      message: message.trim(),
+      mode: "home:default",
+      res,
+    });
+    sendOk(res, { answer, chatId });
+  } catch (err) {
+    if (!res.headersSent) {
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  }
+});
 
 // ─────────────────────────────────────────────────────────────────────────
 // POST /root/:rootId/chat

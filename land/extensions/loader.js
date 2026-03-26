@@ -685,6 +685,15 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         app.use("/", withExtensionTimeout(instance.pageRouter, manifest.name));
       }
 
+      // Wire raw-body webhook (e.g. Stripe). Extension returns rawWebhook from init().
+      if (instance.rawWebhook && typeof instance.rawWebhook === "function") {
+        try {
+          const { registerRawWebhook } = await import("../server.js");
+          registerRawWebhook(instance.rawWebhook);
+          log.verbose("Extensions", `${manifest.name}: raw webhook registered`);
+        } catch {}
+      }
+
       // Wire MCP tools and register in tool resolver
       if (instance.tools && mcpServer) {
         const { registerToolDef } = await import("../seed/ws/tools.js");

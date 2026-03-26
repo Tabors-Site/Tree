@@ -7,11 +7,16 @@ export default {
     models: ["User"],
   },
 
-  provides: {
-    routes: false,
-    tools: "./tools.js",
-    jobs: false,
+  optional: {},
 
+  provides: {
+    models: {},
+    routes: false,
+    tools: true,
+    jobs: false,
+    orchestrator: false,
+    energyActions: {},
+    sessionTypes: {},
     cli: [],
   },
 };

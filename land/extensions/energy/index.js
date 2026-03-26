@@ -1,7 +1,10 @@
-import router from "./routes.js";
-import { maybeResetEnergy, useEnergy, registerAction, DAILY_LIMITS } from "./core.js";
+import { setServices, maybeResetEnergy, useEnergy, registerAction, DAILY_LIMITS } from "./core.js";
 
 export async function init(core) {
+  setServices({ models: core.models });
+
+  const { default: router, setModels } = await import("./routes.js");
+  setModels(core.models);
   // Register lifecycle hooks for energy metering
   core.hooks.register("beforeNote", async (data) => {
     try { await useEnergy({ userId: data.userId, action: "note" }); } catch {}

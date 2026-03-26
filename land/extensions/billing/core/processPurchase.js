@@ -1,6 +1,6 @@
 import User from "../../../seed/models/user.js";
 import { upgradeUserPlan } from "./upgradePlan.js";
-import { clearUserClientCache } from "../../../ws/conversation.js";
+import { clearUserClientCache } from "../../../seed/ws/conversation.js";
 import { getUserMeta, setUserMeta } from "../../../seed/tree/userMetadata.js";
 
 const ALLOWED_PAID_PLANS = ["standard", "premium"];

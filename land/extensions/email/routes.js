@@ -2,7 +2,9 @@ import log from "../../seed/log.js";
 import express from "express";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import User from "../../seed/models/user.js";
+// User model wired from init via setModels
+let User = null;
+export function setModels(models) { User = models.User; }
 import TempUser from "./model.js";
 import { sendResetEmail } from "./core.js";
 import { getLandUrl } from "../../canopy/identity.js";

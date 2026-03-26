@@ -1,16 +1,25 @@
 import log from "../../seed/log.js";
 import GatewayChannel from "./model.js";
-import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
 import crypto from "crypto";
 import { getLandUrl } from "../../canopy/identity.js";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getChannelType, getRegisteredTypes, hasChannelType } from "./registry.js";
 
-dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
+// Models wired from init() via setModels(). Fallback to direct import for standalone use.
+let Node = null;
+let User = null;
+export function setModels(models) { Node = models.Node; User = models.User; }
+
+// Lazy model access for gateway core (may be called before init in some paths)
+async function ensureModels() {
+  if (!Node) {
+    const mod = await import("../../seed/models/node.js");
+    Node = mod.default;
+  }
+  if (!User) {
+    const mod = await import("../../seed/models/user.js");
+    User = mod.default;
+  }
+}
 
 const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";
@@ -46,19 +55,18 @@ function decrypt(encryptedText) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// VALIDATION
+// VALIDATION (delegates to registered channel type handlers)
 // ─────────────────────────────────────────────────────────────────────────
 
-const VALID_TYPES = ["telegram", "discord", "webapp"];
 const VALID_DIRECTIONS = ["input", "input-output", "output"];
 const VALID_MODES = ["read", "read-write", "write"];
 const KNOWN_NOTIFICATION_TYPES = ["dream-summary", "dream-thought"];
 const MAX_CHANNELS_PER_ROOT = 10;
 
 function validateType(type) {
-  if (!type || !VALID_TYPES.includes(type)) {
+  if (!type || !hasChannelType(type)) {
     throw new Error(
-      "Invalid channel type -- must be one of: " + VALID_TYPES.join(", "),
+      "Unknown channel type: " + type + ". Registered types: " + getRegisteredTypes().join(", "),
     );
   }
 }
@@ -72,7 +80,7 @@ function validateNotificationTypes(types) {
       throw new Error(
         "Unknown notification type: " +
           t +
-          " -- must be one of: " +
+          ". Must be one of: " +
           KNOWN_NOTIFICATION_TYPES.join(", "),
       );
     }
@@ -83,111 +91,19 @@ function validateConfigForType(type, config, direction) {
   if (!config || typeof config !== "object") {
     throw new Error("config is required");
   }
-
-  var hasInput = direction === "input" || direction === "input-output";
-  var hasOutput = direction === "output" || direction === "input-output";
-
-  switch (type) {
-    case "telegram": {
-      // Telegram always needs botToken + chatId (same bot sends and receives)
-      if (!config.botToken || typeof config.botToken !== "string") {
-        throw new Error("Telegram channel requires a botToken");
-      }
-      if (!config.chatId || typeof config.chatId !== "string") {
-        throw new Error("Telegram channel requires a chatId");
-      }
-      break;
-    }
-    case "discord": {
-      if (hasInput) {
-        // Discord input requires bot token + channel ID (bot connects via gateway)
-        if (!config.botToken || typeof config.botToken !== "string") {
-          throw new Error("Discord input channel requires a botToken");
-        }
-        if (
-          !config.discordChannelId ||
-          typeof config.discordChannelId !== "string"
-        ) {
-          throw new Error("Discord input channel requires a discordChannelId");
-        }
-        // Webhook URL optional for input-output (used for output side)
-        if (hasOutput && config.webhookUrl) {
-          validateDiscordWebhookUrl(config.webhookUrl);
-        }
-      } else {
-        // Output-only: webhook URL required
-        if (!config.webhookUrl || typeof config.webhookUrl !== "string") {
-          throw new Error("Discord channel requires a webhookUrl");
-        }
-        validateDiscordWebhookUrl(config.webhookUrl);
-      }
-      break;
-    }
-    case "webapp": {
-      if (!config.subscription || typeof config.subscription !== "object") {
-        throw new Error("Web app channel requires a subscription object");
-      }
-      if (
-        !config.subscription.endpoint ||
-        typeof config.subscription.endpoint !== "string"
-      ) {
-        throw new Error("Web push subscription must have an endpoint");
-      }
-      break;
-    }
-  }
-}
-
-function validateDiscordWebhookUrl(webhookUrl) {
-  try {
-    var parsed = new URL(webhookUrl);
-    if (
-      !parsed.hostname.endsWith("discord.com") &&
-      !parsed.hostname.endsWith("discordapp.com")
-    ) {
-      throw new Error("Discord webhook URL must be a discord.com URL");
-    }
-  } catch (err) {
-    if (err.message.includes("discord")) throw err;
-    throw new Error("Invalid Discord webhook URL");
-  }
+  var handler = getChannelType(type);
+  if (!handler) throw new Error("Unknown channel type: " + type);
+  handler.validateConfig(config, direction);
 }
 
 function buildEncryptedConfig(type, config, direction) {
-  var secrets;
-  var metadata = {};
-  var displayIdentifier = config.displayIdentifier || null;
-  var hasInput = direction === "input" || direction === "input-output";
-
-  switch (type) {
-    case "telegram":
-      secrets = { botToken: config.botToken };
-      metadata = { chatId: config.chatId };
-      break;
-    case "discord":
-      if (hasInput) {
-        // Bot token for input, optionally webhook for output side
-        secrets = { botToken: config.botToken };
-        if (config.webhookUrl) secrets.webhookUrl = config.webhookUrl;
-        metadata = {
-          discordChannelId: config.discordChannelId,
-          guildId: config.guildId || null,
-        };
-      } else {
-        secrets = { webhookUrl: config.webhookUrl };
-      }
-      break;
-    case "webapp":
-      secrets = { subscription: config.subscription };
-      break;
-    default:
-      secrets = {};
-  }
-
+  var handler = getChannelType(type);
+  if (!handler) throw new Error("Unknown channel type: " + type);
+  var result = handler.buildEncryptedConfig(config, direction);
   return {
-    encryptedPayload: encrypt(JSON.stringify(secrets)),
-    displayIdentifier,
-    metadata,
+    encryptedPayload: encrypt(JSON.stringify(result.secrets)),
+    displayIdentifier: result.displayIdentifier || config.displayIdentifier || null,
+    metadata: result.metadata || {},
   };
 }
 
@@ -231,8 +147,6 @@ function sanitizeChannel(channel) {
 // PUBLIC API
 // ─────────────────────────────────────────────────────────────────────────
 
-const PAID_TIERS = ["standard", "premium"];
-
 export async function addGatewayChannel(
   userId,
   rootId,
@@ -252,34 +166,37 @@ export async function addGatewayChannel(
   }
 
   validateType(type);
+  var handler = getChannelType(type);
 
   // Validate direction and mode
   var safeDirection = direction || "output";
   var safeMode = mode || "write";
   if (!VALID_DIRECTIONS.includes(safeDirection)) {
     throw new Error(
-      "Invalid direction -- must be one of: " + VALID_DIRECTIONS.join(", "),
+      "Invalid direction. Must be one of: " + VALID_DIRECTIONS.join(", "),
     );
   }
   if (!VALID_MODES.includes(safeMode)) {
     throw new Error(
-      "Invalid mode -- must be one of: " + VALID_MODES.join(", "),
+      "Invalid mode. Must be one of: " + VALID_MODES.join(", "),
     );
   }
 
-  // Webapp can only be output
-  if (type === "webapp" && safeDirection !== "output") {
-    throw new Error("Web push channels can only be output");
+  // Check if this channel type supports the requested direction
+  if (!handler.allowedDirections.includes(safeDirection)) {
+    throw new Error(
+      type + " channels only support: " + handler.allowedDirections.join(", "),
+    );
   }
 
-  // Discord input requires paid tier
+  // Tier check for input channels (if handler requires it)
   var hasInput = safeDirection === "input" || safeDirection === "input-output";
-  if (type === "discord" && hasInput) {
+  if (hasInput && handler.requiredTiers && handler.requiredTiers.length > 0) {
     var user = await User.findById(userId).select("isAdmin metadata").lean();
     var userPlan = (user?.metadata?.tiers?.plan) || "basic";
-    if (!user || (!user.isAdmin && !PAID_TIERS.includes(userPlan))) {
+    if (!user || (!user.isAdmin && !handler.requiredTiers.includes(userPlan))) {
       throw new Error(
-        "Discord input channels require a Standard or Premium tier subscription",
+        type + " input channels require a " + handler.requiredTiers.join(" or ") + " tier subscription",
       );
     }
   }
@@ -287,7 +204,7 @@ export async function addGatewayChannel(
   var hasOutput =
     safeDirection === "output" || safeDirection === "input-output";
 
-  // Validate config: input channels also need config (Telegram bot token, Discord bot token)
+  // Validate config
   var encConfig = {
     encryptedPayload: null,
     displayIdentifier: null,
@@ -322,8 +239,8 @@ export async function addGatewayChannel(
   // Register input webhooks/bots after creation
   if (hasInput && channel.enabled) {
     registerInputChannel(channel).catch((err) =>
- log.error("Gateway", 
-        `Gateway: failed to register input for channel ${channel._id}:`,
+      log.error("Gateway",
+        `Failed to register input for channel ${channel._id}:`,
         err.message,
       ),
     );
@@ -376,15 +293,15 @@ export async function updateGatewayChannel(userId, channelId, updates) {
   if (hasInput) {
     if (!wasEnabled && channel.enabled) {
       registerInputChannel(channel).catch((err) =>
- log.error("Gateway", 
-          `Gateway: failed to register input for channel ${channel._id}:`,
+        log.error("Gateway",
+          `Failed to register input for channel ${channel._id}:`,
           err.message,
         ),
       );
     } else if (wasEnabled && !channel.enabled) {
       unregisterInputChannel(channel).catch((err) =>
- log.error("Gateway", 
-          `Gateway: failed to unregister input for channel ${channel._id}:`,
+        log.error("Gateway",
+          `Failed to unregister input for channel ${channel._id}:`,
           err.message,
         ),
       );
@@ -405,8 +322,8 @@ export async function deleteGatewayChannel(userId, channelId) {
     channel.direction === "input" || channel.direction === "input-output";
   if (hasInput) {
     unregisterInputChannel(channel).catch((err) =>
- log.error("Gateway", 
-        `Gateway: failed to unregister input for channel ${channel._id}:`,
+      log.error("Gateway",
+        `Failed to unregister input for channel ${channel._id}:`,
         err.message,
       ),
     );
@@ -443,86 +360,24 @@ export async function getChannelWithSecrets(channelId) {
 export { decrypt as decryptPayload };
 
 // ─────────────────────────────────────────────────────────────────────────
-// INPUT CHANNEL LIFECYCLE
+// INPUT CHANNEL LIFECYCLE (delegates to registered handler)
 // ─────────────────────────────────────────────────────────────────────────
 
 async function registerInputChannel(channel) {
-  if (channel.type === "telegram") {
-    var secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
-    var secretToken = crypto.randomBytes(32).toString("hex");
-    var webhookUrl = `${process.env.BASE_URL || getLandUrl()}/api/v1/gateway/telegram/${channel._id}`;
-
-    var res = await fetch(
-      `https://api.telegram.org/bot${secrets.botToken}/setWebhook`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: webhookUrl,
-          secret_token: secretToken,
-          allowed_updates: ["message"],
-        }),
-      },
-    );
-
-    if (!res.ok) {
-      var body = await res.text();
-      throw new Error("Telegram setWebhook failed: " + body);
-    }
-
-    // Store secret token in metadata for webhook verification
-    await GatewayChannel.findByIdAndUpdate(channel._id, {
-      $set: { "config.metadata.webhookSecret": secretToken },
-    });
-
- log.verbose("Gateway", 
-      `Gateway: Telegram webhook registered for channel ${channel._id}`,
-    );
-  } else if (channel.type === "discord") {
-    var { connectBot } = await import("./discordBotManager.js");
-    var secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
-    await connectBot(
-      secrets.botToken,
-      channel._id,
-      channel.config.metadata.discordChannelId,
-      channel.rootId,
-    );
- log.verbose("Gateway", `Gateway: Discord bot connected for channel ${channel._id}`);
-  }
+  var handler = getChannelType(channel.type);
+  if (!handler || !handler.registerInput) return;
+  var secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
+  await handler.registerInput(channel, secrets);
 }
 
 async function unregisterInputChannel(channel) {
-  if (channel.type === "telegram") {
-    try {
-      var secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
-      await fetch(
-        `https://api.telegram.org/bot${secrets.botToken}/deleteWebhook`,
-        {
-          method: "POST",
-        },
-      );
- log.verbose("Gateway", 
-        `Gateway: Telegram webhook removed for channel ${channel._id}`,
-      );
-    } catch (err) {
- log.error("Gateway", 
-        `Gateway: failed to remove Telegram webhook for ${channel._id}:`,
-        err.message,
-      );
-    }
-  } else if (channel.type === "discord") {
-    try {
-      var { disconnectBot } = await import("./discordBotManager.js");
-      await disconnectBot(channel._id);
- log.verbose("Gateway", 
-        `Gateway: Discord bot disconnected for channel ${channel._id}`,
-      );
-    } catch (err) {
- log.error("Gateway", 
-        `Gateway: failed to disconnect Discord bot for ${channel._id}:`,
-        err.message,
-      );
-    }
+  var handler = getChannelType(channel.type);
+  if (!handler || !handler.unregisterInput) return;
+  try {
+    var secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
+    await handler.unregisterInput(channel, secrets);
+  } catch (err) {
+    log.error("Gateway", `Failed to unregister input for channel ${channel._id}:`, err.message);
   }
 }
 

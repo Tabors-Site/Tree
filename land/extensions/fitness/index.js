@@ -1,8 +1,9 @@
-import router from "./routes.js";
 import coachMode from "./modes/coach.js";
 import logMode from "./modes/log.js";
 
 export async function init(core) {
+  const { default: router, setModels } = await import("./routes.js");
+  setModels(core.models);
   // Register fitness modes
   core.modes.registerMode("tree:fitness-coach", coachMode, "fitness");
   core.modes.registerMode("tree:fitness-log", logMode, "fitness");

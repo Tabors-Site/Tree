@@ -104,7 +104,7 @@ router.get("/user/:userId/shareToken", urlAuth, async (req, res) => {
 });
 
 // POST share token update
-router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
+router.post("/user/:userId/shareToken", urlAuth, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
