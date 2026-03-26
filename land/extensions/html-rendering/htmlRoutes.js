@@ -857,5 +857,127 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
     }
   });
 
+  // ── COMMAND CENTER ──────────────────────────────────────────────────
+  // Full capability surface of a tree at any position.
+  // Tools, modes, extensions. Color-coded. Toggleable.
+
+  router.get("/node/:nodeId/command-center", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { nodeId } = req.params;
+      const node = await Node.findById(nodeId).select("name metadata parent rootOwner").lean();
+      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
+
+      // Resolve root
+      const rootId = node.rootOwner || nodeId;
+      const rootNode = rootId !== nodeId ? await Node.findById(rootId).select("name").lean() : node;
+
+      // Build path
+      let path = node.name;
+      try { path = await buildPathString(nodeId); } catch {}
+
+      // Extension scope at this node
+      const { getBlockedExtensionsAtNode, getToolOwner, getModeOwner, getConfinedExtensions } = await import("../../seed/tree/extensionScope.js");
+      const scope = await getBlockedExtensionsAtNode(nodeId);
+      const confinedSet = getConfinedExtensions();
+
+      // All tools
+      const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/ws/modes/registry.js");
+      const { resolveTools } = await import("../../seed/ws/tools.js");
+      const { filterToolNamesByScope } = await import("../../seed/tree/extensionScope.js");
+      const { getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+
+      const allToolNames = getAllToolNamesForBigMode("tree");
+      const filteredToolNames = filterToolNamesByScope(allToolNames, scope.blocked, scope.restricted);
+      const toolDefs = resolveTools(allToolNames);
+
+      const toolConfig = getExtMeta(node, "tools");
+      const nodeBlocked = new Set(toolConfig.blocked || []);
+      const nodeAllowed = new Set(toolConfig.allowed || []);
+
+      const tools = allToolNames.map(name => {
+        const def = toolDefs.find(d => d.function?.name === name);
+        const owner = getToolOwner(name);
+        const isFiltered = !filteredToolNames.includes(name);
+        const isNodeBlocked = nodeBlocked.has(name);
+
+        let status = "active";
+        if (isFiltered) status = scope.restricted?.has(owner?.extName) ? "restricted" : "blocked";
+        if (isNodeBlocked) status = "blocked";
+
+        return {
+          name,
+          description: def?.function?.description || "",
+          extName: owner?.extName || "unknown",
+          readOnly: owner?.readOnly || false,
+          destructive: def?.function?.annotations?.destructiveHint || false,
+          status,
+          nodeBlocked: isNodeBlocked,
+        };
+      });
+
+      // All modes
+      const treeModes = getSubModes("tree") || [];
+      const homeModes = getSubModes("home") || [];
+      const landModes = getSubModes("land") || [];
+      const allModes = [...treeModes, ...homeModes, ...landModes];
+
+      const modeOverrides = getExtMeta(node, "modes");
+
+      const modes = allModes.map(m => {
+        const owner = getModeOwner(m.key);
+        const isBlocked = owner ? scope.blocked.has(owner) : false;
+
+        return {
+          key: m.key,
+          emoji: m.emoji || "",
+          label: m.label || m.key,
+          bigMode: m.key.split(":")[0] || "tree",
+          extName: owner || "",
+          intent: m.key.split(":")[1] || "",
+          status: isBlocked ? "blocked" : "active",
+        };
+      });
+
+      // All extensions
+      const { getLoadedManifests } = await import("../../extensions/loader.js");
+      const manifests = getLoadedManifests();
+
+      const extensions = manifests.map(m => {
+        let status = "active";
+        if (scope.blocked.has(m.name)) status = "blocked";
+        else if (scope.restricted?.has(m.name)) status = "restricted";
+        else if (confinedSet.has(m.name) && !scope.allowed?.has(m.name)) status = "confined";
+
+        return {
+          name: m.name,
+          version: m.version || "",
+          description: m.description || "",
+          status,
+        };
+      }).sort((a, b) => {
+        const order = { active: 0, restricted: 1, confined: 2, blocked: 3 };
+        return (order[a.status] || 4) - (order[b.status] || 4);
+      });
+
+      const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";
+
+      const { renderCommandCenter } = await import("./html/commandCenter.js");
+      return res.send(renderCommandCenter({
+        nodeId, nodeName: node.name || nodeId, rootId, rootName: rootNode?.name || rootId, path,
+        extensions, tools, modes, toolConfig, modeOverrides,
+        blocked: scope.blocked, restricted: scope.restricted, allowed: scope.allowed, confined: confinedSet, qs,
+      }));
+    } catch (err) {
+      log.error("HTML", "Command center error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // Alias: /root/:rootId/command-center redirects to the root node's command center
+  router.get("/root/:rootId/command-center", urlAuth, htmlOnly, async (req, res) => {
+    const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";
+    return res.redirect(`/api/v1/node/${req.params.rootId}/command-center${qs}`);
+  });
+
   return router;
 }

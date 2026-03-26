@@ -195,6 +195,7 @@ export async function syncExtensionsToTree(manifests) {
 
     const metadata = { version: manifest.version || "0.0.0" };
     if (manifest.description) metadata.description = manifest.description;
+    if (manifest.scope === "confined") metadata.scope = "confined";
 
     if (existingByName.has(manifest.name)) {
       await Node.findByIdAndUpdate(existingByName.get(manifest.name), {

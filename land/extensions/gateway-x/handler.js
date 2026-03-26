@@ -171,6 +171,8 @@ function buildEncryptedConfig(config, direction) {
 
 async function send(secrets, metadata, notification) {
   const creds = getCreds(secrets);
+  if (!creds.accessToken || !creds.tokenSecret) throw new Error("X OAuth credentials not configured");
+  if (!creds.apiKey || !creds.apiSecret) throw new Error("X API key not configured");
 
   // Format as a post. 280 char limit for the main body.
   let text = notification.content || "";

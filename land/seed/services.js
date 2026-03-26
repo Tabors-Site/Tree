@@ -38,6 +38,7 @@ import {
   setCurrentNodeId, getCurrentNodeId, getCurrentMode,
   clearSession as clearConversationSession,
   resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
+  LLM_PRIORITY,
 } from "./ws/conversation.js";
 
 import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "./ws/mcp.js";
@@ -58,6 +59,10 @@ import {
 } from "./tree/ancestorCache.js";
 import { checkIntegrity } from "./tree/integrityCheck.js";
 import { checkTreeHealth, tripTree, reviveTree, isTreeAlive } from "./tree/treeCircuit.js";
+import {
+  acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple,
+  isNodeLocked, getLockStats as getNodeLockStats,
+} from "./tree/nodeLocks.js";
 
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)
@@ -137,6 +142,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       clearSession: clearConversationSession,
       resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
       registerRootLlmSlot, registerUserLlmSlot,
+      LLM_PRIORITY,
     },
 
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },
@@ -164,6 +170,9 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       checkIntegrity,
       checkTreeHealth, tripTree, reviveTree, isTreeAlive,
     },
+
+    // --- Node locks (structural mutation locks, tier 3 only) ---
+    nodeLocks: { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple, isNodeLocked, getStats: getNodeLockStats },
 
     // --- Metadata (namespace-enforced read/write for extension data on nodes) ---
     metadata: { getExtMeta, setExtMeta, mergeExtMeta },

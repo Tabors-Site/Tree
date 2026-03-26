@@ -118,6 +118,30 @@ export async function init(core) {
     { key: "MY_EXT_API_KEY", required: true, description: "API key for external service" },
   ],
 }`}</Code>
+
+          <h3 style={{color: "#fff", marginTop: 32}}>npm</h3>
+          <P>
+            Extensions that need npm packages declare them at the manifest top level.
+            The loader generates a <code>package.json</code> in the extension directory and
+            runs <code>npm install</code> automatically. Scoped to the extension. Does not
+            pollute the land's root <code>node_modules</code>.
+          </P>
+          <Code>{`// manifest.js
+export default {
+  name: "gateway-discord",
+  version: "1.0.0",
+  npm: ["discord.js@^14.0.0"],
+  // ...
+};
+
+// Then import normally in your code:
+import { Client, GatewayIntentBits } from "discord.js";`}</Code>
+          <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem"}}>
+            Install scripts are blocked (<code>--ignore-scripts</code>). If <code>node_modules</code> is
+            missing on boot (fresh clone, deleted), the loader detects and reinstalls automatically.
+            Failed npm install during extension installation rolls back the entire extension. 60s timeout
+            configurable via <code>npmInstallTimeout</code> in land config.
+          </P>
         </div>
       </section>
 
@@ -489,10 +513,10 @@ res.send(html.renderMyPage({ data }));`}</Code>
             <code>land/extensions/EXTENSION_FORMAT.md</code> in the repo.
             This page covers what you need to get started. The spec covers everything.
           </P>
-          <div style={{marginTop: 24}}>
+          <div className="lp-cta-row">
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>
-            <a className="lp-btn lp-btn-secondary" href="/extensions" style={{marginLeft: 12}}>Extensions</a>
-            <a className="lp-btn lp-btn-secondary" href="/seed" style={{marginLeft: 12}}>The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
           </div>
         </div>
       </section>

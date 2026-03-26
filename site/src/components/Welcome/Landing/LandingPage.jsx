@@ -13,7 +13,7 @@ const LandingPage = () => {
 
       {/* ── BANNER ── */}
       <div className="lp-banner">
-        TreeOS is launching in the next few days.
+        TreeOS is live. <a href="/guide" style={{color: "rgba(255,255,255,0.7)", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.2)"}}>Read the guide</a>.
       </div>
 
       {/* ── HERO ── */}
@@ -36,7 +36,7 @@ const LandingPage = () => {
           <p style={{color: "#666", fontSize: "0.85rem", marginTop: 20}}>
             <a href="/app" style={{color: "#888", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.1)"}}>
               TreeOS
-            </a> is the first operating system built on the seed. It ships with 25+ extensions.
+            </a> is the first operating system built on the seed. It ships with 40+ extensions across four bundles.
           </p>
         </div>
       </section>
@@ -65,59 +65,51 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ── THREE LAYERS ── */}
+      {/* ── FOUR LAYERS ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Three Layers</h2>
-          <div className="lp-cards-3">
+          <h2 className="lp-section-title">Four Layers</h2>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
             <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
-              <h3 style={{color: "#f97316"}}>The Seed (Kernel)</h3>
+              <h3 style={{color: "#f97316"}}>The Seed</h3>
               <p style={{flex: 1}}>
-                Two schemas (Node and User), an AI conversation loop, five registries
-                (hooks, modes, orchestrators, socket handlers, auth strategies), a cascade
-                engine, and a response protocol. Lifecycle hooks covering every critical
-                moment from node creation to AI response to cascade signals.
-                The part that never changes. Build on it.
+                Two schemas. 27 lifecycle hooks. Five registries. A cascade engine.
+                A response protocol. The contract that never changes.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
-                <a href="/kernel" style={{
-                  color: "#f97316", fontSize: "0.95rem", fontWeight: 600,
-                  textDecoration: "none", borderBottom: "1px solid rgba(249, 115, 22, 0.3)",
-                  paddingBottom: 2,
-                }}>Inside the seed</a>
+                <a href="/kernel" style={{color: "#f97316", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(249, 115, 22, 0.3)", paddingBottom: 2}}>Inside the seed</a>
               </div>
             </div>
             <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
               <h3 style={{color: "#a78bfa"}}>Extensions</h3>
               <p style={{flex: 1}}>
-                Everything else. AI modes, tool definitions, billing, HTML rendering,
-                fitness, food, scripts, wallets, gateways, dreams, understanding.
-                Install what you need. Build your own. Each extension adds commands,
-                tools, hooks, and AI behavior. The tree controls what is active
-                at every position.
+                Four bundles. Cascade (8 extensions, the nervous system). Intelligence (11, self-awareness).
+                Connect (8, external channels). Maintenance (4, hygiene). Plus the base OS extensions
+                and mycelium standalone. 40+ total.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
-                <a href="/ai" style={{
-                  color: "#a78bfa", fontSize: "0.95rem", fontWeight: 600,
-                  textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)",
-                  paddingBottom: 2,
-                }}>How AI works</a>
+                <a href="/extensions" style={{color: "#a78bfa", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)", paddingBottom: 2}}>How extensions work</a>
               </div>
             </div>
             <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
               <h3 style={{color: "#4ade80"}}>Federation</h3>
               <p style={{flex: 1}}>
-                Every land is sovereign. You run yours. Someone else runs theirs.
-                Lands peer directly through signed requests. Share trees, proxy LLM
-                calls, propagate cascade signals. The Horizon helps lands
-                find each other. Anyone can run their own Horizon.
+                Lands peer directly through signed requests. Three communication layers:
+                .flow (water table), Canopy (direct peering), Mycelium (intelligent routing).
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
-                <a href="/network" style={{
-                  color: "#4ade80", fontSize: "0.95rem", fontWeight: 600,
-                  textDecoration: "none", borderBottom: "1px solid rgba(74, 222, 128, 0.3)",
-                  paddingBottom: 2,
-                }}>The network</a>
+                <a href="/network" style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(74, 222, 128, 0.3)", paddingBottom: 2}}>The network</a>
+              </div>
+            </div>
+            <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
+              <h3 style={{color: "#38bdf8"}}>Ecosystem</h3>
+              <p style={{flex: 1}}>
+                The tree knows itself. It compresses, detects contradictions, profiles users,
+                evolves structural patterns, searches semantically, explores branches, and holds
+                its own purpose. Every extension reads from every other. The whole is alive.
+              </p>
+              <div style={{textAlign: "center", marginTop: 16}}>
+                <a href="/ai" style={{color: "#38bdf8", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(56, 189, 248, 0.3)", paddingBottom: 2}}>How the AI thinks</a>
               </div>
             </div>
           </div>
@@ -128,27 +120,24 @@ const LandingPage = () => {
       <section className="lp-section">
         <div className="lp-container">
           <h2 className="lp-section-title">Go Deeper</h2>
-          <p className="lp-section-sub">Six pages. Each one answers one question.</p>
-          <div className="lp-cards-3" style={{gridTemplateColumns: "repeat(3, 1fr)"}}>
+          <p className="lp-section-sub">Seven pages. Each one answers one question.</p>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "repeat(4, 1fr)"}}>
             {[
               { href: "/seed", title: "The Seed", desc: "What is the contract?" },
               { href: "/ai", title: "The AI", desc: "How does the tree think?" },
-              { href: "/cascade", title: "Cascade", desc: "How does the tree communicate?" },
+              { href: "/cascade", title: "Cascade", desc: "How does it communicate?" },
               { href: "/flow", title: "The Flow", desc: "How does data move?" },
               { href: "/extensions", title: "Extensions", desc: "How does the tree grow?" },
               { href: "/network", title: "The Network", desc: "How do trees connect?" },
+              { href: "/mycelium", title: "Mycelium", desc: "The forest underground." },
+              { href: "/guide", title: "The Guide", desc: "Everything in one place." },
             ].map(({ href, title, desc }) => (
-              <a key={href} href={href} className="lp-card" style={{textDecoration: "none", textAlign: "center", padding: 24}}>
-                <h3 style={{fontSize: "1rem", marginBottom: 6}}>{title}</h3>
-                <p style={{fontSize: "0.8rem"}}>{desc}</p>
+              <a key={href} href={href} className="lp-card" style={{textDecoration: "none", textAlign: "center", padding: 20}}>
+                <h3 style={{fontSize: "0.95rem", marginBottom: 4}}>{title}</h3>
+                <p style={{fontSize: "0.78rem"}}>{desc}</p>
               </a>
             ))}
           </div>
-          <p className="lp-section-sub" style={{marginTop: 20, fontStyle: "italic", color: "rgba(255,255,255,0.3)", fontSize: "0.85rem"}}>
-            The land is the ground. Trees pull signals from .flow like roots pull water.
-            The AI at each node transforms raw input into new structure. The tree grows from what flows through it.
-            Cascade connects the seed to extensions to federation. The nervous system running through all three layers.
-          </p>
         </div>
       </section>
 
@@ -186,24 +175,15 @@ const LandingPage = () => {
             </div>
           </div>
           <div className="lp-cli-features">
-            <div className="lp-cli-feat">
-              <strong>Navigate</strong> cd, ls, pwd, tree
-            </div>
-            <div className="lp-cli-feat">
-              <strong>Build</strong> mkdir, rm, mv, rename, type
-            </div>
-            <div className="lp-cli-feat">
-              <strong>Content</strong> note, notes, value, goal
-            </div>
-            <div className="lp-cli-feat">
-              <strong>AI</strong> chat, place, query
-            </div>
-            <div className="lp-cli-feat">
-              <strong>Extensions</strong> ext install, ext disable
-            </div>
-            <div className="lp-cli-feat">
-              <strong>LLM</strong> llm add, llm assign
-            </div>
+            <div className="lp-cli-feat"><strong>Navigate</strong> cd, ls, pwd, tree</div>
+            <div className="lp-cli-feat"><strong>Build</strong> mkdir, rm, mv, rename, type</div>
+            <div className="lp-cli-feat"><strong>Content</strong> note, notes, value, goal</div>
+            <div className="lp-cli-feat"><strong>AI</strong> chat, place, query, explore</div>
+            <div className="lp-cli-feat"><strong>Cascade</strong> cascade, perspective, codebook, flow, water</div>
+            <div className="lp-cli-feat"><strong>Intelligence</strong> compress, contradictions, inverse, evolution, thesis</div>
+            <div className="lp-cli-feat"><strong>Extensions</strong> ext install, ext-allow, ext-scope</div>
+            <div className="lp-cli-feat"><strong>Gateway</strong> gateway add, gateway test</div>
+            <div className="lp-cli-feat"><strong>LLM</strong> llm add, llm assign</div>
           </div>
         </div>
       </section>
@@ -300,49 +280,54 @@ const LandingPage = () => {
             you share capabilities that agents run, on a persistent structure that agents inhabit.
           </p>
 
-          <div className="lp-ext-groups">
-            <ExtGroup title="Health" items={[
-              { name: "fitness", desc: "Workout coaching and tracking" },
-              { name: "food", desc: "Calorie and macro tracking" },
-            ]} />
-            <ExtGroup title="AI and Knowledge" items={[
-              { name: "understanding", desc: "Bottom-up tree compression" },
-              { name: "dreams", desc: "Daily background maintenance", href: "/about/dreams" },
-              { name: "raw-ideas", desc: "Capture and auto-place", href: "/about/raw-ideas" },
-            ]} />
-            <ExtGroup title="Developer" items={[
-              { name: "scripts", desc: "Sandboxed JS on nodes" },
-              { name: "api-keys", desc: "Programmatic access" },
-              { name: "prestige", desc: "Node versioning" },
-              { name: "schedules", desc: "Dates and calendar" },
-            ]} />
-            <ExtGroup title="Data" items={[
-              { name: "values", desc: "Numeric values and goals" },
-              { name: "transactions", desc: "Value trades between nodes" },
-              { name: "energy", desc: "Usage metering", href: "/about/energy" },
-              { name: "billing", desc: "Stripe subscriptions" },
-              { name: "solana", desc: "On-chain wallets" },
-            ]} />
-            <ExtGroup title="Content" items={[
-              { name: "blog", desc: "Land-level posts" },
-              { name: "book", desc: "Shareable note exports" },
-              { name: "html-rendering", desc: "Server-rendered pages" },
-            ]} />
-            <ExtGroup title="System" items={[
-              { name: "treeos", desc: "AI modes, tools, navigation" },
-              { name: "tree-orchestrator", desc: "Chat/place/query conversation flow" },
-              { name: "land-manager", desc: "AI land management" },
-              { name: "shell", desc: "Server shell from AI" },
-              { name: "gateway", desc: "External channels (Telegram, Discord)" },
-              { name: "user-llm", desc: "Custom model connections" },
-              { name: "user-queries", desc: "Notes, tags, chats" },
-              { name: "deleted-revive", desc: "Soft delete and recovery" },
-              { name: "email", desc: "Email, password reset" },
-              { name: "backup", desc: "Full and snapshot backup/restore" },
-              { name: "recent-roots", desc: "Recent trees sidebar" },
-              { name: "dashboard", desc: "Session and activity dashboard" },
-            ]} />
+          <p className="lp-section-sub" style={{maxWidth: 700, fontSize: "0.9rem", color: "rgba(255,255,255,0.45)", marginTop: -8}}>
+            Extensions ship as bundles. Install a bundle and everything it needs comes with it.
+            Remove one and the rest keep working. The kernel never knows they exist.
+          </p>
+
+          {/* ── FOUR BUNDLES ── */}
+
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
+            <div className="lp-card" style={{borderLeft: "3px solid rgba(249, 115, 22, 0.5)"}}>
+              <h3 style={{color: "#f97316", fontSize: "1rem"}}>treeos-cascade</h3>
+              <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
+                The nervous system. 8 extensions. One kernel hook becomes a full signal network:
+                propagation, perspective filtering, sealed transport, long memory, codebook compression,
+                gap detection, pulse health, flow visualization.
+              </p>
+              <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-cascade</code>
+            </div>
+            <div className="lp-card" style={{borderLeft: "3px solid rgba(56, 189, 248, 0.5)"}}>
+              <h3 style={{color: "#38bdf8", fontSize: "1rem"}}>treeos-intelligence</h3>
+              <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
+                Self-awareness. 11 extensions. The tree compresses, detects contradictions, profiles users,
+                evolves structural patterns, embeds semantics, explores branches, traces threads,
+                holds its own purpose.
+              </p>
+              <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-intelligence</code>
+            </div>
+            <div className="lp-card" style={{borderLeft: "3px solid rgba(74, 222, 128, 0.5)"}}>
+              <h3 style={{color: "#4ade80", fontSize: "1rem"}}>treeos-connect</h3>
+              <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
+                External channels. 8 extensions. Gateway core with type registry plus telegram, discord,
+                webhook, email, sms, slack, matrix. Each channel registers and gets the full pipeline.
+              </p>
+              <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-connect</code>
+            </div>
+            <div className="lp-card" style={{borderLeft: "3px solid rgba(167, 139, 250, 0.5)"}}>
+              <h3 style={{color: "#a78bfa", fontSize: "1rem"}}>treeos-maintenance</h3>
+              <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
+                Hygiene. 4 extensions. Prune dead branches. Reroot misplaced nodes by semantic similarity.
+                Changelog tracks what changed. Purpose holds the thesis.
+              </p>
+              <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-maintenance</code>
+            </div>
           </div>
+
+          <p className="lp-section-sub" style={{marginTop: 24, color: "rgba(255,255,255,0.35)", fontSize: "0.85rem"}}>
+            Plus the base TreeOS extensions (AI modes, orchestrator, values, scripts, prestige, schedules,
+            billing, solana, blog, backup, dreams, understanding) and mycelium standalone.
+          </p>
 
           <div className="lp-ext-cta">
             <a href="/extensions">How extensions work</a>
@@ -388,7 +373,13 @@ const LandingPage = () => {
               <div className="lp-term-line lp-term-output">  You're up from 130 last session. Nice progression.</div>
               <div className="lp-term-line lp-term-output">  Next up: Overhead Press.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>cd ../Food</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  # Allow a confined extension at a specific branch</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>cd /Finance</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Finance</span> <span className="lp-term-caret">› </span>ext-allow solana</div>
+              <div className="lp-term-line lp-term-output lp-term-green">  Allowed: solana</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Confined extension activated at this position and all children.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Finance</span> <span className="lp-term-caret">› </span>cd /Health/Food</div>
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Food</span> <span className="lp-term-caret">› </span>food "i had eggs and toast for breakfast"</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-output">  Logged. Eggs (2): 144 cal, 12g protein. Toast: 80 cal, 3g protein.</div>
@@ -401,6 +392,27 @@ const LandingPage = () => {
             The food coach can't create workout nodes. Each branch controls its own capabilities.
             Same extensions, different access, based on where you are.
           </p>
+
+          <div style={{maxWidth: 640, margin: "32px auto 0", padding: "20px 24px", background: "rgba(74, 222, 128, 0.04)", border: "1px solid rgba(74, 222, 128, 0.1)", borderRadius: 8}}>
+            <p style={{color: "rgba(255,255,255,0.7)", fontSize: "0.9rem", lineHeight: 1.7, margin: 0}}>
+              <strong style={{color: "#4ade80"}}>The help menu is position-aware.</strong> Run <code>help</code> at
+              /Health/Fitness and you see fitness commands. Navigate to /Finance and the help menu
+              changes. Shell commands disappear where shell is blocked. Solana commands only appear
+              where solana is allowed. The CLI shows exactly what the AI can do at your position.
+              The same commands the AI sees. The same tools it has access to. Your help menu is your
+              capability surface.
+            </p>
+          </div>
+
+          <div style={{maxWidth: 640, margin: "16px auto 0", padding: "20px 24px", background: "rgba(192, 132, 252, 0.04)", border: "1px solid rgba(192, 132, 252, 0.1)", borderRadius: 8}}>
+            <p style={{color: "rgba(255,255,255,0.7)", fontSize: "0.9rem", lineHeight: 1.7, margin: 0}}>
+              <strong style={{color: "#c084fc"}}>Two scoping modes.</strong> Global extensions are active
+              everywhere until you block them. Confined extensions are active nowhere until you allow them.
+              Codebook and evolution are global. You want them everywhere. Shell and solana are confined.
+              You want them only where they belong. <code>ext-allow solana</code> at /Finance. It exists
+              there and nowhere else.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -439,32 +451,35 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ── FEDERATION ── */}
+      {/* ── THREE COMMUNICATION LAYERS ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
           <h2 className="lp-section-title">The Network</h2>
           <p className="lp-section-sub">
-            The Canopy Protocol is how lands discover and peer with each other.
-            Lands advertise their loaded extensions. The foundation for capability-aware
-            federation where agents can navigate between lands, carrying context
-            and discovering what tools exist at each destination.
+            Every real forest has three communication layers. Now every TreeOS network does too.
           </p>
-          <div className="lp-cards-4">
-            <div className="lp-card lp-card-sm">
-              <h4>Peer</h4>
-              <p>Direct land-to-land connections. Signed requests.</p>
+          <div className="lp-cards-3">
+            <div className="lp-card" style={{borderTop: "2px solid rgba(56, 189, 248, 0.4)"}}>
+              <h3 style={{color: "#38bdf8"}}>.flow</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                The water table. Local to one land. Ambient. Cascade signals pool and trees pull
+                what they need. No intelligence. No routing. Already built into the kernel.
+              </p>
             </div>
-            <div className="lp-card lp-card-sm">
-              <h4>Discover</h4>
-              <p>Search lands and public trees across the network.</p>
+            <div className="lp-card" style={{borderTop: "2px solid rgba(74, 222, 128, 0.4)"}}>
+              <h3 style={{color: "#4ade80"}}>Canopy</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                Trees reaching out. Direct land-to-land peering. Ed25519 signed requests.
+                Heartbeat every 5 minutes. Cross-land cascade, invites, LLM proxy, tree sharing.
+              </p>
             </div>
-            <div className="lp-card lp-card-sm">
-              <h4>Collaborate</h4>
-              <p>Cross-land invites. Remote contributions. AI proxy.</p>
-            </div>
-            <div className="lp-card lp-card-sm">
-              <h4>Registry</h4>
-              <p>Publish and pull extensions. Shared package library.</p>
+            <div className="lp-card" style={{borderTop: "2px solid rgba(192, 132, 252, 0.4)"}}>
+              <h3 style={{color: "#c084fc"}}><a href="/mycelium" style={{color: "inherit", textDecoration: "none"}}>Mycelium</a></h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                The intelligent underground. An extension any land installs to become a routing node.
+                Reads signal metadata and peer profiles. Routes where signals would be useful.
+                The most connected node knows the most about the network.
+              </p>
             </div>
           </div>
         </div>
@@ -539,6 +554,7 @@ const LandingPage = () => {
               <a href="/extensions">Extensions</a>
               <a href="/build">Build</a>
               <a href="/network">The Network</a>
+              <a href="/mycelium">Mycelium</a>
             </div>
             <div className="lp-footer-col">
               <h4>TreeOS</h4>
@@ -568,21 +584,5 @@ const LandingPage = () => {
     </div>
   );
 };
-
-const ExtGroup = ({ title, items }) => (
-  <div className="lp-ext-group">
-    <h4 className="lp-ext-group-title">{title}</h4>
-    {items.map((item) => (
-      <div key={item.name} className="lp-ext-item">
-        {item.href ? (
-          <a href={item.href} className="lp-ext-name lp-ext-link">{item.name}</a>
-        ) : (
-          <span className="lp-ext-name">{item.name}</span>
-        )}
-        <span className="lp-ext-desc">{item.desc}</span>
-      </div>
-    ))}
-  </div>
-);
 
 export default LandingPage;

@@ -280,7 +280,12 @@
       "Bash(__NEW_LINE_427e1c6a8932220c__ echo:*)",
       "Bash(timeout 12 node -e \":*)",
       "Bash(grep -rn \"await import.*routes\" extensions/*/index.js)",
-      "Bash(node -e \"require\\(''nodemailer''\\)\")"
+      "Bash(node -e \"require\\(''nodemailer''\\)\")",
+      "Bash(find /home/tabor/github/Tree/land/extensions/boundary -type f -name *)",
+      "Bash(LOG_LEVEL=3 timeout 20 node land/server.js)",
+      "Bash(LOG_LEVEL=3 timeout 20 node server.js)",
+      "Bash(LOG_LEVEL=3 node server.js)",
+      "Bash(LOG_LEVEL=3 timeout 25 node boot.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -301,7 +306,8 @@
       "/home/tabor/github/Tree/land/ws/modes/home",
       "/home/tabor/github/db/\\|\"../ws/\\|\"../middleware/\\|\"..",
       "/home/tabor/github/Tree/land/seed/middleware",
-      "/tmp"
+      "/tmp",
+      "/home/tabor/github/Tree/land/extensions"
     ]
   }
 }

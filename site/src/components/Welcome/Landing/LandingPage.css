@@ -113,6 +113,14 @@
   justify-content: center;
 }
 
+.lp-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+}
+
 .lp-hero-example {
   display: block;
   margin-top: 24px;

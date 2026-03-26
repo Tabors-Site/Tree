@@ -100,6 +100,81 @@ const ExtensionsPage = () => {
         </div>
       </section>
 
+      {/* ── BUNDLES ── */}
+      <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Bundles</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Extensions ship as bundles. A bundle is a meta-extension whose manifest lists other extensions
+            as dependencies. Install the bundle and the loader resolves everything. Remove one extension
+            and the rest keep working. Four bundles cover the major capabilities.
+          </p>
+
+          <div style={{maxWidth: 720, margin: "0 auto"}}>
+            <div style={{marginBottom: 40}}>
+              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-cascade <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>8 extensions</span></h3>
+              <p style={{color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontSize: "0.88rem"}}>
+                The nervous system. The kernel fires one hook when content is written at a cascade-enabled
+                node. Eight extensions turn that hook into a full signal network. Propagation moves signals
+                through children and across lands. Perspective filtering lets each node declare what it
+                drinks. Sealed transport encrypts signals for cross-land delivery. Long memory writes permanent
+                traces. Codebook compresses repeated patterns into shared vocabulary. Gap detection surfaces
+                missing capabilities. Pulse monitors health. Flow visualizes movement.
+              </p>
+              <p style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", marginTop: 8}}>
+                propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow
+              </p>
+            </div>
+
+            <div style={{marginBottom: 40}}>
+              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-connect <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>8 extensions</span></h3>
+              <p style={{color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontSize: "0.88rem"}}>
+                The rain. External channels open the clouds. Discord messages become tree interactions.
+                Telegram chats become conversations at specific nodes. Email through any SMTP server. SMS
+                through Twilio. Slack where teams already work. Matrix for sovereignty. X for public
+                discourse. Reddit for community knowledge. Each channel type registers with the gateway core
+                and gets user resolution, tree access, energy gating, and queue management for free.
+              </p>
+              <p style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", marginTop: 8}}>
+                gateway, gateway-telegram, gateway-discord, gateway-email, gateway-sms, gateway-slack, gateway-matrix, gateway-webhook
+              </p>
+            </div>
+
+            <div style={{marginBottom: 40}}>
+              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-intelligence <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>11 extensions</span></h3>
+              <p style={{color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontSize: "0.88rem"}}>
+                Self-awareness and autonomy. Tree-compress carries meaning upward and trims what has been
+                absorbed. Contradiction surfaces conflicting truths across branches. The inverse tree builds
+                a model of each user from their behavior. Evolution tracks which structures work and teaches
+                the AI to recommend them. Embed gives every note a vector so semantically related content
+                finds each other. Scout runs fast structural passes. Explore navigates branches the way
+                Claude Code navigates a codebase. Trace follows concepts through the tree. Boundary detects
+                where the tree's knowledge ends. Phase detects whether the user is gathering or producing.
+                Intent is the capstone. It reads from every other intelligence extension and synthesizes
+                autonomous actions the tree takes on its own.
+              </p>
+              <p style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", marginTop: 8}}>
+                tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, phase
+              </p>
+            </div>
+
+            <div style={{marginBottom: 12}}>
+              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-maintenance <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>4 extensions</span></h3>
+              <p style={{color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontSize: "0.88rem"}}>
+                Hygiene and reorganization. Prune identifies dead nodes, absorbs essentials into parents,
+                and trims. Reroot builds a semantic similarity graph and proposes moves that minimize distance
+                between related nodes. Changelog narrates why the tree looks the way it does. Root-hold
+                monitors coherence between the tree's thesis and its actual content, surfacing drift before
+                branches grow away from purpose.
+              </p>
+              <p style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", marginTop: 8}}>
+                prune, reroot, changelog, root-hold
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── FIVE REGISTRIES ── */}
       <section className="lp-section">
         <div className="lp-container">
@@ -139,25 +214,45 @@ const ExtensionsPage = () => {
           </p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
             <div className="lp-card">
-              <h3>Blocked</h3>
+              <h3>Global (opt-out)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
-                <code>metadata.extensions.blocked = ["shell", "solana"]</code> on any node.
-                Inherits to all descendants. The extension is invisible at that position.
-                No tools. No hooks. No modes. No metadata writes. As if it doesn't exist.
+                Active everywhere by default. <code>ext-block shell</code> at a node removes it there
+                and all descendants. Good for most extensions: codebook, evolution, pulse, understanding.
+                You want them everywhere.
               </p>
             </div>
             <div className="lp-card">
+              <h3>Confined (opt-in)</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                Active nowhere by default. <code>ext-allow solana</code> at a node activates it there
+                and all descendants. Good for dangerous or specialized extensions: shell, solana, scripts.
+                You want them only where they belong. Manifest declares <code>scope: "confined"</code>.
+              </p>
+            </div>
+          </div>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr", marginTop: 8}}>
+            <div className="lp-card">
               <h3>Restricted</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
-                <code>metadata.extensions.restricted = {"{"} "solana": "read" {"}"}</code>.
+                <code>ext-restrict food read</code>.
                 The extension keeps its read-only tools. Write tools are filtered out.
                 Hooks still fire. Metadata reads work. A middle ground between full access and blocked.
               </p>
             </div>
+            <div className="lp-card">
+              <h3>Position-Aware Help</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                The CLI help menu updates at every position. Run <code>help</code> at /Health/Fitness
+                and you see fitness commands. Navigate to /Finance and solana commands appear. The help
+                menu shows exactly what the AI can do here. Same commands. Same tools. Your view matches
+                the AI's view.
+              </p>
+            </div>
           </div>
           <p className="lp-section-sub" style={{marginTop: 24, color: "rgba(255,255,255,0.4)"}}>
-            A health tree blocks the shell extension. A finance branch restricts scripts to read-only.
             Navigate somewhere and the capability surface changes. The tree reshapes around where you stand.
+            An allowed confined extension can still be blocked further down. Allow solana at /Finance.
+            Block it at /Finance/ReadOnly. The resolution chain handles both.
           </p>
         </div>
       </section>
@@ -214,13 +309,15 @@ const ExtensionsPage = () => {
             A coding OS with architect and review modes. A research OS with citation and synthesis modes.
           </p>
           <p className="lp-section-sub" style={{fontStyle: "italic", color: "rgba(255,255,255,0.3)"}}>
-            TreeOS is the first operating system built on the seed. It ships 25+ extensions that
-            work together. But it is one interpretation. The seed grows whatever you plant.
+            Thirty-one extensions across four bundles. Seventy-two CLI commands.
+            All growing from twelve schema fields and a metadata Map.
+            Enough extensions built on a kernel eventually form an operating system.
+            Operating systems are good starting grounds for people to build off of.
           </p>
-          <div style={{marginTop: 24}}>
+          <div className="lp-cta-row">
             <a className="lp-btn lp-btn-primary" href="/build">Developer Reference</a>
-            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai" style={{marginLeft: 12}}>Browse Extensions</a>
-            <a className="lp-btn lp-btn-secondary" href="/seed" style={{marginLeft: 12}}>The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Browse Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
           </div>
         </div>
       </section>

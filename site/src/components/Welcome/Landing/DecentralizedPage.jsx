@@ -210,9 +210,9 @@ const DecentralizedPage = () => {
               <div className="lp-term-line lp-term-output">  Your land is ready.</div>
             </div>
           </div>
-          <div style={{marginTop: 24}}>
+          <div className="lp-cta-row">
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>
-            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai" style={{marginLeft: 12}}>Browse Horizon</a>
+            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Browse Horizon</a>
           </div>
         </div>
       </section>

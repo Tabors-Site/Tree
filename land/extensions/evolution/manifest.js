@@ -18,6 +18,7 @@ export default {
     "ecosystem learns collectively which tree shapes work for which purposes.",
 
   needs: {
+    services: ["llm"],
     models: ["Node"],
   },
 
@@ -37,22 +38,14 @@ export default {
 
     cli: [
       {
-        command: "evolution",
-        description: "Show fitness metrics at current position",
+        command: "evolution [action]",
+        description: "Fitness metrics at current position. Actions: patterns, dormant.",
         method: "GET",
         endpoint: "/node/:nodeId/evolution",
-      },
-      {
-        command: "evolution-patterns",
-        description: "Show discovered structural patterns for this tree",
-        method: "GET",
-        endpoint: "/root/:rootId/evolution/patterns",
-      },
-      {
-        command: "evolution-dormant",
-        description: "List dormant branches that stopped growing",
-        method: "GET",
-        endpoint: "/root/:rootId/evolution/dormant",
+        subcommands: {
+          "patterns": { method: "GET", endpoint: "/root/:rootId/evolution/patterns", description: "Discovered structural patterns" },
+          "dormant": { method: "GET", endpoint: "/root/:rootId/evolution/dormant", description: "Branches that stopped growing" },
+        },
       },
     ],
 

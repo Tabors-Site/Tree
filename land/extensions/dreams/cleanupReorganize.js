@@ -3,7 +3,7 @@
 // Pipeline: analyze (tool-less) -> execute moves via tree:structure -> execute deletes via tree:structure.
 
 import log from "../../seed/log.js";
-import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { OrchestratorRuntime, LLM_PRIORITY } from "../../seed/orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { buildDeepTreeSummary } from "../../seed/tree/treeFetch.js";
 import Node from "../../seed/models/node.js";
@@ -31,6 +31,7 @@ export async function orchestrateReorganize({
     modeKeyForLlm: "tree:cleanup-analyze",
     source,
     lockNamespace: "cleanup-reorg",
+    llmPriority: LLM_PRIORITY.BACKGROUND,
   });
 
   const initialized = await rt.init();

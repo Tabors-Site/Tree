@@ -3,7 +3,7 @@
 // Pipeline: cluster -> scout -> plan -> build -> place.
 
 import log from "../../seed/log.js";
-import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { OrchestratorRuntime, LLM_PRIORITY } from "../../seed/orchestrators/runtime.js";
 import { acquireLock, releaseLock } from "../../seed/orchestrators/locks.js";
 import { SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { buildDeepTreeSummary } from "../../seed/tree/treeFetch.js";
@@ -89,6 +89,7 @@ export async function drainTree(rootId) {
     description: `Short-term drain: ${rootNode.name || rootId}`,
     modeKeyForLlm: "tree:drain-cluster",
     source: "orchestrator",
+    llmPriority: LLM_PRIORITY.BACKGROUND,
   });
 
   await rt.init(`Draining ${items.length} short-term items for tree "${rootNode.name}"`);

@@ -167,6 +167,9 @@ function buildEncryptedConfig(config, direction) {
 
 async function send(secrets, metadata, notification) {
   const creds = getCreds(secrets);
+  if (!creds.clientId || !creds.clientSecret || !creds.username || !creds.password) {
+    throw new Error("Reddit credentials not configured");
+  }
   const subreddit = metadata.subreddit;
   if (!subreddit) throw new Error("No subreddit configured for output");
 

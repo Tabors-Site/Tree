@@ -73,14 +73,44 @@ let TOOL_RESULT_MAX_BYTES = 50000;
 let _activeLlmCalls = 0;
 const _llmWaiters = [];
 
-async function acquireLlmSlot(signal) {
+/**
+ * LLM priority tiers. Human interactions always get slots first.
+ * Lower number = higher priority.
+ */
+export const LLM_PRIORITY = {
+  HUMAN: 1,        // CLI and WebSocket sessions (direct human interaction)
+  GATEWAY: 2,      // External channel responses (Telegram, Discord, email, etc.)
+  INTERACTIVE: 3,  // Human-initiated async (scout, explore, reroot analysis)
+  BACKGROUND: 4,   // Autonomous jobs (intent, dreams, codebook, cascade, compression)
+};
+
+/**
+ * Acquire an LLM semaphore slot with priority.
+ * If slots available, acquires immediately. If not, waits in a priority queue.
+ * Higher priority waiters (lower number) are dequeued first.
+ *
+ * @param {AbortSignal} [signal] - abort signal to cancel the wait
+ * @param {number} [priority=4] - LLM_PRIORITY tier (default BACKGROUND)
+ */
+async function acquireLlmSlot(signal, priority = LLM_PRIORITY.BACKGROUND) {
   if (_activeLlmCalls < LLM_MAX_CONCURRENT) {
     _activeLlmCalls++;
     return;
   }
   return new Promise((resolve, reject) => {
-    const waiter = { resolve, reject };
-    _llmWaiters.push(waiter);
+    const waiter = { resolve, reject, priority, arrivedAt: Date.now() };
+
+    // Insert in priority order (ascending priority number, then arrival time)
+    let inserted = false;
+    for (let i = 0; i < _llmWaiters.length; i++) {
+      if (priority < _llmWaiters[i].priority) {
+        _llmWaiters.splice(i, 0, waiter);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) _llmWaiters.push(waiter);
+
     if (signal) {
       const onAbort = () => {
         const idx = _llmWaiters.indexOf(waiter);
@@ -95,7 +125,7 @@ async function acquireLlmSlot(signal) {
 
 function releaseLlmSlot() {
   if (_llmWaiters.length > 0) {
-    const next = _llmWaiters.shift();
+    const next = _llmWaiters.shift(); // highest priority (lowest number) is first
     if (next.cleanup) next.cleanup();
     next.resolve();
     // Slot transfers to the next waiter, _activeLlmCalls stays the same
@@ -884,7 +914,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
   let response;
 
   // Acquire semaphore slot before LLM call. Prevents thundering herd.
-  await acquireLlmSlot(ctx.signal);
+  await acquireLlmSlot(ctx.signal, ctx.llmPriority || LLM_PRIORITY.HUMAN);
   try {
     const failoverResult = await callWithFailover(
       (client, model) => client.chat.completions.create({ ...requestParams, model }, requestOpts),
@@ -1010,7 +1040,7 @@ async function handleModelQuirks(assistantMessage, session, tools, openai, MODEL
       // Retry through the semaphore to respect concurrency limits
       const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
       let fallbackResponse;
-      await acquireLlmSlot(ctx.signal);
+      await acquireLlmSlot(ctx.signal, ctx.llmPriority || LLM_PRIORITY.HUMAN);
       try {
         fallbackResponse = await openai.chat.completions.create(
           {
@@ -1480,7 +1510,7 @@ export function sessionCount() {
  *     nodeId: null,  // optional, for per-node context
  *   });
  */
-export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null }) {
+export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null }) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
   }
@@ -1587,6 +1617,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       userId,
       rootId,
       signal: abortSignal,
+      llmPriority,
     });
   } catch (err) {
     if (chat) {

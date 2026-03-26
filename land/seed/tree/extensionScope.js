@@ -2,21 +2,74 @@
 /**
  * Spatial Extension Scoping
  *
- * Extensions can be blocked per-node with parent-to-child inheritance.
- * A tree owner blocks extensions at the root. Branch owners block within.
- * When an extension is blocked at a position, its tools don't appear,
- * its hooks don't fire, its modes don't resolve, and its metadata
- * doesn't get written at that node or any descendant.
+ * Two modes per extension:
  *
- * Storage: node.metadata.extensions = { blocked: ["solana", "scripts"] }
- * Inheritance: walks parent chain, accumulates blocked sets.
+ * Global (default): Active everywhere. Block to remove at specific positions.
+ *   Storage: node.metadata.extensions.blocked[] accumulates up the parent chain.
  *
- * This is the final abstraction layer. Position determines capability.
+ * Confined: Active nowhere. Allow to add at specific positions.
+ *   Storage: node.metadata.extensions.allowed[] walked up the parent chain.
+ *   If not found in allowed[], the extension is treated as blocked.
+ *   If found, it's active (but can still be blocked further down).
+ *
+ * The manifest declares scope: "confined" for dangerous or specialized extensions.
+ * The .extensions system node stores scope on each extension's registry node.
+ *
+ * Resolution: is this extension confined? If yes, walk up looking for allowed[].
+ * If not found, blocked. If found, continue to normal blocked[] check.
+ * Same ancestor cache. Same snapshot. Zero new queries. One check per confined extension.
  */
 
 import log from "../log.js";
+import Node from "../models/node.js";
+import { SYSTEM_ROLE } from "../protocol.js";
 import { getAncestorChain, resolveExtensionScopeFromChain, invalidateAll as clearAncestorCache } from "./ancestorCache.js";
 import { hooks } from "../hooks.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// CONFINED EXTENSIONS REGISTRY
+// ─────────────────────────────────────────────────────────────────────────
+
+// Set of extension names with scope: "confined". Loaded once at boot.
+let _confinedExtensions = new Set();
+
+/**
+ * Load confined extension names from .extensions system node.
+ * Called once during extension loading, after syncExtensionsToTree.
+ */
+export async function loadConfinedExtensions() {
+  try {
+    const extNode = await Node.findOne({ systemRole: SYSTEM_ROLE.EXTENSIONS }).select("children").lean();
+    if (!extNode) return;
+
+    const children = await Node.find({ _id: { $in: extNode.children } })
+      .select("name metadata")
+      .lean();
+
+    const confined = new Set();
+    for (const child of children) {
+      const meta = child.metadata instanceof Map
+        ? Object.fromEntries(child.metadata)
+        : (child.metadata || {});
+      if (meta.scope === "confined") confined.add(child.name);
+    }
+    _confinedExtensions = confined;
+
+    if (confined.size > 0) {
+      log.verbose("Scope", `Confined extensions: ${[...confined].join(", ")}`);
+    }
+  } catch (err) {
+    log.warn("Scope", `Failed to load confined extensions: ${err.message}`);
+  }
+}
+
+export function getConfinedExtensions() {
+  return _confinedExtensions;
+}
+
+export function isExtensionConfined(extName) {
+  return _confinedExtensions.has(extName);
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // SCOPE RESOLUTION
@@ -24,6 +77,7 @@ import { hooks } from "../hooks.js";
 
 /**
  * Check if an extension is blocked at a node position.
+ * Handles both global (blocked[]) and confined (allowed[]) modes.
  */
 export async function isExtensionBlockedAtNode(extName, nodeId) {
   if (!extName || typeof extName !== "string") return false;
@@ -34,12 +88,13 @@ export async function isExtensionBlockedAtNode(extName, nodeId) {
 
 /**
  * Get blocked and restricted extensions at a node position.
+ * Confined extensions not found in allowed[] are added to the blocked set.
  */
 export async function getBlockedExtensionsAtNode(nodeId) {
-  if (!nodeId) return { blocked: new Set(), restricted: new Map() };
+  if (!nodeId) return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
   const ancestors = await getAncestorChain(nodeId);
-  if (!ancestors) return { blocked: new Set(), restricted: new Map() };
-  return resolveExtensionScopeFromChain(ancestors);
+  if (!ancestors) return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
+  return resolveExtensionScopeFromChain(ancestors, _confinedExtensions);
 }
 
 /**
@@ -52,9 +107,9 @@ export function clearScopeCache() {
 /**
  * Clear cache and fire afterScopeChange hook.
  */
-export function notifyScopeChange({ nodeId, blocked, restricted, userId } = {}) {
+export function notifyScopeChange({ nodeId, blocked, restricted, allowed, userId } = {}) {
   clearAncestorCache();
-  hooks.run("afterScopeChange", { nodeId, blocked, restricted, userId })
+  hooks.run("afterScopeChange", { nodeId, blocked, restricted, allowed, userId })
     .catch(err => log.debug("Scope", `afterScopeChange hook error: ${err.message}`));
 }
 

@@ -626,4 +626,37 @@ module.exports = (program) => {
       }
     });
   } // end dreams extension
+
+  program
+    .command("recent")
+    .description("Show recently visited trees")
+    .action(async () => {
+      const cfg = requireAuth();
+      const api = getApi(cfg);
+      try {
+        const data = await api.getUser(cfg.userId);
+        const recents = data.recentRoots || [];
+        if (recents.length === 0) {
+          return console.log(chalk.dim("  No recently visited trees."));
+        }
+        console.log(chalk.bold("Recent trees:"));
+        for (const r of recents) {
+          const ago = r.lastVisitedAt ? chalk.dim(" " + timeAgo(new Date(r.lastVisitedAt))) : "";
+          console.log(`  ${chalk.cyan(r.name || r.rootName || r.rootId)}${ago}`);
+        }
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  function timeAgo(date) {
+    const ms = Date.now() - date.getTime();
+    const mins = Math.floor(ms / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  }
 };

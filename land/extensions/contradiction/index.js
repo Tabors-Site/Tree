@@ -4,8 +4,9 @@ import { setServices, detectContradictions, writeContradictions, cascadeContradi
 
 export async function init(core) {
   const { checkCascade } = await import("../../seed/tree/cascade.js");
+  const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setServices({
-    runChat: core.llm.runChat,
+    runChat: (opts) => core.llm.runChat({ ...opts, llmPriority: BG }),
     checkCascade,
   });
 

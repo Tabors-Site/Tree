@@ -489,26 +489,34 @@ module.exports = (program) => {
           const nodeId = currentNodeId(cfg);
           const data = await api.get(`/node/${nodeId}/extensions`);
           console.log(chalk.bold(`Extension scope at ${data.nodeName || nodeId}`));
-          console.log();
-          if (data.active?.length) {
-            console.log(chalk.green("Active:"));
-            console.log(`  ${data.active.join(", ")}`);
+
+          // Global extensions (active unless blocked)
+          if (data.global?.length) {
+            console.log(chalk.dim("\nGlobal extensions (active unless blocked):"));
+            for (const ext of data.global) {
+              const color = ext.status === "active" ? chalk.green : ext.status === "blocked" ? chalk.red : chalk.yellow;
+              console.log(`  ${color(ext.name)}  ${chalk.dim(ext.status)}`);
+            }
           }
-          if (data.blocked?.length) {
-            console.log(chalk.red("\nBlocked:"));
-            for (const name of data.blocked) console.log(`  ${chalk.red("x")} ${name}`);
+
+          // Confined extensions (inactive unless allowed)
+          if (data.confined?.length) {
+            console.log(chalk.dim("\nConfined extensions (inactive unless allowed):"));
+            for (const ext of data.confined) {
+              const color = ext.status === "allowed" ? chalk.green : ext.status === "blocked" ? chalk.red : chalk.dim;
+              console.log(`  ${color(ext.name)}  ${chalk.dim(ext.status)}`);
+            }
           }
-          if (data.localBlocked?.length) {
-            console.log(chalk.dim(`\nBlocked locally at this node: ${data.localBlocked.join(", ")}`));
-          }
+
+          // Inheritance chain
           if (data.chain?.length) {
             console.log(chalk.dim("\nInheritance:"));
             for (const c of data.chain) {
-              console.log(chalk.dim(`  ${c.name}: ${c.blocked.join(", ")}`));
+              const parts = [];
+              if (c.blocked?.length) parts.push(chalk.red(`blocked: ${c.blocked.join(", ")}`));
+              if (c.allowed?.length) parts.push(chalk.green(`allowed: ${c.allowed.join(", ")}`));
+              if (parts.length) console.log(chalk.dim(`  ${c.name}: `) + parts.join("  "));
             }
-          }
-          if (!data.blocked?.length) {
-            console.log(chalk.dim("  All extensions active at this position."));
           }
         }
       } catch (e) {
@@ -544,7 +552,7 @@ module.exports = (program) => {
 
   program
     .command("ext-allow [extNames...]")
-    .description("Remove extensions from the block list at the current node.")
+    .description("Allow extensions at this position. Unblocks global extensions. Activates confined extensions.")
     .action(async (parts) => {
       if (!parts?.length) return console.log(chalk.yellow("Usage: ext-allow <ext1> <ext2>"));
       const cfg = requireAuth();
@@ -554,13 +562,41 @@ module.exports = (program) => {
         const nodeId = currentNodeId(cfg);
         const names = new Set(parts.join(",").split(",").map(s => s.trim()).filter(Boolean));
         const current = await api.get(`/node/${nodeId}/extensions`);
-        const existing = [];
-        for (const c of current.chain || []) {
-          if (c.nodeId === nodeId) existing.push(...(c.blocked || []));
-        }
-        const blocked = existing.filter(n => !names.has(n));
-        await api.post(`/node/${nodeId}/extensions`, { blocked });
+
+        // Remove from blocked (unblock global extensions)
+        const existingBlocked = current.localBlocked || [];
+        const blocked = existingBlocked.filter(n => !names.has(n));
+
+        // Add to allowed (activate confined extensions)
+        const existingAllowed = current.localAllowed || [];
+        const allowed = [...new Set([...existingAllowed, ...names])];
+
+        await api.post(`/node/${nodeId}/extensions`, { blocked, allowed });
         console.log(chalk.green(`Allowed: ${[...names].join(", ")}`));
+        console.log(chalk.dim("Global extensions unblocked. Confined extensions activated at this position."));
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
+  program
+    .command("ext-unallow [extNames...]")
+    .description("Remove confined extensions from the allowed list. They go dark at this position.")
+    .action(async (parts) => {
+      if (!parts?.length) return console.log(chalk.yellow("Usage: ext-unallow <ext1> <ext2>"));
+      const cfg = requireAuth();
+      if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
+      const api = getApi(cfg);
+      try {
+        const nodeId = currentNodeId(cfg);
+        const names = new Set(parts.join(",").split(",").map(s => s.trim()).filter(Boolean));
+        const current = await api.get(`/node/${nodeId}/extensions`);
+        const existingAllowed = current.localAllowed || [];
+        const allowed = existingAllowed.filter(n => !names.has(n));
+        const blocked = current.localBlocked || [];
+        await api.post(`/node/${nodeId}/extensions`, { blocked, allowed });
+        console.log(chalk.green(`Removed from allowed: ${[...names].join(", ")}`));
+        console.log(chalk.dim("Confined extensions are now inactive at this position."));
       } catch (e) {
         console.error(chalk.red(e.message));
       }

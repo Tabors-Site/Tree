@@ -10,6 +10,7 @@ import User from "../../seed/models/user.js";
 import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
 import {
   userHasLlm,
+  LLM_PRIORITY,
 } from "../../seed/ws/conversation.js";
 import { enqueue, getQueueDepth } from "../../seed/ws/requestQueue.js";
 import {
@@ -182,6 +183,7 @@ export async function processGatewayMessage(
         description: `Gateway ${channel.type} input on root ${channel.rootId}`,
         modeKeyForLlm: modeKey,
         source: "gateway",
+        llmPriority: LLM_PRIORITY.GATEWAY,
       });
 
       await rt.init(trimmed.slice(0, 5000));

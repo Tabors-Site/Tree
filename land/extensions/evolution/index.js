@@ -4,7 +4,8 @@ import { setRunChat, bumpMetric, recordVisit, getPatterns } from "./core.js";
 import { startAnalysisJob, stopAnalysisJob } from "./job.js";
 
 export async function init(core) {
-  setRunChat(core.llm.runChat);
+  const BG = core.llm.LLM_PRIORITY.BACKGROUND;
+  setRunChat((opts) => core.llm.runChat({ ...opts, llmPriority: BG }));
 
   // ── afterNote: track activity ──────────────────────────────────────
   core.hooks.register("afterNote", async ({ nodeId, userId, contentType, action }) => {

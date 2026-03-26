@@ -20,7 +20,9 @@ router.get("/user/:userId", authenticate, async (req, res) => {
     }
     (getExtension("energy")?.exports?.maybeResetEnergy || (() => false))(user);
 
-    const roots = (await getExtension("navigation")?.exports?.getUserRootsWithNames(userId)) || [];
+    const navExt = getExtension("navigation")?.exports;
+    const roots = (await navExt?.getUserRootsWithNames(userId)) || [];
+    const recentRoots = navExt?.getRecentRootsWithNames ? (await navExt.getRecentRootsWithNames(userId)) : [];
     const billingMeta = getUserMeta(user, "billing");
     const plan = billingMeta.plan || "basic";
     const energyData = getUserMeta(user, "energy");
@@ -31,6 +33,7 @@ router.get("/user/:userId", authenticate, async (req, res) => {
       userId: user._id,
       username: user.username,
       roots,
+      recentRoots,
       remoteRoots: canopyMeta.remoteRoots || [],
       isAdmin: user.isAdmin || false,
       plan,

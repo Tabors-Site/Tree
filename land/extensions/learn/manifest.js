@@ -13,6 +13,7 @@ export default {
     "paragraph boundaries) to chunk into manageable pieces before AI refinement.",
 
   needs: {
+    services: ["llm"],
     models: ["Node"],
   },
 

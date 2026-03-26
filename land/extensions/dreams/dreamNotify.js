@@ -3,7 +3,7 @@
 // Two tool-less LLM calls, then saves Notification documents.
 
 import log from "../../seed/log.js";
-import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { OrchestratorRuntime, LLM_PRIORITY } from "../../seed/orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { getExtension } from "../loader.js";
 import Chat from "../../seed/models/chat.js";
@@ -68,6 +68,7 @@ export async function orchestrateDreamNotify({
     description: `Dream notifications: ${treeName}`,
     modeKeyForLlm: "tree:dream-summary",
     source,
+    llmPriority: LLM_PRIORITY.BACKGROUND,
   });
 
   const initialized = await rt.init(`Dream notifications for "${treeName}"`);

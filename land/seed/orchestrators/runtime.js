@@ -18,8 +18,10 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 import {
   switchMode, processMessage, setRootId, getClientForUser,
-  resolveRootLlmForMode, clearSession,
+  resolveRootLlmForMode, clearSession, LLM_PRIORITY,
 } from "../ws/conversation.js";
+
+export { LLM_PRIORITY };
 import {
   trackChainStep, startChat, finalizeChat,
   setChatContext, clearChatContext,
@@ -45,7 +47,7 @@ export class OrchestratorRuntime {
   constructor({
     rootId, userId, username, visitorId, sessionType, description,
     modeKeyForLlm, source = "orchestrator", slot = "main",
-    lockNamespace, lockKey,
+    lockNamespace, lockKey, llmPriority,
   }) {
     if (!userId) throw new Error("OrchestratorRuntime requires userId");
     if (!visitorId) throw new Error("OrchestratorRuntime requires visitorId");
@@ -61,6 +63,7 @@ export class OrchestratorRuntime {
     this.slot = slot;
     this.lockNamespace = lockNamespace;
     this.lockKey = lockKey ?? rootId;
+    this.llmPriority = llmPriority || null;
 
     this.sessionId = null;
     this.abort = null;
@@ -221,6 +224,7 @@ export class OrchestratorRuntime {
       userId: this.userId,
       rootId: this.rootId,
       signal: this.signal,
+      llmPriority: this.llmPriority,
       meta: { internal: true },
     });
     const endTime = new Date();

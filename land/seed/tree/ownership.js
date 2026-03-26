@@ -17,7 +17,8 @@ import { resolveTreeAccess } from "./treeAccess.js";
 import { invalidateNode } from "./ancestorCache.js";
 import { hooks } from "../hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { SYSTEM_OWNER } from "../protocol.js";
+import { SYSTEM_OWNER, ERR, ProtocolError } from "../protocol.js";
+import { acquireNodeLock, releaseNodeLock } from "./nodeLocks.js";
 
 /**
  * Add a contributor to a node. Only the resolved owner or admin can do this.
@@ -110,29 +111,33 @@ export async function setOwner(nodeId, newOwnerId, actorId) {
 
   const previousOwnerId = node.rootOwner ? node.rootOwner.toString() : null;
 
-  // Atomic CAS: only update if rootOwner hasn't changed since we read it.
-  // Prevents TOCTOU race where ownership changes between the check above and the write.
-  const filter = { _id: nodeId };
-  if (previousOwnerId) {
-    filter.rootOwner = previousOwnerId;
-  } else {
-    filter.rootOwner = null;
+  const locked = await acquireNodeLock(nodeId, actorId);
+  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Node ownership is being modified");
+  try {
+    const filter = { _id: nodeId };
+    if (previousOwnerId) {
+      filter.rootOwner = previousOwnerId;
+    } else {
+      filter.rootOwner = null;
+    }
+
+    const result = await Node.updateOne(
+      filter,
+      {
+        $set: { rootOwner: newOwnerId },
+        $pull: { contributors: newOwnerId },
+      },
+    );
+
+    if (result.matchedCount === 0) {
+      throw new Error("Ownership changed concurrently. Retry the operation.");
+    }
+
+    invalidateNode(nodeId);
+    hooks.run("afterOwnershipChange", { nodeId, action: "setOwner", targetUserId: newOwnerId, previousOwnerId }).catch(() => {});
+  } finally {
+    releaseNodeLock(nodeId, actorId);
   }
-
-  const result = await Node.updateOne(
-    filter,
-    {
-      $set: { rootOwner: newOwnerId },
-      $pull: { contributors: newOwnerId },
-    },
-  );
-
-  if (result.matchedCount === 0) {
-    throw new Error("Ownership changed concurrently. Retry the operation.");
-  }
-
-  invalidateNode(nodeId); // rootOwner changed
-  hooks.run("afterOwnershipChange", { nodeId, action: "setOwner", targetUserId: newOwnerId, previousOwnerId }).catch(() => {});
 }
 
 /**
@@ -157,12 +162,18 @@ export async function removeOwner(nodeId, actorId) {
 
   const removedOwnerId = node.rootOwner.toString();
 
-  await Node.updateOne(
-    { _id: nodeId },
-    { $set: { rootOwner: null } },
-  );
-  invalidateNode(nodeId); // rootOwner removed
-  hooks.run("afterOwnershipChange", { nodeId, action: "removeOwner", targetUserId: removedOwnerId }).catch(() => {});
+  const locked = await acquireNodeLock(nodeId, actorId);
+  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Node ownership is being modified");
+  try {
+    await Node.updateOne(
+      { _id: nodeId },
+      { $set: { rootOwner: null } },
+    );
+    invalidateNode(nodeId);
+    hooks.run("afterOwnershipChange", { nodeId, action: "removeOwner", targetUserId: removedOwnerId }).catch(() => {});
+  } finally {
+    releaseNodeLock(nodeId, actorId);
+  }
 }
 
 /**
@@ -188,26 +199,28 @@ export async function transferOwnership(nodeId, newOwnerId, actorId) {
     await assertAdmin(actorId);
   }
 
-  // Atomic transfer: bulkWrite executes both operations in a single
-  // server round-trip. If the process crashes mid-write, MongoDB's
-  // ordered bulkWrite ensures partial state is visible (step 1 done,
-  // step 2 not). Integrity check repairs on next boot.
-  await Node.bulkWrite([
-    {
-      updateOne: {
-        filter: { _id: nodeId },
-        update: { $set: { rootOwner: newOwnerId }, $pull: { contributors: newOwnerId } },
+  const locked = await acquireNodeLock(nodeId, actorId);
+  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Node ownership is being modified");
+  try {
+    await Node.bulkWrite([
+      {
+        updateOne: {
+          filter: { _id: nodeId },
+          update: { $set: { rootOwner: newOwnerId }, $pull: { contributors: newOwnerId } },
+        },
       },
-    },
-    {
-      updateOne: {
-        filter: { _id: nodeId },
-        update: { $addToSet: { contributors: oldOwnerId } },
+      {
+        updateOne: {
+          filter: { _id: nodeId },
+          update: { $addToSet: { contributors: oldOwnerId } },
+        },
       },
-    },
-  ]);
-  invalidateNode(nodeId); // rootOwner transferred
-  hooks.run("afterOwnershipChange", { nodeId, action: "transferOwnership", targetUserId: newOwnerId, previousOwnerId: oldOwnerId }).catch(() => {});
+    ]);
+    invalidateNode(nodeId);
+    hooks.run("afterOwnershipChange", { nodeId, action: "transferOwnership", targetUserId: newOwnerId, previousOwnerId: oldOwnerId }).catch(() => {});
+  } finally {
+    releaseNodeLock(nodeId, actorId);
+  }
 }
 
 // ── Helpers ──

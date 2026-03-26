@@ -20,6 +20,15 @@ export default {
     authStrategies: true,
     env: [],
 
+    cli: [
+      {
+        command: "cc",
+        description: "Command center. Tools, modes, extensions at this position.",
+        method: "GET",
+        endpoint: "/node/:nodeId/command-center",
+      },
+    ],
+
     hooks: {
       fires: [],
       listens: ["afterRegister"],

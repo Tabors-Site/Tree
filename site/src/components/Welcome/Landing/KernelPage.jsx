@@ -662,6 +662,7 @@ const KernelPage = () => {
               ["maxConnectionsPerUser", "Max custom LLM connections per user (1-100)", "15"],
               ["maxOrchestrators", "Max registered orchestrators", "10"],
               ["jwtExpiryDays", "JWT token lifetime in days (1-365)", "30"],
+              ["npmInstallTimeout", "Timeout for npm install in extension directories (ms)", "60000"],
               ["seedVersion", "Current seed version (set by migration runner)", "0.1.0"],
             ].map(([key, desc, def]) => (
               <div key={key} style={{
@@ -776,10 +777,10 @@ const KernelPage = () => {
             trees. Sometimes it pools. Sometimes it floods. The seed protects the ground.
             The tree survives. The structure holds.
           </p>
-          <div style={{marginTop: 24}}>
+          <div className="lp-cta-row">
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>
-            <a className="lp-btn lp-btn-secondary" href="/extensions" style={{marginLeft: 12}}>Extensions</a>
-            <a className="lp-btn lp-btn-secondary" href="/guide" style={{marginLeft: 12}}>Full Guide</a>
+            <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/guide">Full Guide</a>
           </div>
         </div>
       </section>

@@ -12,9 +12,15 @@ import { v4 as uuidv4 } from "uuid";
 // SESSION TYPES
 // ─────────────────────────────────────────────────────────────────────────
 
-// Session type registry. The kernel defines no types. Extensions and
-// transport layers register their own during init or boot.
-export const SESSION_TYPES = {};
+// Session type registry. Seed defines core types. Extensions and
+// transport layers register additional types during init or boot.
+export const SESSION_TYPES = {
+  // Core (registered by seed, always available)
+  HUMAN_WEB: "human-web",
+  HUMAN_CLI: "human-cli",
+  WEBSOCKET_CHAT: "websocket-chat",
+  // Extension types registered dynamically via registerSessionType()
+};
 
 /**
  * Register a session type. Called by extensions (via manifest sessionTypes)

@@ -19,6 +19,7 @@ export default {
     "prestige. The tree carries more meaning in less space.",
 
   needs: {
+    services: ["llm", "hooks"],
     models: ["Node"],
   },
 
@@ -38,35 +39,16 @@ export default {
 
     cli: [
       {
-        command: "compress",
-        description: "Compress current tree from leaves up",
+        command: "compress [action] [args...]",
+        description: "Tree compression. Actions: branch, status, undo, budget. No action compresses full tree.",
         method: "POST",
         endpoint: "/root/:rootId/compress",
-      },
-      {
-        command: "compress-branch",
-        description: "Compress from current node downward",
-        method: "POST",
-        endpoint: "/node/:nodeId/compress",
-      },
-      {
-        command: "compress-status",
-        description: "Show compression state of the current tree",
-        method: "GET",
-        endpoint: "/root/:rootId/compress",
-      },
-      {
-        command: "compress-undo",
-        description: "Decompress current node (restore to active)",
-        method: "POST",
-        endpoint: "/node/:nodeId/decompress",
-      },
-      {
-        command: "compress-budget <size>",
-        description: "Compress until tree is under target size in bytes (e.g. 52428800 for 50MB)",
-        method: "POST",
-        endpoint: "/root/:rootId/compress/budget",
-        body: ["size"],
+        subcommands: {
+          "branch": { method: "POST", endpoint: "/node/:nodeId/compress", description: "Compress from current node down" },
+          "status": { method: "GET", endpoint: "/root/:rootId/compress", description: "Compression state of tree" },
+          "undo": { method: "POST", endpoint: "/node/:nodeId/decompress", description: "Decompress current node" },
+          "budget": { method: "POST", endpoint: "/root/:rootId/compress/budget", args: ["size"], description: "Compress until under target size" },
+        },
       },
     ],
 

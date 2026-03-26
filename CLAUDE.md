@@ -203,14 +203,18 @@ Per-node mode overrides via `metadata.modes`:
 
 ### Extensions (what CAPABILITIES exist)
 ```
-Node metadata.extensions.blocked -> inherits parent to child
+Global:   metadata.extensions.blocked[] -> inherits parent to child (opt-out)
+Confined: metadata.extensions.allowed[] -> inherits parent to child (opt-in)
 ```
 
-Per-node extension blocking via `metadata.extensions.blocked`:
-- `ext-block solana scripts shell` blocks at current node, inherits down
+Two modes per extension. Global (default): active everywhere, block to remove. Confined (`scope: "confined"` in manifest): active nowhere, allow to add.
+
+- **Global**: `ext-block solana scripts shell` blocks at current node, inherits down
+- **Confined**: `ext-allow solana` activates at current node, inherits down. Without allow, invisible.
 - Blocked extensions lose their hooks, tools, modes, and metadata writes
 - The kernel filters at three points: hook firing, tool resolution, mode resolution
-- CLI: `ext-scope`, `ext-scope -t`, `ext-block <name>`, `ext-allow <name>`
+- An allowed confined extension can still be blocked further down (allow at /Finance, block at /Finance/ReadOnly)
+- CLI: `ext-scope`, `ext-scope -t`, `ext-block <name>`, `ext-allow <name>`, `ext-unallow <name>`
 - Navigate somewhere and the capability surface changes
 
 ### Orchestrators (the entire FLOW)

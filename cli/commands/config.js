@@ -1,6 +1,6 @@
 const chalk = require("chalk");
 const TreeAPI = require("../api");
-const { load, save, requireAuth } = require("../config");
+const { load, save, requireAuth, currentNodeId } = require("../config");
 const { registerDynamic } = require("./dynamic");
 
 function getApi() {
@@ -76,24 +76,44 @@ module.exports = (program) => {
       }
     });
 
+  // Shared: fetch and cache protocol from land
+  async function refreshProtocol() {
+    const cfg = load();
+    let landUrl = cfg.landUrl || "https://treeOS.ai";
+    if (!/^https?:\/\//i.test(landUrl)) landUrl = `https://${landUrl}`;
+    const nodeId = currentNodeId(cfg);
+    const qs = nodeId ? `?nodeId=${encodeURIComponent(nodeId)}` : "";
+    const res = await fetch(`${landUrl}/api/v1/protocol${qs}`);
+    if (!res.ok) return null;
+    const raw = await res.json();
+    const protocol = raw.data || raw;
+    cfg.landProtocol = protocol;
+    save(cfg);
+    return { cfg, landUrl, protocol };
+  }
+
+  // help: silently refresh protocol, then show normal program help
   program
-    .command("protocol")
-    .description("Fetch and display the connected land's protocol info")
+    .command("help")
+    .description("Refresh available commands and show help.")
     .action(async () => {
       try {
-        const cfg = load();
-        let landUrl = cfg.landUrl || "https://treeOS.ai";
-        if (!/^https?:\/\//i.test(landUrl)) landUrl = `https://${landUrl}`;
-        const res = await fetch(`${landUrl}/api/v1/protocol`);
-        if (!res.ok) {
-          return console.log(chalk.yellow(`Land at ${landUrl} does not serve /protocol (HTTP ${res.status})`));
-        }
-        const raw = await res.json();
-        const protocol = raw.data || raw;
+        await refreshProtocol();
+      } catch {}
+      program.outputHelp();
+    });
 
-        // Cache it
-        cfg.landProtocol = protocol;
-        save(cfg);
+  // protocol: full protocol details (capabilities, extensions, command count)
+  program
+    .command("protocol")
+    .description("Show land protocol details. Capabilities, extensions, node types, command count.")
+    .action(async () => {
+      try {
+        const result = await refreshProtocol();
+        if (!result) {
+          return console.log(chalk.yellow("Could not reach land protocol endpoint."));
+        }
+        const { landUrl, protocol } = result;
 
         console.log(chalk.bold(`${protocol.name || "TreeOS"} v${protocol.version || "?"}`));
         console.log(chalk.dim(`Land: ${landUrl}\n`));
@@ -109,8 +129,13 @@ module.exports = (program) => {
         }
 
         if (protocol.extensions?.length) {
-          console.log(chalk.bold("\nExtensions:"));
+          console.log(chalk.bold(`\nExtensions${protocol.position ? " (at this position)" : ""}:`));
           console.log("  " + protocol.extensions.join(", "));
+        }
+
+        if (protocol.cli) {
+          const cmdCount = Object.values(protocol.cli).reduce((sum, cmds) => sum + cmds.length, 0);
+          console.log(chalk.bold(`\nCLI Commands: ${cmdCount}`));
         }
       } catch (e) {
         console.error(chalk.red(e.message));

@@ -19,6 +19,7 @@ export default {
     "conflicting truths silently anymore. The immune system detects infection. The operator treats it.",
 
   needs: {
+    services: ["llm"],
     models: ["Node"],
   },
 
@@ -38,23 +39,14 @@ export default {
 
     cli: [
       {
-        command: "contradictions",
-        description: "Show active contradictions at current node",
+        command: "contradictions [action] [args...]",
+        description: "Active conflicts at this position. Actions: resolve, scan.",
         method: "GET",
         endpoint: "/node/:nodeId/contradictions",
-      },
-      {
-        command: "contradictions-resolve <contradictionId>",
-        description: "Mark a contradiction as intentionally resolved",
-        method: "POST",
-        endpoint: "/node/:nodeId/contradictions/resolve",
-        body: ["contradictionId"],
-      },
-      {
-        command: "contradictions-scan",
-        description: "Force a full-tree contradiction scan from current position",
-        method: "POST",
-        endpoint: "/root/:rootId/contradictions/scan",
+        subcommands: {
+          "resolve": { method: "POST", endpoint: "/node/:nodeId/contradictions/resolve", args: ["id"], description: "Mark as intentionally resolved" },
+          "scan": { method: "POST", endpoint: "/root/:rootId/contradictions/scan", description: "Full tree scan" },
+        },
       },
     ],
 

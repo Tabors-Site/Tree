@@ -5,7 +5,7 @@
 import log from "../../seed/log.js";
 import { WS } from "../../seed/protocol.js";
 import { switchMode, processMessage } from "../../seed/ws/conversation.js";
-import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { OrchestratorRuntime, LLM_PRIORITY } from "../../seed/orchestrators/runtime.js";
 import { emitNavigate, emitToUser } from "../../seed/ws/websocket.js";
 import {
   setActiveNavigator,
@@ -166,6 +166,7 @@ export async function orchestrateUnderstanding({
     modeKeyForLlm: "tree:understand",
     source,
     slot: "understand",
+    llmPriority: LLM_PRIORITY.BACKGROUND,
   });
 
   if (isChainStep) {

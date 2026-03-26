@@ -384,9 +384,9 @@ const AIArchitecturePage = () => {
             indexing, tool resolution, mode switching, hook firing, LLM failover. All
             automatic. Your extension calls one function and the rest happens.
           </p>
-          <div style={{marginTop: 24}}>
+          <div className="lp-cta-row">
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>
-            <a className="lp-btn lp-btn-secondary" href="/guide" style={{marginLeft: 12}}>Read the Guide</a>
+            <a className="lp-btn lp-btn-secondary" href="/guide">Read the Guide</a>
           </div>
         </div>
       </section>

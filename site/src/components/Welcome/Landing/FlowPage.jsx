@@ -316,10 +316,10 @@ const FlowPage = () => {
             The AI is photosynthesis. Canopy is trees reaching for each other. The Horizon is the sky.
             The cycle runs itself. It just needs the first drop.
           </p>
-          <div style={{marginTop: 24}}>
+          <div className="lp-cta-row">
             <a className="lp-btn lp-btn-primary" href="/">Get Started</a>
-            <a className="lp-btn lp-btn-secondary" href="/cascade" style={{marginLeft: 12}}>Cascade</a>
-            <a className="lp-btn lp-btn-secondary" href="/seed" style={{marginLeft: 12}}>The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/cascade">Cascade</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
           </div>
         </div>
       </section>

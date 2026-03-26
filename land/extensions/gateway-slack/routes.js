@@ -98,18 +98,23 @@ router.post("/gateway/slack/:channelId", express.json({ limit: "256kb" }), async
 
     // Reply in the Slack channel if input-output
     if (result.reply && channel.direction === "input-output") {
-      const { slackApi, getToken } = await import("./handler.js");
-      const fullChannel = await gateway.exports.getChannelWithSecrets(channel._id);
-      const secrets = fullChannel?.config?.decryptedSecrets || {};
-      const token = getToken(secrets);
+      try {
+        const { slackApi, getToken } = await import("./handler.js");
+        const fullChannel = await gateway.exports.getChannelWithSecrets(channel._id);
+        const secrets = fullChannel?.config?.decryptedSecrets || {};
+        const token = getToken(secrets);
+        if (!token) throw new Error("No Slack bot token available for reply");
 
-      await slackApi("chat.postMessage", token, {
-        channel: event.channel,
-        text: result.reply,
-        thread_ts: event.ts, // Reply in thread
-        unfurl_links: false,
-        unfurl_media: false,
-      });
+        await slackApi("chat.postMessage", token, {
+          channel: event.channel,
+          text: result.reply,
+          thread_ts: event.ts,
+          unfurl_links: false,
+          unfurl_media: false,
+        });
+      } catch (replyErr) {
+        log.warn("GatewaySlack", `Reply failed on channel ${channelId}: ${replyErr.message}`);
+      }
     }
   } catch (err) {
     log.error("GatewaySlack",

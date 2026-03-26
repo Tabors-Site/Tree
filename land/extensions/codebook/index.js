@@ -10,8 +10,9 @@ import {
 } from "./core.js";
 
 export async function init(core) {
-  // Wire runChat for compression passes
-  setRunChat(core.llm.runChat);
+  // Wire runChat with BACKGROUND priority (compression runs are background work)
+  const BG = core.llm.LLM_PRIORITY.BACKGROUND;
+  setRunChat((opts) => core.llm.runChat({ ...opts, llmPriority: BG }));
 
   const config = await getCodebookConfig();
 

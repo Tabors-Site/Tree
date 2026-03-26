@@ -2,7 +2,7 @@ import mongoose from "./seed/dbConfig.js";
 import { getLandIdentity, getLandUrl } from "./canopy/identity.js";
 import { ensureLandRoot } from "./seed/landRoot.js";
 import { initLandConfig, getLandConfigValue } from "./seed/landConfig.js";
-import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames } from "./extensions/loader.js";
+import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames, getBootReport } from "./extensions/loader.js";
 import { startUploadCleanup } from "./seed/tree/uploadCleanup.js";
 import { startRetentionJob } from "./seed/tree/dataRetention.js";
 import { getBlockedExtensionsAtNode } from "./seed/tree/extensionScope.js";
@@ -141,6 +141,11 @@ export function onListen() {
     }
 
     await syncExtensionsToTree(getLoadedManifests());
+
+    // Load confined extensions set from .extensions registry before any scope resolution
+    const { loadConfinedExtensions } = await import("./seed/tree/extensionScope.js");
+    await loadConfinedExtensions();
+
     await runExtensionMigrations();
 
     // Wire spatial extension scoping into hook system
@@ -197,12 +202,22 @@ function printReady() {
   const loaded = getLoadedExtensionNames();
   const hasHtml = loaded.includes("html-rendering");
 
+  const boot = getBootReport();
+
   console.log("");
   log.info("Land", "Land node online.");
   log.info("Land", `API:  ${apiUrl}`);
 
   if (hasHtml) {
     log.info("Land", `HTML: ${apiUrl}/login`);
+  }
+
+  // Boot summary
+  if (boot.skipped === 0) {
+    log.info("Land", `Extensions: ${boot.loaded} loaded, all clear.`);
+  } else {
+    log.info("Land", `Extensions: ${boot.loaded} loaded, ${boot.skipped} skipped.`);
+    log.warn("Land", `Skipped: ${boot.skippedNames.join(", ")}`);
   }
 
   const siteDir = path.resolve(__dirname, "../site");

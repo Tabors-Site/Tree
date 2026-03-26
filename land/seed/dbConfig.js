@@ -16,7 +16,7 @@ const mongooseUri = process.env.MONGODB_URI;
 
 if (!mongooseUri) {
   log.error("DB", "MONGODB_URI is not set in .env. Cannot start.");
-  log.error("DB", "Example: MONGODB_URI=mongodb://localhost:27017/treeos");
+  log.error("DB", "Example: MONGODB_URI=mongodb://localhost:27017/land");
   process.exit(1);
 }
 

@@ -59,15 +59,30 @@ export default async function registerURLRoutes(app, opts = {}) {
   });
 
   // Protocol spec endpoint (no auth, no rate limit, used by CLI connect)
-  const protocolHandler = (req, res) => {
+  // Optional ?nodeId scopes the response to what's available at that position.
+  // Without nodeId, returns everything (backward compatible for connect).
+  const protocolHandler = async (req, res) => {
     const allExtensions = getLoadedExtensionNames();
     const disabled = new Set(getLandConfigValue("disabledExtensions") || []);
-    const activeExtensions = allExtensions.filter(name => !disabled.has(name));
+    let activeExtensions = allExtensions.filter(name => !disabled.has(name));
+
+    // Position-aware: if nodeId provided, exclude blocked extensions
+    let blocked = new Set();
+    const nodeId = req.query.nodeId;
+    if (nodeId) {
+      try {
+        const { getBlockedExtensionsAtNode } = await import("../seed/tree/extensionScope.js");
+        const scope = await getBlockedExtensionsAtNode(nodeId);
+        blocked = scope.blocked || new Set();
+        activeExtensions = activeExtensions.filter(name => !blocked.has(name));
+      } catch {}
+    }
 
     const manifests = getLoadedManifests();
     const cli = {};
     for (const m of manifests) {
       if (disabled.has(m.name)) continue;
+      if (blocked.has(m.name)) continue;
       if (m.provides?.cli?.length) {
         cli[m.name] = m.provides.cli;
       }
@@ -84,6 +99,7 @@ export default async function registerURLRoutes(app, opts = {}) {
       nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
       extensions: activeExtensions,
       cli,
+      position: nodeId || null,
     });
   };
   app.get("/protocol", protocolHandler);

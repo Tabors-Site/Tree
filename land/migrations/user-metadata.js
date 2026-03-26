@@ -18,7 +18,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/tree";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/land";
 
 async function migrate() {
   await mongoose.connect(MONGODB_URI);

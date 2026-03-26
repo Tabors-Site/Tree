@@ -12,6 +12,7 @@ import { getLandRootId } from "../landRoot.js";
 import { invalidateAll, invalidateNode } from "./ancestorCache.js";
 import log from "../log.js";
 import { NODE_STATUS, DELETED, CONTENT_TYPE, ERR, ProtocolError, SYSTEM_OWNER } from "../protocol.js";
+import { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple } from "./nodeLocks.js";
 
 async function getUserOrThrow(userId) {
   if (!userId) {
@@ -101,32 +102,40 @@ export async function createNode(
 
   await newNode.save();
 
-  if (isRoot) {
-    // Navigation extension manages metadata.nav.roots via afterNodeCreate hook
-    const landRootId = getLandRootId();
-    if (landRootId) {
-      await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: newNode._id } });
+  // Structural mutation: lock the parent while adding to its children[]
+  const lockTarget = isRoot ? getLandRootId() : parentNodeID;
+  if (lockTarget) {
+    const locked = await acquireNodeLock(lockTarget, sessionId);
+    if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Parent node is being modified");
+  }
+  try {
+    if (isRoot) {
+      const landRootId = getLandRootId();
+      if (landRootId) {
+        await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: newNode._id } });
+      }
+    } else if (parentNodeID) {
+      const parentNode = await Node.findById(parentNodeID).select("systemRole").lean();
+      if (!parentNode) throw new Error("Parent node not found");
+      if (parentNode.systemRole) throw new Error("Cannot create nodes under system nodes");
+
+      await Node.findByIdAndUpdate(parentNodeID, { $addToSet: { children: newNode._id } });
+
+      await logContribution({
+        userId: user._id,
+        nodeId: parentNodeID,
+        wasAi,
+        chatId,
+        sessionId,
+        action: "updateChild",
+        updateChild: {
+          action: "added",
+          childId: newNode._id.toString(),
+        },
+      });
     }
-  } else if (parentNodeID) {
-    const parentNode = await Node.findById(parentNodeID).select("systemRole").lean();
-    if (!parentNode) throw new Error("Parent node not found");
-    if (parentNode.systemRole) throw new Error("Cannot create nodes under system nodes");
-
-    await Node.findByIdAndUpdate(parentNodeID, { $addToSet: { children: newNode._id } });
-
-    await logContribution({
-      userId: user._id,
-      nodeId: parentNodeID,
-      wasAi,
-      chatId,
-      sessionId,
-      action: "updateChild",
-
-      updateChild: {
-        action: "added",
-        childId: newNode._id.toString(),
-      },
-    });
+  } finally {
+    if (lockTarget) releaseNodeLock(lockTarget, sessionId);
   }
 
   await logContribution({
@@ -253,30 +262,35 @@ export async function deleteNodeBranch(
   await hooks.run("beforeNodeDelete", { node: nodeToDelete, userId });
 
 
-  nodeToDelete.rootOwner = userId;
   const oldParent = nodeToDelete.parent;
-  nodeToDelete.parent = DELETED;
+  const lockIds = [nodeId.toString(), oldParent && oldParent !== DELETED ? oldParent.toString() : null].filter(Boolean);
+  const locked = await acquireMultiple(lockIds, sessionId);
+  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
+  try {
+    nodeToDelete.rootOwner = userId;
+    nodeToDelete.parent = DELETED;
+    await nodeToDelete.save();
 
-  await nodeToDelete.save();
+    if (oldParent && oldParent !== DELETED) {
+      await Node.findByIdAndUpdate(oldParent, {
+        $pull: { children: nodeId },
+      });
 
-  if (oldParent && oldParent !== DELETED) {
-    await Node.findByIdAndUpdate(oldParent, {
-      $pull: { children: nodeId },
-    });
-
-    await logContribution({
-      userId,
-      nodeId: oldParent.toString(),
-      wasAi,
-      chatId,
-      sessionId,
-      action: "updateChild",
-
-      updateChild: {
-        action: "removed",
-        childId: nodeId.toString(),
-      },
-    });
+      await logContribution({
+        userId,
+        nodeId: oldParent.toString(),
+        wasAi,
+        chatId,
+        sessionId,
+        action: "updateChild",
+        updateChild: {
+          action: "removed",
+          childId: nodeId.toString(),
+        },
+      });
+    }
+  } finally {
+    releaseMultiple(lockIds, sessionId);
   }
   await logContribution({
     userId,
@@ -302,6 +316,7 @@ export async function updateParentRelationship(
   wasAi = false,
   chatId = null,
   sessionId = null,
+  opts = {},
 ) {
   const nodeChild = await Node.findById(nodeChildId);
   if (!nodeChild) throw new Error("Child node not found");
@@ -341,6 +356,11 @@ export async function updateParentRelationship(
   }
 
 
+  // Structural lock: lock all three involved nodes to prevent concurrent moves/deletes
+  const lockIds = [nodeChildId, oldParentId, nodeNewParentId].filter(Boolean).map(String);
+  const locked = await acquireMultiple(lockIds, sessionId);
+  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified by another operation");
+
   // The three core operations ($pull, $set parent, $addToSet) must be atomic.
   // Use a MongoDB transaction if available (replica set). Falls back to
   // sequential ops on standalone MongoDB with a warning.
@@ -373,6 +393,7 @@ export async function updateParentRelationship(
     if (session) {
       try { await session.abortTransaction(); } catch {}
     }
+    releaseMultiple(lockIds, sessionId);
     throw err;
   } finally {
     if (session) session.endSession();
@@ -414,7 +435,12 @@ export async function updateParentRelationship(
     updateChild: { action: "added", childId: nodeChildId.toString() },
   });
 
-  invalidateAll(); // Parent relationship changed
+  // Caller can skip cache invalidation for batched moves (e.g., reroot apply).
+  // The caller is responsible for calling invalidateAll() once after the batch.
+  if (!opts.skipCacheInvalidation) {
+    invalidateAll();
+  }
+  releaseMultiple(lockIds, sessionId);
   return { nodeChild, nodeNewParent };
 }
 export async function editNodeName({
@@ -508,43 +534,36 @@ export async function reviveNodeBranch({
   }
 
 
-  deletedNode.parent = targetParentId;
-  deletedNode.rootOwner = null;
-  await deletedNode.save();
+  const lockIds = [deletedNodeId.toString(), targetParentId.toString()];
+  const locked = await acquireMultiple(lockIds);
+  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
+  try {
+    deletedNode.parent = targetParentId;
+    deletedNode.rootOwner = null;
+    await deletedNode.save();
 
-  await Node.findByIdAndUpdate(targetParentId, { $addToSet: { children: deletedNodeId } });
+    await Node.findByIdAndUpdate(targetParentId, { $addToSet: { children: deletedNodeId } });
 
-  // 6️⃣ Log contributions
-  await logContribution({
-    userId,
-    nodeId: targetParentId,
-    wasAi,
-    action: "updateChild",
+    await logContribution({
+      userId,
+      nodeId: targetParentId,
+      wasAi,
+      action: "updateChild",
+      updateChild: { action: "added", childId: deletedNodeId.toString() },
+    });
+    await logContribution({
+      userId,
+      nodeId: deletedNodeId,
+      wasAi,
+      action: "branchLifecycle",
+      branchLifecycle: { action: "revived", fromParentId: DELETED, toParentId: targetParentId.toString() },
+    });
 
-    updateChild: {
-      action: "added",
-      childId: deletedNodeId.toString(),
-    },
-  });
-  await logContribution({
-    userId,
-    nodeId: deletedNodeId,
-    wasAi,
-    action: "branchLifecycle",
-
-    branchLifecycle: {
-      action: "revived",
-      fromParentId: DELETED,
-
-      toParentId: targetParentId.toString(),
-    },
-  });
-
-  invalidateAll(); // Tree structure changed
-  return {
-    revivedNode: deletedNodeId,
-    newParent: targetParentId,
-  };
+    invalidateAll();
+    return { revivedNode: deletedNodeId, newParent: targetParentId };
+  } finally {
+    releaseMultiple(lockIds);
+  }
 }
 export async function reviveNodeBranchAsRoot({
   deletedNodeId,
@@ -568,36 +587,34 @@ export async function reviveNodeBranchAsRoot({
   }
 
 
-  deletedNode.parent = getLandRootId();
-  deletedNode.rootOwner = userId;
-  await deletedNode.save();
-
-  // Navigation extension manages metadata.nav.roots via afterOwnershipChange hook
-  hooks.run("afterOwnershipChange", { nodeId: deletedNodeId, action: "setOwner", targetUserId: userId }).catch(() => {});
-
-  // Add to Land root's children
   const landRootId = getLandRootId();
-  if (landRootId) {
-    await Node.findByIdAndUpdate(landRootId, {
-      $addToSet: { children: deletedNodeId },
+  const lockIds = [deletedNodeId.toString(), landRootId].filter(Boolean);
+  const locked = await acquireMultiple(lockIds);
+  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
+  try {
+    deletedNode.parent = landRootId;
+    deletedNode.rootOwner = userId;
+    await deletedNode.save();
+
+    hooks.run("afterOwnershipChange", { nodeId: deletedNodeId, action: "setOwner", targetUserId: userId }).catch(() => {});
+
+    if (landRootId) {
+      await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: deletedNodeId } });
+    }
+
+    await logContribution({
+      userId,
+      nodeId: deletedNodeId,
+      wasAi,
+      action: "branchLifecycle",
+      branchLifecycle: { action: "revivedAsRoot" },
     });
+
+    invalidateAll();
+    return { revivedRoot: deletedNodeId };
+  } finally {
+    releaseMultiple(lockIds);
   }
-
-  await logContribution({
-    userId,
-    nodeId: deletedNodeId,
-    wasAi,
-    action: "branchLifecycle",
-
-    branchLifecycle: {
-      action: "revivedAsRoot",
-    },
-  });
-
-  invalidateAll(); // Tree structure changed
-  return {
-    revivedRoot: deletedNodeId,
-  };
 }
 
 export async function editNodeType({

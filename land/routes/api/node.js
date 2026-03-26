@@ -298,15 +298,17 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
 router.get("/node/:nodeId/extensions", async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const { getBlockedExtensionsAtNode } = await import("../../seed/tree/extensionScope.js");
-    const blocked = await getBlockedExtensionsAtNode(nodeId);
+    const { getBlockedExtensionsAtNode, getConfinedExtensions } = await import("../../seed/tree/extensionScope.js");
+    const scope = await getBlockedExtensionsAtNode(nodeId);
 
     const node = await Node.findById(nodeId).select("name metadata").lean();
     const meta = node?.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node?.metadata || {});
-    const local = meta.extensions?.blocked || [];
+    const localBlocked = meta.extensions?.blocked || [];
+    const localAllowed = meta.extensions?.allowed || [];
 
     const { getLoadedExtensionNames } = await import("../../extensions/loader.js");
     const installed = getLoadedExtensionNames();
+    const confined = getConfinedExtensions();
 
     // Walk chain for inheritance detail
     const chain = [];
@@ -317,19 +319,30 @@ router.get("/node/:nodeId/extensions", async (req, res) => {
       const n = await Node.findById(cursor).select("name metadata parent systemRole").lean();
       if (!n || n.systemRole) break;
       const m = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
-      if (m.extensions?.blocked?.length) {
-        chain.push({ nodeId: n._id, name: n.name, blocked: m.extensions.blocked });
-      }
+      const entry = { nodeId: n._id, name: n.name };
+      if (m.extensions?.blocked?.length) entry.blocked = m.extensions.blocked;
+      if (m.extensions?.allowed?.length) entry.allowed = m.extensions.allowed;
+      if (entry.blocked || entry.allowed) chain.push(entry);
       cursor = n.parent;
     }
+
+    // Separate global from confined in the response
+    const globalExts = installed.filter(e => !confined.has(e));
+    const confinedExts = installed.filter(e => confined.has(e));
 
     sendOk(res, {
       nodeId,
       nodeName: node?.name || "",
-      blocked: [...blocked],
-      localBlocked: local,
-      installed,
-      active: installed.filter(e => !blocked.has(e)),
+      global: globalExts.map(e => ({
+        name: e,
+        status: scope.blocked.has(e) ? "blocked" : scope.restricted.has(e) ? `restricted (${scope.restricted.get(e)})` : "active",
+      })),
+      confined: confinedExts.map(e => ({
+        name: e,
+        status: scope.allowed.has(e) ? (scope.blocked.has(e) ? "blocked" : "allowed") : "not allowed",
+      })),
+      localBlocked,
+      localAllowed,
       chain: chain.reverse(),
     });
   } catch (err) {
@@ -346,14 +359,14 @@ router.get("/node/:nodeId/extensions", async (req, res) => {
 router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
-    let { blocked, restricted } = req.body;
+    let { blocked, restricted, allowed } = req.body;
 
     const node = await Node.findById(nodeId);
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
     if (node.systemRole) return sendError(res, 400, ERR.INVALID_INPUT, "Cannot modify system nodes");
 
     const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-    const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
+    const { clearScopeCache, notifyScopeChange } = await import("../../seed/tree/extensionScope.js");
 
     const config = {};
     if (Array.isArray(blocked) && blocked.length > 0) {
@@ -362,6 +375,9 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
     if (restricted && typeof restricted === "object" && Object.keys(restricted).length > 0) {
       config.restricted = restricted;
     }
+    if (Array.isArray(allowed) && allowed.length > 0) {
+      config.allowed = allowed.filter(a => typeof a === "string");
+    }
 
     if (Object.keys(config).length === 0) {
       await setExtMeta(node, "extensions", null);
@@ -369,9 +385,9 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
       await setExtMeta(node, "extensions", config);
     }
     await node.save();
-    clearScopeCache();
+    notifyScopeChange({ nodeId, blocked: config.blocked, restricted: config.restricted, allowed: config.allowed, userId: req.userId });
 
-    sendOk(res, { blocked: blocked || [] });
+    sendOk(res, { blocked: config.blocked || [], allowed: config.allowed || [] });
   } catch (err) {
     log.error("API", "editExtensions error:", err.message);
     sendError(res, 400, ERR.INVALID_INPUT, err.message);

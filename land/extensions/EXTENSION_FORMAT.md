@@ -58,6 +58,82 @@ export default {
 };
 ```
 
+## CRITICAL: Service and Dependency Declarations
+
+**If your extension uses a core service, you MUST declare it in `needs.services` or `optional.services`.** The loader builds a scoped core object that only contains declared services. Undeclared services are undefined.
+
+**Common failure:** `Cannot read properties of undefined (reading 'runChat')` means you used `core.llm.runChat` without declaring `services: ["llm"]` in your manifest.
+
+### Available kernel services
+
+| Service | What it provides | Common functions |
+|---------|-----------------|-----------------|
+| `llm` | AI conversation | `runChat`, `processMessage`, `getClientForUser`, `switchMode` |
+| `hooks` | Lifecycle events | `register`, `run` (always available, but declare for clarity) |
+| `session` | Session management | `createSession`, `endSession`, `getSession` |
+| `chat` | Chat tracking | `startChat`, `finalizeChat`, `setChatContext` |
+| `orchestrator` | Pipeline runtime | `OrchestratorRuntime`, `acquireLock`, `releaseLock` |
+| `contributions` | Audit trail | `logContribution` |
+| `ownership` | Tree ownership | `addContributor`, `removeContributor`, `transferOwnership` |
+| `tree` | Tree infrastructure | `getAncestorChain`, `checkIntegrity`, `isTreeAlive` |
+| `cascade` | Signal propagation | `deliverCascade` |
+| `metadata` | Node metadata | `getExtMeta`, `setExtMeta`, `mergeExtMeta` |
+| `protocol` | Error codes, constants | `sendOk`, `sendError`, `ERR`, `WS`, `CASCADE` |
+| `websocket` | Real-time events | `emitToUser`, `registerSocketHandler` |
+| `mcp` | MCP connections | `connectToMCP`, `closeMCPClient` |
+| `auth` | Authentication | `resolveTreeAccess`, `createUser` |
+| `modes` | AI mode registry | `registerMode`, `setDefaultMode` |
+| `orchestrators` | Orchestrator registry | `register`, `get` |
+| `nodeLocks` | Per-node locking | `acquireNodeLock`, `releaseNodeLock` |
+
+### Dependency chains
+
+Extensions load in topological order. If extension A depends on extension B (`needs.extensions: ["b"]`), B loads first. If B fails to load, A is skipped.
+
+**Chain failures cascade.** If `propagation` fails, then `perspective-filter` (depends on propagation) skips, then `treeos-cascade` (depends on perspective-filter) skips. Fix the root cause (propagation) and the whole chain recovers.
+
+**Always check the boot log for the FIRST error.** Later "missing required deps" warnings are consequences, not causes.
+
+### hooks and modes are always available
+
+`core.hooks` and `core.modes` are injected into every scoped core regardless of declaration. You don't need to declare them. But declaring `services: ["hooks"]` documents intent and triggers the init diagnostic if something else is wrong.
+
+### Extension-provided services
+
+Extensions can register services on the core object during init: `core.energy = { useEnergy, ... }`. Later extensions that declare `needs.services: ["energy"]` or `optional.services: ["energy"]` receive it. If the providing extension hasn't loaded yet, optional services get a no-op stub. Required services cause the dependent extension to skip.
+
+## npm Dependencies
+
+Extensions can declare npm packages they depend on. The loader handles installation automatically.
+
+```js
+export default {
+  name: "gateway-discord",
+  version: "1.0.0",
+  npm: ["discord.js@^14.0.0"],
+  // ...
+};
+```
+
+**How it works:**
+
+- The `npm` field is an array of strings in `"package@constraint"` format (e.g., `"discord.js@^14.0.0"`, `"@scope/pkg@^2.0.0"`, or just `"chalk"` for latest).
+- On install (registry, git, or file), the loader generates a `package.json` in the extension directory and runs `npm install --production`.
+- `node_modules` is scoped to the extension directory. Does not pollute the land's root `node_modules`.
+- On boot, if `node_modules` is missing (fresh clone, deleted), the loader detects this and runs `npm install` before calling `init()`.
+- If the manifest's `npm` array changes (dep added, version changed), the loader regenerates `package.json` and reinstalls on next boot.
+- npm install is capped at `npmInstallTimeout` (default 60 seconds, configurable in land .config).
+- If npm install fails during installation, the entire extension is rolled back. No partial installs.
+- If npm install fails at boot, the extension is skipped. Other extensions continue loading.
+
+**Publishing:** `package.json` is included in the published bundle. `node_modules` is not. Each installing land resolves its own npm dependencies.
+
+**Usage in code:** Import packages normally. Node.js resolves from the local `node_modules`.
+
+```js
+import { Client, GatewayIntentBits } from "discord.js";
+```
+
 ## Init Function (index.js)
 
 ```js

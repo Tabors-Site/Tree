@@ -20,6 +20,7 @@ export default {
     "trees. The AI built a tree of the user. Both grow. Both compress. Both inform each other.",
 
   needs: {
+    services: ["llm", "hooks"],
     models: ["Node", "User"],
   },
 
@@ -37,23 +38,14 @@ export default {
 
     cli: [
       {
-        command: "inverse",
-        description: "Show your profile as the AI sees it",
+        command: "inverse [action] [args...]",
+        description: "Your profile as the AI sees it. Actions: correct, reset.",
         method: "GET",
         endpoint: "/user/:userId/inverse",
-      },
-      {
-        command: "inverse-correct <text>",
-        description: "Manually correct the AI's model of you",
-        method: "POST",
-        endpoint: "/user/:userId/inverse/correct",
-        body: ["text"],
-      },
-      {
-        command: "inverse-reset",
-        description: "Wipe the AI's model of you. Start fresh.",
-        method: "POST",
-        endpoint: "/user/:userId/inverse/reset",
+        subcommands: {
+          "correct": { method: "POST", endpoint: "/user/:userId/inverse/correct", args: ["text"], description: "Override AI inference" },
+          "reset": { method: "POST", endpoint: "/user/:userId/inverse/reset", description: "Wipe profile, start fresh" },
+        },
       },
     ],
 

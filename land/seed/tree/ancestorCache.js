@@ -191,14 +191,23 @@ export async function snapshotAncestors(nodeId) {
 
 /**
  * Resolve extension scope from a cached ancestor chain.
- * Returns { blocked: Set<string>, restricted: Map<string, string> }.
+ * Returns { blocked: Set<string>, restricted: Map<string, string>, allowed: Set<string> }.
+ *
+ * Two modes:
+ * - Global extensions: active unless found in blocked[] walking up.
+ * - Confined extensions: inactive unless found in allowed[] walking up.
+ *   If not allowed, added to blocked set so all downstream checks work.
+ *   If allowed but also blocked further down, blocked wins.
  *
  * @param {Array<object>} ancestors - from getAncestorChain or snapshotAncestors
+ * @param {Set<string>} [confinedExtensions] - set of extension names with scope: "confined"
  */
-export function resolveExtensionScopeFromChain(ancestors) {
+export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
   const blocked = new Set();
   const restricted = new Map();
+  const allowed = new Set();
 
+  // First pass: accumulate blocked[], restricted{}, and allowed[]
   for (const node of ancestors) {
     if (node.systemRole) break;
     const extConfig = node.metadata?.extensions;
@@ -212,10 +221,22 @@ export function resolveExtensionScopeFromChain(ancestors) {
         }
       }
     }
+    if (extConfig?.allowed && Array.isArray(extConfig.allowed)) {
+      for (const name of extConfig.allowed) allowed.add(name);
+    }
+  }
+
+  // Second pass: confined extensions not in allowed[] are blocked
+  if (confinedExtensions && confinedExtensions.size > 0) {
+    for (const name of confinedExtensions) {
+      if (!allowed.has(name)) {
+        blocked.add(name);
+      }
+    }
   }
 
   for (const name of blocked) restricted.delete(name);
-  return { blocked, restricted };
+  return { blocked, restricted, allowed };
 }
 
 /**

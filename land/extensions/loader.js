@@ -183,11 +183,104 @@ function semverSatisfies(version, constraint) {
 }
 
 // ---------------------------------------------------------------------------
+// npm dependency management
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a manifest npm array into a dependencies object for package.json.
+ * "discord.js@^14.0.0" -> { "discord.js": "^14.0.0" }
+ * "@scope/pkg@^1.0.0"  -> { "@scope/pkg": "^1.0.0" }
+ * "web-push"           -> { "web-push": "*" }
+ */
+function parseNpmDeps(npmArray) {
+  const deps = {};
+  for (const entry of npmArray) {
+    const scopeEnd = entry.startsWith("@") ? entry.indexOf("/") : -1;
+    const atIdx = entry.indexOf("@", scopeEnd + 1);
+    if (atIdx > 0) {
+      deps[entry.slice(0, atIdx)] = entry.slice(atIdx + 1);
+    } else {
+      deps[entry] = "*";
+    }
+  }
+  return deps;
+}
+
+/**
+ * Check whether npm install needs to run for an extension.
+ * Returns true if node_modules or package.json is missing, or if
+ * the package.json deps don't match the manifest's npm array.
+ */
+function needsNpmInstall(extDir, npmDeps) {
+  const nmDir = path.join(extDir, "node_modules");
+  const pkgPath = path.join(extDir, "package.json");
+
+  if (!fs.existsSync(nmDir)) return true;
+  if (!fs.existsSync(pkgPath)) return true;
+
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+    const current = pkg.dependencies || {};
+    const wanted = parseNpmDeps(npmDeps);
+
+    const currentKeys = Object.keys(current).sort();
+    const wantedKeys = Object.keys(wanted).sort();
+    if (currentKeys.length !== wantedKeys.length) return true;
+    for (let i = 0; i < currentKeys.length; i++) {
+      if (currentKeys[i] !== wantedKeys[i]) return true;
+      if (current[currentKeys[i]] !== wanted[wantedKeys[i]]) return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Generate package.json and run npm install in an extension directory.
+ * Uses execFileSync (same pattern as installFromRepo's git clone).
+ * Throws on failure so the caller can handle rollback.
+ */
+async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
+  const deps = parseNpmDeps(npmDeps);
+
+  const pkgJson = JSON.stringify({
+    name: `treeos-ext-${extName}`,
+    version: "1.0.0",
+    private: true,
+    dependencies: deps,
+  }, null, 2);
+
+  fs.writeFileSync(path.join(extDir, "package.json"), pkgJson, "utf8");
+
+  let timeout = opts.timeout || 60000;
+  try {
+    const { getLandConfigValue } = await import("../seed/landConfig.js");
+    const configured = getLandConfigValue("npmInstallTimeout");
+    if (configured) timeout = Number(configured);
+  } catch {}
+
+  const { execFileSync } = await import("child_process");
+  try {
+    execFileSync("npm", ["install", "--production", "--no-fund", "--no-audit", "--ignore-scripts"], {
+      cwd: extDir,
+      stdio: "pipe",
+      timeout,
+    });
+    log.verbose("Extensions", `${extName}: npm install complete (${npmDeps.length} packages)`);
+  } catch (err) {
+    const stderr = err.stderr ? err.stderr.toString().slice(0, 500) : err.message;
+    throw new Error(`npm install failed: ${stderr}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
 const loaded = new Map();       // name -> { manifest, instance }
 let coreServices = null;        // the assembled core bundle
+const _bootSkipped = [];        // [{ name, reason }] extensions that failed to load
 const modeToolExtensions = [];  // [{ modeKey, toolNames }] from extensions
 const registeredJobs = [];      // [{ name, start, stop }] from extensions
 
@@ -561,16 +654,20 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
   // Sort by dependencies (proper topological sort)
   const sorted = topologicalSort(enabled);
+  log.debug("Extensions", `Load order: ${sorted.map(s => s.manifest.name).join(", ")}`);
 
   // Load each extension
-  for (const { manifest, dir, entryPath } of sorted) {
+  for (let _si = 0; _si < sorted.length; _si++) {
+    const { manifest, dir, entryPath } = sorted[_si];
     try {
       // Validate required dependencies
       const missing = validateNeeds(manifest, coreServices);
       if (missing.length > 0) {
+        log.debug("Extensions", `[${_si}/${sorted.length}] ${manifest.name} SKIP (missing: ${missing.join(", ")}). loaded: ${[...loaded.keys()].join(", ")}`);
         log.warn("Extensions",
           `Skipping "${manifest.name}": missing required deps: ${missing.join(", ")}`
         );
+        _bootSkipped.push({ name: manifest.name, reason: "missing deps" });
         continue;
       }
 
@@ -581,7 +678,22 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           log.warn("Extensions",
           `Skipping "${manifest.name}": ${envResult.missing.join(", ")}. Set in .env and restart.`
           );
+          _bootSkipped.push({ name: manifest.name, reason: "missing env" });
           continue;
+        }
+      }
+
+      // Boot-time npm recovery: if manifest declares npm deps and node_modules is missing
+      if (manifest.npm && manifest.npm.length > 0) {
+        if (needsNpmInstall(dir, manifest.npm)) {
+          log.warn("Extensions", `"${manifest.name}": npm dependencies missing or outdated, running npm install...`);
+          try {
+            await runNpmInstall(dir, manifest.npm, manifest.name);
+          } catch (npmErr) {
+            log.error("Extensions", `Skipping "${manifest.name}": npm install failed: ${npmErr.message}`);
+            _bootSkipped.push({ name: manifest.name, reason: "npm install failed" });
+            continue;
+          }
         }
       }
 
@@ -592,6 +704,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       const extModule = await import(toImportURL(entryPath));
       if (typeof extModule.init !== "function") {
         log.warn("Extensions", `Skipping "${manifest.name}": no init() export`);
+        _bootSkipped.push({ name: manifest.name, reason: "no init()" });
         continue;
       }
 
@@ -629,6 +742,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           }
         }
         log.error("Extensions", `"${manifest.name}": ${initErr.message}.${hint} Skipped.`);
+        _bootSkipped.push({ name: manifest.name, reason: initErr.message.slice(0, 80) });
         continue;
       }
 
@@ -927,6 +1041,20 @@ function validateManifest(manifest, dirName) {
       }
     }
   }
+  // Validate npm dependencies
+  if (manifest.npm !== undefined) {
+    if (!Array.isArray(manifest.npm)) {
+      errors.push(`${dirName}: npm must be an array`);
+    } else {
+      const npmDepRe = /^(@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*(@.+)?$/;
+      for (const dep of manifest.npm) {
+        if (typeof dep !== "string" || !npmDepRe.test(dep)) {
+          errors.push(`${dirName}: invalid npm dependency "${dep}"`);
+          break;
+        }
+      }
+    }
+  }
   return errors;
 }
 
@@ -1009,6 +1137,15 @@ export function getExtensionManifest(name) {
  */
 export function getLoadedExtensionNames() {
   return [...loaded.keys()];
+}
+
+export function getBootReport() {
+  return {
+    loaded: loaded.size,
+    skipped: _bootSkipped.length,
+    skippedNames: _bootSkipped.map(s => s.name),
+    details: _bootSkipped,
+  };
 }
 
 /**
@@ -1097,6 +1234,14 @@ export async function uninstallExtension(name) {
     } catch {}
   }
 
+  // Refresh confined extensions set. The removed extension might have been
+  // confined. Without this, the confined set still references it and the
+  // resolution chain treats a missing extension as blocked at every node.
+  try {
+    const { loadConfinedExtensions } = await import("../seed/tree/extensionScope.js");
+    await loadConfinedExtensions();
+  } catch {}
+
   log.verbose("Extensions", `Uninstalled: ${name}`);
   return { found: true };
 }
@@ -1156,6 +1301,21 @@ export async function installExtensionFiles(name, files) {
     // Cleanup staging on any failure
     try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {}
     throw err;
+  }
+
+  // Run npm install if manifest declares npm dependencies
+  try {
+    const manifestPath = path.join(extDir, "manifest.js");
+    if (fs.existsSync(manifestPath)) {
+      const { default: manifest } = await import(toImportURL(manifestPath) + "?t=" + Date.now());
+      if (manifest.npm && manifest.npm.length > 0) {
+        await runNpmInstall(extDir, manifest.npm, name);
+      }
+    }
+  } catch (npmErr) {
+    log.error("Extensions", `${name}: npm install failed, rolling back: ${npmErr.message}`);
+    try { fs.rmSync(extDir, { recursive: true, force: true }); } catch {}
+    throw new Error(`npm install failed for "${name}": ${npmErr.message}`);
   }
 
   log.verbose("Extensions", `Installed: ${name} (${filesWritten} files)`);
@@ -1273,6 +1433,21 @@ async function installFromRepo(name, repoUrl, version) {
     }
     fs.renameSync(tmpDir, extDir);
 
+    // Run npm install if manifest declares npm dependencies
+    const manifestPath = path.join(extDir, "manifest.js");
+    if (fs.existsSync(manifestPath)) {
+      const { default: manifest } = await import(toImportURL(manifestPath) + "?t=" + Date.now());
+      if (manifest.npm && manifest.npm.length > 0) {
+        try {
+          await runNpmInstall(extDir, manifest.npm, name);
+        } catch (npmErr) {
+          log.error("Extensions", `${name}: npm install failed, rolling back: ${npmErr.message}`);
+          try { fs.rmSync(extDir, { recursive: true, force: true }); } catch {}
+          throw new Error(`npm install failed for "${name}": ${npmErr.message}`);
+        }
+      }
+    }
+
     // Count files
     let filesWritten = 0;
     function countFiles(dir) {
@@ -1356,6 +1531,15 @@ export async function installExtension(name, version) {
   const result = await installExtensionFiles(ext.name || name, ext.files);
 
   log.info("Extensions", `Installed from registry: ${name} v${ext.version} (${result.filesWritten} files)`);
+
+  // Refresh confined extensions set. A newly installed extension might declare
+  // scope: "confined" in its manifest. Without this, the confined set is stale
+  // until restart and the extension resolves as global (active everywhere).
+  try {
+    const { loadConfinedExtensions } = await import("../seed/tree/extensionScope.js");
+    await loadConfinedExtensions();
+  } catch {}
+
   return {
     name: ext.name || name,
     version: ext.version,

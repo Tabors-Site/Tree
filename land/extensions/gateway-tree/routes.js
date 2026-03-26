@@ -111,7 +111,7 @@ router.post("/gateway/tree/:channelId", async (req, res) => {
     // If input-output and there's a reply, dispatch it back through the
     // gateway output pipeline. The channel's output side (send()) POSTs
     // the reply to the remote land's input endpoint as a separate message.
-    if (result.reply && channel.direction === "input-output") {
+    if (result.reply && channel.direction === "input-output" && channel.rootId) {
       try {
         await gateway.exports.dispatchNotifications(channel.rootId, [{
           type: "tree-reply",

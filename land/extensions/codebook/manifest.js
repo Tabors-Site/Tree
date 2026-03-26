@@ -21,6 +21,7 @@ export default {
     "has accumulated does the extension spend tokens to update the codebook.",
 
   needs: {
+    services: ["llm"],
     models: ["Node"],
   },
 

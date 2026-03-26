@@ -24,22 +24,14 @@ export default {
 
     cli: [
       {
-        command: "flow",
-        description: "Show cascade flow for current position",
+        command: "flow [action] [args...]",
+        description: "Cascade flow scoped to current position. Actions: signal, stats.",
         method: "GET",
         endpoint: "/node/:nodeId/flow",
-      },
-      {
-        command: "flow-signal <signalId>",
-        description: "Show details for a specific cascade signal",
-        method: "GET",
-        endpoint: "/flow/:signalId",
-      },
-      {
-        command: "flow-stats",
-        description: "Partition sizes, today's count, retention status",
-        method: "GET",
-        endpoint: "/flow/stats",
+        subcommands: {
+          "signal": { method: "GET", endpoint: "/flow/:signalId", args: ["signalId"], description: "Drill into one signal" },
+          "stats": { method: "GET", endpoint: "/flow/stats", description: "Partition sizes, cap status" },
+        },
       },
     ],
 

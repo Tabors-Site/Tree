@@ -16,27 +16,29 @@ program
   .addHelpText("afterAll", "")
   .configureHelp({
     formatHelp(cmd, helper) {
-      const sections = [
+      const cfg = load();
+
+      // Core sections
+      const coreSections = [
         { title: "Getting Started", cmds: ["connect", "register", "login", "logout", "whoami"] },
-        { title: "Navigation", cmds: ["pwd", "ls", "cd", "land", "home", "tree"] },
+        { title: "Navigation", cmds: ["pwd", "ls", "cd", "land", "home", "tree", "recent"] },
         { title: "Trees", cmds: ["roots", "use", "root", "mkroot", "retire"] },
         { title: "Nodes", cmds: ["mkdir", "rm", "mv", "rename", "what", "type", "complete", "activate", "trim"] },
         { title: "Notes", cmds: ["note", "notes", "cat", "rm-note", "download"] },
         { title: "AI", cmds: ["chat", "place", "query", "chats"] },
         { title: "Collaboration", cmds: ["team", "invite", "invites", "kick", "owner", "visibility", "share", "link", "share-token"] },
         { title: "LLM", cmds: ["llms", "llm"] },
-        { title: "Extensions", cmds: ["ext", "ext-scope", "ext-block", "ext-allow", "ext-restrict", "protocol", "tools", "tools-allow", "tools-block", "tools-clear", "modes", "mode-set", "mode-clear"] },
+        { title: "Extensions", cmds: ["ext", "ext-scope", "ext-block", "ext-allow", "ext-unallow", "ext-restrict", "protocol", "tools", "tools-allow", "tools-block", "tools-clear", "modes", "mode-set", "mode-clear"] },
         { title: "Canopy", cmds: ["peers", "peer", "search", "browse"] },
-        { title: "Config", cmds: ["config", "show"] },
+        { title: "System", cmds: ["config", "show", "flow"] },
       ];
 
-      const cmdMap = {};
-      cmd.commands.forEach((c) => {
-        cmdMap[c.name()] = c;
-      });
+      const coreNames = new Set();
+      for (const s of coreSections) for (const c of s.cmds) coreNames.add(c);
 
-      // Dynamic land info header
-      const cfg = load();
+      const cmdMap = {};
+      cmd.commands.forEach((c) => { cmdMap[c.name()] = c; });
+
       const landUrl = cfg.landUrl || cfg.remoteDomain || null;
       const username = cfg.username || null;
       const extCount = cfg.landProtocol?.extensions?.length || 0;
@@ -45,49 +47,79 @@ program
       let out = "";
 
       if (landUrl) {
-        out += `Land: ${landUrl}`;
-        if (username) out += `  User: ${username}`;
-        if (extCount) out += `  Extensions: ${extCount}`;
+        out += chalk.bold(`${username || "?"}`) + chalk.dim(`@${landUrl.replace(/^https?:\/\//, "")}`);
+        if (extCount) out += chalk.dim(`  ${extCount} extensions`);
         out += "\n";
-        if (treeName) out += `Tree: ${treeName}\n`;
-        out += `Run 'ext list' for loaded extensions, 'ext search' for registry.\n`;
+        if (treeName) {
+          const pos = currentPath(cfg);
+          out += chalk.cyan(treeName) + (pos ? chalk.dim(pos) : "") + "\n";
+        }
         out += "\n";
       } else {
-        out += `TreeOS CLI v${version}\n`;
-        out += `Not connected. Run: treeos connect <url>\n`;
-        out += `Docs: https://treeos.ai/guide\n\n`;
+        out += chalk.bold(`TreeOS CLI v${version}`) + "\n";
+        out += chalk.dim(`Not connected. Run: treeos connect <url>`) + "\n\n";
       }
 
-      const fmtUsage = (c) => {
-        return (c.name() + " " + c.usage()).replace(/ \[options\]/g, "").trim();
+      // Compact format: command padded to 32 chars, description after
+      const PAD = 30;
+      const fmtLine = (c) => {
+        const usage = (c.name() + " " + c.usage()).replace(/ \[options\]/g, "").trim();
+        // Strip chalk from description for the [extName] tag
+        const desc = c.description().replace(/\s*\[.*?\]\s*$/, "").trim();
+        const padded = usage.length < PAD ? usage + " ".repeat(PAD - usage.length) : usage + "  ";
+        return `  ${padded}${chalk.dim(desc)}`;
       };
 
-      for (const section of sections) {
-        out += `${section.title}:\n`;
-        for (const name of section.cmds) {
-          const c = cmdMap[name];
-          if (!c) continue;
-          out += `  ${fmtUsage(c)}\n`;
-          out += `      ${c.description()}\n`;
+      const RULE = chalk.dim("─".repeat(50));
+      const HEAVY_RULE = chalk.dim("═".repeat(50));
+
+      // Core commands
+      for (let si = 0; si < coreSections.length; si++) {
+        const section = coreSections[si];
+        const available = section.cmds.filter(name => cmdMap[name]);
+        if (available.length === 0) continue;
+
+        // Heavy rule before Getting Started
+        if (si === 0) out += HEAVY_RULE + "\n";
+
+        out += chalk.bold(section.title) + "\n";
+        for (const name of available) {
+          out += fmtLine(cmdMap[name]) + "\n";
           delete cmdMap[name];
         }
-        out += "\n";
+
+        // Separator after each section
+        out += RULE + "\n";
       }
 
-      // Any remaining commands not in a section
-      const remaining = Object.values(cmdMap);
-      if (remaining.length) {
-        out += "Other:\n";
-        for (const c of remaining) {
-          out += `  ${fmtUsage(c)}\n`;
-          out += `      ${c.description()}\n`;
+      // Extension commands grouped by extension name
+      const extCmds = [];
+      for (const [name, c] of Object.entries(cmdMap)) {
+        if (!coreNames.has(name)) extCmds.push(c);
+      }
+
+      if (extCmds.length > 0) {
+        out += HEAVY_RULE + "\n";
+
+        const groups = {};
+        for (const c of extCmds) {
+          const match = c.description().match(/\[([^\]]+)\]$/);
+          const ext = match ? match[1] : "other";
+          if (!groups[ext]) groups[ext] = [];
+          groups[ext].push(c);
         }
-        out += "\n";
+
+        for (const [ext, cmds] of Object.entries(groups)) {
+          out += chalk.bold.magenta(ext.toUpperCase()) + chalk.dim(" (extension)") + "\n";
+          for (const c of cmds) {
+            out += fmtLine(c) + "\n";
+          }
+          out += RULE + "\n";
+        }
       }
 
-      out += `Options:\n`;
-      out += `  -V, --version                       output the version number\n`;
-      out += `  -h, --help                           display help for command\n`;
+      out += chalk.dim("  -V, --version     Show version") + "\n";
+      out += chalk.dim("  -h, --help        Show this help") + "\n";
 
       return out;
     },
@@ -203,10 +235,52 @@ const startShell = module.exports.startShell = async () => {
     );
     console.log("");
 
+    // Build command list for tab completion
+    const allCmdNames = program.commands.map(c => c.name()).sort();
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
       terminal: true,
+      completer(line) {
+        const parts = line.split(/\s+/);
+        const partial = parts[0] || "";
+
+        if (parts.length <= 1) {
+          // Complete command name
+          const hits = allCmdNames.filter(c => c.startsWith(partial));
+          return [hits.length ? hits : allCmdNames, partial];
+        }
+
+        // For multi-word: no completion (let the command handle it)
+        return [[], line];
+      },
+    });
+
+    // Shadow hint: show ghost text of the best completion
+    let lastHint = "";
+    process.stdin.on("keypress", () => {
+      // Clear previous hint
+      if (lastHint) {
+        process.stdout.write("\x1b[0K"); // clear to end of line
+        lastHint = "";
+      }
+
+      // Show hint after a tick (so rl.line is updated)
+      setImmediate(() => {
+        const line = rl.line || "";
+        const parts = line.split(/\s+/);
+        if (parts.length === 1 && parts[0].length > 0) {
+          const partial = parts[0];
+          const match = allCmdNames.find(c => c.startsWith(partial) && c !== partial);
+          if (match) {
+            const rest = match.slice(partial.length);
+            lastHint = rest;
+            // Save cursor, write dim ghost text, restore cursor
+            process.stdout.write("\x1b[s\x1b[2m" + rest + "\x1b[0m\x1b[u");
+          }
+        }
+      });
     });
 
     const prompt = () => {

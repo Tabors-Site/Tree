@@ -13,6 +13,9 @@ export default {
     services: ["energy"],
   },
 
+  // npm dependencies (auto-installed by loader into extension-local node_modules)
+  // npm: ["some-package@^1.0.0", "@scope/other-package@^2.0.0"],
+
   provides: {
     models: {},
     routes: false,

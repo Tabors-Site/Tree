@@ -3,7 +3,7 @@
 // Pipeline: find candidates -> scan each (tool-less) -> create branches via tree:structure -> delete notes via tree:notes.
 
 import log from "../../seed/log.js";
-import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { OrchestratorRuntime, LLM_PRIORITY } from "../../seed/orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
@@ -93,6 +93,7 @@ export async function orchestrateExpand({
     modeKeyForLlm: "tree:cleanup-expand-scan",
     source,
     lockNamespace: "cleanup-expand",
+    llmPriority: LLM_PRIORITY.BACKGROUND,
   });
 
   const initialized = await rt.init();

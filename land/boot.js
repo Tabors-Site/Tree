@@ -24,7 +24,7 @@ const DEFAULTS = {
   LAND_DOMAIN: "localhost",
   LAND_NAME: "My Land",
   PORT: "3000",
-  MONGODB_URI: "mongodb://localhost:27017/tree",
+  MONGODB_URI: "mongodb://localhost:27017/land",
   LAND_DEFAULT_TIER: "god",
   REQUIRE_EMAIL: "true",
   ENABLE_FRONTEND_HTML: "true",
@@ -267,6 +267,35 @@ async function installSelected(selected, horizonUrl) {
         const fileDir = path.dirname(filePath);
         if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
         fs.writeFileSync(filePath, file.content, "utf8");
+      }
+
+      // Run npm install if the extension declares npm dependencies
+      const manifestPath = path.join(targetDir, "manifest.js");
+      if (fs.existsSync(manifestPath)) {
+        try {
+          const { pathToFileURL } = await import("url");
+          const { default: manifest } = await import(pathToFileURL(manifestPath).href);
+          if (manifest.npm && manifest.npm.length > 0) {
+            const deps = {};
+            for (const dep of manifest.npm) {
+              const scopeEnd = dep.startsWith("@") ? dep.indexOf("/") : -1;
+              const atIdx = dep.indexOf("@", scopeEnd + 1);
+              if (atIdx > 0) { deps[dep.slice(0, atIdx)] = dep.slice(atIdx + 1); }
+              else { deps[dep] = "*"; }
+            }
+            fs.writeFileSync(path.join(targetDir, "package.json"), JSON.stringify({
+              name: `treeos-ext-${ext.name}`, version: "1.0.0", private: true, dependencies: deps,
+            }, null, 2), "utf8");
+
+            const { execFileSync } = await import("child_process");
+            execFileSync("npm", ["install", "--production", "--no-fund", "--no-audit", "--ignore-scripts"], {
+              cwd: targetDir, stdio: "pipe", timeout: 60000,
+            });
+            console.log(`    ${ext.name}: npm dependencies installed`);
+          }
+        } catch (npmErr) {
+          console.log(`    ${ext.name}: npm install failed (${npmErr.message}). Will retry on boot.`);
+        }
       }
 
       console.log(`    ${ext.name} v${ext.version} (${data.files.length} files)`);

@@ -1,20 +1,23 @@
 const chalk = require("chalk");
 const fetch = require("node-fetch");
 const TreeAPI = require("../api");
-const { requireAuth, load, save } = require("../config");
+const { requireAuth, load, save, currentNodeId } = require("../config");
 
 function getApi() {
   const cfg = requireAuth();
   return new TreeAPI(cfg.apiKey);
 }
 
-async function refreshProtocolCache() {
+async function refreshProtocolCache(nodeId) {
   try {
     const cfg = load();
     if (!cfg.landUrl) return;
     let url = cfg.landUrl;
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    const res = await fetch(`${url}/api/v1/protocol`);
+    // Pass nodeId for position-aware protocol. Without it, returns everything.
+    const nid = nodeId || currentNodeId(cfg);
+    const qs = nid ? `?nodeId=${encodeURIComponent(nid)}` : "";
+    const res = await fetch(`${url}/api/v1/protocol${qs}`);
     if (res.ok) {
       const raw = await res.json();
       cfg.landProtocol = raw.data || raw;
@@ -237,6 +240,9 @@ Examples:
           if (m.needs.models?.length) console.log(`  models: ${m.needs.models.join(", ")}`);
           if (m.needs.services?.length) console.log(`  services: ${m.needs.services.join(", ")}`);
           if (m.needs.extensions?.length) console.log(`  extensions: ${m.needs.extensions.join(", ")}`);
+        }
+        if (m.npm?.length) {
+          console.log(chalk.bold("npm packages:"), m.npm.join(", "));
         }
         if (m.provides?.cli?.length) {
           console.log(chalk.bold("\nCLI Commands:"));

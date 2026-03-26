@@ -70,6 +70,9 @@ async function matrixApi(creds, method, path, body) {
 
 async function send(secrets, metadata, notification) {
   const creds = getMatrixCreds(secrets);
+  if (!creds.homeserver || !creds.accessToken) throw new Error("Matrix credentials not configured");
+  if (!metadata.roomId) throw new Error("Matrix roomId not configured");
+
   const text = notification.title
     ? `**${notification.title}**\n\n${notification.content}`
     : notification.content;

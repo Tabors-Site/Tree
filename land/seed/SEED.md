@@ -148,7 +148,7 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | afterSessionEnd | after | Session ended. React to { sessionId, userId, type }. |
 | afterNavigate | after | Fires when user navigates to a tree root. Extensions track recency. |
 | afterMetadataWrite | after | After setExtMeta succeeds. { nodeId, extName, data }. Zero overhead if no listeners. |
-| afterScopeChange | after | After extension blocking/restriction changes. { nodeId, blocked, restricted, userId } |
+| afterScopeChange | after | After extension scope changes. { nodeId, blocked, restricted, allowed, userId } |
 | afterOwnershipChange | after | After rootOwner or contributors changed. { nodeId, action, targetUserId, previousOwnerId? } |
 | afterBoot | after | Once after all extensions loaded, config initialized, server listening. |
 | onCascade | sequential | Fires on content write at cascade-enabled node. Results written to .flow. |
@@ -320,6 +320,7 @@ Advanced operators can adjust these values via `treeos config set`. Most lands n
 | uploadCleanupBatchSize | 1000 | Max files deleted per cleanup cycle. Clamped 10 to 50000. Raise for lands with large backlogs. |
 | retentionCleanupInterval | 86400000 | Retention job frequency (ms) |
 | cascadeCleanupInterval | 21600000 | Cascade result cleanup frequency (ms) |
+| npmInstallTimeout | 60000 | Timeout for npm install in extension directories (ms). Slow networks may need 120000. |
 | dnsLookupTimeout | 5000 | DNS resolution timeout for custom LLM URLs (ms). Corporate VPN may need 15000. |
 | mcpConnectTimeout | 10000 | MCP client connection timeout (ms). Remote MCP servers may need 20000. |
 | mcpStaleTimeout | 3600000 | MCP client idle timeout before sweep (ms). High-traffic land may want 1800000. |
