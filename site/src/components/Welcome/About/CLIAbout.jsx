@@ -3,12 +3,7 @@ import "../Landing/LandingPage.css";
 
 const CLIAbout = () => {
   return (
-    <div className="lp" style={{background: "transparent"}}>
-
-      {/* ── BACK ── */}
-      <div style={{padding: "20px 32px 0"}}>
-        <a className="al-back-link" href="/about">←</a>
-      </div>
+    <div className="lp">
 
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "50vh"}}>

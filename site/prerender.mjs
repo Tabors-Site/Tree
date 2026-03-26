@@ -37,6 +37,7 @@ const STATIC_ROUTES = [
   "/flow",
   "/network",
   "/build",
+  "/cli",
   "/mycelium",
   "/seed",
   "/app",
@@ -85,6 +86,10 @@ const PAGE_META = {
   "/build": {
     title: "Build Extensions . Developer Reference",
     description: "Everything you need to build extensions for the seed. Manifest, init, hooks, modes, tools, routes, CLI commands, migrations, publishing. Code-first.",
+  },
+  "/cli": {
+    title: "The CLI . Terminal Native",
+    description: "Navigate trees like a filesystem. Named sessions pinned to positions. Multiple AI conversations in parallel. Extensions add commands. The terminal is the interface.",
   },
   "/network": {
     title: "The Network . How Trees Connect",

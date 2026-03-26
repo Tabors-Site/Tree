@@ -49,6 +49,7 @@ const WelcomeRoutes = () => {
       <Route path="/network" element={<NetworkPage />} />
       <Route path="/flow" element={<FlowPage />} />
       <Route path="/build" element={<BuildPage />} />
+      <Route path="/cli" element={<CLIAbout />} />
       <Route path="/mycelium" element={<MyceliumPage />} />
 
       {/* Original app welcome (treeos.ai example) */}
