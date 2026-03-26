@@ -85,7 +85,7 @@ export async function propagateOutward({ node, nodeId, signalId, payload, depth,
     const childIdStr = childId.toString();
 
     // Load child to check its cascade willingness
-    const child = await Node.findById(childIdStr).select("name metadata systemRole children").lean();
+    const child = await Node.findById(childIdStr).select("name metadata systemRole children parent").lean();
     if (!child || child.systemRole) continue;
 
     const childMeta = child.metadata instanceof Map

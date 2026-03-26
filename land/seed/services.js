@@ -46,6 +46,7 @@ import { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandle
 import { OrchestratorRuntime } from "./orchestrators/runtime.js";
 import { acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks } from "./orchestrators/locks.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
+import { getExtMeta, setExtMeta, mergeExtMeta } from "./tree/extensionMetadata.js";
 import { deliverCascade } from "./tree/cascade.js";
 import {
   addContributor, removeContributor,
@@ -163,6 +164,9 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       checkIntegrity,
       checkTreeHealth, tripTree, reviveTree, isTreeAlive,
     },
+
+    // --- Metadata (namespace-enforced read/write for extension data on nodes) ---
+    metadata: { getExtMeta, setExtMeta, mergeExtMeta },
 
     // --- Cascade (extensions call deliverCascade to propagate signals) ---
     cascade: { deliverCascade },

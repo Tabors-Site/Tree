@@ -25,14 +25,33 @@ export default {
 
   provides: {
     models: {},
-    routes: false,
+    routes: "./routes.js",
     tools: false,
     jobs: false,
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
     env: [],
-    cli: [],
+    cli: [
+      {
+        command: "seal [action]",
+        description: "Sealed transport. No action shows seal status. Actions: on, off.",
+        method: "GET",
+        endpoint: "/node/:nodeId/seal",
+        subcommands: {
+          "on": {
+            method: "POST",
+            endpoint: "/node/:nodeId/seal/on",
+            description: "Set cascade mode to sealed at this position",
+          },
+          "off": {
+            method: "POST",
+            endpoint: "/node/:nodeId/seal/off",
+            description: "Set cascade mode to open",
+          },
+        },
+      },
+    ],
 
     hooks: {
       fires: [],

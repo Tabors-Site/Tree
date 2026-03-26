@@ -90,7 +90,10 @@ export async function init(core) {
     }
   }, "propagation");
 
+  const { default: router } = await import("./routes.js");
+
   return {
+    router,
     tools,
     jobs: [
       {

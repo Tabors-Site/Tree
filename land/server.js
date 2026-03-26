@@ -75,7 +75,7 @@ app.get("/health", (_req, res) => {
   });
 });
 
-await registerURLRoutes(app);
+await registerURLRoutes(app, { registerRawWebhook });
 app.use((req, res) => notFoundPage(req, res));
 
 const server = http.createServer(app);

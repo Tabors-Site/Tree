@@ -32,10 +32,22 @@ export default {
 
     cli: [
       {
-        command: "pulse",
-        description: "Show the latest land health snapshot",
+        command: "pulse [action]",
+        description: "Land health. No action shows latest snapshot. Actions: history, peers.",
         method: "GET",
         endpoint: "/pulse",
+        subcommands: {
+          "history": {
+            method: "GET",
+            endpoint: "/pulse/history",
+            description: "Last 10 health snapshots. Trend view.",
+          },
+          "peers": {
+            method: "GET",
+            endpoint: "/pulse/peers",
+            description: "Peer-specific health. Healthy, degraded, mixed.",
+          },
+        },
       },
     ],
 

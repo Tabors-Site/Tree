@@ -30,14 +30,38 @@ export default {
 
   provides: {
     models: {},
-    routes: false,
+    routes: "./routes.js",
     tools: true,
     jobs: false,
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
     env: [],
-    cli: [],
+    cli: [
+      {
+        command: "codebook [action]",
+        description: "Codebook dictionary. No action shows your dictionary. Actions: compress, clear, stats.",
+        method: "GET",
+        endpoint: "/node/:nodeId/codebook",
+        subcommands: {
+          "compress": {
+            method: "POST",
+            endpoint: "/node/:nodeId/codebook/compress",
+            description: "Force a compression pass now",
+          },
+          "clear": {
+            method: "DELETE",
+            endpoint: "/node/:nodeId/codebook",
+            description: "Wipe the dictionary. Start fresh.",
+          },
+          "stats": {
+            method: "GET",
+            endpoint: "/node/:nodeId/codebook/stats",
+            description: "Notes since last compression, dictionary size, timestamps",
+          },
+        },
+      },
+    ],
 
     hooks: {
       fires: [],

@@ -31,7 +31,7 @@ const GatewayChannelSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["telegram", "discord", "webapp"],
+      enum: ["telegram", "discord", "webapp", "email", "sms", "slack", "matrix", "x", "reddit", "tree"],
       required: true,
     },
 

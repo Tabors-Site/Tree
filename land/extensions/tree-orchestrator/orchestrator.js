@@ -539,6 +539,7 @@ async function executePlanSteps({
                 includeParentChain: true,
                 includeValues: false,
                 includeNotes: false,
+                userId,
               });
               candidateContexts.push(ctx);
             } catch (err) {
@@ -708,7 +709,7 @@ async function executePlanSteps({
       };
 
       const profile = contextProfiles[intent.intent] || contextProfiles.query;
-      ctxResult = await getContextForAi(targetNodeId, profile);
+      ctxResult = await getContextForAi(targetNodeId, { ...profile, userId });
 
       // ── SCOUT LOOP ──
       const shouldScout =
@@ -731,6 +732,7 @@ async function executePlanSteps({
           targetNodeId,
           profile,
           signal,
+          userId,
         });
 
         if (scoutResult.adapted) {
@@ -774,6 +776,7 @@ async function executePlanSteps({
               includeParentChain: false,
               includeValues: false,
               includeNotes: false,
+              userId,
             });
             childContexts.push(childCtx);
           } catch (err) {
@@ -808,6 +811,7 @@ async function executePlanSteps({
           intent.directive,
           targetNodeId,
           rootId,
+          userId,
         );
         if (counterparts.length > 0) {
           const combined = {
@@ -2115,6 +2119,7 @@ async function scoutExistingStructure({
   targetNodeId,
   profile,
   signal,
+  userId = null,
 }) {
   const MAX_SCOUT_DEPTH = 3;
   const directiveLower = directive.toLowerCase();
@@ -2222,6 +2227,7 @@ async function scoutExistingStructure({
       includeParentChain: true,
       includeValues: false,
       includeNotes: false,
+      userId,
     });
 
     // Decide: does this child already cover what the plan wants to create?
@@ -2326,7 +2332,7 @@ function findMatchingChild(children, directiveLower, quotedNames, words) {
  *
  * Returns array of contexts, each with { id, name, children, path, ... }
  */
-async function fetchMoveCounterparts(directive, navigatedNodeId, rootId) {
+async function fetchMoveCounterparts(directive, navigatedNodeId, rootId, userId = null) {
   // Extract ALL quoted node names from the directive
   const quotedNames =
     directive.match(/['"]([^'"]+)['"]/g)?.map((s) => s.slice(1, -1)) || [];
@@ -2368,6 +2374,7 @@ async function fetchMoveCounterparts(directive, navigatedNodeId, rootId) {
           includeParentChain: true,
           includeValues: false,
           includeNotes: false,
+          userId,
         });
         results.push(ctx);
       }

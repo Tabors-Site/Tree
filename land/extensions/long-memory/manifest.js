@@ -18,20 +18,40 @@ export default {
 
   needs: {
     models: ["Node"],
+    extensions: ["propagation"],
   },
 
   optional: {},
 
   provides: {
     models: {},
-    routes: false,
+    routes: "./routes.js",
     tools: true,
     jobs: false,
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
     env: [],
-    cli: [],
+    cli: [
+      {
+        command: "memory [action]",
+        description: "Cascade memory. No action shows trace at this node. Actions: clear, connections.",
+        method: "GET",
+        endpoint: "/node/:nodeId/memory",
+        subcommands: {
+          "clear": {
+            method: "DELETE",
+            endpoint: "/node/:nodeId/memory",
+            description: "Wipe the trace. The node forgets its cascade history.",
+          },
+          "connections": {
+            method: "GET",
+            endpoint: "/node/:nodeId/memory/connections",
+            description: "Full connection list with counts and timestamps",
+          },
+        },
+      },
+    ],
 
     hooks: {
       fires: [],

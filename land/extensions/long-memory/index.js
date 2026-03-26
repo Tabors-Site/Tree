@@ -37,7 +37,10 @@ export async function init(core) {
     }
   }, "long-memory");
 
+  const { default: router } = await import("./routes.js");
+
   return {
+    router,
     tools,
     exports: {
       getMemory,

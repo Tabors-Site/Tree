@@ -9,13 +9,13 @@ export async function init(core) {
 
   router.post("/user/:userId/purchase", authenticate, createPurchaseSession);
 
-  // Register Stripe webhook handler. The server exports registerWebhook()
-  // for extensions that need raw-body routes mounted before express.json().
-  let webhookHandler = null;
-  try {
-    const { stripeWebhook } = await import("./webhook.js");
-    webhookHandler = stripeWebhook;
-  } catch {}
+  // Stripe webhook handler. Lazy-load webhook.js (and the Stripe SDK)
+  // on first request to avoid blocking boot if the SDK init is slow.
+  let _webhookMod = null;
+  const webhookHandler = async (req, res) => {
+    if (!_webhookMod) _webhookMod = await import("./webhook.js");
+    return _webhookMod.stripeWebhook(req, res);
+  };
 
   return {
     router,

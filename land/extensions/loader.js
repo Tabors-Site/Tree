@@ -436,6 +436,22 @@ function buildScopedCore(manifest, fullCore) {
     };
   }
 
+  // Metadata binding: enforce namespace ownership.
+  // Extensions can only write to their own namespace (matching manifest name)
+  // or core namespaces (cascade, extensions, tools, modes).
+  // getExtMeta is unbound (read any namespace). setExtMeta and mergeExtMeta
+  // pass callerExtName so the kernel rejects cross-namespace writes.
+  if (scoped.metadata) {
+    const extName = manifest.name;
+    const origSet = scoped.metadata.setExtMeta;
+    const origMerge = scoped.metadata.mergeExtMeta;
+    scoped.metadata = {
+      ...scoped.metadata,
+      setExtMeta: (node, ns, data) => origSet(node, ns, data, { callerExtName: extName }),
+      mergeExtMeta: (node, ns, partial) => origMerge(node, ns, partial, { callerExtName: extName }),
+    };
+  }
+
   // Freeze existing kernel services so extensions can't replace core.hooks,
   // core.llm, etc. But allow adding new properties (core.energy = {...})
   // which is the pattern for extension-provided services.
@@ -686,12 +702,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Wire raw-body webhook (e.g. Stripe). Extension returns rawWebhook from init().
-      if (instance.rawWebhook && typeof instance.rawWebhook === "function") {
-        try {
-          const { registerRawWebhook } = await import("../server.js");
-          registerRawWebhook(instance.rawWebhook);
-          log.verbose("Extensions", `${manifest.name}: raw webhook registered`);
-        } catch {}
+      // registerRawWebhook is passed in opts to avoid circular ESM import of server.js.
+      if (instance.rawWebhook && typeof instance.rawWebhook === "function" && opts.registerRawWebhook) {
+        opts.registerRawWebhook(instance.rawWebhook);
+        log.verbose("Extensions", `${manifest.name}: raw webhook registered`);
       }
 
       // Wire MCP tools and register in tool resolver

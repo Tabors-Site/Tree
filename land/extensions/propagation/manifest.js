@@ -26,7 +26,7 @@ export default {
   },
 
   provides: {
-    routes: false,
+    routes: "./routes.js",
     tools: true,
     jobs: true,
 
@@ -37,11 +37,27 @@ export default {
 
     cli: [
       {
-        command: "cascade [nodeId]",
-        description: "Manually trigger a cascade signal at a node",
-        method: "POST",
-        endpoint: "/root/:rootId/cascade",
-        body: ["nodeId"],
+        command: "cascade [action] [args...]",
+        description: "Cascade status and control. No action shows status. Actions: trigger, retry, config.",
+        method: "GET",
+        endpoint: "/node/:nodeId/cascade/status",
+        subcommands: {
+          "trigger": {
+            method: "POST",
+            endpoint: "/node/:nodeId/cascade/trigger",
+            description: "Manually fire checkCascade at current position",
+          },
+          "retry": {
+            method: "POST",
+            endpoint: "/node/:nodeId/cascade/retry",
+            description: "Retry failed hops from this node",
+          },
+          "config": {
+            method: "GET",
+            endpoint: "/node/:nodeId/cascade/config",
+            description: "Show cascade config on this node",
+          },
+        },
       },
     ],
   },

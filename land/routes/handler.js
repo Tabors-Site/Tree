@@ -44,7 +44,7 @@ const apiLimiter = rateLimit({
   },
 });
 
-export default async function registerURLRoutes(app) {
+export default async function registerURLRoutes(app, opts = {}) {
   app.param("userId", (req, res, next, val) => {
     if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
     next();
@@ -96,7 +96,10 @@ export default async function registerURLRoutes(app) {
   app.use("/", authPageRouter);
 
   // Load extensions (manifests discovered, deps validated, routes wired)
-  await loadExtensions(app, mcpServerInstance, { getConfigValue: getLandConfigValue });
+  await loadExtensions(app, mcpServerInstance, {
+    getConfigValue: getLandConfigValue,
+    registerRawWebhook: opts.registerRawWebhook,
+  });
 
   // Connect MCP transport AFTER extensions register tools (SDK locks after connect)
   await connectMcpTransport();

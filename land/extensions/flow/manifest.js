@@ -35,6 +35,12 @@ export default {
         method: "GET",
         endpoint: "/flow/:signalId",
       },
+      {
+        command: "flow-stats",
+        description: "Partition sizes, today's count, retention status",
+        method: "GET",
+        endpoint: "/flow/stats",
+      },
     ],
 
     hooks: {

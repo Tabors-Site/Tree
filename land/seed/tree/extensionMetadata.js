@@ -162,9 +162,21 @@ export function getExtMeta(node, extName) {
  * on the same node do not clobber each other.
  *
  * Silently skips if the extension is blocked at this node.
+ *
+ * @param {object}  node
+ * @param {string}  extName - the namespace to write to
+ * @param {*}       data - the data to store
+ * @param {object}  [opts]
+ * @param {string}  [opts.callerExtName] - if provided, enforces namespace ownership.
+ *   The caller can only write to its own namespace or core namespaces.
+ *   Set automatically by the scoped core in buildScopedCore().
+ *   Direct imports from seed omit this (kernel code, migrations, utilities).
  */
-export async function setExtMeta(node, extName, data) {
+export async function setExtMeta(node, extName, data, opts) {
   validateExtName(extName);
+  if (opts?.callerExtName && extName !== opts.callerExtName && !CORE_NAMESPACES.has(extName)) {
+    throw new Error(`Namespace violation: "${opts.callerExtName}" cannot write to "${extName}". Extensions can only write to their own namespace.`);
+  }
   if (isBlockedLocally(node, extName)) return false;
 
   validateData(extName, data);
@@ -199,8 +211,11 @@ export async function setExtMeta(node, extName, data) {
  *
  * Same validation as setExtMeta: size, nesting, namespace key, dangerous keys.
  */
-export async function mergeExtMeta(node, extName, partial) {
+export async function mergeExtMeta(node, extName, partial, opts) {
   validateExtName(extName);
+  if (opts?.callerExtName && extName !== opts.callerExtName && !CORE_NAMESPACES.has(extName)) {
+    throw new Error(`Namespace violation: "${opts.callerExtName}" cannot write to "${extName}". Extensions can only write to their own namespace.`);
+  }
   if (isBlockedLocally(node, extName)) return false;
   if (!partial || typeof partial !== "object" || Array.isArray(partial)) return false;
 

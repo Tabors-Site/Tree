@@ -278,7 +278,9 @@
       "Bash(while read:*)",
       "Bash(node -e \"console.log\\(require.resolve\\(''''../../../ws/conversation.js''''\\)\\)\")",
       "Bash(__NEW_LINE_427e1c6a8932220c__ echo:*)",
-      "Bash(timeout 12 node -e \":*)"
+      "Bash(timeout 12 node -e \":*)",
+      "Bash(grep -rn \"await import.*routes\" extensions/*/index.js)",
+      "Bash(node -e \"require\\(''nodemailer''\\)\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

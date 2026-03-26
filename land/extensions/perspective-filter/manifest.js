@@ -34,10 +34,28 @@ export default {
 
     cli: [
       {
-        command: "perspective",
-        description: "Show the effective perspective filter for current node (including inheritance)",
+        command: "perspective [action] [args...]",
+        description: "Perspective filter. No action shows effective filter. Actions: set, clear, test.",
         method: "GET",
         endpoint: "/node/:nodeId/perspective",
+        subcommands: {
+          "set": {
+            method: "POST",
+            endpoint: "/node/:nodeId/perspective",
+            description: "Set accept/reject lists. Pass accept and reject arrays in body.",
+          },
+          "clear": {
+            method: "DELETE",
+            endpoint: "/node/:nodeId/perspective",
+            description: "Remove override, fall back to parent perspective",
+          },
+          "test": {
+            method: "POST",
+            endpoint: "/node/:nodeId/perspective/test",
+            args: ["signal"],
+            description: "Dry run: does this signal pass the filter here?",
+          },
+        },
       },
     ],
 
