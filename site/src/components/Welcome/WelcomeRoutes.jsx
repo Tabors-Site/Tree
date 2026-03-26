@@ -33,6 +33,12 @@ import BlogSection from "./Blog/BlogSection.jsx";
 import NotFound from "./NotFound.jsx";
 
 const WelcomeRoutes = () => {
+  // External redirect: /horizon -> horizon.treeos.ai
+  const HorizonRedirect = () => {
+    window.location.href = "https://horizon.treeos.ai";
+    return null;
+  };
+
   return (
     <Routes>
 
@@ -51,6 +57,7 @@ const WelcomeRoutes = () => {
       <Route path="/build" element={<BuildPage />} />
       <Route path="/cli" element={<CLIAbout />} />
       <Route path="/mycelium" element={<MyceliumPage />} />
+      <Route path="/horizon" element={<HorizonRedirect />} />
 
       {/* Original app welcome (treeos.ai example) */}
       <Route path="/app" element={<WelcomePage />} />

@@ -17,18 +17,18 @@ export function setModels(models) { Node = models.Node; User = models.User; }
 
 let _timer = null;
 
-function getIntervalMs() {
+async function getIntervalMs() {
   try {
-    const { getLandConfigValue } = require("../../seed/landConfig.js");
+    const { getLandConfigValue } = await import("../../seed/landConfig.js");
     return Number(getLandConfigValue("boundaryIntervalMs")) || 7 * 24 * 60 * 60 * 1000; // weekly
   } catch {
     return 7 * 24 * 60 * 60 * 1000;
   }
 }
 
-export function startBoundaryJob() {
+export async function startBoundaryJob() {
   if (_timer) return;
-  const interval = getIntervalMs();
+  const interval = await getIntervalMs();
   _timer = setInterval(runBoundaryCycle, interval);
   if (_timer.unref) _timer.unref();
   log.info("Boundary", `Boundary job started (checking every ${Math.round(interval / (24 * 60 * 60 * 1000))}d)`);

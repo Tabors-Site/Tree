@@ -304,7 +304,22 @@
       "Bash(grep -c '\\\\\\\\`' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)",
       "Bash(grep -v ':0$')",
       "Bash(grep -n '\\\\\\\\`' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/calendar.js)",
-      "Bash(grep -n '\\\\\\\\`' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/chat.js)"
+      "Bash(grep -n '\\\\\\\\`' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/chat.js)",
+      "Bash(grep -v ^$)",
+      "Bash(ls -d /home/tabor/github/Tree/land/extensions/[f-n]*)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(ls -1d /home/tabor/github/Tree/land/extensions/[O-Z]*)",
+      "Bash(do find:*)",
+      "Bash(echo \"✓ $f\")",
+      "Bash(echo \"✗ $f\")",
+      "Bash(if ! grep -q \"export async function init\\(core\\)\" land/extensions/$ext/index.js)",
+      "Bash(then)",
+      "Bash(echo \"✗ $ext: missing ''export async function init\\(core\\)''\")",
+      "Bash(else)",
+      "Bash(echo \"✓ $ext: init\\(core\\) pattern correct\")",
+      "Bash(wc -l /home/tabor/github/Tree/land/extensions/trace/*.js /home/tabor/github/Tree/land/extensions/scout/*.js)",
+      "Bash(grep -E \"\\\\.js$\")",
+      "Bash(grep -l \"description:\" /home/tabor/github/Tree/land/extensions/*/manifest.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
