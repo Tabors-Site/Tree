@@ -1,7 +1,4 @@
-import {
-  logContribution,
-  findNodeById,
-} from "../../seed/utils.js";
+import { logContribution } from "../../seed/tree/contributions.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import Node from "../../seed/models/node.js";
 
@@ -35,7 +32,7 @@ async function addPrestige({
   chatId = null,
   sessionId = null,
 }) {
-  const node = await findNodeById(nodeId);
+  const node = await Node.findById(nodeId).populate("children");
   if (!node) throw new Error("Node not found");
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 

@@ -18,6 +18,7 @@ import CascadePage from "./Landing/CascadePage.jsx";
 import ExtensionsPage from "./Landing/ExtensionsPage.jsx";
 import NetworkPage from "./Landing/NetworkPage.jsx";
 import FlowPage from "./Landing/FlowPage.jsx";
+import BuildPage from "./Landing/BuildPage.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 
@@ -46,6 +47,7 @@ const WelcomeRoutes = () => {
       <Route path="/extensions" element={<ExtensionsPage />} />
       <Route path="/network" element={<NetworkPage />} />
       <Route path="/flow" element={<FlowPage />} />
+      <Route path="/build" element={<BuildPage />} />
 
       {/* Original app welcome (treeos.ai example) */}
       <Route path="/app" element={<WelcomePage />} />

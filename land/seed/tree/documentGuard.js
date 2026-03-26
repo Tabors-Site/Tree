@@ -27,8 +27,8 @@ const PRESSURE_THRESHOLD = 0.8; // 80%
 function getMaxBytes() {
   const configured = getLandConfigValue("maxDocumentSizeBytes");
   if (configured && typeof configured === "number" && configured > 0) {
-    // Never allow above 16MB (MongoDB hard limit)
-    return Math.min(configured, 16 * 1024 * 1024);
+    // Floor 1MB, ceiling 16MB (MongoDB hard limit). Below 1MB bricks the system.
+    return Math.max(1024 * 1024, Math.min(configured, 16 * 1024 * 1024));
   }
   return DEFAULT_MAX_BYTES;
 }
@@ -83,7 +83,7 @@ export function checkWriteSize(doc, additionalBytes = 0, opts = {}) {
       projectedSize,
       maxSize,
       percent: Math.round((projectedSize / maxSize) * 100),
-    }).catch(() => {});
+    }).catch(err => log.debug("DocumentGuard", `onDocumentPressure hook error: ${err.message}`));
 
     if (projectedSize > maxSize) {
       return {
@@ -114,7 +114,9 @@ export function estimateWriteSize(data) {
   try {
     return Buffer.byteLength(JSON.stringify(data), "utf8");
   } catch {
-    return 0;
+    // Circular reference or non-serializable. Return a high estimate so the
+    // size check rejects the write rather than allowing a potentially oversized doc.
+    return DEFAULT_MAX_BYTES;
   }
 }
 

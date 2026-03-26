@@ -259,7 +259,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
 
       const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
       const prestigeData = meta.prestige || {};
-      const status = meta.prestige?.history?.find(h => h.version === v)?.status || node.status || "active";
+      const status = (Array.isArray(meta.prestige?.history) ? meta.prestige.history.find(h => h.version === v)?.status : null) || node.status || "active";
       const values = meta.values || {};
       const goals = meta.goals || {};
       const schedule = meta.schedule || null;
@@ -272,11 +272,14 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
       const createdDate = node.dateCreated ? new Date(node.dateCreated).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
       const scheduleHtml = schedule ? renderers.renderScheduleInline?.(schedule) || "" : "";
 
+      const ALL_STATUSES = ["active", "completed", "trimmed"];
+      const STATUS_LABELS = { active: "Active", completed: "Completed", trimmed: "Trimmed" };
+
       return res.send(renderers.renderVersionDetail({
         node, nodeId, version: v,
         data: { status, values, goals, schedule, prestige: prestigeData, reeffectTime },
         qs, backUrl, backTreeUrl, createdDate, scheduleHtml, reeffectTime,
-        showPrestige, prestigeData,
+        showPrestige, prestigeData, ALL_STATUSES, STATUS_LABELS,
       }));
     } catch (err) {
       log.error("HTML", "Version detail render error:", err.message);

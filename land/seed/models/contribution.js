@@ -36,8 +36,9 @@ const ContributionSchema = new mongoose.Schema({
 // Query indexes for contributions
 ContributionSchema.index({ userId: 1, date: -1 }); // user contribution history
 ContributionSchema.index({ nodeId: 1, date: -1 }); // node contribution history
+ContributionSchema.index({ chatId: 1 }, { sparse: true }); // finalizeChat: Contribution.find({ chatId })
 
-// Retention handled by kernel cleanup job (configurable via land config: contributionRetentionDays, 0 = forever)
+// Retention: kernel deletes contributions older than contributionRetentionDays (default 365, 0 = forever)
 
 const Contribution = mongoose.model("Contribution", ContributionSchema);
 export default Contribution;

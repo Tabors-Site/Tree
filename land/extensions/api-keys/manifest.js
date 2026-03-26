@@ -18,5 +18,6 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
+    authStrategies: true,
   },
 };

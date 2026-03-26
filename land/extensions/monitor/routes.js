@@ -79,7 +79,7 @@ router.get("/land/activity", authenticate, async (req, res) => {
     // AI mode breakdown today
     const modeBreakdown = await Chat.aggregate([
       { $match: { "startMessage.time": { $gte: oneDayAgo } } },
-      { $group: { _id: "$aiContext.path", count: { $sum: 1 } } },
+      { $group: { _id: { zone: "$aiContext.zone", mode: "$aiContext.mode" }, count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);

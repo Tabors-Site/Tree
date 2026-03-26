@@ -545,8 +545,8 @@ const KernelPage = () => {
         <div className="lp-container">
           <h2 className="lp-section-title">System Nodes</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            When a land boots for the first time, the kernel creates six system nodes.
-            They hold infrastructure state, not user content.
+            Created at boot by <code>ensureLandRoot()</code>. They hold infrastructure state, not user content.
+            Every boot verifies all six exist. Missing nodes are recreated. System nodes with wrong parents are repaired automatically.
           </p>
           <div className="lp-steps">
             <div className="lp-step">
@@ -647,7 +647,18 @@ const KernelPage = () => {
               ["circuitCheckInterval", "Health check interval (ms, 1h)", "3600000"],
               ["toolCircuitThreshold", "Consecutive tool failures before session disable", "5"],
               ["llmMaxConcurrent", "Max in-flight LLM calls across all users", "20"],
+              ["failoverTimeout", "Seconds to walk LLM failover stack before giving up", "15"],
+              ["toolCallTimeout", "Seconds before a tool call is killed", "60"],
+              ["toolResultMaxBytes", "Max tool result size before truncation (bytes)", "50000"],
               ["maxNotesPerNode", "Max notes per node", "1000"],
+              ["maxConversationSessions", "Hard cap on in-memory conversation sessions", "50000"],
+              ["staleConversationTimeout", "Seconds before idle conversation is swept", "1800"],
+              ["maxRegisteredTools", "Max tools in the registry", "500"],
+              ["maxRegisteredModes", "Max modes in the registry", "200"],
+              ["landLlmConnection", "Land-wide fallback LLM connection ID for users without their own", "null"],
+              ["maxConnectionsPerUser", "Max custom LLM connections per user (1-100)", "15"],
+              ["maxOrchestrators", "Max registered orchestrators", "10"],
+              ["jwtExpiryDays", "JWT token lifetime in days (1-365)", "30"],
               ["seedVersion", "Current seed version (set by migration runner)", "0.1.0"],
             ].map(([key, desc, def]) => (
               <div key={key} style={{
@@ -684,6 +695,8 @@ const KernelPage = () => {
               ["Extension router timeout", "5s on page routes (/). API routes not wrapped. Mid-stream responses closed after timeout."],
               ["Extension install rollback", "Files written to staging dir. Atomic rename on success. Cleanup on failure. No partial installs."],
               ["MCP spatial scoping", "Tool calls check isExtensionBlockedAtNode before dispatch. Same scoping as WebSocket."],
+              ["MCP client cap", "5,000 max clients. Oldest evicted. 10s connect timeout. 5s close timeout. Stale sweep every 15m. Token isolation."],
+              ["WebSocket safety", "Payload sanitization (200 char strings, 500 char JSON). ID validation (36 char cap). Auth failure logging. Broadcast event name validation."],
               ["Metadata guard", "Blocked extensions can't write. Four core namespaces bypass. Key length max 50 chars. Nesting depth max 5 levels."],
               ["Document size guard", "14MB ceiling. 512KB per namespace. onDocumentPressure at 80%."],
               ["Note count per node", "maxNotesPerNode (1000). Prevents runaway loops."],
@@ -692,14 +705,30 @@ const KernelPage = () => {
               ["Ownership chain", "rootOwner/contributor mutations validate parent chain. System nodes rejected."],
               ["Ancestor cache", "One walk serves six resolution chains. Snapshot per message. Auto-invalidation on changes."],
               ["Atomic metadata writes", "MongoDB $set per namespace. Concurrent writes never clobber."],
-              ["DB health check", "Before each tool call. Dead DB tells AI to inform user."],
+              ["DB health check", "Before each tool call. Dead DB tells AI to inform user. 30s socket timeout. 5s heartbeat. Event monitoring. Graceful shutdown."],
               ["SSRF protection", "Peer registration validates hostname. 15s timeout on all federation fetches."],
               ["Federation system tokens", "System-to-system canopy tokens. Auth returns system identity. Route handlers gate access."],
-              ["Password length", "Min 8, max 128 characters. Prevents bcrypt DoS."],
+              ["Password safety", "Min 8, max 128 chars. 5s bcrypt verify timeout. Prevents DoS from extreme cost factors."],
+              ["JWT security", "Unique jti per token for revocation tracking. Configurable expiry (1-365 days). Token revocation via metadata.auth.tokensInvalidBefore."],
+              ["Username validation", "Regex ^[a-zA-Z0-9_-]{1,32}$. Trimmed. Rejects HTML, special chars, whitespace-only."],
+              ["Auth input guards", "All auth functions validate input types. Null/undefined returns clear error, not crash."],
+              ["bcrypt hardening", "Cost factor 12 (NIST 2025+). Hash prefix bypass closed. Timing-safe login with dummy hash for non-existent users."],
+              ["Auth strategy sanitization", "Extension strategies cannot overwrite userId/username/authType via result.extra. Core fields stripped."],
+              ["Cookie-JWT sync", "Cookie maxAge reads jwtExpiryDays from config. Always expire together."],
+              ["Auth logging", "authenticateOptional logs all failures at debug level. Zero silent catch blocks."],
+              ["Config safety", "Deep copy on reads. Prototype pollution keys stripped. Write verification against DB. Delete via atomic $unset. Reload without restart. Change audit logging."],
+              ["Boot recovery", "All six system nodes verified every boot. Missing recreated. Wrong parents repaired. Partial first-boot crashes recoverable."],
+              ["Extension sync atomicity", "syncExtensionsToTree uses atomic $addToSet. One save failure doesn't corrupt the tree."],
+              ["Orchestrator safety", "30s init timeout. Init rollback on failure. 500 max steps. Zombie guard (no ops after cleanup). Lock ownership with renewal. Abort on cleanup kills in-flight LLM calls. Idempotent cleanup. MCP retry with backoff. 4h internal JWT. Duration tracking."],
+              ["Lock safety", "Owner tracking (userId + visitorId). Release rejects wrong owner. Renewal without release. 10K hard cap. Input validation. Force release for admin. Visibility via getLockInfo/listLocks. Sweep logging."],
+              ["Scope ownership safety", "Tool/mode ownership validated (1-64 chars). Capped at config limits. Cleanup on extension uninstall. Static hook import for notifyScopeChange."],
               ["Seed versioning", "Migrations in order. Failed retry next boot."],
               ["Tree integrity check", "Boot and daily. Auto-repair phantom refs. Orphans logged."],
               ["Index verification", "Boot. Create missing. No collection scans."],
-              ["Session cap", "10K max with oldest-first eviction."],
+              ["Session cap", "10K max (configurable) with oldest-first eviction. Scoped session cap 20K. Session meta capped at 64KB."],
+              ["Core session types immutable", "Extensions register custom types but can't overwrite core types. Stale sweep and navigator promotion stay intact."],
+              ["Session setter bounds", "maxSessions: 100-500K. sessionTTL: 5s-24h. staleTimeout: 1m-24h. No setter can brick the registry."],
+              ["Session cleanup", "Stale sweep cleans orphaned abort controllers. clearUserSessions fires afterSessionEnd per session, not silent bulk delete."],
               ["Depth limits", "50 status cascade, 100 auth traversal, 50 cascade propagation."],
               ["Name validation", "No HTML, no dots, no slashes, max 150 chars."],
               ["Never block inbound", "Cascade signals always accepted. Always write a result."],

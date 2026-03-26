@@ -12,11 +12,14 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 // Stable JSON stringification: sorts object keys so {a:1,b:2} and {b:2,a:1}
 // produce the same string. Used for tool call dedup keys.
-function stableStringify(obj) {
+function stableStringify(obj, seen) {
   if (obj === null || obj === undefined) return "null";
   if (typeof obj !== "object") return JSON.stringify(obj);
-  if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(",")}]`;
-  return `{${Object.keys(obj).sort().map(k => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+  if (!seen) seen = new WeakSet();
+  if (seen.has(obj)) return '"[circular]"';
+  seen.add(obj);
+  if (Array.isArray(obj)) return `[${obj.map(v => stableStringify(v, seen)).join(",")}]`;
+  return `{${Object.keys(obj).sort().map(k => `${JSON.stringify(k)}:${stableStringify(obj[k], seen)}`).join(",")}}`;
 }
 
 // ============================================================================

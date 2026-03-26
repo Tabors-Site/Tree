@@ -33,16 +33,11 @@ const UserSchema = new mongoose.Schema({
   metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
 });
 
-// Hash password before saving
+// Hash password before saving. Always hash. Never skip.
+// Pre-hashed passwords must use $set directly, bypassing this hook.
 UserSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
-
-  // If already a bcrypt hash, do not re-hash
-  if (this.password.startsWith("$2a$") || this.password.startsWith("$2b$")) {
-    return next();
-  }
-
-  const salt = await bcrypt.genSalt(10);
+  const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
@@ -54,8 +49,8 @@ UserSchema.methods.comparePassword = async function (candidatePassword) {
 
 
 // No virtuals. Extension data lives in metadata.
-// Callers use getUserMeta/setUserMeta from core/tree/userMetadata.js
-// or getExtMeta/setExtMeta from core/tree/extensionMetadata.js.
+// Callers use getUserMeta/setUserMeta from seed/tree/userMetadata.js
+// or getExtMeta/setExtMeta from seed/tree/extensionMetadata.js.
 
 const User = mongoose.model("User", UserSchema);
 export default User;

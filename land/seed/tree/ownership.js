@@ -16,6 +16,8 @@ import User from "../models/user.js";
 import { resolveTreeAccess } from "./treeAccess.js";
 import { invalidateNode } from "./ancestorCache.js";
 import { hooks } from "../hooks.js";
+import { getLandConfigValue } from "../landConfig.js";
+import { SYSTEM_OWNER } from "../protocol.js";
 
 /**
  * Add a contributor to a node. Only the resolved owner or admin can do this.
@@ -36,7 +38,7 @@ export async function addContributor(nodeId, contributorId, actorId) {
   }
 
   // Cap contributors array to prevent unbounded growth on shared nodes
-  const MAX_CONTRIBUTORS = 500;
+  const MAX_CONTRIBUTORS = Number(getLandConfigValue("maxContributorsPerNode")) || 500;
   const fullNode = await Node.findById(nodeId).select("contributors").lean();
   if (fullNode?.contributors?.length >= MAX_CONTRIBUTORS) {
     throw new Error(`Node has reached the maximum of ${MAX_CONTRIBUTORS} contributors`);
@@ -92,7 +94,7 @@ export async function setOwner(nodeId, newOwnerId, actorId) {
 
   // If this node already has rootOwner, only that owner or an admin can change it.
   // If it doesn't, resolve the owner above.
-  if (node.rootOwner && node.rootOwner !== "SYSTEM") {
+  if (node.rootOwner && node.rootOwner !== SYSTEM_OWNER) {
     // Current owner or admin can reassign
     const isCurrentOwner = node.rootOwner.toString() === actorId;
     if (!isCurrentOwner) {
@@ -108,14 +110,27 @@ export async function setOwner(nodeId, newOwnerId, actorId) {
 
   const previousOwnerId = node.rootOwner ? node.rootOwner.toString() : null;
 
-  // Set owner and remove from contributors (owner access supersedes contributor)
-  await Node.updateOne(
-    { _id: nodeId },
+  // Atomic CAS: only update if rootOwner hasn't changed since we read it.
+  // Prevents TOCTOU race where ownership changes between the check above and the write.
+  const filter = { _id: nodeId };
+  if (previousOwnerId) {
+    filter.rootOwner = previousOwnerId;
+  } else {
+    filter.rootOwner = null;
+  }
+
+  const result = await Node.updateOne(
+    filter,
     {
       $set: { rootOwner: newOwnerId },
       $pull: { contributors: newOwnerId },
     },
   );
+
+  if (result.matchedCount === 0) {
+    throw new Error("Ownership changed concurrently. Retry the operation.");
+  }
+
   invalidateNode(nodeId); // rootOwner changed
   hooks.run("afterOwnershipChange", { nodeId, action: "setOwner", targetUserId: newOwnerId, previousOwnerId }).catch(() => {});
 }
@@ -130,7 +145,7 @@ export async function removeOwner(nodeId, actorId) {
   const node = await Node.findById(nodeId).select("systemRole rootOwner parent").lean();
   if (!node) throw new Error("Node not found");
   if (node.systemRole) throw new Error("Cannot modify system nodes");
-  if (!node.rootOwner || node.rootOwner === "SYSTEM") throw new Error("Node has no owner to remove");
+  if (!node.rootOwner || node.rootOwner === SYSTEM_OWNER) throw new Error("Node has no owner to remove");
 
   // Only the owner above, or admin, can revoke
   if (node.parent) {
@@ -158,7 +173,7 @@ export async function transferOwnership(nodeId, newOwnerId, actorId) {
   const node = await Node.findById(nodeId).select("systemRole rootOwner").lean();
   if (!node) throw new Error("Node not found");
   if (node.systemRole) throw new Error("Cannot modify system nodes");
-  if (!node.rootOwner || node.rootOwner === "SYSTEM") throw new Error("Node has no owner to transfer from");
+  if (!node.rootOwner || node.rootOwner === SYSTEM_OWNER) throw new Error("Node has no owner to transfer from");
 
   await assertUserExists(newOwnerId);
 

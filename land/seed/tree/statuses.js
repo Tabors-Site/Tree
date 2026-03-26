@@ -1,34 +1,39 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-import {
-  logContribution,
-  findNodeById,
-} from "../utils.js";
+/**
+ * Node status changes.
+ * Three statuses: active, completed, trimmed.
+ * Completed status always inherits to children (by design).
+ * Recursive inheritance capped by depth and total node count.
+ */
+
+import log from "../log.js";
+import { logContribution } from "./contributions.js";
 import { hooks } from "../hooks.js";
+import { checkCascade } from "./cascade.js";
 import Node from "../models/node.js";
 import { NODE_STATUS, ERR, ProtocolError } from "../protocol.js";
+import { getLandConfigValue } from "../landConfig.js";
+
+const VALID_STATUSES = new Set(Object.values(NODE_STATUS));
+const MAX_INHERITED_NODES = 10000; // total nodes affected by one inherited status change
 
 async function editStatus({
-  nodeId,
-  status,
-  isInherited,
-  userId,
-  wasAi = false,
-  chatId = null,
-  sessionId = null,
+  nodeId, status, isInherited,
+  userId, wasAi = false, chatId = null, sessionId = null,
 }) {
-  const node = await findNodeById(nodeId);
+  if (!nodeId || !userId) throw new Error("nodeId and userId are required");
+  if (!status || !VALID_STATUSES.has(status)) {
+    throw new Error(`Invalid status "${status}". Valid: ${[...VALID_STATUSES].join(", ")}`);
+  }
+
+  const node = await Node.findById(nodeId).select("_id name status children systemRole");
   if (!node) throw new Error("Node not found");
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 
-  const VALID_STATUSES = Object.values(NODE_STATUS);
-  if (!VALID_STATUSES.includes(status)) {
-    throw new Error("Invalid Status");
-  }
+  // Completed always inherits. This is by design, not a bug.
+  if (status === NODE_STATUS.COMPLETED) isInherited = true;
 
-  if (status === NODE_STATUS.COMPLETED) {
-    isInherited = true;
-  }
-
+  // beforeStatusChange hook: extensions can validate or cancel
   const beforeData = { node, status, userId };
   const hookResult = await hooks.run("beforeStatusChange", beforeData);
   if (hookResult.cancelled) {
@@ -39,75 +44,55 @@ async function editStatus({
   node.status = status;
   await node.save();
 
-  // afterStatusChange (fire-and-forget)
-  hooks.run("afterStatusChange", { node, status, userId }).catch(() => {});
+  hooks.run("afterStatusChange", { node, status, userId })
+    .catch(err => log.debug("Status", `afterStatusChange hook error: ${err.message}`));
 
-  // Cascade
-  import("./cascade.js").then(({ checkCascade }) =>
-    checkCascade(nodeId, { action: "status:change", status, userId })
-  ).catch(() => {});
+  checkCascade(nodeId, { action: "status:change", status, userId }).catch(() => {});
 
   await logContribution({
-    userId,
-    nodeId,
-    wasAi,
-    chatId,
-    sessionId,
+    userId, nodeId, wasAi, chatId, sessionId,
     action: "editStatus",
     statusEdited: status,
-
   });
 
-  if (isInherited) {
-    await updateNodeStatusRecursively(
-      node,
-      status,
-      userId,
-      wasAi,
-      chatId,
-      sessionId,
-    );
+  // Recursive inheritance
+  if (isInherited && node.children?.length > 0) {
+    const maxDepth = Number(getLandConfigValue("cascadeMaxDepth")) || 50;
+    let totalAffected = 0;
+    await inheritStatus(node.children, status, userId, wasAi, chatId, sessionId, 0, maxDepth, { count: totalAffected, max: MAX_INHERITED_NODES });
   }
 
   return {
-    message: `Status updated to ${status}${
-      isInherited ? " and its children" : ""
-    }`,
+    message: `Status updated to ${status}${isInherited ? " (inherited to children)" : ""}`,
   };
 }
 
-const MAX_CASCADE_DEPTH = 50;
+/**
+ * Recursively set status on all descendants.
+ * Explicit depth parameter (no arguments[] hack).
+ * Capped by both depth and total node count.
+ */
+async function inheritStatus(childIds, status, userId, wasAi, chatId, sessionId, depth, maxDepth, counter) {
+  if (depth >= maxDepth) return;
 
-async function updateNodeStatusRecursively(
-  node,
-  status,
-  userId,
-  wasAi,
-  chatId = null,
-  sessionId = null,
-) {
-  const depth = arguments[6] || 0;
-  if (depth > MAX_CASCADE_DEPTH) return;
+  for (const childId of childIds) {
+    if (counter.count >= counter.max) {
+      log.warn("Status", `Inherited status change capped at ${counter.max} nodes`);
+      return;
+    }
 
-  if (Object.values(NODE_STATUS).includes(status)) {
-    for (const childId of node.children) {
-      await Node.findByIdAndUpdate(childId, { $set: { status } });
-      const childNode = await Node.findById(childId).select("_id children").lean();
-      if (!childNode) continue;
+    await Node.findByIdAndUpdate(childId, { $set: { status } });
+    counter.count++;
 
-      await logContribution({
-        userId,
-        nodeId: childNode._id,
-        wasAi,
-        chatId,
-        sessionId,
-        action: "editStatus",
-        statusEdited: status,
-      });
+    await logContribution({
+      userId, nodeId: childId, wasAi, chatId, sessionId,
+      action: "editStatus",
+      statusEdited: status,
+    });
 
-      await updateNodeStatusRecursively(
-        childNode, status, userId, wasAi, chatId, sessionId, depth + 1,
-      );
+    const child = await Node.findById(childId).select("children").lean();
+    if (child?.children?.length > 0) {
+      await inheritStatus(child.children, status, userId, wasAi, chatId, sessionId, depth + 1, maxDepth, counter);
     }
   }
 }

@@ -5,7 +5,7 @@ import Node from "../models/node.js";
 import Note from "../models/note.js";
 import User from "../models/user.js";
 import { hooks } from "../hooks.js";
-import { NODE_STATUS, DELETED, CONTENT_TYPE } from "../protocol.js";
+import { NODE_STATUS, DELETED, CONTENT_TYPE, SYSTEM_OWNER } from "../protocol.js";
 
 
 export async function buildPathString(nodeId) {
@@ -60,7 +60,7 @@ export async function resolveRootNode(nodeId) {
     throw new Error("Node not found");
   }
 
-  while (!node.rootOwner || node.rootOwner === "SYSTEM") {
+  while (!node.rootOwner || node.rootOwner === SYSTEM_OWNER) {
     if (!node.parent) {
       throw new Error("Invalid tree: no rootOwner found");
     }
@@ -344,7 +344,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
     throw new Error("Node not found");
   }
 
-  const isRoot = !!current.rootOwner && current.rootOwner !== "SYSTEM";
+  const isRoot = !!current.rootOwner && current.rootOwner !== SYSTEM_OWNER;
 
   // ---- Find the tree root (needed for scoped search) ----
   let root;
@@ -359,7 +359,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
         .exec();
       if (!next || next.systemRole) break;
       cursor = next;
-      if (cursor.rootOwner && cursor.rootOwner !== "SYSTEM") break;
+      if (cursor.rootOwner && cursor.rootOwner !== SYSTEM_OWNER) break;
     }
     root = { id: cursor._id.toString(), name: cursor.name };
   }
@@ -582,7 +582,7 @@ export async function getContextForAi(nodeId, options = {}) {
     id: node._id.toString(),
     name: node.name,
     status: node.status || NODE_STATUS.ACTIVE,
-    isRoot: !!node.rootOwner && node.rootOwner !== "SYSTEM",
+    isRoot: !!node.rootOwner && node.rootOwner !== SYSTEM_OWNER,
     dateCreated: node.dateCreated,
   };
 

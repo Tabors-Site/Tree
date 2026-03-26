@@ -15,6 +15,9 @@ export default {
     models: { GatewayChannel: "./model.js" },
     routes: "./routes.js",
     tools: false,
+    sessionTypes: {
+      GATEWAY_INPUT: "gateway-input",
+    },
 
     cli: [
       {

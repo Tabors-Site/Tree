@@ -14,38 +14,36 @@
  * This is the final abstraction layer. Position determines capability.
  */
 
-import Node from "../models/node.js";
+import log from "../log.js";
 import { getAncestorChain, resolveExtensionScopeFromChain, invalidateAll as clearAncestorCache } from "./ancestorCache.js";
+import { hooks } from "../hooks.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// SCOPE RESOLUTION
+// ─────────────────────────────────────────────────────────────────────────
 
 /**
  * Check if an extension is blocked at a node position.
- * Uses the shared ancestor cache.
- *
- * @param {string} extName - extension name to check
- * @param {string} nodeId - node to check at
- * @returns {Promise<boolean>} true if blocked
  */
 export async function isExtensionBlockedAtNode(extName, nodeId) {
-  if (!extName || !nodeId) return false;
+  if (!extName || typeof extName !== "string") return false;
+  if (!nodeId) return false;
   const { blocked } = await getBlockedExtensionsAtNode(nodeId);
   return blocked.has(extName);
 }
 
 /**
  * Get blocked and restricted extensions at a node position.
- * Uses the shared ancestor cache instead of walking DB directly.
- *
- * @param {string} nodeId
- * @returns {Promise<{ blocked: Set<string>, restricted: Map<string,string> }>}
  */
 export async function getBlockedExtensionsAtNode(nodeId) {
+  if (!nodeId) return { blocked: new Set(), restricted: new Map() };
   const ancestors = await getAncestorChain(nodeId);
   if (!ancestors) return { blocked: new Set(), restricted: new Map() };
   return resolveExtensionScopeFromChain(ancestors);
 }
 
 /**
- * Clear the scope cache. Delegates to the shared ancestor cache.
+ * Clear the scope cache.
  */
 export function clearScopeCache() {
   clearAncestorCache();
@@ -53,27 +51,30 @@ export function clearScopeCache() {
 
 /**
  * Clear cache and fire afterScopeChange hook.
- * Call this instead of clearScopeCache when you have context about what changed.
  */
 export function notifyScopeChange({ nodeId, blocked, restricted, userId } = {}) {
   clearAncestorCache();
-  import("../hooks.js").then(({ hooks }) => {
-    hooks.run("afterScopeChange", { nodeId, blocked, restricted, userId }).catch(() => {});
-  }).catch(() => {});
+  hooks.run("afterScopeChange", { nodeId, blocked, restricted, userId })
+    .catch(err => log.debug("Scope", `afterScopeChange hook error: ${err.message}`));
 }
 
-/**
- * Get tool names owned by a specific extension.
- * Used to filter tools when an extension is blocked.
- */
-const _toolOwnership = new Map(); // toolName -> { extName, readOnly }
+// ─────────────────────────────────────────────────────────────────────────
+// TOOL OWNERSHIP
+// ─────────────────────────────────────────────────────────────────────────
 
-/**
- * Register a tool's owner and read-only status.
- * Called by the loader when wiring extension tools.
- */
+import { getLandConfigValue } from "../landConfig.js";
+
+const _toolOwnership = new Map(); // toolName -> { extName, readOnly }
+function maxToolOwners() { return Number(getLandConfigValue("maxRegisteredTools")) || 1000; }
+
 export function registerToolOwner(toolName, extName, readOnly = false) {
-  _toolOwnership.set(toolName, { extName, readOnly });
+  if (typeof toolName !== "string" || toolName.length === 0 || toolName.length > 64) return;
+  if (typeof extName !== "string" || extName.length === 0) return;
+  if (_toolOwnership.size >= maxToolOwners() && !_toolOwnership.has(toolName)) {
+    log.warn("Scope", `Tool ownership cap reached (${maxToolOwners()}). "${toolName}" rejected.`);
+    return;
+  }
+  _toolOwnership.set(toolName, { extName, readOnly: !!readOnly });
 }
 
 export function getToolOwner(toolName) {
@@ -81,13 +82,23 @@ export function getToolOwner(toolName) {
 }
 
 /**
+ * Remove all tool ownership entries for an extension.
+ * Called during extension uninstall.
+ */
+export function clearToolOwnersForExtension(extName) {
+  for (const [name, info] of _toolOwnership) {
+    if (info.extName === extName) _toolOwnership.delete(name);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// TOOL FILTERING
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
  * Filter tool names by scope.
  * Removes tools from blocked extensions.
  * For restricted extensions (access mode "read"), only keeps read-only tools.
- *
- * @param {string[]} toolNames
- * @param {Set<string>} blockedExtensions - fully blocked
- * @param {Map<string,string>} [restrictedExtensions] - extName -> access mode ("read")
  */
 export function filterToolNamesByScope(toolNames, blockedExtensions, restrictedExtensions) {
   if ((!blockedExtensions || blockedExtensions.size === 0) && (!restrictedExtensions || restrictedExtensions.size === 0)) {
@@ -127,10 +138,20 @@ export function filterToolsByScope(tools, blockedExtensions, restrictedExtension
   });
 }
 
-// Mode ownership tracking
+// ─────────────────────────────────────────────────────────────────────────
+// MODE OWNERSHIP
+// ─────────────────────────────────────────────────────────────────────────
+
 const _modeOwnership = new Map(); // modeKey -> extName
+function maxModeOwners() { return Number(getLandConfigValue("maxRegisteredModes")) || 500; }
 
 export function registerModeOwner(modeKey, extName) {
+  if (typeof modeKey !== "string" || modeKey.length === 0 || modeKey.length > 64) return;
+  if (typeof extName !== "string" || extName.length === 0) return;
+  if (_modeOwnership.size >= maxModeOwners() && !_modeOwnership.has(modeKey)) {
+    log.warn("Scope", `Mode ownership cap reached (${maxModeOwners()}). "${modeKey}" rejected.`);
+    return;
+  }
   _modeOwnership.set(modeKey, extName);
 }
 
@@ -139,10 +160,20 @@ export function getModeOwner(modeKey) {
 }
 
 /**
+ * Remove all mode ownership entries for an extension.
+ * Called during extension uninstall.
+ */
+export function clearModeOwnersForExtension(extName) {
+  for (const [key, owner] of _modeOwnership) {
+    if (owner === extName) _modeOwnership.delete(key);
+  }
+}
+
+/**
  * Check if a mode is blocked at a node position.
  */
 export function isModeBlockedByScope(modeKey, blockedExtensions) {
   if (!blockedExtensions || blockedExtensions.size === 0) return false;
   const owner = _modeOwnership.get(modeKey);
-  return owner && blockedExtensions.has(owner);
+  return !!owner && blockedExtensions.has(owner);
 }

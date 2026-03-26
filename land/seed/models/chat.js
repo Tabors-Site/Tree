@@ -54,12 +54,8 @@ const ChatSchema = new mongoose.Schema({
       required: true,
     },
 
-    // "user" = human typed it
-    // "api"  = external API call
-    // "orchestrator" = orchestrator generated this call
-    // "script" = automated trigger from note/script
-    // Free-form string. Core sources: user, api, orchestrator, background, system.
-    // Extensions register their own (script, gateway, etc.)
+    // Free-form string. Callers set whatever describes the origin.
+    // The kernel does not interpret this value.
     source: {
       type: String,
       default: "user",
@@ -97,17 +93,16 @@ const ChatSchema = new mongoose.Schema({
   // AI Context (which mode handled this)
   // -----------------------------------
   aiContext: {
-    path: {
+    // zone = bigMode (tree, home, land). mode = subMode (navigate, edit, default).
+    zone: {
       type: String,
-      default: "home:default",
+      default: "home",
       index: true,
     },
-
-    layers: {
-      type: [String],
-      default: ["home", "default"],
+    mode: {
+      type: String,
+      default: "default",
     },
-
     _id: false,
   },
 
@@ -177,7 +172,8 @@ ChatSchema.index({ userId: 1, "startMessage.time": -1 }); // user chat history q
 // Query by target node (sparse — most home-mode chats lack this field)
 ChatSchema.index({ "treeContext.targetNodeId": 1 }, { sparse: true });
 
-// Retention handled by kernel cleanup job (configurable via land config: chatRetentionDays, 0 = forever)
+// Retention: kernel deletes chats older than chatRetentionDays (default 90, 0 = forever)
+ChatSchema.index({ "startMessage.time": 1 });
 
 const Chat = mongoose.model("Chat", ChatSchema, "aichats");
 

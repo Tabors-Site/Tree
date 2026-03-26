@@ -20,6 +20,8 @@
 import log from "../log.js";
 import mongoose from "mongoose";
 
+const MAX_EXTENSION_INDEXES = 20; // per extension
+
 /**
  * Required kernel indexes. Each entry specifies:
  *   collection: MongoDB collection name (Mongoose pluralizes model names)
@@ -47,6 +49,8 @@ const REQUIRED_INDEXES = [
   { collection: "contributions", fields: { nodeId: 1, date: -1 }, options: {} },
   { collection: "contributions", fields: { userId: 1, date: -1 }, options: {} },
   { collection: "contributions", fields: { sessionId: 1 }, options: { sparse: true } },
+  // Contribution lookup by chatId (finalizeChat collects contributions per chat)
+  { collection: "contributions", fields: { chatId: 1 }, options: { sparse: true } },
 
   // User queries (login by username, already unique in schema but verify)
   { collection: "users", fields: { username: 1 }, options: { unique: true } },
@@ -55,14 +59,25 @@ const REQUIRED_INDEXES = [
   { collection: "aichats", fields: { userId: 1, "startMessage.time": -1 }, options: {} },
   { collection: "aichats", fields: { sessionId: 1, chainIndex: 1 }, options: {} },
   { collection: "aichats", fields: { "treeContext.targetNodeId": 1 }, options: { sparse: true } },
+  // Chat retention cleanup: deleteMany by startMessage.time
+  { collection: "aichats", fields: { "startMessage.time": 1 }, options: {} },
+  // Mode zone queries (gateway, monitor)
+  { collection: "aichats", fields: { "aiContext.zone": 1 }, options: {} },
 
   // LLM connection queries (connections by user)
   { collection: "llmconnections", fields: { userId: 1 }, options: {} },
 ];
 
+// Kernel collection names. Extension indexes cannot target these.
+const KERNEL_COLLECTIONS = new Set([
+  "nodes", "users", "notes", "contributions", "aichats", "llmconnections",
+]);
+
 /**
  * Ensure all required indexes exist. Creates missing ones.
  * Call after database connection, before anything else.
+ *
+ * Groups checks by collection to avoid redundant listIndexes calls.
  *
  * @returns {Promise<{ verified: number, created: number, errors: string[] }>}
  */
@@ -74,35 +89,46 @@ export async function ensureIndexes() {
     return report;
   }
 
+  // Group required indexes by collection
+  const byCollection = new Map();
   for (const idx of REQUIRED_INDEXES) {
+    if (!byCollection.has(idx.collection)) byCollection.set(idx.collection, []);
+    byCollection.get(idx.collection).push(idx);
+  }
+
+  for (const [collName, indexes] of byCollection) {
+    let existing;
     try {
-      const collection = db.collection(idx.collection);
-
-      // Check if this index already exists
-      const existing = await collection.indexes();
-      const fieldKeys = Object.keys(idx.fields);
-      const alreadyExists = existing.some(ex => {
-        if (!ex.key) return false;
-        const exKeys = Object.keys(ex.key);
-        if (exKeys.length !== fieldKeys.length) return false;
-        return fieldKeys.every((k, i) => exKeys[i] === k && ex.key[k] === idx.fields[k]);
-      });
-
-      if (alreadyExists) {
-        report.verified++;
-      } else {
-        await collection.createIndex(idx.fields, {
-          ...idx.options,
-          background: true, // non-blocking creation
-        });
-        report.created++;
-        log.verbose("Indexes", `Created index on ${idx.collection}: ${JSON.stringify(idx.fields)}`);
-      }
+      existing = await db.collection(collName).indexes();
     } catch (err) {
-      // Index creation can fail if conflicting index exists with different options
-      const msg = `${idx.collection} ${JSON.stringify(idx.fields)}: ${err.message}`;
+      const msg = `Failed to list indexes on ${collName}: ${err.message}`;
       report.errors.push(msg);
-      log.warn("Indexes", `Index verification failed: ${msg}`);
+      log.warn("Indexes", msg);
+      continue;
+    }
+
+    for (const idx of indexes) {
+      try {
+        const fieldKeys = Object.keys(idx.fields);
+        const alreadyExists = existing.some(ex => {
+          if (!ex.key) return false;
+          const exKeys = Object.keys(ex.key);
+          if (exKeys.length !== fieldKeys.length) return false;
+          return fieldKeys.every((k, i) => exKeys[i] === k && ex.key[k] === idx.fields[k]);
+        });
+
+        if (alreadyExists) {
+          report.verified++;
+        } else {
+          await db.collection(collName).createIndex(idx.fields, idx.options || {});
+          report.created++;
+          log.verbose("Indexes", `Created index on ${collName}: ${JSON.stringify(idx.fields)}`);
+        }
+      } catch (err) {
+        const msg = `${collName} ${JSON.stringify(idx.fields)}: ${err.message}`;
+        report.errors.push(msg);
+        log.warn("Indexes", `Index verification failed: ${msg}`);
+      }
     }
   }
 
@@ -123,6 +149,10 @@ export async function ensureIndexes() {
  * Ensure extension-declared indexes exist.
  * Called by the loader during the wire phase.
  *
+ * Extensions cannot create indexes on kernel collections.
+ * Capped at MAX_EXTENSION_INDEXES per extension.
+ * Unique indexes are rejected (extensions cannot enforce uniqueness on shared collections).
+ *
  * @param {Array<{ collection: string, fields: object, options?: object }>} indexes
  * @param {string} extName - for logging
  */
@@ -131,13 +161,37 @@ export async function ensureExtensionIndexes(indexes, extName) {
   const db = mongoose.connection.db;
   if (!db) return;
 
+  if (indexes.length > MAX_EXTENSION_INDEXES) {
+    log.warn("Indexes", `Extension ${extName} declares ${indexes.length} indexes (max ${MAX_EXTENSION_INDEXES}). Excess skipped.`);
+    indexes = indexes.slice(0, MAX_EXTENSION_INDEXES);
+  }
+
   for (const idx of indexes) {
-    if (!idx.collection || !idx.fields) continue;
+    if (!idx.collection || typeof idx.collection !== "string") continue;
+    if (!idx.fields || typeof idx.fields !== "object") continue;
+
+    // Extensions cannot create indexes on kernel collections
+    if (KERNEL_COLLECTIONS.has(idx.collection)) {
+      log.warn("Indexes", `Extension ${extName} tried to create index on kernel collection "${idx.collection}". Rejected.`);
+      continue;
+    }
+
+    // Extensions cannot create unique indexes (could break writes for other extensions)
+    const opts = { ...(idx.options || {}) };
+    if (opts.unique) {
+      log.warn("Indexes", `Extension ${extName} tried to create unique index on ${idx.collection}. Unique removed.`);
+      delete opts.unique;
+    }
+
+    // Validate field keys don't contain dangerous operators
+    const fieldKeys = Object.keys(idx.fields);
+    if (fieldKeys.some(k => k.startsWith("$"))) {
+      log.warn("Indexes", `Extension ${extName} index on ${idx.collection} has $ operator in field key. Rejected.`);
+      continue;
+    }
+
     try {
-      await db.collection(idx.collection).createIndex(idx.fields, {
-        ...(idx.options || {}),
-        background: true,
-      });
+      await db.collection(idx.collection).createIndex(idx.fields, opts);
       log.verbose("Indexes", `Extension ${extName}: ensured index on ${idx.collection}`);
     } catch (err) {
       log.warn("Indexes", `Extension ${extName} index failed on ${idx.collection}: ${err.message}`);

@@ -96,7 +96,7 @@ export async function processGatewayMessage(
         {
           userId: channel.userId,
           "endMessage.time": null,
-          "aiContext.path": { $regex: /^tree:|^classifier|^gateway/ },
+          "aiContext.zone": { $in: ["tree", "classifier", "gateway"] },
         },
         {
           $set: {

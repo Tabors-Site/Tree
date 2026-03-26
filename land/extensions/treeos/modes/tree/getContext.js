@@ -1,6 +1,6 @@
 // ws/modes/tree/getContext.js
 export default {
-  name: "tree:getContext",
+  name: "tree:get-context",
   emoji: "📖",
   label: "Get Context",
   bigMode: "tree",

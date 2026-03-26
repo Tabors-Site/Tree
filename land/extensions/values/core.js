@@ -1,4 +1,6 @@
-import { findNodeById, logContribution } from "../../seed/utils.js";
+import { logContribution } from "../../seed/tree/contributions.js";
+import Node from "../../seed/models/node.js";
+async function findNodeById(id) { return Node.findById(id).populate("children"); }
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 let useEnergy = async () => ({ energyUsed: 0 });

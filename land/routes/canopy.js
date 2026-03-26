@@ -1,5 +1,5 @@
 import log from "../seed/log.js";
-import { sendOk, sendError, ERR, NODE_STATUS } from "../seed/protocol.js";
+import { sendOk, sendError, ERR, SYSTEM_OWNER } from "../seed/protocol.js";
 import express from "express";
 import { getLandInfoPayload, getLandIdentity, signCanopyToken } from "../canopy/identity.js";
 import {
@@ -64,10 +64,14 @@ async function requireAdmin(req, res, next) {
 // Simple IP-based rate limiter for unauthenticated endpoints
 const ipRateWindows = new Map();
 const IP_WINDOW_MS = 60 * 1000;
+const MAX_IP_RATE_ENTRIES = 10000;
 function checkIpRate(ip, maxPerMinute) {
   const now = Date.now();
   const w = ipRateWindows.get(ip);
   if (!w || now - w.start > IP_WINDOW_MS) {
+    if (ipRateWindows.size >= MAX_IP_RATE_ENTRIES && !ipRateWindows.has(ip)) {
+      return false; // map full, reject new IPs
+    }
     ipRateWindows.set(ip, { start: now, count: 1 });
     return true;
   }
@@ -138,7 +142,8 @@ router.get("/canopy/user/:username", authenticateCanopy, async (req, res) => {
       landDomain: getLandIdentity().domain,
     });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", `user lookup: ${err.message}`);
+    sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -154,8 +159,7 @@ router.get("/canopy/public-trees", async (req, res) => {
     const skip = (Math.max(1, parseInt(page)) - 1) * limit;
 
     const query = {
-      rootOwner: { $nin: [null, "SYSTEM"] },
-      "versions.0.status": "active",
+      rootOwner: { $nin: [null, SYSTEM_OWNER] },
       visibility: "public",
     };
 
@@ -165,7 +169,7 @@ router.get("/canopy/public-trees", async (req, res) => {
     }
 
     const trees = await Node.find(query)
-      .select("_id name rootOwner llmAssignments")
+      .select("_id name rootOwner llmDefault")
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
@@ -189,7 +193,8 @@ router.get("/canopy/public-trees", async (req, res) => {
 
     sendOk(res, { trees: results, page: parseInt(page) });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", `public-trees: ${err.message}`);
+    sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -200,7 +205,7 @@ router.get("/canopy/public-trees", async (req, res) => {
  */
 router.post("/canopy/peer/register", async (req, res) => {
   try {
-    const ip = req.ip || req.connection?.remoteAddress || "unknown";
+    const ip = req.ip || req.socket?.remoteAddress || "unknown";
     if (!checkIpRate(`register:${ip}`, 5)) {
       return sendError(res, 429, ERR.RATE_LIMITED, "Rate limit exceeded");
     }
@@ -288,7 +293,7 @@ router.post("/canopy/peer/register", async (req, res) => {
         protocolVersion,
         name: name || "",
         extensions: req.body.extensions || [],
-        status: NODE_STATUS.ACTIVE,
+        status: "active",
       });
     }
 
@@ -297,7 +302,8 @@ router.post("/canopy/peer/register", async (req, res) => {
       landId: getLandIdentity().landId,
     });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", `peer register: ${err.message}`);
+    sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -310,12 +316,15 @@ router.post("/canopy/peer/register", async (req, res) => {
 // Used inline with sendError below; kept as a label for grep-ability
 const TEAM_NOT_INSTALLED_MSG = "Team extension not installed. Invites unavailable.";
 
+let _teamHandlersCache = undefined;
 async function loadTeamCanopyHandlers() {
+  if (_teamHandlersCache !== undefined) return _teamHandlersCache;
   try {
-    return await import("../extensions/team/canopyHandlers.js");
+    _teamHandlersCache = await import("../extensions/team/canopyHandlers.js");
   } catch {
-    return null;
+    _teamHandlersCache = null;
   }
+  return _teamHandlersCache;
 }
 
 router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
@@ -324,7 +333,8 @@ router.post("/canopy/invite/offer", authenticateCanopy, async (req, res) => {
     if (!handlers) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, TEAM_NOT_INSTALLED_MSG);
     await handlers.handleInviteOffer(req, res, { User, RemoteUser, validateCanopyRequest });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", `invite/offer: ${err.message}`);
+    sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -334,7 +344,8 @@ router.post("/canopy/invite/accept", authenticateCanopy, async (req, res) => {
     if (!handlers) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, TEAM_NOT_INSTALLED_MSG);
     await handlers.handleInviteAccept(req, res, { User, Node, RemoteUser, validateCanopyRequest, addContributor });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", `invite/accept: ${err.message}`);
+    sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -344,7 +355,8 @@ router.post("/canopy/invite/decline", authenticateCanopy, async (req, res) => {
     if (!handlers) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, TEAM_NOT_INSTALLED_MSG);
     await handlers.handleInviteDecline(req, res, { validateCanopyRequest });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", `invite/decline: ${err.message}`);
+    sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -433,23 +445,20 @@ router.post("/canopy/notify", authenticateCanopy, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Validation failed", { errors: validation.errors });
     }
 
-    const { targetUserId, notificationType, data } = req.body;
+    const { targetUserId, notificationType } = req.body;
 
     // Verify the target user is local
-    const user = await User.findById(targetUserId);
+    const user = await User.findById(targetUserId).select("_id username isRemote").lean();
     if (!user || user.isRemote) {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "Target user not found on this land");
     }
 
-    // For now, just log it. Notification delivery will use existing
-    // notification infrastructure.
-    log.verbose("Canopy",
-      `[Canopy] Notification for ${user.username}: ${notificationType}`
-    );
+    log.verbose("Canopy", `Notification for ${user.username}: ${notificationType}`);
 
     sendOk(res, { message: "Notification received" });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", `notify: ${err.message}`);
+    sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 

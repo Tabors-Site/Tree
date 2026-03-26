@@ -16,18 +16,20 @@
  * on the root node. That's it. One metadata write.
  *
  * The kernel trips. Extensions heal. The kernel does NOT auto-revive.
- * Extensions call core.tree.reviveTree(rootId) when they're satisfied.
+ * Extensions call core.tree.reviveTree(rootId, actorId) when they're satisfied.
  *
  * Defaults to OFF (treeCircuitEnabled: false).
  */
 
 import log from "../log.js";
 import Node from "../models/node.js";
+import User from "../models/user.js";
 import Contribution from "../models/contribution.js";
 import { hooks } from "../hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { invalidateNode } from "./ancestorCache.js";
-import { CASCADE, SYSTEM_ROLE } from "../protocol.js";
+import { resolveTreeAccess } from "./treeAccess.js";
+import { CASCADE, SYSTEM_ROLE, SYSTEM_OWNER } from "../protocol.js";
 
 /**
  * Check if the tree circuit breaker feature is enabled.
@@ -111,44 +113,63 @@ export async function checkTreeHealth(rootId) {
   const checkInterval = parseInt(getLandConfigValue("circuitCheckInterval") || "3600000", 10);
   const since = new Date(Date.now() - checkInterval);
 
-  // Collect node IDs in this tree for scoped queries
-  const treeNodeIds = await Node.find({ rootOwner: rootId }).select("_id").lean();
-  const nodeIdSet = new Set(treeNodeIds.map(n => String(n._id)));
+  // Source A: Contribution log failures scoped to this tree.
+  // Use aggregation with $lookup instead of loading all node IDs into memory.
+  // For large trees, $in with 100K IDs is prohibitively slow.
+  let contributionErrors = 0;
+  try {
+    const errResult = await Contribution.aggregate([
+      { $match: { date: { $gte: since }, "extensionData.error": { $exists: true } } },
+      { $lookup: { from: "nodes", localField: "nodeId", foreignField: "_id", as: "_node" } },
+      { $unwind: "$_node" },
+      { $match: { "_node.rootOwner": rootId } },
+      { $count: "total" },
+    ]);
+    contributionErrors = errResult[0]?.total || 0;
+  } catch {
+    // Aggregation failure is not itself an error to count
+  }
 
-  // Source A: Contribution log failures (extensionData.error on this tree's nodes)
-  const contributionErrors = await Contribution.countDocuments({
-    nodeId: { $in: [...nodeIdSet] },
-    date: { $gte: since },
-    "extensionData.error": { $exists: true },
-  });
-
-  // Source B: .flow cascade failures and rejections sourced from this tree's nodes
+  // Source B: .flow cascade failures/rejections sourced from this tree.
+  // Only check today and yesterday (recent errors matter, historical ones don't).
+  // Cap scanning to prevent O(n) on partitions with 10,000+ results.
   let flowErrors = 0;
   try {
     const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
     if (flowNode) {
       const today = new Date().toISOString().slice(0, 10);
-      const partitions = await Node.find({ parent: flowNode._id, name: { $gte: since.toISOString().slice(0, 10), $lte: today } })
-        .select("metadata")
-        .lean();
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+      const partitions = await Node.find({
+        parent: flowNode._id,
+        name: { $in: [today, yesterday] },
+      }).select("metadata").lean();
+
+      const MAX_SCAN = Number(getLandConfigValue("circuitFlowScanLimit")) || 5000;
+      let scanned = 0;
 
       for (const p of partitions) {
+        if (scanned >= MAX_SCAN) break;
         const results = p.metadata instanceof Map
           ? p.metadata.get("results") || {}
           : p.metadata?.results || {};
 
         for (const entries of Object.values(results)) {
-          if (!Array.isArray(entries)) continue;
-          for (const entry of entries) {
-            if ((entry.status === CASCADE.FAILED || entry.status === CASCADE.REJECTED) && nodeIdSet.has(String(entry.source))) {
+          if (scanned >= MAX_SCAN) break;
+          const arr = Array.isArray(entries) ? entries : [entries];
+          for (const entry of arr) {
+            scanned++;
+            if ((entry.status === CASCADE.FAILED || entry.status === CASCADE.REJECTED) && String(entry.source) === rootId) {
+              // Direct match on rootId as source. For deeper tree scoping,
+              // extensions can implement per-node error tracking in metadata.
               flowErrors++;
             }
           }
         }
       }
     }
-  } catch {
-    // .flow read failure is not itself an error to count
+  } catch (err) {
+    log.debug("Circuit", `Flow error scan failed: ${err.message}`);
   }
 
   const totalErrors = contributionErrors + flowErrors;
@@ -182,6 +203,9 @@ export async function checkTreeHealth(rootId) {
  * @param {object} [scores] - health scores at time of trip
  */
 export async function tripTree(rootId, reason, scores = {}) {
+  if (!reason || typeof reason !== "string") reason = "Unknown";
+  if (reason.length > 500) reason = reason.slice(0, 500);
+
   const circuit = {
     tripped: true,
     reason,
@@ -198,15 +222,37 @@ export async function tripTree(rootId, reason, scores = {}) {
 
   log.warn("Circuit", `Tree ${rootId} tripped: ${reason}`);
 
-  hooks.run("onTreeTripped", { rootId, reason, scores, timestamp: circuit.timestamp }).catch(() => {});
+  hooks.run("onTreeTripped", { rootId, reason, scores, timestamp: circuit.timestamp })
+    .catch(err => log.debug("Circuit", `onTreeTripped hook error: ${err.message}`));
 }
 
 /**
- * Revive a tripped tree.
+ * Revive a tripped tree. Only the tree owner or an admin can revive.
  *
  * @param {string} rootId
+ * @param {string} actorId - userId of the caller (required for authorization)
  */
-export async function reviveTree(rootId) {
+export async function reviveTree(rootId, actorId) {
+  if (!rootId) throw new Error("rootId is required");
+  if (!actorId) throw new Error("actorId is required");
+
+  // Authorization: only tree owner or admin can revive
+  const access = await resolveTreeAccess(rootId, actorId);
+  if (!access.ok || !access.isOwner) {
+    const actor = await User.findById(actorId).select("isAdmin").lean();
+    if (!actor?.isAdmin) {
+      throw new Error("Only the tree owner or admin can revive a tripped tree");
+    }
+  }
+
+  // Only revive if actually tripped. Prevents unnecessary writes and hook fires.
+  const root = await Node.findById(rootId).select("metadata").lean();
+  if (!root) throw new Error("Tree not found");
+  const circuit = root.metadata instanceof Map
+    ? root.metadata.get("circuit")
+    : root.metadata?.circuit;
+  if (!circuit?.tripped) return; // already alive, no-op
+
   await Node.updateOne(
     { _id: rootId },
     { $set: { "metadata.circuit": { tripped: false } } },
@@ -214,9 +260,10 @@ export async function reviveTree(rootId) {
 
   invalidateNode(rootId);
 
-  log.info("Circuit", `Tree ${rootId} revived`);
+  log.info("Circuit", `Tree ${rootId} revived by ${actorId}`);
 
-  hooks.run("onTreeRevived", { rootId, timestamp: new Date().toISOString() }).catch(() => {});
+  hooks.run("onTreeRevived", { rootId, timestamp: new Date().toISOString() })
+    .catch(err => log.debug("Circuit", `onTreeRevived hook error: ${err.message}`));
 }
 
 /**
@@ -232,7 +279,7 @@ export function startCircuitJob() {
     try {
       // Find all tree roots (nodes with rootOwner set, not SYSTEM)
       const roots = await Node.find({
-        rootOwner: { $nin: [null, "SYSTEM"] },
+        rootOwner: { $nin: [null, SYSTEM_OWNER] },
       }).select("_id name metadata").lean();
 
       for (const root of roots) {

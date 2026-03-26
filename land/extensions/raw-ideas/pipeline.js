@@ -12,7 +12,7 @@ import {
   buildDeepTreeSummary,
 } from "../../seed/tree/treeFetch.js";
 import { getExtension } from "../loader.js";
-import { logContribution } from "../../seed/utils.js";
+import { logContribution } from "../../seed/tree/contributions.js";
 import RawIdea from "./model.js";
 import Node from "../../seed/models/node.js";
 

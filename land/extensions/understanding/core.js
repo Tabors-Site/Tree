@@ -3,7 +3,7 @@ import UnderstandingNode from "./understandingNode.js";
 import Node from "../../seed/models/node.js";
 import Contribution from "../../seed/models/contribution.js";
 import { getNotes } from "../../seed/tree/notes.js";
-import { logContribution } from "../../seed/utils.js";
+import { logContribution } from "../../seed/tree/contributions.js";
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 function containsHtml(str) {

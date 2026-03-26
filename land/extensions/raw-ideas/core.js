@@ -4,7 +4,7 @@ import RawIdea from "./model.js";
 import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
 import User from "../../seed/models/user.js";
-import { logContribution } from "../../seed/utils.js";
+import { logContribution } from "../../seed/tree/contributions.js";
 import { DELETED } from "../../seed/protocol.js";
 import { createNote } from "../../seed/tree/notes.js";
 import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";

@@ -3032,7 +3032,7 @@ function addOrchestratorStep(modeKey, result) {
   const MODE_EMOJIS = {
     "intent": "🎯",
     "tree:navigate": "🧭",
-    "tree:getContext": "📖",
+    "tree:get-context": "📖",
     "tree:structure": "🏗️",
     "tree:edit": "✏️",
     "tree:notes": "📝",

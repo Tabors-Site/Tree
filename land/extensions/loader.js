@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices } from "../seed/services.js";
 import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../seed/ws/modes/registry.js";
 import { hooks } from "../seed/hooks.js";
-import { registerOrchestrator } from "../seed/orchestratorRegistry.js";
+import { registerOrchestrator, allowOrchestratorExtension } from "../seed/orchestratorRegistry.js";
 import { registerModeOwner, registerToolOwner, getToolOwner } from "../seed/tree/extensionScope.js";
 import log from "../seed/log.js";
 
@@ -401,6 +401,41 @@ function buildScopedCore(manifest, fullCore) {
     scoped.modes = fullCore.modes;
   }
 
+  // Auth strategy binding: wrap registerStrategy to auto-inject extension name.
+  // Extensions must declare provides.authStrategies in manifest to register.
+  if (scoped.auth?.registerStrategy) {
+    const extName = manifest.name;
+    if (manifest.provides?.authStrategies) {
+      scoped.auth.allowStrategyExtension(extName);
+    }
+    const origRegister = scoped.auth.registerStrategy;
+    scoped.auth = {
+      ...scoped.auth,
+      registerStrategy: (name, handler) => origRegister(name, handler, extName),
+    };
+  }
+
+  // Orchestrator binding: auto-inject extension name so the registry can validate.
+  if (scoped.orchestrators?.register) {
+    const extName = manifest.name;
+    const origRegister = scoped.orchestrators.register;
+    scoped.orchestrators = {
+      ...scoped.orchestrators,
+      register: (bigMode, handler) => origRegister(bigMode, handler, extName),
+    };
+  }
+
+  // Mode binding: auto-inject extension name to prevent impersonation.
+  // Extensions cannot register modes under another extension's identity.
+  if (scoped.modes?.registerMode) {
+    const extName = manifest.name;
+    const origRegister = scoped.modes.registerMode;
+    scoped.modes = {
+      ...scoped.modes,
+      registerMode: (key, handler) => origRegister(key, handler, extName),
+    };
+  }
+
   // Freeze existing kernel services so extensions can't replace core.hooks,
   // core.llm, etc. But allow adding new properties (core.energy = {...})
   // which is the pattern for extension-provided services.
@@ -546,6 +581,11 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Build scoped core: only inject what the manifest declares
       const scopedCore = buildScopedCore(manifest, coreServices);
+
+      // Pre-approve orchestrator registration if declared in manifest
+      if (manifest.provides?.orchestrator) {
+        allowOrchestratorExtension(manifest.name);
+      }
 
       // Initialize (with timeout to prevent a single extension from blocking boot)
       const INIT_TIMEOUT_MS = 10000;
@@ -1016,6 +1056,22 @@ export async function uninstallExtension(name) {
     entry._unloading = true;
     await new Promise(r => setTimeout(r, 2000));
     loaded.delete(name);
+
+    // Clean up tool definitions and mode registrations so stale entries
+    // don't linger in the registry after uninstall.
+    try {
+      const { unregisterToolsForExtension } = await import("../seed/ws/tools.js");
+      unregisterToolsForExtension(name, getToolOwner);
+    } catch {}
+    try {
+      const { unregisterModes } = await import("../seed/ws/modes/registry.js");
+      unregisterModes(name);
+    } catch {}
+    try {
+      const { clearToolOwnersForExtension, clearModeOwnersForExtension } = await import("../seed/tree/extensionScope.js");
+      clearToolOwnersForExtension(name);
+      clearModeOwnersForExtension(name);
+    } catch {}
   }
 
   log.verbose("Extensions", `Uninstalled: ${name}`);

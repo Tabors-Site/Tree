@@ -537,6 +537,7 @@ const LandingPage = () => {
               <a href="/cascade">Cascade</a>
               <a href="/flow">The Flow</a>
               <a href="/extensions">Extensions</a>
+              <a href="/build">Build</a>
               <a href="/network">The Network</a>
             </div>
             <div className="lp-footer-col">

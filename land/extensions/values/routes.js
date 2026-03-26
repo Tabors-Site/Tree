@@ -1,7 +1,8 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import { findNodeById } from "../../seed/utils.js";
+import Node from "../../seed/models/node.js";
+async function findNodeById(id) { return Node.findById(id).populate("children"); }
 import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, getNodeGoals } from "./core.js";
 import { renderValues } from "./html.js";

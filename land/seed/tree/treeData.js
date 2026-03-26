@@ -4,6 +4,9 @@
  * No req/res. No route handlers. Just data in, data out.
  *
  * Route handlers live in routes/api/. This file is kernel-only.
+ *
+ * All recursive traversals are capped by depth and node count.
+ * No function in this file can trigger unbounded DB queries.
  */
 
 import log from "../log.js";
@@ -11,36 +14,50 @@ import Node from "../models/node.js";
 import Note from "../models/note.js";
 import Contribution from "../models/contribution.js";
 import { NODE_STATUS, CONTENT_TYPE } from "../protocol.js";
+import { getLandConfigValue } from "../landConfig.js";
+
+// Configurable caps. Read at call time so config changes take effect.
+function maxTreeDepth() { return Number(getLandConfigValue("treeSummaryMaxDepth")) || 4; }
+function maxTreeNodes() { return Number(getLandConfigValue("treeSummaryMaxNodes")) || 60; }
+function maxNotesPerQuery() { return Math.min(Number(getLandConfigValue("noteQueryLimit")) || 5000, 50000); }
+function maxAncestorDepth() { return Math.max(5, Math.min(Number(getLandConfigValue("treeAncestorDepth")) || 50, 200)); }
+function maxContributionsPerNode() { return Math.max(10, Math.min(Number(getLandConfigValue("treeContributionsPerNode")) || 500, 10000)); }
+function maxNotesPerNodeQuery() { return Math.max(10, Math.min(Number(getLandConfigValue("treeNotesPerNode")) || 100, 1000)); }
+function maxChildrenResolve() { return Math.max(10, Math.min(Number(getLandConfigValue("treeMaxChildrenResolve")) || 200, 1000)); }
+function maxAllDataDepth() { return Math.max(5, Math.min(Number(getLandConfigValue("treeAllDataDepth")) || 20, 50)); }
+const MAX_STRIP_DEPTH = 10; // not configurable, internal safety
 
 /**
  * Get a node's name by ID.
  */
 export async function getNodeName(nodeId) {
+  if (!nodeId) return null;
   const doc = await Node.findById(nodeId, "name").lean();
   return doc?.name || null;
 }
 
 /**
  * Get a node formatted for AI consumption.
- * Returns: { id, name, status, type, parentNodeId, parentName, children, notes, values, goals }
+ * Notes capped. Children resolved by name only (no recursive load).
  */
 export async function getNodeForAi(nodeId) {
   if (!nodeId) throw new Error("Node ID is required");
 
-  const node = await Node.findById(nodeId).lean().exec();
+  const node = await Node.findById(nodeId).lean();
   if (!node) throw new Error(`Node ${nodeId} not found`);
 
   const notes = await Note.find({ nodeId: node._id, contentType: CONTENT_TYPE.TEXT })
     .populate("userId", "username -_id")
-    .lean()
-    .exec();
+    .sort({ createdAt: -1 })
+    .limit(maxNotesPerNodeQuery())
+    .lean();
 
   const parentNodeId = node.parent ? node.parent.toString() : null;
   const parentName = parentNodeId ? await getNodeName(parentNodeId) : "None. Root";
 
   const children = Array.isArray(node.children)
     ? await Promise.all(
-        node.children.map(async (childId) => ({
+        node.children.slice(0, maxChildrenResolve()).map(async (childId) => ({
           id: childId.toString(),
           name: (await getNodeName(childId)) || "Unknown",
         })),
@@ -58,7 +75,7 @@ export async function getNodeForAi(nodeId) {
     parentNodeId,
     parentName,
     children,
-    notes: notes.map((n) => ({
+    notes: notes.map(n => ({
       username: n.userId?.username || "Unknown",
       content: n.content,
     })),
@@ -73,151 +90,176 @@ export async function getNodeForAi(nodeId) {
 
 /**
  * Get a simplified tree for AI consumption.
+ * Depth and node count capped via config (treeSummaryMaxDepth, treeSummaryMaxNodes).
  * Returns JSON string of { tree: { id, name, type?, children[] } }
  */
 export async function getTreeForAi(rootId, filter = null) {
   if (!rootId) throw new Error("Root node ID is required");
 
-  const rootNode = await Node.findById(rootId).populate("children").exec();
-  if (!rootNode) throw new Error("Node not found");
+  const depthCap = maxTreeDepth();
+  const nodeCap = maxTreeNodes();
+  let nodeCount = 0;
 
   const filters = !filter
     ? { [NODE_STATUS.ACTIVE]: true, [NODE_STATUS.TRIMMED]: false, [NODE_STATUS.COMPLETED]: true }
     : { [NODE_STATUS.ACTIVE]: !!filter.active, [NODE_STATUS.TRIMMED]: !!filter.trimmed, [NODE_STATUS.COMPLETED]: !!filter.completed };
 
-  const populateChildrenRecursive = async (node) => {
-    if (node.children?.length > 0) {
-      node.children = await Node.populate(node.children, { path: "children" });
-      for (const child of node.children) {
-        await populateChildrenRecursive(child);
-      }
-    }
-  };
+  const allowedStatuses = new Set();
+  if (filters[NODE_STATUS.ACTIVE]) allowedStatuses.add(NODE_STATUS.ACTIVE);
+  if (filters[NODE_STATUS.TRIMMED]) allowedStatuses.add(NODE_STATUS.TRIMMED);
+  if (filters[NODE_STATUS.COMPLETED]) allowedStatuses.add(NODE_STATUS.COMPLETED);
 
-  await populateChildrenRecursive(rootNode);
+  async function buildNode(nodeId, depth) {
+    if (depth > depthCap || nodeCount >= nodeCap) return null;
 
-  const filtered = filterTreeByStatus(
-    rootNode.toObject ? rootNode.toObject() : rootNode,
-    filters,
-  );
+    const node = await Node.findById(nodeId).select("_id name type status children").lean();
+    if (!node) return null;
 
-  if (!filtered) return JSON.stringify({});
+    const status = node.status || NODE_STATUS.ACTIVE;
+    if (!allowedStatuses.has(status)) return null;
 
-  const simplifyNode = async (node) => {
-    const simplified = {
-      id: node._id.toString(),
-      name: node.name?.replace(/\s+/g, " ").trim(),
-    };
+    nodeCount++;
+    const simplified = { id: node._id.toString(), name: node.name?.replace(/\s+/g, " ").trim() };
     if (node.type) simplified.type = node.type;
-    if (node.children?.length > 0) {
-      simplified.children = [];
-      for (const child of node.children) {
-        simplified.children.push(await simplifyNode(child));
-      }
-    }
-    return simplified;
-  };
 
-  const tree = await simplifyNode(filtered);
+    if (node.children?.length > 0 && depth < depthCap && nodeCount < nodeCap) {
+      const kids = [];
+      for (const childId of node.children) {
+        if (nodeCount >= nodeCap) break;
+        const child = await buildNode(childId, depth + 1);
+        if (child) kids.push(child);
+      }
+      if (kids.length > 0) simplified.children = kids;
+    }
+
+    return simplified;
+  }
+
+  const tree = await buildNode(rootId, 0);
+  if (!tree) return JSON.stringify({});
   return JSON.stringify({ tree });
 }
 
 /**
  * Get tree structure (lightweight, just IDs, names, types, status).
+ * Uses iterative traversal with depth and node caps.
  */
 export async function getTreeStructure(rootId, filters = {}) {
   if (!rootId) throw new Error("Root node ID is required");
 
   const FIELDS = "_id name type status children parent systemRole";
-
-  const populateRecursive = async (nodeId) => {
-    const node = await Node.findById(nodeId)
-      .select(FIELDS)
-      .populate("children", FIELDS)
-      .lean()
-      .exec();
-    if (!node) return null;
-
-    if (node.children?.length > 0) {
-      const populated = [];
-      for (const child of node.children) {
-        const childData = await populateRecursive(child._id);
-        if (childData) populated.push(childData);
-      }
-      node.children = populated;
-    }
-    return node;
-  };
-
-  const rootNode = await populateRecursive(rootId);
-  if (!rootNode) throw new Error("Node not found");
-
-  const ancestors = [];
-  let currentId = rootNode.parent?._id || rootNode.parent;
-  while (currentId) {
-    const parentNode = await Node.findById(currentId).select("_id name parent systemRole").lean().exec();
-    if (!parentNode || parentNode.systemRole) break;
-    ancestors.push(parentNode);
-    currentId = parentNode.parent;
-  }
-  rootNode.ancestors = ancestors;
+  const depthCap = maxTreeDepth() + 2; // structure needs slightly more depth than AI summary
+  const nodeCap = maxTreeNodes() * 5; // structure serves HTML, needs more nodes
 
   const allowedStatuses = [];
   if (filters.active !== false) allowedStatuses.push(NODE_STATUS.ACTIVE);
   if (filters.trimmed === true) allowedStatuses.push(NODE_STATUS.TRIMMED);
   if (filters.completed !== false) allowedStatuses.push(NODE_STATUS.COMPLETED);
 
-  const filterAndFlatten = (node, isRoot = false) => {
-    const status = node.status || NODE_STATUS.ACTIVE;
-    const children = (node.children || []).map((c) => filterAndFlatten(c, false)).filter(Boolean);
-    if (!isRoot && !allowedStatuses.includes(status) && children.length === 0) return null;
-    return { _id: node._id, name: node.name, type: node.type || null, status, parent: node.parent, children };
-  };
+  let nodeCount = 0;
 
-  return filterAndFlatten(rootNode, true);
+  async function buildNode(nodeId, depth) {
+    if (depth > depthCap || nodeCount >= nodeCap) return null;
+
+    const node = await Node.findById(nodeId).select(FIELDS).lean();
+    if (!node) return null;
+
+    nodeCount++;
+    const status = node.status || NODE_STATUS.ACTIVE;
+
+    const children = [];
+    if (node.children?.length > 0 && depth < depthCap && nodeCount < nodeCap) {
+      for (const childId of node.children) {
+        if (nodeCount >= nodeCap) break;
+        const child = await buildNode(childId, depth + 1);
+        if (child) children.push(child);
+      }
+    }
+
+    // Filter: skip nodes with wrong status and no children
+    if (!allowedStatuses.includes(status) && children.length === 0) return null;
+
+    return { _id: node._id, name: node.name, type: node.type || null, status, parent: node.parent, children };
+  }
+
+  const rootNode = await buildNode(rootId, 0);
+  if (!rootNode) throw new Error("Node not found");
+
+  // Ancestors (capped)
+  const ancestors = [];
+  let currentId = rootNode.parent;
+  let ancestorDepth = 0;
+  while (currentId && ancestorDepth < maxAncestorDepth()) {
+    const parentNode = await Node.findById(currentId).select("_id name parent systemRole").lean();
+    if (!parentNode || parentNode.systemRole) break;
+    ancestors.push(parentNode);
+    currentId = parentNode.parent;
+    ancestorDepth++;
+  }
+  rootNode.ancestors = ancestors;
+
+  return rootNode;
 }
 
 /**
  * Get full node data with contributions, notes, ancestors, and status filtering.
- * Returns the root node object with all children populated recursively.
+ * Contributions and notes capped per node. Total nodes capped.
  */
 export async function getAllNodeData(rootId, filters = {}) {
   if (!rootId) throw new Error("Root node ID is required");
 
-  const populateNodeRecursive = async (nodeId) => {
-    let node = await Node.findById(nodeId).populate("children").lean().exec();
+  const nodeCap = maxTreeNodes() * 10;
+  let nodeCount = 0;
+
+  async function buildNode(nodeId, depth) {
+    if (depth > maxAllDataDepth() || nodeCount >= nodeCap) return null;
+
+    let node = await Node.findById(nodeId).lean();
     if (!node) return null;
 
+    nodeCount++;
     node = stripMetadataSecrets(node);
 
-    const contributions = await Contribution.find({ nodeId: node._id }).exec();
-    node.contributions = contributions;
+    node.contributions = await Contribution.find({ nodeId: node._id })
+      .sort({ date: -1 })
+      .limit(maxContributionsPerNode())
+      .lean();
 
     const notes = await Note.find({ nodeId: node._id, contentType: CONTENT_TYPE.TEXT })
-      .populate("userId", "username -_id").lean().exec();
-    node.notes = notes.map((n) => ({ username: n.userId?.username || "Unknown", content: n.content }));
+      .populate("userId", "username -_id")
+      .sort({ createdAt: -1 })
+      .limit(maxNotesPerNodeQuery())
+      .lean();
+    node.notes = notes.map(n => ({ username: n.userId?.username || "Unknown", content: n.content }));
 
     if (node.children?.length > 0) {
-      const populatedChildren = [];
-      for (const child of node.children) {
-        const childData = await populateNodeRecursive(child._id);
-        if (childData) populatedChildren.push(childData);
+      const kids = [];
+      for (const childId of node.children) {
+        if (nodeCount >= nodeCap) break;
+        const child = await buildNode(childId, depth + 1);
+        if (child) kids.push(child);
       }
-      node.children = populatedChildren;
+      node.children = kids;
+    } else {
+      node.children = [];
     }
-    return node;
-  };
 
-  const rootNode = await populateNodeRecursive(rootId);
+    return node;
+  }
+
+  const rootNode = await buildNode(rootId, 0);
   if (!rootNode) return null;
 
+  // Ancestors (capped)
   const ancestors = [];
-  let currentId = rootNode.parent?._id || rootNode.parent;
-  while (currentId) {
-    const parentNode = await Node.findById(currentId).select("_id name parent systemRole").lean().exec();
+  let currentId = rootNode.parent;
+  let ancestorDepth = 0;
+  while (currentId && ancestorDepth < maxAncestorDepth()) {
+    const parentNode = await Node.findById(currentId).select("_id name parent systemRole").lean();
     if (!parentNode || parentNode.systemRole) break;
     ancestors.push(parentNode);
     currentId = parentNode.parent;
+    ancestorDepth++;
   }
   rootNode.ancestors = ancestors;
 
@@ -246,7 +288,7 @@ export function filterTreeByStatus(node, filters) {
     filters[NODE_STATUS.ACTIVE] !== undefined || filters[NODE_STATUS.TRIMMED] !== undefined || filters[NODE_STATUS.COMPLETED] !== undefined;
 
   const status = node.status || NODE_STATUS.ACTIVE;
-  const filteredChildren = node.children?.map((child) => filterTreeByStatus(child, filters)).filter(Boolean) || [];
+  const filteredChildren = node.children?.map(child => filterTreeByStatus(child, filters)).filter(Boolean) || [];
 
   if (!filteringEnabled) return { ...node, children: filteredChildren };
 
@@ -256,11 +298,12 @@ export function filterTreeByStatus(node, filters) {
   return { ...node, children: filteredChildren };
 }
 
-/**
- * Strip sensitive fields from node metadata before sending to clients.
- */
-// Suffix-match sensitive keys. Covers future extensions without kernel changes.
+// ─────────────────────────────────────────────────────────────────────────
+// METADATA SECRET STRIPPING
+// ─────────────────────────────────────────────────────────────────────────
+
 const SENSITIVE_SUFFIXES = ["key", "secret", "token", "password", "mnemonic", "phrase"];
+
 function isSensitiveKey(key) {
   const lower = key.toLowerCase();
   return SENSITIVE_SUFFIXES.some(s => lower.endsWith(s));
@@ -273,7 +316,7 @@ export function stripMetadataSecrets(node) {
 
   for (const [ns, data] of Object.entries(meta)) {
     if (!data || typeof data !== "object") continue;
-    const cleaned = stripDeep(data);
+    const cleaned = stripDeep(data, 0);
     if (cleaned !== data) {
       meta[ns] = cleaned;
       changed = true;
@@ -284,15 +327,15 @@ export function stripMetadataSecrets(node) {
   return node;
 }
 
-function stripDeep(obj) {
-  if (!obj || typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) return obj.map(item => stripDeep(item));
+function stripDeep(obj, depth) {
+  if (!obj || typeof obj !== "object" || depth > MAX_STRIP_DEPTH) return obj;
+  if (Array.isArray(obj)) return obj.map(item => stripDeep(item, depth + 1));
 
   const result = {};
   let stripped = false;
   for (const [key, val] of Object.entries(obj)) {
     if (isSensitiveKey(key)) { stripped = true; continue; }
-    result[key] = val && typeof val === "object" ? stripDeep(val) : val;
+    result[key] = val && typeof val === "object" ? stripDeep(val, depth + 1) : val;
   }
   return stripped ? result : obj;
 }

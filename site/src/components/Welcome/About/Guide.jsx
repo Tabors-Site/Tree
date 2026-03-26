@@ -506,9 +506,10 @@ export async function init(core) {
             what you build. It grows whatever you plant.
           </P>
           <P>
-            Check out extensions built so far at <a href="https://horizon.treeos.ai" style={{color: "#4ade80"}}>horizon.treeos.ai</a> and
-            publish your own. Every extension is a piece contributed toward the future of AI infrastructure.
-            Open code. Open doors. This was designed to be held back by no one.
+            <a href="/build" style={{color: "#4ade80"}}>Full developer reference</a> covers every manifest field, hook,
+            tool registration pattern, and common mistake. Check out extensions at{" "}
+            <a href="https://horizon.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>horizon.treeos.ai</a> and
+            publish your own.
           </P>
         </div>
       </section>
@@ -768,8 +769,34 @@ export async function init(core) {
               ["lockSweepInterval", "300000", "Lock cleanup sweep (ms)"],
               ["uploadCleanupInterval", "21600000", "Upload cleanup frequency (ms)"],
               ["uploadGracePeriodMs", "3600000", "File age before deletion (ms)"],
+              ["uploadCleanupBatchSize", "1000", "Max files deleted per cleanup cycle (10-50000)"],
               ["retentionCleanupInterval", "86400000", "Retention job frequency (ms)"],
               ["cascadeCleanupInterval", "21600000", "Cascade result cleanup frequency (ms)"],
+              ["dnsLookupTimeout", "5000", "DNS resolution timeout for custom LLM URLs (ms)"],
+              ["mcpConnectTimeout", "10000", "MCP client connection timeout (ms)"],
+              ["mcpStaleTimeout", "3600000", "MCP client idle timeout before sweep (ms)"],
+              ["orchestratorInitTimeout", "30000", "Background pipeline init timeout (ms)"],
+              ["hookTimeoutMs", "5000", "Per-hook handler timeout (ms)"],
+              ["hookMaxHandlers", "100", "Max handlers per hook name"],
+              ["hookCircuitThreshold", "5", "Consecutive failures before hook auto-disable"],
+              ["hookCircuitHalfOpenMs", "300000", "Tripped handler recovery test delay (ms)"],
+              ["hookChainTimeoutMs", "15000", "Cumulative timeout for sequential hook chains (ms)"],
+              ["ancestorCacheMaxEntries", "50000", "Max cached ancestor chains"],
+              ["ancestorCacheMaxDepth", "100", "Parent chain depth limit (10-500)"],
+              ["maxContributorsPerNode", "500", "Max contributors[] per node"],
+              ["metadataMaxNestingDepth", "5", "Max metadata nesting depth (2-20)"],
+              ["mcpConnectRetries", "2", "MCP reconnect attempts for pipelines (0-10)"],
+              ["contributionQueryLimit", "5000", "Max contribution docs per query (1-50000)"],
+              ["noteQueryLimit", "5000", "Max notes per query (1-50000)"],
+              ["noteSearchLimit", "500", "Max notes per search (1-10000)"],
+              ["subtreeNodeCap", "10000", "Max nodes in subtree traversal (100-100000)"],
+              ["circuitFlowScanLimit", "5000", "Max cascade results scanned per health check"],
+              ["treeAncestorDepth", "50", "Max ancestors in context build (5-200)"],
+              ["treeContributionsPerNode", "500", "Max contributions per node in context (10-10000)"],
+              ["treeNotesPerNode", "100", "Max notes per node in context (10-1000)"],
+              ["treeMaxChildrenResolve", "200", "Max children resolved per node (10-1000)"],
+              ["treeAllDataDepth", "20", "Max depth for getAllNodeData (5-50)"],
+              ["metadataNamespaceMaxBytes", "524288", "Per-namespace metadata cap in bytes (1KB-2MB)"],
             ].map(([key, def, desc]) => (
               <div key={key} style={{
                 display: "flex", gap: 8, padding: "3px 0",

@@ -15,7 +15,7 @@ const NoteSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: true, // This will store the file link if `contentType` is "file" or text content if `contentType` is "text"
+    required: true, // file link if contentType is "file", text content if "text"
   },
   userId: {
     type: String,
@@ -37,6 +37,10 @@ const NoteSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+// Extensions tag notes via metadata (prestige writes version, treeos writes isReflection).
+// maxNotesPerNode (config, default 1000) checked in createNote before write.
+// Retention: kernel deletes notes when their nodeId is set to DELETED (soft-delete).
 
 const Note = mongoose.model("Note", NoteSchema);
 export default Note;

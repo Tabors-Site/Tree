@@ -30,7 +30,9 @@ function notFoundPage(req, res, message = "This page doesn't exist or may have b
 }
 import { getLandConfigValue } from "../seed/landConfig.js";
 
-const BLOCKED_IDS = ["deleted", "empty", "null", "system"];
+import { DELETED } from "../seed/protocol.js";
+
+const BLOCKED_IDS = new Set([DELETED, "empty", "null", "system"]);
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -44,18 +46,50 @@ const apiLimiter = rateLimit({
 
 export default async function registerURLRoutes(app) {
   app.param("userId", (req, res, next, val) => {
-    if (BLOCKED_IDS.includes(val)) return notFoundPage(req, res);
+    if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
     next();
   });
   app.param("nodeId", (req, res, next, val) => {
-    if (BLOCKED_IDS.includes(val)) return notFoundPage(req, res);
+    if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
     next();
   });
   app.param("rootId", (req, res, next, val) => {
-    if (BLOCKED_IDS.includes(val)) return notFoundPage(req, res);
+    if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
     next();
   });
 
+  // Protocol spec endpoint (no auth, no rate limit, used by CLI connect)
+  const protocolHandler = (req, res) => {
+    const allExtensions = getLoadedExtensionNames();
+    const disabled = new Set(getLandConfigValue("disabledExtensions") || []);
+    const activeExtensions = allExtensions.filter(name => !disabled.has(name));
+
+    const manifests = getLoadedManifests();
+    const cli = {};
+    for (const m of manifests) {
+      if (disabled.has(m.name)) continue;
+      if (m.provides?.cli?.length) {
+        cli[m.name] = m.provides.cli;
+      }
+    }
+
+    sendOk(res, {
+      name: "TreeOS",
+      version: "1.0",
+      capabilities: [
+        "chat", "place", "query",
+        "canopy", "types", "llm-assignments",
+        "transactions", "contributions",
+      ],
+      nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
+      extensions: activeExtensions,
+      cli,
+    });
+  };
+  app.get("/protocol", protocolHandler);
+  app.get("/api/v1/protocol", protocolHandler);
+
+  // Rate limiter (after health and protocol so load balancer pings don't count)
   app.use(apiLimiter);
 
   // Auth page routes (login, register, etc.)
@@ -90,37 +124,4 @@ export default async function registerURLRoutes(app) {
   // Canopy protocol stays at /canopy (not versioned with API)
   app.use("/", canopy);
 
-  // Protocol spec endpoint (both paths for nginx compatibility)
-  const protocolHandler = (req, res) => {
-    const allExtensions = getLoadedExtensionNames();
-
-    // Filter out disabled extensions (may still be loaded in memory until restart)
-    const disabled = new Set(getLandConfigValue("disabledExtensions") || []);
-    const activeExtensions = allExtensions.filter((name) => !disabled.has(name));
-
-    // Collect CLI declarations from active extension manifests
-    const manifests = getLoadedManifests();
-    const cli = {};
-    for (const m of manifests) {
-      if (disabled.has(m.name)) continue;
-      if (m.provides?.cli?.length) {
-        cli[m.name] = m.provides.cli;
-      }
-    }
-
-    sendOk(res, {
-      name: "TreeOS",
-      version: "1.0",
-      capabilities: [
-        "chat", "place", "query",
-        "canopy", "types", "llm-assignments",
-        "transactions", "contributions",
-      ],
-      nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
-      extensions: activeExtensions,
-      cli,
-    });
-  };
-  app.get("/protocol", protocolHandler);
-  app.get("/api/v1/protocol", protocolHandler);
 }

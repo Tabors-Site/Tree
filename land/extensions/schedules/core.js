@@ -1,5 +1,5 @@
 import Node from "../../seed/models/node.js";
-import { logContribution } from "../../seed/utils.js";
+import { logContribution } from "../../seed/tree/contributions.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 let useEnergy = async () => ({ energyUsed: 0 });

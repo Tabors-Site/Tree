@@ -1,7 +1,7 @@
 import vm from "node:vm";
 import { v4 as uuidv4 } from "uuid";
 import Node from "../../seed/models/node.js";
-import { logContribution } from "../../seed/utils.js";
+import { logContribution } from "../../seed/tree/contributions.js";
 import Contribution from "../../seed/models/contribution.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 

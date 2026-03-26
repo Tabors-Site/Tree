@@ -36,6 +36,7 @@ const STATIC_ROUTES = [
   "/extensions",
   "/flow",
   "/network",
+  "/build",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -73,6 +74,10 @@ const PAGE_META = {
   "/extensions": {
     title: "Extensions . How the Tree Grows",
     description: "The manifest, the loader, five registries, spatial scoping. How to build an extension. How an operating system emerges from extensions working together.",
+  },
+  "/build": {
+    title: "Build Extensions . Developer Reference",
+    description: "Everything you need to build extensions for the seed. Manifest, init, hooks, modes, tools, routes, CLI commands, migrations, publishing. Code-first.",
   },
   "/network": {
     title: "The Network . How Trees Connect",

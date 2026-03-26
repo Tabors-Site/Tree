@@ -2,61 +2,29 @@
 /**
  * Protocol: The Communication Primitive
  *
- * One response shape for HTTP. One set of event types for websocket.
- * Semantic error codes that mean something in TreeOS. Cascade statuses
- * as named constants. Every route handler and every websocket emitter
- * imports from this file. Extensions access it through core.protocol.
+ * One response shape for HTTP. One set of event types for WebSocket.
+ * Semantic error codes. Cascade statuses. Node statuses. System roles.
+ * Every route handler and every WebSocket emitter imports from this file.
+ * Extensions access it through core.protocol.
  *
- * Cascade defined how signals move between nodes.
- * This file defines how the kernel talks to everything outside itself.
- * Same philosophy. Shared language that exists before anyone starts talking.
+ * All exported objects are frozen. Extensions cannot modify error codes,
+ * event types, or status values at runtime.
  */
 
-// 400: INVALID_INPUT, INVALID_STATUS, INVALID_TYPE, INVALID_TREE
-// 401: UNAUTHORIZED
-// 403: FORBIDDEN, EXTENSION_BLOCKED, SESSION_EXPIRED, CASCADE_DISABLED, UPLOAD_DISABLED
-// 404: NODE_NOT_FOUND, USER_NOT_FOUND, NOTE_NOT_FOUND, TREE_NOT_FOUND, PEER_NOT_FOUND, EXTENSION_NOT_FOUND, ORCHESTRATOR_NOT_FOUND
-// 409: ORCHESTRATOR_LOCKED, RESOURCE_CONFLICT
-// 413: DOCUMENT_SIZE_EXCEEDED, CASCADE_DEPTH_EXCEEDED, UPLOAD_TOO_LARGE
-// 415: UPLOAD_MIME_REJECTED
-// 429: RATE_LIMITED, CASCADE_REJECTED
-// 500: INTERNAL, TIMEOUT, HOOK_TIMEOUT, HOOK_CANCELLED
-// 502: PEER_UNREACHABLE
-// 503: LLM_TIMEOUT, LLM_FAILED, LLM_NOT_CONFIGURED, TREE_DORMANT
-
-// ============================================================================
-// RESPONSE STATUS
-// ============================================================================
-
-export const STATUS = {
-  OK: "ok",
-  ERROR: "error",
-};
+import log from "./log.js";
 
 // ============================================================================
 // RESPONSE CONSTRUCTORS (transport-agnostic JSON shapes)
 // ============================================================================
 
-/**
- * Build a success response body.
- * @param {object} data - payload
- * @returns {{ status: "ok", data: object }}
- */
 export function ok(data = {}) {
-  return { status: STATUS.OK, data };
+  return { status: "ok", data };
 }
 
-/**
- * Build an error response body.
- * @param {string} code - semantic error code (from ERR)
- * @param {string} message - human-readable message
- * @param {object} [detail] - optional extra context
- * @returns {{ status: "error", error: { code: string, message: string, detail?: object } }}
- */
 export function error(code, message, detail) {
-  const err = { code, message };
-  if (detail !== undefined) err.detail = detail;
-  return { status: STATUS.ERROR, error: err };
+  const err = { code: code || "INTERNAL", message: message || "An error occurred" };
+  if (detail !== undefined && detail !== null) err.detail = detail;
+  return { status: "error", error: err };
 }
 
 // ============================================================================
@@ -64,24 +32,25 @@ export function error(code, message, detail) {
 // ============================================================================
 
 /**
- * Send a success response.
- * @param {object} res - Express response
- * @param {object} data - payload
- * @param {number} [httpStatus=200]
+ * Send a success response. Guards against double-send.
  */
 export function sendOk(res, data = {}, httpStatus = 200) {
+  if (res.headersSent) {
+    log.warn("Protocol", "sendOk called after headers sent. Skipped.");
+    return;
+  }
   return res.status(httpStatus).json(ok(data));
 }
 
 /**
- * Send an error response.
- * @param {object} res - Express response
- * @param {number} httpStatus - HTTP status code (transport layer)
- * @param {string} code - semantic error code (application layer)
- * @param {string} message - human-readable message
- * @param {object} [detail] - optional extra context
+ * Send an error response. Guards against double-send.
+ * Never leaks internal details. Only ProtocolError messages reach the client.
  */
 export function sendError(res, httpStatus, code, message, detail) {
+  if (res.headersSent) {
+    log.warn("Protocol", `sendError(${code}) called after headers sent. Skipped.`);
+    return;
+  }
   return res.status(httpStatus).json(error(code, message, detail));
 }
 
@@ -89,14 +58,10 @@ export function sendError(res, httpStatus, code, message, detail) {
 // PROTOCOL ERROR (throwable Error with ERR code + HTTP status)
 // ============================================================================
 
-/**
- * An error that carries a semantic ERR code and HTTP status.
- * Throw from seed functions. Route catch blocks detect via err.errCode
- * and call sendError(res, err.httpStatus, err.errCode, err.message).
- */
 export class ProtocolError extends Error {
   constructor(httpStatus, code, message) {
     super(message);
+    this.name = "ProtocolError";
     this.httpStatus = httpStatus;
     this.errCode = code;
   }
@@ -104,20 +69,23 @@ export class ProtocolError extends Error {
 
 /**
  * Route-level catch helper. If the error is a ProtocolError, sends the
- * proper response. Otherwise falls back to 500 INTERNAL.
+ * proper response. Otherwise sends 500 INTERNAL with a safe generic message.
+ * Internal error details are logged, never sent to the client.
  */
 export function sendCaughtError(res, err) {
   if (err instanceof ProtocolError) {
     return sendError(res, err.httpStatus, err.errCode, err.message);
   }
-  return sendError(res, 500, "INTERNAL", err.message || "Something went wrong.");
+  // Log the real error for operators. Send a safe message to the client.
+  log.error("Protocol", `Unhandled error: ${err.message}`);
+  return sendError(res, 500, "INTERNAL", "Something went wrong.");
 }
 
 // ============================================================================
 // SEMANTIC ERROR CODES
 // ============================================================================
 
-export const ERR = {
+export const ERR = Object.freeze({
   // Data
   NODE_NOT_FOUND:         "NODE_NOT_FOUND",
   USER_NOT_FOUND:         "USER_NOT_FOUND",
@@ -181,80 +149,76 @@ export const ERR = {
   // System
   INTERNAL:                "INTERNAL",
   TIMEOUT:                 "TIMEOUT",
-};
+});
 
 // ============================================================================
 // WEBSOCKET EVENT TYPES (kernel-emitted only)
 // ============================================================================
 
-export const WS = {
-  // Conversation lifecycle
+export const WS = Object.freeze({
   CHAT_RESPONSE:        "chatResponse",
   CHAT_ERROR:           "chatError",
   CHAT_CANCELLED:       "chatCancelled",
   TOOL_RESULT:          "toolResult",
   PLACE_RESULT:         "placeResult",
   MODE_SWITCHED:        "modeSwitched",
-
-  // Tree mutations
   TREE_CHANGED:         "treeChanged",
-
-  // Infrastructure
   REGISTERED:           "registered",
   NAVIGATOR_SESSION:    "navigatorSession",
   AVAILABLE_MODES:      "availableModes",
   CONVERSATION_CLEARED: "conversationCleared",
   NAVIGATE:             "navigate",
   RELOAD:               "reload",
-};
+});
 
 // ============================================================================
-// CASCADE STATUSES (canonical source, used by seed/tree/cascade.js)
+// CASCADE STATUSES
 // ============================================================================
 
-export const CASCADE = {
+export const CASCADE = Object.freeze({
   SUCCEEDED: "succeeded",
   FAILED:    "failed",
   REJECTED:  "rejected",
   QUEUED:    "queued",
   PARTIAL:   "partial",
   AWAITING:  "awaiting",
-};
+});
 
 // ============================================================================
 // NODE STATUSES
 // ============================================================================
 
-export const NODE_STATUS = {
+export const NODE_STATUS = Object.freeze({
   ACTIVE:    "active",
   COMPLETED: "completed",
   TRIMMED:   "trimmed",
-};
+});
 
 // ============================================================================
-// SYSTEM ROLES (system node identifiers)
+// SYSTEM ROLES
 // ============================================================================
 
-export const SYSTEM_ROLE = {
+export const SYSTEM_ROLE = Object.freeze({
   LAND_ROOT:  "land-root",
   IDENTITY:   "identity",
   CONFIG:     "config",
   PEERS:      "peers",
   EXTENSIONS: "extensions",
   FLOW:       "flow",
-};
+});
 
 // ============================================================================
-// CONTENT TYPES (note content classification)
+// CONTENT TYPES
 // ============================================================================
 
-export const CONTENT_TYPE = {
+export const CONTENT_TYPE = Object.freeze({
   TEXT: "text",
   FILE: "file",
-};
+});
 
 // ============================================================================
 // SENTINEL VALUES
 // ============================================================================
 
 export const DELETED = "deleted";
+export const SYSTEM_OWNER = "SYSTEM";

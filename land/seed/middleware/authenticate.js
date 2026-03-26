@@ -1,7 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "../log.js";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import User from "../models/user.js";
@@ -12,7 +11,6 @@ import { sendError, ERR } from "../protocol.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -72,7 +70,12 @@ export default async function authenticate(req, res, next) {
           req.userId = result.userId;
           req.username = result.username;
           req.authType = name;
-          if (result.extra) Object.assign(req, result.extra);
+          // Extension strategies can attach extra context under a namespaced key.
+          // Never assign directly onto req to prevent overwriting Express internals
+          // or core auth fields (isAdmin, rootId, treeAccess, etc.).
+          if (result.extra && typeof result.extra === "object") {
+            req.strategyExtra = Object.freeze({ ...result.extra });
+          }
           if (!await attachTreeAccess(req, res)) return;
           return next();
         }
@@ -122,7 +125,9 @@ export async function authenticateOptional(req, res, next) {
             return next();
           }
         }
-      } catch {}
+      } catch (jwtErr) {
+        log.debug("Auth", `Optional JWT failed: ${jwtErr.message}`);
+      }
     }
 
     // Extension strategies
@@ -133,15 +138,20 @@ export async function authenticateOptional(req, res, next) {
           req.userId = result.userId;
           req.username = result.username;
           req.authType = name;
-          if (result.extra) Object.assign(req, result.extra);
+          if (result.extra && typeof result.extra === "object") {
+            req.strategyExtra = Object.freeze({ ...result.extra });
+          }
           return next();
         }
-      } catch {}
+      } catch (stratErr) {
+        log.debug("Auth", `Optional strategy "${name}" failed: ${stratErr.message}`);
+      }
     }
 
     // No auth matched. Continue anonymously.
     return next();
-  } catch {
+  } catch (outerErr) {
+    log.debug("Auth", `Optional auth pipeline error: ${outerErr.message}`);
     return next();
   }
 }
@@ -152,9 +162,9 @@ export async function authenticateOptional(req, res, next) {
 
 // Map resolveTreeAccess error strings to protocol codes and HTTP statuses
 const TREE_ACCESS_ERRORS = {
-  NODE_NOT_FOUND: { http: 404, code: ERR.NODE_NOT_FOUND },
-  BROKEN_TREE:    { http: 500, code: ERR.INTERNAL },
-  INVALID_TREE:   { http: 500, code: ERR.INTERNAL },
+  [ERR.NODE_NOT_FOUND]: { http: 404, code: ERR.NODE_NOT_FOUND },
+  [ERR.INVALID_INPUT]:  { http: 400, code: ERR.INVALID_INPUT },
+  [ERR.INVALID_TREE]:   { http: 400, code: ERR.INVALID_TREE },
 };
 
 /**

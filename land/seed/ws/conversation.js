@@ -5,7 +5,6 @@ import log from "../log.js";
 import { hooks } from "../hooks.js";
 
 import OpenAI from "openai";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
@@ -23,19 +22,19 @@ import {
 } from "./modes/registry.js";
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
 import { getLandConfigValue } from "../landConfig.js";
+import { SYSTEM_OWNER } from "../protocol.js";
 
 import { resolveAndValidateHost, getEncryptionKey } from "../llm/connections.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 // ─────────────────────────────────────────────────────────────────────────
-// DEFAULT LLM CLIENT (your server)
+// ─────────────────────────────────────────────────────────────────────────
+// LLM DEFAULTS
 // ─────────────────────────────────────────────────────────────────────────
 
-let DEFAULT_MODEL = process.env.AI_MODEL || "qwen3.5:27b";
 let MAX_MESSAGES = 30;
 let MAX_TOOL_ITERATIONS = 15;
 let LLM_TIMEOUT_MS = 15 * 60 * 1000;
@@ -45,13 +44,21 @@ const MODE_TIMEOUTS = {};
 // ── Kernel config setters (called from startup.js after land config loads) ──
 export function setKernelConfig(key, value) {
   const num = Number(value);
+  // Clamp all numeric values to sane bounds. Zero or negative values for
+  // timeouts/limits would brick the conversation loop. Government-level:
+  // every config path produces a functional system, never a broken one.
   switch (key) {
-    case "llmTimeout": LLM_TIMEOUT_MS = num * 1000; break;
-    case "llmMaxRetries": LLM_MAX_RETRIES = num; break;
-    case "maxToolIterations": MAX_TOOL_ITERATIONS = num; break;
-    case "maxConversationMessages": MAX_MESSAGES = num; break;
-    case "defaultModel": DEFAULT_MODEL = String(value); break;
-    case "llmMaxConcurrent": LLM_MAX_CONCURRENT = num; break;
+    case "llmTimeout": LLM_TIMEOUT_MS = Math.max(5000, Math.min(num * 1000, 30 * 60 * 1000)); break;
+    case "llmMaxRetries": LLM_MAX_RETRIES = Math.max(0, Math.min(num, 10)); break;
+    case "maxToolIterations": MAX_TOOL_ITERATIONS = Math.max(1, Math.min(num, 100)); break;
+    case "maxConversationMessages": MAX_MESSAGES = Math.max(4, Math.min(num, 200)); break;
+    // "defaultModel" removed: model comes from the connection record, not a global default
+    case "llmMaxConcurrent": LLM_MAX_CONCURRENT = Math.max(1, Math.min(num, 500)); break;
+    case "failoverTimeout": FAILOVER_TIMEOUT_MS = Math.max(1000, Math.min(num * 1000, 120000)); break;
+    case "toolCallTimeout": TOOL_CALL_TIMEOUT_MS = Math.max(5000, Math.min(num * 1000, 600000)); break;
+    case "toolResultMaxBytes": TOOL_RESULT_MAX_BYTES = Math.max(1000, Math.min(num, 1000000)); break;
+    case "maxConversationSessions": MAX_CONVERSATION_SESSIONS = Math.max(100, Math.min(num, 500000)); break;
+    case "staleConversationTimeout": STALE_SESSION_MS = Math.max(60000, Math.min(num * 1000, 86400000)); break;
   }
 }
 export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
@@ -60,6 +67,9 @@ export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
 // Prevents thundering herd: caps in-flight LLM calls across all users.
 // Excess callers queue with abort signal support.
 let LLM_MAX_CONCURRENT = 20;
+let FAILOVER_TIMEOUT_MS = 15000;
+let TOOL_CALL_TIMEOUT_MS = 60000;
+let TOOL_RESULT_MAX_BYTES = 50000;
 let _activeLlmCalls = 0;
 const _llmWaiters = [];
 
@@ -137,7 +147,6 @@ async function callWithFailover(callFn, primaryClient, userId) {
   // Walk failover stack with cumulative timeout. If all connections are
   // rate-limited, the jittered backoff per entry can compound. Cap the total
   // failover walk to 15 seconds so the user doesn't wait forever.
-  const FAILOVER_TIMEOUT_MS = 15000;
   const failoverStart = Date.now();
   const stack = await getFailoverStack(userId);
   for (const connId of stack) {
@@ -193,14 +202,23 @@ const ALGORITHM = "aes-256-cbc";
 
 function decrypt(encryptedText) {
   // Use the unified key derivation from connections.js to avoid mismatch
-  const key = getEncryptionKey();
+  let key;
+  try {
+    key = getEncryptionKey();
+  } catch (e) {
+    throw new Error("Cannot decrypt LLM credentials: " + e.message);
+  }
   const [ivHex, encrypted] = encryptedText.split(":");
-  if (!ivHex || !encrypted) throw new Error("Malformed encrypted text");
-  const iv = Buffer.from(ivHex, "hex");
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  let decrypted = decipher.update(encrypted, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
+  if (!ivHex || !encrypted) throw new Error("Malformed encrypted LLM credential (expected iv:ciphertext)");
+  try {
+    const iv = Buffer.from(ivHex, "hex");
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    let decrypted = decipher.update(encrypted, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  } catch (e) {
+    throw new Error("Failed to decrypt LLM credential. The encryption key may have changed or the stored credential is corrupted.");
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -234,34 +252,32 @@ setInterval(() => {
  * Returns the entry on success, or null if the connection is missing/invalid.
  */
 async function resolveConnection(connectionId, cacheKey) {
-  var conn = await LlmConnection.findById(connectionId).lean();
+  const conn = await LlmConnection.findById(connectionId).lean();
   if (!conn || !conn.baseUrl || !conn.encryptedApiKey) return null;
 
   // Admin users can use private/internal IPs (e.g. local Ollama)
-  var owner = await User.findById(conn.userId).select("isAdmin").lean();
+  const owner = await User.findById(conn.userId).select("isAdmin").lean();
 
   if (!owner?.isAdmin) {
     try {
-      var hostname = new URL(conn.baseUrl).hostname;
+      const hostname = new URL(conn.baseUrl).hostname;
       await resolveAndValidateHost(hostname);
     } catch (err) {
-      log.error("LLM", 
-        "Blocked custom LLM connection " + connectionId + ": " + err.message,
-      );
+      log.error("LLM", `Blocked custom LLM connection ${connectionId}: ${err.message}`);
       return null;
     }
   }
 
-  var apiKey = decrypt(conn.encryptedApiKey);
-  var baseURL = conn.baseUrl.replace(/\/+$/, "");
+  const apiKey = decrypt(conn.encryptedApiKey);
+  let baseURL = conn.baseUrl.replace(/\/+$/, "");
   if (baseURL.endsWith("/chat/completions")) {
     baseURL = baseURL.replace(/\/chat\/completions$/, "");
   }
 
-  var entry = {
+  const entry = {
     client: new OpenAI({
-      baseURL: baseURL,
-      apiKey: apiKey,
+      baseURL,
+      apiKey,
       maxRetries: LLM_MAX_RETRIES,
       timeout: LLM_TIMEOUT_MS,
       defaultHeaders: {
@@ -270,7 +286,7 @@ async function resolveConnection(connectionId, cacheKey) {
         "X-OpenRouter-Categories": "personal-agent,general-chat",
       },
     }),
-    model: conn.model || DEFAULT_MODEL,
+    model: conn.model || null,
     isCustom: true,
     connectionId: conn._id,
     fetchedAt: Date.now(),
@@ -281,7 +297,7 @@ async function resolveConnection(connectionId, cacheKey) {
   LlmConnection.updateOne(
     { _id: conn._id },
     { $set: { lastUsedAt: new Date() } },
-  ).catch(function () {});
+  ).catch(() => {});
 
   return entry;
 }
@@ -300,46 +316,35 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
   slot = slot || "main";
 
   // 1. If an override connectionId is provided (e.g. from a root's llmAssignments),
-  //    try that first — it takes highest priority.
+  //    try that first. It takes highest priority.
   if (overrideConnectionId) {
-    var overrideCacheKey = "conn:" + overrideConnectionId;
-    var overrideCached = userClientCache.get(overrideCacheKey);
-    if (
-      overrideCached &&
-      Date.now() - overrideCached.fetchedAt < CLIENT_CACHE_TTL
-    ) {
+    const overrideCacheKey = "conn:" + overrideConnectionId;
+    const overrideCached = userClientCache.get(overrideCacheKey);
+    if (overrideCached && Date.now() - overrideCached.fetchedAt < CLIENT_CACHE_TTL) {
       return overrideCached;
     }
     try {
-      var overrideEntry = await resolveConnection(
-        overrideConnectionId,
-        overrideCacheKey,
-      );
+      const overrideEntry = await resolveConnection(overrideConnectionId, overrideCacheKey);
       if (overrideEntry) return overrideEntry;
     } catch (err) {
-      log.error("LLM", 
-        "Failed to resolve override connection " +
-          overrideConnectionId +
-          ": " +
-          err.message,
-      );
+      log.error("LLM", `Failed to resolve override connection ${overrideConnectionId}: ${err.message}`);
     }
     // Fall through to normal slot-based resolution
   }
 
   // 2. Normal slot-based resolution from user.llmAssignments
-  var cacheKey = userId + ":" + slot;
-  var cached = userClientCache.get(cacheKey);
-  var ttl = cached?.isCanopyProxy ? PROXY_CACHE_TTL : CLIENT_CACHE_TTL;
+  const cacheKey = userId + ":" + slot;
+  const cached = userClientCache.get(cacheKey);
+  const ttl = cached?.isCanopyProxy ? PROXY_CACHE_TTL : CLIENT_CACHE_TTL;
   if (cached && Date.now() - cached.fetchedAt < ttl) {
     return cached;
   }
 
   try {
-    var user = await User.findById(userId).select("llmDefault metadata").lean();
-    var meta = user?.metadata || {};
-    var extSlots = meta?.userLlm?.slots || {};
-    var connectionId = slot === "main" ? user?.llmDefault : (extSlots[slot] || null);
+    const user = await User.findById(userId).select("llmDefault metadata").lean();
+    const meta = user?.metadata || {};
+    const extSlots = meta?.userLlm?.slots || {};
+    let connectionId = slot === "main" ? user?.llmDefault : (extSlots[slot] || null);
 
     // Fall back to "main" (llmDefault) if the specific slot has no assignment
     if (!connectionId && slot !== "main" && user?.llmDefault) {
@@ -347,26 +352,20 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
     }
 
     if (connectionId) {
-      var entry = await resolveConnection(connectionId, cacheKey);
+      const entry = await resolveConnection(connectionId, cacheKey);
       if (entry) return entry;
     }
   } catch (err) {
-    log.error("LLM", 
-      "Failed to load custom LLM for user " + userId + ": " + err.message,
-    );
+    log.error("LLM", `Failed to load custom LLM for user ${userId}: ${err.message}`);
   }
 
   // Check if this is a remote user whose LLM lives on their home land
   try {
-    var remoteCheck = await User.findById(userId).select("isRemote homeLand").lean();
+    const remoteCheck = await User.findById(userId).select("isRemote homeLand").lean();
     if (remoteCheck?.isRemote && remoteCheck.homeLand) {
-      var { createCanopyLlmProxyClient } = await import("../canopy/llmProxy.js");
-      var proxyClient = createCanopyLlmProxyClient({
-        userId,
-        homeLand: remoteCheck.homeLand,
-        slot,
-      });
-      var proxyEntry = {
+      const { createCanopyLlmProxyClient } = await import("../canopy/llmProxy.js");
+      const proxyClient = createCanopyLlmProxyClient({ userId, homeLand: remoteCheck.homeLand, slot });
+      const proxyEntry = {
         client: proxyClient,
         model: null,
         isCustom: true,
@@ -378,10 +377,26 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
       return proxyEntry;
     }
   } catch (err) {
-    log.error("LLM", "Failed to create canopy LLM proxy for user " + userId + ": " + err.message);
+    log.error("LLM", `Failed to create canopy LLM proxy for user ${userId}: ${err.message}`);
   }
 
-  var noLlmEntry = {
+  // Land-level default LLM (operator-configured fallback for all users)
+  try {
+    const landLlmId = getLandConfigValue("landLlmConnection");
+    if (landLlmId) {
+      const landCacheKey = "land:" + slot;
+      const landCached = userClientCache.get(landCacheKey);
+      if (landCached && Date.now() - landCached.fetchedAt < CLIENT_CACHE_TTL) {
+        return landCached;
+      }
+      const landEntry = await resolveConnection(landLlmId, landCacheKey);
+      if (landEntry) return landEntry;
+    }
+  } catch (err) {
+    log.error("LLM", `Failed to resolve land default LLM: ${err.message}`);
+  }
+
+  const noLlmEntry = {
     client: null,
     model: null,
     isCustom: false,
@@ -404,7 +419,7 @@ const MODE_TO_ASSIGNMENT = {
   "tree:structure": "placement",
   "tree:edit": "placement",
   "tree:be": "placement",
-  "tree:getContext": "placement",
+  "tree:get-context": "placement",
   "tree:respond": "respond",
   "tree:notes": "notes",
   // Extension modes are registered via registerModeAssignment() during init
@@ -471,12 +486,14 @@ export function clearUserClientCache(userId) {
  */
 export async function userHasLlm(userId) {
   if (!userId) return false;
-  var user = await User.findById(userId).select("metadata").lean();
-  var userMeta = user?.metadata || {};
-  var userLlm = userMeta?.userLlm?.assignments || {};
+  const user = await User.findById(userId).select("metadata").lean();
+  const userMeta = user?.metadata || {};
+  const userLlm = userMeta?.userLlm?.assignments || {};
   if (userLlm.main) return true;
-  var count = await LlmConnection.countDocuments({ userId });
-  return count > 0;
+  const count = await LlmConnection.countDocuments({ userId });
+  if (count > 0) return true;
+  // Land default available?
+  return !!getLandConfigValue("landLlmConnection");
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -485,12 +502,21 @@ export async function userHasLlm(userId) {
 
 // Each session holds: { modeKey, bigMode, messages[], rootId, _lastActive }
 const sessions = new Map();
+let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked sessions
 
 /**
  * Get or create session for a visitor.
  */
 function getSession(visitorId) {
   if (!sessions.has(visitorId)) {
+    // Hard cap: if sessions exceed limit, evict oldest before creating new
+    if (sessions.size >= MAX_CONVERSATION_SESSIONS) {
+      let oldestKey = null, oldestTime = Infinity;
+      for (const [id, s] of sessions) {
+        if ((s._lastActive || 0) < oldestTime) { oldestTime = s._lastActive || 0; oldestKey = id; }
+      }
+      if (oldestKey) sessions.delete(oldestKey);
+    }
     sessions.set(visitorId, {
       modeKey: null,
       bigMode: null,
@@ -505,7 +531,7 @@ function getSession(visitorId) {
 }
 
 // Sweep stale conversation sessions every 10 minutes (safety net)
-const STALE_SESSION_MS = 30 * 60 * 1000; // 30 min
+let STALE_SESSION_MS = 30 * 60 * 1000; // 30 min
 setInterval(
   () => {
     const now = Date.now();
@@ -533,6 +559,7 @@ setInterval(
  * Returns { modeKey, alert } for the frontend.
  */
 export async function switchMode(visitorId, newModeKey, ctx) {
+  ctx = ctx || {};
   const session = getSession(visitorId);
   const mode = getMode(newModeKey);
   if (!mode) throw new Error(`Unknown mode: ${newModeKey}`);
@@ -644,7 +671,7 @@ async function ensureSession(visitorId, ctx) {
 function checkTreeCircuit(session) {
   if (session._ancestorSnapshot) {
     // The owner node (root) is the last non-system node in the chain
-    const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== "SYSTEM");
+    const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== SYSTEM_OWNER);
     if (rootAncestor?.metadata?.circuit?.tripped) {
       return {
         content: "This tree is dormant. It exceeded health thresholds and its circuit breaker tripped. Contact the land operator or wait for an extension to revive it.",
@@ -751,10 +778,18 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     session.messages = [{ role: "system", content: systemPrompt }];
   }
 
-  // Trim if over max
+  // Trim if over max. Preserve conversation integrity: tool results must
+  // follow their corresponding assistant tool_call message. Trim to a clean
+  // boundary (user or assistant without tool_calls) to avoid orphaned tool results.
   if (session.messages.length > MAX_MESSAGES) {
     const systemMsg = session.messages[0];
-    const recent = session.messages.slice(-(MAX_MESSAGES - 1));
+    let recent = session.messages.slice(-(MAX_MESSAGES - 1));
+    // Walk forward from the trim point to find a clean boundary.
+    // If the first message is a tool result, drop it (and any consecutive
+    // tool results) because their assistant message was trimmed away.
+    while (recent.length > 0 && recent[0].role === "tool") {
+      recent.shift();
+    }
     session.messages = [systemMsg, ...recent];
   }
 
@@ -804,7 +839,9 @@ async function resolveToolsForPosition(session) {
       }
       if (blockedExts.size) blockedExtensions = blockedExts;
       if (restrictedExts.size) restrictedExtensions = restrictedExts;
-    } catch {}
+    } catch (scopeErr) {
+      log.warn("LLM", `Tool scope resolution failed for node ${currentNodeId}: ${scopeErr.message}`);
+    }
   }
   let tools = getToolsForMode(session.modeKey, treeToolConfig);
   // Filter tools by spatial extension scope (blocked + restricted)
@@ -868,23 +905,56 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
       hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
     }).catch(() => {});
   } catch (apiErr) {
-    // Handle models that invent tool names (e.g. "json") instead of using defined tools
+    // Handle models that invent tool names (e.g. "json") instead of using defined tools.
+    // Common with cheap/free models on OpenRouter that attempt function calling syntax
+    // but use hallucinated tool names. The error contains the model's actual output in
+    // failed_generation. We extract the useful text from that output.
     if (apiErr.code === "tool_use_failed" && apiErr.error?.failed_generation) {
+      const inventedTool = apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?";
       let extracted = null;
+
+      // Phase 1: Try parsing as JSON and extract from known argument fields
       try {
         const gen = JSON.parse(apiErr.error.failed_generation);
-        extracted = gen.arguments?.responseHint || gen.arguments?.response || gen.arguments?.content || gen.arguments?.summary || JSON.stringify(gen.arguments);
+        const args = gen.arguments || gen;
+        // Walk common field names that models put their actual response into
+        extracted = args.responseHint || args.response || args.content
+          || args.summary || args.text || args.message || args.answer;
+        // If none matched but arguments exists, serialize it (but not "undefined")
+        if (!extracted && gen.arguments && typeof gen.arguments === "object") {
+          extracted = JSON.stringify(gen.arguments);
+        }
       } catch {
-        // Try extracting any readable text from the failed generation
+        // Phase 2: JSON parse failed. Try regex extraction from raw text.
+        // Check multiple field names, not just responseHint.
         const raw = apiErr.error.failed_generation;
-        const hintMatch = raw.match(/"responseHint"\s*:\s*"([\s\S]*?)(?:"\s*[,}])/);
-        if (hintMatch) extracted = hintMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+        for (const field of ["responseHint", "response", "content", "summary", "text", "message", "answer"]) {
+          const match = raw.match(new RegExp(`"${field}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}])`));
+          if (match) {
+            extracted = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+            break;
+          }
+        }
+        // Phase 3: If still nothing, try to use the raw text itself if it looks like prose
+        if (!extracted && raw && !raw.startsWith("{") && !raw.startsWith("<") && raw.length > 10) {
+          extracted = raw;
+        }
       }
 
-      if (extracted) {
-        log.warn("LLM", `⚠️ Model invented tool "${apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?"}". Extracted response from failed_generation.`);
+      if (extracted && extracted !== "undefined" && extracted !== "null") {
+        log.warn("LLM", `Model invented tool "${inventedTool}". Extracted response from failed_generation (${extracted.length} chars).`);
         response = { choices: [{ message: { role: "assistant", content: extracted }, finish_reason: "stop" }] };
+
+        // Fire afterLLMCall so energy metering still tracks the call
+        hooks.run("afterLLMCall", {
+          userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+          model: clientEntry?.model || MODEL,
+          usage: null, // No usage data available from the error
+          hasToolCalls: false,
+          _failedGeneration: true,
+        }).catch(() => {});
       } else {
+        log.error("LLM", `Model invented tool "${inventedTool}" but no usable text could be extracted from failed_generation.`);
         throw apiErr;
       }
     } else {
@@ -892,6 +962,20 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
     }
   } finally {
     releaseLlmSlot();
+  }
+
+  // Validate response structure. Some LLM providers return malformed responses
+  // (missing choices array, null choices, empty array). Normalize to prevent
+  // downstream crashes.
+  if (!response || !response.choices || !Array.isArray(response.choices)) {
+    log.warn("LLM", `LLM returned malformed response (no choices array). Model: ${MODEL}`);
+    response = { choices: [{ message: { role: "assistant", content: "I was unable to generate a response. Please try again." }, finish_reason: "stop" }] };
+  } else if (response.choices.length === 0) {
+    log.warn("LLM", `LLM returned empty choices array. Model: ${MODEL}`);
+    response = { choices: [{ message: { role: "assistant", content: "I was unable to generate a response. Please try again." }, finish_reason: "stop" }] };
+  } else if (!response.choices[0].message) {
+    log.warn("LLM", `LLM returned choice without message. Model: ${MODEL}`);
+    response.choices[0].message = { role: "assistant", content: "I was unable to generate a response. Please try again." };
   }
 
   return response;
@@ -917,27 +1001,39 @@ async function handleModelQuirks(assistantMessage, session, tools, openai, MODEL
 
     if (looksLikeToolCall) {
       log.warn("LLM",
-        `⚠️ Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`,
+        `Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`,
       );
-      const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
+
+      // Remove the bad assistant message before retrying
       session.messages.pop();
-      const fallbackResponse = await openai.chat.completions.create(
-        {
-          model: MODEL,
-          messages: [
-            ...session.messages,
-            {
-              role: "system",
-              content:
-                "Answer the user's question directly in plain text. Do not use XML, function call, or tool_call syntax.",
-            },
-          ],
-        },
-        requestOpts,
-      );
-      const fallbackChoice = fallbackResponse.choices?.[0];
-      if (fallbackChoice) {
+
+      // Retry through the semaphore to respect concurrency limits
+      const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
+      let fallbackResponse;
+      await acquireLlmSlot(ctx.signal);
+      try {
+        fallbackResponse = await openai.chat.completions.create(
+          {
+            model: MODEL,
+            messages: [
+              ...session.messages,
+              {
+                role: "system",
+                content:
+                  "Answer the user's question directly in plain text. Do not use XML, function call, or tool_call syntax.",
+              },
+            ],
+          },
+          requestOpts,
+        );
+      } finally {
+        releaseLlmSlot();
+      }
+
+      const fallbackChoice = fallbackResponse?.choices?.[0];
+      if (fallbackChoice?.message?.content) {
         session.messages.push(fallbackChoice.message);
+
         if (isInternal) {
           const raw = fallbackChoice.message.content;
           const _llmProvider = {
@@ -945,22 +1041,30 @@ async function handleModelQuirks(assistantMessage, session, tools, openai, MODEL
             model: MODEL,
             connectionId: resolvedConnectionId || null,
           };
+          // Try JSON parse for orchestrator consumption
           try {
             const p = JSON.parse(raw);
             p._llmProvider = _llmProvider;
             return { earlyReturn: p };
           } catch {
+            // Model can't produce structured output. Return the raw text
+            // as content so the orchestrator can still surface it to the user
+            // instead of silently dropping the response.
             return {
               earlyReturn: {
-                action: "error",
-                reason: "Model cannot use tools",
-                raw,
+                action: "respond",
+                content: raw,
+                _noToolSupport: true,
                 _llmProvider,
               },
             };
           }
         }
-        answer = fallbackChoice.message.content;
+      } else {
+        // Fallback produced nothing. Let the original tool-call text through
+        // as the response rather than returning nothing.
+        log.warn("LLM", `Fallback retry produced no content for ${MODEL}. Using original text.`);
+        session.messages.push(assistantMessage);
       }
       return { breakLoop: true };
     }
@@ -1009,10 +1113,15 @@ function parseInternalResponse(raw, isCustom, MODEL, resolvedConnectionId) {
       return { _raw: true, content: raw, _llmProvider };
     }
 
+    // The model produced text that isn't valid JSON. Rather than returning
+    // action:"error" (which the orchestrator treats as a failure, giving the
+    // user nothing), return action:"respond" with the raw text. The user sees
+    // the model's actual answer. This is the common path for cheap/free models
+    // that don't follow structured output instructions.
     return {
-      action: "error",
-      reason: "Internal mode returned invalid JSON",
-      raw,
+      action: "respond",
+      content: raw,
+      _unstructured: true,
       _llmProvider,
     };
   }
@@ -1090,14 +1199,27 @@ async function executeTool(toolCall, session, ctx, client) {
   }
 
   try {
-    const result = await client.callTool({
+    // Tool call timeout: individual tools should not hang longer than the LLM timeout.
+    // Most tools complete in < 5s. A 60s ceiling prevents a single tool from blocking
+    // the entire conversation loop.
+    const toolPromise = client.callTool({
       name: resolvedToolName,
       arguments: args,
     });
-    const resultText =
+    const result = await Promise.race([
+      toolPromise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Tool "${resolvedToolName}" timed out after ${TOOL_CALL_TIMEOUT_MS / 1000}s`)), TOOL_CALL_TIMEOUT_MS)
+      ),
+    ]);
+    let resultText =
       result?.contents?.[0]?.text ||
       result?.content?.[0]?.text ||
       JSON.stringify(result);
+    // Cap tool result size to prevent huge payloads from consuming context window
+    if (resultText && resultText.length > TOOL_RESULT_MAX_BYTES) {
+      resultText = resultText.slice(0, TOOL_RESULT_MAX_BYTES) + `\n... (truncated, result exceeded ${Math.round(TOOL_RESULT_MAX_BYTES / 1024)}KB)`;
+    }
 
     session.messages.push({
       role: "tool",
@@ -1153,14 +1275,20 @@ async function executeTool(toolCall, session, ctx, client) {
 /**
  * Ensure final text response, push to messages, return the result object.
  */
-async function finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId) {
-  // Ensure final text response
+async function finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId, ctx) {
+  // Ensure final text response. If the tool loop ended with no text content
+  // (e.g., model returned only tool calls), make one more call to get a summary.
   if (!response?.choices?.[0]?.message?.content) {
-    const finalResponse = await openai.chat.completions.create({
-      model: MODEL,
-      messages: session.messages,
-    });
-    response = finalResponse;
+    await acquireLlmSlot(ctx?.signal);
+    try {
+      const finalResponse = await openai.chat.completions.create({
+        model: MODEL,
+        messages: session.messages,
+      });
+      response = finalResponse;
+    } finally {
+      releaseLlmSlot();
+    }
   }
 
   const finalAnswer = response?.choices?.[0]?.message?.content || "Done.";
@@ -1264,7 +1392,7 @@ export async function processMessage(visitorId, message, ctx) {
   }
 
   // Phase 7: Finalize response
-  return finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId);
+  return finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId, ctx);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1274,7 +1402,12 @@ export async function processMessage(visitorId, message, ctx) {
 export function injectContext(visitorId, content) {
   const session = getSession(visitorId);
   if (session.messages.length > 0) {
-    session.messages.push({ role: "system", content });
+    // Cap injected context to prevent an extension from consuming the entire context window
+    const MAX_INJECT_SIZE = 32000;
+    const safeContent = typeof content === "string"
+      ? (content.length > MAX_INJECT_SIZE ? content.slice(0, MAX_INJECT_SIZE) + "\n... (context truncated)" : content)
+      : String(content).slice(0, MAX_INJECT_SIZE);
+    session.messages.push({ role: "system", content: safeContent });
     return true;
   }
   return false;
@@ -1380,6 +1513,11 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   // Uses crypto.randomUUID() (sync) to avoid race condition between check and set
   if (!runChat._sessions) runChat._sessions = new Map();
   if (!runChat._sessions.has(visitorId)) {
+    // Cap static sessions map to prevent unbounded growth
+    if (runChat._sessions.size >= 10000) {
+      const first = runChat._sessions.keys().next().value;
+      runChat._sessions.delete(first);
+    }
     runChat._sessions.set(visitorId, crypto.randomUUID());
   }
   const sessionId = runChat._sessions.get(visitorId);

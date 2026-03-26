@@ -4,6 +4,7 @@
 // Services the host land doesn't have get no-op stubs so extensions always
 // have a safe interface to call.
 
+import log from "./log.js";
 import { hooks as hooksModule } from "./hooks.js";
 import { registerMode, setDefaultMode } from "./ws/modes/registry.js";
 import { registerOrchestrator, getOrchestrator } from "./orchestratorRegistry.js";
@@ -12,9 +13,9 @@ import Node from "./models/node.js";
 import Contribution from "./models/contribution.js";
 import Note from "./models/note.js";
 
-import { logContribution } from "./utils.js";
+import { logContribution } from "./tree/contributions.js";
 import { resolveTreeAccess } from "./tree/treeAccess.js";
-import { createUser, verifyPassword, generateToken, isFirstUser, findUserByUsername } from "./auth.js";
+import { createUser, createFirstUser, verifyPassword, generateToken, isFirstUser, findUserByUsername } from "./auth.js";
 
 import {
   createSession, endSession, registerSession,
@@ -43,8 +44,8 @@ import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "./ws
 import { registerRootLlmSlot, registerUserLlmSlot } from "./llm/connections.js";
 import { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandler } from "./ws/websocket.js";
 import { OrchestratorRuntime } from "./orchestrators/runtime.js";
-import { acquireLock, releaseLock, isLocked } from "./orchestrators/locks.js";
-import { ok, error, sendOk, sendError, ERR, WS, CASCADE, STATUS } from "./protocol.js";
+import { acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks } from "./orchestrators/locks.js";
+import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
 import { deliverCascade } from "./tree/cascade.js";
 import {
   addContributor, removeContributor,
@@ -59,9 +60,12 @@ import { checkTreeHealth, tripTree, reviveTree, isTreeAlive } from "./tree/treeC
 
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)
+// Extensions must declare provides.authStrategies in their manifest.
+// The loader wraps registerStrategy to bind the extension name automatically.
 // ---------------------------------------------------------------------------
 
 const authStrategies = [];
+const _allowedStrategyExtensions = new Set();
 
 // ---------------------------------------------------------------------------
 // No-op stubs for optional services
@@ -97,7 +101,16 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     auth: {
       resolveTreeAccess,
       createUser, verifyPassword, generateToken, isFirstUser, findUserByUsername,
-      registerStrategy: (name, handler) => authStrategies.push({ name, handler }),
+      registerStrategy: (name, handler, extName = "unknown") => {
+        if (!_allowedStrategyExtensions.has(extName)) {
+          log.warn("Auth", `Strategy "${name}" from "${extName}" rejected: extension must declare provides.authStrategies in manifest`);
+          return false;
+        }
+        authStrategies.push({ name, handler, extName });
+        log.verbose("Auth", `Strategy "${name}" registered by "${extName}"`);
+        return true;
+      },
+      allowStrategyExtension: (extName) => _allowedStrategyExtensions.add(extName),
       getStrategies: () => authStrategies,
     },
 
@@ -131,7 +144,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       ? { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandler }
       : NOOP_WEBSOCKET,
 
-    orchestrator: { OrchestratorRuntime, acquireLock, releaseLock, isLocked },
+    orchestrator: { OrchestratorRuntime, acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks },
 
     // --- Shared models (core protocol, always available) ---
     models: { User, Node, Contribution, Note },
@@ -155,7 +168,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     cascade: { deliverCascade },
 
     // --- Response protocol (shapes, error codes, event types) ---
-    protocol: { ok, error, sendOk, sendError, ERR, WS, CASCADE, STATUS },
+    protocol: { ok, error, sendOk, sendError, ERR, WS, CASCADE },
   };
 
   // Apply overrides (lands can swap any service)

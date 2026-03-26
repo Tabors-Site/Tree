@@ -17,24 +17,34 @@
  *   setExtMeta / setOwner:  invalidateNode(nodeId) + all entries containing it
  *   addContributor:         invalidateNode(nodeId) only
  *
- * Consistency within one message: snapshotAncestors() returns a frozen copy.
+ * Consistency within one message: snapshotAncestors() returns a deep copy.
  * The conversation loop snapshots once at message start. All resolution chains
  * for that message read from the snapshot. One message, one consistent view.
+ *
+ * Safety:
+ *   - Cache capped at MAX_ENTRIES. LRU eviction on overflow.
+ *   - Invalidation snapshots keys before deletion (no iterate-and-delete).
+ *   - TTL read once per operation for consistency.
+ *   - Stats reset at 1B to prevent overflow.
  */
 
 import log from "../log.js";
 import Node from "../models/node.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { ERR } from "../protocol.js";
+import { ERR, SYSTEM_OWNER } from "../protocol.js";
 
 // ── Cache storage ──
 
 const _cache = new Map(); // nodeId -> { ancestors: [...], cachedAt: number }
+function MAX_ENTRIES() { return Number(getLandConfigValue("ancestorCacheMaxEntries")) || 50000; }
+function MAX_DEPTH() { return Math.max(10, Math.min(Number(getLandConfigValue("ancestorCacheMaxDepth")) || 100, 500)); }
+const STATS_RESET = 1_000_000_000; // reset counters before overflow
 
 // Stats for observability (pulse extension reads these)
 let _hits = 0;
 let _misses = 0;
 let _invalidations = 0;
+let _evictions = 0;
 
 // Fields to cache per ancestor node. These are what the six resolution chains read.
 const ANCESTOR_FIELDS = "metadata parent systemRole rootOwner contributors";
@@ -60,28 +70,31 @@ function getTTL() {
 export async function getAncestorChain(nodeId) {
   if (!nodeId) return null;
   const id = String(nodeId);
+  const ttl = getTTL();
 
   // Check cache
   const cached = _cache.get(id);
-  if (cached && (Date.now() - cached.cachedAt) < getTTL()) {
+  if (cached && (Date.now() - cached.cachedAt) < ttl) {
     _hits++;
     return cached.ancestors;
   }
 
   // Cache miss. Walk from DB.
   _misses++;
-  const ancestors = await walkFromDb(id);
+  const ancestors = await walkFromDb(id, ttl);
   if (!ancestors) return null;
 
-  // Cache the result
-  _cache.set(id, { ancestors, cachedAt: Date.now() });
+  // Cache the result (with eviction if at capacity)
+  cacheEntry(id, ancestors);
 
   // Also cache sub-paths for shared ancestors.
   // If the chain is [C, B, A, root], also cache B -> [B, A, root] and A -> [A, root].
-  for (let i = 1; i < ancestors.length; i++) {
+  // Cap sub-path caching to avoid flooding from deep chains.
+  const maxSubPaths = Math.min(ancestors.length - 1, 10);
+  for (let i = 1; i <= maxSubPaths; i++) {
     const subId = String(ancestors[i]._id);
-    if (!_cache.has(subId) || (Date.now() - _cache.get(subId).cachedAt) >= getTTL()) {
-      _cache.set(subId, { ancestors: ancestors.slice(i), cachedAt: Date.now() });
+    if (!_cache.has(subId)) {
+      cacheEntry(subId, ancestors.slice(i));
     }
   }
 
@@ -89,26 +102,46 @@ export async function getAncestorChain(nodeId) {
 }
 
 /**
+ * Cache an entry with LRU eviction on overflow.
+ */
+function cacheEntry(id, ancestors) {
+  // Evict oldest entries if at capacity
+  if (_cache.size >= MAX_ENTRIES() && !_cache.has(id)) {
+    // Delete the first (oldest) entry. Map preserves insertion order.
+    const oldest = _cache.keys().next().value;
+    _cache.delete(oldest);
+    _evictions++;
+  }
+  _cache.set(id, { ancestors, cachedAt: Date.now() });
+}
+
+/**
  * Walk the parent chain from the database.
  * Returns null if the starting node doesn't exist.
  */
-async function walkFromDb(nodeId) {
+async function walkFromDb(nodeId, ttl) {
   const ancestors = [];
   let cursor = nodeId;
   const visited = new Set();
-  const MAX_DEPTH = 100;
 
   while (cursor && !visited.has(cursor)) {
     visited.add(cursor);
-    if (ancestors.length > MAX_DEPTH) break;
+    if (ancestors.length > MAX_DEPTH()) {
+      log.warn("AncestorCache", `Chain depth exceeded ${MAX_DEPTH()} for ${nodeId}. Possible circular ref.`);
+      break;
+    }
 
     // Check if this ancestor is already cached (shared path optimization)
     const cachedAncestor = _cache.get(String(cursor));
-    if (cachedAncestor && (Date.now() - cachedAncestor.cachedAt) < getTTL()) {
-      // Splice the cached tail onto our chain
-      ancestors.push(...cachedAncestor.ancestors);
-      _hits++;
-      return ancestors;
+    if (cachedAncestor && (Date.now() - cachedAncestor.cachedAt) < ttl) {
+      // Validate the cached tail before splicing
+      if (Array.isArray(cachedAncestor.ancestors) && cachedAncestor.ancestors.length > 0 && cachedAncestor.ancestors[0]._id) {
+        ancestors.push(...cachedAncestor.ancestors);
+        _hits++;
+        return ancestors;
+      }
+      // Invalid cached data. Evict and continue from DB.
+      _cache.delete(String(cursor));
     }
 
     const n = await Node.findById(cursor).select(ANCESTOR_FIELDS).lean();
@@ -139,7 +172,7 @@ async function walkFromDb(nodeId) {
 
 /**
  * Snapshot the ancestor chain for conversation loop consistency.
- * Returns a frozen deep copy. All resolution chains for one message
+ * Returns a deep copy. All resolution chains for one message
  * read from this snapshot. The live cache can change underneath.
  *
  * @param {string} nodeId
@@ -149,6 +182,7 @@ export async function snapshotAncestors(nodeId) {
   const chain = await getAncestorChain(nodeId);
   if (!chain) return null;
   // Deep copy: metadata objects are plain (not Maps), so JSON roundtrip works.
+  // Lean documents from Mongoose are pure JSON-safe objects.
   return JSON.parse(JSON.stringify(chain));
 }
 
@@ -211,7 +245,7 @@ export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
     }
 
     // First rootOwner found is the ownership boundary
-    if (node.rootOwner && node.rootOwner !== "SYSTEM") {
+    if (node.rootOwner && node.rootOwner !== SYSTEM_OWNER) {
       ownerNode = node;
       break;
     }
@@ -242,6 +276,7 @@ export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
 
 /**
  * Invalidate a specific node and all cache entries that contain it as an ancestor.
+ * Snapshots keys before deletion to avoid iterate-and-delete.
  */
 export function invalidateNode(nodeId) {
   const id = String(nodeId);
@@ -250,9 +285,11 @@ export function invalidateNode(nodeId) {
   // Remove direct entry
   _cache.delete(id);
 
-  // Remove any entry whose ancestors array contains this node
-  for (const [key, entry] of _cache) {
-    if (entry.ancestors.some(a => a._id === id)) {
+  // Snapshot keys then check each. Safe against concurrent modification.
+  const keys = [..._cache.keys()];
+  for (const key of keys) {
+    const entry = _cache.get(key);
+    if (entry && entry.ancestors.some(a => a._id === id)) {
       _cache.delete(key);
     }
   }
@@ -270,11 +307,19 @@ export function invalidateAll() {
  * Get cache statistics for observability.
  */
 export function getCacheStats() {
+  // Reset counters before they overflow
+  if (_hits > STATS_RESET || _misses > STATS_RESET) {
+    _hits = 0;
+    _misses = 0;
+  }
+
   return {
     size: _cache.size,
+    maxSize: MAX_ENTRIES(),
     hits: _hits,
     misses: _misses,
     invalidations: _invalidations,
+    evictions: _evictions,
     hitRate: (_hits + _misses) > 0
       ? Math.round((_hits / (_hits + _misses)) * 100)
       : 0,
@@ -292,8 +337,18 @@ function scheduleCleanup() {
   _cleanupTimer = setTimeout(() => {
     const currentTtl = getTTL();
     const cutoff = Date.now() - (currentTtl * 2);
-    for (const [key, entry] of _cache) {
-      if (entry.cachedAt < cutoff) _cache.delete(key);
+    // Snapshot keys before deletion
+    const keys = [..._cache.keys()];
+    let swept = 0;
+    for (const key of keys) {
+      const entry = _cache.get(key);
+      if (entry && entry.cachedAt < cutoff) {
+        _cache.delete(key);
+        swept++;
+      }
+    }
+    if (swept > 0) {
+      log.debug("AncestorCache", `Cleanup: ${swept} expired entries removed. ${_cache.size} remain.`);
     }
     scheduleCleanup(); // re-schedule with potentially updated TTL
   }, ttl * 4);

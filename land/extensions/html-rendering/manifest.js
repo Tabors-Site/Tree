@@ -17,6 +17,7 @@ export default {
     jobs: false,
     energyActions: {},
     sessionTypes: {},
+    authStrategies: true,
     env: [],
 
     hooks: {

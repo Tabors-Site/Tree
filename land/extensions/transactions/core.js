@@ -2,7 +2,7 @@ import Node from "../../seed/models/node.js";
 import Contribution from "../../seed/models/contribution.js";
 
 import Transaction from "./model.js";
-import { logContribution } from "../../seed/utils.js";
+import { logContribution } from "../../seed/tree/contributions.js";
 import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 

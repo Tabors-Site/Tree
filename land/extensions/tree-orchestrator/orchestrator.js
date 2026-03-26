@@ -849,10 +849,10 @@ async function executePlanSteps({
         );
       }
 
-      emitModeResult(socket, "tree:getContext", ctxResult);
+      emitModeResult(socket, "tree:get-context", ctxResult);
 
       const ctxEnd = new Date();
-      rt.trackStep("tree:getContext", {
+      rt.trackStep("tree:get-context", {
         input: `getContextForAi(${targetNodeId}, ${intent.intent})`,
         output: ctxResult,
         startTime: ctxStart,

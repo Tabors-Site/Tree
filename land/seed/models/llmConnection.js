@@ -15,5 +15,10 @@ const LlmConnectionSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: true } }
 );
 
+// API key encrypted with AES-256-CBC (seed/llm/connections.js).
+// SSRF: baseUrl validated against blocked hosts/IPs. Admin users bypass for local LLMs.
+// maxConnectionsPerUser (config, default 15) checked in addLlmConnection.
+// DNS resolved and validated at both creation and request time.
+
 const LlmConnection = mongoose.model("LlmConnection", LlmConnectionSchema, "customllmconnections");
 export default LlmConnection;

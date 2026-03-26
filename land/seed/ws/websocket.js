@@ -6,7 +6,6 @@ import log from "../log.js";
 import { WS } from "../protocol.js";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { getClientForUser, userHasLlm } from "../ws/conversation.js";
@@ -54,7 +53,9 @@ import {
   setChatContext,
   clearChatContext,
 } from "./chatTracker.js";
-const clearMemory = () => {}; // provided by tree-orchestrator extension if installed
+// Provided by tree-orchestrator extension if installed. No-op without it.
+let clearMemory = () => {};
+export function setClearMemoryFn(fn) { if (typeof fn === "function") clearMemory = fn; }
 import {
   registerSession,
   endSession,
@@ -67,13 +68,13 @@ import {
   getSessionsForUser,
   updateSessionMeta,
   SESSION_TYPES,
+  registerSessionType,
   registeredSessionCount,
 } from "./sessionRegistry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -136,6 +137,9 @@ function emitNavigatorStatus(socket) {
 // ============================================================================
 
 export function initWebSocketServer(httpServer, allowedOrigins) {
+  // Register transport-layer session types before any connections arrive
+  registerSessionType("WEBSOCKET_CHAT", "websocket-chat");
+
   io = new Server(httpServer, {
     cors: {
       origin: allowedOrigins,
@@ -174,10 +178,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (tokenMatch) {
         try {
           const decoded = jwt.verify(tokenMatch[1], JWT_SECRET);
-          socket.userId = decoded.id || decoded.userId || decoded._id;
+          socket.userId = decoded.userId;
           socket.username = decoded.username;
           socket.jwt = tokenMatch[1];
-        } catch (_) {}
+        } catch (tokenErr) {
+          log.debug("WS", `Invalid token from ${ip}: ${tokenErr.message}`);
+        }
       }
     }
 
@@ -284,9 +290,13 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
      * Frontend sends this when the iframe URL changes.
      * Payload: { url: "/root/abc123", rootId?: "abc123" }
      */
-    socket.on("urlChanged", async ({ url, rootId, nodeId }) => {
+    socket.on("urlChanged", async ({ url, rootId, nodeId } = {}) => {
       const visitorId = socket.visitorId;
       if (!visitorId) return;
+      // Cap URL to prevent multi-MB payloads flowing through mode detection and session meta
+      if (typeof url === "string" && url.length > 2000) url = url.slice(0, 2000);
+      if (rootId && (typeof rootId !== "string" || rootId.length > 36)) rootId = null;
+      if (nodeId && (typeof nodeId !== "string" || nodeId.length > 36)) nodeId = null;
 
       const newBigMode = bigModeFromUrl(url);
       const currentMode = getCurrentMode(visitorId);
@@ -368,8 +378,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (newBigMode === BIG_MODES.TREE && activeRootId) {
         try {
           rootName = await getNodeName(activeRootId);
-        } catch (e) {}
+        } catch {}
       }
+
 
       // Always send available modes so frontend stays in sync
       const activeMode = getCurrentMode(visitorId);
@@ -457,7 +468,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (bigMode === BIG_MODES.TREE && activeRootId) {
         try {
           rootName = await getNodeName(activeRootId);
-        } catch (e) {}
+        } catch {}
       }
 
       socket.emit(WS.AVAILABLE_MODES, {
@@ -470,266 +481,149 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
 
     // ── CHAT ──────────────────────────────────────────────────────────
-    socket.on(
-      "chat",
-      async ({ message, username, generation, mode: chatMode }) => {
-        if (!message || !username) {
-          socket.emit(WS.CHAT_ERROR, {
-            error: "Missing message or username",
+
+    /** Check if user has LLM access (own connection or tree owner's). */
+    async function checkLlmAccess(userId, visitorId) {
+      if (await userHasLlm(userId)) return true;
+      const activeRootId = getRootId(visitorId);
+      if (!activeRootId) return false;
+      const rootNode = await Node.findById(activeRootId).select("rootOwner llmDefault").lean();
+      return rootNode
+        && rootNode.rootOwner.toString() !== userId.toString()
+        && rootNode.llmDefault && rootNode.llmDefault !== "none";
+    }
+
+    /** Finalize a Chat record and clear tracking state. Single path for all outcomes. */
+    function finishChat(chatId, content, stopped, modeKey) {
+      if (chatId) {
+        finalizeChat({ chatId, content, stopped, modeKey }).catch(e =>
+          log.warn("WS", `Chat finalize failed: ${e.message}`)
+        );
+      }
+      clearChatContext(socket.visitorId);
+      clearActiveChat(socket);
+    }
+
+    socket.on("chat", async ({ message, username, generation, mode: chatMode }) => {
+      if (!message || typeof message !== "string" || !username) {
+        return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
+      }
+      if (message.length > 5000) {
+        return socket.emit(WS.CHAT_ERROR, { error: "Message must be under 5000 characters.", generation });
+      }
+
+      const safeChatMode = ["chat", "place", "query"].includes(chatMode) ? chatMode : "chat";
+      const visitorId = socket.visitorId || `user:${socket.userId}`;
+
+      // LLM access gate
+      try {
+        if (!(await checkLlmAccess(socket.userId, visitorId))) {
+          return socket.emit(WS.CHAT_ERROR, {
+            error: "You need to set up a custom LLM connection before chatting. Visit /setup to connect one.",
             generation,
           });
-          return;
         }
+      } catch (err) {
+        return socket.emit(WS.CHAT_ERROR, { error: err.message, generation });
+      }
 
-        if (typeof message !== "string" || message.length > 5000) {
-          socket.emit(WS.CHAT_ERROR, {
-            error: "Message must be under 5000 characters.",
-            generation,
-          });
-          return;
+      // Serialize per visitorId. Previous message must finish before next starts.
+      await enqueue(visitorId, async () => {
+        if (socket._chatAbort) socket._chatAbort.abort();
+        const abort = new AbortController();
+        socket._chatAbort = abort;
+
+        await finalizeOpenChat(socket);
+
+        const sessionId = ensureSession(socket);
+        syncRegistrySession(socket);
+        const preMode = getCurrentMode(visitorId) || "home:default";
+
+        // Resolve LLM client for tracking
+        const trackingRootId = getRootId(visitorId);
+        let rootLlmOverride = null;
+        if (trackingRootId) {
+          const rn = await Node.findById(trackingRootId).select("llmDefault").lean();
+          rootLlmOverride = (rn?.llmDefault && rn.llmDefault !== "none") ? rn.llmDefault : null;
         }
+        const clientInfo = await getClientForUser(socket.userId, undefined, rootLlmOverride);
 
-        // Validate chat mode
-        const validModes = ["chat", "place", "query"];
-        const safeChatMode = validModes.includes(chatMode) ? chatMode : "chat";
-
-        const visitorId = socket.visitorId || `user:${socket.userId}`;
-
-        // Check if user has LLM access
+        // Start Chat record
+        let chat = null;
         try {
-          let hasLlmAccess = await userHasLlm(socket.userId);
-          if (!hasLlmAccess) {
-            const activeRootId = getRootId(visitorId);
-            if (activeRootId) {
-              const rootNode = await Node.findById(activeRootId)
-                .select("rootOwner llmDefault metadata")
-                .lean();
-              if (
-                rootNode &&
-                rootNode.rootOwner.toString() !== socket.userId.toString() &&
-                rootNode.llmDefault && rootNode.llmDefault !== "none"
-              ) {
-                hasLlmAccess = true;
-              }
-            }
-          }
-          if (!hasLlmAccess) {
-            socket.emit(WS.CHAT_ERROR, {
-              error:
-                "You need to set up a custom LLM connection before chatting. Visit /setup to connect one.",
-              generation,
+          chat = await startChat({
+            userId: socket.userId, sessionId,
+            message: message.slice(0, 5000), source: "user", modeKey: preMode,
+            llmProvider: { isCustom: clientInfo.isCustom, model: clientInfo.model, connectionId: clientInfo.connectionId || null },
+            ...(trackingRootId ? { treeContext: { targetNodeId: trackingRootId } } : {}),
+          });
+          setActiveChat(socket, chat._id, chat.startMessage.time);
+          setChatContext(socket.visitorId, sessionId, chat._id);
+        } catch (err) {
+          log.warn("WS", `Failed to create Chat: ${err.message}`);
+        }
+
+        try {
+          const currentMode = getCurrentMode(visitorId);
+          const bigMode = currentMode?.split(":")[0] || null;
+          let response;
+
+          if (bigMode === "tree") {
+            const orch = getOrchestrator("tree");
+            if (!orch) throw new Error("No tree orchestrator installed. Install the tree-orchestrator extension.");
+            response = await orch.handle({
+              visitorId, message, socket, username,
+              userId: socket.userId, signal: abort.signal, sessionId,
+              skipRespond: safeChatMode === "place",
+              forceQueryOnly: safeChatMode === "query",
+              rootChatId: chat?._id || null,
+              sourceType: safeChatMode === "place" ? "ws-tree-place" : safeChatMode === "query" ? "ws-tree-query" : "tree-chat",
             });
+          } else {
+            response = await processMessage(visitorId, message, {
+              username, userId: socket.userId, rootId: getRootId(visitorId), signal: abort.signal,
+              onToolResults(results) {
+                if (!abort.signal.aborted) for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+              },
+            });
+          }
+
+          if (abort.signal.aborted) {
+            finishChat(chat?._id, null, true);
             return;
           }
-        } catch (err) {
-          socket.emit(WS.CHAT_ERROR, { error: err.message, generation });
-          return;
-        }
 
-        // Serialize messages per visitorId — wait for previous message to finish
-        await enqueue(visitorId, async () => {
-          // Abort any previous in-flight request
-          if (socket._chatAbort) {
-            socket._chatAbort.abort();
-          }
-          const abort = new AbortController();
-          socket._chatAbort = abort;
+          if (response) {
+            // beforeResponse hook
+            let finalContent = response.content || response.answer || null;
+            if (finalContent && safeChatMode !== "place") {
+              const hookData = { content: finalContent, userId: socket.userId, rootId: getRootId(visitorId), mode: getCurrentMode(visitorId) };
+              await hooks.run("beforeResponse", hookData);
+              finalContent = hookData.content;
+            }
 
-          // ── Session + Chat tracking ──────────────────────────────────
-          // Finalize any leftover chat from a previous turn
-          await finalizeOpenChat(socket);
-
-          const sessionId = ensureSession(socket);
-          syncRegistrySession(socket);
-          const preMode = getCurrentMode(visitorId) || "home:default";
-
-          // Resolve client info for tracking (include root override if present)
-          const trackingRootId = getRootId(visitorId);
-          let rootLlmOverride = null;
-          if (trackingRootId) {
-            const rn = await Node.findById(trackingRootId)
-              .select("llmDefault metadata")
-              .lean();
-            rootLlmOverride = (rn?.llmDefault && rn.llmDefault !== "none") ? rn.llmDefault : null;
-          }
-          const clientInfo = await getClientForUser(
-            socket.userId,
-            undefined,
-            rootLlmOverride,
-          );
-
-          let chat = null;
-          try {
-            const activeRootId = trackingRootId;
-            chat = await startChat({
-              userId: socket.userId,
-              sessionId,
-              message: message.slice(0, 5000),
-              source: "user",
-              modeKey: preMode,
-              llmProvider: {
-                isCustom: clientInfo.isCustom,
-                model: clientInfo.model,
-                connectionId: clientInfo.connectionId || null,
-              },
-              ...(activeRootId
-                ? { treeContext: { targetNodeId: activeRootId } }
-                : {}),
-            });
-            setActiveChat(socket, chat._id, chat.startMessage.time);
-            setChatContext(socket.visitorId, sessionId, chat._id);
-          } catch (err) {
-            log.warn("WS", "Failed to create Chat:", err.message);
-          }
-
-          try {
-            const currentMode = getCurrentMode(visitorId);
-            const bigMode = currentMode?.split(":")[0] || null;
-            let response;
-
-            if (bigMode === "tree") {
-              const orchArgs = {
-                visitorId,
-                message,
-                socket,
-                username,
-                userId: socket.userId,
-                signal: abort.signal,
-                sessionId,
-                skipRespond: safeChatMode === "place",
-                forceQueryOnly: safeChatMode === "query",
-                rootChatId: chat?._id || null,
-                sourceType:
-                  safeChatMode === "place"
-                    ? "ws-tree-place"
-                    : safeChatMode === "query"
-                      ? "ws-tree-query"
-                      : "tree-chat",
-              };
-
-              // Orchestrator loaded from extension registry
-              const orch = getOrchestrator("tree");
-              if (!orch) {
-                throw new Error("No tree orchestrator installed. Install the tree-orchestrator extension.");
-              }
-              response = await orch.handle(orchArgs);
+            if (safeChatMode === "place") {
+              socket.emit(WS.PLACE_RESULT, { success: response.success, stepSummaries: response.stepSummaries || [], targetPath: response.lastTargetPath || null, generation });
             } else {
-              response = await processMessage(visitorId, message, {
-                username,
-                userId: socket.userId,
-                rootId: getRootId(visitorId),
-                signal: abort.signal,
-                onToolResults(results) {
-                  if (abort.signal.aborted) return;
-                  for (const r of results) {
-                    socket.emit(WS.TOOL_RESULT, r);
-                  }
-                },
-              });
+              socket.emit(WS.CHAT_RESPONSE, { success: response.success, answer: finalContent, generation });
             }
 
-            if (response && !abort.signal.aborted) {
-              // beforeResponse hook: extensions can modify content before client receives it
-              const rawContent = response.content || response.answer || null;
-              let finalContent = rawContent;
-              if (rawContent && safeChatMode !== "place") {
-                const hookData = {
-                  content: rawContent,
-                  userId: socket.userId,
-                  rootId: getRootId(visitorId),
-                  mode: getCurrentMode(visitorId),
-                };
-                await hooks.run("beforeResponse", hookData);
-                finalContent = hookData.content;
-              }
-
-              // Only send public data to client
-              if (safeChatMode === "place") {
-                socket.emit(WS.PLACE_RESULT, {
-                  success: response.success,
-                  stepSummaries: response.stepSummaries || [],
-                  targetPath: response.lastTargetPath || null,
-                  generation,
-                });
-              } else {
-                socket.emit(WS.CHAT_RESPONSE, {
-                  success: response.success,
-                  answer: finalContent,
-                  generation,
-                });
-              }
-
-              // ── Finalize Chat (success) ────────────────────────────
-              if (chat) {
-                const internal = response._internal || {};
-                finalizeChat({
-                  chatId: chat._id,
-                  content: response.content || response.answer || null,
-                  stopped: false,
-                  modeKey: internal.modeKey || getCurrentMode(visitorId),
-                }).catch((err) =>
-                  log.warn("WS", "Chat finalize failed:", err.message),
-                );
-              }
-              clearChatContext(socket.visitorId);
-              clearActiveChat(socket);
-            } else if (abort.signal.aborted) {
-              // ── Finalize Chat (cancelled mid-flight) ───────────────
-              if (chat) {
-                finalizeChat({
-                  chatId: chat._id,
-                  content: null,
-                  stopped: true,
-                }).catch((err) =>
-                  log.error("WS",
-                    "⚠️ Chat cancel finalize failed:",
-                    err.message,
-                  ),
-                );
-              }
-              clearChatContext(socket.visitorId);
-              clearActiveChat(socket);
-            }
-          } catch (err) {
-            if (abort.signal.aborted) {
-              if (chat) {
-                finalizeChat({
-                  chatId: chat._id,
-                  content: null,
-                  stopped: true,
-                }).catch((e) =>
-                  log.warn("WS", "Chat abort finalize failed:", e.message),
-                );
-              }
-              clearActiveChat(socket);
-              return;
-            }
-
-            log.error("WS", "Chat error:", err);
-
-            // Energy metering handled by energy extension hooks if installed
-
-            socket.emit(WS.CHAT_ERROR, { error: err.message, generation });
-
-            // ── Finalize Chat (error) ────────────────────────────────
-            if (chat) {
-              finalizeChat({
-                chatId: chat._id,
-                content: `Error: ${err.message}`,
-                stopped: false,
-              }).catch((e) =>
-                log.warn("WS", "Chat error finalize failed:", e.message),
-              );
-            }
-            clearActiveChat(socket);
-          } finally {
-            if (socket._chatAbort === abort) {
-              socket._chatAbort = null;
-            }
+            const internal = response._internal || {};
+            finishChat(chat?._id, response.content || response.answer || null, false, internal.modeKey || getCurrentMode(visitorId));
           }
-        });
-      },
-    );
+        } catch (err) {
+          if (abort.signal.aborted) {
+            finishChat(chat?._id, null, true);
+            return;
+          }
+          log.error("WS", `Chat error: ${err.message}`);
+          socket.emit(WS.CHAT_ERROR, { error: err.message, generation });
+          finishChat(chat?._id, `Error: ${err.message}`, false);
+        } finally {
+          if (socket._chatAbort === abort) socket._chatAbort = null;
+        }
+      });
+    });
 
     // ── CANCEL REQUEST ────────────────────────────────────────────────
     socket.on("cancelRequest", () => {
@@ -742,73 +636,60 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
 
     // ── ACTIVE ROOT ───────────────────────────────────────────────────
-    socket.on("setActiveRoot", ({ rootId }) => {
+    socket.on("setActiveRoot", ({ rootId } = {}) => {
       const visitorId = socket.visitorId;
-      if (visitorId && rootId) {
-        setRootId(visitorId, rootId);
-        log.debug("WS", `Set root: ${visitorId}: ${rootId}`);
-      }
+      if (!visitorId || !rootId || typeof rootId !== "string") return;
+      // Basic format check: must look like a UUID or ObjectId
+      if (rootId.length > 36) return;
+      setRootId(visitorId, rootId);
+      log.debug("WS", `Set root: ${visitorId}: ${rootId}`);
     });
     // ── FRONTEND SYNC (context injection) ─────────────────────────────
-    socket.on("nodeUpdated", ({ nodeId, changes }) => {
+    // All payloads are capped. The frontend can send arbitrary data.
+    // injectContext already caps at 32KB, but we sanitize here too to
+    // prevent JSON.stringify on a multi-MB changes object.
+
+    function safeStr(val, max = 200) {
+      if (val == null) return "";
+      return String(val).slice(0, max);
+    }
+
+    socket.on("nodeUpdated", ({ nodeId, changes } = {}) => {
       const visitorId = socket.visitorId;
-      if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Update] User modified node ${nodeId}. Changes: ${JSON.stringify(changes)}`,
-        );
-      }
+      if (!visitorId || !nodeId) return;
+      const changesStr = typeof changes === "object" ? JSON.stringify(changes).slice(0, 500) : safeStr(changes, 500);
+      injectContext(visitorId, `[Frontend Update] User modified node ${safeStr(nodeId)}. Changes: ${changesStr}`);
     });
 
-    socket.on("nodeNavigated", ({ nodeId, nodeName }) => {
+    socket.on("nodeNavigated", ({ nodeId, nodeName } = {}) => {
       const visitorId = socket.visitorId;
-      if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Navigation] User navigated to node "${nodeName}" (${nodeId}).`,
-        );
-      }
+      if (!visitorId || !nodeId) return;
+      injectContext(visitorId, `[Frontend Navigation] User navigated to node "${safeStr(nodeName)}" (${safeStr(nodeId)}).`);
     });
 
-    socket.on("nodeSelected", ({ nodeId, nodeName }) => {
+    socket.on("nodeSelected", ({ nodeId, nodeName } = {}) => {
       const visitorId = socket.visitorId;
-      if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Selection] User is now focusing on node "${nodeName}" (${nodeId}).`,
-        );
-      }
+      if (!visitorId || !nodeId) return;
+      injectContext(visitorId, `[Frontend Selection] User is now focusing on node "${safeStr(nodeName)}" (${safeStr(nodeId)}).`);
     });
 
-    socket.on("nodeCreated", ({ nodeId, nodeName, parentId }) => {
+    socket.on("nodeCreated", ({ nodeId, nodeName, parentId } = {}) => {
       const visitorId = socket.visitorId;
-      if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Action] User created node "${nodeName}" (${nodeId}) under ${parentId}.`,
-        );
-      }
+      if (!visitorId || !nodeId) return;
+      injectContext(visitorId, `[Frontend Action] User created node "${safeStr(nodeName)}" (${safeStr(nodeId)}) under ${safeStr(parentId)}.`);
     });
 
-    socket.on("nodeDeleted", ({ nodeId, nodeName }) => {
+    socket.on("nodeDeleted", ({ nodeId, nodeName } = {}) => {
       const visitorId = socket.visitorId;
-      if (visitorId) {
-        injectContext(
-          visitorId,
-          `[Frontend Action] User deleted node "${nodeName}" (${nodeId}).`,
-        );
-      }
+      if (!visitorId || !nodeId) return;
+      injectContext(visitorId, `[Frontend Action] User deleted node "${safeStr(nodeName)}" (${safeStr(nodeId)}).`);
     });
 
-    socket.on("noteCreated", ({ nodeId, noteContent }) => {
+    socket.on("noteCreated", ({ nodeId, noteContent } = {}) => {
       const visitorId = socket.visitorId;
-      if (visitorId) {
-        const preview = String(noteContent ?? "").slice(0, 100);
-        injectContext(
-          visitorId,
-          `[Frontend Action] User added note to node ${nodeId}: "${preview}${noteContent?.length > 100 ? "..." : ""}"`,
-        );
-      }
+      if (!visitorId || !nodeId) return;
+      const preview = safeStr(noteContent, 100);
+      injectContext(visitorId, `[Frontend Action] User added note to node ${safeStr(nodeId)}: "${preview}${noteContent?.length > 100 ? "..." : ""}"`);
     });
 
     // ── NAVIGATOR CONTROL ──────────────────────────────────────────────
@@ -970,8 +851,15 @@ export function emitReload({ userId }) {
   if (socketId) io.to(socketId).emit(WS.RELOAD);
 }
 
+/**
+ * Broadcast to ALL connected sockets. Use with extreme caution.
+ * Every connected user receives this event. Never send user-specific data.
+ * Safe for: extension reload signals, land-wide announcements, config changes.
+ */
 export function emitBroadcast(event, data) {
-  if (io) io.emit(event, data);
+  if (!io) return;
+  if (!event || typeof event !== "string") return;
+  io.emit(event, data);
 }
 
 export function emitToUser(userId, event, data) {

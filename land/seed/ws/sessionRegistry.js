@@ -12,78 +12,72 @@ import { v4 as uuidv4 } from "uuid";
 // SESSION TYPES
 // ─────────────────────────────────────────────────────────────────────────
 
-export const SESSION_TYPES = {
-  WEBSOCKET_CHAT: "websocket-chat",
-  API_TREE_CHAT: "api-tree-chat",
-  API_TREE_PLACE: "api-tree-place",
-  API_TREE_QUERY: "api-tree-query",
-  RAW_IDEA_ORCHESTRATE: "raw-idea-orchestrate",
-  RAW_IDEA_CHAT: "raw-idea-chat",
-  UNDERSTANDING_ORCHESTRATE: "understanding-orchestrate",
-  SCHEDULED_RAW_IDEA: "scheduled-raw-idea",
-  SHORT_TERM_DRAIN: "short-term-drain",
-  CLEANUP_REORGANIZE: "cleanup-reorganize",
-  CLEANUP_EXPAND: "cleanup-expand",
-  DREAM_NOTIFY: "dream-notify",
-  GATEWAY_INPUT: "gateway-input",
-};
+// Session type registry. The kernel defines no types. Extensions and
+// transport layers register their own during init or boot.
+export const SESSION_TYPES = {};
 
 /**
- * Register a custom session type (used by extensions).
- * @param {string} key   - constant name, e.g. "MY_EXT_SESSION"
- * @param {string} value - wire value, e.g. "my-ext-session"
+ * Register a session type. Called by extensions (via manifest sessionTypes)
+ * and by the transport layer (websocket.js, orchestrate routes).
+ * Duplicate keys are rejected to prevent silent overwrites.
  */
 export function registerSessionType(key, value) {
+  if (typeof key !== "string" || typeof value !== "string") {
+    log.warn("Session", `Invalid session type registration: key and value must be strings`);
+    return false;
+  }
+  if (SESSION_TYPES[key] && SESSION_TYPES[key] !== value) {
+    log.warn("Session", `Session type "${key}" already registered as "${SESSION_TYPES[key]}". Cannot overwrite with "${value}".`);
+    return false;
+  }
   SESSION_TYPES[key] = value;
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // DATA STRUCTURES
 // ─────────────────────────────────────────────────────────────────────────
 
-// sessionId → { sessionId, userId, type, createdAt, lastActivity, status, description, meta }
+// sessionId -> { sessionId, userId, type, createdAt, lastActivity, status, description, meta }
 const sessions = new Map();
 
-// userId → Set<sessionId>
+// userId -> Set<sessionId>
 const userSessionIndex = new Map();
 
-// userId → sessionId  (which session controls the iframe)
+// userId -> sessionId  (which session controls the iframe)
 const activeNavigator = new Map();
 
-
-// sessionId → AbortController  (allows killing in-flight work)
+// sessionId -> AbortController  (allows killing in-flight work)
 const sessionAbortControllers = new Map();
 
-// scopeKey → { sessionId, lastActivity }  (for idle-TTL reuse of scoped sessions)
+// scopeKey -> { sessionId, lastActivity }  (for idle-TTL reuse of scoped sessions)
 const scopedSessions = new Map();
+const MAX_SCOPED_SESSIONS = 20000;
 let DEFAULT_SCOPE_TTL = 15 * 60 * 1000; // 15 minutes
-export function setSessionTTL(ms) { DEFAULT_SCOPE_TTL = ms; }
+export function setSessionTTL(ms) {
+  DEFAULT_SCOPE_TTL = Math.max(5000, Math.min(ms, 86400000));
+}
 
 // ─────────────────────────────────────────────────────────────────────────
-// SESSION CREATION — single entry point for all session creation
+// SESSION CREATION
 // ─────────────────────────────────────────────────────────────────────────
+
+let MAX_SESSIONS = 10000;
+export function setMaxSessions(n) {
+  MAX_SESSIONS = Math.max(100, Math.min(Number(n) || 10000, 500000));
+}
 
 /**
- * Create or retrieve a session. This is the preferred way to get a sessionId.
- *
- * @param {object}  opts
- * @param {string}  opts.userId      - required
- * @param {string}  opts.type        - SESSION_TYPES value
- * @param {string}  [opts.scopeKey]  - for idle-TTL reuse (e.g. "userId:rootId")
- * @param {string}  [opts.description]
- * @param {object}  [opts.meta]
- * @param {number}  [opts.idleTTL]   - ms before a scoped session expires (default 15 min)
- * @returns {{ sessionId: string, reused: boolean, isActiveNavigator: boolean }}
+ * Create or retrieve a session. Single entry point for all session creation.
  */
-let MAX_SESSIONS = 10000;
-export function setMaxSessions(n) { MAX_SESSIONS = n; }
-
 export function createSession({ userId, type, scopeKey, description = "", meta = {}, idleTTL = DEFAULT_SCOPE_TTL }) {
+  if (!userId) throw new Error("createSession requires userId");
+  if (!type || typeof type !== "string") throw new Error("createSession requires a valid type string");
+
   const now = Date.now();
 
-  // Land-level session cap
+  // Land-level session cap with oldest-first eviction
   if (sessions.size >= MAX_SESSIONS) {
-    // Evict oldest session before creating new one
     let oldestKey = null, oldestTime = Infinity;
     for (const [id, s] of sessions) {
       if (s.lastActivity < oldestTime) { oldestTime = s.lastActivity; oldestKey = id; }
@@ -96,7 +90,6 @@ export function createSession({ userId, type, scopeKey, description = "", meta =
     const existing = scopedSessions.get(scopeKey);
     if (existing && now - existing.lastActivity < idleTTL) {
       existing.lastActivity = now;
-      // Re-register to update meta/description and touch lastActivity
       const { isActiveNavigator } = registerSession({ sessionId: existing.sessionId, userId, type, description, meta });
       return { sessionId: existing.sessionId, reused: true, isActiveNavigator };
     }
@@ -106,8 +99,16 @@ export function createSession({ userId, type, scopeKey, description = "", meta =
   const sessionId = uuidv4();
   const { isActiveNavigator } = registerSession({ sessionId, userId, type, description, meta });
 
-  // Store in scoped map if scopeKey provided
+  // Store in scoped map if scopeKey provided (with cap)
   if (scopeKey) {
+    if (scopedSessions.size >= MAX_SCOPED_SESSIONS) {
+      // Evict oldest scoped entry
+      let oldestKey = null, oldestTime = Infinity;
+      for (const [k, v] of scopedSessions) {
+        if (v.lastActivity < oldestTime) { oldestTime = v.lastActivity; oldestKey = k; }
+      }
+      if (oldestKey) scopedSessions.delete(oldestKey);
+    }
     scopedSessions.set(scopeKey, { sessionId, lastActivity: now });
   }
 
@@ -121,20 +122,21 @@ export function createSession({ userId, type, scopeKey, description = "", meta =
 /**
  * Register a session (or touch it if it already exists).
  * websocket-chat type auto-claims navigator.
- * @returns {{ sessionId: string, isActiveNavigator: boolean }}
  */
+const MAX_DESCRIPTION_LENGTH = 500;
+
 export function registerSession({ sessionId, userId, type, description = "", meta = {} }) {
   const now = Date.now();
   const uid = String(userId);
+  // Cap description to prevent oversized session objects
+  const safeDesc = typeof description === "string" ? description.slice(0, MAX_DESCRIPTION_LENGTH) : "";
 
   const existing = sessions.get(sessionId);
   if (existing) {
-    // Idempotent re-registration — just touch and update meta
     existing.lastActivity = now;
-    existing.description = description || existing.description;
+    existing.description = safeDesc || existing.description;
     existing.meta = { ...existing.meta, ...meta };
     const isNav = activeNavigator.get(uid) === sessionId;
-  
     return { sessionId, isActiveNavigator: isNav };
   }
 
@@ -145,7 +147,7 @@ export function registerSession({ sessionId, userId, type, description = "", met
     createdAt: now,
     lastActivity: now,
     status: "active",
-    description,
+    description: safeDesc,
     meta,
   });
 
@@ -155,26 +157,20 @@ export function registerSession({ sessionId, userId, type, description = "", met
   userSessionIndex.get(uid).add(sessionId);
 
   // Only claim navigator if no one else has it yet.
-  // websocket-chat claims by default, but never steals from another type.
   const currentNav = activeNavigator.get(uid);
   const currentNavSession = currentNav ? sessions.get(currentNav) : null;
 
   if (!currentNav || !currentNavSession) {
-    // No navigator — claim it
     activeNavigator.set(uid, sessionId);
   } else if (
     type === SESSION_TYPES.WEBSOCKET_CHAT &&
     currentNavSession.type === SESSION_TYPES.WEBSOCKET_CHAT
   ) {
-    // Replacing an old websocket-chat session (rotation) — fine
     activeNavigator.set(uid, sessionId);
   }
 
   const isNav = activeNavigator.get(uid) === sessionId;
-  log.debug("Session",
-    `📋 Session registered: ${type} [${sessionId.slice(0, 8)}] for user ${uid} (navigator: ${isNav})`,
-  );
-
+  log.debug("Session", `Session registered: ${type} [${sessionId.slice(0, 8)}] for user ${uid} (navigator: ${isNav})`);
 
   hooks.run("afterSessionCreate", { sessionId, userId: uid, type, description, meta, isActiveNavigator: isNav }).catch(() => {});
   return { sessionId, isActiveNavigator: isNav };
@@ -194,7 +190,7 @@ export function endSession(sessionId) {
   // Abort any in-flight work tied to this session
   const ac = sessionAbortControllers.get(sessionId);
   if (ac) {
-    ac.abort();
+    try { ac.abort(); } catch {}
     sessionAbortControllers.delete(sessionId);
   }
 
@@ -207,17 +203,16 @@ export function endSession(sessionId) {
     if (userSet.size === 0) userSessionIndex.delete(uid);
   }
 
-  // If this was the active navigator, promote a replacement
   if (activeNavigator.get(uid) === sessionId) {
     promoteNavigator(uid);
   }
-
 
   hooks.run("afterSessionEnd", { sessionId, userId: uid, type: session.type }).catch(() => {});
 }
 
 /**
  * Remove all sessions for a user (e.g. on disconnect).
+ * Fires afterSessionEnd for each session so extensions can clean up.
  */
 export function clearUserSessions(userId) {
   const uid = String(userId);
@@ -225,12 +220,26 @@ export function clearUserSessions(userId) {
   if (!userSet) return;
 
   for (const sid of userSet) {
+    const session = sessions.get(sid);
+    // Clean up abort controllers
+    const ac = sessionAbortControllers.get(sid);
+    if (ac) {
+      try { ac.abort(); } catch {}
+      sessionAbortControllers.delete(sid);
+    }
     sessions.delete(sid);
+    // Fire hook so extensions know the session ended
+    if (session) {
+      hooks.run("afterSessionEnd", { sessionId: sid, userId: uid, type: session.type }).catch(() => {});
+    }
   }
   userSessionIndex.delete(uid);
   activeNavigator.delete(uid);
 
-
+  // Clean up scoped sessions pointing to this user's sessions
+  for (const [key, val] of scopedSessions) {
+    if (!sessions.has(val.sessionId)) scopedSessions.delete(key);
+  }
 }
 
 /**
@@ -242,12 +251,22 @@ export function touchSession(sessionId) {
 }
 
 /**
- * Merge updates into a session's meta object and notify listeners.
+ * Merge updates into a session's meta object.
+ * Capped to prevent unbounded growth from buggy extensions.
  */
 export function updateSessionMeta(sessionId, metaUpdates) {
   const session = sessions.get(sessionId);
   if (!session) return false;
-  session.meta = { ...session.meta, ...metaUpdates };
+  if (!metaUpdates || typeof metaUpdates !== "object") return false;
+  // Cap: reject if serialized meta would exceed 64KB
+  const merged = { ...session.meta, ...metaUpdates };
+  try {
+    if (JSON.stringify(merged).length > 65536) {
+      log.warn("Session", `Session meta update rejected: would exceed 64KB for ${sessionId.slice(0, 8)}`);
+      return false;
+    }
+  } catch { return false; }
+  session.meta = merged;
   session.lastActivity = Date.now();
   return true;
 }
@@ -256,24 +275,14 @@ export function updateSessionMeta(sessionId, metaUpdates) {
 // NAVIGATION GATING
 // ─────────────────────────────────────────────────────────────────────────
 
-/**
- * Check if a session is allowed to navigate. Returns true only if:
- * 1. The session exists and is active
- * 2. The session is the active navigator for its user
- * Also updates lastActivity.
- */
 export function canNavigate(sessionId) {
   const session = sessions.get(sessionId);
   if (!session || session.status !== "active") return false;
-
   const isNav = activeNavigator.get(session.userId) === sessionId;
   if (isNav) session.lastActivity = Date.now();
   return isNav;
 }
 
-/**
- * Check if a given session is the active navigator for a user.
- */
 export function isActiveNavigator(userId, sessionId) {
   return activeNavigator.get(String(userId)) === sessionId;
 }
@@ -282,10 +291,6 @@ export function isActiveNavigator(userId, sessionId) {
 // NAVIGATOR CONTROL
 // ─────────────────────────────────────────────────────────────────────────
 
-/**
- * Manually set which session controls navigation for a user.
- * @returns {boolean} true if set successfully
- */
 export function setActiveNavigator(userId, sessionId) {
   const session = sessions.get(sessionId);
   if (!session || session.userId !== String(userId)) return false;
@@ -293,27 +298,18 @@ export function setActiveNavigator(userId, sessionId) {
   return true;
 }
 
-/**
- * Get the current active navigator sessionId for a user.
- */
 export function getActiveNavigator(userId) {
   return activeNavigator.get(String(userId)) || null;
 }
 
-/**
- * Clear the active navigator for a user (no session controls iframe).
- */
 export function clearActiveNavigator(userId) {
   activeNavigator.delete(String(userId));
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// QUERY (for future frontend UI)
+// QUERY
 // ─────────────────────────────────────────────────────────────────────────
 
-/**
- * Get all sessions for a user.
- */
 export function getSessionsForUser(userId) {
   const uid = String(userId);
   const userSet = userSessionIndex.get(uid);
@@ -326,55 +322,38 @@ export function getSessionsForUser(userId) {
   return result;
 }
 
-/**
- * Get a single session by ID.
- */
 export function getSession(sessionId) {
   const s = sessions.get(sessionId);
   return s ? { ...s } : null;
 }
 
-/**
- * Total registered session count (for logStats).
- */
 export function registeredSessionCount() {
   return sessions.size;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// ABORT CONTROL — lets callers register an AbortController per session
+// ABORT CONTROL
 // ─────────────────────────────────────────────────────────────────────────
 
-/**
- * Register an AbortController for a session so it can be killed externally.
- */
 export function setSessionAbort(sessionId, abortController) {
+  // Only store abort controllers for sessions that exist.
+  // Orphan sweep catches stragglers, but this prevents the common case.
+  if (!sessions.has(sessionId) && !sessionId) return;
   sessionAbortControllers.set(sessionId, abortController);
 }
 
-/**
- * Abort and remove the controller for a session.
- */
 export function abortSession(sessionId) {
   const ac = sessionAbortControllers.get(sessionId);
   if (ac) {
-    ac.abort();
+    try { ac.abort(); } catch {}
     sessionAbortControllers.delete(sessionId);
   }
 }
 
-/**
- * Clean up abort controller (called when session ends normally).
- */
 export function clearSessionAbort(sessionId) {
   sessionAbortControllers.delete(sessionId);
 }
 
-/**
- * Abort all active sessions for a given scopeKey (e.g. "gw:channelId").
- * Triggers AbortController for each, then ends the session.
- * @returns {number} count of sessions aborted
- */
 export function abortSessionsByScope(scopeKey) {
   const scoped = scopedSessions.get(scopeKey);
   if (!scoped) return 0;
@@ -396,11 +375,19 @@ export function abortSessionsByScope(scopeKey) {
 // INTERNAL: NAVIGATOR PROMOTION
 // ─────────────────────────────────────────────────────────────────────────
 
-const PROMOTION_PRIORITY = [
-  SESSION_TYPES.WEBSOCKET_CHAT,
-  SESSION_TYPES.RAW_IDEA_CHAT,
-  SESSION_TYPES.API_TREE_CHAT,
-];
+// Navigator promotion priority. Resolved at call time since session
+// types are registered dynamically by extensions and transport layers.
+const PROMOTION_PRIORITY_KEYS = ["WEBSOCKET_CHAT", "API_TREE_CHAT"];
+
+/**
+ * Register additional session types for navigator promotion priority.
+ * Extensions call this to make their interactive session types eligible.
+ */
+export function registerPromotionPriority(key) {
+  if (!PROMOTION_PRIORITY_KEYS.includes(key)) {
+    PROMOTION_PRIORITY_KEYS.push(key);
+  }
+}
 
 function promoteNavigator(userId) {
   const userSet = userSessionIndex.get(userId);
@@ -409,18 +396,18 @@ function promoteNavigator(userId) {
     return;
   }
 
-  for (const type of PROMOTION_PRIORITY) {
+  const priority = PROMOTION_PRIORITY_KEYS.map(k => SESSION_TYPES[k]).filter(Boolean);
+  for (const type of priority) {
     for (const sid of userSet) {
       const s = sessions.get(sid);
       if (s && s.type === type && s.status === "active") {
         activeNavigator.set(userId, sid);
-        log.debug("Session", `📋 Navigator promoted: ${type} [${sid.slice(0, 8)}] for user ${userId}`);
+        log.debug("Session", `Navigator promoted: ${type} [${sid.slice(0, 8)}] for user ${userId}`);
         return;
       }
     }
   }
 
-  // No priority match — clear navigator
   activeNavigator.delete(userId);
 }
 
@@ -429,20 +416,26 @@ function promoteNavigator(userId) {
 // ─────────────────────────────────────────────────────────────────────────
 
 let STALE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-export function setStaleTimeout(ms) { STALE_TIMEOUT = ms; }
+export function setStaleTimeout(ms) {
+  STALE_TIMEOUT = Math.max(60000, Math.min(ms, 86400000));
+}
 
 setInterval(() => {
   const now = Date.now();
   for (const [sessionId, session] of sessions) {
-    // websocket-chat sessions are cleaned up by socket disconnect, not stale sweep
+    // Skip websocket sessions (they have their own lifecycle via socket disconnect)
     if (session.type === SESSION_TYPES.WEBSOCKET_CHAT) continue;
     if (now - session.lastActivity > STALE_TIMEOUT) {
-      log.debug("Session", `🧹 Stale session removed: ${session.type} [${sessionId.slice(0, 8)}]`);
+      log.debug("Session", `Stale session removed: ${session.type} [${sessionId.slice(0, 8)}]`);
       endSession(sessionId);
     }
   }
   // Clean up expired scoped session entries
   for (const [key, val] of scopedSessions) {
     if (now - val.lastActivity > DEFAULT_SCOPE_TTL) scopedSessions.delete(key);
+  }
+  // Clean up orphaned abort controllers (session already ended but controller lingered)
+  for (const sid of sessionAbortControllers.keys()) {
+    if (!sessions.has(sid)) sessionAbortControllers.delete(sid);
   }
 }, 5 * 60 * 1000).unref();

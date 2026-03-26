@@ -228,7 +228,7 @@ export function modeLabel(path) {
     reflect: "Reflect",
     navigate: "Navigate",
     understand: "Understand",
-    getContext: "Context",
+    "get-context": "Context",
     respond: "Respond",
     notes: "Notes",
     start: "Start",

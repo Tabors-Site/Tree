@@ -4,329 +4,264 @@ import Chat from "../models/chat.js";
 import Contribution from "../models/contribution.js";
 import { getDescendantIds } from "../tree/treeFetch.js";
 
-async function getChats({
-  userId,
-  sessionLimit = 10,
-  sessionId,
-  startDate,
-  endDate,
-}) {
-  try {
-    if (!userId) {
-      throw new Error("Missing required parameter: userId");
-    }
+// ─────────────────────────────────────────────────────────────────────────
+// LIMITS
+// ─────────────────────────────────────────────────────────────────────────
 
-    if (
-      sessionLimit !== undefined &&
-      (typeof sessionLimit !== "number" || sessionLimit <= 0)
-    ) {
-      throw new Error("Invalid sessionLimit: must be a positive number");
-    }
+const MAX_SESSION_LIMIT = 50;         // max sessions per query
+const MAX_CHATS_PER_SESSION = 200;    // max chain steps loaded per session
+const MAX_DESCENDANT_IDS = 500;       // cap on includeChildren node expansion
+const MAX_CONTRIBUTIONS_PER_QUERY = 5000; // cap on contribution documents loaded
 
-    const query = { userId };
+// ─────────────────────────────────────────────────────────────────────────
+// SHARED HELPERS
+// ─────────────────────────────────────────────────────────────────────────
 
-    if (sessionId) {
-      query.sessionId = sessionId;
-    }
+/**
+ * Validate and clamp sessionLimit.
+ */
+function clampSessionLimit(sessionLimit) {
+  const n = Number(sessionLimit);
+  if (!n || n <= 0) return 10;
+  return Math.min(n, MAX_SESSION_LIMIT);
+}
 
-    if (startDate || endDate) {
-      query["startMessage.time"] = {};
-      if (startDate) query["startMessage.time"].$gte = new Date(startDate);
-      if (endDate) query["startMessage.time"].$lte = new Date(endDate);
-    }
+/**
+ * Validate a date string. Returns a Date or null if invalid.
+ */
+function parseDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
 
-    // Step 1: Find the N most recent distinct sessions
-    const sessionIds = sessionId
-      ? [sessionId]
-      : await Chat.aggregate([
-          { $match: query },
-          { $sort: { "startMessage.time": -1 } },
-          {
-            $group: {
-              _id: "$sessionId",
-              latestTime: { $first: "$startMessage.time" },
-            },
-          },
-          { $sort: { latestTime: -1 } },
-          { $limit: sessionLimit },
-          { $project: { _id: 1 } },
-        ]).then((docs) => docs.map((d) => d._id));
+/**
+ * Build a time range filter for startMessage.time.
+ */
+function buildTimeFilter(startDate, endDate) {
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+  if (!start && !end) return null;
+  const filter = {};
+  if (start) filter.$gte = start;
+  if (end) filter.$lte = end;
+  return filter;
+}
 
-    if (!sessionIds.length) {
-      return {
-        message: `No AI chats found for user ${userId}`,
-        sessions: [],
-      };
-    }
+/**
+ * Find the N most recent distinct session IDs matching a query.
+ */
+async function findRecentSessionIds(matchQuery, limit) {
+  return Chat.aggregate([
+    { $match: matchQuery },
+    { $sort: { "startMessage.time": -1 } },
+    { $group: { _id: "$sessionId", latestTime: { $first: "$startMessage.time" } } },
+    { $sort: { latestTime: -1 } },
+    { $limit: limit },
+    { $project: { _id: 1 } },
+  ]).then(docs => docs.map(d => d._id));
+}
 
-    // Step 2: Fetch all chats belonging to those sessions
-    const chats = await Chat.find({
-      userId,
-      sessionId: { $in: sessionIds },
-      ...(startDate || endDate
-        ? { "startMessage.time": query["startMessage.time"] }
-        : {}),
-    })
-      .populate({
-        path: "contributions",
-        select:
-          "_id action nodeId wasAi date extensionData",
-        populate: { path: "nodeId", select: "name" },
-      })
-      .populate({
-        path: "treeContext.targetNodeId",
-        select: "name",
-        model: "Node",
-      })
-      .populate({
-        path: "llmProvider.connectionId",
-        select: "name model",
-        model: "LlmConnection",
-      })
-      .sort({ "startMessage.time": -1 })
-      .lean();
+/**
+ * Fetch chats for a list of session IDs with populates.
+ * Caps per-session results to MAX_CHATS_PER_SESSION.
+ */
+async function fetchChatsForSessions(sessionIds, extraMatch = {}, populateUser = false) {
+  const query = {
+    sessionId: { $in: sessionIds },
+    ...extraMatch,
+  };
 
-    // Step 2b: Direct chatId lookup — always accurate, works for in-progress chats
-    const chatIds = chats.map((c) => c._id);
-    const directContribs = await Contribution.find({
-      chatId: { $in: chatIds },
-    })
-      .select(
-        "_id action nodeId wasAi date extensionData chatId",
-      )
-      .populate({ path: "nodeId", select: "name" })
-      .lean();
+  const q = Chat.find(query);
 
-    if (directContribs.length > 0) {
-      const contribsByChat = new Map();
-      for (const c of directContribs) {
-        const key = String(c.chatId);
-        if (!contribsByChat.has(key)) contribsByChat.set(key, []);
-        contribsByChat.get(key).push(c);
-      }
-      for (const chat of chats) {
-        const direct = contribsByChat.get(String(chat._id));
-        if (direct) chat.contributions = direct;
-      }
-    }
+  if (populateUser) {
+    q.populate({ path: "userId", select: "username", model: "User" });
+  }
 
-    // Step 3: Group into sessions (preserving newest-session-first order)
-    const sessionMap = new Map();
-    for (const sid of sessionIds) {
-      sessionMap.set(sid, []);
-    }
+  // Lean populates: only fetch the fields we need from references.
+  // Skip the contributions populate entirely. We fetch contributions
+  // directly by chatId below, which is faster and more accurate.
+  q.populate({ path: "treeContext.targetNodeId", select: "name", model: "Node" });
+  q.populate({ path: "llmProvider.connectionId", select: "name model", model: "LlmConnection" });
+  q.sort({ "startMessage.time": -1 });
 
-    for (const chat of chats) {
-      const sid = chat.sessionId || "unknown";
-      if (sessionMap.has(sid)) {
-        sessionMap.get(sid).push(chat);
-      }
-    }
-    // Sort each session's chats: time ascending (groups chains together), then chainIndex ascending (orders steps within chain)
-    const sessions = sessionIds
-      .filter((sid) => sessionMap.get(sid).length > 0)
-      .map((sid) => {
-        const sessionChats = sessionMap.get(sid).sort((a, b) => {
-          const ta = new Date(a.startMessage?.time || 0).getTime();
-          const tb = new Date(b.startMessage?.time || 0).getTime();
-          if (ta !== tb) return ta - tb;
-          return a.chainIndex - b.chainIndex;
-        });
-        return {
-          sessionId: sid,
-          chats: sessionChats,
-          startTime: sessionChats[0]?.startMessage?.time || null,
-          chatCount: sessionChats.length,
-        };
-      });
+  // Hard ceiling: MAX_CHATS_PER_SESSION * number of sessions
+  q.limit(MAX_CHATS_PER_SESSION * sessionIds.length);
 
-    return {
-      message: "AI chats retrieved successfully",
-      sessions,
-    };
-  } catch (err) {
-    log.error("AI", "getChats:", err);
-    throw new Error(
-      err.message || "Database error occurred while retrieving AI chats.",
-    );
+  return q.lean();
+}
+
+/**
+ * Attach contributions to chats by direct chatId lookup.
+ * More accurate than the contributions[] array on the Chat doc
+ * because it catches in-progress chats where the array hasn't been finalized.
+ */
+async function attachContributions(chats) {
+  if (chats.length === 0) return;
+  const chatIds = chats.map(c => c._id);
+
+  const contribs = await Contribution.find({ chatId: { $in: chatIds } })
+    .select("_id action nodeId wasAi date extensionData chatId")
+    .populate({ path: "nodeId", select: "name" })
+    .limit(MAX_CONTRIBUTIONS_PER_QUERY)
+    .lean();
+
+  if (contribs.length === 0) return;
+
+  const byChat = new Map();
+  for (const c of contribs) {
+    const key = String(c.chatId);
+    if (!byChat.has(key)) byChat.set(key, []);
+    byChat.get(key).push(c);
+  }
+  for (const chat of chats) {
+    const direct = byChat.get(String(chat._id));
+    if (direct) chat.contributions = direct;
   }
 }
 
-async function getNodeChats({
-  nodeId,
-  sessionLimit = 10,
-  sessionId,
-  startDate,
-  endDate,
-  includeChildren = false,
-}) {
+/**
+ * Group chats into sessions, sorted by time then chain index.
+ * Returns session objects with metadata.
+ */
+function groupIntoSessions(sessionIds, chats) {
+  const sessionMap = new Map();
+  for (const sid of sessionIds) sessionMap.set(sid, []);
+
+  for (const chat of chats) {
+    const sid = chat.sessionId || "unknown";
+    if (sessionMap.has(sid)) sessionMap.get(sid).push(chat);
+  }
+
+  return sessionIds
+    .filter(sid => sessionMap.get(sid).length > 0)
+    .map(sid => {
+      const sessionChats = sessionMap.get(sid).sort((a, b) => {
+        const ta = new Date(a.startMessage?.time || 0).getTime();
+        const tb = new Date(b.startMessage?.time || 0).getTime();
+        if (ta !== tb) return ta - tb;
+        return (a.chainIndex || 0) - (b.chainIndex || 0);
+      });
+      // Cap per-session to prevent one massive orchestrator chain from dominating
+      const capped = sessionChats.slice(0, MAX_CHATS_PER_SESSION);
+      return {
+        sessionId: sid,
+        chats: capped,
+        startTime: capped[0]?.startMessage?.time || null,
+        chatCount: capped.length,
+        truncated: sessionChats.length > MAX_CHATS_PER_SESSION,
+      };
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PUBLIC API
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Get chat history for a user, grouped by session.
+ * Returns the N most recent sessions with their chain steps.
+ */
+async function getChats({ userId, sessionLimit = 10, sessionId, startDate, endDate }) {
+  if (!userId) throw new Error("Missing required parameter: userId");
+
+  const limit = clampSessionLimit(sessionLimit);
+  const timeFilter = buildTimeFilter(startDate, endDate);
+
   try {
-    if (!nodeId) {
-      throw new Error("Missing required parameter: nodeId");
+    // Find recent session IDs
+    const matchQuery = { userId };
+    if (timeFilter) matchQuery["startMessage.time"] = timeFilter;
+
+    const sessionIds = sessionId
+      ? [sessionId]
+      : await findRecentSessionIds(matchQuery, limit);
+
+    if (!sessionIds.length) {
+      return { message: `No AI chats found for user ${userId}`, sessions: [] };
     }
 
-    if (
-      sessionLimit !== undefined &&
-      (typeof sessionLimit !== "number" || sessionLimit <= 0)
-    ) {
-      throw new Error("Invalid sessionLimit: must be a positive number");
+    // Fetch chats + contributions
+    const extraMatch = { userId };
+    if (timeFilter) extraMatch["startMessage.time"] = timeFilter;
+
+    const chats = await fetchChatsForSessions(sessionIds, extraMatch);
+    await attachContributions(chats);
+
+    return {
+      message: "AI chats retrieved successfully",
+      sessions: groupIntoSessions(sessionIds, chats),
+    };
+  } catch (err) {
+    log.error("AI", "getChats:", err.message);
+    throw new Error(err.message || "Database error occurred while retrieving AI chats.");
+  }
+}
+
+/**
+ * Get chat history for a node (and optionally its children), grouped by session.
+ * Finds sessions that touched the node via contributions or tree context.
+ */
+async function getNodeChats({ nodeId, sessionLimit = 10, sessionId, startDate, endDate, includeChildren = false }) {
+  if (!nodeId) throw new Error("Missing required parameter: nodeId");
+
+  const limit = clampSessionLimit(sessionLimit);
+  const timeFilter = buildTimeFilter(startDate, endDate);
+
+  try {
+    // Resolve target node IDs (capped to prevent explosion on wide trees)
+    let nodeIds;
+    if (includeChildren) {
+      const all = await getDescendantIds(nodeId);
+      nodeIds = all.slice(0, MAX_DESCENDANT_IDS);
+      if (all.length > MAX_DESCENDANT_IDS) {
+        log.warn("AI", `getNodeChats: descendant expansion capped at ${MAX_DESCENDANT_IDS} (tree has ${all.length})`);
+      }
+    } else {
+      nodeIds = [nodeId];
     }
 
-    // Resolve target node IDs (just this node, or all descendants)
-    const nodeIds = includeChildren ? await getDescendantIds(nodeId) : [nodeId];
-
-    // Path A: Find sessionIds via Contributions that touched these nodes
+    // Path A: sessions via contributions that touched these nodes
     const contribQuery = { nodeId: { $in: nodeIds } };
-    if (startDate || endDate) {
-      contribQuery.date = {};
-      if (startDate) contribQuery.date.$gte = new Date(startDate);
-      if (endDate) contribQuery.date.$lte = new Date(endDate);
-    }
-    const contribSessionIds = await Contribution.distinct(
-      "sessionId",
-      contribQuery,
-    );
+    if (timeFilter) contribQuery.date = timeFilter;
+    const contribSessionIds = await Contribution.distinct("sessionId", contribQuery);
 
-    // Path B: Find sessionIds via Chat.treeContext.targetNodeId
+    // Path B: sessions via Chat.treeContext.targetNodeId
     const treeCtxQuery = { "treeContext.targetNodeId": { $in: nodeIds } };
-    if (startDate || endDate) {
-      treeCtxQuery["startMessage.time"] = {};
-      if (startDate)
-        treeCtxQuery["startMessage.time"].$gte = new Date(startDate);
-      if (endDate) treeCtxQuery["startMessage.time"].$lte = new Date(endDate);
-    }
+    if (timeFilter) treeCtxQuery["startMessage.time"] = timeFilter;
     const treeCtxSessionIds = await Chat.distinct("sessionId", treeCtxQuery);
 
     // Union and deduplicate
-    const allSessionIds = [
-      ...new Set([...contribSessionIds, ...treeCtxSessionIds]),
-    ].filter(Boolean);
+    const allSessionIds = [...new Set([...contribSessionIds, ...treeCtxSessionIds])].filter(Boolean);
 
-    if (sessionId) {
-      // If filtering to a specific session, only keep it if it's in our set
-      if (!allSessionIds.includes(sessionId)) {
-        return {
-          message: `No AI chats found for node ${nodeId}`,
-          sessions: [],
-        };
-      }
+    if (sessionId && !allSessionIds.includes(sessionId)) {
+      return { message: `No AI chats found for node ${nodeId}`, sessions: [] };
     }
-
     if (allSessionIds.length === 0) {
       return { message: `No AI chats found for node ${nodeId}`, sessions: [] };
     }
 
-    // Apply sessionLimit: find the N most recent sessions
+    // Find the N most recent sessions from the candidate set
     const targetSessionIds = sessionId
       ? [sessionId]
-      : await Chat.aggregate([
-          { $match: { sessionId: { $in: allSessionIds } } },
-          { $sort: { "startMessage.time": -1 } },
-          {
-            $group: {
-              _id: "$sessionId",
-              latestTime: { $first: "$startMessage.time" },
-            },
-          },
-          { $sort: { latestTime: -1 } },
-          { $limit: sessionLimit },
-          { $project: { _id: 1 } },
-        ]).then((docs) => docs.map((d) => d._id));
+      : await findRecentSessionIds({ sessionId: { $in: allSessionIds } }, limit);
 
     if (!targetSessionIds.length) {
       return { message: `No AI chats found for node ${nodeId}`, sessions: [] };
     }
 
-    // Fetch all chats belonging to those sessions
-    const chats = await Chat.find({
-      sessionId: { $in: targetSessionIds },
-    })
-      .populate({
-        path: "userId",
-        select: "username",
-        model: "User",
-      })
-      .populate({
-        path: "contributions",
-        select:
-          "_id action nodeId wasAi date extensionData",
-        populate: { path: "nodeId", select: "name" },
-      })
-      .populate({
-        path: "treeContext.targetNodeId",
-        select: "name",
-        model: "Node",
-      })
-      .populate({
-        path: "llmProvider.connectionId",
-        select: "name model",
-        model: "LlmConnection",
-      })
-      .sort({ "startMessage.time": -1 })
-      .lean();
-
-    // Direct chatId lookup
-    const chatIds = chats.map((c) => c._id);
-    const directContribs = await Contribution.find({
-      chatId: { $in: chatIds },
-    })
-      .select(
-        "_id action nodeId wasAi date extensionData chatId",
-      )
-      .populate({ path: "nodeId", select: "name" })
-      .lean();
-
-    if (directContribs.length > 0) {
-      const contribsByChat = new Map();
-      for (const c of directContribs) {
-        const key = String(c.chatId);
-        if (!contribsByChat.has(key)) contribsByChat.set(key, []);
-        contribsByChat.get(key).push(c);
-      }
-      for (const chat of chats) {
-        const direct = contribsByChat.get(String(chat._id));
-        if (direct) chat.contributions = direct;
-      }
-    }
-
-    // Group into sessions
-    const sessionMap = new Map();
-    for (const sid of targetSessionIds) {
-      sessionMap.set(sid, []);
-    }
-    for (const chat of chats) {
-      const sid = chat.sessionId || "unknown";
-      if (sessionMap.has(sid)) {
-        sessionMap.get(sid).push(chat);
-      }
-    }
-
-    const sessions = targetSessionIds
-      .filter((sid) => sessionMap.get(sid).length > 0)
-      .map((sid) => {
-        const sessionChats = sessionMap.get(sid).sort((a, b) => {
-          const ta = new Date(a.startMessage?.time || 0).getTime();
-          const tb = new Date(b.startMessage?.time || 0).getTime();
-          if (ta !== tb) return ta - tb;
-          return a.chainIndex - b.chainIndex;
-        });
-        return {
-          sessionId: sid,
-          chats: sessionChats,
-          startTime: sessionChats[0]?.startMessage?.time || null,
-          chatCount: sessionChats.length,
-        };
-      });
+    // Fetch chats + contributions
+    const chats = await fetchChatsForSessions(targetSessionIds, {}, true);
+    await attachContributions(chats);
 
     return {
       message: "AI chats retrieved successfully",
-      sessions,
+      sessions: groupIntoSessions(targetSessionIds, chats),
     };
   } catch (err) {
-    log.error("AI", "getNodeChats:", err);
-    throw new Error(
-      err.message || "Database error occurred while retrieving AI chats.",
-    );
+    log.error("AI", "getNodeChats:", err.message);
+    throw new Error(err.message || "Database error occurred while retrieving AI chats.");
   }
 }
 

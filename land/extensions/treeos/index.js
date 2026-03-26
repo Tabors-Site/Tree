@@ -26,7 +26,7 @@ export async function init(core) {
   core.modes.registerMode("tree:edit", treeEdit, "treeos");
   core.modes.registerMode("tree:respond", treeRespond, "treeos");
   core.modes.registerMode("tree:librarian", treeLibrarian, "treeos");
-  core.modes.registerMode("tree:getContext", treeGetContext, "treeos");
+  core.modes.registerMode("tree:get-context", treeGetContext, "treeos");
   core.modes.registerMode("tree:be", treeBe, "treeos");
   core.modes.registerMode("tree:notes", treeNotes, "treeos");
 

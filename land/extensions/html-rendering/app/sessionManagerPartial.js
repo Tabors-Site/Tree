@@ -1240,7 +1240,7 @@ export function dashboardJS() {
         for (var i = 0; i < chats.length; i++) {
           var c = chats[i];
           var source = (c.startMessage && c.startMessage.source) || "user";
-          var path = (c.aiContext && c.aiContext.path) || "?";
+          var path = (c.aiContext && c.aiContext.zone && c.aiContext.mode) ? c.aiContext.zone + ":" + c.aiContext.mode : "?";
           var userMsg = dashEscape(dashTruncate((c.startMessage && c.startMessage.content) || "", 300));
           var aiMsg = (c.endMessage && c.endMessage.content)
             ? '<div style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px">' + dashEscape(dashTruncate(c.endMessage.content, 500)) + '</div>'

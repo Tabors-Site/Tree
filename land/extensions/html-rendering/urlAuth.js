@@ -117,7 +117,9 @@ export default async function urlAuth(req, res, next) {
           req.username = result.username;
           req.authType = name;
           req.isHtmlShare = false;
-          if (result.extra) Object.assign(req, result.extra);
+          if (result.extra && typeof result.extra === "object") {
+            req.strategyExtra = Object.freeze({ ...result.extra });
+          }
           return next();
         }
       } catch (strategyErr) {

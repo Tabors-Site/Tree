@@ -2,7 +2,7 @@ import log from "../../seed/log.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Stripe from "stripe";
 import { processPurchase } from "./core/processPurchase.js";
-import { logContribution } from "../../seed/utils.js";
+import { logContribution } from "../../seed/tree/contributions.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 

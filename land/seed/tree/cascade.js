@@ -26,6 +26,28 @@ import { CASCADE, SYSTEM_ROLE } from "../protocol.js";
 import { v4 as uuidv4 } from "uuid";
 import { checkWriteSize, estimateWriteSize } from "./documentGuard.js";
 
+// Track the maximum depth seen per signalId. Prevents extensions from
+// resetting depth to 0 to bypass the maxDepth guard.
+// Entries auto-expire after 5 minutes to prevent unbounded growth.
+const _signalDepths = new Map();
+const SIGNAL_DEPTH_TTL_MS = 5 * 60 * 1000;
+
+function trackSignalDepth(signalId, depth) {
+  const existing = _signalDepths.get(signalId);
+  if (existing && depth < existing.maxDepth) {
+    return false; // depth regression, reject
+  }
+  _signalDepths.set(signalId, { maxDepth: depth, at: Date.now() });
+  // Lazy cleanup: evict expired entries when map grows large
+  if (_signalDepths.size > 10000) {
+    const now = Date.now();
+    for (const [id, entry] of _signalDepths) {
+      if (now - entry.at > SIGNAL_DEPTH_TTL_MS) _signalDepths.delete(id);
+    }
+  }
+  return true;
+}
+
 /**
  * Check if cascade should fire for a content write at a node.
  * Called by afterNote and afterStatusChange hooks in the kernel.
@@ -103,9 +125,30 @@ export async function checkCascade(nodeId, writeContext) {
  * @param {number} opts.depth - current propagation depth
  */
 export async function deliverCascade({ nodeId, signalId, payload = {}, source, depth = 0 }) {
+  // Per-signal delivery rate limit: cap total deliveries per signalId.
+  // Prevents a single cascade from flooding thousands of nodes.
+  const maxDeliveriesPerSignal = parseInt(getLandConfigValue("cascadeMaxDeliveriesPerSignal") || "500", 10);
+  if (signalId) {
+    const entry = _signalDepths.get(signalId);
+    const deliveries = (entry?.deliveries || 0) + 1;
+    if (deliveries > maxDeliveriesPerSignal) {
+      const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "delivery limit exceeded", deliveries, max: maxDeliveriesPerSignal }, timestamp: new Date(), signalId };
+      await writeResult(signalId, result);
+      return result;
+    }
+    _signalDepths.set(signalId, { ...(_signalDepths.get(signalId) || {}), deliveries, at: Date.now() });
+  }
+
   // Check payload size limit
   const maxPayloadBytes = parseInt(getLandConfigValue("cascadeMaxPayloadBytes") || "51200", 10);
-  const payloadBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+  let payloadBytes;
+  try {
+    payloadBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+  } catch {
+    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "payload_not_serializable" }, timestamp: new Date(), signalId };
+    await writeResult(signalId, result);
+    return result;
+  }
   if (payloadBytes > maxPayloadBytes) {
     const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "payload_too_large", size: payloadBytes, max: maxPayloadBytes }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
@@ -116,6 +159,13 @@ export async function deliverCascade({ nodeId, signalId, payload = {}, source, d
   const maxDepth = parseInt(getLandConfigValue("cascadeMaxDepth") || "50", 10);
   if (depth > maxDepth) {
     const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "depth limit exceeded", depth, maxDepth }, timestamp: new Date(), signalId };
+    await writeResult(signalId, result);
+    return result;
+  }
+
+  // Depth regression guard: prevent extensions from resetting depth to bypass maxDepth
+  if (signalId && !trackSignalDepth(signalId, depth)) {
+    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "depth regression detected", depth }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return result;
   }
@@ -212,7 +262,6 @@ async function getOrCreatePartition() {
 
   // Atomic upsert: prevents duplicate partitions when concurrent cascade
   // writes hit the midnight boundary simultaneously.
-  const { v4: uuidv4 } = await import("uuid");
   const partition = await Node.findOneAndUpdate(
     { parent: flowNode._id, name: today },
     {
@@ -298,8 +347,9 @@ async function writeResult(signalId, result) {
       return;
     }
 
-    // Load partition to check size
-    const partition = await Node.findById(partitionId);
+    // Size check: load partition with lean() to minimize memory.
+    // Only load metadata for the size estimate, not the full Mongoose document.
+    const partition = await Node.findById(partitionId).select("metadata").lean();
     if (!partition) return;
 
     const writeSize = estimateWriteSize(result);
@@ -362,11 +412,7 @@ export async function getCascadeResults(signalId) {
     if (results[signalId]) return results[signalId];
   }
 
-  // Fallback: check .flow itself for pre-partition results
-  const results = flowNode.metadata instanceof Map
-    ? flowNode.metadata.get("results") || {}
-    : flowNode.metadata?.results || {};
-  return results[signalId] || [];
+  return [];
 }
 
 /**
@@ -396,9 +442,9 @@ export async function getAllCascadeResults(limit = 50) {
       return new Date(bTime) - new Date(aTime);
     });
 
-    for (const [signalId, results] of entries) {
+    for (const [signalId, signalResults] of entries) {
       if (count >= limit) break;
-      all[signalId] = results;
+      all[signalId] = signalResults;
       count++;
     }
   }

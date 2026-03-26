@@ -73,7 +73,13 @@ export function getDefaultMode(bigMode) {
  * Set the default entry mode for a big mode.
  * Called by extensions to upgrade from the kernel fallback.
  */
+const VALID_BIG_MODES = new Set(Object.values(BIG_MODES));
+
 export function setDefaultMode(bigMode, modeKey) {
+  if (!VALID_BIG_MODES.has(bigMode)) {
+    log.warn("Modes", `Cannot set default: "${bigMode}" is not a valid zone (${[...VALID_BIG_MODES].join(", ")})`);
+    return false;
+  }
   if (!ALL_MODES[modeKey]) {
     log.warn("Modes", `Cannot set default for ${bigMode}: mode "${modeKey}" not registered`);
     return false;
@@ -90,13 +96,21 @@ export function setDefaultMode(bigMode, modeKey) {
  * @param {string} intent - e.g. "navigate", "structure", "respond", "librarian"
  * @param {string} bigMode - e.g. "tree", "home", "land"
  * @param {object|null} nodeMetadata - current node's metadata (or null)
+ * @param {Set<string>|null} blockedExtensions - full set of blocked extensions at this position
+ *   (from ancestor chain walk). If null, falls back to node-local metadata.extensions.blocked.
  * @returns {string} resolved mode key (e.g. "tree:navigate" or "custom:smart-nav")
  */
-export function resolveMode(intent, bigMode, nodeMetadata = null) {
+export function resolveMode(intent, bigMode, nodeMetadata = null, blockedExtensions = null) {
+  // Guard against undefined/null intent or bigMode producing keys like "tree:undefined"
+  if (!intent || typeof intent !== "string") return DEFAULT_MODES[bigMode] || `${bigMode || "tree"}:fallback`;
+  if (!bigMode || typeof bigMode !== "string") bigMode = "tree";
+
   const meta = nodeMetadata instanceof Map ? Object.fromEntries(nodeMetadata) : (nodeMetadata || {});
 
-  // Spatial extension scoping: collect blocked extensions from node metadata
-  const blockedExts = meta.extensions?.blocked ? new Set(meta.extensions.blocked) : null;
+  // Spatial extension scoping: prefer the full ancestor-chain blocked set if provided.
+  // Falls back to node-local metadata for backward compat with callers that don't pass it.
+  const blockedExts = blockedExtensions
+    || (meta.extensions?.blocked ? new Set(meta.extensions.blocked) : null);
 
   // Layer 1: per-node override (skip if owning extension is blocked)
   const nodeMode = meta.modes?.[intent];
@@ -147,7 +161,8 @@ export function getToolsForMode(modeKey, treeToolConfig = null) {
       toolNames = [...new Set([...toolNames, ...treeToolConfig.allowed])];
     }
     if (Array.isArray(treeToolConfig.blocked)) {
-      toolNames = toolNames.filter(t => !treeToolConfig.blocked.includes(t));
+      const blockedSet = new Set(treeToolConfig.blocked);
+      toolNames = toolNames.filter(t => !blockedSet.has(t));
     }
   }
 
@@ -174,9 +189,23 @@ export function setExtensionToolResolver(fn) {
  * The mode object must have: name, bigMode, toolNames[], buildSystemPrompt(ctx)
  * Optional: emoji, label, hidden, maxMessagesBeforeLoop, preserveContextOnLoop
  */
+let MAX_REGISTERED_MODES = 200;
+export function setMaxModes(n) { MAX_REGISTERED_MODES = Math.max(10, Number(n) || 200); }
+
+// modeKey format: "bigMode:subMode" where both parts are lowercase alphanumeric + hyphens
+const MODE_KEY_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
+
 export function registerMode(modeKey, modeConfig, extName = "unknown") {
   if (!modeKey || !modeConfig) {
     log.warn("Modes", `Invalid mode registration from ${extName}`);
+    return false;
+  }
+  if (typeof modeKey !== "string" || !MODE_KEY_RE.test(modeKey)) {
+    log.warn("Modes", `Invalid mode key format "${modeKey}" from ${extName}. Expected "bigMode:subMode" (lowercase alphanumeric + hyphens).`);
+    return false;
+  }
+  if (Object.keys(ALL_MODES).length >= MAX_REGISTERED_MODES) {
+    log.error("Modes", `Mode registry full (${MAX_REGISTERED_MODES} modes). "${modeKey}" from "${extName}" rejected.`);
     return false;
   }
   if (!modeConfig.buildSystemPrompt || typeof modeConfig.buildSystemPrompt !== "function") {
@@ -187,8 +216,14 @@ export function registerMode(modeKey, modeConfig, extName = "unknown") {
     log.warn("Modes", `Mode "${modeKey}" from ${extName} missing toolNames[]. Skipped.`);
     return false;
   }
+  // Validate toolNames entries are all strings
+  if (modeConfig.toolNames.some(t => typeof t !== "string")) {
+    log.warn("Modes", `Mode "${modeKey}" from ${extName} has non-string entries in toolNames[]. Skipped.`);
+    return false;
+  }
   if (ALL_MODES[modeKey]) {
-    log.warn("Modes", `Mode "${modeKey}" already registered. ${extName} cannot override.`);
+    const existingOwner = ALL_MODES[modeKey]._extName || "kernel";
+    log.warn("Modes", `Mode "${modeKey}" already registered by "${existingOwner}". "${extName}" cannot override.`);
     return false;
   }
 
@@ -219,6 +254,13 @@ export function unregisterModes(extName) {
   for (const [key, mode] of Object.entries(ALL_MODES)) {
     if (mode._extName === extName) {
       delete ALL_MODES[key];
+      // If this mode was the default for its bigMode, fall back to kernel fallback
+      for (const [bigMode, defaultKey] of Object.entries(DEFAULT_MODES)) {
+        if (defaultKey === key) {
+          DEFAULT_MODES[bigMode] = `${bigMode}:fallback`;
+          log.verbose("Modes", `Default mode for ${bigMode} reset to fallback (${extName} unregistered)`);
+        }
+      }
     }
   }
 }
@@ -264,8 +306,9 @@ export async function buildPromptForMode(modeKey, ctx) {
         const resolved = await Promise.all(entries.map(([, id]) => getNodeName(id)));
         entries.forEach(([key], i) => { names[key] = resolved[i]; });
       }
-    } catch {
+    } catch (nameErr) {
       // DB error: degrade to ID-only. The AI still knows where it is.
+      log.debug("Modes", `Node name resolution failed: ${nameErr.message}`);
     }
 
     if (rootId) {
@@ -291,7 +334,25 @@ export async function buildPromptForMode(modeKey, ctx) {
     : "";
 
   // ── Mode layer: domain-specific prompt ──
-  const modePrompt = mode.buildSystemPrompt(ctx);
+  // Await in case the extension's buildSystemPrompt is async (fetching node data, etc.)
+  // Catch errors from buggy extension prompt builders so the AI still gets a response.
+  let modePrompt;
+  try {
+    modePrompt = await Promise.resolve(mode.buildSystemPrompt(ctx));
+  } catch (promptErr) {
+    log.error("Modes", `buildSystemPrompt for "${modeKey}" threw: ${promptErr.message}`);
+    modePrompt = `[Mode: ${modeKey}] (prompt generation failed, assist the user as best you can)`;
+  }
+  // Guard against oversized prompts consuming the entire context window.
+  // 32KB is generous for a system prompt. Anything larger is a bug.
+  if (typeof modePrompt === "string" && modePrompt.length > 32000) {
+    log.warn("Modes", `System prompt for "${modeKey}" is ${modePrompt.length} chars. Truncating to 32KB.`);
+    modePrompt = modePrompt.slice(0, 32000) + "\n... (system prompt truncated)";
+  }
+  if (typeof modePrompt !== "string") {
+    log.error("Modes", `buildSystemPrompt for "${modeKey}" returned ${typeof modePrompt}, expected string`);
+    modePrompt = `[Mode: ${modeKey}]`;
+  }
 
   // ── Time layer: land timezone ──
   const tz = getLandConfigValue("timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -307,7 +368,8 @@ export async function buildPromptForMode(modeKey, ctx) {
       minute: "2-digit",
       timeZoneName: "short",
     });
-  } catch {
+  } catch (tzErr) {
+    log.debug("Modes", `Timezone "${tz}" failed: ${tzErr.message}. Using ISO.`);
     timeStr = new Date().toISOString();
   }
 
@@ -336,7 +398,7 @@ export function bigModeFromUrl(urlPath) {
   if (NODE_PREFIX_PATTERN.test(clean)) {
     return BIG_MODES.TREE;
   }
-if (clean.match(/^(\/api\/v1)?\/user\//)) return BIG_MODES.HOME;
+  if (clean.match(/^(\/api\/v1)?\/user\//)) return BIG_MODES.HOME;
   if (clean.match(/^(\/api\/v1)?\/root\//)) return BIG_MODES.TREE;
   // bare /:nodeId or /api/v1/:nodeId
 
@@ -349,14 +411,10 @@ if (clean.match(/^(\/api\/v1)?\/user\//)) return BIG_MODES.HOME;
  */
 export function getAllToolNamesForBigMode(bigMode) {
   const names = new Set();
+  const prefix = bigMode + ":";
   for (const [key, mode] of Object.entries(ALL_MODES)) {
-    if (key.startsWith(bigMode + ":")) {
+    if (key.startsWith(prefix)) {
       for (const t of mode.toolNames) names.add(t);
-    }
-  }
-  // Add extension-injected tools across all modes of this bigMode
-  for (const [key] of Object.entries(ALL_MODES)) {
-    if (key.startsWith(bigMode + ":")) {
       for (const t of _getExtToolsFn(key)) names.add(t);
     }
   }

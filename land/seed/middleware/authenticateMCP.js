@@ -1,14 +1,12 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "../log.js";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { sendError, ERR } from "../protocol.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, "../..", ".env") });
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
 const JWT_SECRET = process.env.JWT_SECRET;

@@ -42,6 +42,7 @@ import {
   setSessionAbort,
   clearSessionAbort,
   SESSION_TYPES,
+  registerSessionType,
 } from "../../seed/ws/sessionRegistry.js";
 import User from "../../seed/models/user.js";
 import Node from "../../seed/models/node.js";
@@ -49,6 +50,11 @@ import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 import { nullSocket } from "../../seed/orchestrators/helpers.js";
 
 import { getLandConfigValue } from "../../seed/landConfig.js";
+
+// Register API transport session types
+registerSessionType("API_TREE_CHAT", "api-tree-chat");
+registerSessionType("API_TREE_PLACE", "api-tree-place");
+registerSessionType("API_TREE_QUERY", "api-tree-query");
 
 const router = express.Router();
 const DEFAULT_TIMEOUT_MS = 19 * 60 * 1000;

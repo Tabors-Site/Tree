@@ -1,5 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "./log.js";
+import { getLandConfigValue } from "./landConfig.js";
 /**
  * Hook System
  *
@@ -63,11 +64,12 @@ import log from "./log.js";
  *   core.hooks.register("gateway:beforeDispatch", async (data) => { ... }, "my-ext");
  */
 
-const HOOK_TIMEOUT_MS = 5000;
-const MAX_HANDLERS_PER_HOOK = 100;
-const CIRCUIT_BREAKER_THRESHOLD = 5; // consecutive failures before auto-disable
-const CIRCUIT_HALF_OPEN_MS = 5 * 60 * 1000; // 5 min before allowing a test call
-const CHAIN_TIMEOUT_MS = 15000; // cumulative timeout for sequential override chains
+// All configurable via land config. Read at use time so changes take effect immediately.
+function HOOK_TIMEOUT_MS() { return Number(getLandConfigValue("hookTimeoutMs")) || 5000; }
+function MAX_HANDLERS_PER_HOOK() { return Number(getLandConfigValue("hookMaxHandlers")) || 100; }
+function CIRCUIT_BREAKER_THRESHOLD() { return Number(getLandConfigValue("hookCircuitThreshold")) || 5; }
+function CIRCUIT_HALF_OPEN_MS() { return Number(getLandConfigValue("hookCircuitHalfOpenMs")) || 300000; }
+function CHAIN_TIMEOUT_MS() { return Number(getLandConfigValue("hookChainTimeoutMs")) || 15000; }
 
 // Hooks that run sequentially even though they're not "before" hooks.
 // Default rule: before = sequential (can cancel), after = parallel (independent reactions).
@@ -136,7 +138,7 @@ function register(hookName, handler, extName = "unknown") {
       "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
       "beforeResponse", "beforeRegister", "afterRegister",
       "afterSessionCreate", "afterSessionEnd", "afterNavigate",
-      "afterMetadataWrite", "afterScopeChange", "afterBoot",
+      "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
       "onTreeTripped", "onTreeRevived",
     ];
     if (!hookName.includes(":")) {
@@ -160,8 +162,8 @@ function register(hookName, handler, extName = "unknown") {
     return;
   }
 
-  if (handlers.length >= MAX_HANDLERS_PER_HOOK) {
-    log.error("Hooks", `"${hookName}" at capacity (${MAX_HANDLERS_PER_HOOK}). Rejected ${extName}.`);
+  if (handlers.length >= MAX_HANDLERS_PER_HOOK()) {
+    log.error("Hooks", `"${hookName}" at capacity (${MAX_HANDLERS_PER_HOOK()}). Rejected ${extName}.`);
     return;
   }
 
@@ -197,7 +199,9 @@ async function run(hookName, data) {
   if (nodeId && _getScopeFn) {
     try {
       blockedExtensions = await _getScopeFn(String(nodeId));
-    } catch {}
+    } catch (scopeErr) {
+      log.warn("Hooks", `Scope resolution failed for node ${nodeId}: ${scopeErr.message}. Extensions not filtered.`);
+    }
   }
 
   const isBefore = hookName.startsWith("before");
@@ -211,15 +215,15 @@ async function run(hookName, data) {
           if (blockedExtensions && blockedExtensions.has(extName)) return false;
           const key = `${hookName}:${extName}`;
           const failures = _failureCounts.get(key) || 0;
-          if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
+          if (failures >= CIRCUIT_BREAKER_THRESHOLD()) {
             // Half-open: allow one test call after CIRCUIT_HALF_OPEN_MS
             const openedAt = _circuitOpenedAt.get(key) || 0;
-            if (Date.now() - openedAt < CIRCUIT_HALF_OPEN_MS) return false;
+            if (Date.now() - openedAt < CIRCUIT_HALF_OPEN_MS()) return false;
           }
           return true;
         })
         .map(({ extName, handler }) =>
-          withTimeout(handler(data), HOOK_TIMEOUT_MS, `${hookName}:${extName}`)
+          withTimeout(handler(data), HOOK_TIMEOUT_MS(), `${hookName}:${extName}`)
             .then(() => {
               _failureCounts.delete(`${hookName}:${extName}`);
               _circuitOpenedAt.delete(`${hookName}:${extName}`);
@@ -228,11 +232,11 @@ async function run(hookName, data) {
               const key = `${hookName}:${extName}`;
               const count = (_failureCounts.get(key) || 0) + 1;
               _failureCounts.set(key, count);
-              if (count >= CIRCUIT_BREAKER_THRESHOLD) {
+              if (count >= CIRCUIT_BREAKER_THRESHOLD()) {
                 _circuitOpenedAt.set(key, Date.now());
                 log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open. Auto-disabled.`);
               } else {
-                log.warn("Hooks", `${hookName} from "${extName}" failed (${count}/${CIRCUIT_BREAKER_THRESHOLD}):`, err.message);
+                log.warn("Hooks", `${hookName} from "${extName}" failed (${count}/${CIRCUIT_BREAKER_THRESHOLD()}):`, err.message);
               }
             })
         )
@@ -248,24 +252,24 @@ async function run(hookName, data) {
     if (blockedExtensions && blockedExtensions.has(extName)) continue;
     const key = `${hookName}:${extName}`;
     const failures = _failureCounts.get(key) || 0;
-    if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
+    if (failures >= CIRCUIT_BREAKER_THRESHOLD()) {
       // Half-open: allow one test call after CIRCUIT_HALF_OPEN_MS
       const openedAt = _circuitOpenedAt.get(key) || 0;
-      if (Date.now() - openedAt < CIRCUIT_HALF_OPEN_MS) continue;
+      if (Date.now() - openedAt < CIRCUIT_HALF_OPEN_MS()) continue;
     }
 
     // Cumulative timeout for sequential override chains (enrichContext, onCascade)
     if (isSequentialOverride) {
       const elapsed = Date.now() - chainStart;
-      if (elapsed >= CHAIN_TIMEOUT_MS) {
-        log.warn("Hooks", `${hookName} chain exceeded ${CHAIN_TIMEOUT_MS}ms. Remaining handlers skipped.`);
+      if (elapsed >= CHAIN_TIMEOUT_MS()) {
+        log.warn("Hooks", `${hookName} chain exceeded ${CHAIN_TIMEOUT_MS()}ms. Remaining handlers skipped.`);
         break;
       }
     }
 
     const perHandlerTimeout = isSequentialOverride
-      ? Math.min(HOOK_TIMEOUT_MS, CHAIN_TIMEOUT_MS - (Date.now() - chainStart))
-      : HOOK_TIMEOUT_MS;
+      ? Math.min(HOOK_TIMEOUT_MS(), CHAIN_TIMEOUT_MS() - (Date.now() - chainStart))
+      : HOOK_TIMEOUT_MS();
 
     try {
       const result = await withTimeout(handler(data), perHandlerTimeout, `${hookName}:${extName}`);
@@ -277,7 +281,7 @@ async function run(hookName, data) {
     } catch (err) {
       const count = (_failureCounts.get(key) || 0) + 1;
       _failureCounts.set(key, count);
-      if (count >= CIRCUIT_BREAKER_THRESHOLD) {
+      if (count >= CIRCUIT_BREAKER_THRESHOLD()) {
         _circuitOpenedAt.set(key, Date.now());
         log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open.`);
       }

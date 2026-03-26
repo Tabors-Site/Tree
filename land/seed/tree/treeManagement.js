@@ -1,7 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import mongoose from "mongoose";
 import Node from "../models/node.js";
-import { logContribution, containsHtml } from "../utils.js";
+import { logContribution } from "./contributions.js";
+import { containsHtml } from "../utils.js";
 import User from "../models/user.js";
 import { createNote } from "./notes.js";
 import { resolveTreeAccess } from "./treeAccess.js";
@@ -10,7 +11,7 @@ import { hooks } from "../hooks.js";
 import { getLandRootId } from "../landRoot.js";
 import { invalidateAll, invalidateNode } from "./ancestorCache.js";
 import log from "../log.js";
-import { NODE_STATUS, DELETED, CONTENT_TYPE, ERR, ProtocolError } from "../protocol.js";
+import { NODE_STATUS, DELETED, CONTENT_TYPE, ERR, ProtocolError, SYSTEM_OWNER } from "../protocol.js";
 
 async function getUserOrThrow(userId) {
   if (!userId) {
@@ -242,7 +243,7 @@ export async function deleteNodeBranch(
   if (!access.isOwner || (!access.isRoot && !!nodeToDelete.rootOwner)) {
     throw new Error("Invalid delete attempt. Must be owner and not root.");
   }
-  if (nodeToDelete.rootOwner && nodeToDelete.rootOwner !== "SYSTEM") {
+  if (nodeToDelete.rootOwner && nodeToDelete.rootOwner !== SYSTEM_OWNER) {
     throw new Error("Root nodes can only be retired on root view");
   }
   if (nodeToDelete.parent === DELETED) {
@@ -304,7 +305,7 @@ export async function updateParentRelationship(
 ) {
   const nodeChild = await Node.findById(nodeChildId);
   if (!nodeChild) throw new Error("Child node not found");
-  if (nodeChild.rootOwner && nodeChild.rootOwner !== "SYSTEM") throw new Error("Cannot change root's parent");
+  if (nodeChild.rootOwner && nodeChild.rootOwner !== SYSTEM_OWNER) throw new Error("Cannot change root's parent");
   if (nodeChild.parent.toString() === nodeNewParentId.toString()) {
     throw new Error("Node already has this parent");
   }

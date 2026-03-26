@@ -25,6 +25,10 @@ export default {
     energyActions: {},
     sessionTypes: {
       DREAM_ORCHESTRATE: "dream-orchestrate",
+      DREAM_NOTIFY: "dream-notify",
+      SHORT_TERM_DRAIN: "short-term-drain",
+      CLEANUP_REORGANIZE: "cleanup-reorganize",
+      CLEANUP_EXPAND: "cleanup-expand",
     },
     cli: [
       { command: "dream-time <time>", description: "Set daily dream time (HH:MM) for current tree", method: "POST", endpoint: "/root/:rootId/dream-time" },

@@ -218,7 +218,8 @@ const ExtensionsPage = () => {
             work together. But it is one interpretation. The seed grows whatever you plant.
           </p>
           <div style={{marginTop: 24}}>
-            <a className="lp-btn lp-btn-primary" href="https://horizon.treeos.ai">Browse Extensions</a>
+            <a className="lp-btn lp-btn-primary" href="/build">Developer Reference</a>
+            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai" style={{marginLeft: 12}}>Browse Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/seed" style={{marginLeft: 12}}>The Seed</a>
           </div>
         </div>

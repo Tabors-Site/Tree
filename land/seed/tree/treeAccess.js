@@ -12,6 +12,8 @@ import { ERR } from "../protocol.js";
  * Contributors accumulate along the walk. If the user is in
  * contributors[] at ANY node between the current position and
  * the ownership boundary, they have write access.
+ *
+ * userId is normalized to string. Callers can pass ObjectId or string.
  */
 export async function resolveTreeAccess(nodeId, userId) {
   if (!nodeId) {
@@ -22,7 +24,11 @@ export async function resolveTreeAccess(nodeId, userId) {
     };
   }
 
-  const ancestors = await getAncestorChain(nodeId);
+  // Normalize userId to string for consistent comparison with cached ancestor data.
+  // Ancestor cache stores all IDs as strings. ObjectId === String is always false.
+  const safeUserId = userId ? String(userId) : null;
+
+  const ancestors = await getAncestorChain(String(nodeId));
   if (!ancestors) {
     return {
       ok: false,
@@ -31,5 +37,5 @@ export async function resolveTreeAccess(nodeId, userId) {
     };
   }
 
-  return resolveTreeAccessFromChain(String(nodeId), userId, ancestors);
+  return resolveTreeAccessFromChain(String(nodeId), safeUserId, ancestors);
 }

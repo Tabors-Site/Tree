@@ -6,6 +6,7 @@
  * on lands created before the versioning system.
  */
 
+import log from "../log.js";
 import { getLandConfigValue, setLandConfigValue } from "../landConfig.js";
 
 const DEFAULTS = {
@@ -16,10 +17,14 @@ const DEFAULTS = {
 };
 
 export default async function migrate() {
+  let set = 0;
   for (const [key, value] of Object.entries(DEFAULTS)) {
     const existing = getLandConfigValue(key);
     if (existing === null || existing === undefined) {
       await setLandConfigValue(key, value);
+      set++;
+      log.verbose("Seed", `0.1.0: set ${key} = ${JSON.stringify(value)}`);
     }
   }
+  if (set > 0) log.verbose("Seed", `0.1.0: ${set} config default(s) applied`);
 }
