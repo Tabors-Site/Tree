@@ -38,7 +38,7 @@ Type is free-form. The kernel validates format (string, max 50 chars, no HTML). 
 
 username, password, llmDefault, isAdmin, isRemote, homeLand, metadata (Map)
 
-One default LLM connection. `isAdmin` is a boolean the kernel checks for authorization (private IP bypass, note size bypass, admin route gates). `isRemote` and `homeLand` are identity fields the auth layer checks on every request. Federation data (remote roots) lives in `metadata.canopy`. Tier/plan lives in `metadata.tiers`. Extensions store energy budgets, API keys, LLM slot assignments, storage usage, and preferences in metadata.
+One default LLM connection. `isAdmin` is a boolean the kernel checks for authorization (private IP bypass, note size bypass, admin route gates). `isRemote` and `homeLand` are identity fields the auth layer checks on every request. Tree root navigation (formerly `roots[]` on the schema) lives in `metadata.nav.roots`, managed by the navigation extension. Federation data (remote roots) lives in `metadata.canopy`. Tier/plan lives in `metadata.tiers`. Extensions store energy budgets, API keys, LLM slot assignments, storage usage, and preferences in metadata.
 
 ### Supporting Models
 
@@ -121,6 +121,12 @@ Every operation at a node goes through four resolution chains. Position determin
 2. **Tool scope**: Mode base tools + extension tools + per-node `metadata.tools.allowed/blocked`. Filtered by extension scope.
 3. **Mode resolution**: `metadata.modes[intent]` per-node override, then default mapping, then bigMode fallback.
 4. **LLM resolution**: Extension slot on tree, tree default, extension slot on user, user default.
+
+### Confined Extensions
+
+Extensions can declare `scope: "confined"` in their manifest. Confined extensions are inactive everywhere until explicitly allowed at a position via `metadata.extensions.allowed[]`. The resolution chain checks confined status first. Not found in allowed means blocked. Allowed inherits down. An allowed confined extension can still be blocked further down (`ext-allow solana` at /Finance, `ext-block solana` at /Finance/ReadOnly).
+
+This enables dangerous extensions like shell and solana to exist on the land without being active. They install but do nothing until an operator allows them at a specific branch. The capability surface changes as you navigate. Move to /Finance and solana tools appear. Move to /Marketing and they vanish.
 
 ## Hooks
 
@@ -253,47 +259,86 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | circuitDensityWeight | 0.3 | Weight of metadata density |
 | circuitErrorWeight | 0.3 | Weight of error rate |
 | circuitCheckInterval | 3600000 | Health check interval (1 hour) |
-| toolCircuitThreshold | 5 | Consecutive failures before a tool is disabled for the session |
-| llmMaxConcurrent | 20 | Max in-flight LLM API calls across all users. Prevents thundering herd. |
-| failoverTimeout | 15 | Seconds before giving up walking the LLM failover stack |
-| toolCallTimeout | 60 | Seconds before a single MCP tool call is killed |
-| toolResultMaxBytes | 50000 | Max tool result size before truncation (bytes) |
-| maxConversationSessions | 50000 | Hard cap on in-memory conversation sessions. Evicts oldest on overflow. |
-| staleConversationTimeout | 1800 | Seconds before an idle conversation session is swept (default 30 min) |
-| chatRateLimit | 10 | Max chat messages per rate window per user. Prevents spam via WebSocket. |
-| chatRateWindowMs | 60000 | Chat rate limit window in milliseconds (default 1 minute). |
-| maxNotesPerNode | 1000 | Max notes per node. Prevents runaway extension note floods. |
-| maxRegisteredTools | 500 | Max tool definitions in the registry. Raise for lands with many extensions. |
-| maxRegisteredModes | 200 | Max mode definitions in the registry. Raise for lands with many extensions. |
-| maxConnectionsPerUser | 15 | Max custom LLM connections per user. Enterprise lands raise to 50+. Clamped 1 to 100. |
-| maxOrchestrators | 10 | Max registered orchestrators. Raise as extensions define new zones beyond land/home/tree. |
-| metadataNamespaceMaxBytes | 524288 | Max bytes per metadata namespace (node, user, contribution extensionData). Clamped 1KB to 2MB. One config controls all three. Default 512KB. |
-| hookTimeoutMs | 5000 | Milliseconds before a single hook handler is killed. Raise for extensions with slow external calls. |
-| hookMaxHandlers | 100 | Max handlers per hook name. Raise for lands with 50+ extensions. |
-| hookCircuitThreshold | 5 | Consecutive failures before auto-disabling a hook handler. Lower for stricter lands. |
-| hookCircuitHalfOpenMs | 300000 | Milliseconds before a tripped hook handler gets one test call (5 min default). |
-| hookChainTimeoutMs | 15000 | Cumulative timeout for sequential hook chains (enrichContext, onCascade). |
-| ancestorCacheMaxEntries | 50000 | Max cached ancestor chains. Raise for lands with 100K+ nodes. Lower for memory-constrained hosts. |
-| ancestorCacheMaxDepth | 100 | Max parent chain depth before stopping. Clamped 10 to 500. Trees deeper than this are extremely rare. |
-| metadataMaxNestingDepth | 5 | Max nesting depth for extension metadata values. Clamped 2 to 20. Deep nesting creates expensive queries. |
-| mcpConnectRetries | 2 | MCP connection retry count for background pipelines. Clamped 0 to 10. Raise for unreliable networks. |
-| treeAncestorDepth | 50 | Max ancestor chain depth in tree data queries. Clamped 5 to 200. |
-| treeContributionsPerNode | 500 | Max contributions loaded per node in full tree export. Clamped 10 to 10000. |
-| treeNotesPerNode | 100 | Max notes loaded per node in AI context and full tree export. Clamped 10 to 1000. |
-| treeMaxChildrenResolve | 200 | Max children name-resolved per node for AI. Clamped 10 to 1000. |
-| treeAllDataDepth | 20 | Max recursion depth in full tree export. Clamped 5 to 50. |
-| noteQueryLimit | 5000 | Max notes returned per query. Clamped 1 to 50000. |
-| noteSearchLimit | 500 | Max notes returned per search query. Clamped 1 to 10000. |
-| subtreeNodeCap | 10000 | Max node IDs collected in subtree traversal. Clamped 100 to 100000. |
-| contributionQueryLimit | 5000 | Max contribution documents returned per query. Clamped 1 to 50000. |
-| maxContributorsPerNode | 500 | Max contributors[] entries per node. Enterprise collaboration lands raise this. |
-| seedVersion | "0.1.0" | Current seed version. Compared at boot to run migrations. Set by migration runner. Do not modify manually. |
 
 Extension config (like `htmlEnabled`) lives in .config too, written by extensions on first boot, not by the kernel.
 
-### Internal Tuning
+### Advanced Tuning
 
-Advanced operators can adjust these values via `treeos config set`. Most lands never need to. Defaults are safe.
+These keys are configurable via `treeos config set` but most lands never need to change them. Defaults are safe. Grouped by subsystem.
+
+**Concurrency and rate limiting:**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
+| llmMaxConcurrent | 20 | Max in-flight LLM API calls across all users. Prevents thundering herd. |
+| failoverTimeout | 15 | Seconds before giving up walking the LLM failover stack |
+| chatRateLimit | 10 | Max chat messages per rate window per user |
+| chatRateWindowMs | 60000 | Chat rate limit window (ms) |
+| maxConversationSessions | 50000 | Hard cap on in-memory conversation sessions. Evicts oldest on overflow. |
+| staleConversationTimeout | 1800 | Idle conversation session sweep (seconds) |
+| maxConnectionsPerIp | 20 | Per-IP WS connection cap |
+
+**Tools, modes, and registries:**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
+| toolCircuitThreshold | 5 | Consecutive failures before a tool is disabled for the session |
+| toolCallTimeout | 60 | Seconds before a single MCP tool call is killed |
+| toolResultMaxBytes | 50000 | Max tool result size before truncation (bytes) |
+| maxRegisteredTools | 500 | Max tool definitions in the registry |
+| maxRegisteredModes | 200 | Max mode definitions in the registry |
+| maxOrchestrators | 10 | Max registered orchestrators |
+
+**Hooks:**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
+| hookTimeoutMs | 5000 | Per-handler timeout (ms) |
+| hookMaxHandlers | 100 | Max handlers per hook name |
+| hookCircuitThreshold | 5 | Consecutive failures before auto-disabling a handler |
+| hookCircuitHalfOpenMs | 300000 | Half-open recovery interval (ms) |
+| hookChainTimeoutMs | 15000 | Cumulative timeout for sequential chains (ms) |
+
+**Metadata and data limits:**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
+| metadataNamespaceMaxBytes | 524288 | Max bytes per metadata namespace (512KB) |
+| metadataMaxNestingDepth | 5 | Max nesting depth for extension metadata values |
+| maxNotesPerNode | 1000 | Max notes per node |
+| maxContributorsPerNode | 500 | Max contributors[] entries per node |
+| maxConnectionsPerUser | 15 | Max custom LLM connections per user |
+| noteQueryLimit | 5000 | Max notes returned per query |
+| noteSearchLimit | 500 | Max notes returned per search query |
+| contributionQueryLimit | 5000 | Max contribution documents returned per query |
+| subtreeNodeCap | 10000 | Max node IDs collected in subtree traversal |
+
+**Tree data queries (AI context):**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
+| treeAncestorDepth | 50 | Max ancestor chain depth |
+| treeContributionsPerNode | 500 | Max contributions loaded per node |
+| treeNotesPerNode | 100 | Max notes loaded per node |
+| treeMaxChildrenResolve | 200 | Max children name-resolved per node |
+| treeAllDataDepth | 20 | Max recursion depth in full tree export |
+
+**Ancestor cache:**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
+| ancestorCacheMaxEntries | 50000 | Max cached ancestor chains |
+| ancestorCacheMaxDepth | 100 | Max parent chain depth before stopping |
+
+**MCP:**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
+| mcpConnectRetries | 2 | Connection retry count for background pipelines |
+| mcpConnectTimeout | 10000 | Client connection timeout (ms) |
+| mcpStaleTimeout | 3600000 | Client idle timeout before sweep (ms) |
+
+**WebSocket transport:**
 
 | Key | Default | What it tunes |
 |-----|---------|---------------|
@@ -301,10 +346,19 @@ Advanced operators can adjust these values via `treeos config set`. Most lands n
 | socketPingTimeout | 30000 | WS ping timeout (ms) |
 | socketPingInterval | 25000 | WS ping interval (ms) |
 | socketConnectTimeout | 10000 | WS connection timeout (ms) |
-| maxConnectionsPerIp | 20 | Per-IP WS connection cap |
+
+**LLM client:**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
 | llmClientCacheTtl | 300 | User LLM client cache lifetime (seconds) |
 | canopyProxyCacheTtl | 60 | Canopy proxy client cache lifetime (seconds) |
 | apiOrchestrationTimeout | 1140000 | API request timeout (ms) |
+
+**Federation (Canopy):**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
 | canopyHeartbeatInterval | 300000 | Heartbeat frequency (ms) |
 | canopyDegradedThreshold | 2 | Failed heartbeats before degraded |
 | canopyUnreachableThreshold | 12 | Failed heartbeats before unreachable |
@@ -313,19 +367,33 @@ Advanced operators can adjust these values via `treeos config set`. Most lands n
 | canopyMaxRetries | 5 | Event delivery retries |
 | canopyEventDeliveryTimeout | 15000 | Per-event delivery timeout (ms) |
 | canopyDestLimitPerCycle | 10 | Events per destination per cycle |
+
+**Orchestrator internals:**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
 | orchestratorLockTtlMs | 1800000 | Lock TTL before auto-expire (ms) |
 | lockSweepInterval | 300000 | Lock cleanup sweep (ms) |
-| uploadCleanupInterval | 21600000 | Cleanup frequency (ms) |
+| orchestratorInitTimeout | 30000 | Background pipeline init timeout (ms) |
+
+**Cleanup intervals:**
+
+| Key | Default | What it tunes |
+|-----|---------|---------------|
+| uploadCleanupInterval | 21600000 | Upload cleanup frequency (ms) |
 | uploadGracePeriodMs | 3600000 | File age before deletion (ms) |
-| uploadCleanupBatchSize | 1000 | Max files deleted per cleanup cycle. Clamped 10 to 50000. Raise for lands with large backlogs. |
+| uploadCleanupBatchSize | 1000 | Max files deleted per cleanup cycle |
 | retentionCleanupInterval | 86400000 | Retention job frequency (ms) |
 | cascadeCleanupInterval | 21600000 | Cascade result cleanup frequency (ms) |
-| npmInstallTimeout | 60000 | Timeout for npm install in extension directories (ms). Slow networks may need 120000. |
-| dnsLookupTimeout | 5000 | DNS resolution timeout for custom LLM URLs (ms). Corporate VPN may need 15000. |
-| mcpConnectTimeout | 10000 | MCP client connection timeout (ms). Remote MCP servers may need 20000. |
-| mcpStaleTimeout | 3600000 | MCP client idle timeout before sweep (ms). High-traffic land may want 1800000. |
-| orchestratorInitTimeout | 30000 | Background pipeline init timeout (ms). Slow LLM providers may need 60000. |
-| circuitFlowScanLimit | 5000 | Max cascade results scanned per tree health check. Heavy cascade lands raise to 20000. Light lands lower to 1000. |
+| npmInstallTimeout | 60000 | npm install timeout for extensions (ms) |
+| dnsLookupTimeout | 5000 | DNS resolution timeout for custom LLM URLs (ms) |
+| circuitFlowScanLimit | 5000 | Max cascade results scanned per tree health check |
+
+**Kernel version (do not modify):**
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| seedVersion | "0.1.0" | Compared at boot to run migrations. Set by migration runner. |
 
 ## Tree Circuit Breaker
 
@@ -355,6 +423,8 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Extension router timeout | 5s on page routes (/). API routes (/api/v1) not wrapped. AI chat routes take as long as the LLM needs. Mid-stream responses closed after timeout. |
 | Extension init timeout | 10s per extension init(). Hanging init skipped, boot continues. Init errors diagnose missing service declarations and suggest manifest fixes. |
 | LLM concurrency semaphore | llmMaxConcurrent (default 20) caps in-flight LLM calls globally. Excess queued with abort signal support. Jittered exponential backoff on 429. |
+| LLM priority queue | Human sessions acquire LLM slots first. Gateway second. Interactive third. Background jobs last. Prevents autonomous extensions from starving human responses. |
+| Namespace enforcement | Scoped core binds the calling extension name. setExtMeta rejects writes to namespaces not owned by the caller. Core namespaces (cascade, extensions, tools, modes) rejected for all extension callers. Extensions cannot corrupt each other's metadata. |
 | enrichContext chain timeout | 15s cumulative cap for the entire enrichContext/onCascade handler chain. Per-handler timeout reduced to remaining budget. |
 | MCP spatial scoping | MCP tool calls check isExtensionBlockedAtNode before dispatch. Same spatial scoping guarantee as WebSocket conversations. |
 | Extension install rollback | Files written to staging directory. Atomic rename on success. Cleanup on failure. No partial installs. |
@@ -367,6 +437,7 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Contribution extensionData cap | 512KB per contribution extensionData field. Same cap as setExtMeta. Prevents buggy extensions from writing 5MB per contribution. |
 | .flow partitioning | Daily partition nodes prevent unbounded growth. flowMaxResultsPerDay cap with circular overwrite. Retention deletes entire partitions by date. |
 | Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. System nodes always rejected. transferOwnership uses bulkWrite for atomic two-op transfer. |
+| Node locks | Structural mutations (move, delete, transfer ownership) acquire short-lived in-memory locks. Reads and scoped writes proceed without locking. Sorted acquisition prevents deadlocks. 30s TTL expiry prevents permanent locks on crash. |
 | Tree circuit breaker | Health equation monitors node count, metadata density, error rate. Score > 1.0 trips the tree. No AI, no writes, no cascade. Read access stays. Extensions revive. Defaults to off. |
 | Ancestor cache | Shared cache for parent chain walks. One walk serves all six resolution chains. Snapshot per message for consistency. moveNode clears entire cache. deleteNode clears entries containing the deleted node. Metadata/ownership changes clear the affected node and descendants. |
 | Session cap | 10K max (configurable) with oldest-first eviction. |

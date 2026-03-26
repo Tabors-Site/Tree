@@ -223,10 +223,24 @@ const { answer } = await core.llm.runChat({
   mode: "tree:structure",
   rootId: "...",            // optional, for tree modes
   res,                      // optional, Express response for auto-abort on disconnect
+  llmPriority: core.llm.LLM_PRIORITY.BACKGROUND, // optional, default HUMAN
 });
 ```
 
 Handles automatically: MCP connection, mode switching, Chat tracking, abort on client disconnect, session persistence, error finalization. Pass `res` for HTTP routes.
+
+### LLM priority
+
+When multiple sessions compete for LLM slots, priority determines who goes first. The semaphore queue is sorted by priority (lowest number first), then by arrival time.
+
+| Priority | Value | Use case |
+|----------|-------|----------|
+| `HUMAN` | 1 | CLI and web sessions. Default for all `runChat` calls. |
+| `GATEWAY` | 2 | External channel responses (Telegram, Discord, email, SMS). |
+| `INTERACTIVE` | 3 | Human-initiated async (scout, explore, reroot analysis). |
+| `BACKGROUND` | 4 | Autonomous jobs (intent, dreams, codebook, compression). |
+
+Access via `core.llm.LLM_PRIORITY`. Background jobs should always set `llmPriority: core.llm.LLM_PRIORITY.BACKGROUND` so human interactions never wait behind autonomous work.
 
 Sessions persist within the same zone. `tree:{rootId}:{userId}` gives each tree its own conversation. Switching trees starts fresh.
 
@@ -244,6 +258,7 @@ const rt = new OrchestratorRuntime({
   description: "Processing tree",
   modeKeyForLlm: "tree:my-mode",
   lockNamespace: "my-pipeline",  // optional, prevents concurrent runs
+  llmPriority: LLM_PRIORITY.BACKGROUND, // optional, default HUMAN
 });
 
 const ok = await rt.init("Starting pipeline");
@@ -389,10 +404,19 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 | Contributions | `core.contributions.logContribution` | Yes |
 | Sessions | `core.session.*` | Yes |
 | Chat | `core.chat.*` | Yes |
-| LLM | `core.llm.*` | Yes |
+| LLM | `core.llm.*` (includes `LLM_PRIORITY`) | Yes |
 | MCP | `core.mcp.*` | Yes |
 | WebSocket | `core.websocket.*` | Yes (no-op if headless) |
 | Orchestrator | `core.orchestrator.*` | Yes |
+| Hooks | `core.hooks.*` | Yes (always injected) |
+| Modes | `core.modes.*` | Yes (always injected) |
+| Orchestrators | `core.orchestrators.*` | Yes |
+| Ownership | `core.ownership.*` | Yes |
+| Tree | `core.tree.*` | Yes |
+| Node Locks | `core.nodeLocks.*` | Yes |
+| Metadata | `core.metadata.*` (namespace-enforced) | Yes |
+| Cascade | `core.cascade.*` | Yes |
+| Protocol | `core.protocol.*` | Yes |
 | Energy | `core.energy.*` | No-op stub if extension not loaded |
 
 ## Logging
@@ -517,6 +541,23 @@ Extensions define their own hooks using the `extName:hookName` naming convention
 - All handlers have a 5 second timeout. Hanging handlers are killed and logged.
 - Max 100 handlers per hook.
 - Hooks auto-unregister when an extension is disabled via `hooks.unregister(extName)`.
+
+### Structural mutations in hooks
+
+If your hook handler creates, moves, or deletes nodes, acquire a node lock via `core.nodeLocks.acquireNodeLock`. Release in a `finally` block. The kernel does not know which hooks do structural work. Extensions that do take responsibility.
+
+```js
+core.hooks.register("afterNote", async ({ nodeId }) => {
+  const lock = await core.nodeLocks.acquireNodeLock(parentId, sessionId);
+  try {
+    await createNode("Child", null, null, parentId, false, userId);
+  } finally {
+    core.nodeLocks.releaseNodeLock(parentId, sessionId);
+  }
+}, "my-ext");
+```
+
+Node locks are short-lived, in-memory, sorted-acquisition (prevents deadlocks), and TTL-expiring (prevents permanent locks on crash). The integrity check repairs on boot if a crash left orphaned state.
 
 ## Data Migrations
 
@@ -737,10 +778,24 @@ setExtMeta(node, "my-extension", { wallets: {}, config: {} });
 
 // Partial update (shallow merge)
 mergeExtMeta(node, "my-extension", { lastSync: new Date() });
-
-// Always save after writing
-await node.save();
 ```
+
+### Namespace enforcement through the scoped core
+
+Extensions can also use `core.metadata.setExtMeta(node, data)` through the scoped core. When called this way, the namespace is automatically bound to the calling extension's name. The extension cannot write to another extension's namespace. A `Namespace violation` error is thrown if the namespace doesn't match the caller.
+
+```js
+// Through scoped core (namespace enforced, recommended):
+await core.metadata.setExtMeta(node, "my-extension", { key: "value" });
+
+// Direct import from seed (no enforcement, still works for kernel code and utilities):
+import { setExtMeta } from "../../seed/tree/extensionMetadata.js";
+setExtMeta(node, "my-extension", { key: "value" });
+```
+
+Both paths are valid. The scoped core path prevents accidental cross-namespace writes. The direct import path is for kernel code, migrations, and utilities that need to write to arbitrary namespaces.
+
+Four core namespaces (`tools`, `modes`, `extensions`, `cascade`) are always writable regardless of caller. These are kernel-owned shared configuration.
 
 Convention:
 - Namespace key MUST match your manifest `name`
@@ -941,6 +996,30 @@ treeos ext-restrict fitness read   # fitness can see food data but not write her
 ```
 
 The fitness coach can reference nutrition data while planning workouts. The food coach can see exercise history when recommending meals. Neither can modify the other's branch.
+
+### Confined extensions
+
+Extensions can declare `scope: "confined"` in their manifest. Confined extensions are inactive everywhere by default. They must be explicitly allowed at a position via `metadata.extensions.allowed[]`. Use `ext-allow solana` to activate a confined extension at the current node and below. Use `ext-unallow solana` to remove access. Confined scope is for dangerous extensions (shell, solana, scripts) that should only exist where explicitly permitted.
+
+```js
+export default {
+  name: "solana",
+  scope: "confined",   // "global" (default) or "confined"
+  // ...
+};
+```
+
+The resolution chain handles confined extensions in one walk. If a confined extension is not in the `allowed[]` set at any ancestor, it resolves as blocked. Same blocked infrastructure. Same filtering for tools, hooks, modes, and metadata writes.
+
+**CLI:**
+```
+ext-allow solana              Allow confined extension at this node
+ext-unallow solana            Remove confined extension access
+```
+
+The `ext-allow` command is dual-purpose. It unblocks a globally blocked extension and it allows a confined extension. The user doesn't need to know the internal model. They say "I want this extension here" and the system figures out the right operation.
+
+When a confined extension is installed at runtime (via `treeos ext install`), the confined set refreshes automatically. No restart needed.
 
 ## CLI Subcommands
 

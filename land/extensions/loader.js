@@ -572,17 +572,11 @@ function topologicalSort(manifests) {
     if (visited.has(name)) return;
     visited.add(name);
 
-    // Visit extension dependencies first (strip semver constraints for lookup)
+    // Visit REQUIRED extension dependencies first (strip semver constraints for lookup).
+    // Optional deps are NOT visited here. They don't affect load order.
+    // Optional deps load IF present, checked at runtime via getExtension().
     if (item.manifest.needs?.extensions) {
       for (const dep of item.manifest.needs.extensions) {
-        const depName = parseDepString(dep).name;
-        if (byName.has(depName)) visit(byName.get(depName));
-      }
-    }
-
-    // Visit optional extension dependencies if they exist
-    if (item.manifest.optional?.extensions) {
-      for (const dep of item.manifest.optional.extensions) {
         const depName = parseDepString(dep).name;
         if (byName.has(depName)) visit(byName.get(depName));
       }
@@ -591,18 +585,10 @@ function topologicalSort(manifests) {
     sorted.push(item);
   }
 
-  // Visit in order of dependency count (least deps first as tiebreaker)
-  const ordered = [...manifests].sort((a, b) => {
-    const aDeps = (a.manifest.needs?.services?.length || 0) +
-                  (a.manifest.needs?.models?.length || 0) +
-                  (a.manifest.needs?.extensions?.length || 0);
-    const bDeps = (b.manifest.needs?.services?.length || 0) +
-                  (b.manifest.needs?.models?.length || 0) +
-                  (b.manifest.needs?.extensions?.length || 0);
-    return aDeps - bDeps;
-  });
-
-  for (const item of ordered) visit(item);
+  // No pre-sort. The recursive visit produces correct ordering regardless of
+  // iteration order. That's the entire point of topological sort. A pre-sort
+  // can break the invariant by changing when nodes get visited.
+  for (const item of manifests) visit(item);
   return sorted;
 }
 

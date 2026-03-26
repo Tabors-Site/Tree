@@ -285,7 +285,11 @@
       "Bash(LOG_LEVEL=3 timeout 20 node land/server.js)",
       "Bash(LOG_LEVEL=3 timeout 20 node server.js)",
       "Bash(LOG_LEVEL=3 node server.js)",
-      "Bash(LOG_LEVEL=3 timeout 25 node boot.js)"
+      "Bash(LOG_LEVEL=3 timeout 25 node boot.js)",
+      "Bash(ls -d /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep -v '^_template$')",
+      "Bash(for bundle:*)",
+      "Bash(echo \"=== $bundle ===\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

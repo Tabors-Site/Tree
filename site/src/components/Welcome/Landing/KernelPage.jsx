@@ -382,9 +382,11 @@ const KernelPage = () => {
             <div className="lp-card">
               <h3>1. Extension Scope</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
-                Is this extension active, restricted, or blocked here?
-                Walk parent chain, accumulate <code>metadata.extensions.blocked[]</code> and <code>restricted{}</code>.
-                Blocked extensions lose all capabilities. Restricted extensions keep read-only tools.
+                Is this extension active, restricted, blocked, or confined?
+                Two modes: global extensions accumulate <code>blocked[]</code> walking up (opt-out).
+                Confined extensions check <code>allowed[]</code> walking up (opt-in).
+                Confined and not allowed = blocked. Allowed but blocked further down = blocked wins.
+                Restricted extensions keep read-only tools.
               </p>
             </div>
             <div className="lp-card">
@@ -726,6 +728,11 @@ const KernelPage = () => {
               ["Orchestrator safety", "30s init timeout. Init rollback on failure. 500 max steps. Zombie guard (no ops after cleanup). Lock ownership with renewal. Abort on cleanup kills in-flight LLM calls. Idempotent cleanup. MCP retry with backoff. 4h internal JWT. Duration tracking."],
               ["Lock safety", "Owner tracking (userId + visitorId). Release rejects wrong owner. Renewal without release. 10K hard cap. Input validation. Force release for admin. Visibility via getLockInfo/listLocks. Sweep logging."],
               ["Scope ownership safety", "Tool/mode ownership validated (1-64 chars). Capped at config limits. Cleanup on extension uninstall. Static hook import for notifyScopeChange."],
+              ["Node locks", "Structural mutations (create, move, delete, ownership) acquire short-lived in-memory locks. Sorted acquisition prevents deadlocks. TTL expiry (30s) prevents permanent locks on crash."],
+              ["LLM priority queue", "Human > Gateway > Interactive > Background. Background jobs (dreams, understanding, compression) yield to users typing. Twenty concurrent slots default."],
+              ["Namespace enforcement", "setExtMeta enforces namespace ownership through scoped core. Extensions can only write to their own namespace. Core namespaces rejected for all callers."],
+              ["npm install safety", "Extension npm deps run with --ignore-scripts. No preinstall/postinstall code execution. 60s timeout. Rollback on failure."],
+              ["Confined extensions", "scope: confined in manifest. Active nowhere by default. Requires explicit allowed[] at a node to activate. Shell, solana, scripts default to confined."],
               ["Seed versioning", "Migrations in order. Failed retry next boot."],
               ["Tree integrity check", "Boot and daily. Auto-repair phantom refs. Orphans logged."],
               ["Index verification", "Boot. Create missing. No collection scans."],

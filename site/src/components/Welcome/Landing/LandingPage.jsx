@@ -32,11 +32,12 @@ const LandingPage = () => {
           <div className="lp-hero-ctas">
             <button className="lp-btn lp-btn-primary" onClick={scrollToInstall}>Get Started</button>
             <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
           </div>
           <p style={{color: "#666", fontSize: "0.85rem", marginTop: 20}}>
             <a href="/app" style={{color: "#888", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.1)"}}>
               TreeOS
-            </a> is the first operating system built on the seed. It ships with 40+ extensions across four bundles.
+            </a> is the first operating system built on the seed. It ships with 78 extensions across four bundles.
           </p>
         </div>
       </section>
@@ -83,9 +84,9 @@ const LandingPage = () => {
             <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
               <h3 style={{color: "#a78bfa"}}>Extensions</h3>
               <p style={{flex: 1}}>
-                Four bundles. Cascade (8 extensions, the nervous system). Intelligence (11, self-awareness).
-                Connect (8, external channels). Maintenance (4, hygiene). Plus the base OS extensions
-                and mycelium standalone. 40+ total.
+                Four bundles. Cascade (8, the nervous system). Intelligence (12, self-awareness).
+                Connect (8, external channels). Maintenance (4, hygiene). Plus base OS, developer tools,
+                data, content, gateways, and mycelium. 78 extensions total.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/extensions" style={{color: "#a78bfa", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)", paddingBottom: 2}}>How extensions work</a>
@@ -300,9 +301,9 @@ const LandingPage = () => {
             <div className="lp-card" style={{borderLeft: "3px solid rgba(56, 189, 248, 0.5)"}}>
               <h3 style={{color: "#38bdf8", fontSize: "1rem"}}>treeos-intelligence</h3>
               <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
-                Self-awareness. 11 extensions. The tree compresses, detects contradictions, profiles users,
+                Self-awareness. 12 extensions. The tree compresses, detects contradictions, profiles users,
                 evolves structural patterns, embeds semantics, explores branches, traces threads,
-                holds its own purpose.
+                finds boundaries, tracks cognitive phase, holds its own purpose.
               </p>
               <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-intelligence</code>
             </div>
@@ -324,21 +325,52 @@ const LandingPage = () => {
             </div>
           </div>
 
-          <p className="lp-section-sub" style={{marginTop: 24, color: "rgba(255,255,255,0.35)", fontSize: "0.85rem"}}>
-            Plus the base TreeOS extensions (AI modes, orchestrator, values, scripts, prestige, schedules,
-            billing, solana, blog, backup, dreams, understanding) and mycelium standalone.
+          <p className="lp-section-sub" style={{marginTop: 32, marginBottom: 16, color: "rgba(255,255,255,0.5)", fontSize: "0.9rem"}}>
+            Plus standalone extensions and the base TreeOS system:
           </p>
 
-          <div className="lp-ext-cta">
+          <div style={{maxWidth: 700, margin: "0 auto", fontSize: "0.85rem", lineHeight: 1.8}}>
+            {[
+              ["mycelium", "Intelligent cross-land signal routing. The forest underground."],
+              ["understanding", "Bottom-up tree compression. Walks leaves to root, summarizes upward."],
+              ["dreams", "Background maintenance. Runs while you sleep. Reorganizes, expands, notifies."],
+              ["perspective-filter", "Per-node cascade filtering by topic. Each node declares what it drinks."],
+              ["land-manager", "AI land management. Extensions, config, users, peers from the root."],
+              ["html-rendering", "Server-rendered pages. Values, schedules, gateway, prestige all get web views."],
+              ["gateway-telegram", "Telegram bot. Input, output, or both. Webhook receiver."],
+              ["gateway-discord", "Discord bot. Persistent WebSocket. Channel pooling by token."],
+              ["shell", "Execute server commands from the AI. Confined scope."],
+              ["scripts", "Sandboxed JavaScript on nodes. Confined scope."],
+              ["solana", "On-chain wallets per tree. Confined scope."],
+              ["fitness", "Workout coaching and tracking with progressive overload."],
+              ["food", "Calorie and macro tracking from natural language."],
+              ["values", "Numeric values and goals on nodes with tree-wide accumulation."],
+              ["backup", "Full and snapshot backup/restore. Point-in-time recovery."],
+              ["prestige", "Node versioning. Compare, revert, branch from any version."],
+              ["energy", "Usage metering. Token tracking per user per action."],
+              ["billing", "Stripe subscriptions. Tier-gated features."],
+              ["raw-ideas", "Capture and auto-place. The AI sorts your loose thoughts."],
+            ].map(([name, desc]) => (
+              <div key={name} style={{
+                display: "flex", gap: 12, padding: "6px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.03)",
+              }}>
+                <code style={{color: "#4ade80", minWidth: 160, fontSize: "0.8rem"}}>{name}</code>
+                <span style={{color: "rgba(255,255,255,0.45)"}}>{desc}</span>
+              </div>
+            ))}
+            <p style={{color: "rgba(255,255,255,0.3)", marginTop: 12, fontSize: "0.8rem"}}>
+              And 40+ more: blog, book, schedules, transactions, user-llm, user-queries, api-keys, email,
+              deleted-revive, dashboard, navigation, team, notifications, console, monitor, and every
+              gateway channel (reddit, slack, sms, matrix, x, tree).
+            </p>
+          </div>
+
+          <div className="lp-ext-cta" style={{marginTop: 24}}>
             <a href="/extensions">How extensions work</a>
             <span style={{color: "rgba(255,255,255,0.15)", margin: "0 12px"}}>.</span>
-            <a href="https://horizon.treeos.ai">Browse extensions at horizon.treeos.ai</a>
+            <a href="https://horizon.treeos.ai">Browse all at horizon.treeos.ai</a>
           </div>
-          <p style={{textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: "0.85rem", marginTop: 16, maxWidth: 600, margin: "16px auto 0", lineHeight: 1.7}}>
-            Every extension is a piece contributed toward the future of AI infrastructure. There are
-            many things to be built off the kernel. Open code, open doors, resilient, decentralized.
-            This was designed to be held back by no one.
-          </p>
         </div>
       </section>
 
@@ -537,6 +569,33 @@ const LandingPage = () => {
               <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos register</div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── FROM TABOR ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 720}}>
+          <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.9, fontSize: "0.95rem", marginBottom: 20}}>
+            If you build code, play with agents, or use LLMs, I need your help. Not from a
+            corporation. From you. The everyday person who builds things because they care
+            about what they are building.
+          </p>
+          <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.9, fontSize: "0.95rem", marginBottom: 20}}>
+            I built a new kernel specifically for AI. It already has extensions but the more
+            contributors the faster it grows. The extensions become operating systems built on top
+            of it. Anyone can build extensions and operating systems as people build off the kernel,
+            specifically designed to compound and organize AI intelligence.
+          </p>
+          <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.9, fontSize: "0.95rem", marginBottom: 20}}>
+            Host your server and you are automatically in a decentralized network. If you do not want
+            to host, you can join someone else's land. Once in, download extensions others have made
+            to get a conceptual understanding since this is quite new. I think you will quickly see
+            how the benefits compound for all of us who contribute. Complex orchestration systems
+            will no longer be hard to access or share. We all build together.
+          </p>
+          <p style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", textAlign: "right"}}>
+            Tabor
+          </p>
         </div>
       </section>
 

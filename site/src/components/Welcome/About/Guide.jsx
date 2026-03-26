@@ -263,7 +263,28 @@ You are tabor's personal fitness coach...`}</Code>
 treeos ext-restrict food read     # food is read-only here
 treeos ext-scope                  # see what's active at this position`}</Code>
           <P>
-            Install from the registry: <code>treeos ext install understanding</code>.
+            <strong>Confined extensions</strong>: dangerous or specialized extensions declare <code>scope: "confined"</code> in
+            their manifest. They are active nowhere by default. You allow them at specific positions.
+            Two directions. Global extensions active everywhere, block to remove. Confined extensions
+            active nowhere, allow to add.
+          </P>
+          <Code>{`treeos ext-allow solana            # confined extension activated here and below
+treeos ext-unallow solana          # remove, extension goes dark
+treeos ext-scope                   # shows both global and confined status`}</Code>
+          <P>
+            <strong>Extension bundles.</strong> Extensions ship as bundles. Install a bundle and the loader
+            resolves everything. Four bundles cover the major capabilities:
+          </P>
+          <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", lineHeight: 1.7}}>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-cascade</strong> (8): propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-intelligence</strong> (12): tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, phase.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-connect</strong> (8): gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-maintenance</strong> (4): prune, reroot, changelog, root-hold.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>mycelium</strong> (standalone): intelligent cross-land signal routing.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>78 extensions total</strong> including base OS, developer tools, data, content, gateways, and user management.
+          </P>
+          <P>
+            Install from the registry: <code>treeos ext install treeos-cascade</code>.
             Publish your own: <code>treeos ext publish my-extension</code>.
             Browse what exists at <a href="https://horizon.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>horizon.treeos.ai</a>.
           </P>
@@ -430,9 +451,39 @@ treeos config set treeCircuitEnabled true`}</Code>
       </section>
 
       {/* ══════════════════════════════════════════════════════════════ */}
-      {/* 14. SAFETY */}
+      {/* 13b. CONCURRENCY */}
       {/* ══════════════════════════════════════════════════════════════ */}
       <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Concurrency</h2>
+          <P>The tree is multi-agent. Multiple users, multiple sessions, background jobs, gateway channels, cascade signals. Three tiers handle it.</P>
+          <div style={{fontSize: "0.85rem"}}>
+            {[
+              ["Reads", "Fully concurrent. Zero locks. Zero overhead. Any number of agents can read any node simultaneously."],
+              ["Scoped writes", "Concurrent across namespaces. setExtMeta uses atomic MongoDB $set per namespace key. Two extensions writing to different namespaces on the same node never clobber each other."],
+              ["Structural mutations", "Locked. Create, move, delete, ownership changes acquire short-lived in-memory node locks. Sorted acquisition prevents deadlocks. 30s TTL auto-expires on crash."],
+            ].map(([name, desc]) => (
+              <div key={name} style={{
+                display: "flex", gap: 12, padding: "10px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+              }}>
+                <span style={{color: "#4ade80", minWidth: 150, fontWeight: 600, fontSize: "0.8rem"}}>{name}</span>
+                <span style={{color: "#666"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+          <P style={{marginTop: 16}}>
+            <strong>LLM priority queue.</strong> The semaphore sorts by priority: human sessions first,
+            gateway channels second, interactive tools third, background jobs last. Twenty concurrent
+            slots default. Dreams and understanding yield to the user typing.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 14. SAFETY */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">Safety</h2>
           <P>The kernel protects itself from extensions, from runaway AI, and from time.</P>
@@ -451,6 +502,11 @@ treeos config set treeCircuitEnabled true`}</Code>
               ["Seed versioning", "Migrations run in order. Failed migrations retry next boot."],
               ["Ownership chain", "rootOwner/contributor mutations validate the parent chain."],
               ["Extension route timeout", "Page routes (/) wrapped with 5s timeout. API routes (/api/v1) are not. AI chat routes can take as long as the LLM needs."],
+              ["Node locks", "Structural mutations acquire sorted locks. TTL prevents permanent locks on crash."],
+              ["LLM priority", "Human > Gateway > Interactive > Background. Background jobs yield to users."],
+              ["Namespace enforcement", "Extensions can only write to their own metadata namespace."],
+              ["npm install safety", "--ignore-scripts on all extension npm installs. 60s timeout. Rollback on failure."],
+              ["Confined extensions", "scope: confined means active nowhere until explicitly allowed."],
               ["Graceful shutdown", "All timers .unref(). SIGTERM closes clean."],
             ].map(([name, desc]) => (
               <div key={name} style={{

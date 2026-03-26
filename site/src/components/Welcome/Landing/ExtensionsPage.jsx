@@ -23,6 +23,39 @@ const ExtensionsPage = () => {
         </div>
       </section>
 
+      {/* ── SECURITY WARNING ── */}
+      <section className="lp-section" style={{paddingTop: 40, paddingBottom: 40}}>
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <div style={{
+            padding: "24px 28px",
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "2px solid rgba(239, 68, 68, 0.3)",
+            borderRadius: 10,
+          }}>
+            <h3 style={{color: "#ef4444", fontSize: "1.1rem", marginTop: 0, marginBottom: 12}}>
+              Review every extension before you install it.
+            </h3>
+            <p style={{color: "rgba(255,255,255,0.7)", lineHeight: 1.8, fontSize: "0.9rem", margin: "0 0 12px"}}>
+              This is a new community and we are developing extensions openly. The kernel is safe.
+              But extensions can access your file system, make network calls, run shell commands,
+              and execute complex orchestration chains. A malicious extension with the right tools
+              can do real damage.
+            </p>
+            <p style={{color: "rgba(255,255,255,0.7)", lineHeight: 1.8, fontSize: "0.9rem", margin: "0 0 12px"}}>
+              If an extension is from an unknown source, read its code before installing.
+              Check what hooks it listens to, what tools it registers, what services it declares.
+              Use <code style={{color: "#ef4444"}}>ext view</code> to inspect before
+              you <code style={{color: "#ef4444"}}>ext install</code>.
+              Use spatial scoping to confine dangerous extensions to specific branches.
+            </p>
+            <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.85rem", margin: 0}}>
+              We will build more security tooling and share it as this ecosystem grows.
+              Until then, be vigilant. We are all building this together.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ── MANIFEST + INIT ── */}
       <section className="lp-section">
         <div className="lp-container">
@@ -141,7 +174,7 @@ const ExtensionsPage = () => {
             </div>
 
             <div style={{marginBottom: 40}}>
-              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-intelligence <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>11 extensions</span></h3>
+              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-intelligence <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>12 extensions</span></h3>
               <p style={{color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontSize: "0.88rem"}}>
                 Self-awareness and autonomy. Tree-compress carries meaning upward and trims what has been
                 absorbed. Contradiction surfaces conflicting truths across branches. The inverse tree builds
