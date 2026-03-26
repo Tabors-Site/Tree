@@ -32,9 +32,9 @@ function buildEncryptedConfig(config, direction) {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function send(secrets, metadata, notification) {
-  var { subscription } = secrets;
+  const { subscription } = secrets;
 
-  var webpush;
+  let webpush;
   try {
     webpush = await import("web-push");
     webpush = webpush.default || webpush;
@@ -42,18 +42,18 @@ async function send(secrets, metadata, notification) {
     throw new Error("web-push package not installed");
   }
 
-  var vapidPublic = process.env.VAPID_PUBLIC_KEY;
-  var vapidPrivate = process.env.VAPID_PRIVATE_KEY;
-  var vapidEmail = process.env.VAPID_EMAIL;
+  const vapidPublic = process.env.VAPID_PUBLIC_KEY;
+  const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+  const vapidEmail = process.env.VAPID_EMAIL;
 
   if (!vapidPublic || !vapidPrivate || !vapidEmail) {
     throw new Error("VAPID keys not configured");
   }
 
-  var email = vapidEmail.startsWith("mailto:") ? vapidEmail : "mailto:" + vapidEmail;
+  const email = vapidEmail.startsWith("mailto:") ? vapidEmail : "mailto:" + vapidEmail;
   webpush.setVapidDetails(email, vapidPublic, vapidPrivate);
 
-  var payload = JSON.stringify({
+  const payload = JSON.stringify({
     title: notification.title,
     body: notification.content,
     type: notification.type,
@@ -65,11 +65,11 @@ async function send(secrets, metadata, notification) {
     if (err.statusCode === 410) {
       // Subscription expired, disable the channel
       try {
-        var GatewayChannel = (await import("../gateway/model.js")).default;
+        const GatewayChannel = (await import("../gateway/model.js")).default;
         await GatewayChannel.findByIdAndUpdate(notification._channelId, {
           $set: { enabled: false, lastError: "Push subscription expired (410 Gone)" },
         });
-      } catch {}
+      } catch (err2) { log.warn("GatewayWebhook", "failed to disable expired channel:", err2.message); }
       throw new Error("Push subscription expired");
     }
     throw err;

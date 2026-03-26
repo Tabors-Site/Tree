@@ -1,10 +1,47 @@
 const chalk = require("chalk");
-const { save, load, requireAuth, currentNodeId, hasExtension } = require("../config");
+const {
+  save, load, requireAuth, currentNodeId, hasExtension,
+  createSession, switchSession, killSession, listSessions,
+  resolveSessionTarget, getSession,
+} = require("../config");
 const { getApi } = require("../helpers");
 const { printChats } = require("../display");
 
 module.exports = (program) => {
   const cfg = load();
+
+  // ── Sessions ──────────────────────────────────────────────────────
+  program
+    .command("sessions [action] [handle]")
+    .description("Named sessions pinned to positions. Actions: list (default), kill <handle>")
+    .action(async (action, handle) => {
+      const cfg = requireAuth();
+
+      if (!action || action === "list" || action === "ls") {
+        const all = listSessions(cfg);
+        if (all.length === 0) {
+          console.log(chalk.dim("  No sessions. Use @name to start one (e.g. @fitness hello)"));
+          return;
+        }
+        for (const s of all) {
+          const marker = s.active ? chalk.green(" *") : "  ";
+          const pos = s.rootName ? `${s.rootName}/${s.position}` : s.position;
+          console.log(`${marker} ${chalk.magenta("@" + s.handle)}  ${chalk.dim(pos)}  ${chalk.dim(s.createdAt ? new Date(s.createdAt).toLocaleString() : "")}`);
+        }
+        return;
+      }
+
+      if (action === "kill" || action === "rm") {
+        if (!handle) return console.log(chalk.yellow("Usage: sessions kill <handle>"));
+        killSession(cfg, handle);
+        console.log(chalk.green(`Session @${handle} ended`));
+        return;
+      }
+
+      console.log(chalk.yellow(`Unknown: ${action}. Try: sessions, sessions kill <handle>`));
+    });
+
+  // ── Chats ──────────────────────────────────────────────────────────
   program
     .command("chats [scope]")
     .description("List AI chats. In home: your chats. In tree: node chats. 'chats tree' = whole tree. -l limit")
@@ -31,38 +68,83 @@ module.exports = (program) => {
       }
     });
 
+  // ── Chat (with @session support) ──────────────────────────────────
   program
     .command("chat [message...]")
-    .description("Chat with AI. In a tree: about the branch. At home: personal. At land root: land management (admin).")
+    .description("Chat with AI. @name pins a session to the current position. @name alone switches to it.")
     .action(async (parts) => {
-      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: chat <message>"));
-      const message = parts.join(" ");
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: chat <message> or @name <message>"));
       const cfg = requireAuth();
       const api = getApi(cfg);
 
+      // Parse @session prefix
+      let handle = cfg.activeSession || null;
+      let msgParts = [...parts];
+
+      if (msgParts[0] && msgParts[0].startsWith("@")) {
+        handle = msgParts[0].slice(1);
+        msgParts = msgParts.slice(1);
+
+        // @name alone = switch to that session
+        if (msgParts.length === 0) {
+          if (handle === "default" || !handle) {
+            switchSession(cfg, null);
+            console.log(chalk.dim("Switched to default session (follows navigation)"));
+            return;
+          }
+          if (!getSession(cfg, handle)) {
+            return console.log(chalk.yellow(`No session @${handle}. Send a message to create it: @${handle} hello`));
+          }
+          switchSession(cfg, handle);
+          const s = getSession(cfg, handle);
+          const pos = s.rootName + "/" + (s.pathStack || []).map(n => n.name).join("/");
+          console.log(chalk.green(`@${handle}`) + chalk.dim(` pinned at ${pos}`));
+          return;
+        }
+      }
+
+      const message = msgParts.join(" ");
+
+      // Resolve target position
+      let target;
+      if (handle && handle !== "default") {
+        if (!getSession(cfg, handle)) {
+          // Create session pinned to current position
+          if (!cfg.activeRootId) {
+            return console.log(chalk.yellow("Navigate to a tree first before creating a session"));
+          }
+          createSession(cfg, handle);
+          const pos = cfg.activeRootName + "/" + (cfg.pathStack || []).map(n => n.name).join("/");
+          console.log(chalk.dim(`@${handle} pinned at ${pos}`));
+        }
+        target = resolveSessionTarget(cfg, handle);
+      } else {
+        target = resolveSessionTarget(cfg, null);
+      }
+
       try {
         global._treeosInFlight = new AbortController();
-        if (!cfg.activeRootId && !cfg.atHome) {
-          // At land root (/): land manager, admin only
+        const signal = global._treeosInFlight.signal;
+        const label = handle ? chalk.magenta(`@${handle}`) : chalk.bold("Tree");
+
+        if (!target.rootId && !cfg.atHome) {
           console.log(chalk.dim("Land Manager…"));
-          const data = await api.post("/land/chat", { message }, { signal: global._treeosInFlight.signal });
+          const data = await api.post("/land/chat", { message }, { signal });
           console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
-        } else if (!cfg.activeRootId) {
-          // At home (~): personal chat, any user
+        } else if (!target.rootId) {
           console.log(chalk.dim("Thinking…"));
-          const data = await api.post("/home/chat", { message }, { signal: global._treeosInFlight.signal });
+          const data = await api.post("/home/chat", { message }, { signal });
           console.log(chalk.bold("\nHome:") + " " + (data.answer || "No response."));
         } else {
           console.log(chalk.dim("Thinking…"));
-          const nodeId = currentNodeId(cfg);
-          const data = await api.chat(nodeId, message, { signal: global._treeosInFlight.signal });
-          console.log(chalk.bold("\nTree:") + " " + (data.answer || "No response."));
+          const data = await api.chat(target.rootId, message, {
+            signal,
+            sessionHandle: handle || undefined,
+          });
+          console.log(`\n${label}: ` + (data.answer || "No response."));
         }
       } catch (e) {
-        if (e.name === "AbortError") {
-          console.log(chalk.dim("Cancelled."));
-          return;
-        }
+        if (e.name === "AbortError") return console.log(chalk.dim("Cancelled."));
         console.error(chalk.red(e.message));
       } finally {
         global._treeosInFlight = null;

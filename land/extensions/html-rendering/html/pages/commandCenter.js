@@ -1,8 +1,10 @@
-// Command Center renderer.
-// Full capability surface of a tree at any position.
-// Tools, modes, extensions. Color-coded. Toggleable. Military-grade overview.
+/* ------------------------------------------------- */
+/* Command Center page (layout-wrapped)              */
+/* Dark theme -- uses bare: true                     */
+/* ------------------------------------------------- */
 
-import { esc, truncate, modeLabel } from "./utils.js";
+import { page } from "../layout.js";
+import { esc, truncate, modeLabel } from "../utils.js";
 
 const STATUS_COLORS = {
   active:     { bg: "rgba(74,222,128,0.12)", border: "rgba(74,222,128,0.3)", text: "#4ade80", label: "ACTIVE" },
@@ -50,151 +52,7 @@ export function renderCommandCenter({
     modesByBig[big].push(mode);
   }
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Command Center . ${esc(nodeName)}</title>
-  <style>${CSS}</style>
-</head>
-<body>
-  <div class="cc">
-
-    <!-- HEADER -->
-    <header class="cc-header">
-      <div class="cc-container">
-        <div class="cc-breadcrumb">${esc(path || rootName || rootId)}</div>
-        <h1 class="cc-title">Command Center</h1>
-        <p class="cc-subtitle">${esc(nodeName)} . ${activeTools}/${totalTools} tools . ${activeModes}/${totalModes} modes . ${activeExts}/${totalExts} extensions</p>
-      </div>
-    </header>
-
-    <!-- KEY -->
-    <div class="cc-key">
-      <div class="cc-container cc-key-inner">
-        ${Object.entries(STATUS_COLORS).map(([k, v]) =>
-          `<span class="cc-key-item">${dot(k)} ${v.label}</span>`
-        ).join("")}
-      </div>
-    </div>
-
-    <!-- MAIN GRID -->
-    <div class="cc-container">
-      <div class="cc-grid">
-
-        <!-- EXTENSIONS COLUMN -->
-        <section class="cc-col">
-          <h2 class="cc-col-title">Extensions <span class="cc-count">${activeExts}/${totalExts}</span></h2>
-          ${extensions.map(ext => {
-            const extTools = toolsByExt[ext.name] || [];
-            const extModes = modes.filter(m => m.extName === ext.name);
-            return `
-            <details class="cc-item">
-              <summary class="cc-item-row">
-                ${dot(ext.status)}
-                <span class="cc-item-name">${esc(ext.name)}</span>
-                <span class="cc-item-version">${esc(ext.version || "")}</span>
-                ${badge(ext.status)}
-              </summary>
-              <div class="cc-item-detail">
-                ${ext.description ? `<p class="cc-item-desc">${esc(truncate(ext.description, 200))}</p>` : ""}
-                ${extTools.length > 0 ? `<div class="cc-item-sub"><strong>Tools:</strong> ${extTools.map(t => `<span style="color:${(STATUS_COLORS[t.status]||{}).text||"#888"}">${esc(t.name)}</span>`).join(", ")}</div>` : ""}
-                ${extModes.length > 0 ? `<div class="cc-item-sub"><strong>Modes:</strong> ${extModes.map(m => `<span style="color:${(STATUS_COLORS[m.status]||{}).text||"#888"}">${m.emoji||""} ${esc(m.label || m.key)}</span>`).join(", ")}</div>` : ""}
-                ${ext.status === "active" ? `
-                  <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
-                    <input type="hidden" name="block" value="${esc(ext.name)}" />
-                    <button type="submit" class="cc-btn cc-btn-red">Block at this node</button>
-                  </form>
-                ` : ""}
-                ${ext.status === "blocked" ? `
-                  <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
-                    <input type="hidden" name="allow" value="${esc(ext.name)}" />
-                    <button type="submit" class="cc-btn cc-btn-green">Unblock</button>
-                  </form>
-                ` : ""}
-              </div>
-            </details>`;
-          }).join("")}
-        </section>
-
-        <!-- TOOLS COLUMN -->
-        <section class="cc-col">
-          <h2 class="cc-col-title">Tools <span class="cc-count">${activeTools}/${totalTools}</span></h2>
-          ${Object.entries(toolsByExt).map(([extName, extTools]) => `
-            <details class="cc-group" ${extTools.some(t => t.status === "active") ? "open" : ""}>
-              <summary class="cc-group-header">${esc(extName)} <span class="cc-count">${extTools.filter(t=>t.status==="active").length}/${extTools.length}</span></summary>
-              ${extTools.map(t => `
-                <div class="cc-tool-row">
-                  ${dot(t.status)}
-                  <div class="cc-tool-info">
-                    <span class="cc-tool-name">${esc(t.name)}</span>
-                    ${t.readOnly ? '<span class="cc-badge-sm cc-badge-ro">RO</span>' : ""}
-                    ${t.destructive ? '<span class="cc-badge-sm cc-badge-dest">DEST</span>' : ""}
-                    <div class="cc-tool-desc">${esc(truncate(t.description || "", 120))}</div>
-                  </div>
-                  <div class="cc-tool-actions">
-                    ${t.status === "active" && !t.nodeBlocked ? `
-                      <form method="POST" action="/api/v1/node/${nodeId}/tools${qs}" style="display:inline;">
-                        <input type="hidden" name="block" value="${esc(t.name)}" />
-                        <button type="submit" class="cc-btn-sm cc-btn-red" title="Block">X</button>
-                      </form>` : ""}
-                    ${t.nodeBlocked ? `
-                      <form method="POST" action="/api/v1/node/${nodeId}/tools${qs}" style="display:inline;">
-                        <input type="hidden" name="allow" value="${esc(t.name)}" />
-                        <button type="submit" class="cc-btn-sm cc-btn-green" title="Allow">+</button>
-                      </form>` : ""}
-                  </div>
-                </div>
-              `).join("")}
-            </details>
-          `).join("")}
-        </section>
-
-        <!-- MODES COLUMN -->
-        <section class="cc-col">
-          <h2 class="cc-col-title">Modes <span class="cc-count">${activeModes}/${totalModes}</span></h2>
-          ${Object.entries(modesByBig).map(([bigMode, bigModes]) => `
-            <details class="cc-group" open>
-              <summary class="cc-group-header">${esc(bigMode)} <span class="cc-count">${bigModes.filter(m=>m.status==="active").length}/${bigModes.length}</span></summary>
-              ${bigModes.map(m => {
-                const override = modeOverrides?.[m.intent];
-                return `
-                <div class="cc-mode-row">
-                  ${dot(m.status)}
-                  <span class="cc-mode-emoji">${m.emoji || ""}</span>
-                  <div class="cc-mode-info">
-                    <span class="cc-mode-name">${esc(m.label || m.key)}</span>
-                    <span class="cc-mode-key">${esc(m.key)}</span>
-                    ${m.extName ? `<span class="cc-mode-ext">${esc(m.extName)}</span>` : ""}
-                    ${override ? `<div class="cc-mode-override">Override: ${esc(override)}</div>` : ""}
-                  </div>
-                </div>`;
-              }).join("")}
-            </details>
-          `).join("")}
-        </section>
-
-      </div>
-    </div>
-
-    <!-- FOOTER -->
-    <footer class="cc-footer">
-      <div class="cc-container">
-        <a href="/api/v1/node/${nodeId}?html${qs ? "&" + qs.slice(1) : ""}" class="cc-back">Back to node</a>
-      </div>
-    </footer>
-
-  </div>
-</body>
-</html>`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// CSS (LandingPage.css aesthetic, self-contained)
-// ─────────────────────────────────────────────────────────────────────────
-
-const CSS = `
+  const css = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -506,5 +364,141 @@ body {
   .cc-container { padding: 0 16px; }
   .cc-title { font-size: 24px; }
   .cc-tool-row, .cc-mode-row { padding: 6px 8px 6px 12px; }
+}`;
+
+  const bodyHtml = `
+  <div class="cc">
+
+    <!-- HEADER -->
+    <header class="cc-header">
+      <div class="cc-container">
+        <div class="cc-breadcrumb">${esc(path || rootName || rootId)}</div>
+        <h1 class="cc-title">Command Center</h1>
+        <p class="cc-subtitle">${esc(nodeName)} . ${activeTools}/${totalTools} tools . ${activeModes}/${totalModes} modes . ${activeExts}/${totalExts} extensions</p>
+      </div>
+    </header>
+
+    <!-- KEY -->
+    <div class="cc-key">
+      <div class="cc-container cc-key-inner">
+        ${Object.entries(STATUS_COLORS).map(([k, v]) =>
+          `<span class="cc-key-item">${dot(k)} ${v.label}</span>`
+        ).join("")}
+      </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="cc-container">
+      <div class="cc-grid">
+
+        <!-- EXTENSIONS COLUMN -->
+        <section class="cc-col">
+          <h2 class="cc-col-title">Extensions <span class="cc-count">${activeExts}/${totalExts}</span></h2>
+          ${extensions.map(ext => {
+            const extTools = toolsByExt[ext.name] || [];
+            const extModes = modes.filter(m => m.extName === ext.name);
+            return `
+            <details class="cc-item">
+              <summary class="cc-item-row">
+                ${dot(ext.status)}
+                <span class="cc-item-name">${esc(ext.name)}</span>
+                <span class="cc-item-version">${esc(ext.version || "")}</span>
+                ${badge(ext.status)}
+              </summary>
+              <div class="cc-item-detail">
+                ${ext.description ? `<p class="cc-item-desc">${esc(truncate(ext.description, 200))}</p>` : ""}
+                ${extTools.length > 0 ? `<div class="cc-item-sub"><strong>Tools:</strong> ${extTools.map(t => `<span style="color:${(STATUS_COLORS[t.status]||{}).text||"#888"}">${esc(t.name)}</span>`).join(", ")}</div>` : ""}
+                ${extModes.length > 0 ? `<div class="cc-item-sub"><strong>Modes:</strong> ${extModes.map(m => `<span style="color:${(STATUS_COLORS[m.status]||{}).text||"#888"}">${m.emoji||""} ${esc(m.label || m.key)}</span>`).join(", ")}</div>` : ""}
+                ${ext.status === "active" ? `
+                  <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
+                    <input type="hidden" name="block" value="${esc(ext.name)}" />
+                    <button type="submit" class="cc-btn cc-btn-red">Block at this node</button>
+                  </form>
+                ` : ""}
+                ${ext.status === "blocked" ? `
+                  <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
+                    <input type="hidden" name="allow" value="${esc(ext.name)}" />
+                    <button type="submit" class="cc-btn cc-btn-green">Unblock</button>
+                  </form>
+                ` : ""}
+              </div>
+            </details>`;
+          }).join("")}
+        </section>
+
+        <!-- TOOLS COLUMN -->
+        <section class="cc-col">
+          <h2 class="cc-col-title">Tools <span class="cc-count">${activeTools}/${totalTools}</span></h2>
+          ${Object.entries(toolsByExt).map(([extName, extTools]) => `
+            <details class="cc-group" ${extTools.some(t => t.status === "active") ? "open" : ""}>
+              <summary class="cc-group-header">${esc(extName)} <span class="cc-count">${extTools.filter(t=>t.status==="active").length}/${extTools.length}</span></summary>
+              ${extTools.map(t => `
+                <div class="cc-tool-row">
+                  ${dot(t.status)}
+                  <div class="cc-tool-info">
+                    <span class="cc-tool-name">${esc(t.name)}</span>
+                    ${t.readOnly ? '<span class="cc-badge-sm cc-badge-ro">RO</span>' : ""}
+                    ${t.destructive ? '<span class="cc-badge-sm cc-badge-dest">DEST</span>' : ""}
+                    <div class="cc-tool-desc">${esc(truncate(t.description || "", 120))}</div>
+                  </div>
+                  <div class="cc-tool-actions">
+                    ${t.status === "active" && !t.nodeBlocked ? `
+                      <form method="POST" action="/api/v1/node/${nodeId}/tools${qs}" style="display:inline;">
+                        <input type="hidden" name="block" value="${esc(t.name)}" />
+                        <button type="submit" class="cc-btn-sm cc-btn-red" title="Block">X</button>
+                      </form>` : ""}
+                    ${t.nodeBlocked ? `
+                      <form method="POST" action="/api/v1/node/${nodeId}/tools${qs}" style="display:inline;">
+                        <input type="hidden" name="allow" value="${esc(t.name)}" />
+                        <button type="submit" class="cc-btn-sm cc-btn-green" title="Allow">+</button>
+                      </form>` : ""}
+                  </div>
+                </div>
+              `).join("")}
+            </details>
+          `).join("")}
+        </section>
+
+        <!-- MODES COLUMN -->
+        <section class="cc-col">
+          <h2 class="cc-col-title">Modes <span class="cc-count">${activeModes}/${totalModes}</span></h2>
+          ${Object.entries(modesByBig).map(([bigMode, bigModes]) => `
+            <details class="cc-group" open>
+              <summary class="cc-group-header">${esc(bigMode)} <span class="cc-count">${bigModes.filter(m=>m.status==="active").length}/${bigModes.length}</span></summary>
+              ${bigModes.map(m => {
+                const override = modeOverrides?.[m.intent];
+                return `
+                <div class="cc-mode-row">
+                  ${dot(m.status)}
+                  <span class="cc-mode-emoji">${m.emoji || ""}</span>
+                  <div class="cc-mode-info">
+                    <span class="cc-mode-name">${esc(m.label || m.key)}</span>
+                    <span class="cc-mode-key">${esc(m.key)}</span>
+                    ${m.extName ? `<span class="cc-mode-ext">${esc(m.extName)}</span>` : ""}
+                    ${override ? `<div class="cc-mode-override">Override: ${esc(override)}</div>` : ""}
+                  </div>
+                </div>`;
+              }).join("")}
+            </details>
+          `).join("")}
+        </section>
+
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="cc-footer">
+      <div class="cc-container">
+        <a href="/api/v1/node/${nodeId}?html${qs ? "&" + qs.slice(1) : ""}" class="cc-back">Back to node</a>
+      </div>
+    </footer>
+
+  </div>`;
+
+  return page({
+    title: `Command Center . ${esc(nodeName)}`,
+    css,
+    body: bodyHtml,
+    bare: true,
+  });
 }
-`;

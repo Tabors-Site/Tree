@@ -9,7 +9,7 @@ export default {
 
   provides: {
     models: {},
-    routes: false,
+    routes: true,
     tools: false,
     jobs: false,
     env: [

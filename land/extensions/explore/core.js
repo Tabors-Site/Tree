@@ -175,7 +175,9 @@ async function scoreCandidate(candidate, query, queryVector) {
           }
         }
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Explore", "Embed similarity lookup failed:", err.message);
+    }
   }
 
   // Contradictions (signals active debate)
@@ -302,7 +304,9 @@ export async function runExplore(nodeId, query, userId, opts = {}) {
     const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
     const root = await resolveRootNode(nodeId);
     rootId = root?._id;
-  } catch {}
+  } catch (err) {
+    log.debug("Explore", "Root resolution failed:", err.message);
+  }
 
   // Get query vector if embed is available
   let queryVector = null;
@@ -312,7 +316,9 @@ export async function runExplore(nodeId, query, userId, opts = {}) {
     if (embedExt?.exports?.generateEmbedding) {
       queryVector = await embedExt.exports.generateEmbedding(query, userId);
     }
-  } catch {}
+  } catch (err) {
+    log.debug("Explore", "Query vector generation failed:", err.message);
+  }
 
   // Phase 1: Structure scan
   const allNodes = await structureScan(nodeId, config.structureScanDepth);

@@ -108,7 +108,9 @@ export async function propagateOutward({ node, nodeId, signalId, payload, depth,
           continue;
         }
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Propagation", "perspective filter check failed:", err.message);
+    }
 
     // Filter: if child has cascade.filters, check them
     if (childCascade?.filters) {
@@ -132,7 +134,9 @@ export async function propagateOutward({ node, nodeId, signalId, payload, depth,
             deliveryPayload = sealedExt.exports.sealPayload(payload);
           }
         }
-      } catch {}
+      } catch (err) {
+        log.debug("Propagation", "sealed-transport check failed:", err.message);
+      }
 
       // deliverCascade writes to .flow and fires onCascade at the child.
       // If the child has cascade.enabled, our handler fires again (recursion).

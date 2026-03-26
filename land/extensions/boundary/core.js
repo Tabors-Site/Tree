@@ -287,7 +287,9 @@ async function buildSimilarityMatrix(profiles, userId, username, rootId) {
       if (coverage >= 0.5) {
         useEmbeddings = true;
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Boundary", "Embed status check failed:", err.message);
+    }
   }
 
   // Initialize NxN matrix
@@ -501,7 +503,9 @@ async function detectPatterns(profiles, matrix, branchIds, allNodes, userId, use
                 `Consider moving "${nodeName}" to a more relevant branch`,
             });
           }
-        } catch {}
+        } catch (err) {
+          log.debug("Boundary", "Orphan embed lookup failed for node:", err.message);
+        }
       }
 
       // Branch coherence: average similarity

@@ -289,7 +289,22 @@
       "Bash(ls -d /home/tabor/github/Tree/land/extensions/*/manifest.js)",
       "Bash(grep -v '^_template$')",
       "Bash(for bundle:*)",
-      "Bash(echo \"=== $bundle ===\")"
+      "Bash(echo \"=== $bundle ===\")",
+      "Bash(find /home/tabor/github/Tree/land/extensions/html-rendering -type f -exec ls -lh {})",
+      "Bash(wc -l /home/tabor/github/Tree/land/extensions/html-rendering/*.js /home/tabor/github/Tree/land/extensions/html-rendering/html/*.js /home/tabor/github/Tree/land/extensions/html-rendering/app/*.js)",
+      "Bash(grep -c 'export function\\\\|export async function' /home/tabor/github/Tree/land/extensions/html-rendering/html/*.js)",
+      "Bash(wc -l /home/tabor/github/Tree/land/extensions/html-rendering/app/*.js)",
+      "Bash(/tmp/count_functions.sh:*)",
+      "Bash(chmod +x /tmp/count_functions.sh)",
+      "Bash(/tmp/count_functions.sh)",
+      "Bash(grep -n \"router\\\\.get\\\\|router\\\\.post\\\\|router\\\\.put\\\\|router\\\\.patch\\\\|router\\\\.delete\" /home/tabor/github/Tree/land/extensions/html-rendering/app/*.js)",
+      "Bash(grep -A 20 \"createRoot\\\\|mkroot\" /home/tabor/github/Tree/cli/commands/*.js)",
+      "Read(//home/tabor/github/Tree/land/extensions/**)",
+      "Bash(grep -h 'export function\\\\|export async function' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)",
+      "Bash(grep -c '\\\\\\\\`' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)",
+      "Bash(grep -v ':0$')",
+      "Bash(grep -n '\\\\\\\\`' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/calendar.js)",
+      "Bash(grep -n '\\\\\\\\`' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/chat.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

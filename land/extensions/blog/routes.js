@@ -16,7 +16,7 @@ export default function createRouter(core) {
         .lean();
       sendOk(res, { posts });
     } catch (err) {
- log.error("Blog", "Blog list error:", err.message);
+      log.error("Blog", "Blog list error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
@@ -30,7 +30,7 @@ export default function createRouter(core) {
       if (!post) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Post not found");
       sendOk(res, { post });
     } catch (err) {
- log.error("Blog", "Blog post error:", err.message);
+      log.error("Blog", "Blog post error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
@@ -65,7 +65,7 @@ export default function createRouter(core) {
       if (err.code === 11000) {
         return sendError(res, 400, ERR.INVALID_INPUT, "Slug already exists");
       }
- log.error("Blog", "Blog create error:", err.message);
+      log.error("Blog", "Blog create error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
@@ -96,7 +96,7 @@ export default function createRouter(core) {
       if (err.code === 11000) {
         return sendError(res, 400, ERR.INVALID_INPUT, "Slug already exists");
       }
- log.error("Blog", "Blog update error:", err.message);
+      log.error("Blog", "Blog update error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
@@ -112,7 +112,7 @@ export default function createRouter(core) {
       if (!post) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Post not found");
       sendOk(res, { deleted: req.params.slug });
     } catch (err) {
- log.error("Blog", "Blog delete error:", err.message);
+      log.error("Blog", "Blog delete error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });

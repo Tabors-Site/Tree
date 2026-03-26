@@ -36,7 +36,7 @@ export default function createRouter(core) {
 
       return res.send(renderDeletedBranches({ userId, user, deleted, token }));
     } catch (err) {
- log.error("Deleted Revive", "Error in /user/:userId/deleted:", err);
+      log.error("Deleted Revive", "Error in /user/:userId/deleted:", err);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
@@ -68,7 +68,7 @@ export default function createRouter(core) {
 
       return sendOk(res, result);
     } catch (err) {
- log.error("Deleted Revive", "revive branch error:", err);
+      log.error("Deleted Revive", "revive branch error:", err);
       return sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   });
@@ -94,7 +94,7 @@ export default function createRouter(core) {
 
       return sendOk(res, result);
     } catch (err) {
- log.error("Deleted Revive", "revive root error:", err);
+      log.error("Deleted Revive", "revive root error:", err);
       return sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   });

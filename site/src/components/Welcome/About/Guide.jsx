@@ -39,9 +39,9 @@ const Guide = () => {
             that everything builds on.
           </P>
           <P>
-            TreeOS is one operating system built on the seed. It ships with 25+ extensions that
-            work together: AI modes, tree orchestration, values, schedules, understanding, energy,
-            HTML rendering, gateway channels. But TreeOS is just one interpretation. A medical
+            TreeOS is one operating system built on the seed. It ships with 77 extensions across
+            four bundles: cascade network, intelligence, external channels, maintenance, plus
+            the base OS, developer tools, data, content, and gateways. But TreeOS is just one interpretation. A medical
             platform, a code review pipeline, a research assistant could all be built on the same kernel.
             Same relationship as Linux and Ubuntu. The seed is the kernel. The extensions are the distribution.
           </P>
@@ -279,9 +279,9 @@ treeos ext-scope                   # shows both global and confined status`}</Co
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-cascade</strong> (8): propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-intelligence</strong> (12): tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, phase.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-connect</strong> (8): gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-maintenance</strong> (4): prune, reroot, changelog, root-hold.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-maintenance</strong> (4): prune, reroot, changelog, purpose.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>mycelium</strong> (standalone): intelligent cross-land signal routing.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>78 extensions total</strong> including base OS, developer tools, data, content, gateways, and user management.
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>77 extensions total</strong> including base OS, developer tools, data, content, gateways, and user management.
           </P>
           <P>
             Install from the registry: <code>treeos ext install treeos-cascade</code>.

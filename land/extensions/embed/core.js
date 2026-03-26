@@ -280,7 +280,9 @@ export async function findRelatedAtNode(nodeId, userId, rootId, searchAll = fals
       const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
       const root = await resolveRootNode(nodeId);
       rootId = root?._id;
-    } catch {}
+    } catch (err) {
+      log.debug("Embed", "Root resolution failed:", err.message);
+    }
   }
 
   if (!rootId) return [];

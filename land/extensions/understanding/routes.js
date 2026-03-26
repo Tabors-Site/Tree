@@ -8,16 +8,22 @@ import {
 } from "./core.js";
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
-import Contribution from "../../seed/models/contribution.js";
 import { getNotes } from "../../seed/tree/notes.js";
-const router = express.Router();
-
-import Node from "../../seed/models/node.js";
 import { userHasLlm } from "../../seed/ws/conversation.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
 import { getSessionsForUser, endSession, SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { renderUnderstandingRun, renderUnderstandingNode, renderUnderstandingsList, renderRunNodeView, buildRunCards, buildRunNodeInputsHtml } from "./html.js";
 import { getExtension } from "../loader.js";
+
+// Models wired from init via setModels
+let Node = null;
+let Contribution = null;
+export function setModels(models) {
+  Node = models.Node;
+  Contribution = models.Contribution;
+}
+
+const router = express.Router();
 
 function buildQueryString(req) {
   const allowedParams = ["token", "html"];

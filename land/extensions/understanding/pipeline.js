@@ -1,11 +1,11 @@
-// orchestrators/pipelines/understand.js
+// Understanding pipeline.
 // Autonomous understanding: creates/resumes a run, loops through all nodes,
 // uses LLM for summarization only (no tool calling), commits results.
+// Uses OrchestratorRuntime for session lifecycle, lock management, and LLM calls.
 
 import log from "../../seed/log.js";
 import { WS } from "../../seed/protocol.js";
-import { switchMode, processMessage } from "../../seed/ws/conversation.js";
-import { OrchestratorRuntime, LLM_PRIORITY } from "../../seed/orchestrators/runtime.js";
+import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import { emitNavigate, emitToUser } from "../../seed/ws/websocket.js";
 import {
   setActiveNavigator,
@@ -21,7 +21,14 @@ import {
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
 
-import { acquireLock, releaseLock } from "../../seed/orchestrators/locks.js";
+// LLM_PRIORITY accessed via core.llm.LLM_PRIORITY in the caller,
+// but the pipeline constructs its own runtime so we import directly.
+let LLM_PRIORITY;
+try {
+  ({ LLM_PRIORITY } = await import("../../seed/ws/conversation.js"));
+} catch {
+  LLM_PRIORITY = { BACKGROUND: 4 };
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -113,12 +120,6 @@ export async function orchestrateUnderstanding({
   }
 
   const understandingRunId = String(existingRun._id);
-
-  // Concurrent-run guard
-  if (!acquireLock("understand", understandingRunId)) {
-    return { success: false, error: "This understanding run is already being processed" };
-  }
-
   const runPerspective = existingRun.perspective;
   const nodeCount = existingRun.nodeMap
     ? existingRun.nodeMap instanceof Map
@@ -128,14 +129,13 @@ export async function orchestrateUnderstanding({
 
   // Prepare incremental run
   const { dirtyCount, totalNodes } = await prepareIncrementalRun(understandingRunId, userId);
- log.debug("Understanding", `Incremental prep: ${dirtyCount}/${totalNodes} nodes dirty`);
+  log.debug("Understanding", `Incremental prep: ${dirtyCount}/${totalNodes} nodes dirty`);
 
   await UnderstandingRun.findByIdAndUpdate(understandingRunId, { status: "running" });
 
   // Check if already complete before spinning up resources
   const firstPayload = await getNextCompressionPayloadForLLM(understandingRunId, userId);
   if (!firstPayload) {
-    releaseLock("understand", understandingRunId);
     await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
       status: "completed",
       lastCompletedAt: new Date(),
@@ -156,6 +156,8 @@ export async function orchestrateUnderstanding({
   const isSite = fromSite && !isChainStep;
   const visitorId = `understand:${rootId}:${Date.now()}`;
 
+  // OrchestratorRuntime handles: session, MCP, chat, lock, cleanup.
+  // Lock namespace "understand" with the run ID as key prevents concurrent runs.
   const rt = new OrchestratorRuntime({
     rootId,
     userId,
@@ -166,7 +168,9 @@ export async function orchestrateUnderstanding({
     modeKeyForLlm: "tree:understand",
     source,
     slot: "understand",
-    llmPriority: LLM_PRIORITY.BACKGROUND,
+    llmPriority: LLM_PRIORITY?.BACKGROUND || 4,
+    lockNamespace: "understand",
+    lockKey: understandingRunId,
   });
 
   if (isChainStep) {
@@ -178,7 +182,10 @@ export async function orchestrateUnderstanding({
       connectMcp: true,
     });
   } else {
-    await rt.init(`Understanding tree ${rootId} (${runPerspective})`);
+    const ok = await rt.init(`Understanding tree ${rootId} (${runPerspective})`);
+    if (!ok) {
+      return { success: false, error: "This understanding run is already being processed" };
+    }
   }
 
   if (isSite) {
@@ -193,7 +200,7 @@ export async function orchestrateUnderstanding({
 
   let nodesProcessed = 0;
 
- log.verbose("Understanding", `Understand orchestrator started for run ${understandingRunId} (${runPerspective}, ${nodeCount} nodes)`);
+  log.verbose("Understanding", `Understand orchestrator started for run ${understandingRunId} (${runPerspective}, ${nodeCount} nodes)`);
 
   try {
     rt.trackStep("tree:understand", {
@@ -213,35 +220,26 @@ export async function orchestrateUnderstanding({
       if (!payload) break;
 
       const prompt = buildSummarizationPrompt(payload);
-      const stepStart = new Date();
 
-      await switchMode(visitorId, "tree:understand-summarize", {
-        username,
-        userId,
-        perspective: runPerspective,
-        nodeType: payload.inputs?.[0]?.nodeType || null,
-        clearHistory: true,
+      // rt.runStep handles: switchMode, processMessage, lock renewal,
+      // abort check, chain tracking. Returns { parsed, raw, llmProvider }.
+      const { parsed: summary, raw: result } = await rt.runStep("tree:understand-summarize", {
+        prompt,
+        modeCtx: {
+          perspective: runPerspective,
+          nodeType: payload.inputs?.[0]?.nodeType || null,
+          clearHistory: true,
+        },
+        input: `${payload.mode}: ${payload.inputs[0]?.nodeName || "unknown"}`,
       });
 
-      const result = await processMessage(visitorId, prompt, {
-        username,
-        userId,
-        rootId,
-        slot: "understand",
-        signal: rt.signal,
-      });
+      // rt.runStep returns parsed via parseJsonSafe. For plain text summaries,
+      // parseJsonSafe returns the string as-is. Extract the text.
+      const summaryText = typeof summary === "string"
+        ? summary.trim()
+        : (result?.answer || result?.content || "").trim();
 
-      if (result && !result.success && result.content && !result.answer) {
-        throw new Error(`No LLM available for understand slot: ${result.content}`);
-      }
-
-      const summary =
-        typeof result === "string"
-          ? result
-          : (result?.answer || result?.content || "").trim();
-      const stepEnd = new Date();
-
-      if (!summary) {
+      if (!summaryText) {
         const nodeId = payload.target.understandingNodeId;
         if (nodeId === lastEmptyNodeId) {
           emptyRetries++;
@@ -250,7 +248,7 @@ export async function orchestrateUnderstanding({
           lastEmptyNodeId = nodeId;
         }
 
- log.warn("Understanding", `Empty summary for node ${nodeId}, attempt ${emptyRetries}/${MAX_EMPTY_RETRIES}`);
+        log.warn("Understanding", `Empty summary for node ${nodeId}, attempt ${emptyRetries}/${MAX_EMPTY_RETRIES}`);
 
         if (emptyRetries >= MAX_EMPTY_RETRIES) {
           await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
@@ -268,7 +266,7 @@ export async function orchestrateUnderstanding({
             sessionId: rt.sessionId,
           });
           nodesProcessed++;
- log.warn("Understanding", `Committed placeholder for stuck node ${nodeId}, moving on`);
+          log.warn("Understanding", `Committed placeholder for stuck node ${nodeId}, moving on`);
           emptyRetries = 0;
           lastEmptyNodeId = null;
         }
@@ -281,7 +279,7 @@ export async function orchestrateUnderstanding({
       await commitCompressionResult({
         mode: payload.mode,
         understandingRunId,
-        encoding: summary,
+        encoding: summaryText,
         understandingNodeId: payload.target.understandingNodeId,
         currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
         userId,
@@ -301,19 +299,7 @@ export async function orchestrateUnderstanding({
         });
       }
 
-      rt.trackStep("tree:understand-summarize", {
-        input: `${payload.mode}: ${payload.inputs[0]?.nodeName || "unknown"}`,
-        output: {
-          mode: payload.mode,
-          understandingNodeId: payload.target.understandingNodeId,
-          summaryLength: summary.length,
-        },
-        startTime: stepStart,
-        endTime: stepEnd,
-        llmProvider: result?.llmProvider || rt.llmProvider,
-      });
-
- log.debug("Understanding", `  ${payload.mode} node ${payload.inputs[0]?.nodeName} (${nodesProcessed}/${nodeCount})`);
+      log.debug("Understanding", `  ${payload.mode} node ${payload.inputs[0]?.nodeName} (${nodesProcessed}/${nodeCount})`);
     }
 
     // Finalize
@@ -345,7 +331,7 @@ export async function orchestrateUnderstanding({
       });
     }
 
- log.verbose("Understanding", `Understanding complete for root ${rootId} (${nodesProcessed} nodes processed)`);
+    log.verbose("Understanding", `Understanding complete for root ${rootId} (${nodesProcessed} nodes processed)`);
 
     return {
       success: true,
@@ -356,14 +342,8 @@ export async function orchestrateUnderstanding({
       rootEncoding,
     };
   } catch (err) {
- log.error("Understanding", `Understanding orchestration error for root ${rootId}:`, err.message);
+    log.error("Understanding", `Understanding orchestration error for root ${rootId}:`, err.message);
     rt.setError(err.message, "tree:understand");
-
-    rt.trackStep("tree:understand", {
-      input: "error",
-      output: { error: err.message },
-    });
-
     return { success: false, error: err.message };
   } finally {
     try {
@@ -371,8 +351,8 @@ export async function orchestrateUnderstanding({
       if (currentRun?.status === "running") {
         await UnderstandingRun.findByIdAndUpdate(understandingRunId, { status: "completed" });
       }
-    } catch (_) {}
-    releaseLock("understand", understandingRunId);
+    } catch (err) { log.debug("Understanding", "Failed to finalize run status:", err.message); }
+    // rt.cleanup() releases the lock, finalizes chat, closes MCP, ends session.
     await rt.cleanup();
   }
 }

@@ -29,7 +29,7 @@ router.get("/land/status", authenticate, async (req, res) => {
     try {
       const LandPeer = (await import("../../canopy/models/landPeer.js")).default;
       peerCount = await LandPeer.countDocuments();
-    } catch {}
+    } catch (err) { log.debug("LandManager", "Canopy peer count unavailable:", err.message); }
 
     sendOk(res, {
       land: { name: land.name, domain: land.domain, url: getLandUrl() },

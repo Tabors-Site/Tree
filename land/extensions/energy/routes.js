@@ -83,7 +83,7 @@ router.get("/user/:userId/energy", authenticateOptional, async (req, res) => {
       }),
     );
   } catch (err) {
- log.error("Energy", "Energy page error:", err);
+    log.error("Energy", "Energy page error:", err);
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });

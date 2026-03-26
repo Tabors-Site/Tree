@@ -1,4 +1,5 @@
 import { z } from "zod";
+import log from "../../seed/log.js";
 import { calculateFitness, getPatterns, getDormant, analyzeTree } from "./core.js";
 
 export default [
@@ -61,7 +62,9 @@ export default [
           const User = (await import("../../seed/models/user.js")).default;
           const user = await User.findById(userId).select("username").lean();
           username = user?.username;
-        } catch {}
+        } catch (err) {
+          log.debug("Evolution", "username lookup failed:", err.message);
+        }
         const result = await analyzeTree(rootId, userId, username);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {

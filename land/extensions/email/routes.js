@@ -172,7 +172,7 @@ router.get("/user/verify/:token", async (req, res) => {
     await tempUser.deleteOne();
     return res.redirect(`${getLandUrl()}/setup`);
   } catch (err) {
- log.error("Email", "[email:verifyEmail]", err);
+    log.error("Email", "[email:verifyEmail]", err);
     sendError(res, 500, ERR.INTERNAL, "Verification failed");
   }
 });

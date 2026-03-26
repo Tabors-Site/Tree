@@ -25,7 +25,7 @@ function getBaseSite() {
 // Clear base cache (for tests or after config change)
 function clearBaseCache() { _baseCache = null; }
 
-const REQUEST_TIMEOUT_MS = 60000; // 60s default
+const REQUEST_TIMEOUT_MS = 480000; // 8 minutes (LLM responses can be slow)
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 const MAX_RETRIES = 1;
 
@@ -372,7 +372,11 @@ class TreeAPI {
   setGoal(nodeId, key, goal) { return this.post(`/node/${nodeId}/goal`, { key, goal }); }
 
   // ── AI ────────────────────────────────────────────────────────────────
-  chat(rootId, message, opts) { return this.post(`/root/${rootId}/chat`, { message }, opts); }
+  chat(rootId, message, opts) {
+    const body = { message };
+    if (opts?.sessionHandle) body.sessionHandle = opts.sessionHandle;
+    return this.post(`/root/${rootId}/chat`, body, opts);
+  }
   place(rootId, message, opts) { return this.post(`/root/${rootId}/place`, { message }, opts); }
   query(rootId, message, opts) { return this.post(`/root/${rootId}/query`, { message }, opts); }
 

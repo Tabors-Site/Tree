@@ -1,9 +1,9 @@
 /* ------------------------------------------------- */
-/* HTML renderers for Canopy admin pages              */
+/* Canopy admin pages (layout-wrapped)               */
 /* ------------------------------------------------- */
 
-import { baseStyles } from "./baseStyles.js";
-import { escapeHtml, truncateRaw as truncate, timeAgo } from "./utils.js";
+import { page } from "../layout.js";
+import { escapeHtml, truncateRaw as truncate, timeAgo } from "../utils.js";
 
 function statusColor(status) {
   switch (status) {
@@ -23,12 +23,10 @@ function statusColor(status) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Shared CSS
+// Shared CSS (page-specific, beyond what layout provides)
 // ─────────────────────────────────────────────────────────────────────────
 
-const sharedStyles = `
-${baseStyles}
-
+const canopyStyles = `
 /* ── Canopy overrides ── */
 :root {
   --text-primary: #ffffff;
@@ -360,7 +358,7 @@ button.small-btn {
    EMPTY STATE
    ========================================================= */
 
-.empty-state {
+.canopy-empty-state {
   text-align: center;
   padding: 32px 16px;
   color: var(--text-muted);
@@ -429,8 +427,7 @@ button.small-btn {
   .form-row input[type="url"],
   .form-row select { min-width: 100%; }
   .action-cell { flex-direction: column; }
-}
-`;
+}`;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared JS helpers
@@ -465,8 +462,25 @@ async function canopyFetch(url, options) {
     showToast(err.message || "Network error", "error");
     return null;
   }
+}`;
+
+// ─────────────────────────────────────────────────────────────────────────
+// NAV HELPER
+// ─────────────────────────────────────────────────────────────────────────
+
+function navLinks(activePage) {
+  const pages = [
+    { href: "/canopy/admin", label: "Dashboard" },
+    { href: "/canopy/admin/invites", label: "Invites" },
+    { href: "/canopy/admin/horizon", label: "Horizon" },
+  ];
+  return pages
+    .map(
+      (p) =>
+        `<a href="${p.href}" class="${p.href === activePage ? "active" : ""}">${p.label}</a>`
+    )
+    .join("\n");
 }
-`;
 
 // ─────────────────────────────────────────────────────────────────────────
 // 1. renderCanopyAdmin
@@ -513,7 +527,7 @@ export function renderCanopyAdmin({ land, peers, pendingEvents, failedEvents }) 
             `;
           })
           .join("")
-      : `<tr><td colspan="5" class="empty-state">No peers connected yet. Add one below to start federating.</td></tr>`;
+      : `<tr><td colspan="5" class="canopy-empty-state">No peers connected yet. Add one below to start federating.</td></tr>`;
 
   const failedEventRows =
     failedEvents && failedEvents.length > 0
@@ -536,21 +550,9 @@ export function renderCanopyAdmin({ land, peers, pendingEvents, failedEvents }) 
             `;
           })
           .join("")
-      : `<tr><td colspan="5" class="empty-state">No failed events. All clear.</td></tr>`;
+      : `<tr><td colspan="5" class="canopy-empty-state">No failed events. All clear.</td></tr>`;
 
-  return `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#667eea">
-    <title>Canopy Admin</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>${sharedStyles}</style>
-  </head>
-  <body>
+  const bodyHtml = `
     <div id="toast-container" class="toast-container"></div>
 
     <div class="container">
@@ -650,9 +652,9 @@ export function renderCanopyAdmin({ land, peers, pendingEvents, failedEvents }) 
           </table>
         </div>
       </div>
-    </div>
+    </div>`;
 
-    <script>
+  const js = `
       ${sharedScripts}
 
       async function addPeer() {
@@ -717,29 +719,14 @@ export function renderCanopyAdmin({ land, peers, pendingEvents, failedEvents }) 
           showToast("Event retried", "success");
           setTimeout(function () { location.reload(); }, 800);
         }
-      }
-    </script>
-  </body>
-  </html>
-  `;
-}
+      }`;
 
-// ─────────────────────────────────────────────────────────────────────────
-// NAV HELPER
-// ─────────────────────────────────────────────────────────────────────────
-
-function navLinks(activePage) {
-  const pages = [
-    { href: "/canopy/admin", label: "Dashboard" },
-    { href: "/canopy/admin/invites", label: "Invites" },
-    { href: "/canopy/admin/horizon", label: "Horizon" },
-  ];
-  return pages
-    .map(
-      (p) =>
-        `<a href="${p.href}" class="${p.href === activePage ? "active" : ""}">${p.label}</a>`
-    )
-    .join("\n");
+  return page({
+    title: "Canopy Admin",
+    css: canopyStyles,
+    body: bodyHtml,
+    js,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -775,7 +762,7 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
             `;
           })
           .join("")
-      : `<tr><td colspan="3" class="empty-state">No incoming invites.</td></tr>`;
+      : `<tr><td colspan="3" class="canopy-empty-state">No incoming invites.</td></tr>`;
 
   const treeOptions =
     localTrees && localTrees.length > 0
@@ -787,19 +774,7 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
           .join("")
       : `<option value="" disabled>No trees available</option>`;
 
-  return `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#667eea">
-    <title>Canopy Invites</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>${sharedStyles}</style>
-  </head>
-  <body>
+  const bodyHtml = `
     <div id="toast-container" class="toast-container"></div>
 
     <div class="container">
@@ -846,9 +821,9 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
           <button class="accent-btn" onclick="sendInvite()">Send Invite</button>
         </div>
       </div>
-    </div>
+    </div>`;
 
-    <script>
+  const js = `
       ${sharedScripts}
 
       async function sendInvite() {
@@ -867,11 +842,14 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
           document.getElementById("canopy-id").value = "";
           setTimeout(function () { location.reload(); }, 800);
         }
-      }
-    </script>
-  </body>
-  </html>
-  `;
+      }`;
+
+  return page({
+    title: "Canopy Invites",
+    css: canopyStyles,
+    body: bodyHtml,
+    js,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -881,7 +859,7 @@ export function renderCanopyInvites({ invites, remoteUsers, localTrees }) {
 export function renderCanopyHorizon({ hasHorizon }) {
   const noHorizonMessage = !hasHorizon
     ? '<div class="glass-card" style="animation-delay: 0.1s;">' +
-      '<div class="empty-state">' +
+      '<div class="canopy-empty-state">' +
       '<p>No Horizon service configured.</p>' +
       '<p style="margin-top: 8px; font-size: 13px;">Set the <code>HORIZON_URL</code> environment variable to connect to the Horizon and discover other lands.</p>' +
       '</div></div>'
@@ -898,7 +876,7 @@ export function renderCanopyHorizon({ hasHorizon }) {
       '<button class="accent-btn" onclick="doSearch()">Search</button>' +
       '</div>' +
       '<div id="search-results" class="search-results">' +
-      '<div class="empty-state">Enter a search term or leave blank to browse all.</div>' +
+      '<div class="canopy-empty-state">Enter a search term or leave blank to browse all.</div>' +
       '</div></div>'
     : "";
 
@@ -926,8 +904,24 @@ export function renderCanopyHorizon({ hasHorizon }) {
     }
     .tab-bar button:hover { background: rgba(var(--glass-water-rgb), 0.25); transform: none; }
     .tab-bar button.active { background: var(--accent); }
-    .loading { text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px; }
-  `;
+    .loading { text-align: center; padding: 20px; color: var(--text-muted); font-size: 14px; }`;
+
+  const bodyHtml = `
+    <div id="toast-container" class="toast-container"></div>
+
+    <div class="container">
+      <div class="page-header">
+        <h1>Horizon</h1>
+        <p>Discover lands and public trees across the network</p>
+      </div>
+
+      <div class="nav-links">
+        ${navLinks("/canopy/admin/horizon")}
+      </div>
+
+      ${noHorizonMessage}
+      ${searchSection}
+    </div>`;
 
   const horizonScript = `
       var currentTab = "lands";
@@ -937,7 +931,7 @@ export function renderCanopyHorizon({ hasHorizon }) {
         document.getElementById("tab-lands").className = tab === "lands" ? "active" : "";
         document.getElementById("tab-trees").className = tab === "trees" ? "active" : "";
         document.getElementById("search-results").innerHTML =
-          '<div class="empty-state">Enter a search term or leave blank to browse all.</div>';
+          '<div class="canopy-empty-state">Enter a search term or leave blank to browse all.</div>';
       }
 
       async function doSearch() {
@@ -952,7 +946,7 @@ export function renderCanopyHorizon({ hasHorizon }) {
         var data = await canopyFetch(endpoint + "?q=" + encodeURIComponent(query));
 
         if (!data) {
-          resultsDiv.innerHTML = '<div class="empty-state">Search failed.</div>';
+          resultsDiv.innerHTML = '<div class="canopy-empty-state">Search failed.</div>';
           return;
         }
 
@@ -966,7 +960,7 @@ export function renderCanopyHorizon({ hasHorizon }) {
       function renderLandResults(lands) {
         var div = document.getElementById("search-results");
         if (lands.length === 0) {
-          div.innerHTML = '<div class="empty-state">No lands found.</div>';
+          div.innerHTML = '<div class="canopy-empty-state">No lands found.</div>';
           return;
         }
 
@@ -986,7 +980,7 @@ export function renderCanopyHorizon({ hasHorizon }) {
       function renderTreeResults(trees) {
         var div = document.getElementById("search-results");
         if (trees.length === 0) {
-          div.innerHTML = '<div class="empty-state">No public trees found.</div>';
+          div.innerHTML = '<div class="canopy-empty-state">No public trees found.</div>';
           return;
         }
 
@@ -1016,43 +1010,16 @@ export function renderCanopyHorizon({ hasHorizon }) {
         var div = document.createElement("div");
         div.textContent = str;
         return div.innerHTML;
-      }
-  `;
+      }`;
 
-  return `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#667eea">
-    <title>Canopy Horizon</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>${sharedStyles}${extraStyles}</style>
-  </head>
-  <body>
-    <div id="toast-container" class="toast-container"></div>
-
-    <div class="container">
-      <div class="page-header">
-        <h1>Horizon</h1>
-        <p>Discover lands and public trees across the network</p>
-      </div>
-
-      <div class="nav-links">
-        ${navLinks("/canopy/admin/horizon")}
-      </div>
-
-      ${noHorizonMessage}
-      ${searchSection}
-    </div>
-
-    <script>
+  const js = `
       ${sharedScripts}
-      ${hasHorizon ? horizonScript : ""}
-    </script>
-  </body>
-  </html>
-  `;
+      ${hasHorizon ? horizonScript : ""}`;
+
+  return page({
+    title: "Canopy Horizon",
+    css: canopyStyles + extraStyles,
+    body: bodyHtml,
+    js,
+  });
 }

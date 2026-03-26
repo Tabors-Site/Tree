@@ -37,6 +37,9 @@ const STATIC_ROUTES = [
   "/flow",
   "/network",
   "/build",
+  "/mycelium",
+  "/seed",
+  "/app",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -61,7 +64,11 @@ const PAGE_META = {
   },
   "/kernel": {
     title: "The Seed . What Runs When Everything Else Is Stripped Away",
-    description: "Two schemas, six system nodes, 28 config keys, 23 lifecycle hooks, five registries, and cascade. The kernel that never changes.",
+    description: "Two schemas, six system nodes, 27 lifecycle hooks, five registries, a cascade engine, and a response protocol. The kernel that never changes.",
+  },
+  "/seed": {
+    title: "The Seed . What Runs When Everything Else Is Stripped Away",
+    description: "Two schemas, six system nodes, 27 lifecycle hooks, five registries, a cascade engine, and a response protocol. The kernel that never changes.",
   },
   "/cascade": {
     title: "Cascade . How the Tree Communicates",
@@ -82,6 +89,14 @@ const PAGE_META = {
   "/network": {
     title: "The Network . How Trees Connect",
     description: "Sovereign lands. Canopy protocol. Ed25519 signing. Federation without a central authority. Your data stays on your land.",
+  },
+  "/mycelium": {
+    title: "Mycelium . The Forest Underground",
+    description: "Intelligent cross-land signal routing. Not a server. An extension any land installs to become a routing node. Three layers: water table, canopy, mycelium.",
+  },
+  "/app": {
+    title: "TreeOS . The First OS Built on the Seed",
+    description: "77 extensions across four bundles. AI modes, cascade network, intelligence, external channels, maintenance. Plant the seed. Build anything on top of it.",
   },
   "/about": {
     title: "About - TreeOS",

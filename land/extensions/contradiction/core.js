@@ -109,7 +109,9 @@ export async function detectContradictions(nodeId, noteContent, userId, username
     const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
     const root = await resolveRootNode(nodeId);
     rootId = root?._id;
-  } catch {}
+  } catch (err) {
+    log.debug("Contradiction", "resolveRootNode failed:", err.message);
+  }
 
   const prompt =
     `You are a contradiction detector for a knowledge tree.\n\n` +

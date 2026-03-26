@@ -313,7 +313,9 @@ export async function purge(rootId, userId) {
   try {
     const { getLandConfigValue } = await import("../../seed/landConfig.js");
     graceDays = Number(getLandConfigValue("purgeGraceDays"));
-  } catch {}
+  } catch (err) {
+    log.debug("Prune", "Failed to read purgeGraceDays config:", err.message);
+  }
 
   if (!graceDays || graceDays <= 0) {
     throw new Error("Purge is disabled. Set purgeGraceDays in land config to enable.");
@@ -378,7 +380,9 @@ async function getCascadeActivity(rootId, nodeIds, cutoff) {
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    log.debug("Prune", "Cascade activity check failed:", err.message);
+  }
   return active;
 }
 
@@ -391,7 +395,9 @@ async function getCodebookReferences(rootId, nodeIds) {
     for (const id of referenced) {
       if (nodeIds.includes(id)) refs.add(id);
     }
-  } catch {}
+  } catch (err) {
+    log.debug("Prune", "Codebook reference check failed:", err.message);
+  }
   return refs;
 }
 
@@ -404,6 +410,8 @@ async function getContradictionReferences(rootId, nodeIds) {
     for (const id of referenced) {
       if (nodeIds.includes(id)) refs.add(id);
     }
-  } catch {}
+  } catch (err) {
+    log.debug("Prune", "Contradiction reference check failed:", err.message);
+  }
   return refs;
 }

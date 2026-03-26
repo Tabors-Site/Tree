@@ -34,7 +34,7 @@ export default function getTools() {
           try {
             const LandPeer = (await import("../../canopy/models/landPeer.js")).default;
             peerCount = await LandPeer.countDocuments();
-          } catch {}
+          } catch (err) { log.debug("LandManager", "Canopy peer count unavailable:", err.message); }
 
           const status = {
             land: { name: land.name, domain: land.domain, url: getLandUrl() },

@@ -47,18 +47,18 @@ export async function processGatewayMessage(
   { senderName, senderPlatformId, messageText },
 ) {
   // 1. Load and validate channel
-  var channel = await GatewayChannel.findById(channelId).lean();
+  const channel = await GatewayChannel.findById(channelId).lean();
   if (!channel) return { error: "Channel not found" };
   if (!channel.enabled) return { error: "Channel is disabled" };
 
-  var hasInput =
+  const hasInput =
     channel.direction === "input" || channel.direction === "input-output";
   if (!hasInput) return { error: "Channel does not accept input" };
 
   if (!messageText || typeof messageText !== "string" || !messageText.trim()) {
     return { error: "Empty message" };
   }
-  var trimmed = messageText.trim();
+  const trimmed = messageText.trim();
   if (trimmed.length > 5000) {
     return { error: "Message too long (max 5000 characters)" };
   }
@@ -69,13 +69,13 @@ export async function processGatewayMessage(
   }
 
   // 3. Cancel/stop command
-  var lowerTrimmed = trimmed.toLowerCase();
+  const lowerTrimmed = trimmed.toLowerCase();
   if (lowerTrimmed === "cancel" || lowerTrimmed === "stop") {
     // Abort ALL in-flight abort controllers for this channel
-    var aborts = channelAborts.get(channelId);
-    var abortCount = 0;
+    const aborts = channelAborts.get(channelId);
+    let abortCount = 0;
     if (aborts) {
-      for (var ac of aborts) {
+      for (const ac of aborts) {
         ac.abort();
         abortCount++;
       }
@@ -83,7 +83,7 @@ export async function processGatewayMessage(
     }
 
     // Also abort the session itself
-    var scopeKey = "gw:" + channelId;
+    const scopeKey = "gw:" + channelId;
     abortSessionsByScope(scopeKey);
 
  log.verbose("Gateway",
@@ -92,7 +92,7 @@ export async function processGatewayMessage(
 
     // Finalize any open chats that were in-flight
     try {
-      var Chat = (await import("../../seed/models/chat.js")).default;
+      const Chat = (await import("../../seed/models/chat.js")).default;
       await Chat.updateMany(
         {
           userId: channel.userId,
@@ -118,8 +118,8 @@ export async function processGatewayMessage(
   }
 
   // 3. Queue depth check
-  var queueKey = "gw:" + channelId;
-  var depth = getQueueDepth(queueKey);
+  const queueKey = "gw:" + channelId;
+  const depth = getQueueDepth(queueKey);
   if (depth >= MAX_CONCURRENT) {
     if (channel.queueBehavior === "silent") {
       return { queued: false, reply: null };
@@ -128,39 +128,39 @@ export async function processGatewayMessage(
   }
 
   // 4. Resolve channel creator's user
-  var user = await User.findById(channel.userId).select("_id username").lean();
+  const user = await User.findById(channel.userId).select("_id username").lean();
   if (!user) return { error: "Channel owner not found" };
 
   // 5. Check tree access
-  var access = await resolveTreeAccess(channel.rootId, channel.userId);
+  const access = await resolveTreeAccess(channel.rootId, channel.userId);
   if (!access.isOwner && !access.isContributor) {
     return { error: "Channel owner no longer has tree access" };
   }
 
   // 6. Check LLM access
-  var rootCheck = await Node.findById(channel.rootId)
+  const rootCheck = await Node.findById(channel.rootId)
     .select("rootOwner llmAssignments")
     .lean();
-  var hasUserLlm = await userHasLlm(channel.userId);
-  var hasRootLlm = !!(rootCheck?.llmDefault && rootCheck.llmDefault !== "none");
+  const hasUserLlm = await userHasLlm(channel.userId);
+  const hasRootLlm = !!(rootCheck?.llmDefault && rootCheck.llmDefault !== "none");
   if (!hasUserLlm && !hasRootLlm) {
     return { error: "No LLM connection configured" };
   }
 
   // 7. Determine orchestrator flags based on channel mode
-  var skipRespond = channel.mode === "write";
-  var forceQueryOnly = channel.mode === "read";
-  var sourceType = "gateway-" + channel.type;
+  const skipRespond = channel.mode === "write";
+  const forceQueryOnly = channel.mode === "read";
+  const sourceType = "gateway-" + channel.type;
 
   // 8. Label message with sender identity
-  var labeledMessage = senderName ? `${senderName}: "${trimmed}"` : trimmed;
+  const labeledMessage = senderName ? `${senderName}: "${trimmed}"` : trimmed;
 
   // 9. Pre-queue abort tracking (must exist before enqueue for cancel to work)
-  var abort = new AbortController();
+  const abort = new AbortController();
   if (!channelAborts.has(channelId)) channelAborts.set(channelId, new Set());
   channelAborts.get(channelId).add(abort);
 
-  var modeKey = "tree:" +
+  const modeKey = "tree:" +
     (channel.mode === "write"
       ? "place"
       : channel.mode === "read"
@@ -168,13 +168,13 @@ export async function processGatewayMessage(
         : "chat");
 
   // 10. Enqueue with max concurrent 2
-  var visitorId = `gateway:${channel.type}:${channelId}:${Date.now()}`;
+  const visitorId = `gateway:${channel.type}:${channelId}:${Date.now()}`;
 
-  var result = await enqueue(
+  const result = await enqueue(
     queueKey,
     async () => {
       // Create runtime for session + MCP + Chat lifecycle
-      var rt = new OrchestratorRuntime({
+      const rt = new OrchestratorRuntime({
         rootId: channel.rootId,
         userId: channel.userId,
         username: user.username,
@@ -189,18 +189,18 @@ export async function processGatewayMessage(
       await rt.init(trimmed.slice(0, 5000));
       setSessionAbort(rt.sessionId, abort);
 
-      var timedOut = false;
-      var TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes for gateway
-      var timer = setTimeout(async () => {
+      let timedOut = false;
+      const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes for gateway
+      const timer = setTimeout(async () => {
         timedOut = true;
         rt.setError("Request timed out", "gateway:timeout");
         await rt.cleanup().catch(() => {});
       }, TIMEOUT_MS);
 
       try {
-        var treeOrch = getOrchestrator("tree");
+        const treeOrch = getOrchestrator("tree");
         if (!treeOrch) throw new Error("No tree orchestrator installed");
-        var orchResult = await treeOrch.handle({
+        const orchResult = await treeOrch.handle({
           visitorId,
           message: labeledMessage,
           socket: nullSocket,
@@ -218,8 +218,8 @@ export async function processGatewayMessage(
         clearTimeout(timer);
         if (timedOut) return { success: false, answer: "Request timed out." };
 
-        var wasAborted = abort.signal.aborted;
-        var answer = wasAborted
+        const wasAborted = abort.signal.aborted;
+        const answer = wasAborted
           ? "Cancelled by user"
           : orchResult?.answer || orchResult?.reason || null;
         rt.setResult(answer, orchResult?.modeKey || "tree:orchestrator");
@@ -247,7 +247,7 @@ export async function processGatewayMessage(
           await rt.cleanup();
         }
         // Remove this abort controller from the channel tracking
-        var abortSet = channelAborts.get(channelId);
+        const abortSet = channelAborts.get(channelId);
         if (abortSet) {
           abortSet.delete(abort);
           if (abortSet.size === 0) channelAborts.delete(channelId);
@@ -258,8 +258,8 @@ export async function processGatewayMessage(
   );
 
   // 11. Build reply based on mode
-  var reply = null;
-  var hasOutput = channel.direction === "input-output";
+  let reply = null;
+  const hasOutput = channel.direction === "input-output";
 
   if (hasOutput && result.success) {
     if (skipRespond) {

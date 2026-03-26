@@ -8,7 +8,9 @@ export async function init(core) {
   try {
     const { getLandConfigValue } = await import("../../seed/landConfig.js");
     setLandConfig(getLandConfigValue);
-  } catch {}
+  } catch (err) {
+    log.debug("Phase", "landConfig import failed:", err.message);
+  }
 
   const { default: router } = await import("./routes.js");
 
@@ -57,7 +59,9 @@ export async function init(core) {
       if (phaseContext) {
         context.userPhase = phaseContext;
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Phase", "enrichContext failed:", err.message);
+    }
   }, "phase");
 
   log.verbose("Phase", "Phase detection loaded (awareness / attention / scattered)");

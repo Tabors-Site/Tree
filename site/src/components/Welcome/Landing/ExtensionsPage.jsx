@@ -201,7 +201,7 @@ const ExtensionsPage = () => {
                 branches grow away from purpose.
               </p>
               <p style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", marginTop: 8}}>
-                prune, reroot, changelog, root-hold
+                prune, reroot, changelog, purpose
               </p>
             </div>
           </div>
@@ -342,9 +342,8 @@ const ExtensionsPage = () => {
             A coding OS with architect and review modes. A research OS with citation and synthesis modes.
           </p>
           <p className="lp-section-sub" style={{fontStyle: "italic", color: "rgba(255,255,255,0.3)"}}>
-            Thirty-one extensions across four bundles. Seventy-two CLI commands.
-            All growing from twelve schema fields and a metadata Map.
-            Enough extensions built on a kernel eventually form an operating system.
+            77 extensions across four bundles plus standalone. All growing from twelve schema
+            fields and a metadata Map. Enough extensions built on a kernel form an operating system.
             Operating systems are good starting grounds for people to build off of.
           </p>
           <div className="lp-cta-row">

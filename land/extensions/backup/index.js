@@ -100,19 +100,19 @@ export async function init(core) {
     try {
       const { ensureIndexes } = await import("../../seed/tree/indexes.js");
       await ensureIndexes();
-    } catch {}
+    } catch (err) { log.debug("Backup", "Post-restore index rebuild failed:", err.message); }
 
     // Integrity check
     try {
       const { checkIntegrity } = await import("../../seed/tree/integrityCheck.js");
       await checkIntegrity({ repair: true });
-    } catch {}
+    } catch (err) { log.debug("Backup", "Post-restore integrity check failed:", err.message); }
 
     // Invalidate ancestor cache
     try {
       const { invalidateAll } = await import("../../seed/tree/ancestorCache.js");
       invalidateAll();
-    } catch {}
+    } catch (err) { log.debug("Backup", "Post-restore ancestor cache invalidation failed:", err.message); }
 
     // Fire afterRestore for other extensions
     await core.hooks.run("afterRestore", { restoreInfo });

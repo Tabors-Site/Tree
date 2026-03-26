@@ -33,11 +33,12 @@ const LandingPage = () => {
             <button className="lp-btn lp-btn-primary" onClick={scrollToInstall}>Get Started</button>
             <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the Seed</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
+            <a className="lp-btn lp-btn-secondary" href="/cli">CLI</a>
           </div>
           <p style={{color: "#666", fontSize: "0.85rem", marginTop: 20}}>
             <a href="/app" style={{color: "#888", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.1)"}}>
               TreeOS
-            </a> is the first operating system built on the seed. It ships with 78 extensions across four bundles.
+            </a> is the first operating system built on the seed. It ships with 77 extensions across four bundles.
           </p>
         </div>
       </section>
@@ -86,7 +87,7 @@ const LandingPage = () => {
               <p style={{flex: 1}}>
                 Four bundles. Cascade (8, the nervous system). Intelligence (12, self-awareness).
                 Connect (8, external channels). Maintenance (4, hygiene). Plus base OS, developer tools,
-                data, content, gateways, and mycelium. 78 extensions total.
+                data, content, gateways, and mycelium. 77 extensions total.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/extensions" style={{color: "#a78bfa", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)", paddingBottom: 2}}>How extensions work</a>
@@ -145,7 +146,7 @@ const LandingPage = () => {
       {/* ── CLI ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Terminal Native</h2>
+          <h2 className="lp-section-title"><a href="/cli" style={{color: "inherit", textDecoration: "none"}}>Terminal Native</a></h2>
           <p className="lp-section-sub">
             The CLI works like a regular terminal. <code>cd</code>, <code>ls</code>,
             <code>mkdir</code>, <code>rm</code>, <code>mv</code>. If you know a shell,
@@ -179,12 +180,15 @@ const LandingPage = () => {
             <div className="lp-cli-feat"><strong>Navigate</strong> cd, ls, pwd, tree</div>
             <div className="lp-cli-feat"><strong>Build</strong> mkdir, rm, mv, rename, type</div>
             <div className="lp-cli-feat"><strong>Content</strong> note, notes, value, goal</div>
-            <div className="lp-cli-feat"><strong>AI</strong> chat, place, query, explore</div>
+            <div className="lp-cli-feat"><strong>AI</strong> chat, place, query, @sessions</div>
             <div className="lp-cli-feat"><strong>Cascade</strong> cascade, perspective, codebook, flow, water</div>
-            <div className="lp-cli-feat"><strong>Intelligence</strong> compress, contradictions, inverse, evolution, thesis</div>
+            <div className="lp-cli-feat"><strong>Intelligence</strong> compress, contradictions, inverse, evolution, intent</div>
             <div className="lp-cli-feat"><strong>Extensions</strong> ext install, ext-allow, ext-scope</div>
             <div className="lp-cli-feat"><strong>Gateway</strong> gateway add, gateway test</div>
             <div className="lp-cli-feat"><strong>LLM</strong> llm add, llm assign</div>
+          </div>
+          <div style={{textAlign: "center", marginTop: 32}}>
+            <a className="lp-btn lp-btn-secondary" href="/cli">Learn more</a>
           </div>
         </div>
       </section>
@@ -619,7 +623,7 @@ const LandingPage = () => {
               <h4>TreeOS</h4>
               <a href="/app">Site</a>
               <a href="/about/api">API</a>
-              <a href="/about/cli">CLI</a>
+              <a href="/cli">CLI</a>
               <a href="/about/gateway">Gateway</a>
               <a href="/about/land">Land Setup</a>
               <a href="/about/energy">Energy</a>

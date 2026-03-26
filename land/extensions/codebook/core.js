@@ -185,7 +185,9 @@ export async function runCompression(nodeId, userId, username) {
       const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
       const root = await resolveRootNode(nodeId);
       rootId = root?._id || null;
-    } catch {}
+    } catch (err) {
+      log.debug("Codebook", "Root node resolution failed:", err.message);
+    }
 
     const { answer } = await _runChat({
       userId,

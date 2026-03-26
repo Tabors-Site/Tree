@@ -230,7 +230,7 @@ export async function drainTree(rootId) {
           try {
             const targetNode = await Node.findById(targetNodeId).select("prestige").lean();
             prestige = targetNode?.prestige ?? 0;
-          } catch {}
+          } catch (err) { log.debug("Dreams", "Could not fetch prestige for target node:", err.message); }
 
           const { parsed: noteData } = await rt.runStep("tree:notes", {
             prompt: `Create a note with this content: ${placeStep.noteContent}`,

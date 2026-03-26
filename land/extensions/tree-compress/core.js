@@ -216,7 +216,9 @@ async function compressNode(nodeId, depthMap, userId, username, rootId, config) 
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    log.debug("TreeCompress", "Codebook lookup failed:", err.message);
+  }
 
   // Determine if leaf or parent
   const hasChildren = node.children && node.children.length > 0;
@@ -490,7 +492,9 @@ export async function getCompressStatus(rootId) {
     if (meta.compress?.essence) {
       try {
         totalEssenceBytes += Buffer.byteLength(JSON.stringify(meta.compress.essence), "utf8");
-      } catch {}
+      } catch (err) {
+        log.debug("TreeCompress", "Essence size calculation failed:", err.message);
+      }
     }
 
     if (meta.compress?.history) {

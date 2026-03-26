@@ -110,10 +110,12 @@ export async function init(core) {
 
   // Export functions for other extensions
   return {
-    getUserRoots,
-    getUserRootsWithNames,
-    getRecentRootsWithNames,
-    addRoot,
-    removeRoot,
+    exports: {
+      getUserRoots,
+      getUserRootsWithNames,
+      getRecentRootsWithNames,
+      addRoot,
+      removeRoot,
+    },
   };
 }

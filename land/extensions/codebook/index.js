@@ -41,7 +41,9 @@ export async function init(core) {
       try {
         const user = await core.models.User.findById(userId).select("username").lean();
         username = user?.username;
-      } catch {}
+      } catch (err) {
+        log.debug("Codebook", "Username lookup failed:", err.message);
+      }
 
       // Fire compression in background, don't block the note write
       runCompression(nodeId, userId, username).catch((err) => {

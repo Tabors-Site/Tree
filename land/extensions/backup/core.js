@@ -20,16 +20,16 @@ import Contribution from "../../seed/models/contribution.js";
 import log from "../../seed/log.js";
 
 let Chat = null;
-try { Chat = (await import("../../seed/models/chat.js")).default; } catch {}
+try { Chat = (await import("../../seed/models/chat.js")).default; } catch (err) { log.debug("Backup", "Chat model not available:", err.message); }
 
 let seedVersion = "unknown";
-try { seedVersion = (await import("../../seed/version.js")).SEED_VERSION; } catch {}
+try { seedVersion = (await import("../../seed/version.js")).SEED_VERSION; } catch (err) { log.debug("Backup", "Could not load seed version:", err.message); }
 
 let getLandConfigValue = () => null;
 try {
   const mod = await import("../../seed/landConfig.js");
   getLandConfigValue = mod.getLandConfigValue;
-} catch {}
+} catch (err) { log.debug("Backup", "Could not load landConfig:", err.message); }
 
 function normalizeDoc(doc) {
   if (doc.metadata instanceof Map) {
@@ -160,7 +160,7 @@ export async function importLand(input) {
   const mongoose = (await import("mongoose")).default;
   const db = mongoose.connection.db;
   for (const col of ["nodes", "users", "notes", "contributions"]) {
-    try { await db.collection(col).deleteMany({}); } catch {}
+    try { await db.collection(col).deleteMany({}); } catch (err) { log.debug("Backup", `Failed to clear collection ${col}:`, err.message); }
   }
 
   const report = { nodes: 0, users: 0, notes: 0, contributions: 0 };

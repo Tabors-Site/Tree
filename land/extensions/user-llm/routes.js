@@ -34,7 +34,7 @@ router.post("/user/:userId/llm-assign", authenticate, async (req, res) => {
     );
     return sendOk(res, result);
   } catch (err) {
- log.error("User Llm", "Failed to assign custom LLM:", err.message);
+    log.error("User Llm", "Failed to assign custom LLM:", err.message);
     return sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
@@ -60,12 +60,12 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
         await assignConnection(req.params.userId, "main", result._id);
       }
     } catch (assignErr) {
- log.error("User Llm", "Auto-assign main failed:", assignErr.message);
+      log.error("User Llm", "Auto-assign main failed:", assignErr.message);
     }
 
     return sendOk(res, { connection: result }, 201);
   } catch (err) {
- log.error("User Llm", "Failed to save custom LLM:", err.message);
+    log.error("User Llm", "Failed to save custom LLM:", err.message);
     const status = err.message.includes("Maximum") ? 400 : 500;
     const code = status === 400 ? ERR.INVALID_INPUT : ERR.INTERNAL;
     return sendError(res, status, code, err.message);
@@ -88,7 +88,7 @@ router.put(
       );
       return sendOk(res, { connection: result });
     } catch (err) {
- log.error("User Llm", "Failed to update custom LLM:", err.message);
+      log.error("User Llm", "Failed to update custom LLM:", err.message);
       return sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },
@@ -105,7 +105,7 @@ router.delete(
       );
       return sendOk(res, { removed: true });
     } catch (err) {
- log.error("User Llm", "Failed to delete custom LLM:", err.message);
+      log.error("User Llm", "Failed to delete custom LLM:", err.message);
       return sendError(res, 500, ERR.INTERNAL, err.message);
     }
   },

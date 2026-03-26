@@ -5,13 +5,12 @@ export default {
 
   // Required: won't load without these
   needs: {
-    services: ["llm", "session", "chat", "orchestrator", "mcp"],
+    services: ["llm", "session", "chat", "orchestrator", "mcp", "contributions", "hooks"],
     models: ["Node", "Contribution"],
   },
 
-  // Optional: works without these, gets no-op stubs if missing
   optional: {
-    services: ["energy", "contributions"],
+    services: ["energy"],
     extensions: ["html-rendering"],
   },
 

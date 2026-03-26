@@ -14,11 +14,11 @@ const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";
 
 function decrypt(encryptedText) {
-  var parts = encryptedText.split(":");
-  var iv = Buffer.from(parts[0], "hex");
-  var key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
-  var decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  var decrypted = decipher.update(parts[1], "hex", "utf8");
+  const parts = encryptedText.split(":");
+  const iv = Buffer.from(parts[0], "hex");
+  const key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  let decrypted = decipher.update(parts[1], "hex", "utf8");
   decrypted += decipher.final("utf8");
   return decrypted;
 }
@@ -39,7 +39,7 @@ function decryptChannelSecrets(channel) {
 export async function dispatchNotifications(rootId, notifications) {
   if (!notifications || notifications.length === 0) return;
 
-  var channels = await GatewayChannel.find({
+  const channels = await GatewayChannel.find({
     rootId,
     enabled: true,
     direction: { $in: ["output", "input-output"] },
@@ -47,16 +47,16 @@ export async function dispatchNotifications(rootId, notifications) {
 
   if (channels.length === 0) return;
 
-  var results = [];
+  const results = [];
 
-  for (var channel of channels) {
-    var matching = notifications.filter(
+  for (const channel of channels) {
+    const matching = notifications.filter(
       (n) => channel.notificationTypes.includes(n.type),
     );
 
     if (matching.length === 0) continue;
 
-    var secrets = decryptChannelSecrets(channel);
+    const secrets = decryptChannelSecrets(channel);
     if (!secrets) {
       log.error("Gateway", `Failed to decrypt secrets for channel ${channel._id}`);
       await GatewayChannel.findByIdAndUpdate(channel._id, {
@@ -65,13 +65,13 @@ export async function dispatchNotifications(rootId, notifications) {
       continue;
     }
 
-    var handler = getChannelType(channel.type);
+    const handler = getChannelType(channel.type);
     if (!handler || !handler.send) {
       log.error("Gateway", `No registered sender for channel type "${channel.type}"`);
       continue;
     }
 
-    for (var notification of matching) {
+    for (const notification of matching) {
       try {
         await handler.send(secrets, channel.config.metadata || {}, {
           ...notification,
@@ -96,8 +96,8 @@ export async function dispatchNotifications(rootId, notifications) {
   }
 
   if (results.length > 0) {
-    var ok = results.filter((r) => r.status === "ok").length;
-    var fail = results.filter((r) => r.status === "error").length;
+    const ok = results.filter((r) => r.status === "ok").length;
+    const fail = results.filter((r) => r.status === "error").length;
     log.verbose("Gateway", `Dispatched ${ok} ok, ${fail} failed for root ${rootId}`);
   }
 
@@ -105,17 +105,17 @@ export async function dispatchNotifications(rootId, notifications) {
 }
 
 export async function dispatchTestNotification(channelId) {
-  var channel = await GatewayChannel.findById(channelId).lean();
+  const channel = await GatewayChannel.findById(channelId).lean();
   if (!channel) throw new Error("Channel not found");
   if (!channel.enabled) throw new Error("Channel is disabled");
 
-  var secrets = decryptChannelSecrets(channel);
+  const secrets = decryptChannelSecrets(channel);
   if (!secrets) throw new Error("Failed to decrypt channel secrets");
 
-  var handler = getChannelType(channel.type);
+  const handler = getChannelType(channel.type);
   if (!handler || !handler.send) throw new Error("No sender for channel type: " + channel.type);
 
-  var testNotification = {
+  const testNotification = {
     type: "test",
     title: "Test Notification",
     content: "This is a test notification from your tree. If you see this, your channel is working correctly!",

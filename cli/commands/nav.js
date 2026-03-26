@@ -203,6 +203,10 @@ module.exports = (program) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: cd <name or id> | cd @domain/tree"));
       const name = parts.join(" ");
       const cfg = requireAuth();
+      // Navigation switches back to default session. Named sessions stay pinned.
+      if (cfg.activeSession) {
+        cfg.activeSession = null;
+      }
 
       // ── cd @domain/treename or cd @domain ──
       if (name.startsWith("@")) {

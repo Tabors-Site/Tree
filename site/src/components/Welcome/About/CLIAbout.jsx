@@ -1,375 +1,343 @@
 
-import "./CLIAbout.css";
-
-const CmdRow = ({ cmd, desc }) => (
-  <div className="cli-cmd-row">
-    <span className="cli-cmd-name">{cmd}</span>
-    <span className="cli-cmd-desc">{desc}</span>
-  </div>
-);
+import "../Landing/LandingPage.css";
 
 const CLIAbout = () => {
   return (
-    <div className="about-cli">
-      <div className="cli-card">
+    <div className="lp" style={{background: "transparent"}}>
 
-        {/* ── BACK ── */}
-        <div className="al-page-back">
-          <a className="al-back-link" href="/about">←</a>
+      {/* ── BACK ── */}
+      <div style={{padding: "20px 32px 0"}}>
+        <a className="al-back-link" href="/about">←</a>
+      </div>
+
+      {/* ── HERO ── */}
+      <section className="lp-hero" style={{minHeight: "50vh"}}>
+        <div className="lp-hero-inner">
+          <h1 className="lp-title">The CLI</h1>
+          <p className="lp-subtitle">Talk to the tree.</p>
+          <p className="lp-tagline">
+            Navigate like a filesystem. Talk like a conversation. The AI changes
+            based on where you are. Extensions add their own commands. The help menu
+            updates at every position. Your view matches the AI's view.
+          </p>
+          <div className="lp-hero-ctas">
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/build">Build</a>
+          </div>
         </div>
+      </section>
 
-        {/* ── HEADER ── */}
-        <div className="cli-header">
-          <h2 className="cli-title">💻 TreeOS CLI</h2>
-          <p className="cli-subtitle">
-            Navigate and manage your trees like a filesystem from the terminal.
-            All commands map to the <a href="/about/api" style={{ color: "rgba(255,255,255,0.85)" }}>TreeOS REST API</a>.
-            Config stored in <code>~/.treeos/config.json</code>.
+      {/* ── THREE BASE COMMANDS ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">Three Commands</h2>
+          <p className="lp-section-sub">Everything else builds on them.</p>
+
+          <div style={{maxWidth: 500, margin: "0 auto 24px"}}>
+            <Cmd name="chat" desc="the AI thinks and acts" />
+            <Cmd name="place" desc="the AI stores what you said" />
+            <Cmd name="query" desc="the AI answers without changing anything" />
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.9rem", marginBottom: 24}}>
+            But these are just the floor. Extensions add their own AI commands that work the same
+            way but think differently.
+          </p>
+
+          <div style={{maxWidth: 600, margin: "0 auto"}}>
+            <CmdEx cmd='fitness "bench 135x10x10x8"' label="fitness coach mode" />
+            <CmdEx cmd='food "eggs and toast for breakfast"' label="nutrition coach mode" />
+            <CmdEx cmd='explore "where is the auth refactor"' label="searches your branch" />
+            <CmdEx cmd='scout "what do I know about protein"' label="triangulates the whole tree" />
+            <CmdEx cmd='understand' label="compresses the branch into knowledge" />
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.4)", lineHeight: 1.8, fontSize: "0.85rem", marginTop: 20}}>
+            Every extension command activates a different AI mode at your position.
+            Same tools. Different mind. <code>chat</code> is general. <code>fitness</code> is
+            a coach. <code>explore</code> is a researcher. <code>scout</code> is a detective.
+            Same node. Different mind.
           </p>
         </div>
+      </section>
 
-        {/* ── INSTALL ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">📦</span> Install
+      {/* ── WHERE YOU ARE ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">Where You Are Changes Everything</h2>
+
+          <div style={{maxWidth: 500, margin: "0 auto 24px"}}>
+            <Cmd name="cd /" desc="land zone: AI manages your server" />
+            <Cmd name="cd ~" desc="home zone: AI helps you reflect" />
+            <Cmd name="cd MyTree" desc="tree zone: AI works the branch" />
           </div>
-          <div className="cli-code-block">npm install -g treeos</div>
+
+          <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.85rem", marginBottom: 20}}>
+            No settings menu. No mode picker. Just <code>cd</code>.
+          </p>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/</span> <span className="lp-term-caret">› </span>chat "what extensions are loaded"</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Land: You have 77 extensions loaded. 4 disabled...</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">~</span> <span className="lp-term-caret">› </span>chat "what have I been working on"</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Home: Most active in Health and Projects this week...</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>chat "add a back routine"</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Tree: Created Back and Biceps. Pull-ups 4x8, Rows 3x10...</div>
+            </div>
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", marginTop: 16, textAlign: "center"}}>
+            Same command. Three completely different AIs. Position is everything.
+          </p>
         </div>
+      </section>
 
-        {/* ── SESSION ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🖥️</span> Session
-          </div>
-          <CmdRow cmd="connect <url>" desc="Set the land URL to connect to" />
-          <CmdRow cmd="register" desc="Create an account on the connected land" />
-          <CmdRow cmd="login" desc="Log in with username and password" />
-          <CmdRow cmd="login --key <key>" desc="Authenticate with an API key" />
-          <CmdRow cmd="start / shell" desc="Launch interactive shell" />
-          <CmdRow cmd="stop / exit" desc="Exit the shell" />
-          <CmdRow cmd="logout" desc="Clear stored credentials and exit" />
-          <CmdRow cmd="whoami" desc="Show login, plan, energy, and active tree" />
-        </div>
+      {/* ── SESSIONS ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">Sessions</h2>
+          <p className="lp-section-sub">
+            A session is a conversation pinned to a position. You are always in one. You can run many.
+          </p>
 
-        {/* ── HOME ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🏠</span> User Home
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>chat "hey"</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  # default session at /Health</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>@fitness "whats my bench PR"</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  # creates fitness session at /Health/Fitness</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@fitness › </span>add a back day</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  # still in fitness session</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@fitness › </span>@work "status on the API refactor"</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  # creates work session at /Projects/Backend</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@work › </span>looks good, mark auth complete</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@work › </span>@fitness</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  # switch back (shows recent history)</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@fitness › </span>@default</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  # back to default session</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>_</div>
+            </div>
           </div>
-          <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Commands available without entering a tree. <code>ls</code> and <code>cd</code> also work from home to list/enter trees.
-          </div>
-          <CmdRow cmd="roots" desc="List all your trees" />
-          <CmdRow cmd="use <name> / root <name>" desc="Enter a tree by name or ID" />
-          <CmdRow cmd="mkroot <name>" desc="Create a new tree. --goal --plan --task --knowledge --resource --identity or --type custom" />
-          <CmdRow cmd="retire/leave [name] -f" desc="Leave a shared tree or delete if sole owner" />
-          <CmdRow cmd="home" desc="Leave current tree, return home" />
-          <CmdRow cmd="deleted" desc="List your deleted branches" />
-          <CmdRow cmd="revive <id> <target>" desc="Revive a deleted branch. Target is a parent node ID, or 'root' for a new tree" />
-          <CmdRow cmd="invites" desc="List pending invites from other users" />
-          <CmdRow cmd="tags / mail" desc="Notes where you've been @tagged" />
-          <CmdRow cmd="notes" desc="Your user-level notes. -l limit, -q search" />
-          <CmdRow cmd="chats" desc="All AI chats across your trees. -l limit" />
-          <CmdRow cmd="contributions" desc="Your recent contributions" />
-          <CmdRow cmd="share-token [token]" desc="Show or set your share token" />
-          <CmdRow cmd="share idea <id>" desc="Public link to a raw idea" />
-        </div>
 
-        {/* ── RAW IDEAS ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">💡</span> Raw Ideas
-          </div>
-          <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Capture ideas from anywhere. AI figures out where they belong.
-          </div>
-          <CmdRow cmd="ideas" desc="List ideas. -p pending, -r processing, -s stuck, -d done, -a all, -q search, -l limit" />
-          <CmdRow cmd="cat idea <id or #>" desc="View full content of a raw idea" />
-          <CmdRow cmd="idea <message>" desc="AI places your idea in the right tree and navigates you there" />
-          <CmdRow cmd="idea-store <message>" desc="Save an idea for later without processing" />
-          <CmdRow cmd="idea-place <id or message>" desc="AI-place an idea (fire-and-forget)" />
-          <CmdRow cmd="idea-auto [on/off]" desc="Toggle auto-placement every 15 min (Standard plan+)" />
-          <CmdRow cmd="idea-transfer <id> <nodeId>" desc="Manually move an idea to a specific node" />
-          <CmdRow cmd="rm-idea <id> -f" desc="Delete a raw idea" />
-        </div>
+          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
+            Sessions stay pinned. <code>@fitness</code> always talks to /Health/Fitness even
+            when you have navigated somewhere else. Navigate away and the session does not follow.
+            It waits. Come back with <code>@fitness</code> from anywhere.
+          </p>
 
-        {/* ── NAVIGATION ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🧭</span> Navigation
-          </div>
-          <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Inside a tree. <code>ls</code> and <code>cd</code> also work from home (listing/entering trees).
-          </div>
-          <CmdRow cmd="pwd" desc="Print current path" />
-          <CmdRow cmd="ls / ls -l" desc="List children. Long format shows IDs and status" />
-          <CmdRow cmd="cd <name>" desc="Navigate into a child. Supports .., /, -r (search whole tree), path chaining (A/B/C)" />
-          <CmdRow cmd="cd /" desc="Go to tree root. At tree root, go to land" />
-          <CmdRow cmd="land" desc="Go to land root (/) from anywhere" />
-          <CmdRow cmd="tree" desc="Render subtree. -a active, -c completed, -t trimmed" />
-          <div className="cli-note" style={{ marginTop: 8 }}>
-            Nodes have three statuses: <strong>active</strong> (green), <strong>completed</strong> (gray), <strong>trimmed</strong> (dim).
-          </div>
-        </div>
-
-        {/* ── NODE MANAGEMENT ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🔷</span> Node Management
-          </div>
-          <CmdRow cmd="mkdir <name>" desc="Create child node(s). Comma-separate for multiple: mkdir foo, bar. --goal --plan --task --knowledge --resource --identity or --type custom" />
-          <CmdRow cmd="rm <name> -f" desc="Delete a node (soft delete)" />
-          <CmdRow cmd="rename <name> <new>" desc="Rename a child node" />
-          <CmdRow cmd="mv <name> <destId>" desc="Move a node to a new parent" />
-          <CmdRow cmd="complete" desc="Set current node and all children to completed" />
-          <CmdRow cmd="activate" desc="Set current node and all children to active" />
-          <CmdRow cmd="what / node" desc="Show details of the current node" />
-          <CmdRow cmd="type [newType]" desc="Set or clear the node type (goal, plan, task, knowledge, resource, identity, or custom)" />
-          <CmdRow cmd="trim" desc="Set current node and all children to trimmed" />
-          <CmdRow cmd="prestige" desc="Create a new version of the current node" />
-        </div>
-
-        {/* ── NOTES & VALUES ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">📝</span> Notes &amp; Values
-          </div>
-          <CmdRow cmd="note <content>" desc="Post a note on the current node" />
-          <CmdRow cmd="notes" desc="List notes on the current node. -l limit, -q search" />
-          <CmdRow cmd="cat note <id or #>" desc="View full content of a note" />
-          <CmdRow cmd="rm-note <id> -f" desc="Delete a note" />
-          <CmdRow cmd="download <id or #>" desc="Download a note to local file. -o output path, -r for raw idea instead of note" />
-          <CmdRow cmd="book" desc="Print the full book of notes from current node down" />
-          <CmdRow cmd="contributions" desc="List contributions on the current node" />
-          <CmdRow cmd="values" desc="List values on the current node. -g global totals, -t per-node tree breakdown" />
-          <CmdRow cmd="value <key> <val>" desc="Set a value" />
-          <CmdRow cmd="goal <key> <goal>" desc="Set a goal" />
-        </div>
-
-        {/* ── SCHEDULING ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">📅</span> Scheduling
-          </div>
-          <div className="cli-note" style={{ marginBottom: 10 }}>
-            Date: <code>MM/DD/YYYY</code>. Time: <code>HH:MM</code> or <code>HH:MMam/pm</code>. Reeffect: hours. Use <code>clear</code> to remove.
-          </div>
-          <CmdRow cmd="schedule <date> [time] [reeffect]" desc="Set schedule (e.g. 1/11/2025 3, 1/11/2025 11:45pm 5, clear)" />
-          <CmdRow cmd="calendar" desc="Show scheduled dates. -m month (1-12 or name), -y year" />
-          <CmdRow cmd="dream-time <HH:MM>" desc="Set nightly dream time (or clear)" />
-        </div>
-
-        {/* ── COLLABORATION ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🤝</span> Collaboration
-          </div>
-          <CmdRow cmd="team" desc="Show owner and contributors" />
-          <CmdRow cmd="invite <username>" desc="Invite a user to the current tree" />
-          <CmdRow cmd="invite accept <id>" desc="Accept a pending invite" />
-          <CmdRow cmd="invite deny <id>" desc="Decline a pending invite" />
-          <CmdRow cmd="kick <username>" desc="Remove a contributor" />
-          <CmdRow cmd="owner <username>" desc="Transfer tree ownership" />
-          <CmdRow cmd="visibility [level]" desc="Show or set tree visibility (public/private)" />
-        </div>
-
-        {/* ── LINKS & SHARING ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🔗</span> Links &amp; Sharing
-          </div>
-          <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Clickable terminal hyperlinks. <code>link</code> uses your share token; <code>share</code> generates public links.
-          </div>
-          <div className="cli-note" style={{ marginBottom: 10 }}>In a tree:</div>
-          <CmdRow cmd="link" desc="Link to current node" />
-          <CmdRow cmd="link root" desc="Link to tree root" />
-          <CmdRow cmd="link book" desc="Link to book view" />
-          <CmdRow cmd="link gateway" desc="Link to gateway channels" />
-          <CmdRow cmd="link note <id>" desc="Link to a specific note" />
-          <CmdRow cmd="share note <id>" desc="Public link to a note" />
-          <CmdRow cmd="share book" desc="Public book share link (TOC included)" />
-          <div className="cli-note" style={{ marginBottom: 10, marginTop: 14 }}>From home:</div>
-          <CmdRow cmd="link" desc="Link to your profile" />
-          <CmdRow cmd="link ideas" desc="Link to your raw ideas" />
-          <CmdRow cmd="link idea <id>" desc="Link to a specific raw idea" />
-        </div>
-
-        {/* ── AI ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🧠</span> AI
-          </div>
-          <CmdRow cmd="chat <message>" desc="Chat with AI about the current branch" />
-          <CmdRow cmd="place <message>" desc="AI writes content into the branch" />
-          <CmdRow cmd="query <message>" desc="Ask AI about the branch (read-only, no writes)" />
-          <CmdRow cmd="chats" desc="Chat history for current node. -l limit" />
-          <CmdRow cmd="chats tree" desc="All chat history across the whole tree" />
-        </div>
-
-        {/* ── UNDERSTANDING ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🔬</span> Understanding Runs
-          </div>
-          <CmdRow cmd="understand [perspective]" desc="Start an understanding run. Returns final encoding" />
-          <CmdRow cmd="understandings" desc="List runs" />
-          <CmdRow cmd="understand-status <runId>" desc="Check progress" />
-          <CmdRow cmd="understand-stop <runId>" desc="Stop a run" />
-        </div>
-
-        {/* ── EXTENSIONS ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🧩</span> Extensions
-          </div>
-          <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Manage land extensions. Install from the registry or git repos.
-            Installs verify SHA256 checksums and auto-resolve dependencies.
-          </div>
-          <CmdRow cmd="ext list" desc="List all loaded extensions with status" />
-          <CmdRow cmd="ext info <name>" desc="Show manifest details for a local extension" />
-          <CmdRow cmd="ext search [query]" desc="Search the registry. -l limit, -t tag" />
-          <CmdRow cmd="ext view <name> [version]" desc="Full registry details: manifest, files, readme, versions" />
-          <CmdRow cmd="ext install <name> [version]" desc="Install from registry or git repo (auto-resolves deps, verifies checksum)" />
-          <CmdRow cmd="ext update <name>" desc="Update to latest version from registry" />
-          <CmdRow cmd="ext publish <name>" desc="Publish local extension to registry with Canopy auth" />
-          <CmdRow cmd="ext disable <name>" desc="Disable an extension (warns about dependents)" />
-          <CmdRow cmd="ext enable <name>" desc="Re-enable a disabled extension" />
-          <CmdRow cmd="ext uninstall <name>" desc="Remove extension (blocks if dependents exist, -f to force)" />
-          <div className="cli-section-text" style={{ marginTop: 14, marginBottom: 14 }}>
-            Per-node extension scoping. Control which extensions are active at each position in the tree.
-          </div>
-          <CmdRow cmd="ext-scope" desc="Show active/blocked/restricted extensions at current position" />
-          <CmdRow cmd="ext-scope -t" desc="Tree-wide view of all extension blocks across branches" />
-          <CmdRow cmd="ext-block <name>" desc="Block an extension at current node (inherits to all children)" />
-          <CmdRow cmd="ext-allow <name>" desc="Remove an extension from block list at current node" />
-          <CmdRow cmd="ext-restrict <name> read" desc="Restrict extension to read-only tools at current node" />
-        </div>
-
-        {/* ── LLM CONNECTIONS ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🔌</span> LLM Connections
-          </div>
-          <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Connect your own OpenAI-compatible endpoint. Assign models to user slots or per-tree slots.
-          </div>
-          <CmdRow cmd="llms" desc="List your LLM connections" />
-          <CmdRow cmd="llm add" desc="Interactive setup: name, URL, model, API key" />
-          <CmdRow cmd="llm remove <id>" desc="Delete a connection" />
-          <CmdRow cmd="llm assign <slot> <id>" desc="Assign to user slot (main, rawIdea)" />
-          <CmdRow cmd="llm tree-assign <slot> <id>" desc="Assign to tree slot (placement, respond, notes, understanding, cleanup, drain, notification)" />
-          <CmdRow cmd="llm clear <slot>" desc="Clear a user slot" />
-          <CmdRow cmd="llm tree-clear <slot>" desc="Clear a tree slot" />
-        </div>
-
-        {/* ── API KEYS ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🔑</span> API Keys
-          </div>
-          <CmdRow cmd="api-keys" desc="List your API keys" />
-          <CmdRow cmd="api-keys create [name]" desc="Create a new key" />
-          <CmdRow cmd="api-keys revoke <id>" desc="Revoke a key" />
-        </div>
-
-        {/* ── CANOPY ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🌐</span> Canopy (Federation)
-          </div>
-          <CmdRow cmd="peers" desc="List peered lands" />
-          <CmdRow cmd="peer add <domain>" desc="Peer with another land" />
-          <CmdRow cmd="peer remove <domain>" desc="Remove a peer" />
-          <CmdRow cmd="search <query>" desc="Search the Horizon for lands and trees" />
-          <CmdRow cmd="browse <domain> [query]" desc="Browse public trees on another land" />
-        </div>
-
-        {/* ── LAND CONFIG ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">⚙️</span> Land Config
-          </div>
-          <CmdRow cmd="config" desc="Show all land config values" />
-          <CmdRow cmd="config get <key>" desc="Get a config value" />
-          <CmdRow cmd="config set <key> <value>" desc="Set a config value (admin)" />
-          <CmdRow cmd="protocol" desc="Show land protocol info and capabilities" />
-        </div>
-
-        {/* ── BLOG ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">💪</span> Health
-          </div>
-          <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            Fitness coaching and food tracking. Each uses custom AI modes with domain-specific prompts.
-          </div>
-          <CmdRow cmd="fitness [message]" desc="Talk to your fitness coach. Plans workouts, logs exercises, tracks progress." />
-          <CmdRow cmd="food [message]" desc="Talk to your food coach. Logs meals, tracks macros, plans nutrition." />
-        </div>
-
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">📰</span> Blog
-          </div>
-          <div className="cli-section-text" style={{ marginBottom: 14 }}>
-            No login required.
-          </div>
-          <CmdRow cmd="blogs" desc="List published posts" />
-          <CmdRow cmd="blog <slug or number>" desc="Read a post by slug or list number" />
-        </div>
-
-        {/* ── NAME MATCHING ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">🔍</span> Name Matching
-          </div>
-          <div className="cli-section-text">
-            All commands accept names or IDs. No quotes needed for multi-word names. Matching order:
-          </div>
-          <div className="cli-note" style={{ marginTop: 8 }}>
-            1. Exact ID or ID prefix<br />
-            2. Exact name (case-insensitive)<br />
-            3. Name starts with query<br />
-            4. Name contains query
-          </div>
-          <div className="cli-note" style={{ marginTop: 8 }}>
-            Multiple matches prompt you to disambiguate by ID.
+          <div style={{maxWidth: 400, margin: "16px auto 0"}}>
+            <Cmd name="sessions" desc="list all active sessions" />
+            <Cmd name="sessions kill fitness" desc="end a session" />
           </div>
         </div>
+      </section>
 
-        {/* ── LINKS ── */}
-        <div className="cli-section">
-          <div className="cli-section-title">
-            <span className="cli-section-icon">📎</span> Links
+      {/* ── WAIT WHAT ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 700}}>
+          <h2 className="lp-section-title" style={{fontSize: "1.3rem"}}>"Wait. First it was <code>fitness</code>, now it's <code>@fitness</code>?"</h2>
+
+          <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.9, fontSize: "0.92rem", marginBottom: 16}}>
+            Both work. <code>fitness "bench 135"</code> is a direct extension command. It fires
+            the fitness AI at your current position, one shot. <code>@fitness "bench 135"</code> opens
+            a persistent session pinned to the fitness branch. The session remembers. The direct command
+            does not.
+          </p>
+          <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.9, fontSize: "0.92rem", marginBottom: 16}}>
+            Inside the shell you just type <code>@fitness hello</code>. No <code>chat</code> prefix needed.
+            The shell intercepts the <code>@</code> and routes it. The <code>chat @fitness hello</code> form
+            exists for one-shot use outside the shell (<code>treeos chat @fitness hello</code> from a
+            regular terminal).
+          </p>
+          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.9, fontSize: "0.88rem"}}>
+            You can <code>cd</code> anywhere, start new chats in any mode, go back, and continue
+            where you left off. Sessions persist. If you close the shell and come back tomorrow,
+            <code> @fitness</code> picks up where it stopped.
+          </p>
+        </div>
+      </section>
+
+      {/* ── CONTINUING CONVERSATIONS ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">Context Carries</h2>
+          <p className="lp-section-sub">
+            The AI remembers within a session. Switch extensions, the context carries.
+          </p>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>food "eggs and toast for breakfast"</div>
+              <div className="lp-term-line lp-term-output">  Logged. 224 cal, 15g protein. You've got room.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>fitness "what should I do today"</div>
+              <div className="lp-term-line lp-term-output">  Based on your 224 cal so far, let's keep it moderate.</div>
+              <div className="lp-term-line lp-term-output">  Push day: bench, OHP, lateral raises.</div>
+            </div>
           </div>
-          <div className="cli-section-text">
-            <a href={import.meta.env.VITE_LAND_URL} style={{ color: "rgba(255,255,255,0.85)" }}>TreeOS</a>
-            {" | "}
-            <a href="/about/gettingstarted" style={{ color: "rgba(255,255,255,0.85)" }}>Getting Started</a>
-            {" | "}
-            <a href="/about/raw-ideas" style={{ color: "rgba(255,255,255,0.85)" }}>Raw Ideas</a>
-            {" | "}
-            <a href="/about/energy" style={{ color: "rgba(255,255,255,0.85)" }}>Energy</a>
-            {" | "}
-            <a href="/about/dreams" style={{ color: "rgba(255,255,255,0.85)" }}>Dreams</a>
-            {" | "}
-            <a href="/about/gateway" style={{ color: "rgba(255,255,255,0.85)" }}>Gateway</a>
-            {" | "}
-            <a href="/about/api" style={{ color: "rgba(255,255,255,0.85)" }}>API</a>
-            {" | "}
-            <a href="/about/cli" style={{ color: "rgba(255,255,255,0.85)" }}>CLI Guide</a>
-            {" | "}
-            <a href="/about/extensions" style={{ color: "rgba(255,255,255,0.85)" }}>Extensions</a>
-            {" | "}
-            <a href="/blog" style={{ color: "rgba(255,255,255,0.85)" }}>Blog</a>
+
+          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
+            The fitness AI saw your food data. Not because the extensions talk to each other. Because
+            both write to the same node's metadata, and <code>enrichContext</code> injects both into every
+            prompt. The node is the shared memory. Four messages carry across mode switches. The
+            conversation flows.
+          </p>
+        </div>
+      </section>
+
+      {/* ── AUTONOMOUS ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">The Tree Works While You Are Away</h2>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>intent</div>
+              <div className="lp-term-line lp-term-output">  Queue: empty</div>
+              <div className="lp-term-line lp-term-output">  Last 24h: 2 executed</div>
+              <div className="lp-term-line lp-term-output lp-term-green">    Compressed dormant branches under /Projects/Old</div>
+              <div className="lp-term-line lp-term-output lp-term-green">    Nudged: "You said you'd start running 3x/week. No runs logged."</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>intent reject 2</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Got it. Won't nudge about running again.</div>
+            </div>
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
+            The intent extension reads pulse health, evolution metrics, contradictions, codebook compression
+            status, and your stated goals. It generates actions the tree should take on its own. Review
+            them. Reject what you do not want. The tree learns.
+          </p>
+        </div>
+      </section>
+
+      {/* ── WATER ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">See Everything at Once</h2>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>water</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-output">  Hydration at /Health/Fitness:</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Cascade: enabled, 12 signals today</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Perspective: accepting fitness, health. Rejecting dreams.</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Codebook: 23 entries, last compressed 2h ago</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Memory: 34 connections to /Health/Food, 12 to /Health/Recovery</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Gaps: none</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Coherence: 0.91 against tree thesis</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Evolution: active, 47 notes this week, high revisit score</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>water land</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-output">  Land health:</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Signals: 4,200 today, 98% succeeded</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Sessions: 5 human, 12 extension, 3 gateway</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Cache: 94% hit rate</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Trees: 8 active, 2 dormant</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Peers: 3 healthy, 1 degraded</div>
+            </div>
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
+            <code>water</code> is the full picture at any position. Everything the extensions
+            know, assembled in one view. The tree knows its own hydration.
+          </p>
+        </div>
+      </section>
+
+      {/* ── INSTALL ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{textAlign: "center"}}>
+          <h2 className="lp-section-title">Get Started</h2>
+          <div style={{
+            maxWidth: 400, margin: "0 auto", padding: "16px 24px",
+            background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 8, fontFamily: "monospace", fontSize: "0.9rem", color: "rgba(255,255,255,0.6)",
+          }}>
+            npm install -g treeos
+          </div>
+          <div className="lp-cta-row">
+            <a className="lp-btn lp-btn-primary" href="/">Home</a>
+            <a className="lp-btn lp-btn-secondary" href="/guide">Guide</a>
+            <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
           </div>
         </div>
+      </section>
 
-      </div>
+      {/* ── FOOTER ── */}
+      <footer className="lp-footer">
+        <div className="lp-container">
+          <div className="lp-footer-bottom">
+            TreeOS . AGPL-3.0 . <a href="https://tabors.site" style={{color: "inherit", textDecoration: "none"}}>Tabor Holly</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
+
+const Cmd = ({ name, desc }) => (
+  <div style={{
+    display: "flex", justifyContent: "space-between", padding: "8px 0",
+    borderBottom: "1px solid rgba(255,255,255,0.04)",
+  }}>
+    <code style={{color: "#4ade80", fontSize: "0.9rem"}}>{name}</code>
+    <span style={{color: "rgba(255,255,255,0.45)", fontSize: "0.85rem"}}>{desc}</span>
+  </div>
+);
+
+const CmdEx = ({ cmd, label }) => (
+  <div style={{
+    display: "flex", justifyContent: "space-between", padding: "6px 0",
+    borderBottom: "1px solid rgba(255,255,255,0.03)",
+  }}>
+    <code style={{color: "rgba(255,255,255,0.55)", fontSize: "0.82rem"}}>{cmd}</code>
+    <span style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem"}}>{label}</span>
+  </div>
+);
 
 export default CLIAbout;

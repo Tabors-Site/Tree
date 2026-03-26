@@ -1,4 +1,5 @@
 import { z } from "zod";
+import log from "../../seed/log.js";
 import {
   initLearnState,
   getLearnState,
@@ -59,7 +60,9 @@ export default [
           const User = (await import("../../seed/models/user.js")).default;
           const user = await User.findById(userId).select("username").lean();
           username = user?.username;
-        } catch {}
+        } catch (err) {
+          log.debug("Learn", "Username lookup failed:", err.message);
+        }
 
         const state = await processQueue(nodeId, userId, username, maxSteps || 10);
 
@@ -121,7 +124,9 @@ export default [
           const User = (await import("../../seed/models/user.js")).default;
           const user = await User.findById(userId).select("username").lean();
           username = user?.username;
-        } catch {}
+        } catch (err) {
+          log.debug("Learn", "Username lookup failed:", err.message);
+        }
 
         const updated = await processQueue(nodeId, userId, username, maxSteps || 10);
 

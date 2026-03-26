@@ -30,7 +30,7 @@ router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
           const root = await Node.findById(req.params.rootId).select("name").lean();
           return res.send(renderGateway({ rootId: req.params.rootId, rootName: root?.name || "", queryString: `?token=${req.query.token || ""}&html`, channels }));
         }
-      } catch {}
+      } catch (err) { log.debug("Gateway", "HTML rendering fallback failed:", err.message); }
     }
     sendOk(res, { channels });
   } catch (err) {

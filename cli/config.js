@@ -15,6 +15,11 @@ const DEFAULT_CONFIG = {
   pathStack: [],
   // true when at /~ (user home), false when at / (land level)
   atHome: false,
+  // Named sessions pinned to positions. @fitness stays at /Health/Fitness.
+  // { [handle]: { rootId, rootName, pathStack, createdAt } }
+  sessions: {},
+  // Active session handle (null = default, follows navigation)
+  activeSession: null,
 };
 
 function load() {
@@ -73,4 +78,77 @@ function getProtocolCli(cfg) {
   return cfg?.landProtocol?.cli || {};
 }
 
-module.exports = { load, save, requireAuth, currentNodeId, currentPath, currentLand, isRemoteSession, hasExtension, getProtocolCli };
+// ── Session helpers ──
+
+/**
+ * Get or create a named session. Sessions pin to the current position.
+ * Returns { rootId, rootName, pathStack, nodeId, handle }.
+ */
+function getSession(cfg, handle) {
+  if (!handle || handle === "default") return null; // default = follow navigation
+  if (!cfg.sessions) cfg.sessions = {};
+  return cfg.sessions[handle] || null;
+}
+
+function createSession(cfg, handle) {
+  if (!cfg.sessions) cfg.sessions = {};
+  cfg.sessions[handle] = {
+    rootId: cfg.activeRootId,
+    rootName: cfg.activeRootName,
+    pathStack: [...cfg.pathStack],
+    createdAt: new Date().toISOString(),
+  };
+  cfg.activeSession = handle;
+  save(cfg);
+  return cfg.sessions[handle];
+}
+
+function switchSession(cfg, handle) {
+  if (!handle || handle === "default") {
+    cfg.activeSession = null;
+  } else {
+    cfg.activeSession = handle;
+  }
+  save(cfg);
+}
+
+function killSession(cfg, handle) {
+  if (!cfg.sessions) return;
+  delete cfg.sessions[handle];
+  if (cfg.activeSession === handle) cfg.activeSession = null;
+  save(cfg);
+}
+
+function listSessions(cfg) {
+  if (!cfg.sessions) return [];
+  return Object.entries(cfg.sessions).map(([handle, s]) => ({
+    handle,
+    rootName: s.rootName,
+    position: s.pathStack?.length ? s.pathStack.map(n => n.name).join("/") : "(root)",
+    createdAt: s.createdAt,
+    active: cfg.activeSession === handle,
+  }));
+}
+
+/**
+ * Resolve the effective rootId and nodeId for a message.
+ * If a session is active, use the pinned position. Otherwise, follow navigation.
+ */
+function resolveSessionTarget(cfg, handle) {
+  const sess = handle ? getSession(cfg, handle) : null;
+  if (sess) {
+    const nodeId = sess.pathStack?.length
+      ? sess.pathStack[sess.pathStack.length - 1].id
+      : sess.rootId;
+    return { rootId: sess.rootId, nodeId, handle };
+  }
+  // Default: follow current navigation position
+  return { rootId: cfg.activeRootId, nodeId: currentNodeId(cfg), handle: null };
+}
+
+module.exports = {
+  load, save, requireAuth, currentNodeId, currentPath, currentLand,
+  isRemoteSession, hasExtension, getProtocolCli,
+  getSession, createSession: createSession, switchSession, killSession,
+  listSessions, resolveSessionTarget,
+};

@@ -9,7 +9,7 @@ import log from "../../seed/log.js";
 
 function validateDiscordWebhookUrl(webhookUrl) {
   try {
-    var parsed = new URL(webhookUrl);
+    const parsed = new URL(webhookUrl);
     if (
       !parsed.hostname.endsWith("discord.com") &&
       !parsed.hostname.endsWith("discordapp.com")
@@ -23,8 +23,8 @@ function validateDiscordWebhookUrl(webhookUrl) {
 }
 
 function validateConfig(config, direction) {
-  var hasInput = direction === "input" || direction === "input-output";
-  var hasOutput = direction === "output" || direction === "input-output";
+  const hasInput = direction === "input" || direction === "input-output";
+  const hasOutput = direction === "output" || direction === "input-output";
 
   if (hasInput) {
     // Discord input requires bot token + channel ID (bot connects via gateway)
@@ -51,9 +51,9 @@ function validateConfig(config, direction) {
 }
 
 function buildEncryptedConfig(config, direction) {
-  var hasInput = direction === "input" || direction === "input-output";
-  var secrets;
-  var metadata = {};
+  const hasInput = direction === "input" || direction === "input-output";
+  let secrets;
+  let metadata = {};
 
   if (hasInput) {
     // Bot token for input, optionally webhook for output side
@@ -79,26 +79,26 @@ function buildEncryptedConfig(config, direction) {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function send(secrets, metadata, notification) {
-  var content = `**${notification.title}**\n\n${notification.content}`;
+  let content = `**${notification.title}**\n\n${notification.content}`;
   if (content.length > 2000) {
     content = content.slice(0, 1997) + "...";
   }
 
   if (secrets.webhookUrl) {
     // Output via webhook
-    var res = await fetch(secrets.webhookUrl, {
+    const res = await fetch(secrets.webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
     });
 
     if (!res.ok) {
-      var body = await res.text();
+      const body = await res.text();
       throw new Error(`Discord webhook error ${res.status}: ${body}`);
     }
   } else if (secrets.botToken && metadata.discordChannelId) {
     // Input channel, send via bot API
-    var res = await fetch(`https://discord.com/api/v10/channels/${metadata.discordChannelId}/messages`, {
+    const res = await fetch(`https://discord.com/api/v10/channels/${metadata.discordChannelId}/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -108,7 +108,7 @@ async function send(secrets, metadata, notification) {
     });
 
     if (!res.ok) {
-      var body = await res.text();
+      const body = await res.text();
       throw new Error(`Discord bot API error ${res.status}: ${body}`);
     }
   } else {
@@ -121,7 +121,7 @@ async function send(secrets, metadata, notification) {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function registerInput(channel, secrets) {
-  var { connectBot } = await import("./botManager.js");
+  const { connectBot } = await import("./botManager.js");
   await connectBot(
     secrets.botToken,
     channel._id,
@@ -133,7 +133,7 @@ async function registerInput(channel, secrets) {
 
 async function unregisterInput(channel, secrets) {
   try {
-    var { disconnectBot } = await import("./botManager.js");
+    const { disconnectBot } = await import("./botManager.js");
     await disconnectBot(channel._id);
     log.verbose("GatewayDiscord", `Discord bot disconnected for channel ${channel._id}`);
   } catch (err) {

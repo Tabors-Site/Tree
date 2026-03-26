@@ -49,7 +49,7 @@ const editScheduleHandler = async (req, res) => {
 
     sendOk(res, result);
   } catch (err) {
- log.error("Schedules", "editSchedule error:", err);
+    log.error("Schedules", "editSchedule error:", err);
     sendError(res, err.status || 400, ERR.INVALID_INPUT, err.message);
   }
 };

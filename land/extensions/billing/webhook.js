@@ -19,7 +19,7 @@ export async function stripeWebhook(req, res) {
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
- log.error("Billing", "Webhook signature failed");
+    log.error("Billing", "Webhook signature failed");
     return res.status(400).send("Webhook Error");
   }
 
@@ -52,11 +52,11 @@ export async function stripeWebhook(req, res) {
         err?.code === 11000 ||
         err?.message?.toLowerCase().includes("duplicate")
       ) {
- log.verbose("Billing", "Duplicate purchase webhook ignored:", session.id);
+      log.verbose("Billing", "Duplicate purchase webhook ignored:", session.id);
         return sendOk(res, { received: true });
       }
 
- log.error("Billing", "Contribution logging failed:", err);
+      log.error("Billing", "Contribution logging failed:", err);
       return sendError(res, 500, ERR.INTERNAL, "Contribution logging failed");
     }
 

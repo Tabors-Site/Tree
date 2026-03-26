@@ -3,7 +3,7 @@ import handler from "./handler.js";
 import { getExtension } from "../loader.js";
 
 export async function init(core) {
-  var gateway = getExtension("gateway");
+  const gateway = getExtension("gateway");
   if (!gateway?.exports?.registerChannelType) {
     throw new Error("gateway-webhook requires the gateway extension to be loaded first");
   }

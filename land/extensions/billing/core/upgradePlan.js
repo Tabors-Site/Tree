@@ -3,6 +3,20 @@ import { getUserMeta, setUserMeta } from "../../../seed/tree/userMetadata.js";
 let DAILY_LIMITS = {};
 export function setEnergyService(energy) { DAILY_LIMITS = energy.DAILY_LIMITS || {}; }
 
+/**
+ * Read the user's energy metadata, ensuring the expected shape exists.
+ * Energy data lives in user.metadata under the "energy" key with structure:
+ *   { available: { amount, lastResetAt }, additional: { amount } }
+ */
+function getEnergy(user) {
+  const energy = getUserMeta(user, "energy");
+  if (!energy.available) energy.available = { amount: 0, lastResetAt: null };
+  if (!energy.additional) energy.additional = { amount: 0 };
+  if (typeof energy.available.amount !== "number") energy.available.amount = 0;
+  if (typeof energy.additional.amount !== "number") energy.additional.amount = 0;
+  return energy;
+}
+
 const PLAN_DAILY_VALUE = {
   basic: 0,
   standard: 500,

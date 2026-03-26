@@ -12,7 +12,7 @@ const TermsSection = () => {
         <div className="terms-docs-header">
           <div className="tos-icon">📜</div>
           <h1 className="terms-docs-title">Terms of Service</h1>
-          <div className="tos-last-updated">Last Updated: March 19, 2026</div>
+          <div className="tos-last-updated">Last Updated: March 26, 2026</div>
         </div>
 
         {/* ── 1 ── */}
@@ -24,6 +24,20 @@ const TermsSection = () => {
             {LAND_NAME} Land is a web-based platform that provides digital organizational features including trees, notes, and usage-based energy credits. All purchases grant access to features within the Service and do not represent ownership of any real-world asset.
             <br /><br />
             You must be at least 18 years old to use the Service.
+          </div>
+        </div>
+
+        {/* ── 1b ── */}
+        <div className="tos-section">
+          <div className="tos-section-title">1b. Scope: The Seed Kernel Is Not Covered</div>
+          <div className="tos-section-text">
+            These Terms of Service apply exclusively to the {LAND_NAME} hosted service, including the web application at {new URL(import.meta.env.VITE_LAND_URL).hostname}/app, the dashboard, all associated pages, and any services operated by {LAND_NAME} Land.
+            <br /><br />
+            These Terms do <strong>not</strong> apply to The Seed Kernel, the open source operating system kernel upon which the Service is built. The Seed Kernel is a separate, independently licensed open source project released under the <strong>GNU Affero General Public License, version 3.0 (AGPL-3.0)</strong>. Your rights and obligations regarding The Seed Kernel are governed solely by the terms of the AGPL-3.0 license, not by these Terms of Service.
+            <br /><br />
+            The Seed Kernel is free software. You may use, modify, and distribute it in accordance with the AGPL-3.0 license. Nothing in these Terms restricts, limits, or modifies the rights granted to you under that license.
+            <br /><br />
+            To be clear: these Terms govern your use of the hosted Service, its features, your account, your purchases, and your data as processed by {LAND_NAME} Land. They do not govern The Seed Kernel source code, which remains freely available under its open source license.
           </div>
         </div>
 
@@ -105,6 +119,8 @@ const TermsSection = () => {
           <div className="tos-section-title">7. Intellectual Property</div>
           <div className="tos-section-text">
             All content, software, design, and branding within the Service remain the property of Tree or its licensors. You are granted a limited, non-exclusive license to use the Service for personal or authorized purposes.
+            <br /><br />
+            This section does not apply to The Seed Kernel, which is licensed under the AGPL-3.0 and governed by the terms of that license as described in Section 1b.
           </div>
         </div>
 

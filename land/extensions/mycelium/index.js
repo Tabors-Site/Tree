@@ -66,7 +66,9 @@ export async function init(core) {
           buffered: status.signalsBuffered,
         };
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Mycelium", "enrichContext status injection failed:", err.message);
+    }
   }, "mycelium");
 
   const { default: router } = await import("./routes.js");

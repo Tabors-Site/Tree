@@ -100,7 +100,9 @@ export async function recordSignal(userId, type, nodeId) {
           confidence: detected.confidence,
         });
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Phase", "inverse-tree signal failed:", err.message);
+    }
   }
 }
 

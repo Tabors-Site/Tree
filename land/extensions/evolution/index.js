@@ -15,7 +15,9 @@ export async function init(core) {
 
     try {
       await bumpMetric(nodeId, "notesWritten");
-    } catch {}
+    } catch (err) {
+      log.debug("Evolution", "bumpMetric notesWritten failed:", err.message);
+    }
   }, "evolution");
 
   // ── afterNodeCreate: track growth ──────────────────────────────────
@@ -25,7 +27,9 @@ export async function init(core) {
     try {
       // Bump growth score on the parent (a child was added)
       await bumpMetric(node.parent.toString(), "childrenCreated");
-    } catch {}
+    } catch (err) {
+      log.debug("Evolution", "bumpMetric childrenCreated failed:", err.message);
+    }
   }, "evolution");
 
   // ── afterNavigate: track revisits ──────────────────────────────────
@@ -34,7 +38,9 @@ export async function init(core) {
 
     try {
       await recordVisit(rootId);
-    } catch {}
+    } catch (err) {
+      log.debug("Evolution", "recordVisit failed:", err.message);
+    }
   }, "evolution");
 
   // ── onCascade: track cascade involvement ───────────────────────────
@@ -50,7 +56,9 @@ export async function init(core) {
         // This node received a cascade
         await bumpMetric(nodeId, "cascadesReceived");
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Evolution", "cascade metric bump failed:", err.message);
+    }
   }, "evolution");
 
   // ── enrichContext: inject relevant patterns ─────────────────────────
@@ -69,7 +77,10 @@ export async function init(core) {
         const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
         const root = await resolveRootNode(node._id);
         rootId = root?._id;
-      } catch { return; }
+      } catch (err) {
+        log.debug("Evolution", "resolveRootNode failed:", err.message);
+        return;
+      }
     }
 
     if (!rootId) return;
@@ -80,7 +91,9 @@ export async function init(core) {
         // Inject top 5 most relevant patterns (keep context lean)
         context.structuralPatterns = patterns.slice(0, 5).map((p) => p.pattern);
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Evolution", "pattern injection failed:", err.message);
+    }
 
     // Inject this node's fitness summary if it has evolution data
     const evo = meta.evolution;

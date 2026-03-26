@@ -12,7 +12,7 @@ const PrivacySection = () => {
         <div className="privacy-docs-header">
           <div className="prv-icon">🔒</div>
           <h1 className="privacy-docs-title">Privacy Policy</h1>
-          <div className="prv-last-updated">Last Updated: March 19, 2026</div>
+          <div className="prv-last-updated">Last Updated: March 26, 2026</div>
         </div>
 
         {/* ── 1 ── */}
@@ -22,6 +22,18 @@ const PrivacySection = () => {
             This Privacy Policy explains how {LAND_NAME} Land ("Service", "we", "us", or "our") at {new URL(import.meta.env.VITE_LAND_URL).hostname} collects, uses, stores, and protects your information when you use the Service.
             <br /><br />
             By using the Service, you consent to the data practices described in this policy. If you do not agree, please do not use the Service.
+          </div>
+        </div>
+
+        {/* ── 1b ── */}
+        <div className="prv-section">
+          <div className="prv-section-title">1b. Scope: The Seed Kernel Is Not Covered</div>
+          <div className="prv-section-text">
+            This Privacy Policy applies exclusively to the {LAND_NAME} hosted service at {new URL(import.meta.env.VITE_LAND_URL).hostname}/app, the dashboard, and all associated pages and services operated by {LAND_NAME} Land.
+            <br /><br />
+            This Privacy Policy does <strong>not</strong> apply to The Seed Kernel, the open source operating system kernel upon which the Service is built. The Seed Kernel is a separate open source project released under the <strong>GNU Affero General Public License, version 3.0 (AGPL-3.0)</strong>. If you self-host or run The Seed Kernel independently, the data practices of that deployment are determined by whoever operates it, not by this policy.
+            <br /><br />
+            We do not collect, process, or have access to any data handled by independent deployments of The Seed Kernel. This Privacy Policy covers only the data we collect and process through our hosted Service.
           </div>
         </div>
 

@@ -75,7 +75,7 @@ export const listApiKeys = async (req, res) => {
     }
 
     return sendOk(res,
-      getUserMeta(user, "apiKeys") || [].map((k) => ({
+      (getUserMeta(user, "apiKeys") || []).map((k) => ({
         id: k._id,
         name: k.name,
         createdAt: k.createdAt,

@@ -4,7 +4,7 @@ import { getExtension } from "../loader.js";
 import { startupScan, disconnectAllBots } from "./botManager.js";
 
 export async function init(core) {
-  var gateway = getExtension("gateway");
+  const gateway = getExtension("gateway");
   if (!gateway?.exports?.registerChannelType) {
     throw new Error("gateway-discord requires the gateway extension to be loaded first");
   }

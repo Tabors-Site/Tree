@@ -1,19 +1,12 @@
-import { baseStyles } from "./baseStyles.js";
+/* ------------------------------------------------- */
+/* Error page (layout-wrapped)                       */
+/* ------------------------------------------------- */
+
+import { page } from "../layout.js";
 
 export function errorHtml(status, title, message) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#736fe6">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>${title} - TreeOS</title>
-<style>
-${baseStyles}
-
-/* ── 404 page overrides on base ── */
+  const css = `
+/* ── Error page overrides on base ── */
 html, body { height: 100%; }
 body {
   color: white;
@@ -99,10 +92,9 @@ p {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.06); }
 }
-.icon { animation: heroGrow 4.5s ease-in-out infinite; }
-</style>
-</head>
-<body>
+.icon { animation: heroGrow 4.5s ease-in-out infinite; }`;
+
+  const bodyHtml = `
 <div class="card">
   <div class="code">${status}</div>
   <a href="/" class="brand" onclick="event.preventDefault(); window.top.location.href='/';">
@@ -113,7 +105,11 @@ p {
   <p>${message}</p>
   <a href="/" class="btn" onclick="event.preventDefault(); window.top.location.href='/';">Back to Home</a>
   <div class="ai-note">If this was triggered by an AI automated process, wait a moment. You may be redirected shortly.</div>
-</div>
-</body>
-</html>`;
+</div>`;
+
+  return page({
+    title: `${title} - TreeOS`,
+    css,
+    body: bodyHtml,
+  });
 }

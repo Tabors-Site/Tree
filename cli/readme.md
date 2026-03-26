@@ -1,6 +1,6 @@
 # TreeOS
 
-Terminal client for [Tree](https://treeOS.ai). A context management system for organizing AI, data, and ideas into living structure. Navigate your trees like a filesystem. Connect to any Land, browse the canopy network, and work across federated trees from one terminal.
+Terminal client for [Tree](https://treeOS.ai). A context management system for organizing AI, data, and ideas into living structure. Navigate your trees like a filesystem. Run multiple AI conversations in parallel. Connect to any Land, browse the canopy network, and work across federated trees from one terminal.
 
 ## Install
 
@@ -29,11 +29,12 @@ cd Workouts                  # go into a node it created
 place did 20 pushups today   # AI logs it in the right spot
 note stretch before next session
 
-cd /                         # go to Land root
-ls                           # see system nodes, your trees, public trees
-cd ..                        # back up one level
+@fitness how's my bench      # named session, pinned here
+cd /Projects                 # navigate away
+@fitness add 5 reps to last set  # still talks to Health/Workouts
+sessions                     # see all active sessions
 
-idea i should track my sleep # AI places it in the right tree
+cd /                         # go to Land root
 home                         # back to user home
 exit                         # leave the shell
 ```
@@ -42,7 +43,7 @@ exit                         # leave the shell
 
 ## Commands
 
-### Session
+### Connection
 
 | Command              | Description                                           |
 | -------------------- | ----------------------------------------------------- |
@@ -52,15 +53,53 @@ exit                         # leave the shell
 | `login --key <key>`  | Authenticate with your API key                         |
 | `logout`             | Clear stored credentials                               |
 | `whoami`             | Show login, plan, energy, and active tree              |
+| `help`               | Refresh available commands and show help               |
+| `protocol`           | Show land capabilities, extensions, command count       |
+
+### Sessions
+
+Named conversations pinned to positions. Start a session anywhere, navigate away, come back to it from anywhere. Each session maintains its own AI context at its pinned position.
+
+| Command                   | Description                                              |
+| ------------------------- | -------------------------------------------------------- |
+| `@name <message>`         | Send a message to a named session. Creates it if new.    |
+| `@name`                   | Switch to a named session (prompt updates)               |
+| `@default`                | Switch back to default session (follows navigation)      |
+| `sessions`                | List all active sessions with positions                  |
+| `sessions kill <handle>`  | End a named session                                      |
+
+Sessions are pinned to the position where they were created. `@fitness` created at `/Health/Fitness` always talks to that position, even if you navigate to `/Projects`. The AI responds with the full context of the pinned branch.
+
+Navigating with `cd` switches back to the default session. Named sessions stay alive. `@fitness` from anywhere brings you right back.
+
+In the shell, the prompt shows your active session:
+
+```
+tabor@treeos.ai/MyTree @fitness >
+```
+
+### AI
+
+AI has full context of the branch you're in. Works in remote trees too.
+
+| Command           | Description                                    |
+| ----------------- | ---------------------------------------------- |
+| `chat <message>`  | Chat with AI about the current branch          |
+| `place <message>` | AI writes content into the branch              |
+| `query <message>` | Ask AI about the branch (read-only, no writes) |
+| `chats`           | Chat history for current node. `-l` limit      |
+| `chats tree`      | All chat history across the whole tree         |
+
+Use `@name` for named sessions (see Sessions above). `@fitness hello` is the natural way. `chat` is for messages at the current position without a session name.
 
 ### Land Root
 
-At `/` you see the Land. System nodes (`.identity`, `.config`, `.peers`) appear alongside your own trees, shared trees, and public trees on this Land.
+At `/` you see the Land. System nodes (`.identity`, `.config`, `.peers`) appear alongside your own trees, shared trees, and public trees.
 
 | Command        | Description                                                                    |
 | -------------- | ------------------------------------------------------------------------------ |
 | `cd /`         | Go to Land root from anywhere                                                  |
-| `ls` / `ls -l` | List system nodes + your trees + shared trees + public trees. Long format shows type (owned/shared/public/system) |
+| `ls` / `ls -l` | List system nodes + your trees + shared trees + public trees                   |
 | `cd <name>`    | Enter a tree or system node                                                    |
 | `config`       | View Land runtime configuration                                                |
 | `config set <key> <val>` | Set a config value (admin only)                                      |
@@ -82,7 +121,6 @@ Your home screen before entering a tree.
 | `chats`                      | All AI chats across your trees. `-l` limit     |
 | `contributions`              | Your recent contributions                      |
 | `share-token [token]`        | Show or set your share token                   |
-| `share idea <id>`            | Public link to a raw idea                      |
 
 ### Raw Ideas
 
@@ -113,10 +151,11 @@ Move through your tree the way you'd move through a filesystem. Works in local a
 | `cd @domain/tree`   | Enter a public tree on a remote land via the canopy proxy                                    |
 | `cd @domain`        | List public trees on a remote land                                                           |
 | `tree`              | Render subtree. `-a` active, `-c` completed, `-t` trimmed                                    |
+| `cc`                | Open the command center (tools, modes, extensions at this position)                          |
 
 Nodes have three statuses: **active** (green), **completed** (gray), **trimmed** (dim).
 
-When inside a remote tree (prompt shows `@domain` in the path), all commands (`ls`, `mkdir`, `note`, `chat`, etc.) automatically route through the canopy proxy to the remote land.
+When inside a remote tree (prompt shows `@domain`), all commands route through the canopy proxy to the remote land.
 
 ### Node Management
 
@@ -197,18 +236,6 @@ Clickable terminal hyperlinks. `link` uses your share token; `share` generates p
 | `link ideas`     | Link to your raw ideas      |
 | `link idea <id>` | Link to a specific raw idea |
 
-### AI
-
-AI has full context of the branch you're in. Works in remote trees too (LLM calls proxy through the canopy to the user's home land).
-
-| Command           | Description                                    |
-| ----------------- | ---------------------------------------------- |
-| `chat <message>`  | Chat with AI about the current branch          |
-| `place <message>` | AI writes content into the branch              |
-| `query <message>` | Ask AI about the branch (read-only, no writes) |
-| `chats`           | Chat history for current node. `-l` limit      |
-| `chats tree`      | All chat history across the whole tree         |
-
 ### Understanding Runs
 
 Compress a branch into a structured encoding the AI can reference.
@@ -239,7 +266,7 @@ Connect to peer lands, discover trees across the network, and navigate into remo
 | `cd @domain/treename`      | Enter a remote tree (all commands proxy through)     |
 | `cd @domain`               | List public trees on a remote land                   |
 
-Once inside a remote tree, your shell prompt shows the `@domain` prefix and all commands (navigation, notes, AI, etc.) route transparently through the canopy proxy.
+Once inside a remote tree, your shell prompt shows the `@domain` prefix and all commands route transparently through the canopy proxy.
 
 ### Blog
 
@@ -252,7 +279,7 @@ No login required.
 
 ### Extensions
 
-Install, manage, and build modular capabilities.
+Install, manage, and build modular capabilities. Commands from installed extensions appear automatically after `help` refreshes the protocol.
 
 | Command                    | Description                                    |
 | -------------------------- | ---------------------------------------------- |
@@ -266,7 +293,6 @@ Install, manage, and build modular capabilities.
 | `ext enable <name>`        | Re-enable a disabled extension                  |
 | `ext uninstall <name>`     | Remove extension directory (data stays in DB)   |
 | `ext publish <name>`       | Publish to the registry                         |
-| `protocol`                 | Show land capabilities and loaded extensions    |
 
 ### Per-Node AI Customization
 
@@ -284,7 +310,7 @@ Control what the AI can do and how it thinks at every node. Inherits parent to c
 | `ext-scope`                       | Show active/blocked extensions at current node       |
 | `ext-scope -t`                    | Show block map across entire tree                    |
 | `ext-block <name>`                | Block an extension at this node (inherits down)      |
-| `ext-allow <name>`                | Remove extension block at this node                  |
+| `ext-allow <name>`                | Allow a confined extension at this node              |
 
 ### LLM Management
 
@@ -325,11 +351,27 @@ Multiple matches prompt you to disambiguate by ID.
 
 ## Examples
 
+### Multiple sessions in parallel
+
+```
+root Fitness
+cd Workouts
+@fitness track my bench progress      # creates @fitness pinned here
+
+cd /Projects/Backend
+@work what's the status on the API    # creates @work pinned here
+
+@fitness add 5 reps to bench          # talks to Workouts from Projects
+@work prioritize the auth refactor    # talks to Backend from Projects
+sessions                              # see both sessions
+@default                              # back to following navigation
+```
+
 ### Let AI build your structure
 
 ```
 root Startup
-chat I need to plan a product launch for March —
+chat I need to plan a product launch for March --
      landing page, email sequence, social, and a demo video
 
 tree                             # see what it built
@@ -401,7 +443,7 @@ note interesting approach here   # leave a note (if you have access)
 cd /                             # back to your Land
 ```
 
-When you `cd @domain/treename`, the CLI proxies all operations through the canopy. The remote land handles auth and access. Your prompt shows where you are.
+When you `cd @domain/treename`, the CLI proxies all operations through the canopy. The remote land handles auth and access.
 
 ### Morning routine from the terminal
 
@@ -411,11 +453,10 @@ root Life
 calendar                         # what's scheduled today
 cd -r Workouts                   # jump straight there
 place ran 5k, felt good
+@fitness log bench 135x8, 155x5  # quick session note from anywhere
 cd /
 dream-time 9:30pm               # AI cleans up tonight
 ```
-
-Set a dream time and the AI will reorganize, compress, and maintain your tree overnight.
 
 ### Share your work
 
@@ -440,7 +481,7 @@ If you skip `connect`, the CLI defaults to `https://treeOS.ai`.
 
 ## How It Works
 
-All commands map to the [Tree REST API](https://treeOS.ai/about/api). Remote tree operations route through the [Canopy protocol](https://treeOS.ai/about) via `/canopy/proxy/:domain/*`. Config stored in `~/.treeos/config.json`.
+All commands map to the [Tree REST API](https://treeOS.ai/about/api). Named sessions use `sessionHandle` to maintain conversation context across messages. Remote tree operations route through the [Canopy protocol](https://treeOS.ai/about) via `/canopy/proxy/:domain/*`. Config stored in `~/.treeos/config.json`.
 
 ## Links
 

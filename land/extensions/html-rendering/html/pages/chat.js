@@ -1,36 +1,15 @@
-/* ─────────────────────────────────────────────── */
-/* HTML renderer for chat page                     */
-/* ─────────────────────────────────────────────── */
+/* ------------------------------------------------- */
+/* Chat page (layout-wrapped)                        */
+/* ------------------------------------------------- */
 
-import { getLandUrl, getLandIdentity } from "../../../canopy/identity.js";
-import { baseStyles } from "./baseStyles.js";
-import { escapeHtml } from "./utils.js";
+import { getLandUrl, getLandIdentity } from "../../../../canopy/identity.js";
+import { page } from "../layout.js";
+import { escapeHtml } from "../utils.js";
 
 export function renderChat({ username, userId, treesJSON, trees }) {
   const landName = getLandIdentity()?.name || "TreeOS";
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Chat - ${landName}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#736fe6" />
-  <link rel="icon" href="/tree.png" />
-  <link rel="canonical" href="${getLandUrl()}/chat" />
-  <meta name="robots" content="noindex, nofollow" />
-  <meta name="description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
-  <meta property="og:title" content="Chat - ${landName}" />
-  <meta property="og:description" content="Chat with your knowledge trees. AI-powered conversations that grow your understanding." />
-  <meta property="og:url" content="${getLandUrl()}/chat" />
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="${landName}" />
-  <meta property="og:image" content="${getLandUrl()}/tree.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    ${baseStyles}
 
+  const css = `
     /* ── Chat-specific overrides on base ── */
     :root {
       --glass-rgb: 115, 111, 230;
@@ -188,7 +167,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
     .chat-area { flex: 1; display: none; flex-direction: column; overflow: hidden; }
     .chat-area.active { display: flex; }
 
-    /* Messages — matches app.js */
+    /* Messages */
     .chat-messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; }
     .chat-messages::-webkit-scrollbar { width: 4px; }
     .chat-messages::-webkit-scrollbar-track { background: transparent; margin: 8px 0; }
@@ -206,7 +185,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
     .message.assistant .message-content { border-radius: 18px 18px 18px 6px; }
     .message.error .message-content { background: rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); }
 
-    /* Message content formatting — matches app.js */
+    /* Message content formatting */
     .message-content p { margin: 0 0 10px 0; word-break: break-word; }
     .message-content p:last-child { margin-bottom: 0; }
     .message-content h1, .message-content h2, .message-content h3, .message-content h4 { margin: 14px 0 8px 0; font-weight: 600; line-height: 1.3; }
@@ -239,14 +218,14 @@ export function renderChat({ username, userId, treesJSON, trees }) {
     .message-content .menu-text { flex: 1; min-width: 0; padding-top: 2px; word-break: break-word; overflow-wrap: break-word; }
     .message-content .menu-text strong { display: block; margin-bottom: 2px; word-break: break-word; }
 
-    /* Typing indicator — matches app.js */
+    /* Typing indicator */
     .typing-indicator { display: flex; gap: 4px; padding: 14px 18px; }
     .typing-dot { width: 8px; height: 8px; background: rgba(255, 255, 255, 0.6); border-radius: 50%; animation: typing 1.4s infinite; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-8px); } }
 
-    /* Input — matches app.js */
+    /* Input */
     .chat-input-area { padding: 16px 20px 20px; border-top: 1px solid var(--glass-border-light); }
     .input-container { display: flex; align-items: flex-end; gap: 12px; padding: 14px 18px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border: 1px solid var(--glass-border-light); border-radius: 18px; transition: all var(--transition-fast); }
     .input-container:focus-within { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1); }
@@ -278,7 +257,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
     /* Place result message */
     .place-result { font-size: 13px; color: var(--text-muted); padding: 8px 14px; background: rgba(72,187,120,0.08); border-radius: 12px; border: 1px solid rgba(72,187,120,0.15); margin: 4px 0; }
 
-    /* Empty state — input pinned to vertical center, welcome above it */
+    /* Empty state -- input pinned to vertical center, welcome above it */
     .chat-area.empty { position: relative; }
     .chat-area.empty .chat-input-area { position: absolute; top: 40%; left: 50%; transform: translate(-50%, 0); border-top: none; max-width: 600px; width: calc(100% - 40px); }
     .chat-area.empty .chat-messages { position: absolute; top: 40%; left: 0; right: 0; transform: translateY(-100%); display: flex; flex-direction: column; align-items: center; overflow: visible; flex: none; }
@@ -565,19 +544,18 @@ export function renderChat({ username, userId, treesJSON, trees }) {
       .notif-panel { width: 100%; max-width: 100%; right: -100%; }
       .notif-panel.open { right: 0; }
 
-      /* Empty state — mobile: push to top */
+      /* Empty state -- mobile: push to top */
       .chat-area.empty { overflow: visible; }
       .chat-area.empty .chat-messages { position: static; flex: 0; padding-top: 0; transform: none; overflow: visible; }
       .chat-area.empty .chat-input-area { position: static; transform: none; width: 100%; max-width: 100%; margin: 0; }
-    }
-  </style>
-</head>
-<body>
+    }`;
+
+  const body = `
   <div class="container">
     <div class="chat-header">
       <div class="chat-title">
         <a href="/app" style="text-decoration:none;display:flex;align-items:center;gap:12px;color:inherit;">
-        <span class="tree-icon">🌳</span>
+        <span class="tree-icon">\u{1F333}</span>
         <h1>Tree</h1>
         </a>
         <span class="root-name-inline" id="rootName"></span>
@@ -592,7 +570,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
         </button>
         <button class="notif-btn" id="notifBtn" onclick="toggleNotifs()">
           <span class="notif-dot" id="notifDot"></span>
-          <span class="notif-btn-icon">☰</span>
+          <span class="notif-btn-icon">\u2630</span>
           <span class="notif-btn-label">Menu</span>
         </button>
         <a href="/dashboard" class="advanced-btn" id="advancedLink">Advanced</a>
@@ -631,7 +609,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
       ${
         trees.length === 0
           ? `<div class="empty-state">
-              <span class="empty-icon">🌱</span>
+              <span class="empty-icon">\u{1F331}</span>
               <h2>Plant your first tree</h2>
               <p>A tree starts with a single root, a broad topic that everything else branches out from. Think big categories like <strong>My Life</strong>, <strong>Career</strong>, or <strong>Health</strong>.</p>
               <p style="margin-top:8px;">Name it, and you can start chatting with it right away.</p>
@@ -647,7 +625,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
                 .map(
                   (t) => `
                 <div class="tree-item" onclick="selectTree('${t._id}', '${escapeHtml(t.name)}')">
-                  <span class="tree-item-icon">🌳</span>
+                  <span class="tree-item-icon">\u{1F333}</span>
                   <span class="tree-item-name">${escapeHtml(t.name)}</span>
                 </div>`,
                 )
@@ -664,7 +642,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
     <div class="chat-area empty" id="chatArea">
       <div class="chat-messages" id="messages">
         <div class="welcome-message" id="welcomeMsg">
-          <div class="welcome-icon">🌳</div>
+          <div class="welcome-icon">\u{1F333}</div>
           <h2>Start chatting</h2>
           <p>Ask anything about your tree or tell it something new.</p>
         </div>
@@ -685,8 +663,9 @@ export function renderChat({ username, userId, treesJSON, trees }) {
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
+  <script src="/socket.io/socket.io.js"></script>`;
+
+  const js = `
     const CONFIG = {
       username: "${escapeHtml(username)}",
       userId: "${userId}",
@@ -732,7 +711,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
       return d.innerHTML;
     }
 
-    // ── Markdown formatting — matches app.js ──────────────────────────
+    // ── Markdown formatting ──────────────────────────
     function formatMessageContent(text) {
       if (!text) return '';
       let html = text;
@@ -746,8 +725,8 @@ export function renderChat({ username, userId, treesJSON, trees }) {
       html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
       // Code blocks
-      html = html.replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre><code>$1</code></pre>');
-      html = html.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+      html = html.replace(/\\\`\\\`\\\`([\\s\\S]*?)\\\`\\\`\\\`/g, '<pre><code>$1</code></pre>');
+      html = html.replace(/\\\`([^\\\`]+)\\\`/g, '<code>$1</code>');
 
       // Bold / italic
       html = html.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
@@ -842,7 +821,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
         const disc = chatMessages.querySelector(".welcome-message.disconnected");
         if (disc) {
           disc.remove();
-          chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">🌳</div><h2>Start chatting</h2><p>Ask anything about your tree or tell it something new.</p></div>';
+          chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">\\u{1F333}</div><h2>Start chatting</h2><p>Ask anything about your tree or tell it something new.</p></div>';
           chatArea.classList.add("empty");
         }
 
@@ -901,10 +880,10 @@ export function renderChat({ username, userId, treesJSON, trees }) {
       statusText.textContent = "Disconnected";
       updateSendBtn();
 
-      chatMessages.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">🌳</div><h2>Disconnected</h2><p>You have been disconnected from ' + CONFIG.landName + '. Please refresh the page to reconnect.</p></div>';
+      chatMessages.innerHTML = '<div class="welcome-message disconnected"><div class="welcome-icon">\\u{1F333}</div><h2>Disconnected</h2><p>You have been disconnected from ' + CONFIG.landName + '. Please refresh the page to reconnect.</p></div>';
     });
 
-    // Ignore navigate events — no iframe
+    // Ignore navigate events
     socket.on("navigate", () => {});
 
     // ── Create tree ─────────────────────────────────────────────────
@@ -930,7 +909,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
         // Add to tree list (create it if empty state)
         let treeList = document.getElementById("treeList");
         if (!treeList) {
-          // Was empty state — rebuild picker content
+          // Was empty state -- rebuild picker content
           const emptyState = treePicker.querySelector(".empty-state");
           if (emptyState) emptyState.remove();
 
@@ -956,7 +935,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
         item.className = "tree-item";
         item.onclick = () => selectTree(data.rootId, name);
         item.innerHTML = \`
-          <span class="tree-item-icon">🌳</span>
+          <span class="tree-item-icon">\\u{1F333}</span>
           <span class="tree-item-name">\${escapeHtml(name)}</span>\`;
         item.style.animation = "fadeInUp 0.3s ease-out";
         treeList.appendChild(item);
@@ -1164,7 +1143,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
         isSending = false;
       }
       socket.emit("clearConversation");
-      chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">🌳</div><h2>Start chatting</h2><p>Ask anything about your tree or tell it something new.</p></div>';
+      chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">\\u{1F333}</div><h2>Start chatting</h2><p>Ask anything about your tree or tell it something new.</p></div>';
       chatArea.classList.add("empty");
       document.getElementById("clearChatBtn").classList.remove("visible");
       updateSendBtn();
@@ -1523,9 +1502,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
           document.getElementById("invitesDot").classList.add("visible");
         }
       })
-      .catch(function() {});
-  </script>
-</body>
-</html>
-`;
+      .catch(function() {});`;
+
+  return page({ title: `Chat - ${landName}`, css, body, js, bare: false });
 }

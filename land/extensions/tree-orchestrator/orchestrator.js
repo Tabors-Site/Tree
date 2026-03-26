@@ -154,7 +154,7 @@ function buildStepSummary({
         // Include a brief snapshot — node name, child count, etc.
         if (ctx.name) summary.nodeName = ctx.name;
         if (ctx.children) summary.childCount = ctx.children.length;
-      } catch {}
+      } catch (err) { log.debug("TreeOrch", "Could not parse nodeContext for step summary:", err.message); }
     }
   }
 
@@ -936,7 +936,7 @@ async function executePlanSteps({
         try {
           const parsed = JSON.parse(nodeContext);
           prestige = parsed.prestige ?? 0;
-        } catch {}
+        } catch (err) { log.debug("TreeOrch", "Could not parse nodeContext for prestige:", err.message); }
       }
 
       await switchMode(visitorId, executionMode, {
@@ -1664,7 +1664,7 @@ async function runLibrarianFlow({
     },
   });
 
-  var plan = libPlan?.plan || [];
+  const plan = libPlan?.plan || [];
   const responseHint =
     libPlan?.responseHint || classification.responseHint || "";
 
@@ -1800,7 +1800,7 @@ async function executePendingOperation({
     try {
       const parsed = JSON.parse(pending.nodeContext);
       prestige = parsed.prestige ?? 0;
-    } catch {}
+    } catch (err) { log.debug("TreeOrch", "Could not parse pending nodeContext for prestige:", err.message); }
   }
 
   await switchMode(visitorId, executionMode, {

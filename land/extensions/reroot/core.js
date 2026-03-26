@@ -306,7 +306,9 @@ async function buildTreeSnapshot(rootId) {
   if (codebookExt?.exports?.getRelationships) {
     try {
       codebookRelations = await codebookExt.exports.getRelationships(rootId);
-    } catch {}
+    } catch (err) {
+      log.debug("Reroot", "Codebook relationships unavailable:", err.message);
+    }
   }
 
   // Build snapshot entries

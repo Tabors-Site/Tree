@@ -99,7 +99,9 @@ export async function collectTreeState(rootId, rootNode, models) {
     if (flowMeta && Object.keys(flowMeta).length > 0) {
       state.cascade = flowMeta;
     }
-  } catch {}
+  } catch (err) {
+    log.debug("Intent", "Cascade flow metadata read failed:", err.message);
+  }
 
   // Circuit breaker: approaching thresholds
   try {
@@ -107,7 +109,9 @@ export async function collectTreeState(rootId, rootNode, models) {
     if (circuitMeta) {
       state.circuit = circuitMeta;
     }
-  } catch {}
+  } catch (err) {
+    log.debug("Intent", "Circuit breaker metadata read failed:", err.message);
+  }
 
   // Load rejections (intents the user said "don't do that again")
   try {
@@ -115,7 +119,9 @@ export async function collectTreeState(rootId, rootNode, models) {
     if (intentMeta?.rejections) {
       state.rejections = intentMeta.rejections;
     }
-  } catch {}
+  } catch (err) {
+    log.debug("Intent", "Intent metadata read failed:", err.message);
+  }
 
   return state;
 }

@@ -1,3 +1,4 @@
+import log from "../../seed/log.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getExtension } from "../loader.js";
 
@@ -105,7 +106,9 @@ async function addPrestigeToNode(node) {
           nodeId: node._id.toString(), key, value: 0,
           userId: node.rootOwner?.toString() || "system",
         });
-      } catch {}
+      } catch (err) {
+        log.debug("Prestige", "Value reset failed for key " + key + ":", err.message);
+      }
     }
   }
 
@@ -117,7 +120,9 @@ async function addPrestigeToNode(node) {
     if (newSchedule) {
       try {
         await schedulesExt.exports.updateSchedule(node._id.toString(), { schedule: newSchedule });
-      } catch {}
+      } catch (err) {
+        log.debug("Prestige", "Schedule advance failed:", err.message);
+      }
     }
   }
 

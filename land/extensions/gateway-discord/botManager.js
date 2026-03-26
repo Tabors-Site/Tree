@@ -3,13 +3,13 @@
 
 import log from "../../seed/log.js";
 
-var Client, GatewayIntentBits;
-var discordLoaded = false;
+let Client, GatewayIntentBits;
+let discordLoaded = false;
 
 async function loadDiscord() {
   if (discordLoaded) return;
   try {
-    var discordjs = await import("discord.js");
+    const discordjs = await import("discord.js");
     Client = discordjs.Client;
     GatewayIntentBits = discordjs.GatewayIntentBits;
     discordLoaded = true;
@@ -36,8 +36,8 @@ export async function connectBot(
 ) {
   await loadDiscord();
 
-  var key = hashToken(botToken);
-  var entry = activeBots.get(key);
+  const key = hashToken(botToken);
+  const entry = activeBots.get(key);
 
   if (entry) {
     // Bot already connected, just add this channel to its map
@@ -49,7 +49,7 @@ export async function connectBot(
   }
 
   // Create new bot client
-  var client = new Client({
+  const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
@@ -57,7 +57,7 @@ export async function connectBot(
     ],
   });
 
-  var channelMap = new Map();
+  const channelMap = new Map();
   channelMap.set(channelId, { discordChannelId, rootId });
 
   // Message handler
@@ -66,13 +66,13 @@ export async function connectBot(
     if (message.author.id === client.user?.id) return;
 
     // Find which gateway channel(s) are listening on this Discord channel
-    for (var [gwChannelId, config] of channelMap) {
+    for (const [gwChannelId, config] of channelMap) {
       if (message.channel.id !== config.discordChannelId) continue;
 
-      var senderName =
+      const senderName =
         message.author.displayName || message.author.username || "Unknown";
-      var senderPlatformId = message.author.id;
-      var messageText = message.content;
+      const senderPlatformId = message.author.id;
+      const messageText = message.content;
 
       if (!messageText || !messageText.trim()) continue;
 
@@ -82,14 +82,14 @@ export async function connectBot(
 
       try {
         // Process via gateway core
-        var { getExtension } = await import("../loader.js");
-        var gateway = getExtension("gateway");
+        const { getExtension } = await import("../loader.js");
+        const gateway = getExtension("gateway");
         if (!gateway?.exports?.processGatewayMessage) {
           log.error("GatewayDiscord", "Gateway core not loaded");
           continue;
         }
 
-        var result = await gateway.exports.processGatewayMessage(gwChannelId, {
+        const result = await gateway.exports.processGatewayMessage(gwChannelId, {
           senderName,
           senderPlatformId,
           messageText,
@@ -97,7 +97,7 @@ export async function connectBot(
 
         // Send reply back to the same Discord channel if input-output
         if (result.reply) {
-          var replyText = result.reply;
+          let replyText = result.reply;
           if (replyText.length > 2000) {
             replyText = replyText.slice(0, 1997) + "...";
           }
@@ -135,7 +135,7 @@ export async function connectBot(
 }
 
 export async function disconnectBot(channelId) {
-  for (var [key, entry] of activeBots) {
+  for (const [key, entry] of activeBots) {
     if (entry.channelMap.has(channelId)) {
       entry.channelMap.delete(channelId);
       log.debug("GatewayDiscord",
@@ -146,7 +146,7 @@ export async function disconnectBot(channelId) {
       if (entry.channelMap.size === 0) {
         try {
           entry.client.destroy();
-        } catch {}
+        } catch (err) { log.debug("GatewayDiscord", "bot client destroy failed:", err.message); }
         activeBots.delete(key);
         log.verbose("GatewayDiscord",
           "Bot manager: bot client destroyed (no channels left)",
@@ -158,10 +158,10 @@ export async function disconnectBot(channelId) {
 }
 
 export async function disconnectAllBots() {
-  for (var [key, entry] of activeBots) {
+  for (const [key, entry] of activeBots) {
     try {
       entry.client.destroy();
-    } catch {}
+    } catch (err) { log.debug("GatewayDiscord", "bot client destroy failed during shutdown:", err.message); }
   }
   activeBots.clear();
   log.verbose("GatewayDiscord", "Bot manager: all bots disconnected");
@@ -177,10 +177,10 @@ export function getActiveBotCount() {
  */
 export async function startupScan() {
   try {
-    var GatewayChannel = (await import("../gateway/model.js")).default;
-    var { getChannelWithSecrets } = await import("../gateway/core.js");
+    const GatewayChannel = (await import("../gateway/model.js")).default;
+    const { getChannelWithSecrets } = await import("../gateway/core.js");
 
-    var channels = await GatewayChannel.find({
+    const channels = await GatewayChannel.find({
       type: "discord",
       direction: { $in: ["input", "input-output"] },
       enabled: true,
@@ -195,9 +195,9 @@ export async function startupScan() {
       `Bot manager: found ${channels.length} Discord input channel(s) to connect`,
     );
 
-    for (var channel of channels) {
+    for (const channel of channels) {
       try {
-        var full = await getChannelWithSecrets(channel._id);
+        const full = await getChannelWithSecrets(channel._id);
         if (!full?.config?.decryptedSecrets?.botToken) {
           log.error("GatewayDiscord",
             `Bot manager: no bot token for channel ${channel._id}`,

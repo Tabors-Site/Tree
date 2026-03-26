@@ -160,8 +160,14 @@ export async function createNode(
     });
   }
 
-  // afterNodeCreate (fire-and-forget)
-  hooks.run("afterNodeCreate", { node: newNode, userId: user._id }).catch(() => {});
+  // afterNodeCreate: await for root creation so navigation extension
+  // updates metadata.nav.roots before the response goes back to the CLI.
+  // Non-root nodes fire-and-forget (hooks are independent reactions).
+  if (isRoot) {
+    await hooks.run("afterNodeCreate", { node: newNode, userId: user._id }).catch(() => {});
+  } else {
+    hooks.run("afterNodeCreate", { node: newNode, userId: user._id }).catch(() => {});
+  }
 
   return newNode;
 }

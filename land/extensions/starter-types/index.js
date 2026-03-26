@@ -12,7 +12,9 @@ export async function init(core) {
     if (Array.isArray(custom) && custom.length > 0) {
       configuredTypes = custom;
     }
-  } catch {}
+  } catch (err) {
+    log.debug("StarterTypes", "Custom types config not found, using defaults");
+  }
 
   // Inject suggested types into AI context at every node
   core.hooks.register("enrichContext", async ({ context }) => {

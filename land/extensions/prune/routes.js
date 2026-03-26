@@ -49,7 +49,7 @@ router.post("/root/:rootId/prune/scan", authenticate, async (req, res) => {
     const candidates = await scanForCandidates(rootId, req.userId);
     sendOk(res, { candidates, count: candidates.length });
   } catch (err) {
-    sendError(res, 400, ERR.INVALID_INPUT, err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -61,7 +61,7 @@ router.post("/root/:rootId/prune/confirm", authenticate, async (req, res) => {
     const result = await confirmPrune(rootId, req.userId, req.username);
     sendOk(res, result);
   } catch (err) {
-    sendError(res, 400, ERR.INVALID_INPUT, err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -73,7 +73,7 @@ router.post("/root/:rootId/prune/undo", authenticate, async (req, res) => {
     const result = await undoPrune(nodeId, req.userId);
     sendOk(res, result);
   } catch (err) {
-    sendError(res, 400, ERR.INVALID_INPUT, err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
@@ -105,7 +105,7 @@ router.post("/root/:rootId/prune/purge", authenticate, async (req, res) => {
     const result = await purge(rootId, req.userId);
     sendOk(res, result);
   } catch (err) {
-    sendError(res, 400, ERR.INVALID_INPUT, err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

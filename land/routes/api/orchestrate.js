@@ -87,13 +87,19 @@ async function runTreeOrchestration(opts, res) {
     isPublicQuery = false,
   } = opts;
 
-  const visitorId = `tree-${mode}:${userId}:${Date.now()}`;
+  const handle = opts.sessionHandle;
+  const visitorId = handle
+    ? `tree-${mode}:${userId}:${handle}`
+    : `tree-${mode}:${userId}:${Date.now()}`;
+  const scopeKey = handle
+    ? `${userId}:${rootId}:${handle}`
+    : `${userId}:${rootId}`;
   const { sessionId } = createSession({
     userId,
     type: sessionType,
-    scopeKey: `${userId}:${rootId}`,
-    description: `API tree ${mode} on root ${rootId}${isPublicQuery ? " (public)" : ""}`,
-    meta: { rootId, visitorId, isPublicQuery },
+    scopeKey,
+    description: `API tree ${mode} on root ${rootId}${handle ? ` [${handle}]` : ""}${isPublicQuery ? " (public)" : ""}`,
+    meta: { rootId, visitorId, isPublicQuery, sessionHandle: handle },
   });
   const abort = new AbortController();
   setSessionAbort(sessionId, abort);
@@ -332,7 +338,7 @@ router.post("/home/chat", authenticate, async (req, res) => {
 
 router.post("/root/:rootId/chat", authenticate, async (req, res) => {
   const { rootId } = req.params;
-  const { message } = req.body;
+  const { message, sessionHandle } = req.body;
 
   if (!validateMessage(message, res)) return;
   if (!(await checkTreeAccess(rootId, req.userId, res))) return;
@@ -345,6 +351,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
     userId: req.userId,
     username: req.username,
     sessionType: SESSION_TYPES.API_TREE_CHAT,
+    sessionHandle: sessionHandle || null,
   }, res);
 });
 

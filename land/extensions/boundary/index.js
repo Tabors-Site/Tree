@@ -35,7 +35,9 @@ export async function init(core) {
       if (root?._id) {
         markStale(root._id.toString()).catch(() => {});
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Boundary", "Failed to mark stale after note:", err.message);
+    }
   }, "boundary");
 
   // ── enrichContext: inject boundary findings ──────────────────────────

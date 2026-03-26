@@ -14,26 +14,26 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
   sendOk(res, { ok: true });
 
   try {
-    var channelId = req.params.channelId;
-    var update = req.body;
+    const channelId = req.params.channelId;
+    const update = req.body;
 
     // Basic structure check
     if (!update || !update.message || !update.message.text) return;
 
     // Load channel
-    var GatewayChannel = (await import("../gateway/model.js")).default;
-    var channel = await GatewayChannel.findById(channelId).lean();
+    const GatewayChannel = (await import("../gateway/model.js")).default;
+    const channel = await GatewayChannel.findById(channelId).lean();
     if (!channel || !channel.enabled) return;
     if (channel.type !== "telegram") return;
 
-    var hasInput =
+    const hasInput =
       channel.direction === "input" || channel.direction === "input-output";
     if (!hasInput) return;
 
     // Verify secret token header (if configured)
-    var expectedSecret = channel.config?.metadata?.webhookSecret;
+    const expectedSecret = channel.config?.metadata?.webhookSecret;
     if (expectedSecret) {
-      var headerSecret = req.headers["x-telegram-bot-api-secret-token"];
+      const headerSecret = req.headers["x-telegram-bot-api-secret-token"];
       if (headerSecret !== expectedSecret) {
         log.error("GatewayTelegram",
           `Telegram webhook secret mismatch for channel ${channelId}`,
@@ -43,8 +43,8 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
     }
 
     // Verify chatId matches
-    var expectedChatId = channel.config?.metadata?.chatId;
-    var actualChatId = String(update.message.chat.id);
+    const expectedChatId = channel.config?.metadata?.chatId;
+    const actualChatId = String(update.message.chat.id);
     if (expectedChatId && actualChatId !== expectedChatId) {
       log.error("GatewayTelegram",
         `Telegram chatId mismatch for channel ${channelId}: expected ${expectedChatId}, got ${actualChatId}`,
@@ -53,24 +53,24 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
     }
 
     // Extract sender info
-    var from = update.message.from || {};
-    var senderName = from.username || from.first_name || "Unknown";
-    var senderPlatformId = String(from.id || "");
-    var messageText = update.message.text;
+    const from = update.message.from || {};
+    const senderName = from.username || from.first_name || "Unknown";
+    const senderPlatformId = String(from.id || "");
+    const messageText = update.message.text;
 
     log.verbose("GatewayTelegram",
       `Telegram message on channel ${channelId} from ${senderName}: "${messageText.slice(0, 80)}"`,
     );
 
     // Process the message via gateway core
-    var { getExtension } = await import("../loader.js");
-    var gateway = getExtension("gateway");
+    const { getExtension } = await import("../loader.js");
+    const gateway = getExtension("gateway");
     if (!gateway?.exports?.processGatewayMessage) {
       log.error("GatewayTelegram", "Gateway core not loaded");
       return;
     }
 
-    var result = await gateway.exports.processGatewayMessage(channelId, {
+    const result = await gateway.exports.processGatewayMessage(channelId, {
       senderName,
       senderPlatformId,
       messageText,

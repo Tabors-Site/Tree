@@ -1,16 +1,9 @@
-/* ─────────────────────────────────────────────── */
-/* HTML renderer for contributions page             */
-/* ─────────────────────────────────────────────── */
+/* ------------------------------------------------- */
+/* Contributions page (layout-wrapped)               */
+/* ------------------------------------------------- */
 
-import {
-  baseStyles,
-  backNavStyles,
-  glassHeaderStyles,
-  glassCardStyles,
-  emptyStateStyles,
-  responsiveBase,
-} from "./baseStyles.js";
-import { esc, actionColorClass } from "./utils.js";
+import { page } from "../layout.js";
+import { esc, actionColorClass } from "../utils.js";
 
 const link = (id, queryString) =>
   id
@@ -153,7 +146,7 @@ function renderAction(rawC, { nodeId, parsedVersion, nextVersion, queryString })
 
     case "executeScript": {
       const xs = c.executeScript || {};
-      const icon = xs.success ? "✅" : "❌";
+      const icon = xs.success ? "\u2705" : "\u274C";
       let text = `${icon} Ran <code>${esc(xs.scriptName || xs.scriptId)}</code>`;
       if (xs.error) text += ` — <code>${esc(xs.error)}</code>`;
       return text;
@@ -273,7 +266,7 @@ export function renderContributions({ nodeId, version, nodeName, contributions, 
     const aiBadge = c.wasAi ? `<span class="badge badge-ai">AI</span>` : "";
     const energyBadge =
       c.energyUsed != null && c.energyUsed > 0
-        ? `<span class="badge badge-energy">⚡ ${c.energyUsed}</span>`
+        ? `<span class="badge badge-energy">\u26A1 ${c.energyUsed}</span>`
         : "";
 
     const user = userTag(c.userId, queryString);
@@ -285,10 +278,10 @@ export function renderContributions({ nodeId, version, nodeName, contributions, 
         </div>
         <div class="note-meta">
           ${user}
-          <span class="meta-separator">·</span>
+          <span class="meta-separator">\u00B7</span>
           ${time}
           ${aiBadge}${energyBadge}
-          <span class="meta-separator">·</span>
+          <span class="meta-separator">\u00B7</span>
           <code class="contribution-id">${esc(c._id)}</code>
         </div>
       </li>`;
@@ -298,23 +291,7 @@ export function renderContributions({ nodeId, version, nodeName, contributions, 
   const backTreeUrl = `/api/v1/root/${nodeId}${qs}`;
   const backUrl = `/api/v1/node/${nodeId}/${version}${qs}`;
 
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#667eea">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>${esc(nodeName || nodeId)} — Contributions</title>
-  <style>
-${baseStyles}
-${backNavStyles}
-${glassHeaderStyles}
-${glassCardStyles}
-${emptyStateStyles}
-${responsiveBase}
-
+  const css = `
 /* ── Page-specific: contributions ── */
 
 .version-badge {
@@ -405,13 +382,12 @@ ${responsiveBase}
   border: none !important;
   padding: 0 !important;
   font-weight: 600;
-}
-  </style>
-</head>
-<body>
+}`;
+
+  const bodyHtml = `
   <div class="container">
     <div class="back-nav">
-      <a href="${backTreeUrl}" class="back-link">← Back to Tree</a>
+      <a href="${backTreeUrl}" class="back-link">\u2190 Back to Tree</a>
       <a href="${backUrl}" class="back-link">Back to Version</a>
     </div>
 
@@ -432,14 +408,16 @@ ${responsiveBase}
         ? `<ul class="notes-list">${items.join("")}</ul>`
         : `
     <div class="empty-state">
-      <div class="empty-state-icon">📊</div>
+      <div class="empty-state-icon">\u{1F4CA}</div>
       <div class="empty-state-text">No contributions yet</div>
       <div class="empty-state-subtext">Contributions and activity will appear here</div>
     </div>`
     }
-  </div>
+  </div>`;
 
-</body>
-</html>
-`;
+  return page({
+    title: `${esc(nodeName || nodeId)} — Contributions`,
+    css,
+    body: bodyHtml,
+  });
 }

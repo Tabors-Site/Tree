@@ -253,7 +253,9 @@ export async function processNode(nodeId, rootId, userId, username, targetSize) 
         const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
         const root = await resolveRootNode(nodeId);
         aiRootId = root?._id || null;
-      } catch {}
+      } catch (err) {
+        log.debug("Learn", "Root node resolution failed:", err.message);
+      }
     }
 
     sections = await aiDecompose(text, userId, username, aiRootId);

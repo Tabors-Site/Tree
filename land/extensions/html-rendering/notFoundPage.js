@@ -1,5 +1,5 @@
 import { sendError, ERR } from "../../seed/protocol.js";
-import { errorHtml } from "./html/notFound.js";
+import { errorHtml } from "./html/pages/error.js";
 import { isHtmlEnabled } from "./config.js";
 
 export { errorHtml };

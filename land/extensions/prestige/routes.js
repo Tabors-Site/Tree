@@ -44,7 +44,7 @@ const prestigeHandler = async (req, res) => {
 
     sendOk(res, result);
   } catch (err) {
- log.error("Prestige", "prestige error:", err);
+    log.error("Prestige", "prestige error:", err);
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 };

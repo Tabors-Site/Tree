@@ -27,9 +27,6 @@ export default {
     energyActions: {},
     sessionTypes: {},
     cli: [],
-    hooks: {
-      fires: [],
-      listens: ["afterNodeCreate", "afterStatusChange", "afterOwnershipChange"],
-    },
+    hooks: { fires: [], listens: [] },
   },
 };

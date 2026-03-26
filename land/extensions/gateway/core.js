@@ -36,20 +36,20 @@ function getEncryptionKey() {
 }
 
 function encrypt(text) {
-  var key = getEncryptionKey();
-  var iv = crypto.randomBytes(16);
-  var cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-  var encrypted = cipher.update(text, "utf8", "hex");
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
   encrypted += cipher.final("hex");
   return iv.toString("hex") + ":" + encrypted;
 }
 
 function decrypt(encryptedText) {
-  var parts = encryptedText.split(":");
-  var iv = Buffer.from(parts[0], "hex");
-  var key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
-  var decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  var decrypted = decipher.update(parts[1], "hex", "utf8");
+  const parts = encryptedText.split(":");
+  const iv = Buffer.from(parts[0], "hex");
+  const key = Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32));
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  let decrypted = decipher.update(parts[1], "hex", "utf8");
   decrypted += decipher.final("utf8");
   return decrypted;
 }
@@ -75,7 +75,7 @@ function validateNotificationTypes(types) {
   if (!Array.isArray(types)) {
     throw new Error("notificationTypes must be an array");
   }
-  for (var t of types) {
+  for (const t of types) {
     if (typeof t !== "string" || !KNOWN_NOTIFICATION_TYPES.includes(t)) {
       throw new Error(
         "Unknown notification type: " +
@@ -91,15 +91,15 @@ function validateConfigForType(type, config, direction) {
   if (!config || typeof config !== "object") {
     throw new Error("config is required");
   }
-  var handler = getChannelType(type);
+  const handler = getChannelType(type);
   if (!handler) throw new Error("Unknown channel type: " + type);
   handler.validateConfig(config, direction);
 }
 
 function buildEncryptedConfig(type, config, direction) {
-  var handler = getChannelType(type);
+  const handler = getChannelType(type);
   if (!handler) throw new Error("Unknown channel type: " + type);
-  var result = handler.buildEncryptedConfig(config, direction);
+  const result = handler.buildEncryptedConfig(config, direction);
   return {
     encryptedPayload: encrypt(JSON.stringify(result.secrets)),
     displayIdentifier: result.displayIdentifier || config.displayIdentifier || null,
@@ -112,14 +112,14 @@ function buildEncryptedConfig(type, config, direction) {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function verifyRootAccess(userId, rootId) {
-  var root = await Node.findById(rootId)
+  const root = await Node.findById(rootId)
     .select("rootOwner contributors")
     .lean();
   if (!root) throw new Error("Root not found");
   if (!root.rootOwner) throw new Error("Node is not a root");
 
-  var isOwner = root.rootOwner.toString() === userId.toString();
-  var isContributor = (root.contributors || []).some(
+  const isOwner = root.rootOwner.toString() === userId.toString();
+  const isContributor = (root.contributors || []).some(
     (c) => c.toString() === userId.toString(),
   );
 
@@ -133,7 +133,7 @@ async function verifyRootAccess(userId, rootId) {
 }
 
 function sanitizeChannel(channel) {
-  var obj =
+  const obj =
     typeof channel.toObject === "function"
       ? channel.toObject()
       : { ...channel };
@@ -154,7 +154,7 @@ export async function addGatewayChannel(
 ) {
   await verifyRootAccess(userId, rootId);
 
-  var count = await GatewayChannel.countDocuments({ rootId });
+  const count = await GatewayChannel.countDocuments({ rootId });
   if (count >= MAX_CHANNELS_PER_ROOT) {
     throw new Error(
       "Maximum of " + MAX_CHANNELS_PER_ROOT + " channels per root reached",
@@ -166,11 +166,11 @@ export async function addGatewayChannel(
   }
 
   validateType(type);
-  var handler = getChannelType(type);
+  const handler = getChannelType(type);
 
   // Validate direction and mode
-  var safeDirection = direction || "output";
-  var safeMode = mode || "write";
+  const safeDirection = direction || "output";
+  const safeMode = mode || "write";
   if (!VALID_DIRECTIONS.includes(safeDirection)) {
     throw new Error(
       "Invalid direction. Must be one of: " + VALID_DIRECTIONS.join(", "),
@@ -190,10 +190,10 @@ export async function addGatewayChannel(
   }
 
   // Tier check for input channels (if handler requires it)
-  var hasInput = safeDirection === "input" || safeDirection === "input-output";
+  const hasInput = safeDirection === "input" || safeDirection === "input-output";
   if (hasInput && handler.requiredTiers && handler.requiredTiers.length > 0) {
-    var user = await User.findById(userId).select("isAdmin metadata").lean();
-    var userPlan = (user?.metadata?.tiers?.plan) || "basic";
+    const user = await User.findById(userId).select("isAdmin metadata").lean();
+    const userPlan = (user?.metadata?.tiers?.plan) || "basic";
     if (!user || (!user.isAdmin && !handler.requiredTiers.includes(userPlan))) {
       throw new Error(
         type + " input channels require a " + handler.requiredTiers.join(" or ") + " tier subscription",
@@ -201,11 +201,11 @@ export async function addGatewayChannel(
     }
   }
 
-  var hasOutput =
+  const hasOutput =
     safeDirection === "output" || safeDirection === "input-output";
 
   // Validate config
-  var encConfig = {
+  let encConfig = {
     encryptedPayload: null,
     displayIdentifier: null,
     metadata: {},
@@ -215,15 +215,15 @@ export async function addGatewayChannel(
     encConfig = buildEncryptedConfig(type, config, safeDirection);
   }
 
-  var types = [];
+  let types = [];
   if (hasOutput) {
     types = notificationTypes || KNOWN_NOTIFICATION_TYPES;
     validateNotificationTypes(types);
   }
 
-  var safeQueueBehavior = queueBehavior === "silent" ? "silent" : "respond";
+  const safeQueueBehavior = queueBehavior === "silent" ? "silent" : "respond";
 
-  var channel = await GatewayChannel.create({
+  const channel = await GatewayChannel.create({
     userId,
     rootId,
     name: name.trim(),
@@ -250,11 +250,11 @@ export async function addGatewayChannel(
 }
 
 export async function updateGatewayChannel(userId, channelId, updates) {
-  var channel = await GatewayChannel.findOne({ _id: channelId, userId });
+  const channel = await GatewayChannel.findOne({ _id: channelId, userId });
   if (!channel) throw new Error("Channel not found");
 
-  var wasEnabled = channel.enabled;
-  var hasInput =
+  const wasEnabled = channel.enabled;
+  const hasInput =
     channel.direction === "input" || channel.direction === "input-output";
 
   if (updates.name !== undefined) {
@@ -312,13 +312,13 @@ export async function updateGatewayChannel(userId, channelId, updates) {
 }
 
 export async function deleteGatewayChannel(userId, channelId) {
-  var channel = await GatewayChannel.findOneAndDelete({
+  const channel = await GatewayChannel.findOneAndDelete({
     _id: channelId,
     userId,
   });
   if (!channel) throw new Error("Channel not found");
 
-  var hasInput =
+  const hasInput =
     channel.direction === "input" || channel.direction === "input-output";
   if (hasInput) {
     unregisterInputChannel(channel).catch((err) =>
@@ -333,7 +333,7 @@ export async function deleteGatewayChannel(userId, channelId) {
 }
 
 export async function getChannelsForRoot(rootId) {
-  var channels = await GatewayChannel.find({ rootId })
+  const channels = await GatewayChannel.find({ rootId })
     .select("-config.encryptedPayload")
     .sort({ createdAt: -1 })
     .lean();
@@ -341,7 +341,7 @@ export async function getChannelsForRoot(rootId) {
 }
 
 export async function getChannelWithSecrets(channelId) {
-  var channel = await GatewayChannel.findById(channelId).lean();
+  const channel = await GatewayChannel.findById(channelId).lean();
   if (!channel) return null;
 
   if (channel.config && channel.config.encryptedPayload) {
@@ -364,17 +364,17 @@ export { decrypt as decryptPayload };
 // ─────────────────────────────────────────────────────────────────────────
 
 async function registerInputChannel(channel) {
-  var handler = getChannelType(channel.type);
+  const handler = getChannelType(channel.type);
   if (!handler || !handler.registerInput) return;
-  var secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
+  const secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
   await handler.registerInput(channel, secrets);
 }
 
 async function unregisterInputChannel(channel) {
-  var handler = getChannelType(channel.type);
+  const handler = getChannelType(channel.type);
   if (!handler || !handler.unregisterInput) return;
   try {
-    var secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
+    const secrets = JSON.parse(decrypt(channel.config.encryptedPayload));
     await handler.unregisterInput(channel, secrets);
   } catch (err) {
     log.error("Gateway", `Failed to unregister input for channel ${channel._id}:`, err.message);

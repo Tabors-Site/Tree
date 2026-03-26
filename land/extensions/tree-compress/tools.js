@@ -1,4 +1,5 @@
 import { z } from "zod";
+import log from "../../seed/log.js";
 import { compressTree, compressBranch, compressToBudget, decompressNode, getCompressStatus } from "./core.js";
 
 export default [
@@ -27,7 +28,9 @@ export default [
           const User = (await import("../../seed/models/user.js")).default;
           const user = await User.findById(userId).select("username").lean();
           username = user?.username;
-        } catch {}
+        } catch (err) {
+          log.debug("TreeCompress", "Username lookup failed:", err.message);
+        }
 
         let result;
         if (targetSizeBytes) {
@@ -64,7 +67,9 @@ export default [
           const User = (await import("../../seed/models/user.js")).default;
           const user = await User.findById(userId).select("username").lean();
           username = user?.username;
-        } catch {}
+        } catch (err) {
+          log.debug("TreeCompress", "Username lookup failed:", err.message);
+        }
 
         const result = await compressBranch(nodeId, userId, username);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };

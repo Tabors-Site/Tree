@@ -287,7 +287,8 @@ const startShell = module.exports.startShell = async () => {
       const cfg = load(); // re-read so prompt reflects cd/use changes
       const user = cfg.username || cfg.userId || "?";
       const land = currentLand(cfg);
-      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + chalk.dim(currentPath(cfg)) + chalk.bold.cyan(" › ");
+      const session = cfg.activeSession ? chalk.magenta(` @${cfg.activeSession}`) : "";
+      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + chalk.dim(currentPath(cfg)) + session + chalk.bold.cyan(" › ");
       rl.setPrompt(p);
       rl.prompt();
     };
@@ -315,6 +316,11 @@ const startShell = module.exports.startShell = async () => {
       let cleanInput = input;
       if (/^treeos\s+/i.test(cleanInput)) {
         cleanInput = cleanInput.replace(/^treeos\s+/i, "");
+      }
+
+      // @prefix shorthand: "@fitness hello" becomes "chat @fitness hello"
+      if (cleanInput.startsWith("@")) {
+        cleanInput = "chat " + cleanInput;
       }
 
       // Re-dispatch through Commander as if the user typed "tree <input>"

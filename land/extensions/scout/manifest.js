@@ -20,7 +20,7 @@ export default {
   provides: {
     models: {},
     routes: false,
-    tools: true,
+    tools: false,
     jobs: false,
     orchestrator: false,
     energyActions: {},

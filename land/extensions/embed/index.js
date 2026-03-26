@@ -85,7 +85,9 @@ export async function init(core) {
           snippet: r.snippet,
         }));
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Embed", "Related notes enrichment failed:", err.message);
+    }
   }, "embed");
 
   const { default: router } = await import("./routes.js");

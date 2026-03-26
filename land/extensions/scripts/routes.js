@@ -49,7 +49,7 @@ router.get("/node/:nodeId/script/:scriptId", authenticateOptional, async (req, r
       html().renderScriptDetail({ nodeId, script, contributions, qsWithQ }),
     );
   } catch (err) {
- log.error("Scripts", "Error fetching script:", err);
+    log.error("Scripts", "Error fetching script:", err);
 
     if (err.message === "Node not found") {
       return sendError(res, 404, ERR.NODE_NOT_FOUND, err.message);
@@ -83,7 +83,7 @@ router.post(
 
       return res.redirect(`/api/v1/node/${nodeId}/script/${scriptId}?${qs}`);
     } catch (err) {
- log.error("Scripts", "Error editing script:", err);
+      log.error("Scripts", "Error editing script:", err);
       return res.status(500).send("Failed to update script");
     }
   },
@@ -103,13 +103,13 @@ router.post(
       const qs = filterQuery(req);
       return res.redirect(`/api/v1/node/${nodeId}/script/${scriptId}?${qs}`);
     } catch (err) {
- log.error("Scripts", "Error executing script:", err);
+      log.error("Scripts", "Error executing script:", err);
 
       let qs = "";
       try {
         qs = filterQuery(req);
       } catch (e) {
- log.error("Scripts", "filterQuery failed:", e);
+        log.error("Scripts", "filterQuery failed:", e);
       }
       const { nodeId, scriptId } = req.params;
 
@@ -238,7 +238,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, 0 + 1);`,
       html().renderScriptHelp({ nodeId, nodeName: node.name, data, qsWithQ }),
     );
   } catch (err) {
- log.error("Scripts", "Error loading script help:", err);
+    log.error("Scripts", "Error loading script help:", err);
     return sendError(res, 500, ERR.INTERNAL, "Internal server error");
   }
 });
@@ -266,7 +266,7 @@ router.post("/node/:nodeId/script/create", authenticate, async (req, res) => {
       `/api/v1/node/${nodeId}/script/${result.scriptId}?${qs}`,
     );
   } catch (err) {
- log.error("Scripts", "Create script error:", err);
+    log.error("Scripts", "Create script error:", err);
     return res.status(500).send("Failed to create script");
   }
 });

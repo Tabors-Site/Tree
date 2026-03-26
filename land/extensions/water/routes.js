@@ -3,6 +3,7 @@ import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Node from "../../seed/models/node.js";
 import { getExtension } from "../loader.js";
+import log from "../../seed/log.js";
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ router.get("/node/:nodeId/water", authenticate, async (req, res) => {
       try {
         const perspective = await perspectiveExt.exports.resolvePerspective(node);
         picture.perspective = perspective || { accept: [], reject: [] };
-      } catch {}
+      } catch (err) { log.debug("Water", "perspective section failed:", err.message); }
     }
 
     // Memory: who this node has talked to
@@ -41,7 +42,7 @@ router.get("/node/:nodeId/water", authenticate, async (req, res) => {
             recentSources: (memory.connections || []).slice(-5).map((c) => c.sourceId),
           };
         }
-      } catch {}
+      } catch (err) { log.debug("Water", "memory section failed:", err.message); }
     }
 
     // Codebook: compression stats
@@ -76,7 +77,7 @@ router.get("/node/:nodeId/water", authenticate, async (req, res) => {
           scope: flow.scope,
           recentSignals: Object.keys(flow.results).length,
         };
-      } catch {}
+      } catch (err) { log.debug("Water", "flow section failed:", err.message); }
     }
 
     // Evolution: fitness
@@ -126,7 +127,7 @@ router.get("/water/land", authenticate, async (req, res) => {
             peers: snapshot.peers,
           };
         }
-      } catch {}
+      } catch (err) { log.debug("Water", "pulse section failed:", err.message); }
     }
 
     // Gaps: land-wide aggregation
@@ -155,7 +156,7 @@ router.get("/water/land", authenticate, async (req, res) => {
           .map(([namespace, count]) => ({ namespace, count }));
 
         if (sorted.length > 0) picture.gaps = sorted;
-      } catch {}
+      } catch (err) { log.debug("Water", "gaps section failed:", err.message); }
     }
 
     // Flow stats

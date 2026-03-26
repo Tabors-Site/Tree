@@ -1,23 +1,13 @@
 /* ------------------------------------------------- */
-/* Public query page renderer                        */
-/* Lightweight chat UI for querying public trees      */
+/* Public query page (layout-wrapped)                */
+/* Dark theme -- uses bare: true                     */
 /* ------------------------------------------------- */
-/* NOTE: baseStyles not imported here. The query page */
-/* uses a dark theme (gradient #0f0c29 -> #16213e)   */
-/* that diverges entirely from the purple base. Only  */
-/* the * reset overlaps, which is not worth the       */
-/* import + override cost.                            */
 
-import { escapeHtml } from "./utils.js";
+import { page } from "../layout.js";
+import { escapeHtml } from "../utils.js";
 
 export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailable, isAuthenticated }) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(treeName)} - Query</title>
-  <style>
+  const css = `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -228,11 +218,9 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
       font-size: 1.1rem;
       margin-bottom: 8px;
       color: rgba(255,255,255,0.7);
-    }
-  </style>
-</head>
-<body>
+    }`;
 
+  const body = `
   <div class="header">
     <div>
       <h1>${escapeHtml(treeName)}</h1>
@@ -274,9 +262,9 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
 
   <div class="footer">
     Powered by <a href="https://treeos.ai" target="_blank">TreeOS</a>
-  </div>
+  </div>`;
 
-  <script>
+  const js = `
   var ROOT_ID = "${rootId}";
   var sending = false;
 
@@ -382,9 +370,13 @@ export function renderQueryPage({ treeName, ownerUsername, rootId, queryAvailabl
     btn.disabled = false;
     btn.textContent = "Ask";
     input.focus();
-  }
-  </script>
+  }`;
 
-</body>
-</html>`;
+  return page({
+    title: `${escapeHtml(treeName)} - Query`,
+    css,
+    body,
+    js,
+    bare: true,
+  });
 }

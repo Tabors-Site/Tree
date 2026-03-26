@@ -26,7 +26,10 @@ export async function init(core) {
       const Node = core.models.Node;
       const node = await Node.findById(nodeId).select("systemRole").lean();
       if (node?.systemRole) return;
-    } catch { return; }
+    } catch (err) {
+      log.debug("Contradiction", "systemRole check failed:", err.message);
+      return;
+    }
 
     // Throttle: increment counter, only scan when threshold reached
     const count = await incrementNoteCount(nodeId);
@@ -40,7 +43,9 @@ export async function init(core) {
     try {
       const user = await core.models.User.findById(userId).select("username").lean();
       username = user?.username;
-    } catch {}
+    } catch (err) {
+      log.debug("Contradiction", "username lookup failed:", err.message);
+    }
 
     // Detect in background so we don't block the note write response
     detectContradictions(nodeId, note.content || "", userId, username)

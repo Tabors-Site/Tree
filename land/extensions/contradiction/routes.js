@@ -26,7 +26,7 @@ router.post("/node/:nodeId/contradictions/resolve", authenticate, async (req, re
     const entry = await resolveContradiction(req.params.nodeId, contradictionId);
     sendOk(res, entry);
   } catch (err) {
-    sendError(res, 400, ERR.INVALID_INPUT, err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

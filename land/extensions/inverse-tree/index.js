@@ -50,7 +50,9 @@ export async function init(core) {
           log.debug("InverseTree", `Background compression failed: ${err.message}`),
         );
       }
-    } catch {}
+    } catch (err) {
+      log.debug("InverseTree", "afterNote signal recording failed:", err.message);
+    }
   }, "inverse-tree");
 
   // ── afterLLMCall: track activity patterns ──────────────────────────
@@ -70,7 +72,9 @@ export async function init(core) {
           log.debug("InverseTree", `Background compression failed: ${err.message}`),
         );
       }
-    } catch {}
+    } catch (err) {
+      log.debug("InverseTree", "afterLLMCall signal recording failed:", err.message);
+    }
   }, "inverse-tree");
 
   // ── afterToolCall: track tool usage patterns ───────────────────────
@@ -90,7 +94,9 @@ export async function init(core) {
           log.debug("InverseTree", `Background compression failed: ${err.message}`),
         );
       }
-    } catch {}
+    } catch (err) {
+      log.debug("InverseTree", "afterToolCall signal recording failed:", err.message);
+    }
   }, "inverse-tree");
 
   // ── enrichContext: inject profile scoped by zone ─────────────────────
@@ -127,7 +133,9 @@ export async function init(core) {
       if (profile && Object.keys(profile).length > 0) {
         context.userProfile = profile;
       }
-    } catch {}
+    } catch (err) {
+      log.debug("InverseTree", "enrichContext profile lookup failed:", err.message);
+    }
   }, "inverse-tree");
 
   const { default: router } = await import("./routes.js");

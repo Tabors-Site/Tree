@@ -1,4 +1,5 @@
 import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import log from "../../seed/log.js";
 
 let User, Node;
 
@@ -144,7 +145,7 @@ export async function getRecentRootsWithNames(userId) {
       try {
         const node = await Node.findById(r.rootId).select("name").lean();
         if (node) name = node.name;
-      } catch {}
+      } catch (err) { log.debug("Navigation", "recent root name lookup failed:", err.message); }
       return {
         rootId: r.rootId,
         name: name || r.rootId.slice(0, 8) + "...",

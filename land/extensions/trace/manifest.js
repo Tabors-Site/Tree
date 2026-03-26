@@ -21,12 +21,12 @@ export default {
   provides: {
     models: {},
     routes: false,
-    tools: true,
+    tools: false,
     jobs: false,
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
     cli: [],
-    hooks: { fires: [], listens: ["enrichContext"] },
+    hooks: { fires: [], listens: [] },
   },
 };

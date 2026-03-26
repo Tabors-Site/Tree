@@ -34,7 +34,7 @@ export default {
       "prune",
       "reroot",
       "changelog",
-      "root-hold",
+      "purpose",
     ],
   },
 

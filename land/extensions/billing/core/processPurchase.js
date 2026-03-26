@@ -3,6 +3,20 @@ import { upgradeUserPlan } from "./upgradePlan.js";
 import { clearUserClientCache } from "../../../seed/ws/conversation.js";
 import { getUserMeta, setUserMeta } from "../../../seed/tree/userMetadata.js";
 
+/**
+ * Read the user's energy metadata, ensuring the expected shape exists.
+ * Energy data lives in user.metadata under the "energy" key with structure:
+ *   { available: { amount, lastResetAt }, additional: { amount } }
+ */
+function getEnergy(user) {
+  const energy = getUserMeta(user, "energy");
+  if (!energy.available) energy.available = { amount: 0, lastResetAt: null };
+  if (!energy.additional) energy.additional = { amount: 0 };
+  if (typeof energy.available.amount !== "number") energy.available.amount = 0;
+  if (typeof energy.additional.amount !== "number") energy.additional.amount = 0;
+  return energy;
+}
+
 const ALLOWED_PAID_PLANS = ["standard", "premium"];
 const PLAN_DURATION_DAYS = 30;
 const MAX_ENERGY_PURCHASE = 1_000_000; // safety cap

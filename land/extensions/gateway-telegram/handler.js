@@ -32,12 +32,12 @@ function buildEncryptedConfig(config, direction) {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function send(secrets, metadata, notification) {
-  var { botToken } = secrets;
-  var chatId = metadata.chatId;
+  const { botToken } = secrets;
+  const chatId = metadata.chatId;
 
-  var text = `*${notification.title}*\n\n${notification.content}`;
+  const text = `*${notification.title}*\n\n${notification.content}`;
 
-  var res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -48,7 +48,7 @@ async function send(secrets, metadata, notification) {
   });
 
   if (!res.ok) {
-    var body = await res.text();
+    const body = await res.text();
     throw new Error(`Telegram API error ${res.status}: ${body}`);
   }
 }
@@ -58,10 +58,10 @@ async function send(secrets, metadata, notification) {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function registerInput(channel, secrets) {
-  var secretToken = crypto.randomBytes(32).toString("hex");
-  var webhookUrl = `${process.env.BASE_URL || getLandUrl()}/api/v1/gateway/telegram/${channel._id}`;
+  const secretToken = crypto.randomBytes(32).toString("hex");
+  const webhookUrl = `${process.env.BASE_URL || getLandUrl()}/api/v1/gateway/telegram/${channel._id}`;
 
-  var res = await fetch(
+  const res = await fetch(
     `https://api.telegram.org/bot${secrets.botToken}/setWebhook`,
     {
       method: "POST",
@@ -75,12 +75,12 @@ async function registerInput(channel, secrets) {
   );
 
   if (!res.ok) {
-    var body = await res.text();
+    const body = await res.text();
     throw new Error("Telegram setWebhook failed: " + body);
   }
 
   // Store secret token in metadata for webhook verification
-  var GatewayChannel = (await import("../gateway/model.js")).default;
+  const GatewayChannel = (await import("../gateway/model.js")).default;
   await GatewayChannel.findByIdAndUpdate(channel._id, {
     $set: { "config.metadata.webhookSecret": secretToken },
   });
@@ -106,18 +106,18 @@ async function unregisterInput(channel, secrets) {
 
 export async function sendTelegramReply(channel, chatId, text) {
   try {
-    var { getChannelWithSecrets } = (await import("../gateway/core.js"));
-    var fullChannel = await getChannelWithSecrets(channel._id);
+    const { getChannelWithSecrets } = (await import("../gateway/core.js"));
+    const fullChannel = await getChannelWithSecrets(channel._id);
     if (!fullChannel?.config?.decryptedSecrets?.botToken) return;
 
-    var botToken = fullChannel.config.decryptedSecrets.botToken;
+    const botToken = fullChannel.config.decryptedSecrets.botToken;
 
     // Truncate if too long for Telegram (4096 char limit)
     if (text.length > 4096) {
       text = text.slice(0, 4093) + "...";
     }
 
-    var res = await fetch(
+    const res = await fetch(
       `https://api.telegram.org/bot${botToken}/sendMessage`,
       {
         method: "POST",
@@ -131,7 +131,7 @@ export async function sendTelegramReply(channel, chatId, text) {
     );
 
     if (!res.ok) {
-      var body = await res.text();
+      const body = await res.text();
       log.error("GatewayTelegram", `Telegram reply failed for channel ${channel._id}: ${body}`);
     }
   } catch (err) {

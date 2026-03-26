@@ -99,7 +99,7 @@ function buildEncryptedConfig(config, direction) {
 
   let display = "tree";
   if (config.remoteUrl) {
-    try { display = new URL(config.remoteUrl).hostname; } catch {}
+    try { display = new URL(config.remoteUrl).hostname; } catch (err) { log.debug("GatewayTree", "Could not parse remoteUrl for display:", err.message); }
   }
   if (config.remoteName) display = config.remoteName;
 
