@@ -1280,7 +1280,7 @@ body {
 
   const js = `
 function loadFailoverStack() {
-  fetch("/api/v1/user/${userId}/llm-failover${qs}", { headers: { "Authorization": "Bearer " + document.cookie.replace(/.*token=([^;]*).*/, "$1") } })
+  fetch("/api/v1/user/${userId}/llm-failover${qs}", { credentials: "include" })
     .then(r => r.json())
     .then(data => {
       const inner = data.data || data;
@@ -1312,12 +1312,13 @@ function pushFailover() {
   if (!connectionId) return;
   fetch("/api/v1/user/${userId}/llm-failover${qs}", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + document.cookie.replace(/.*token=([^;]*).*/, "$1") },
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ connectionId })
   })
     .then(r => r.json())
     .then(data => {
-      if (data.error) return alert(data.error);
+      if (data.error) return alert((data.error && data.error.message) || data.error || "Failed to add");
       select.value = "";
       loadFailoverStack();
     });
@@ -1326,11 +1327,11 @@ function pushFailover() {
 function removeFailover(connId, index) {
   fetch("/api/v1/user/${userId}/llm-failover/" + encodeURIComponent(connId) + "${qs}", {
     method: "DELETE",
-    headers: { "Authorization": "Bearer " + document.cookie.replace(/.*token=([^;]*).*/, "$1") },
+    credentials: "include",
   })
     .then(r => r.json())
     .then(data => {
-      if (data.error) return alert(data.error);
+      if (data.error) return alert((data.error && data.error.message) || data.error || "Failed to remove");
       loadFailoverStack();
     });
 }

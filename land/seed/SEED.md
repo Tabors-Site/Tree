@@ -235,6 +235,7 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | contributionRetentionDays | 365 | Auto-delete contributions |
 | timezone | auto | Land timezone for AI prompts |
 | disabledExtensions | [] | Extensions to skip on boot |
+| allowedLlmDomains | [] | Whitelist of allowed LLM endpoint domains for non-admin users. Empty means any external domain. Admins bypass. Example: `["api.openai.com", "openrouter.ai"]` |
 | cascadeEnabled | false | Enable cascade signals |
 | resultTTL | 604800 | Cascade result TTL (seconds) |
 | awaitingTimeout | 300 | Awaiting to failed timeout (seconds) |

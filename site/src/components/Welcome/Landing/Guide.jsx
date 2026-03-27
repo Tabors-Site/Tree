@@ -395,6 +395,11 @@ treeos ext-scope                   # shows both global and confined status`}</Co
           </P>
           <Code>{`treeos llm add            # add a connection
 treeos llm assign         # assign to tree or mode`}</Code>
+          <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem"}}>
+            SSRF protection blocks private IPs and cloud metadata endpoints for non-admin users.
+            Operators can restrict allowed LLM domains via <code>allowedLlmDomains</code> config.
+            Admins bypass for localhost flexibility (local Ollama, etc).
+          </P>
         </div>
       </section>
 

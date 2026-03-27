@@ -154,6 +154,9 @@ Runtime settings stored in the `.config` system node:
 Kernel tunables (applied at boot from `.config` node):
 `llmTimeout`, `llmMaxRetries`, `maxToolIterations`, `maxConversationMessages`, `noteMaxChars`, `treeSummaryMaxDepth`, `treeSummaryMaxNodes`, `carryMessages`, `sessionTTL`, `staleSessionTimeout`
 
+Security config:
+`allowedLlmDomains` - array of allowed LLM endpoint domains for non-admin users. Empty or unset means any external domain. Example: `["api.openai.com", "openrouter.ai", "api.anthropic.com"]`. Admins always bypass for localhost/local LLM flexibility.
+
 Extension settings declared in each extension's manifest under `provides.env`. Extensions read their own config via `core.config.get()`.
 
 Manage with `treeos config set <key> <value>` or the admin API. With the land-manager extension, the AI can manage config through chat.

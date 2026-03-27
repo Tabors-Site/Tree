@@ -152,6 +152,15 @@ function validateBaseUrl(baseUrl, isAdmin) {
     if (isBlockedIp(hostname)) {
       throw new Error("Local/private network URLs are not allowed");
     }
+
+    // Operator whitelist: if set, only listed domains are allowed for non-admins
+    const allowed = getLandConfigValue("allowedLlmDomains");
+    if (Array.isArray(allowed) && allowed.length > 0) {
+      const match = allowed.some(d => hostname === d.toLowerCase() || hostname.endsWith("." + d.toLowerCase()));
+      if (!match) {
+        throw new Error(`LLM domain "${hostname}" is not in this land's allowed list. Contact your admin.`);
+      }
+    }
   }
 
   return parsed.href.replace(/\/+$/, "");
