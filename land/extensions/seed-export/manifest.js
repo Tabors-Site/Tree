@@ -65,16 +65,14 @@ export default {
 
     cli: [
       {
-        command: "seed-export [action]",
-        description: "Export and plant tree skeletons. Actions: analyze.",
-        method: "GET",
+        command: "seed [action] [args...]",
+        description: "Tree skeleton export and import. Actions: export, plant, analyze.",
+        method: "POST",
         endpoint: "/node/:nodeId/seed-export",
         subcommands: {
-          analyze: {
-            method: "POST",
-            endpoint: "/seed/analyze",
-            description: "Analyze a seed file before planting",
-          },
+          export: { method: "POST", endpoint: "/node/:nodeId/seed-export", description: "Export current tree as seed file" },
+          plant: { method: "POST", endpoint: "/node/:nodeId/seed-plant", args: ["file"], description: "Plant a seed file at current position" },
+          analyze: { method: "POST", endpoint: "/seed/analyze", args: ["file"], description: "Analyze a seed file before planting" },
         },
       },
     ],

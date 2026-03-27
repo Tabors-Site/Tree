@@ -43,6 +43,7 @@ export default {
     sessionTypes: {},
     cli: [
       { command: "deleted", description: "List soft-deleted branches", method: "GET", endpoint: "/user/:userId/deleted" },
+      { command: "revive <deletedId> <target>", description: "Revive a deleted branch under a target node", method: "POST", endpoint: "/user/:userId/deleted/:deletedId/revive", bodyMap: { targetNodeId: 1 } },
     ],
   },
 };

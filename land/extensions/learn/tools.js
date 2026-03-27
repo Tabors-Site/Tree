@@ -18,7 +18,7 @@ export default [
       "paused and resumed. If no text is provided, learns from the existing notes on the node.",
     schema: {
       nodeId: z.string().describe("The node to start learning at. Children will be created here."),
-      text: z.string().optional().describe("The text to learn. If omitted, reads from existing notes on the node."),
+      text: z.string().max(1000000).optional().describe("The text to learn (max 1MB). If omitted, reads from existing notes on the node."),
       targetSize: z.number().optional().default(3000).describe("Target note size in characters for leaf nodes (default 3000)."),
       maxSteps: z.number().optional().default(10).describe("Max nodes to process in this call (default 10). Use for incremental processing."),
       userId: z.string().describe("Injected by server. Ignore."),

@@ -23,10 +23,17 @@ export default {
     sessionTypes: {},
     env: [],
     cli: [
-      { command: "persona", description: "Show effective persona at current position", method: "GET", endpoint: "/persona" },
-      { command: "persona-set", description: "Set persona field", method: "POST", endpoint: "/persona/set", bodyMap: { field: 0, value: 1 } },
-      { command: "persona-clear", description: "Remove persona at current node", method: "DELETE", endpoint: "/persona" },
-      { command: "persona-tree", description: "Show persona map across the tree", method: "GET", endpoint: "/persona/tree" },
+      {
+        command: "persona [action] [args...]",
+        description: "AI identity. No action shows persona. Actions: set, clear, tree.",
+        method: "GET",
+        endpoint: "/persona",
+        subcommands: {
+          set: { method: "POST", endpoint: "/persona/set", args: ["field", "value"], description: "Set a persona field directly" },
+          clear: { method: "DELETE", endpoint: "/persona", description: "Remove persona, inherit from parent" },
+          tree: { method: "GET", endpoint: "/persona/tree", description: "Persona map across the whole tree" },
+        },
+      },
     ],
   },
 };

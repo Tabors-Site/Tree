@@ -32,5 +32,8 @@ export default {
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
+    cli: [
+      { command: "contributions", description: "List your contributions across all trees", method: "GET", endpoint: "/user/:userId/contributions" },
+    ],
   },
 };

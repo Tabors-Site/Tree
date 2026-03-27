@@ -63,8 +63,10 @@ export default {
       UNDERSTANDING_ORCHESTRATE: "understanding-orchestrate",
     },
     cli: [
-      { command: "understand", description: "Start an understanding run on current tree", method: "POST", endpoint: "/root/:rootId/understandings" },
+      { command: "understand", description: "Start an understanding run (-i incremental)", method: "POST", endpoint: "/root/:rootId/understandings" },
       { command: "understandings", description: "List understanding runs", method: "GET", endpoint: "/root/:rootId/understandings" },
+      { command: "understand-status <runId>", description: "Check progress of a run", method: "GET", endpoint: "/root/:rootId/understandings/run/:runId" },
+      { command: "understand-stop <runId>", description: "Stop a running understanding run", method: "POST", endpoint: "/root/:rootId/understandings/run/:runId/stop" },
     ],
   },
 };

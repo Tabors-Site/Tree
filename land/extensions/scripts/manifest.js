@@ -2,6 +2,7 @@ export default {
   name: "scripts",
   version: "1.0.0",
   builtFor: "TreeOS",
+  scope: "confined",
   description:
     "Sandboxed JavaScript execution on tree nodes. Scripts are stored in node metadata as named " +
     "code blocks (max 2000 characters each) and executed in a Node.js vm context with a 5-second " +

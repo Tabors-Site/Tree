@@ -68,6 +68,16 @@ export default {
             endpoint: "/node/:nodeId/review/resume",
             description: "Resume automatic reviews",
           },
+          apply: {
+            method: "POST",
+            endpoint: "/node/:nodeId/review/apply",
+            description: "Apply pending review feedback",
+          },
+          dismiss: {
+            method: "POST",
+            endpoint: "/node/:nodeId/review/dismiss",
+            description: "Dismiss pending review feedback",
+          },
         },
       },
     ],

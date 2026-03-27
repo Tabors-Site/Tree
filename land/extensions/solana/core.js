@@ -316,8 +316,14 @@ export async function sendSOLFromVersion({
     throw new Error("Insufficient SOL to cover fees and rent");
   }
 
-  // Auto-adjust amount if needed
-  const finalLamports = Math.min(lamports, maxSendable);
+  // Reject if requested amount exceeds available balance after fees
+  if (lamports > maxSendable) {
+    throw new Error(
+      `Requested ${lamports} lamports but only ${maxSendable} sendable after fees and rent. ` +
+      `Reduce the amount or add more SOL.`
+    );
+  }
+  const finalLamports = lamports;
 
   /* -------------------------------------------------- */
   /*  Build + send transaction                          */
@@ -358,7 +364,6 @@ export async function sendSOLFromVersion({
     from: signer.publicKey.toBase58(),
     to: destinationPubkey.toBase58(),
     lamports: finalLamports,
-    adjusted: finalLamports !== lamports,
   };
 }
 

@@ -24,12 +24,8 @@ export default {
       listens: ["enrichContext", "afterBoot"],
     },
     cli: [
-      {
-        command: "governance",
-        description: "Show governance status for all configured directories",
-        method: "GET",
-        endpoint: "/land/governance",
-      },
+      { command: "governance-status", description: "Governance compliance status (cached)", method: "GET", endpoint: "/land/governance" },
+      { command: "governance-check", description: "Live check against directory policies", method: "POST", endpoint: "/land/governance/check" },
     ],
   },
 };

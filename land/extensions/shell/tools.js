@@ -1,12 +1,18 @@
 import { z } from "zod";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import User from "../../seed/models/user.js";
 import log from "../../seed/log.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const TIMEOUT_MS = 30000;
 const MAX_OUTPUT = 8000;
+
+let _useEnergy = async () => ({ energyUsed: 0 });
+
+export function setEnergyService(energy) {
+  if (energy?.useEnergy) _useEnergy = energy.useEnergy;
+}
 
 export default function getTools() {
   return [
@@ -40,21 +46,24 @@ export default function getTools() {
           /\bmkfs\b/i,                     // format filesystem
           /\bdd\s+/i,                      // disk destroy
           /\b:\(\)\{.*\|.*\}/,             // fork bomb
-          /\bchmod\s+777\b/,              // wide open permissions
-          /\bchown\s+-R\b/i,              // recursive ownership change
+          /\bchmod\s+(777|000|\+s)\b/,     // dangerous permission changes
+          /\bchown\b/i,                    // any ownership change
           />\s*\/dev\/sd/,                 // overwrite disk devices
           /\bshutdown\b/i,                // shutdown
           /\breboot\b/i,                  // reboot
           /\binit\s+[06]\b/,              // init shutdown/reboot
-          /\bsystemctl\s+(stop|disable|mask)\b/i, // stop services
+          /\bsystemctl\s+(stop|disable|mask|restart)\b/i, // stop/restart services
           /\bkill\s+-9\s+1\b/,            // kill init
           /\biptables\s+-F\b/i,           // flush firewall
-          /\bufw\s+disable\b/i,           // disable firewall
+          /\bufw\s+(disable|reset)\b/i,   // disable firewall
           /\bpasswd\b/i,                  // change passwords
           /\busermod\b/i,                 // modify users
           /\buserdel\b/i,                 // delete users
           /\bcurl\b.*\|\s*(bash|sh)\b/i,  // pipe to shell
           /\bwget\b.*\|\s*(bash|sh)\b/i,  // pipe to shell
+          /\beval\b/i,                    // eval execution
+          /`[^`]*`/,                      // backtick command substitution
+          /\$\([^)]*\)/,                  // $() command substitution
         ];
 
         const blocked = BLOCKED.find(re => re.test(command));
@@ -63,13 +72,24 @@ export default function getTools() {
           return { content: [{ type: "text", text: "Blocked: this command pattern is not allowed for safety. Use the server directly for destructive operations." }] };
         }
 
+        // Energy metering
+        try {
+          await _useEnergy({ userId, action: "shellExecute" });
+        } catch {
+          return { content: [{ type: "text", text: "Insufficient energy for shell execution." }] };
+        }
+
         log.warn("Shell", `${userId} executing: ${command.slice(0, 200)}`);
 
+        // Execute via /bin/sh -c but with execFile (no double shell interpretation).
+        // execFile with explicit shell path avoids the implicit shell spawning of exec().
+        // The command is passed as a single argument to sh -c, not interpreted by Node.
         try {
-          const { stdout, stderr } = await execAsync(command, {
+          const { stdout, stderr } = await execFileAsync("/bin/sh", ["-c", command], {
             timeout: TIMEOUT_MS,
             cwd: process.cwd(),
             maxBuffer: 1024 * 1024,
+            env: { ...process.env, PATH: process.env.PATH },
           });
           const out = (stdout || "").slice(0, MAX_OUTPUT);
           const err = (stderr || "").slice(0, MAX_OUTPUT);

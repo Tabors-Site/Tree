@@ -3,15 +3,13 @@ export default {
   version: "1.0.0",
   builtFor: "treeos-intelligence",
   description:
-    "The tree knows where its knowledge ends. Competence detects the edges of what " +
-    "the tree contains. A question arrives and the tree can answer it from its notes. " +
-    "Another question arrives and the tree has nothing. Competence tracks which queries " +
-    "found answers and which found silence. Over time it builds a map of the tree's " +
-    "competence boundary. The AI injects this: I can help with X, Y, Z at this branch. " +
-    "I don't have information about A or B. Honest about limits instead of hallucinating.",
+    "The tree knows where its knowledge ends. Tracks which queries found answers " +
+    "and which found silence. Over time builds a map of the tree's competence boundary. " +
+    "The AI injects: I can help with X, Y, Z at this branch. I don't have information " +
+    "about A or B. Honest about limits instead of hallucinating.",
 
   needs: {
-    services: ["hooks"],
+    services: ["hooks", "metadata"],
     models: ["Node"],
   },
 
@@ -21,13 +19,25 @@ export default {
 
   provides: {
     models: {},
-    routes: false,
-    tools: false,
+    routes: "./routes.js",
+    tools: true,
     jobs: false,
     orchestrator: false,
     energyActions: {},
     sessionTypes: {},
-    cli: [],
-    hooks: { fires: [], listens: [] },
+
+    hooks: {
+      fires: [],
+      listens: ["afterLLMCall", "enrichContext"],
+    },
+
+    cli: [
+      {
+        command: "competence",
+        description: "Knowledge boundaries at this position",
+        method: "GET",
+        endpoint: "/node/:nodeId/competence",
+      },
+    ],
   },
 };

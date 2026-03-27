@@ -57,7 +57,13 @@ export default {
       SCHEDULED_RAW_IDEA: "scheduled-raw-idea",
     },
     cli: [
-      { command: "ideas", description: "List raw ideas", method: "GET", endpoint: "/user/:userId/raw-ideas" },
+      { command: "ideas", description: "List raw ideas (-p pending, -a all, -q search)", method: "GET", endpoint: "/user/:userId/raw-ideas" },
+      { command: "idea <message...>", description: "AI places idea in the right tree", method: "POST", endpoint: "/user/:userId/raw-ideas/place", bodyMap: { content: 0 } },
+      { command: "idea-store <message...>", description: "Save idea without processing", method: "POST", endpoint: "/user/:userId/raw-ideas", bodyMap: { content: 0 } },
+      { command: "idea-place <rawIdeaId>", description: "Process a stored idea", method: "POST", endpoint: "/user/:userId/raw-ideas/:rawIdeaId/place" },
+      { command: "idea-transfer <rawIdeaId> <nodeId>", description: "Manually transfer idea to a node", method: "POST", endpoint: "/user/:userId/raw-ideas/:rawIdeaId/transfer", bodyMap: { nodeId: 1 } },
+      { command: "idea-auto <toggle>", description: "Toggle auto-placement (on/off)", method: "POST", endpoint: "/user/:userId/raw-ideas/auto", bodyMap: { enabled: 0 } },
+      { command: "rm-idea <id>", description: "Delete a raw idea", method: "DELETE", endpoint: "/user/:userId/raw-ideas/:id" },
     ],
   },
 };

@@ -284,7 +284,8 @@ const startShell = module.exports.startShell = async () => {
 
     function clearHint() {
       if (_hintLine) {
-        process.stdout.write("\x1b[s\x1b[A\x1b[2K\x1b[u");
+        // Save cursor, move down one line, clear it, restore cursor
+        process.stdout.write("\x1b[s\x1b[B\x1b[2K\x1b[u");
         _hintLine = "";
       }
     }
@@ -292,8 +293,12 @@ const startShell = module.exports.startShell = async () => {
     function showHint(text) {
       clearHint();
       if (!text) return;
-      _hintLine = text;
-      process.stdout.write("\x1b[s\x1b[A\x1b[2K\x1b[92m" + text + "\x1b[0m\x1b[u");
+      // Truncate to terminal width to prevent wrapping into the input line
+      const cols = process.stdout.columns || 80;
+      const truncated = text.length > cols - 2 ? text.slice(0, cols - 5) + "..." : text;
+      _hintLine = truncated;
+      // Print newline to make space, write hint, move cursor back up to input line
+      process.stdout.write("\x1b[s\n\x1b[2K\x1b[92m" + truncated + "\x1b[0m\x1b[u");
     }
 
     // Replace the current line content in readline
@@ -399,6 +404,7 @@ const startShell = module.exports.startShell = async () => {
     });
 
     const prompt = () => {
+      clearHint(); // remove any lingering hint line below
       const cfg = load(); // re-read so prompt reflects cd/use changes
       const user = cfg.username || cfg.userId || "?";
       const land = currentLand(cfg);

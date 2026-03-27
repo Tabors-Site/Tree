@@ -31,7 +31,7 @@ async function getApi(url) {
     throw new Error("Local IPs are blocked");
   }
 
-  const res = await axios.get(url);
+  const res = await axios.get(url, { timeout: 10000 });
   return res.data;
 }
 

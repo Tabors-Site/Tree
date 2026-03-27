@@ -340,7 +340,14 @@
       "Bash(grep -h 'version:' /home/tabor/github/Tree/land/extensions/*/manifest.js)",
       "Bash(grep -rn GET.*/ /home/tabor/github/Tree/land/extensions/html-rendering/pages.js)",
       "Bash(grep -n \"hooks\\\\|enrichContext\\\\|reads\\\\|writes\\\\|listens\\\\|fires\" /home/tabor/github/Tree/land/extensions/propagation/*.js)",
-      "Bash(find /home/tabor/github/Tree/land/extensions/sealed-transport -name *.js)"
+      "Bash(find /home/tabor/github/Tree/land/extensions/sealed-transport -name *.js)",
+      "Bash(else echo:*)",
+      "Bash(fi)",
+      "Bash(find /home/tabor/github/Tree/land/extensions/scout -name *.js)",
+      "Bash(find /home/tabor/github/Tree/land/extensions -name \"*.js\" -exec grep -l \"afterNote\\\\|afterNavigate\\\\|afterToolCall\" {})",
+      "Bash(echo \"$ext OK\")",
+      "Bash(echo \"$ext FAIL\")",
+      "Bash(find /home/tabor/github/Tree/land/seed -name \"*.js\" -type f -exec grep -l \"\\\\.handler\\\\|resolveTools\" {})"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

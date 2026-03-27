@@ -2,6 +2,7 @@ export default {
   name: "solana",
   version: "1.0.0",
   builtFor: "TreeOS",
+  scope: "confined",
   description:
     "Every node in the tree can own a Solana wallet. The extension generates keypairs " +
     "on demand, encrypts private keys with AES-256-GCM using a server-side master key, " +
