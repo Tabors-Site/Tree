@@ -926,10 +926,12 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
   // Pass abort signal to OpenAI if available
   const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
 
-  // beforeLLMCall: extensions can cancel (quota exhausted) or modify params
+  // beforeLLMCall: extensions can cancel (quota exhausted) or modify params.
+  // messages exposed so before-hooks can prepend/modify (persona, guardrails, etc.)
   const llmHookData = {
     userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
     model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
+    messages: session.messages, nodeId: session.currentNodeId || ctx.rootId || null,
   };
   const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
   if (llmHookResult.cancelled) {

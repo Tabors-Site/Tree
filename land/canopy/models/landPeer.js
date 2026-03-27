@@ -25,6 +25,7 @@ const LandPeerSchema = new mongoose.Schema({
   landId: { type: String, required: true },
   publicKey: { type: String, required: true },
   protocolVersion: { type: Number, default: 1 },
+  seedVersion: { type: String, default: null },
   name: { type: String, default: "" },
   lastSeenAt: { type: Date, default: Date.now },
   status: {

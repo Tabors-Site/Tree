@@ -1,5 +1,6 @@
 import log from "../seed/log.js";
 import { getLandConfigValue } from "../seed/landConfig.js";
+import { SEED_VERSION } from "../seed/version.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -122,6 +123,7 @@ export function getLandInfoPayload() {
     name: identity.name,
     publicKey: identity.publicKey,
     protocolVersion: identity.protocolVersion,
+    seedVersion: SEED_VERSION,
     baseUrl,
     siteUrl: process.env.LAND_SITE_URL || null,
     timezone,

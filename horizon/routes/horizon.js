@@ -2,6 +2,7 @@ import { Router } from "express";
 import Land from "../db/models/land.js";
 import PublicTree from "../db/models/publicTree.js";
 import Extension from "../db/models/extension.js";
+import { getGovernanceConfig, setGovernanceConfig } from "../db/models/governanceConfig.js";
 import { verifyHorizonAuth } from "../auth.js";
 
 const router = Router();
@@ -26,6 +27,7 @@ router.post(
         baseUrl,
         publicKey,
         protocolVersion,
+        seedVersion,
         publicTrees,
         siteUrl,
       } = req.body;
@@ -104,6 +106,8 @@ router.post(
             baseUrl,
             publicKey,
             protocolVersion: protocolVersion || 1,
+            seedVersion: seedVersion || null,
+            seedVersionNumeric: seedVersion ? (() => { const [maj, min, pat] = seedVersion.split(".").map(Number); return maj * 10000 + min * 100 + (pat || 0); })() : null,
             siteUrl: siteUrl || null,
             status: "active",
             lastSeenAt: new Date(),
@@ -138,10 +142,30 @@ router.post(
         }
       }
 
+      // Check for governance notices
+      const notices = [];
+      if (seedVersion) {
+        const gov = await getGovernanceConfig();
+        if (gov.recommendedSeedVersion && seedVersion !== gov.recommendedSeedVersion) {
+          const [rMaj, rMin, rPat] = gov.recommendedSeedVersion.split(".").map(Number);
+          const recNumeric = rMaj * 10000 + rMin * 100 + (rPat || 0);
+          const [sMaj, sMin, sPat] = seedVersion.split(".").map(Number);
+          const seedNumeric = sMaj * 10000 + sMin * 100 + (sPat || 0);
+          if (seedNumeric < recNumeric) {
+            notices.push({
+              type: "version_advisory",
+              message: `Seed version ${seedVersion} is below the recommended version ${gov.recommendedSeedVersion}`,
+              recommendedSeedVersion: gov.recommendedSeedVersion,
+            });
+          }
+        }
+      }
+
       return res.json({
         success: true,
         message: "Land registered successfully",
         landId: land._id,
+        notices: notices.length > 0 ? notices : undefined,
       });
     } catch (err) {
       console.error("[Horizon] Register error:", err.message);
@@ -180,6 +204,37 @@ router.get("/lands", async (req, res) => {
       ];
     }
 
+    // Governance: exclude lands below minimum seed version
+    const gov = await getGovernanceConfig();
+    if (gov.minimumSeedVersionNumeric && !req.query.status) {
+      // Lands with seedVersion: null (pre-upgrade) are NOT excluded
+      filter.$or = [
+        ...(filter.$or || []),
+        { seedVersionNumeric: { $gte: gov.minimumSeedVersionNumeric } },
+        { seedVersion: null },
+      ];
+      // If there was already an $or from the search query, wrap in $and
+      if (req.query.q && filter.$or) {
+        const searchOr = [
+          { name: filter.$or.find(c => c.name)?.$regex ? { name: filter.$or.find(c => c.name) } : null },
+          { domain: filter.$or.find(c => c.domain)?.$regex ? { domain: filter.$or.find(c => c.domain) } : null },
+        ].filter(Boolean);
+        // Reconstruct: need both the search condition AND the version condition
+        delete filter.$or;
+        const escaped = req.query.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        filter.$and = [
+          { $or: [
+            { name: { $regex: escaped, $options: "i" } },
+            { domain: { $regex: escaped, $options: "i" } },
+          ]},
+          { $or: [
+            { seedVersionNumeric: { $gte: gov.minimumSeedVersionNumeric } },
+            { seedVersion: null },
+          ]},
+        ];
+      }
+    }
+
     // Sort: "active" (default) = last seen, "recent" = registration date
     const sortField = req.query.sort === "recent"
       ? { registeredAt: -1 }
@@ -187,7 +242,7 @@ router.get("/lands", async (req, res) => {
 
     const [lands, total] = await Promise.all([
       Land.find(filter)
-        .select("_id domain name protocolVersion status lastSeenAt registeredAt metadata siteUrl")
+        .select("_id domain name protocolVersion seedVersion status lastSeenAt registeredAt metadata siteUrl")
         .sort(sortField)
         .skip(skip)
         .limit(limit)
@@ -220,7 +275,7 @@ router.get("/lands", async (req, res) => {
 router.get("/land/:domain", async (req, res) => {
   try {
     const land = await Land.findOne({ domain: req.params.domain })
-      .select("_id domain name baseUrl publicKey protocolVersion siteUrl")
+      .select("_id domain name baseUrl publicKey protocolVersion seedVersion siteUrl")
       .lean();
 
     if (!land) {
@@ -236,6 +291,7 @@ router.get("/land/:domain", async (req, res) => {
         baseUrl: land.baseUrl,
         publicKey: land.publicKey,
         protocolVersion: land.protocolVersion,
+        seedVersion: land.seedVersion,
         siteUrl: land.siteUrl,
       },
     });
@@ -334,6 +390,63 @@ router.delete(
     }
   }
 );
+
+/**
+ * GET /horizon/governance
+ * Returns current governance policies. Public, no auth required.
+ */
+router.get("/governance", async (req, res) => {
+  try {
+    const config = await getGovernanceConfig();
+    return res.json({
+      success: true,
+      governance: {
+        minimumSeedVersion: config.minimumSeedVersion,
+        recommendedSeedVersion: config.recommendedSeedVersion,
+        updatedAt: config.updatedAt,
+        voting: null, // Reserved for future voting mechanism
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * PUT /horizon/governance
+ * Update governance policies. Requires HORIZON_ADMIN_SECRET header.
+ */
+router.put("/governance", async (req, res) => {
+  try {
+    const secret = process.env.HORIZON_ADMIN_SECRET;
+    if (!secret) {
+      return res.status(503).json({ success: false, error: "Governance admin not configured" });
+    }
+
+    const provided = req.headers["x-admin-secret"] || req.headers["authorization"];
+    if (provided !== secret && provided !== `Bearer ${secret}`) {
+      return res.status(401).json({ success: false, error: "Invalid admin secret" });
+    }
+
+    const { minimumSeedVersion, recommendedSeedVersion } = req.body;
+    const fields = {};
+    if (minimumSeedVersion !== undefined) fields.minimumSeedVersion = minimumSeedVersion;
+    if (recommendedSeedVersion !== undefined) fields.recommendedSeedVersion = recommendedSeedVersion;
+    fields.updatedBy = "admin";
+
+    const config = await setGovernanceConfig(fields);
+    return res.json({
+      success: true,
+      governance: {
+        minimumSeedVersion: config.minimumSeedVersion,
+        recommendedSeedVersion: config.recommendedSeedVersion,
+        updatedAt: config.updatedAt,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
 
 /**
  * GET /horizon/directory-info

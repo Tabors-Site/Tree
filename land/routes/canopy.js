@@ -21,6 +21,7 @@ import {
   validateCanopyRequest,
   isCompatibleVersion,
 } from "../canopy/protocol.js";
+import { compareSemver } from "../canopy/semver.js";
 import { proxyToRemoteLand } from "../canopy/proxy.js";
 import {
   queueCanopyEvent,
@@ -218,6 +219,16 @@ router.post("/canopy/peer/register", async (req, res) => {
 
     if (!isCompatibleVersion(protocolVersion)) {
       return sendError(res, 400, ERR.INVALID_INPUT, `Incompatible protocol version: ${protocolVersion}`);
+    }
+
+    // Per-land peer seed version policy (canopy config, not kernel config)
+    const { getLandConfigValue } = await import("../seed/landConfig.js");
+    const minPeerSeed = getLandConfigValue("minPeerSeedVersion");
+    const remoteSeedVersion = req.body.seedVersion;
+    if (minPeerSeed && remoteSeedVersion && compareSemver(remoteSeedVersion, minPeerSeed) < 0) {
+      return sendError(res, 400, ERR.INVALID_INPUT,
+        `Seed version ${remoteSeedVersion} is below this land's minimum peer requirement (${minPeerSeed})`
+      );
     }
 
     // SECURITY: Verify the sender actually controls the claimed domain.

@@ -16,6 +16,8 @@ const LandSchema = new mongoose.Schema({
   publicKey: { type: String, required: true },
   siteUrl: { type: String, default: null },
   protocolVersion: { type: Number, default: 1 },
+  seedVersion: { type: String, default: null },
+  seedVersionNumeric: { type: Number, default: null },
   status: {
     type: String,
     enum: ["active", "degraded", "unreachable", "dead"],

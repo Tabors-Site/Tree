@@ -328,7 +328,11 @@
       "Bash(grep -rn \"without.*limit\\\\|unbounded\\\\|no.*limit\" /home/tabor/github/Tree/land/seed/tree/*.js /home/tabor/github/Tree/land/seed/ws/*.js)",
       "Bash(grep -l \"enrichContext\" /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(grep -r \"cli\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
-      "Bash(grep -r \"version.*policy\\\\|recommended.*version\\\\|minimum.*version\\\\|operator.*notify\\\\|governance\" /home/tabor/github/Tree/land --include=*.js)"
+      "Bash(grep -r \"version.*policy\\\\|recommended.*version\\\\|minimum.*version\\\\|operator.*notify\\\\|governance\" /home/tabor/github/Tree/land --include=*.js)",
+      "Bash(find /home/tabor/github/Tree -name \"*.js\" -type f -exec grep -l \"minPeerSeedVersion\\\\|seedVersion\" {})",
+      "Bash(grep -r \"5-phase pipeline\\\\|structure scan\\\\|metadata probe\" /home/tabor/github/Tree --include=*.md --include=*.js)",
+      "Bash(git -C /home/tabor/github/Tree log --all --oneline --grep=explore)",
+      "Bash(git -C /home/tabor/github/Tree log --all -n 50 --oneline)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -350,7 +354,8 @@
       "/home/tabor/github/db/\\|\"../ws/\\|\"../middleware/\\|\"..",
       "/home/tabor/github/Tree/land/seed/middleware",
       "/tmp",
-      "/home/tabor/github/Tree/land/extensions"
+      "/home/tabor/github/Tree/land/extensions",
+      "/home/tabor/github/Tree/land/extensions/peer-review"
     ]
   }
 }

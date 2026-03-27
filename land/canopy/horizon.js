@@ -60,6 +60,7 @@ async function registerWithDirectory(url) {
         publicKey: info.publicKey,
         protocolVersion: info.protocolVersion,
         siteUrl: info.siteUrl,
+        seedVersion: info.seedVersion,
         publicTrees,
       }),
       signal: AbortSignal.timeout(15000),

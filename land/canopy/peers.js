@@ -4,6 +4,7 @@ import { getLandIdentity, getLandInfoPayload } from "./identity.js";
 import { isCompatibleVersion } from "./protocol.js";
 import { isPrivateHost } from "./security.js";
 import { getLandConfigValue } from "../seed/landConfig.js";
+import { compareSemver } from "./semver.js";
 
 let HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 let DEGRADED_THRESHOLD = 2;
@@ -50,6 +51,14 @@ export async function registerPeer(peerUrl) {
     );
   }
 
+  // Per-land peer seed version policy (canopy config, not kernel config)
+  const minPeerSeed = getLandConfigValue("minPeerSeedVersion");
+  if (minPeerSeed && info.seedVersion && compareSemver(info.seedVersion, minPeerSeed) < 0) {
+    throw new Error(
+      `Peer seed version ${info.seedVersion} is below this land's minimum (${minPeerSeed})`
+    );
+  }
+
   // Check if peer already exists
   let peer = await LandPeer.findOne({ domain: info.domain });
 
@@ -57,6 +66,7 @@ export async function registerPeer(peerUrl) {
     peer.landId = info.landId;
     peer.publicKey = info.publicKey;
     peer.protocolVersion = info.protocolVersion;
+    peer.seedVersion = info.seedVersion || peer.seedVersion;
     peer.name = info.name || "";
     peer.baseUrl = url;
     peer.extensions = info.extensions || [];
@@ -73,6 +83,7 @@ export async function registerPeer(peerUrl) {
       landId: info.landId,
       publicKey: info.publicKey,
       protocolVersion: info.protocolVersion,
+      seedVersion: info.seedVersion || null,
       name: info.name || "",
       extensions: info.extensions || [],
       status: "active",
@@ -217,6 +228,7 @@ export async function pingPeer(peer) {
     peer.firstFailureAt = null;
     peer.status = "active";
     peer.protocolVersion = info.protocolVersion || peer.protocolVersion;
+    peer.seedVersion = info.seedVersion || peer.seedVersion;
     peer.extensions = info.extensions || peer.extensions;
     // SECURITY: Never update publicKey from heartbeat. Keys are only set during
     // initial peering. To rotate keys, the peer must re-peer.

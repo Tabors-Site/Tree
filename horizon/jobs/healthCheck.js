@@ -23,6 +23,18 @@ async function checkLand(land) {
     clearTimeout(timeout);
 
     if (response.ok) {
+      // Extract seedVersion from the /canopy/info response
+      try {
+        const info = await response.json();
+        if (info.seedVersion) {
+          land.seedVersion = info.seedVersion;
+          const [maj, min, pat] = info.seedVersion.split(".").map(Number);
+          land.seedVersionNumeric = maj * 10000 + min * 100 + (pat || 0);
+        }
+      } catch {
+        // Response body parse failure is non-fatal for health check
+      }
+
       land.lastSeenAt = new Date();
       land.lastHealthCheck = new Date();
       land.failedChecks = 0;
