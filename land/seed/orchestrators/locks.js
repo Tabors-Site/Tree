@@ -170,12 +170,9 @@ export function isLocked(namespace, key) {
   const entry = map.get(key);
   if (!entry) return false;
 
-  if ((Date.now() - entry.renewedAt) >= LOCK_TTL_MS) {
-    map.delete(key);
-    decTotal();
-    if (map.size === 0) locks.delete(namespace);
-    return false;
-  }
+  // Read-only check. Expired locks return false but are not deleted here.
+  // The periodic sweep handles cleanup. Readers should never mutate state.
+  if ((Date.now() - entry.renewedAt) >= LOCK_TTL_MS) return false;
 
   return true;
 }

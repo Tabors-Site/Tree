@@ -11,9 +11,10 @@ const router = express.Router();
 
 async function useLatest(req, res, next) {
   try {
-    const node = await _Node.findById(req.params.nodeId).select("prestige").lean();
+    const node = await _Node.findById(req.params.nodeId).select("metadata").lean();
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
-    req.params.version = String(0);
+    const meta = node.metadata instanceof Map ? node.metadata.get("prestige") : node.metadata?.prestige;
+    req.params.version = String(meta?.current || 0);
     next();
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

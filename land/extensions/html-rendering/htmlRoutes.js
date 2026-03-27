@@ -22,7 +22,7 @@ async function resolveVersion(nodeId, version) {
   if (version === "latest" || version === undefined) {
     const node = await Node.findById(nodeId).select("metadata").lean();
     const meta = node?.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node?.metadata || {});
-    return meta.version?.current || 0;
+    return meta.prestige?.current || 0;
   }
   return Number(version);
 }
@@ -33,7 +33,7 @@ import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { getExtension } from "../loader.js";
 import { isHtmlEnabled } from "./config.js";
 
-export default function buildHtmlRoutes({ urlAuth, renderers }) {
+export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
   const router = express.Router();
 
   // Sanitize token on every request before it reaches any renderer.
@@ -598,7 +598,7 @@ export default function buildHtmlRoutes({ urlAuth, renderers }) {
     }
   });
 
-  router.get("/node/:nodeId/:version/notes/:noteId", urlAuth, htmlOnly, async (req, res) => {
+  router.get("/node/:nodeId/:version/notes/:noteId", optionalAuth, htmlOnly, async (req, res) => {
     try {
       const { nodeId, version, noteId } = req.params;
       const Note = (await import("../../seed/models/note.js")).default;

@@ -319,7 +319,16 @@
       "Bash(echo \"✓ $ext: init\\(core\\) pattern correct\")",
       "Bash(wc -l /home/tabor/github/Tree/land/extensions/trace/*.js /home/tabor/github/Tree/land/extensions/scout/*.js)",
       "Bash(grep -E \"\\\\.js$\")",
-      "Bash(grep -l \"description:\" /home/tabor/github/Tree/land/extensions/*/manifest.js)"
+      "Bash(grep -l \"description:\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep -h '^  [a-z]' /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep -h '^  [a-zA-Z]' /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep -r \"\\\\.find\\(\\\\|\\\\.countDocuments\\(\\\\|\\\\.distinct\\(\\\\|\\\\.aggregate\\(\" /home/tabor/github/Tree/land/seed/tree/*.js /home/tabor/github/Tree/land/seed/ws/*.js)",
+      "Bash(wc -l /home/tabor/github/Tree/land/seed/ws/*.js /home/tabor/github/Tree/land/seed/orchestrators/*.js)",
+      "Bash(grep -r metadata[ /home/tabor/github/Tree/land/seed/models/*.js)",
+      "Bash(grep -rn \"without.*limit\\\\|unbounded\\\\|no.*limit\" /home/tabor/github/Tree/land/seed/tree/*.js /home/tabor/github/Tree/land/seed/ws/*.js)",
+      "Bash(grep -l \"enrichContext\" /home/tabor/github/Tree/land/extensions/*/index.js)",
+      "Bash(grep -r \"cli\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep -r \"version.*policy\\\\|recommended.*version\\\\|minimum.*version\\\\|operator.*notify\\\\|governance\" /home/tabor/github/Tree/land --include=*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

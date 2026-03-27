@@ -6,34 +6,29 @@ import Note from "../models/note.js";
 import User from "../models/user.js";
 import { hooks } from "../hooks.js";
 import { NODE_STATUS, DELETED, CONTENT_TYPE, SYSTEM_OWNER } from "../protocol.js";
+import { getAncestorChain } from "./ancestorCache.js";
 
 
 export async function buildPathString(nodeId) {
+  // Use ancestor cache: one lookup instead of N sequential DB queries.
+  // The cache stores the full chain from node to root with name fields.
+  const chain = await getAncestorChain(nodeId);
+  if (!chain || chain.length === 0) return "";
+
   const segments = [];
-  let cursor = nodeId;
-  const maxDepth = 50; // safety guard against circular refs
-  let depth = 0;
-
-  while (cursor && depth < maxDepth) {
-    const node = await Node.findById(cursor)
-      .select("_id name parent systemRole")
-      .lean()
-      .exec();
-
-    if (!node || node.systemRole) break;
-
-    segments.unshift(node.name);
-
-    if (!node.parent) break;
-    cursor = node.parent;
-    depth++;
+  for (const ancestor of chain) {
+    if (ancestor.systemRole) break;
+    if (ancestor.name) segments.push(ancestor.name);
   }
 
+  // Chain is ordered node-to-root. Path is root-to-node.
+  segments.reverse();
   return segments.join(" > ");
 }
 
 // Batch version: returns path for multiple node IDs
-// Useful when navigate returns candidates
+// Ancestor cache shares sub-paths, so the first call populates
+// shared ancestors and subsequent calls hit cache.
 export async function buildPathStrings(nodeIds) {
   const results = {};
   for (const id of nodeIds) {
@@ -98,10 +93,11 @@ export async function isDescendant(ancestorId, nodeId) {
   return false;
 }
 
-export async function getDescendantIds(nodeId) {
+export async function getDescendantIds(nodeId, { maxResults = 10000 } = {}) {
   const queue = [nodeId];
   const visited = new Set([nodeId]);
   while (queue.length > 0) {
+    if (visited.size >= maxResults) break;
     const batch = queue.splice(0, 100);
     const nodes = await Node.find({ _id: { $in: batch } })
       .select("_id children")
@@ -109,6 +105,7 @@ export async function getDescendantIds(nodeId) {
     for (const n of nodes) {
       if (Array.isArray(n.children)) {
         for (const childId of n.children) {
+          if (visited.size >= maxResults) break;
           const cid = String(childId);
           if (!visited.has(cid)) {
             visited.add(cid);

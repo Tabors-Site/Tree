@@ -24,7 +24,7 @@ async function resolveVersion(nodeId, version) {
   if (version === "latest" || version === undefined) {
     const node = await Node.findById(nodeId).select("metadata").lean();
     const meta = node?.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node?.metadata || {});
-    return meta.version?.current || 0;
+    return meta.prestige?.current || 0;
   }
   return Number(version);
 }

@@ -15,7 +15,7 @@ import { isHtmlEnabled } from "./config.js";
 import { sendError, ERR } from "../../seed/protocol.js";
 
 // Mount HTML intercept routes (handles ?html on kernel API paths)
-const htmlRouter = buildHtmlRoutes({ urlAuth, renderers: { ...renderers, notFoundPage, errorHtml } });
+const htmlRouter = buildHtmlRoutes({ urlAuth, optionalAuth: authenticateLite, renderers: { ...renderers, notFoundPage, errorHtml } });
 router.use("/", htmlRouter);
 
 // Mount app page routers onto the pageRouter so the loader wires them at /

@@ -492,4 +492,429 @@ Examples:
         console.error(chalk.red("Error:"), err.message);
       }
     });
+
+  // -------------------------------------------------------------------------
+  // Bundle commands
+  // -------------------------------------------------------------------------
+
+  const bundle = program
+    .command("bundle")
+    .description("Manage extension bundles")
+    .addHelpText("after", `
+Examples:
+  bundle list                  List available bundles
+  bundle info treeos-cascade   Look before you plant. Full details.
+  bundle install treeos-cascade  Install all member extensions
+    `)
+    .action(() => bundle.outputHelp());
+
+  bundle
+    .command("list")
+    .description("List available bundles from the directory")
+    .action(async () => {
+      try {
+        const horizonUrl = "https://horizon.treeos.ai";
+        const res = await fetch(`${horizonUrl}/extensions?type=bundle&limit=100`);
+        if (!res.ok) throw new Error(`Directory unavailable (${res.status})`);
+        const data = await res.json();
+        const bundles = data.extensions || [];
+        if (!bundles.length) return console.log(chalk.dim("  No bundles published yet."));
+
+        console.log(chalk.bold(`Bundles (${data.total})\n`));
+        for (const b of bundles) {
+          const count = (b.includes || []).length;
+          const dl = b.downloads ? chalk.dim(` ${b.downloads} dl`) : "";
+          console.log(`  ${chalk.yellow(b.name)} ${chalk.dim("v" + b.version)} ${chalk.dim(`(${count} extensions)`)}${dl}`);
+          if (b.description) console.log(`    ${chalk.dim(b.description)}`);
+        }
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  bundle
+    .command("info [name...]")
+    .description("Look before you plant. Shows bundle details, member list, total size estimate.")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: bundle info <name>"));
+      const name = parts.join("-");
+      try {
+        const horizonUrl = "https://horizon.treeos.ai";
+
+        // Fetch bundle details
+        const res = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}`);
+        if (!res.ok) return console.log(chalk.red(`Bundle "${name}" not found.`));
+        const data = await res.json();
+        const b = data.latest;
+        if (!b || b.type !== "bundle") return console.log(chalk.red(`"${name}" is not a bundle.`));
+
+        console.log(chalk.bold(chalk.yellow("[bundle]") + " " + b.name) + " " + chalk.dim("v" + b.version));
+        if (b.description) console.log(b.description);
+        console.log(chalk.dim(`by ${b.authorName || b.authorDomain || "unknown"}, ${b.downloads || 0} downloads`));
+        console.log();
+
+        // Fetch ecosystem stats
+        const ecoRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/ecosystem`);
+        if (ecoRes.ok) {
+          const eco = await ecoRes.json();
+          if (eco.stats) {
+            console.log(chalk.bold("Ecosystem:"));
+            console.log(`  ${chalk.dim("Extensions:")} ${eco.stats.extensionCount}`);
+            console.log(`  ${chalk.dim("Total installs:")} ${eco.stats.totalDownloads}`);
+            console.log(`  ${chalk.dim("Contributors:")} ${eco.stats.contributorCount}`);
+            console.log();
+          }
+
+          if (eco.members?.length) {
+            console.log(chalk.bold("Included Extensions:"));
+            let totalBytes = 0;
+            for (const m of eco.members) {
+              const dl = m.downloads ? chalk.dim(` ${m.downloads} dl`) : "";
+              console.log(`  ${chalk.cyan(m.name)} ${chalk.dim("v" + (m.version || "?"))}${dl}`);
+              if (m.description) console.log(`    ${chalk.dim(m.description)}`);
+              totalBytes += m.totalBytes || 0;
+            }
+            if (totalBytes > 0) {
+              console.log(chalk.dim(`\n  Estimated size: ${(totalBytes / 1024).toFixed(1)} KB`));
+            }
+          }
+        }
+
+        // Show npm deps across all members
+        const includes = b.manifest?.includes || b.includes || [];
+        console.log(chalk.dim(`\ntreeos bundle install ${name}`));
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  bundle
+    .command("install [name...]")
+    .description("Install a bundle (installs all member extensions)")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: bundle install <name>. Run 'bundle list' to find bundles."));
+      const name = parts.join("-");
+      try {
+        const api = getApi();
+        const horizonUrl = "https://horizon.treeos.ai";
+
+        // Fetch bundle from registry
+        console.log(chalk.dim(`Fetching bundle ${name} from directory...`));
+        const res = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}`);
+        if (!res.ok) return console.log(chalk.red(`Bundle "${name}" not found in directory.`));
+        const data = await res.json();
+        const b = data.latest;
+        if (!b || b.type !== "bundle") return console.log(chalk.red(`"${name}" is not a bundle.`));
+
+        const includes = b.manifest?.includes || b.includes || [];
+        if (!includes.length) return console.log(chalk.red("Bundle has no members."));
+
+        console.log(chalk.bold(`Installing ${name}: ${includes.length} extensions\n`));
+
+        let installed = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        for (const dep of includes) {
+          const depName = dep.split("@")[0];
+          const depVersion = dep.includes("@") ? dep.split("@")[1] : null;
+          try {
+            console.log(chalk.dim(`  ${depName}...`));
+            const result = await api.installExtension(depName, depVersion);
+            console.log(chalk.green(`  Installed: ${depName} v${result.version || "?"}`));
+            installed++;
+          } catch (err) {
+            if (err.message?.includes("already") || err.message?.includes("exists")) {
+              console.log(chalk.dim(`  ${depName} already installed.`));
+              skipped++;
+            } else {
+              console.log(chalk.red(`  Failed: ${depName}: ${err.message}`));
+              failed++;
+            }
+          }
+        }
+
+        console.log();
+        console.log(chalk.bold("Summary:"), `${installed} installed, ${skipped} already present, ${failed} failed`);
+        if (failed === 0) {
+          console.log(chalk.dim("Restart the land to load."));
+        } else {
+          console.log(chalk.yellow("Some extensions failed. The bundle may not work correctly."));
+        }
+        await refreshProtocolCache();
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  // -------------------------------------------------------------------------
+  // OS commands
+  // -------------------------------------------------------------------------
+
+  const os = program
+    .command("os")
+    .description("Manage operating systems (extension distributions)")
+    .addHelpText("after", `
+Examples:
+  os list              List available OS distributions
+  os info TreeOS       Look before you plant. Full details.
+  os install TreeOS    Install everything: bundles, extensions, config.
+    `)
+    .action(() => os.outputHelp());
+
+  os
+    .command("list")
+    .description("List available OS distributions from the directory")
+    .action(async () => {
+      try {
+        const horizonUrl = "https://horizon.treeos.ai";
+        const res = await fetch(`${horizonUrl}/extensions?type=os&limit=100`);
+        if (!res.ok) throw new Error(`Directory unavailable (${res.status})`);
+        const data = await res.json();
+        const items = data.extensions || [];
+        if (!items.length) return console.log(chalk.dim("  No OS distributions published yet."));
+
+        console.log(chalk.bold(`Operating Systems (${data.total})\n`));
+        for (const o of items) {
+          const bundleCount = (o.bundles || []).length;
+          const standaloneCount = (o.standalone || []).length;
+          const dl = o.downloads ? chalk.dim(` ${o.downloads} dl`) : "";
+          console.log(`  ${chalk.magenta(o.name)} ${chalk.dim("v" + o.version)}${dl}`);
+          if (o.description) console.log(`    ${chalk.dim(o.description)}`);
+          console.log(`    ${chalk.dim(`${bundleCount} bundles, ${standaloneCount} standalone extensions`)}`);
+          console.log();
+        }
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  os
+    .command("info [name...]")
+    .description("Look before you plant. Shows everything the OS installs, configures, and expects.")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: os info <name>"));
+      const name = parts.join("-");
+      try {
+        const horizonUrl = "https://horizon.treeos.ai";
+
+        const res = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}`);
+        if (!res.ok) return console.log(chalk.red(`OS "${name}" not found.`));
+        const data = await res.json();
+        const o = data.latest;
+        if (!o || o.type !== "os") return console.log(chalk.red(`"${name}" is not an OS.`));
+
+        const m = o.manifest || {};
+
+        console.log(chalk.bold(chalk.magenta("[os]") + " " + o.name) + " " + chalk.dim("v" + o.version));
+        if (o.description) console.log(o.description);
+        console.log(chalk.dim(`by ${o.authorName || o.authorDomain || "unknown"}, ${o.downloads || 0} downloads`));
+        console.log();
+
+        // Ecosystem stats
+        const ecoRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/ecosystem`);
+        if (ecoRes.ok) {
+          const eco = await ecoRes.json();
+          if (eco.stats) {
+            console.log(chalk.bold("Ecosystem:"));
+            console.log(`  ${chalk.dim("Extensions:")} ${eco.stats.extensionCount}`);
+            console.log(`  ${chalk.dim("Total installs:")} ${eco.stats.totalDownloads}`);
+            console.log(`  ${chalk.dim("Contributors:")} ${eco.stats.contributorCount}`);
+            console.log();
+          }
+
+          // Estimate disk footprint
+          let totalBytes = 0;
+          if (eco.members) {
+            for (const mem of eco.members) totalBytes += mem.totalBytes || 0;
+          }
+          if (totalBytes > 0) {
+            console.log(chalk.dim(`  Estimated disk: ${(totalBytes / 1024).toFixed(1)} KB`));
+            console.log();
+          }
+        }
+
+        // Bundles
+        const bundles = m.bundles || o.bundles || [];
+        if (bundles.length) {
+          console.log(chalk.bold("Bundles:"));
+          for (const b of bundles) console.log(`  ${chalk.yellow(b)}`);
+          console.log();
+        }
+
+        // Standalone
+        const standalone = m.standalone || o.standalone || [];
+        if (standalone.length) {
+          console.log(chalk.bold("Standalone Extensions:"));
+          for (const s of standalone) console.log(`  ${chalk.cyan(s)}`);
+          console.log();
+        }
+
+        // Config defaults
+        const config = m.config || o.osConfig;
+        if (config && Object.keys(config).length) {
+          console.log(chalk.bold("Config Defaults:"));
+          for (const [k, v] of Object.entries(config)) {
+            console.log(`  ${chalk.dim(k)}: ${v}`);
+          }
+          console.log();
+        }
+
+        // Orchestrators
+        const orchestrators = m.orchestrators || o.osOrchestrators;
+        if (orchestrators && Object.keys(orchestrators).length) {
+          console.log(chalk.bold("Orchestrators:"));
+          for (const [zone, orch] of Object.entries(orchestrators)) {
+            console.log(`  ${chalk.dim(zone)}: ${orch}`);
+          }
+          console.log();
+        }
+
+        // npm dependencies across all members
+        const npmDeps = new Set();
+        if (m.needs?.npm) m.needs.npm.forEach(d => npmDeps.add(d));
+
+        // Collect from ecosystem members
+        const ecoRes2 = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/ecosystem`);
+        if (ecoRes2.ok) {
+          const eco2 = await ecoRes2.json();
+          for (const mem of (eco2.members || [])) {
+            if (mem.npmDependencies) mem.npmDependencies.forEach(d => npmDeps.add(d));
+          }
+        }
+
+        if (npmDeps.size > 0) {
+          console.log(chalk.bold("npm Dependencies (across all extensions):"));
+          for (const d of npmDeps) console.log(`  ${chalk.dim(d)}`);
+          console.log();
+        }
+
+        console.log(chalk.dim(`treeos os install ${name}`));
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  os
+    .command("install [name...]")
+    .description("Install an OS distribution (all bundles, extensions, config)")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: os install <name>. Run 'os list' to find OS distributions. Run 'os info <name>' first."));
+      const name = parts.join("-");
+      try {
+        const api = getApi();
+        const horizonUrl = "https://horizon.treeos.ai";
+
+        console.log(chalk.dim(`Fetching OS ${name} from directory...`));
+        const res = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}`);
+        if (!res.ok) return console.log(chalk.red(`OS "${name}" not found in directory.`));
+        const data = await res.json();
+        const o = data.latest;
+        if (!o || o.type !== "os") return console.log(chalk.red(`"${name}" is not an OS.`));
+
+        const m = o.manifest || {};
+        const bundles = m.bundles || o.bundles || [];
+        const standalone = m.standalone || o.standalone || [];
+
+        console.log(chalk.bold(`Installing ${name}: ${bundles.length} bundles, ${standalone.length} standalone extensions\n`));
+
+        let installed = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        // Install each bundle's members
+        for (const bundleRef of bundles) {
+          const bundleName = bundleRef.split("@")[0];
+          console.log(chalk.bold(`\nBundle: ${bundleName}`));
+
+          const bRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(bundleName)}`);
+          if (!bRes.ok) {
+            console.log(chalk.red(`  Bundle "${bundleName}" not found in directory.`));
+            failed++;
+            continue;
+          }
+          const bData = await bRes.json();
+          const b = bData.latest;
+          if (!b) {
+            console.log(chalk.red(`  Bundle "${bundleName}" has no published version.`));
+            failed++;
+            continue;
+          }
+
+          const includes = b.manifest?.includes || b.includes || [];
+          for (const dep of includes) {
+            const depName = dep.split("@")[0];
+            const depVersion = dep.includes("@") ? dep.split("@")[1] : null;
+            try {
+              console.log(chalk.dim(`  ${depName}...`));
+              const result = await api.installExtension(depName, depVersion);
+              console.log(chalk.green(`  Installed: ${depName} v${result.version || "?"}`));
+              installed++;
+            } catch (err) {
+              if (err.message?.includes("already") || err.message?.includes("exists")) {
+                console.log(chalk.dim(`  ${depName} already installed.`));
+                skipped++;
+              } else {
+                console.log(chalk.red(`  Failed: ${depName}: ${err.message}`));
+                failed++;
+              }
+            }
+          }
+        }
+
+        // Install standalone extensions
+        if (standalone.length) {
+          console.log(chalk.bold("\nStandalone Extensions:"));
+          for (const dep of standalone) {
+            const depName = dep.split("@")[0];
+            const depVersion = dep.includes("@") ? dep.split("@")[1] : null;
+            try {
+              console.log(chalk.dim(`  ${depName}...`));
+              const result = await api.installExtension(depName, depVersion);
+              console.log(chalk.green(`  Installed: ${depName} v${result.version || "?"}`));
+              installed++;
+            } catch (err) {
+              if (err.message?.includes("already") || err.message?.includes("exists")) {
+                console.log(chalk.dim(`  ${depName} already installed.`));
+                skipped++;
+              } else {
+                console.log(chalk.red(`  Failed: ${depName}: ${err.message}`));
+                failed++;
+              }
+            }
+          }
+        }
+
+        // Apply config defaults (merge, don't overwrite)
+        const config = m.config || o.osConfig;
+        if (config && Object.keys(config).length) {
+          console.log(chalk.bold("\nApplying config defaults..."));
+          try {
+            for (const [key, value] of Object.entries(config)) {
+              try {
+                await api.post("/land/config", { key, value, merge: true });
+                console.log(chalk.dim(`  ${key}: ${value}`));
+              } catch {
+                console.log(chalk.dim(`  ${key}: skipped (already set or invalid)`));
+              }
+            }
+          } catch (err) {
+            console.log(chalk.yellow(`  Config apply failed: ${err.message}`));
+          }
+        }
+
+        console.log(chalk.bold("\nSummary:"));
+        console.log(`  ${installed} installed, ${skipped} already present, ${failed} failed`);
+        if (failed === 0) {
+          console.log(chalk.green(`\n${name} installed successfully.`));
+          console.log(chalk.dim("Restart the land to load."));
+        } else {
+          console.log(chalk.yellow("\nSome components failed. The OS may not work correctly."));
+          console.log(chalk.dim("Restart the land to load what was installed."));
+        }
+        await refreshProtocolCache();
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
 };

@@ -338,6 +338,14 @@ async function trimPartitionIfNeeded(partitionId, maxPerDay) {
  * Write a cascade result to today's .flow partition.
  * Guarded against document size limit. When today's partition hits
  * flowMaxResultsPerDay, oldest results are dropped (circular buffer).
+ *
+ * Concurrency safety: the size check and write are not atomic (read-then-write).
+ * Under high concurrency, multiple writers can all pass the size check before
+ * any write lands. To prevent exceeding the 16MB BSON limit:
+ *   1. Trim synchronously (not deferred) when at or above 60% capacity.
+ *   2. Hard-cap signal keys per partition. Reject writes that exceed the cap.
+ *   3. Keep a 4MB headroom (14MB ceiling, 16MB MongoDB limit) to absorb
+ *      concurrent writes that slip through between the read and the write.
  */
 async function writeResult(signalId, result) {
   try {
@@ -347,11 +355,23 @@ async function writeResult(signalId, result) {
       return;
     }
 
-    // Size check: load partition with lean() to minimize memory.
-    // Only load metadata for the size estimate, not the full Mongoose document.
     const partition = await Node.findById(partitionId).select("metadata").lean();
     if (!partition) return;
 
+    // Hard cap: reject writes when signal key count exceeds per-day cap.
+    // This is O(1) and prevents unbounded growth regardless of concurrency.
+    const maxPerDay = parseInt(getLandConfigValue("flowMaxResultsPerDay") || "10000", 10);
+    const results = partition.metadata instanceof Map
+      ? partition.metadata.get("results") || {}
+      : partition.metadata?.results || {};
+    const keyCount = Object.keys(results).length;
+
+    if (keyCount >= maxPerDay) {
+      // At capacity. Trim synchronously before writing.
+      await trimPartitionIfNeeded(partitionId, maxPerDay);
+    }
+
+    // Size check. If over 60% capacity, trim synchronously first.
     const writeSize = estimateWriteSize(result);
     const sizeCheck = checkWriteSize(partition, writeSize, {
       documentType: "system",
@@ -359,33 +379,31 @@ async function writeResult(signalId, result) {
     });
 
     if (!sizeCheck.ok) {
-      // Partition full. Drop the result with the earliest timestamp.
-      const meta = partition.metadata instanceof Map
-        ? partition.metadata.get("results") || {}
-        : partition.metadata?.results || {};
-      const oldestKey = findOldestResultKey(meta);
+      // Partition over size limit. Drop oldest result synchronously, then recheck.
+      const oldestKey = findOldestResultKey(results);
       if (oldestKey) {
         await Node.updateOne(
           { _id: partitionId },
           { $unset: { [`metadata.results.${oldestKey}`]: 1 } },
         );
+      } else {
+        // No key to drop. Partition metadata is full with non-result data. Reject.
+        log.error("Cascade", `Partition ${partitionId} over size limit with no droppable results. Write rejected.`);
+        return;
       }
+    } else if (sizeCheck.projectedSize >= sizeCheck.maxSize * 0.6) {
+      // Proactive trim at 60% to keep headroom for concurrent writers.
+      // Synchronous, not deferred. Under high concurrency, deferred trims
+      // arrive too late and the partition blows past the BSON limit.
+      await trimPartitionIfNeeded(partitionId, Math.floor(maxPerDay * 0.8));
     }
 
-    // Write the result atomically. Per-day cap enforced as a soft limit:
-    // write first, then trim excess asynchronously. This avoids the race
-    // where two concurrent writes both see count < max and both write.
+    // Write the result.
     await Node.findByIdAndUpdate(
       partitionId,
       { $push: { [`metadata.results.${signalId}`]: result } },
       { upsert: false },
     );
-
-    // Deferred trim: if over the per-day cap, drop the oldest
-    const maxPerDay = parseInt(getLandConfigValue("flowMaxResultsPerDay") || "10000", 10);
-    trimPartitionIfNeeded(partitionId, maxPerDay).catch((err) => {
-      log.warn("Cascade", `Trim failed for partition ${partitionId}: ${err.message}. Will retry on next write.`);
-    });
   } catch (err) {
     log.error("Cascade", "Failed to write result to .flow:", err.message);
   }

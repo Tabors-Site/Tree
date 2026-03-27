@@ -97,7 +97,9 @@ export function releaseNodeLock(nodeId, sessionId) {
   if (!nodeId) return;
   const lock = locks.get(nodeId);
   if (!lock) return;
-  if (sessionId && lock.sessionId && lock.sessionId !== sessionId) return;
+  // Reject release if the lock has an owner and the caller doesn't match.
+  // Null callers cannot release owned locks. Only TTL expiry can.
+  if (lock.sessionId && (!sessionId || lock.sessionId !== sessionId)) return;
   locks.delete(nodeId);
 }
 

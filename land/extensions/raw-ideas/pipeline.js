@@ -237,8 +237,9 @@ export async function orchestrateRawIdeaPlacement({
     rawIdea.placedAt = new Date();
     await rawIdea.save();
 
-    const targetNode = await Node.findById(targetNodeId).select("prestige name parent").lean();
-    const nodeVersion = targetNode?.prestige?.toString() ?? "0";
+    const targetNode = await Node.findById(targetNodeId).select("metadata name parent").lean();
+    const pMeta = targetNode?.metadata instanceof Map ? targetNode.metadata.get("prestige") : targetNode?.metadata?.prestige;
+    const nodeVersion = String(pMeta?.current || 0);
 
     // Build full path from root to target node
     const targetNodePath = [];

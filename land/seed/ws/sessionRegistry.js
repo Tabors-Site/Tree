@@ -429,9 +429,14 @@ export function setStaleTimeout(ms) {
 setInterval(() => {
   const now = Date.now();
   for (const [sessionId, session] of sessions) {
-    // Skip websocket sessions (they have their own lifecycle via socket disconnect)
-    if (session.type === SESSION_TYPES.WEBSOCKET_CHAT) continue;
-    if (now - session.lastActivity > STALE_TIMEOUT) {
+    // WebSocket sessions get a longer timeout: they normally clean up on
+    // socket disconnect, but crashed clients (power loss, network drop without
+    // TCP FIN) can leave orphaned sessions. 2x the normal stale timeout gives
+    // generous reconnection headroom while still reclaiming dead sessions.
+    const timeout = session.type === SESSION_TYPES.WEBSOCKET_CHAT
+      ? STALE_TIMEOUT * 2
+      : STALE_TIMEOUT;
+    if (now - session.lastActivity > timeout) {
       log.debug("Session", `Stale session removed: ${session.type} [${sessionId.slice(0, 8)}]`);
       endSession(sessionId);
     }

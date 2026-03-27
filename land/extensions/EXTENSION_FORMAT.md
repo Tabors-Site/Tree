@@ -1160,3 +1160,120 @@ Extensions run in the same Node.js process as core. There is no sandbox or impor
 - Extensions can register routes, tools, hooks, and jobs that run with full system privileges.
 
 **For land operators:** Review all third party extension code before installing. Use `DISABLED_EXTENSIONS` to disable problematic extensions without removing their files. Disabling an extension prevents it from loading, unregisters its hooks, and removes its routes, tools, and jobs.
+
+## Package Types: Extensions, Bundles, and OS
+
+The Horizon directory organizes publishable packages into three types. All use the same publishing pipeline, versioning, ownership, and tombstone system. A `type` field in the manifest distinguishes them.
+
+### Extension (default)
+
+One folder. One manifest. One init. Does one thing. This is the standard format documented above.
+
+```js
+export default {
+  name: "crop-tracker",
+  type: "extension",             // default if omitted
+  version: "1.0.0",
+  builtFor: "FarmOS",            // "kernel" (universal), bundle name, or OS name
+  description: "Track crop yields per node",
+  needs: { extensions: ["farm-core@>=1.0.0"] },
+  provides: { routes: true, tools: true },
+};
+```
+
+**`builtFor`** declares where this extension is designed to work:
+- `"kernel"` (default): works on any land with no special extensions. Universal.
+- `"treeos-cascade"`: needs that bundle's extensions to be present.
+- `"FarmOS"`: built specifically for that OS distribution.
+
+The Horizon directory groups extensions by `builtFor` automatically. Publish with `builtFor: "FarmOS"` and it appears under FarmOS in the directory. No manual curation.
+
+### Bundle
+
+A curated set of extensions that form a coherent stack. Dependency group. No code of its own.
+
+```js
+export default {
+  name: "treeos-cascade",
+  type: "bundle",
+  version: "1.0.0",
+  builtFor: "kernel",
+  description: "The cascade nervous system",
+  includes: [
+    "propagation@^1.0.0",
+    "perspective-filter@^1.0.0",
+    "sealed-transport@^1.0.0",
+    "codebook@^1.0.0",
+    "gap-detection@^1.0.0",
+    "long-memory@^1.0.0",
+    "pulse@^1.0.0",
+    "flow@^1.0.0",
+  ],
+};
+```
+
+**Key fields:**
+- `type: "bundle"` is required.
+- `includes` lists the extensions in this bundle with version constraints. Must have at least 2.
+- Bundles do not need `index.js`. Only `manifest.js` is required.
+- All listed extensions must exist in the Horizon directory at publish time.
+- Installing a bundle (`treeos bundle install <name>`) installs all member extensions.
+
+### OS
+
+A full TreeOS distribution. Bundles + standalone extensions + default config + orchestrators.
+
+```js
+export default {
+  name: "TreeOS",
+  type: "os",
+  version: "1.0.0",
+  builtFor: "kernel",
+  description: "The first operating system built on the seed",
+  bundles: [
+    "treeos-cascade@^1.0.0",
+    "treeos-connect@^1.0.0",
+    "treeos-intelligence@^1.0.0",
+    "treeos-maintenance@^1.0.0",
+  ],
+  standalone: [
+    "treeos@^1.0.0",
+    "tree-orchestrator@^1.0.0",
+    "fitness@^1.0.0",
+    "food@^1.0.0",
+  ],
+  config: {
+    cascadeEnabled: true,
+    treeCircuitEnabled: true,
+  },
+  orchestrators: {
+    tree: "tree-orchestrator",
+    land: "land-manager",
+    home: "treeos",
+  },
+};
+```
+
+**Key fields:**
+- `type: "os"` is required.
+- `bundles`: bundles this OS includes. Each bundle's member extensions are installed.
+- `standalone`: extensions not part of any bundle that should still be installed.
+- `config`: default land config overrides. Applied during `treeos os install`, merged (not overwriting existing user values).
+- `orchestrators`: default orchestrator assignments by zone.
+- Must have at least one of `bundles` or `standalone`.
+- OS manifests do not need `index.js`. Only `manifest.js` is required.
+- Installing an OS (`treeos os install <name>`) installs all bundles (which install their members), all standalone extensions, applies config, and reports a summary.
+
+### CLI for Bundles and OS
+
+```
+treeos os list                  List available OS distributions
+treeos os info <name>           Look before you plant. Full details.
+treeos os install <name>        Install everything.
+
+treeos bundle list              List available bundles
+treeos bundle info <name>       Bundle details and member list.
+treeos bundle install <name>    Install all member extensions.
+```
+
+`os info` shows: bundles, extension count, config defaults, orchestrator assignments, estimated disk footprint, npm dependencies across all members. The operator makes an informed decision before committing.

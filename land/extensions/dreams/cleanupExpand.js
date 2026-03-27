@@ -33,12 +33,14 @@ async function findExpansionCandidates(rootId) {
   async function walk(nodeId, depth) {
     if (candidates.length >= MAX_CANDIDATES_PER_RUN) return;
 
-    const node = await Node.findById(nodeId).select("_id name type prestige children").lean();
+    const node = await Node.findById(nodeId).select("_id name type metadata children").lean();
     if (!node) return;
+
+    const pMeta = node.metadata instanceof Map ? node.metadata.get("prestige") : node.metadata?.prestige;
+    const currentPrestige = pMeta?.current || 0;
 
     const notes = await Note.find({
       nodeId: node._id,
-      version: String(0 ?? 0),
       contentType: "text",
     })
       .select("_id content userId")
@@ -52,7 +54,7 @@ async function findExpansionCandidates(rootId) {
           nodeId: node._id,
           nodeName: node.name,
           nodeType: node.type || null,
-          prestige: 0 ?? 0,
+          prestige: currentPrestige,
           children: node.children || [],
           notes,
           totalLength,

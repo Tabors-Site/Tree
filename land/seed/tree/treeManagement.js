@@ -13,6 +13,7 @@ import { invalidateAll, invalidateNode } from "./ancestorCache.js";
 import log from "../log.js";
 import { NODE_STATUS, DELETED, CONTENT_TYPE, ERR, ProtocolError, SYSTEM_OWNER } from "../protocol.js";
 import { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple } from "./nodeLocks.js";
+import { getLandConfigValue } from "../landConfig.js";
 
 async function getUserOrThrow(userId) {
   if (!userId) {
@@ -109,15 +110,27 @@ export async function createNode(
     if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Parent node is being modified");
   }
   try {
+    // Children cap: prevent any single node from accumulating unbounded children.
+    // Wide nodes cause memory spikes on every parent query (the entire children
+    // array loads into memory). Default 1000, configurable via maxChildrenPerNode.
+    const maxChildren = parseInt(getLandConfigValue("maxChildrenPerNode") || "1000", 10);
+
     if (isRoot) {
       const landRootId = getLandRootId();
       if (landRootId) {
+        const landRoot = await Node.findById(landRootId).select("children").lean();
+        if (landRoot?.children?.length >= maxChildren) {
+          throw new ProtocolError(400, ERR.INVALID_INPUT, `Land root has reached the maximum of ${maxChildren} children`);
+        }
         await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: newNode._id } });
       }
     } else if (parentNodeID) {
-      const parentNode = await Node.findById(parentNodeID).select("systemRole").lean();
+      const parentNode = await Node.findById(parentNodeID).select("systemRole children").lean();
       if (!parentNode) throw new Error("Parent node not found");
       if (parentNode.systemRole) throw new Error("Cannot create nodes under system nodes");
+      if (parentNode.children?.length >= maxChildren) {
+        throw new ProtocolError(400, ERR.INVALID_INPUT, `Parent node has reached the maximum of ${maxChildren} children`);
+      }
 
       await Node.findByIdAndUpdate(parentNodeID, { $addToSet: { children: newNode._id } });
 

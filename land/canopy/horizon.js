@@ -2,7 +2,12 @@ import log from "../seed/log.js";
 import { getLandInfoPayload, signCanopyToken } from "./identity.js";
 import Node from "../seed/models/node.js";
 
-const HORIZON_URL = process.env.HORIZON_URL;
+// Support comma-separated list of directory URLs
+const HORIZON_URLS = (process.env.HORIZON_URL || "")
+  .split(",")
+  .map((u) => u.trim())
+  .filter(Boolean);
+
 const RE_REGISTER_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 let reRegisterTimer = null;
@@ -33,20 +38,15 @@ async function getPublicTrees() {
 }
 
 /**
- * Register this land with the Horizon service.
- * Sends land identity + public trees. Authenticates with a CanopyToken.
+ * Register this land with a single directory URL.
  */
-export async function registerWithHorizon() {
-  if (!HORIZON_URL) return;
-
+async function registerWithDirectory(url) {
   try {
     const info = getLandInfoPayload();
     const publicTrees = await getPublicTrees();
-
-    // Sign a token targeting the Horizon
     const token = await signCanopyToken("horizon-registration", "horizon");
 
-    const res = await fetch(`${HORIZON_URL}/horizon/register`, {
+    const res = await fetch(`${url}/horizon/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -62,28 +62,41 @@ export async function registerWithHorizon() {
         siteUrl: info.siteUrl,
         publicTrees,
       }),
+      signal: AbortSignal.timeout(15000),
     });
 
     const data = await res.json();
 
-    if (data.status === "ok") {
-      log.verbose("Canopy", `Registered with Horizon at ${HORIZON_URL}`);
+    if (data.success || data.status === "ok") {
+      log.verbose("Canopy", `Registered with directory at ${url}`);
     } else {
-      log.error("Canopy", `[Land] Horizon registration failed: ${(data.error && data.error.message) || data.error}`);
+      log.error("Canopy", `Directory registration failed at ${url}: ${(data.error && data.error.message) || data.error}`);
     }
   } catch (err) {
-    log.error("Canopy", `[Land] Could not reach Horizon at ${HORIZON_URL}: ${err.message}`);
+    log.error("Canopy", `Could not reach directory at ${url}: ${err.message}`);
   }
+}
+
+/**
+ * Register this land with all configured directories.
+ * Each directory is contacted in parallel. Failures are isolated per URL.
+ */
+export async function registerWithHorizon() {
+  if (HORIZON_URLS.length === 0) return;
+
+  await Promise.allSettled(HORIZON_URLS.map((url) => registerWithDirectory(url)));
 }
 
 /**
  * Start periodic re-registration (updates public tree list, refreshes lastSeenAt).
  */
 export function startHorizonRegistration() {
-  if (!HORIZON_URL) {
-    log.verbose("Land", "No HORIZON_URL set, skipping Horizon registration");
+  if (HORIZON_URLS.length === 0) {
+    log.verbose("Land", "No HORIZON_URL set, skipping directory registration");
     return;
   }
+
+  log.verbose("Canopy", `Registering with ${HORIZON_URLS.length} director${HORIZON_URLS.length === 1 ? "y" : "ies"}: ${HORIZON_URLS.join(", ")}`);
 
   // Register immediately
   registerWithHorizon();
@@ -103,68 +116,96 @@ export function stopHorizonRegistration() {
 }
 
 /**
- * Look up a land by domain through the Horizon service.
- * Returns { domain, name, baseUrl, publicKey, ... } or null.
+ * Look up a land by domain through the directories.
+ * Queries all configured directories, returns the first match.
  */
 export async function lookupLandByDomain(domain) {
-  if (!HORIZON_URL) return null;
+  if (HORIZON_URLS.length === 0) return null;
 
-  try {
-    const res = await fetch(
-      `${HORIZON_URL}/horizon/land/${encodeURIComponent(domain)}`,
-      { signal: AbortSignal.timeout(10000) }
-    );
+  const results = await Promise.allSettled(
+    HORIZON_URLS.map(async (url) => {
+      const res = await fetch(
+        `${url}/horizon/land/${encodeURIComponent(domain)}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      const result = data.data || data;
+      if (data.status === "error" || !result.land) return null;
+      return result.land;
+    })
+  );
 
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    const result = data.data || data;
-    if (data.status === "error" || !result.land) return null;
-
-    return result.land;
-  } catch {
-    return null;
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) return r.value;
   }
+  return null;
 }
 
 /**
- * Search lands by name or domain through the Horizon.
+ * Search lands by name or domain through the directories.
+ * Queries all directories and merges/deduplicates by domain.
  */
 export async function searchLands(query) {
-  if (!HORIZON_URL) return [];
+  if (HORIZON_URLS.length === 0) return [];
 
-  try {
-    const res = await fetch(
-      `${HORIZON_URL}/horizon/lands?q=${encodeURIComponent(query)}`,
-      { signal: AbortSignal.timeout(10000) }
-    );
+  const results = await Promise.allSettled(
+    HORIZON_URLS.map(async (url) => {
+      const res = await fetch(
+        `${url}/horizon/lands?q=${encodeURIComponent(query)}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.lands || [];
+    })
+  );
 
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    return data.lands || [];
-  } catch {
-    return [];
+  // Merge and deduplicate by domain
+  const seen = new Set();
+  const merged = [];
+  for (const r of results) {
+    if (r.status !== "fulfilled") continue;
+    for (const land of r.value) {
+      if (!seen.has(land.domain)) {
+        seen.add(land.domain);
+        merged.push(land);
+      }
+    }
   }
+  return merged;
 }
 
 /**
- * Search public trees across the network through the Horizon.
+ * Search public trees across the network through the directories.
+ * Queries all directories and merges/deduplicates by rootId+landDomain.
  */
 export async function searchPublicTrees(query) {
-  if (!HORIZON_URL) return [];
+  if (HORIZON_URLS.length === 0) return [];
 
-  try {
-    const res = await fetch(
-      `${HORIZON_URL}/horizon/search/trees?q=${encodeURIComponent(query)}`,
-      { signal: AbortSignal.timeout(10000) }
-    );
+  const results = await Promise.allSettled(
+    HORIZON_URLS.map(async (url) => {
+      const res = await fetch(
+        `${url}/horizon/search/trees?q=${encodeURIComponent(query)}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.trees || [];
+    })
+  );
 
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    return data.trees || [];
-  } catch {
-    return [];
+  const seen = new Set();
+  const merged = [];
+  for (const r of results) {
+    if (r.status !== "fulfilled") continue;
+    for (const tree of r.value) {
+      const key = `${tree.landDomain}:${tree.rootId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(tree);
+      }
+    }
   }
+  return merged;
 }

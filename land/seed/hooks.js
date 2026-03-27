@@ -80,6 +80,47 @@ const SEQUENTIAL_OVERRIDES = {
 };
 const _failureCounts = new Map(); // "hookName:extName" -> count
 const _circuitOpenedAt = new Map(); // "hookName:extName" -> timestamp when breaker opened
+const _circuitRetries = new Map(); // "hookName:extName" -> number of failed half-open retries
+const CIRCUIT_MAX_BACKOFF_MS = 3600000; // 1 hour max backoff
+
+/**
+ * Calculate the half-open delay with exponential backoff.
+ * First retry at base interval, then 2x, 4x, etc. Caps at 1 hour.
+ */
+function getHalfOpenDelay(key) {
+  const retries = _circuitRetries.get(key) || 0;
+  const base = CIRCUIT_HALF_OPEN_MS();
+  return Math.min(base * Math.pow(2, retries), CIRCUIT_MAX_BACKOFF_MS);
+}
+
+/**
+ * Reset circuit breaker state for a key (on successful call).
+ */
+function circuitSuccess(key) {
+  _failureCounts.delete(key);
+  _circuitOpenedAt.delete(key);
+  _circuitRetries.delete(key);
+}
+
+/**
+ * Record a circuit breaker failure for a key.
+ */
+function circuitFailure(key, hookName, extName) {
+  const count = (_failureCounts.get(key) || 0) + 1;
+  _failureCounts.set(key, count);
+  if (count >= CIRCUIT_BREAKER_THRESHOLD()) {
+    // If breaker was already open (half-open test failed), increment retries
+    if (_circuitOpenedAt.has(key)) {
+      const retries = (_circuitRetries.get(key) || 0) + 1;
+      _circuitRetries.set(key, retries);
+      const nextDelay = getHalfOpenDelay(key);
+      log.error("Hooks", `${hookName} from "${extName}" half-open test failed (retry ${retries}). Next attempt in ${Math.round(nextDelay / 1000)}s.`);
+    } else {
+      log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open.`);
+    }
+    _circuitOpenedAt.set(key, Date.now());
+  }
+}
 
 // Map<hookName, Array<{ extName, handler }>>
 const registry = new Map();
@@ -220,30 +261,25 @@ async function run(hookName, data) {
           const key = `${hookName}:${extName}`;
           const failures = _failureCounts.get(key) || 0;
           if (failures >= CIRCUIT_BREAKER_THRESHOLD()) {
-            // Half-open: allow one test call after CIRCUIT_HALF_OPEN_MS
             const openedAt = _circuitOpenedAt.get(key) || 0;
-            if (Date.now() - openedAt < CIRCUIT_HALF_OPEN_MS()) return false;
+            if (Date.now() - openedAt < getHalfOpenDelay(key)) return false;
           }
           return true;
         })
-        .map(({ extName, handler }) =>
-          withTimeout(handler(data), HOOK_TIMEOUT_MS(), `${hookName}:${extName}`)
+        .map(({ extName, handler }) => {
+          const key = `${hookName}:${extName}`;
+          return withTimeout(handler(data), HOOK_TIMEOUT_MS(), `${hookName}:${extName}`)
             .then(() => {
-              _failureCounts.delete(`${hookName}:${extName}`);
-              _circuitOpenedAt.delete(`${hookName}:${extName}`);
+              circuitSuccess(key);
             })
             .catch(err => {
-              const key = `${hookName}:${extName}`;
-              const count = (_failureCounts.get(key) || 0) + 1;
-              _failureCounts.set(key, count);
-              if (count >= CIRCUIT_BREAKER_THRESHOLD()) {
-                _circuitOpenedAt.set(key, Date.now());
-                log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open. Auto-disabled.`);
-              } else {
+              circuitFailure(key, hookName, extName);
+              const count = _failureCounts.get(key) || 0;
+              if (count < CIRCUIT_BREAKER_THRESHOLD()) {
                 log.warn("Hooks", `${hookName} from "${extName}" failed (${count}/${CIRCUIT_BREAKER_THRESHOLD()}):`, err.message);
               }
-            })
-        )
+            });
+        })
     );
     return { cancelled: false };
   }
@@ -257,9 +293,8 @@ async function run(hookName, data) {
     const key = `${hookName}:${extName}`;
     const failures = _failureCounts.get(key) || 0;
     if (failures >= CIRCUIT_BREAKER_THRESHOLD()) {
-      // Half-open: allow one test call after CIRCUIT_HALF_OPEN_MS
       const openedAt = _circuitOpenedAt.get(key) || 0;
-      if (Date.now() - openedAt < CIRCUIT_HALF_OPEN_MS()) continue;
+      if (Date.now() - openedAt < getHalfOpenDelay(key)) continue;
     }
 
     // Cumulative timeout for sequential override chains (enrichContext, onCascade)
@@ -277,24 +312,21 @@ async function run(hookName, data) {
 
     try {
       const result = await withTimeout(handler(data), perHandlerTimeout, `${hookName}:${extName}`);
-      _failureCounts.delete(key);
-      _circuitOpenedAt.delete(key);
+      circuitSuccess(key);
       if (isBefore && result === false) {
         return { cancelled: true, reason: `Cancelled by ${extName}` };
       }
     } catch (err) {
-      const count = (_failureCounts.get(key) || 0) + 1;
-      _failureCounts.set(key, count);
-      if (count >= CIRCUIT_BREAKER_THRESHOLD()) {
-        _circuitOpenedAt.set(key, Date.now());
-        log.error("Hooks", `${hookName} from "${extName}" failed ${count}x. Circuit breaker open.`);
-      }
+      circuitFailure(key, hookName, extName);
       if (isBefore) {
         const isTimeout = err.message?.includes("timed out");
         log.error("Hooks", `${hookName} from "${extName}" ${isTimeout ? "timed out" : "threw"}, cancelling:`, err.message);
         return { cancelled: true, reason: err.message, timedOut: isTimeout };
       }
-      log.warn("Hooks", `${hookName} from "${extName}" failed:`, err.message);
+      const count = _failureCounts.get(key) || 0;
+      if (count < CIRCUIT_BREAKER_THRESHOLD()) {
+        log.warn("Hooks", `${hookName} from "${extName}" failed:`, err.message);
+      }
     }
   }
 
@@ -322,10 +354,21 @@ function setScopeResolver(fn) {
   _getScopeFn = fn;
 }
 
+/**
+ * Manually reset a circuit breaker for a hook:extension pair.
+ * Use when the underlying issue is resolved but the breaker is in deep backoff.
+ */
+function resetCircuit(hookName, extName) {
+  const key = `${hookName}:${extName}`;
+  circuitSuccess(key);
+  log.info("Hooks", `Circuit breaker manually reset for ${key}`);
+}
+
 export const hooks = {
   register,
   unregister,
   run,
   list,
   setScopeResolver,
+  resetCircuit,
 };

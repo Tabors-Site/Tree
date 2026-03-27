@@ -6,6 +6,23 @@ const ExtensionSchema = new mongoose.Schema({
   version: { type: String, required: true },
   description: { type: String, default: "" },
 
+  // Package taxonomy
+  type: {
+    type: String,
+    enum: ["extension", "bundle", "os"],
+    default: "extension",
+  },
+  builtFor: { type: String, default: "kernel" },
+
+  // Bundle fields: extensions this bundle includes
+  includes: [{ type: String }],
+
+  // OS fields: bundles, standalone extensions, config, orchestrators
+  bundles: [{ type: String }],
+  standalone: [{ type: String }],
+  osConfig: { type: mongoose.Schema.Types.Mixed, default: null },
+  osOrchestrators: { type: mongoose.Schema.Types.Mixed, default: null },
+
   // Author (the land that originally published)
   authorLandId: { type: String, required: true },
   authorDomain: { type: String, required: true },
@@ -43,6 +60,9 @@ const ExtensionSchema = new mongoose.Schema({
   // Discovery
   tags: [{ type: String }],
   readme: { type: String, default: "" },
+
+  // Dependency visibility (denormalized from manifest.needs.npm)
+  npmDependencies: [{ type: String }],
 });
 
 // name + version must be unique (like npm)
@@ -50,6 +70,9 @@ ExtensionSchema.index({ name: 1, version: 1 }, { unique: true });
 ExtensionSchema.index({ name: 1 });
 ExtensionSchema.index({ tags: 1 });
 ExtensionSchema.index({ authorLandId: 1 });
+ExtensionSchema.index({ type: 1 });
+ExtensionSchema.index({ builtFor: 1 });
+ExtensionSchema.index({ type: 1, builtFor: 1 });
 ExtensionSchema.index({ name: "text", description: "text", tags: "text" });
 
 const Extension = mongoose.model("Extension", ExtensionSchema);

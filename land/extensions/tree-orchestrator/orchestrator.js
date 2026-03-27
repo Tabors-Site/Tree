@@ -15,6 +15,32 @@ import {
   resolveRootLlmForMode,
 } from "../../seed/ws/conversation.js";
 import { classify, translateDestructive } from "./translator.js";
+import { getLandConfigValue } from "../../seed/landConfig.js";
+
+/**
+ * Local intent classification. Zero LLM calls.
+ * The user already classified by typing the command (chat/place/query/fitness/etc).
+ * This catches the remaining cases within chat where the AI needs a hint.
+ * Wrong classification doesn't break anything because the AI has all tools.
+ */
+function localClassify(message) {
+  const lower = message.toLowerCase().trim();
+
+  // Conversational: skip librarian, go straight to respond
+  if (/^(hey|hi|hello|thanks|ok|sure|yep|yeah|what's up|sup|yo|nice|cool|got it|good)\b/i.test(lower))
+    return { intent: "query", confidence: 0.9, summary: message.slice(0, 100), responseHint: "" };
+
+  // Questions: read-only query flow
+  if (/^(what|how|why|when|where|who|is |are |does |do |can |show |tell |list )/.test(lower))
+    return { intent: "query", confidence: 0.8, summary: message.slice(0, 100), responseHint: "" };
+
+  // Destructive: needs LLM translation for safety
+  if (/\b(delete|remove|move|merge|reorganize|clean up|mark .* completed?)\b/.test(lower))
+    return { intent: "destructive", confidence: 0.7, summary: message.slice(0, 100), responseHint: "" };
+
+  // Everything else: placement
+  return { intent: "place", confidence: 0.6, summary: message.slice(0, 100), responseHint: "" };
+}
 import { setChatContext } from "../../seed/ws/chatTracker.js";
 import { isActiveNavigator } from "../../seed/ws/sessionRegistry.js";
 
@@ -1164,30 +1190,33 @@ export async function orchestrateTreeRequest({
 
   let classification;
   const classifyStart = new Date();
-  try {
-    classification = await classify({
-      message,
-      userId,
-      conversationMemory: formatMemoryContext(visitorId),
-      treeSummary,
-      signal,
-      slot,
-      rootId,
-    });
-  } catch (err) {
-    if (signal?.aborted) return null;
-    if (err.message === "NO_LLM") {
-      throw new Error(
-        "No LLM connection configured. Set one up at /setup or assign one to this tree.",
-      );
+  const classificationMode = getLandConfigValue("classificationMode") || "local";
+
+  if (classificationMode === "llm") {
+    // Opt-in LLM classification (old behavior)
+    try {
+      classification = await classify({
+        message,
+        userId,
+        conversationMemory: formatMemoryContext(visitorId),
+        treeSummary,
+        signal,
+        slot,
+        rootId,
+      });
+    } catch (err) {
+      if (signal?.aborted) return null;
+      if (err.message === "NO_LLM") {
+        throw new Error(
+          "No LLM connection configured. Set one up at /setup or assign one to this tree.",
+        );
+      }
+      log.error("Tree Orchestrator", " Classification failed:", err.message);
+      classification = localClassify(message);
     }
- log.error("Tree Orchestrator", " Classification failed:", err.message);
-    classification = {
-      intent: "query",
-      confidence: 0.5,
-      responseHint: "Respond naturally to the user's message.",
-      summary: message,
-    };
+  } else {
+    // Default: local classification. Zero LLM calls.
+    classification = localClassify(message);
   }
   const classifyEnd = new Date();
 

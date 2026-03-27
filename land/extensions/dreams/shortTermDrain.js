@@ -228,8 +228,9 @@ export async function drainTree(rootId) {
           // Get current prestige for the target node
           let prestige = 0;
           try {
-            const targetNode = await Node.findById(targetNodeId).select("prestige").lean();
-            prestige = targetNode?.prestige ?? 0;
+            const targetNode = await Node.findById(targetNodeId).select("metadata").lean();
+            const pMeta = targetNode?.metadata instanceof Map ? targetNode.metadata.get("prestige") : targetNode?.metadata?.prestige;
+            prestige = pMeta?.current ?? 0;
           } catch (err) { log.debug("Dreams", "Could not fetch prestige for target node:", err.message); }
 
           const { parsed: noteData } = await rt.runStep("tree:notes", {

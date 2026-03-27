@@ -40,6 +40,7 @@ let MAX_TOOL_ITERATIONS = 15;
 let LLM_TIMEOUT_MS = 15 * 60 * 1000;
 let LLM_MAX_RETRIES = 3;
 const MODE_TIMEOUTS = {};
+const MAX_MESSAGE_CONTENT_BYTES = 32768; // 32KB per message in conversation history
 
 // ── Kernel config setters (called from startup.js after land config loads) ──
 export function setKernelConfig(key, value) {
@@ -57,6 +58,7 @@ export function setKernelConfig(key, value) {
     case "failoverTimeout": FAILOVER_TIMEOUT_MS = Math.max(1000, Math.min(num * 1000, 120000)); break;
     case "toolCallTimeout": TOOL_CALL_TIMEOUT_MS = Math.max(5000, Math.min(num * 1000, 600000)); break;
     case "toolResultMaxBytes": TOOL_RESULT_MAX_BYTES = Math.max(1000, Math.min(num, 1000000)); break;
+    case "llmWaiterTimeout": LLM_WAITER_TIMEOUT_MS = Math.max(5000, Math.min(num * 1000, 120000)); break;
     case "maxConversationSessions": MAX_CONVERSATION_SESSIONS = Math.max(100, Math.min(num, 500000)); break;
     case "staleConversationTimeout": STALE_SESSION_MS = Math.max(60000, Math.min(num * 1000, 86400000)); break;
   }
@@ -70,6 +72,7 @@ let LLM_MAX_CONCURRENT = 20;
 let FAILOVER_TIMEOUT_MS = 15000;
 let TOOL_CALL_TIMEOUT_MS = 60000;
 let TOOL_RESULT_MAX_BYTES = 50000;
+let LLM_WAITER_TIMEOUT_MS = 30000;
 let _activeLlmCalls = 0;
 const _llmWaiters = [];
 
@@ -111,8 +114,18 @@ async function acquireLlmSlot(signal, priority = LLM_PRIORITY.BACKGROUND) {
     }
     if (!inserted) _llmWaiters.push(waiter);
 
+    // Waiter timeout: reject and remove if slot not acquired in time.
+    // Prevents zombie waiters from crashed/disconnected clients filling the queue.
+    const timeoutId = setTimeout(() => {
+      const idx = _llmWaiters.indexOf(waiter);
+      if (idx >= 0) _llmWaiters.splice(idx, 1);
+      reject(new Error(`LLM slot not acquired within ${LLM_WAITER_TIMEOUT_MS}ms`));
+    }, LLM_WAITER_TIMEOUT_MS);
+    waiter.cleanupTimeout = () => clearTimeout(timeoutId);
+
     if (signal) {
       const onAbort = () => {
+        clearTimeout(timeoutId);
         const idx = _llmWaiters.indexOf(waiter);
         if (idx >= 0) _llmWaiters.splice(idx, 1);
         reject(new Error("Queued LLM call cancelled"));
@@ -126,6 +139,7 @@ async function acquireLlmSlot(signal, priority = LLM_PRIORITY.BACKGROUND) {
 function releaseLlmSlot() {
   if (_llmWaiters.length > 0) {
     const next = _llmWaiters.shift(); // highest priority (lowest number) is first
+    if (next.cleanupTimeout) next.cleanupTimeout();
     if (next.cleanup) next.cleanup();
     next.resolve();
     // Slot transfers to the next waiter, _activeLlmCalls stays the same
@@ -820,11 +834,22 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     while (recent.length > 0 && recent[0].role === "tool") {
       recent.shift();
     }
+    // Cap any oversized messages retained after trim. Tool results and
+    // injected context are capped on insertion, but LLM responses can be
+    // arbitrarily large. Truncating here bounds total session memory.
+    for (const msg of recent) {
+      if (typeof msg.content === "string" && msg.content.length > MAX_MESSAGE_CONTENT_BYTES) {
+        msg.content = msg.content.slice(0, MAX_MESSAGE_CONTENT_BYTES) + "\n... (truncated)";
+      }
+    }
     session.messages = [systemMsg, ...recent];
   }
 
-  // Add user message
-  session.messages.push({ role: "user", content: message });
+  // Add user message (capped to prevent oversized entries in conversation history)
+  const safeUserMsg = message.length > MAX_MESSAGE_CONTENT_BYTES
+    ? message.slice(0, MAX_MESSAGE_CONTENT_BYTES) + "\n... (message truncated)"
+    : message;
+  session.messages.push({ role: "user", content: safeUserMsg });
 }
 
 /**

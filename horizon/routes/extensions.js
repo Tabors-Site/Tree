@@ -322,11 +322,22 @@ const router = Router();
 
 /**
  * GET /extensions
- * List available extensions. Supports search via ?q=
+ * List available packages. Supports search, type filter, builtFor filter, sort, ecosystem.
+ *
+ * Query params:
+ *   q         - text search
+ *   tag       - filter by tag
+ *   author    - filter by author domain
+ *   type      - "extension", "bundle", "os"
+ *   builtFor  - "kernel" or a specific OS/bundle name
+ *   sort      - "downloaded" (default), "recent"
+ *   ecosystem - OS name: returns everything with builtFor matching this OS
+ *   limit     - max results (default 50, max 100)
+ *   offset    - skip N results
  */
 router.get("/", async (req, res) => {
   try {
-    const { q, tag, author, limit = 50, offset = 0 } = req.query;
+    const { q, tag, author, type, builtFor, sort, ecosystem, limit = 50, offset = 0 } = req.query;
 
     let query = {};
 
@@ -342,7 +353,25 @@ router.get("/", async (req, res) => {
       query.authorDomain = author;
     }
 
-    // Get latest version of each extension
+    if (type && ["extension", "bundle", "os"].includes(type)) {
+      query.type = type;
+    }
+
+    if (builtFor) {
+      query.builtFor = builtFor;
+    }
+
+    // Ecosystem shortcut: all packages built for this OS
+    if (ecosystem) {
+      query.builtFor = ecosystem;
+    }
+
+    // Sort stage
+    const sortStage = sort === "recent"
+      ? { publishedAt: -1, name: 1 }
+      : { downloads: -1, name: 1 };
+
+    // Get latest version of each package
     const pipeline = [
       { $match: query },
       { $sort: { name: 1, publishedAt: -1 } },
@@ -353,7 +382,7 @@ router.get("/", async (req, res) => {
         },
       },
       { $replaceRoot: { newRoot: "$latest" } },
-      { $sort: { downloads: -1, name: 1 } },
+      { $sort: sortStage },
       { $skip: Number(offset) },
       { $limit: Math.min(Number(limit), 100) },
       {
@@ -361,11 +390,17 @@ router.get("/", async (req, res) => {
           name: 1,
           version: 1,
           description: 1,
+          type: 1,
+          builtFor: 1,
+          includes: 1,
+          bundles: 1,
+          standalone: 1,
           authorDomain: 1,
           authorName: 1,
           tags: 1,
           downloads: 1,
           publishedAt: 1,
+          npmDependencies: 1,
           "manifest.needs": 1,
           "manifest.optional": 1,
           "manifest.provides": 1,
@@ -458,6 +493,147 @@ router.get("/:name", async (req, res) => {
 });
 
 /**
+ * GET /extensions/:name/dependents
+ * Returns all packages that depend on :name via needs.extensions, includes, bundles, or standalone.
+ */
+router.get("/:name/dependents", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // Find latest version of each package that references this name
+    const pipeline = [
+      {
+        $match: {
+          name: { $ne: name },
+          $or: [
+            { "manifest.needs.extensions": { $regex: `^${escapedName}(@|$)` } },
+            { includes: { $regex: `^${escapedName}(@|$)` } },
+            { bundles: { $regex: `^${escapedName}(@|$)` } },
+            { standalone: { $regex: `^${escapedName}(@|$)` } },
+          ],
+        },
+      },
+      { $sort: { name: 1, publishedAt: -1 } },
+      { $group: { _id: "$name", latest: { $first: "$$ROOT" } } },
+      { $replaceRoot: { newRoot: "$latest" } },
+      { $project: { name: 1, version: 1, type: 1, includes: 1, bundles: 1, standalone: 1, "manifest.needs.extensions": 1 } },
+    ];
+
+    const results = await Extension.aggregate(pipeline);
+
+    const dependents = results.map((r) => {
+      let relationship = "needs";
+      const includesMatch = (r.includes || []).some((i) => i.split("@")[0] === name);
+      const bundlesMatch = (r.bundles || []).some((b) => b.split("@")[0] === name);
+      const standaloneMatch = (r.standalone || []).some((s) => s.split("@")[0] === name);
+      if (includesMatch) relationship = "includes";
+      else if (bundlesMatch) relationship = "bundles";
+      else if (standaloneMatch) relationship = "standalone";
+      return { name: r.name, version: r.version, type: r.type || "extension", relationship };
+    });
+
+    res.json({ name, dependents, total: dependents.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /extensions/:name/ecosystem
+ * For OS or bundle: returns member packages and aggregate stats.
+ */
+router.get("/:name/ecosystem", async (req, res) => {
+  try {
+    const { name } = req.params;
+
+    // Get latest version
+    const pkg = await Extension.findOne({ name }).sort({ publishedAt: -1 }).lean();
+    if (!pkg) {
+      return res.status(404).json({ error: "Package not found" });
+    }
+
+    const type = pkg.type || "extension";
+    if (type !== "os" && type !== "bundle") {
+      return res.status(400).json({ error: "Ecosystem stats are only available for OS and bundle packages" });
+    }
+
+    // Collect member names
+    let memberNames = [];
+    if (type === "bundle") {
+      memberNames = (pkg.includes || []).map((i) => i.split("@")[0]);
+    } else {
+      // OS: collect from bundles (resolve each bundle's includes) and standalone
+      const bundleNames = (pkg.bundles || []).map((b) => b.split("@")[0]);
+      const standaloneNames = (pkg.standalone || []).map((s) => s.split("@")[0]);
+
+      // Fetch bundle manifests to get their includes
+      const bundleDocs = await Extension.find({ name: { $in: bundleNames }, type: "bundle" })
+        .sort({ publishedAt: -1 })
+        .lean();
+
+      // Dedupe by name (take latest of each)
+      const seen = new Set();
+      for (const b of bundleDocs) {
+        if (!seen.has(b.name)) {
+          seen.add(b.name);
+          const inc = (b.includes || []).map((i) => i.split("@")[0]);
+          memberNames.push(...inc);
+        }
+      }
+      memberNames.push(...bundleNames, ...standaloneNames);
+    }
+
+    // Also include anything with builtFor = this name
+    const builtForQuery = { builtFor: name, name: { $ne: name } };
+    const builtForDocs = await Extension.find(builtForQuery)
+      .sort({ name: 1, publishedAt: -1 })
+      .lean();
+
+    const builtForNames = [];
+    const builtForSeen = new Set();
+    for (const d of builtForDocs) {
+      if (!builtForSeen.has(d.name)) {
+        builtForSeen.add(d.name);
+        builtForNames.push(d.name);
+      }
+    }
+
+    const allNames = [...new Set([...memberNames, ...builtForNames])];
+
+    // Aggregate stats across all members
+    const memberDocs = await Extension.aggregate([
+      { $match: { name: { $in: allNames } } },
+      { $sort: { name: 1, publishedAt: -1 } },
+      { $group: { _id: "$name", latest: { $first: "$$ROOT" } } },
+      { $replaceRoot: { newRoot: "$latest" } },
+      { $project: { name: 1, version: 1, type: 1, builtFor: 1, downloads: 1, authorDomain: 1, publishedAt: 1, description: 1, tags: 1 } },
+    ]);
+
+    const totalDownloads = memberDocs.reduce((sum, d) => sum + (d.downloads || 0), 0);
+    const contributors = new Set(memberDocs.map((d) => d.authorDomain).filter(Boolean));
+    const latestUpdate = memberDocs.reduce((latest, d) => {
+      const dt = d.publishedAt ? new Date(d.publishedAt).getTime() : 0;
+      return dt > latest ? dt : latest;
+    }, 0);
+
+    res.json({
+      name,
+      type,
+      stats: {
+        totalDownloads,
+        contributorCount: contributors.size,
+        extensionCount: memberDocs.length,
+        lastUpdated: latestUpdate ? new Date(latestUpdate) : null,
+      },
+      members: memberDocs,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /extensions/:name/:version
  * Get a specific version with full file contents for installation.
  * Download count is deduplicated per IP per extension per hour to prevent inflation.
@@ -531,16 +707,37 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       return res.status(400).json({ error: "manifest with name and version is required" });
     }
 
+    const pkgType = ["extension", "bundle", "os"].includes(manifest.type) ? manifest.type : "extension";
+
     if (!files || !Array.isArray(files) || files.length === 0) {
-      return res.status(400).json({ error: "files array is required (at least manifest.js and index.js)" });
+      return res.status(400).json({ error: "files array is required (at least manifest.js)" });
     }
 
     const filePaths = new Set(files.map((f) => f.path));
     if (!filePaths.has("manifest.js")) {
       return res.status(400).json({ error: "manifest.js is required in files" });
     }
-    if (!filePaths.has("index.js")) {
-      return res.status(400).json({ error: "index.js is required in files" });
+
+    // Extensions must have index.js. Bundles and OS are dependency groups with no code.
+    if (pkgType === "extension" && !filePaths.has("index.js")) {
+      return res.status(400).json({ error: "index.js is required in files for extensions" });
+    }
+
+    // Bundle must have includes with at least 2 entries
+    if (pkgType === "bundle") {
+      const includes = manifest.includes;
+      if (!Array.isArray(includes) || includes.length < 2) {
+        return res.status(400).json({ error: "bundles must have an 'includes' array with at least 2 extensions" });
+      }
+    }
+
+    // OS must have at least one of bundles or standalone
+    if (pkgType === "os") {
+      const hasBundles = Array.isArray(manifest.bundles) && manifest.bundles.length > 0;
+      const hasStandalone = Array.isArray(manifest.standalone) && manifest.standalone.length > 0;
+      if (!hasBundles && !hasStandalone) {
+        return res.status(400).json({ error: "OS manifests must have at least one of 'bundles' or 'standalone'" });
+      }
     }
 
     // -----------------------------------------------------------------------
@@ -654,6 +851,13 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       name: manifest.name,
       version: manifest.version,
       description: manifest.description || "",
+      type: pkgType,
+      builtFor: manifest.builtFor || "kernel",
+      includes: pkgType === "bundle" ? (manifest.includes || []) : [],
+      bundles: pkgType === "os" ? (manifest.bundles || []) : [],
+      standalone: pkgType === "os" ? (manifest.standalone || []) : [],
+      osConfig: pkgType === "os" ? (manifest.config || null) : null,
+      osOrchestrators: pkgType === "os" ? (manifest.orchestrators || null) : null,
       authorLandId: req.landId,
       authorDomain: req.landDomain || "",
       authorName: req.landName || "",
@@ -667,6 +871,7 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       tags: tags || [],
       repoUrl: repoUrl || null,
       maintainers: maintainers || [],
+      npmDependencies: manifest.needs?.npm || [],
     });
 
     await ext.save();

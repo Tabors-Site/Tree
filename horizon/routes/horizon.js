@@ -1,6 +1,7 @@
 import { Router } from "express";
 import Land from "../db/models/land.js";
 import PublicTree from "../db/models/publicTree.js";
+import Extension from "../db/models/extension.js";
 import { verifyHorizonAuth } from "../auth.js";
 
 const router = Router();
@@ -179,10 +180,15 @@ router.get("/lands", async (req, res) => {
       ];
     }
 
+    // Sort: "active" (default) = last seen, "recent" = registration date
+    const sortField = req.query.sort === "recent"
+      ? { registeredAt: -1 }
+      : { lastSeenAt: -1 };
+
     const [lands, total] = await Promise.all([
       Land.find(filter)
-        .select("_id domain name protocolVersion status lastSeenAt metadata siteUrl")
-        .sort({ lastSeenAt: -1 })
+        .select("_id domain name protocolVersion status lastSeenAt registeredAt metadata siteUrl")
+        .sort(sortField)
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -328,6 +334,34 @@ router.delete(
     }
   }
 );
+
+/**
+ * GET /horizon/directory-info
+ * Returns directory identity so lands can inspect before registering.
+ * Any service implementing the Horizon API can expose this.
+ */
+router.get("/directory-info", async (req, res) => {
+  try {
+    const [landCount, extensionCount] = await Promise.all([
+      Land.countDocuments({ status: { $ne: "dead" } }),
+      Extension.distinct("name").then((r) => r.length),
+    ]);
+
+    return res.json({
+      success: true,
+      directory: {
+        name: process.env.HORIZON_NAME || "Canopy Horizon",
+        url: process.env.HORIZON_PUBLIC_URL || null,
+        operator: process.env.HORIZON_OPERATOR || null,
+        landCount,
+        packageCount: extensionCount,
+        uptime: process.uptime(),
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
 
 /**
  * GET /horizon/health

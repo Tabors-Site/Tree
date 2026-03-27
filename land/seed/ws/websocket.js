@@ -870,10 +870,25 @@ export function emitReload({ userId }) {
  * Broadcast to ALL connected sockets. Use with extreme caution.
  * Every connected user receives this event. Never send user-specific data.
  * Safe for: extension reload signals, land-wide announcements, config changes.
+ *
+ * Payload capped at 64KB to prevent network storms. A 64KB broadcast to
+ * 10,000 clients is 640MB of I/O. Anything larger must use targeted emits.
  */
+const MAX_BROADCAST_BYTES = 65536;
+
 export function emitBroadcast(event, data) {
   if (!io) return;
   if (!event || typeof event !== "string") return;
+  try {
+    const size = Buffer.byteLength(JSON.stringify(data), "utf8");
+    if (size > MAX_BROADCAST_BYTES) {
+      log.error("WS", `Broadcast "${event}" rejected: payload ${Math.round(size / 1024)}KB exceeds ${MAX_BROADCAST_BYTES / 1024}KB cap. Use targeted emits for large payloads.`);
+      return;
+    }
+  } catch {
+    log.error("WS", `Broadcast "${event}" rejected: payload not serializable.`);
+    return;
+  }
   io.emit(event, data);
 }
 

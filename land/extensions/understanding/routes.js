@@ -282,8 +282,11 @@ router.get(
       }
 
       const realNode = await Node.findById(uNode.realNodeId)
-        .select("name prestige")
+        .select("name metadata")
         .lean();
+
+      const _pMeta1 = realNode?.metadata instanceof Map ? realNode.metadata.get("prestige") : realNode?.metadata?.prestige;
+      const realNodePrestige = _pMeta1?.current || 0;
 
       let run = null;
       let structure = null;
@@ -306,7 +309,7 @@ router.get(
 
       const notesResult = await getNotes({
         nodeId: realNode._id,
-        version: realNode.prestige,
+        version: realNodePrestige,
       });
 
       const encodingHistory = Object.entries(uNode.perspectiveStates || {}).map(
@@ -451,8 +454,11 @@ router.get(
       }
 
       const realNode = await Node.findById(uNode.realNodeId)
-        .select("name prestige")
+        .select("name metadata")
         .lean();
+
+      const _pMeta2 = realNode?.metadata instanceof Map ? realNode.metadata.get("prestige") : realNode?.metadata?.prestige;
+      const realNodePrestige2 = _pMeta2?.current || 0;
 
       const run = await UnderstandingRun.findById(runId).lean();
       if (!run) {
@@ -492,7 +498,7 @@ router.get(
       if (isLeaf) {
         const notesResult = await getNotes({
           nodeId: realNode._id,
-          version: realNode.prestige,
+          version: realNodePrestige2,
         });
 
         chats = (notesResult?.notes ?? []).map((n) => ({

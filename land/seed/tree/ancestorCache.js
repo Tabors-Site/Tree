@@ -46,8 +46,9 @@ let _misses = 0;
 let _invalidations = 0;
 let _evictions = 0;
 
-// Fields to cache per ancestor node. These are what the six resolution chains read.
-const ANCESTOR_FIELDS = "metadata parent systemRole rootOwner contributors";
+// Fields to cache per ancestor node. These are what the resolution chains read.
+// name included for buildPathString (avoids 50 sequential DB queries on deep trees).
+const ANCESTOR_FIELDS = "name metadata parent systemRole rootOwner contributors";
 
 function getTTL() {
   const configured = getLandConfigValue("ancestorCacheTTL");
@@ -154,6 +155,7 @@ async function walkFromDb(nodeId, ttl) {
     const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
     ancestors.push({
       _id: String(n._id),
+      name: n.name || null,
       metadata: meta,
       parent: n.parent ? String(n.parent) : null,
       systemRole: n.systemRole || null,
