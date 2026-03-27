@@ -52,7 +52,7 @@ export default {
     schemaVersion: 1,
     migrations: "./migrations.js",
     cli: [
-      { command: "transactions", description: "List transactions for current node", method: "GET", endpoint: "/node/:nodeId/:version/transactions" },
+      { command: "transactions", scope: ["tree"], description: "List transactions for current node", method: "GET", endpoint: "/node/:nodeId/:version/transactions" },
     ],
   },
 };

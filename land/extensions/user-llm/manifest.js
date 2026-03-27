@@ -42,9 +42,9 @@ export default {
     sessionTypes: {},
 
     cli: [
-      { command: "llm failover", description: "Show failover stack", method: "GET", endpoint: "/user/:userId/llm-failover" },
-      { command: "llm failover-push <connectionId>", description: "Add a connection to the failover stack", method: "POST", endpoint: "/user/:userId/llm-failover", body: ["connectionId"] },
-      { command: "llm failover-pop", description: "Remove last connection from failover stack", method: "DELETE", endpoint: "/user/:userId/llm-failover" },
+      { command: "llm failover", scope: ["home"], description: "Show failover stack", method: "GET", endpoint: "/user/:userId/llm-failover" },
+      { command: "llm failover-push <connectionId>", scope: ["home"], description: "Add a connection to the failover stack", method: "POST", endpoint: "/user/:userId/llm-failover", body: ["connectionId"] },
+      { command: "llm failover-pop", scope: ["home"], description: "Remove last connection from failover stack", method: "DELETE", endpoint: "/user/:userId/llm-failover" },
     ],
   },
 };

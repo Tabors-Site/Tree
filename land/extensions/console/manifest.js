@@ -39,7 +39,7 @@ export default {
       { key: "LOG_LEVEL", required: false, default: "2", description: "Log severity: 1=info, 2=verbose, 3=debug" },
     ],
     cli: [
-      { command: "log-level <level>", description: "Set log level (1=info, 2=verbose, 3=debug)", method: "POST", endpoint: "/land/log-level", body: ["level"] },
+      { command: "log-level <level>", scope: ["land"], description: "Set log level (1=info, 2=verbose, 3=debug)", method: "POST", endpoint: "/land/log-level", body: ["level"] },
     ],
   },
 };

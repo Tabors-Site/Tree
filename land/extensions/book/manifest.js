@@ -48,7 +48,7 @@ export default {
     energyActions: {},
     sessionTypes: {},
     cli: [
-      { command: "book", description: "View compiled notes for current tree", method: "GET", endpoint: "/root/:rootId/book" },
+      { command: "book", scope: ["tree"], description: "View compiled notes for current tree", method: "GET", endpoint: "/root/:rootId/book" },
     ],
   },
 };

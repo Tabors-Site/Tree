@@ -43,11 +43,11 @@ export default {
     sessionTypes: {},
     env: [],
     cli: [
-      { command: "invites", description: "List pending invites", method: "GET", endpoint: "/user/:userId/invites", userIdParam: true },
-      { command: "invite", description: "Invite a user to the current tree", method: "POST", endpoint: "/root/:rootId/invite", rootIdParam: true, bodyMap: { userReceiving: 0 } },
-      { command: "transfer-owner", description: "Transfer tree ownership to another user", method: "POST", endpoint: "/root/:rootId/transfer-owner", rootIdParam: true, bodyMap: { userReceiving: 0 } },
-      { command: "remove-user", description: "Remove a contributor from the tree", method: "POST", endpoint: "/root/:rootId/remove-user", rootIdParam: true, bodyMap: { userReceiving: 0 } },
-      { command: "retire", description: "Retire (soft-delete) a tree you own", method: "POST", endpoint: "/root/:rootId/retire", rootIdParam: true },
+      { command: "invites", scope: ["tree"], description: "List pending invites", method: "GET", endpoint: "/user/:userId/invites", userIdParam: true },
+      { command: "invite", scope: ["tree"], description: "Invite a user to the current tree", method: "POST", endpoint: "/root/:rootId/invite", rootIdParam: true, bodyMap: { userReceiving: 0 } },
+      { command: "transfer-owner", scope: ["tree"], description: "Transfer tree ownership to another user", method: "POST", endpoint: "/root/:rootId/transfer-owner", rootIdParam: true, bodyMap: { userReceiving: 0 } },
+      { command: "remove-user", scope: ["tree"], description: "Remove a contributor from the tree", method: "POST", endpoint: "/root/:rootId/remove-user", rootIdParam: true, bodyMap: { userReceiving: 0 } },
+      { command: "retire", scope: ["tree"], description: "Retire (soft-delete) a tree you own", method: "POST", endpoint: "/root/:rootId/retire", rootIdParam: true },
     ],
   },
 };

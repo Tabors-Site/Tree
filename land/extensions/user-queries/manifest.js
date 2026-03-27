@@ -33,7 +33,7 @@ export default {
     energyActions: {},
     sessionTypes: {},
     cli: [
-      { command: "contributions", description: "List your contributions across all trees", method: "GET", endpoint: "/user/:userId/contributions" },
+      { command: "contributions", scope: ["tree", "home"], description: "List your contributions across all trees", method: "GET", endpoint: "/user/:userId/contributions" },
     ],
   },
 };

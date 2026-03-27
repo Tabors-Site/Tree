@@ -1,13 +1,6 @@
-import { useRef } from "react";
 import "./LandingPage.css";
 
 const LandingPage = () => {
-  const installRef = useRef(null);
-
-  const scrollToInstall = () => {
-    installRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   return (
     <div className="lp">
 
@@ -30,40 +23,9 @@ const LandingPage = () => {
             Build anything on top of it.
           </p>
           <div className="lp-hero-ctas">
-            <button className="lp-btn lp-btn-primary" onClick={scrollToInstall}>Get Started</button>
+            <a className="lp-btn lp-btn-primary" href="/land">Start a Land</a>
             <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the Seed</a>
-            <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
-            <a className="lp-btn lp-btn-secondary" href="/cli">CLI</a>
           </div>
-          <p style={{color: "#666", fontSize: "0.85rem", marginTop: 20}}>
-            <a href="/app" style={{color: "#888", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.1)"}}>
-              TreeOS
-            </a> is the first operating system built on the seed. It ships with 77 extensions across four bundles.
-          </p>
-        </div>
-      </section>
-
-      {/* ── THE RELATIONSHIP ── */}
-      <section className="lp-section">
-        <div className="lp-container">
-          <h2 className="lp-section-title">Kernel and Implementation</h2>
-          <p className="lp-section-sub lp-section-sub-wide">
-            The seed is the kernel. It defines the data contract, the conversation loop, the hook
-            system, the cascade engine, the extension loader, and the response protocol. It never
-            changes. It never imports from extensions. It boots clean with zero extensions installed.
-          </p>
-          <p className="lp-section-sub lp-section-sub-wide">
-            TreeOS is one implementation built on the seed. It ships with extensions for AI modes,
-            tool definitions, billing, federation, HTML rendering, and more. But those are all
-            extensions. Someone else could build a completely different system on the same kernel.
-            A medical platform. A code review pipeline. A research assistant. The seed provides
-            structure. Extensions provide meaning.
-          </p>
-          <p className="lp-section-sub lp-section-sub-wide" style={{color: "#666"}}>
-            Same relationship as Linux and Ubuntu. The kernel is the contract. The distribution
-            is the interpretation. TreeOS is the first distribution. The seed is what we are
-            giving to the world.
-          </p>
         </div>
       </section>
 
@@ -621,11 +583,11 @@ const LandingPage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>TreeOS</h4>
+              <a href="/land">Start a Land</a>
               <a href="/app">Site</a>
               <a href="/about/api">API</a>
               <a href="/cli">CLI</a>
               <a href="/about/gateway">Gateway</a>
-              <a href="/about/land">Land Setup</a>
               <a href="/about/energy">Energy</a>
             </div>
             <div className="lp-footer-col">

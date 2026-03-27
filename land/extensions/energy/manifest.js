@@ -52,7 +52,7 @@ export default {
     orchestrator: false,
     sessionTypes: {},
     cli: [
-      { command: "energy", description: "Show your energy balance and reset time", method: "GET", endpoint: "/user/:userId/energy" },
+      { command: "energy", scope: ["home"], description: "Show your energy balance and reset time", method: "GET", endpoint: "/user/:userId/energy" },
     ],
 
     hooks: {

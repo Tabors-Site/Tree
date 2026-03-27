@@ -34,7 +34,7 @@ export default {
     energyActions: {},
     sessionTypes: {},
     cli: [
-      { command: "tier", description: "Show your current tier", method: "GET", endpoint: "/user/:userId/tier" },
+      { command: "tier", scope: ["home"], description: "Show your current tier", method: "GET", endpoint: "/user/:userId/tier" },
     ],
   },
 };

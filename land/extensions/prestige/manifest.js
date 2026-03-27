@@ -46,7 +46,7 @@ export default {
     },
     sessionTypes: {},
     cli: [
-      { command: "prestige", description: "Add new version to current node", method: "POST", endpoint: "/node/:nodeId/prestige" },
+      { command: "prestige", scope: ["tree"], description: "Add new version to current node", method: "POST", endpoint: "/node/:nodeId/prestige" },
     ],
     hooks: {
       fires: [],

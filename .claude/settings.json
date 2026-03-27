@@ -351,7 +351,8 @@
       "Bash(wc -l /home/tabor/github/Tree/land/extensions/html-rendering/*.js)",
       "Bash(grep -r \"innerHTML\\\\|insertAdjacentHTML\\\\|<.*$\\\\|esc\\\\|escape\" /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/ --include=\"*.js\")",
       "Bash(grep -l \"validateConfig\\\\|buildEncryptedConfig\\\\|send\" /home/tabor/github/Tree/land/extensions/gateway-*/handler.js)",
-      "Read(//home/tabor/github/Tree/land/extensions/gateway-$ext/**)"
+      "Read(//home/tabor/github/Tree/land/extensions/gateway-$ext/**)",
+      "Bash(git -C /home/tabor/github/Tree log --oneline --all -- site/src/components/Welcome/Landing/KernelPage.jsx)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

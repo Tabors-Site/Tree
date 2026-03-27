@@ -45,7 +45,7 @@ export default {
 
     cli: [
       {
-        command: "digest [action]",
+        command: "digest [action]", scope: ["tree"],
         description: "The tree's daily briefing. Actions: history, config",
         method: "GET",
         endpoint: "/land/digest",

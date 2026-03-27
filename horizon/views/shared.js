@@ -759,7 +759,7 @@ export function pageShell(opts, bodyContent) {
     ${navBar(opts.activePage || "home", opts.breadcrumb)}
     ${bodyContent}
     <div class="footer">
-      <a href="/lands" class="footer-cta">What is a Land? Start your own.</a>
+      <a href="https://treeos.ai/land" class="footer-cta">What is a Land? Start your own.</a>
       <br><br>
       Canopy Horizon
       <span class="separator"></span>

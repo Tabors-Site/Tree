@@ -43,8 +43,8 @@ export default {
     },
     sessionTypes: {},
     cli: [
-      { command: "schedule <date>", description: "Set schedule on current node", method: "POST", endpoint: "/node/:nodeId/editSchedule" },
-      { command: "calendar", description: "Show scheduled nodes for current tree", method: "GET", endpoint: "/root/:rootId/calendar" },
+      { command: "schedule <date>", scope: ["tree"], description: "Set schedule on current node", method: "POST", endpoint: "/node/:nodeId/editSchedule" },
+      { command: "calendar", scope: ["tree"], description: "Show scheduled nodes for current tree", method: "GET", endpoint: "/root/:rootId/calendar" },
     ],
     hooks: {
       fires: [],

@@ -1,7 +1,7 @@
 export default {
   name: "delegate",
   version: "1.0.0",
-  builtFor: "TreeOS",
+  builtFor: "treeos-maintenance",
   description:
     "The tree's social intelligence. Intent generates actions for the tree to do itself. " +
     "Delegate matches stuck work to available humans. Reads team contributor lists, activity " +
@@ -42,7 +42,7 @@ export default {
 
     cli: [
       {
-        command: "delegate [action] [args...]",
+        command: "delegate [action] [args...]", scope: ["tree"],
         description: "Delegate suggestions. Actions: dismiss <id>, accept <id>",
         method: "GET",
         endpoint: "/root/:rootId/delegate",

@@ -49,9 +49,9 @@ export default {
     },
 
     cli: [
-      { command: "values", description: "Show values for current node", method: "GET", endpoint: "/node/:nodeId/values" },
-      { command: "value <key> <value>", description: "Set a value on current node", method: "POST", endpoint: "/node/:nodeId/value" },
-      { command: "goal <key> <goal>", description: "Set a goal for a value", method: "POST", endpoint: "/node/:nodeId/goal" },
+      { command: "values", scope: ["tree"], description: "Show values for current node", method: "GET", endpoint: "/node/:nodeId/values" },
+      { command: "value <key> <value>", scope: ["tree"], description: "Set a value on current node", method: "POST", endpoint: "/node/:nodeId/value" },
+      { command: "goal <key> <goal>", scope: ["tree"], description: "Set a goal for a value", method: "POST", endpoint: "/node/:nodeId/goal" },
     ],
     hooks: {
       fires: [],

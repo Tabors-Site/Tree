@@ -24,8 +24,8 @@ export default {
       listens: ["enrichContext", "afterBoot"],
     },
     cli: [
-      { command: "governance-status", description: "Governance compliance status (cached)", method: "GET", endpoint: "/land/governance" },
-      { command: "governance-check", description: "Live check against directory policies", method: "POST", endpoint: "/land/governance/check" },
+      { command: "governance-status", scope: ["land"], description: "Governance compliance status (cached)", method: "GET", endpoint: "/land/governance" },
+      { command: "governance-check", scope: ["land"], description: "Live check against directory policies", method: "POST", endpoint: "/land/governance/check" },
     ],
   },
 };

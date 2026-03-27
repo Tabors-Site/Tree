@@ -65,10 +65,10 @@ export default {
       CLEANUP_EXPAND: "cleanup-expand",
     },
     cli: [
-      { command: "dream-time <time>", description: "Set daily dream time (HH:MM) for current tree", method: "POST", endpoint: "/root/:rootId/dream-time" },
-      { command: "holdings", description: "List deferred items for current tree", method: "GET", endpoint: "/root/:rootId/holdings" },
-      { command: "holdings-dismiss <id>", description: "Dismiss a deferred item", method: "POST", endpoint: "/root/:rootId/holdings/:id/dismiss" },
-      { command: "holdings-view <id>", description: "View details of a deferred item", method: "GET", endpoint: "/root/:rootId/holdings/:id" },
+      { command: "dream-time <time>", scope: ["tree"], description: "Set daily dream time (HH:MM) for current tree", method: "POST", endpoint: "/root/:rootId/dream-time" },
+      { command: "holdings", scope: ["tree"], description: "List deferred items for current tree", method: "GET", endpoint: "/root/:rootId/holdings" },
+      { command: "holdings-dismiss <id>", scope: ["tree"], description: "Dismiss a deferred item", method: "POST", endpoint: "/root/:rootId/holdings/:id/dismiss" },
+      { command: "holdings-view <id>", scope: ["tree"], description: "View details of a deferred item", method: "GET", endpoint: "/root/:rootId/holdings/:id" },
     ],
     hooks: {
       fires: [],

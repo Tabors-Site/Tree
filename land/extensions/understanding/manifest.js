@@ -63,10 +63,10 @@ export default {
       UNDERSTANDING_ORCHESTRATE: "understanding-orchestrate",
     },
     cli: [
-      { command: "understand", description: "Start an understanding run (-i incremental)", method: "POST", endpoint: "/root/:rootId/understandings" },
-      { command: "understandings", description: "List understanding runs", method: "GET", endpoint: "/root/:rootId/understandings" },
-      { command: "understand-status <runId>", description: "Check progress of a run", method: "GET", endpoint: "/root/:rootId/understandings/run/:runId" },
-      { command: "understand-stop <runId>", description: "Stop a running understanding run", method: "POST", endpoint: "/root/:rootId/understandings/run/:runId/stop" },
+      { command: "understand", scope: ["tree"], description: "Start an understanding run (-i incremental)", method: "POST", endpoint: "/root/:rootId/understandings" },
+      { command: "understandings", scope: ["tree"], description: "List understanding runs", method: "GET", endpoint: "/root/:rootId/understandings" },
+      { command: "understand-status <runId>", scope: ["tree"], description: "Check progress of a run", method: "GET", endpoint: "/root/:rootId/understandings/run/:runId" },
+      { command: "understand-stop <runId>", scope: ["tree"], description: "Stop a running understanding run", method: "POST", endpoint: "/root/:rootId/understandings/run/:runId/stop" },
     ],
   },
 };
