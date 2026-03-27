@@ -414,7 +414,12 @@
       "Bash(grep -v '^--$')",
       "Bash(echo \"OK: $f\" done)",
       "Bash(do file=/home/tabor/github/Tree/land/extensions/$ext/index.js echo '=== $ext ===' grep -n runChat $file)",
-      "Bash(do file=/home/tabor/github/Tree/land/extensions/$ext/index.js echo '=== $ext ===' grep -n \"runChat\\\\|llm:\" $file)"
+      "Bash(do file=/home/tabor/github/Tree/land/extensions/$ext/index.js echo '=== $ext ===' grep -n \"runChat\\\\|llm:\" $file)",
+      "Bash(grep -rn \"renderUserNotes\\\\|renderUserTags\\\\|renderEnergy\\\\|renderInvites\\\\|renderDeletedBranches\\\\|renderChat\\\\|renderChats\\\\|renderRawIdeasList\\\\|renderBookPage\\\\|renderShareToken\\\\|renderScriptDetail\" /home/tabor/github/Tree/land/extensions/html-rendering/*.js)",
+      "Bash(grep -E \"href=\"\"$\\\\{\" /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/treeOverview.js)",
+      "Bash(grep -n \"fetch\\(\" /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)",
+      "Bash(echo \"--- $file ---\" done)",
+      "Bash(grep -n '\\\\$\\\\{' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/apiKeys.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

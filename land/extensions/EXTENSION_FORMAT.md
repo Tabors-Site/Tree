@@ -1152,6 +1152,28 @@ optional: {
 },
 ```
 
+## Common Mistakes
+
+**Calling runChat without checking LLM availability.** If no LLM is configured (no user connection, no land default), `runChat` fails and leaves an empty chat record in the database. Always check before calling:
+
+```js
+// In your index.js setRunChat wrapper:
+setRunChat(async (opts) => {
+  if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) {
+    return { answer: null };
+  }
+  return core.llm.runChat({ ...opts, llmPriority: BG });
+});
+```
+
+`userHasLlm` checks the full resolution chain: user connections, user assignments, and land default. Returns false only when there is truly no LLM anywhere. The check does not bypass the land fallback.
+
+**Injecting into enrichContext without guarding.** Every enrichContext handler should check if relevant data exists before injecting. If your extension has no data for this node, return early. Do not inject empty objects. Do not run database queries on every context build unless you have data to contribute.
+
+**Writing to metadata without setExtMeta.** Direct `node.metadata.set()` bypasses namespace ownership, document size guards, and the afterMetadataWrite hook. Always use `setExtMeta(node, "your-extension", data)`. The only exception is atomic MongoDB operations ($push/$slice, $inc) that cannot go through read-modify-write.
+
+**Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
+
 ## Security Model
 
 Extensions run in the same Node.js process as core. There is no sandbox or import restriction.

@@ -1283,8 +1283,9 @@ function loadFailoverStack() {
   fetch("/api/v1/user/${userId}/llm-failover${qs}", { headers: { "Authorization": "Bearer " + document.cookie.replace(/.*token=([^;]*).*/, "$1") } })
     .then(r => r.json())
     .then(data => {
+      const inner = data.data || data;
       const el = document.getElementById("failoverStack");
-      const stack = data.stack || [];
+      const stack = inner.stack || [];
       if (stack.length === 0) {
         el.innerHTML = '<div style="opacity:0.4;font-size:0.85rem;">No backups configured. Add connections above to build your failover stack.</div>';
         return;
