@@ -299,8 +299,9 @@ async function getWebPushSubscription() {
   var reg = await navigator.serviceWorker.register("/sw.js");
   await navigator.serviceWorker.ready;
 
-  var vapidKey = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/vapid-key")
+  var vapidRes = await fetch("/api/v1/root/" + ROOT_ID + "/gateway/vapid-key")
     .then(function(r) { return r.json(); });
+  var vapidKey = vapidRes.data || vapidRes;
 
   if (!vapidKey.key) throw new Error("VAPID key not configured on server");
 
@@ -386,7 +387,7 @@ async function addChannel() {
       body: JSON.stringify({ name: name, type: type, direction: direction, mode: mode, config: config, notificationTypes: notificationTypes, queueBehavior: queueBehavior }),
     });
     var data = await res.json();
-    if (!res.ok) { showStatus(data.error || "Failed to add channel", true); return; }
+    if (!res.ok) { showStatus((data.error && data.error.message) || data.error || "Failed to add channel", true); return; }
     showStatus("Channel added successfully");
     setTimeout(function() { location.reload(); }, 1000);
   } catch (err) {
@@ -402,7 +403,7 @@ async function testChannel(channelId) {
       headers: { "Content-Type": "application/json" },
     });
     var data = await res.json();
-    if (!res.ok) { alert(data.error || "Test failed"); return; }
+    if (!res.ok) { alert((data.error && data.error.message) || data.error || "Test failed"); return; }
     alert("Test notification sent!");
   } catch (err) { alert("Network error"); }
 }
@@ -416,7 +417,7 @@ async function toggleChannel(channelId, enabled) {
       body: JSON.stringify({ enabled: enabled }),
     });
     if (res.ok) location.reload();
-    else { var data = await res.json(); alert(data.error || "Failed"); }
+    else { var data = await res.json(); alert((data.error && data.error.message) || data.error || "Failed"); }
   } catch (err) { alert("Network error"); }
 }
 
@@ -429,7 +430,7 @@ async function deleteChannel(channelId) {
       headers: { "Content-Type": "application/json" },
     });
     if (res.ok) location.reload();
-    else { var data = await res.json(); alert(data.error || "Failed"); }
+    else { var data = await res.json(); alert((data.error && data.error.message) || data.error || "Failed"); }
   } catch (err) { alert("Network error"); }
 }
 `;

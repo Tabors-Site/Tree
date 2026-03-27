@@ -905,6 +905,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
         });
         const data = await res.json();
         if (!res.ok || data.status === "error") throw new Error((data.error && data.error.message) || data.error || "Failed");
+        const createInner = data.data || data;
 
         // Add to tree list (create it if empty state)
         let treeList = document.getElementById("treeList");
@@ -933,7 +934,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
 
         const item = document.createElement("div");
         item.className = "tree-item";
-        item.onclick = () => selectTree(data.rootId, name);
+        item.onclick = () => selectTree(createInner.rootId, name);
         item.innerHTML = \`
           <span class="tree-item-icon">\\u{1F333}</span>
           <span class="tree-item-name">\${escapeHtml(name)}</span>\`;
@@ -1196,19 +1197,20 @@ export function renderChat({ username, userId, treesJSON, trees }) {
         var dreamUrl = "/api/v1/chat/notifications" + (activeRootId ? "?rootId=" + activeRootId : "");
         var res = await fetch(dreamUrl, { credentials: "include" });
         var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed");
+        if (!res.ok || data.status === "error") throw new Error((data.error && data.error.message) || data.error || "Failed");
+        var inner = data.data || data;
 
         dreamsLoaded = true;
-        var notifs = data.notifications || [];
+        var notifs = inner.notifications || [];
         var html = "";
 
         // Dream time config (only when inside a tree and user is owner)
-        if (activeRootId && data.isOwner) {
-          if (data.metadata?.dreams?.dreamTime) {
+        if (activeRootId && inner.isOwner) {
+          if (inner.metadata?.dreams?.dreamTime) {
             html += '<div class="dream-config">' +
               '<div class="dream-config-label">Dream schedule</div>' +
               '<div class="dream-config-row">' +
-                '<input type="time" id="dreamTimeInput" value="' + escapeHtml(data.metadata?.dreams?.dreamTime) + '" />' +
+                '<input type="time" id="dreamTimeInput" value="' + escapeHtml(inner.metadata?.dreams?.dreamTime) + '" />' +
                 '<button class="dream-config-save" onclick="saveDreamTime()">Save</button>' +
                 '<button class="dream-config-off" onclick="disableDreamTime()">Turn Off</button>' +
               '</div>' +
@@ -1273,7 +1275,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
           body: JSON.stringify({ dreamTime: input.value }),
         });
         var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed");
+        if (!res.ok) throw new Error((data.error && data.error.message) || data.error || "Failed");
         status.textContent = "Dreams set for " + input.value;
         dreamsLoaded = false;
         fetchDreams();
@@ -1292,7 +1294,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
           body: JSON.stringify({ dreamTime: null }),
         });
         var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed");
+        if (!res.ok) throw new Error((data.error && data.error.message) || data.error || "Failed");
         status.textContent = "Dreams disabled";
         dreamsLoaded = false;
         fetchDreams();
@@ -1308,13 +1310,14 @@ export function renderChat({ username, userId, treesJSON, trees }) {
         var invUrl = "/api/v1/chat/invites" + (activeRootId ? "?rootId=" + activeRootId : "");
         var res = await fetch(invUrl, { credentials: "include" });
         var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed");
+        if (!res.ok || data.status === "error") throw new Error((data.error && data.error.message) || data.error || "Failed");
+        var invInner = data.data || data;
 
         invitesLoaded = true;
         var html = "";
 
         // Pending invites section
-        var invites = data.invites || [];
+        var invites = invInner.invites || [];
         if (invites.length > 0) {
           document.getElementById("invitesDot").classList.add("visible");
           notifDot.classList.add("has-notifs");
@@ -1330,8 +1333,8 @@ export function renderChat({ username, userId, treesJSON, trees }) {
         }
 
         // Members section (only when inside a tree)
-        if (activeRootId && data.members) {
-          var members = data.members;
+        if (activeRootId && invInner.members) {
+          var members = invInner.members;
           html += '<div class="members-section">';
           html += '<div class="members-section-title">Members</div>';
 
@@ -1397,7 +1400,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
           body: JSON.stringify({ accept: accept }),
         });
         var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed");
+        if (!res.ok) throw new Error((data.error && data.error.message) || data.error || "Failed");
         item.remove();
         // Refresh tree list if accepted
         if (accept) {
@@ -1428,7 +1431,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
           body: JSON.stringify({ userReceiving: username }),
         });
         var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed");
+        if (!res.ok) throw new Error((data.error && data.error.message) || data.error || "Failed");
 
         status.textContent = "Invite sent!";
         status.className = "invite-status success";
@@ -1450,7 +1453,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
           body: JSON.stringify({ userReceiving: userId }),
         });
         var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed");
+        if (!res.ok) throw new Error((data.error && data.error.message) || data.error || "Failed");
         if (userId === CONFIG.userId) {
           location.reload();
         } else {
@@ -1474,7 +1477,7 @@ export function renderChat({ username, userId, treesJSON, trees }) {
           body: JSON.stringify({ userReceiving: userId }),
         });
         var data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed");
+        if (!res.ok) throw new Error((data.error && data.error.message) || data.error || "Failed");
         invitesLoaded = false;
         fetchInvites();
       } catch (err) {
@@ -1487,7 +1490,8 @@ export function renderChat({ username, userId, treesJSON, trees }) {
     fetch("/api/v1/chat/notifications", { credentials: "include" })
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        if (d.notifications && d.notifications.length > 0) {
+        var di = d.data || d;
+        if (di.notifications && di.notifications.length > 0) {
           notifDot.classList.add("has-notifs");
           document.getElementById("dreamsDot").classList.add("visible");
         }

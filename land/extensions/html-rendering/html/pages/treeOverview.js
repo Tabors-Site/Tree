@@ -1433,7 +1433,7 @@ async function saveVisibility() {
       if (status) {
         status.style.display = "inline";
         status.style.color = "rgba(255, 107, 107, 0.9)";
-        status.textContent = data.error || "Failed";
+        status.textContent = (data.error && data.error.message) || data.error || "Failed";
       }
     }
   } catch (err) {
@@ -1468,7 +1468,7 @@ async function saveDreamTime() {
       if (status) {
         status.style.display = "inline";
         status.style.color = "rgba(255, 107, 107, 0.9)";
-        status.textContent = data.error || "Failed";
+        status.textContent = (data.error && data.error.message) || data.error || "Failed";
       }
     }
   } catch (err) {
@@ -1506,7 +1506,7 @@ async function assignRootLlm(slot, connId) {
       if (statusEl) {
         statusEl.style.display = "block";
         statusEl.style.color = "rgba(255, 107, 107, 0.9)";
-        statusEl.textContent = "\\u2715 " + (data.error || "Failed");
+        statusEl.textContent = "\\u2715 " + ((data.error && data.error.message) || data.error || "Failed");
       }
     }
   } catch (err) {

@@ -12,6 +12,7 @@ export function renderTextNote({
   userLink,
   editorButton,
   note,
+  hasToken,
 }) {
   const css = `
     /* Note Card */
@@ -275,7 +276,7 @@ pre.flash::before {
         ${note.createdAt ? `<span class="note-time">${new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at ${new Date(note.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>` : ""}
       </div>
 <div class="copy-bar">
-  ${editorButton}
+  ${editorButton ? `<a href="${back.replace('/notes?', '/notes/' + note._id + '/editor?')}" class="copy-btn" title="Edit note">\u270F\uFE0F</a>` : ""}
   <button id="copyNoteBtn" class="copy-btn" title="Copy note">\ud83d\udccb</button>
 </div>
 
@@ -343,6 +344,7 @@ export function renderFileNote({
   fileUrl,
   mediaHtml,
   fileDeleted,
+  hasToken,
 }) {
   const css = `
     /* File Card */

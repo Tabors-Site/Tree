@@ -814,9 +814,7 @@ export function renderVersionDetail({
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="${backTreeUrl}" class="back-link">
-        ← Back to Tree
-      </a>
+      ${backTreeUrl ? `<a href="${backTreeUrl}" class="back-link">← Back to Tree</a>` : ""}
       <a href="${backUrl}" class="back-link">
         View All Versions
       </a>

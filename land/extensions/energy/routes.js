@@ -6,6 +6,7 @@ import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import { getConnectionsForUser } from "../../seed/llm/connections.js";
 
 // Models wired from init via setModels
 let _User = null;

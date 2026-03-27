@@ -7,7 +7,10 @@ export async function init(core) {
   const { editStatus } = await import("../../seed/tree/statuses.js");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setServices({
-    runChat: (opts) => core.llm.runChat({ ...opts, llmPriority: BG }),
+    runChat: async (opts) => {
+      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      return core.llm.runChat({ ...opts, llmPriority: BG });
+    },
     editStatus,
   });
 

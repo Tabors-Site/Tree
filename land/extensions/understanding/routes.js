@@ -309,7 +309,6 @@ router.get(
 
       const notesResult = await getNotes({
         nodeId: realNode._id,
-        version: realNodePrestige,
       });
 
       const encodingHistory = Object.entries(uNode.perspectiveStates || {}).map(
@@ -498,7 +497,6 @@ router.get(
       if (isLeaf) {
         const notesResult = await getNotes({
           nodeId: realNode._id,
-          version: realNodePrestige2,
         });
 
         chats = (notesResult?.notes ?? []).map((n) => ({

@@ -17,7 +17,10 @@ const _pending = new Map();
 
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
-  setRunChat((opts) => core.llm.runChat({ ...opts, llmPriority: BG }));
+  setRunChat(async (opts) => {
+    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    return core.llm.runChat({ ...opts, llmPriority: BG });
+  });
 
   const config = await getPurposeConfig();
 

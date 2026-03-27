@@ -573,9 +573,7 @@ export function renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPubl
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="${rootUrl}" class="back-link">
-        ← Back to Tree
-      </a>
+      ${rootUrl ? `<a href="${rootUrl}" class="back-link">← Back to Tree</a>` : ""}
       <a href="/api/v1/node/${nodeId}/chats${qs}" class="back-link">
         AI Chats
       </a>

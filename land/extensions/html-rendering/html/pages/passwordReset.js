@@ -451,8 +451,8 @@ body {
 
         const data = await res.json();
 
-        if (!res.ok) {
-          errorEl.textContent = data.message || "Reset failed. Please try again.";
+        if (!res.ok || data.status === "error") {
+          errorEl.textContent = (data.error && data.error.message) || data.message || "Reset failed. Please try again.";
           errorEl.classList.add("show");
           btn.classList.remove("loading");
           btn.disabled = false;

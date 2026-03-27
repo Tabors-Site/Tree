@@ -129,7 +129,7 @@ router.post("/user/:userId/shareToken", urlAuth, async (req, res) => {
 
     const token = req.query.token ?? "";
     if ("html" in req.query) {
-      return res.redirect(`/api/v1/user/${req.params.userId}/sharetoken?token=${encodeURIComponent(token)}&html`);
+      return res.redirect(`/api/v1/user/${req.params.userId}/shareToken?token=${encodeURIComponent(token)}&html`);
     }
     return sendOk(res, { htmlShareToken });
   } catch (err) {

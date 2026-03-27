@@ -1,6 +1,6 @@
 import express from "express";
 import Book from "./model.js";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   getBook as coreGetBook,
@@ -17,7 +17,7 @@ function notFoundPage(req, res, message = "This page doesn't exist or may have b
 
 const router = express.Router();
 
-router.get("/root/:nodeId/book", authenticateOptional, async (req, res) => {
+router.get("/root/:nodeId/book", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
 

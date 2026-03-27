@@ -405,7 +405,16 @@
       "Bash(grep -r \"question\\\\|ask\\\\|readline\\\\|prompt\" /home/tabor/github/Tree/create-treeos/template --include=*.js)",
       "Read(//^| Key | Default/,/^$/**)",
       "Bash(git -C /home/tabor/github/Tree log --oneline -10 -- cli/index.js)",
-      "Bash(git -C /home/tabor/github/Tree diff e9d67d4~1..e9d67d4 -- cli/index.js)"
+      "Bash(git -C /home/tabor/github/Tree diff e9d67d4~1..e9d67d4 -- cli/index.js)",
+      "Bash(grep -rn \"version:.*Number\\\\|version:.*String\\\\|version:.*parsed\\\\|{ nodeId,\\\\|nodeId,.*version\" /home/tabor/github/Tree/land/seed/tree/notes.js /home/tabor/github/Tree/land/extensions/*/routes.js /home/tabor/github/Tree/land/extensions/*/core.js /home/tabor/github/Tree/land/routes/api/*.js)",
+      "Bash(grep -rn 'data\\\\.redirect\\\\|\\\\.json\\(\\)' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)",
+      "Bash(grep -rn data.redirectb /home/tabor/github/Tree/land/extensions/ --include=*.js)",
+      "Bash(grep -rn '\\\\.json\\(\\);' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)",
+      "Bash(do file=/home/tabor/github/Tree/land/extensions/html-rendering/html/pages/$f.js echo '=== $f ===' grep -A3 'await res.json\\(\\)' $file)",
+      "Bash(grep -v '^--$')",
+      "Bash(echo \"OK: $f\" done)",
+      "Bash(do file=/home/tabor/github/Tree/land/extensions/$ext/index.js echo '=== $ext ===' grep -n runChat $file)",
+      "Bash(do file=/home/tabor/github/Tree/land/extensions/$ext/index.js echo '=== $ext ===' grep -n \"runChat\\\\|llm:\" $file)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

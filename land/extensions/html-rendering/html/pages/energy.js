@@ -1562,14 +1562,15 @@ async function handleCheckout() {
     });
 
     var data = await res.json();
+    var inner = data.data || data;
 
-    if (data.url) {
+    if (inner.url) {
       if (window.top !== window.self) {
-        window.top.location.href = data.url;
+        window.top.location.href = inner.url;
       } else {
-        window.location.href = data.url;
+        window.location.href = inner.url;
       }
-    } else if (data.error) {
+    } else if (data.error || inner.error) {
       alert(data.error);
       btn.disabled = false;
       btn.textContent = "Pay with Stripe";
@@ -1622,7 +1623,7 @@ async function addConnection() {
       setTimeout(function() { location.reload(); }, 1000);
     } else {
       var data = await res.json().catch(function() { return {}; });
-      showLlmStatus("\u2715 " + (data.error || "Failed to save"), false);
+      showLlmStatus("\u2715 " + (data.error?.message || data.error || "Failed to save"), false);
     }
   } catch (err) {
     showLlmStatus("\u2715 Network error", false);
@@ -1672,7 +1673,7 @@ async function updateConnection() {
       setTimeout(function() { location.reload(); }, 1000);
     } else {
       var data = await res.json().catch(function() { return {}; });
-      showLlmStatus("\u2715 " + (data.error || "Failed to update"), false);
+      showLlmStatus("\u2715 " + (data.error?.message || data.error || "Failed to update"), false);
     }
   } catch (err) {
     showLlmStatus("\u2715 Network error", false);

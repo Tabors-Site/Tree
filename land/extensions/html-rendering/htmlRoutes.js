@@ -159,6 +159,36 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
   });
 
   // ═══════════════════════════════════════════════════════════════════
+  // NOTIFICATIONS
+  // ═══════════════════════════════════════════════════════════════════
+
+  router.get("/user/:userId/notifications", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const user = await User.findById(userId).select("username").lean();
+      if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
+
+      const notifExt = getExtension("notifications");
+      if (!notifExt?.exports?.getNotifications) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Notifications extension not loaded");
+
+      const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+      const offset = parseInt(req.query.offset, 10) || 0;
+      const { notifications, total } = await notifExt.exports.getNotifications({ userId, limit, offset });
+
+      return res.send(renderers.renderNotifications({
+        userId,
+        notifications,
+        total,
+        username: user.username,
+        token: req.query.token ?? "",
+      }));
+    } catch (err) {
+      log.error("HTML", "Notifications render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
   // PASSWORD RESET (always HTML, no ?html flag needed)
   // ═══════════════════════════════════════════════════════════════════
 
@@ -224,7 +254,7 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
 
       const parentName = node.parent ? await getNodeName(node.parent) : null;
       const qs = buildQS(req);
-      const rootUrl = node.rootOwner ? `/api/v1/root/${node.rootOwner}${qs}` : null;
+      const rootUrl = `/api/v1/root/${nodeId}${qs}`;
 
       return res.send(renderers.renderNodeDetail({
         node,
@@ -268,7 +298,7 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
 
       const qs = buildQS(req);
       const backUrl = `/api/v1/node/${nodeId}${qs}`;
-      const backTreeUrl = node.rootOwner ? `/api/v1/root/${node.rootOwner}${qs}` : null;
+      const backTreeUrl = `/api/v1/root/${nodeId}${qs}`;
       const createdDate = node.dateCreated ? new Date(node.dateCreated).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : null;
       const scheduleHtml = schedule ? renderers.renderScheduleInline?.(schedule) || "" : "";
 
@@ -466,7 +496,9 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
 
       const byDay = {};
       for (const item of calendar) {
-        const day = new Date(item.scheduledDate).toISOString().split("T")[0];
+        const d = new Date(item.scheduledDate);
+        if (isNaN(d.getTime())) continue;
+        const day = d.toISOString().split("T")[0];
         (byDay[day] = byDay[day] || []).push(item);
       }
 
@@ -578,9 +610,12 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       const { nodeId, version } = req.params;
       const Note = (await import("../../seed/models/note.js")).default;
       const limit = Math.min(Number(req.query.limit) || 50, 200);
-      const query = { nodeId, version: Number(version) };
-      if (req.query.startDate) query.date = { ...query.date, $gte: new Date(req.query.startDate) };
-      if (req.query.endDate) query.date = { ...query.date, $lte: new Date(req.query.endDate) };
+      const query = { nodeId };
+      // Version lives in metadata.version (set by prestige beforeNote hook), not a top-level field
+      const v = Number(version);
+      if (!isNaN(v) && v > 0) query["metadata.version"] = v;
+      if (req.query.startDate) query.createdAt = { ...query.createdAt, $gte: new Date(req.query.startDate) };
+      if (req.query.endDate) query.createdAt = { ...query.createdAt, $lte: new Date(req.query.endDate) };
 
       const notes = await Note.find(query)
         .populate("userId", "username")
@@ -605,14 +640,31 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       const note = await Note.findById(noteId).populate("userId", "username").lean();
       if (!note) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Note not found");
 
+      const token = req.query.token || "";
+      const hasToken = !!token;
       const qs = buildQS(req);
-      const back = `/api/v1/node/${nodeId}/${version}/notes${qs}`;
-      const backText = "Back to notes";
+
+      // Public share link (no token): back goes to land home, no editor
+      // Authenticated (token or JWT): back goes to notes list, editor available
+      let back, backText;
+      if (hasToken || req.userId) {
+        back = `/api/v1/node/${nodeId}/${version}/notes${qs}`;
+        backText = "\u2190 Back to Notes";
+      } else {
+        try {
+          const { getLandUrl } = await import("../../canopy/identity.js");
+          back = getLandUrl() || "/";
+        } catch { back = "/"; }
+        backText = "\u2190 Back to Home";
+      }
+
       const safeUsername = renderers.escapeHtml?.(note.userId?.username || "Unknown") || (note.userId?.username || "Unknown");
-      const userLink = `<a href="/api/v1/user/${note.userId?._id || ""}${qs}">${safeUsername}</a>`;
+      const userLink = hasToken || req.userId
+        ? `<a href="/api/v1/user/${note.userId?._id || ""}${qs}">${safeUsername}</a>`
+        : `<span>${safeUsername}</span>`;
 
       if (note.contentType === "text") {
-        return res.send(renderers.renderTextNote({ back, backText, userLink, editorButton: true, note }));
+        return res.send(renderers.renderTextNote({ back, backText, userLink, editorButton: hasToken || !!req.userId, note, hasToken }));
       }
 
       // File note
@@ -626,7 +678,7 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       const mimeType = mime.lookup(fileName) || "application/octet-stream";
       const mediaHtml = renderers.renderMedia?.(fileUrl, mimeType, { lazy: false }) || "";
 
-      return res.send(renderers.renderFileNote({ back, backText, userLink, note, fileName, fileUrl, mediaHtml, fileDeleted }));
+      return res.send(renderers.renderFileNote({ back, backText, userLink, note, fileName, fileUrl, mediaHtml, fileDeleted, hasToken }));
     } catch (err) {
       log.error("HTML", "Note detail render error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
@@ -658,7 +710,6 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
           content: req.body.content,
           userId: req.userId,
           nodeId,
-          version: Number(version),
         });
       }
 

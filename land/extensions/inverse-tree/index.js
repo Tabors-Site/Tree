@@ -7,7 +7,10 @@ import { getLandConfigValue } from "../../seed/landConfig.js";
 
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
-  setRunChat((opts) => core.llm.runChat({ ...opts, llmPriority: BG }));
+  setRunChat(async (opts) => {
+    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    return core.llm.runChat({ ...opts, llmPriority: BG });
+  });
 
   // Read config from .config metadata
   const configNode = await Node.findOne({ systemRole: SYSTEM_ROLE.CONFIG }).select("metadata").lean();

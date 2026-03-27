@@ -535,8 +535,9 @@ const bookToggleScript = `
       });
 
       const data = await res.json();
-      if (data.redirect) {
-        window.location.href = data.redirect;
+      const redirect = data.redirect || data.data?.redirect;
+      if (redirect) {
+        window.location.href = redirect;
       }
     }
 

@@ -176,8 +176,8 @@ export async function getTreeStructure(rootId, filters = {}) {
       }
     }
 
-    // Filter: skip nodes with wrong status and no children
-    if (!allowedStatuses.includes(status) && children.length === 0) return null;
+    // Filter: skip nodes with wrong status and no children (never skip the root)
+    if (depth > 0 && !allowedStatuses.includes(status) && children.length === 0) return null;
 
     return { _id: node._id, name: node.name, type: node.type || null, status, parent: node.parent, children };
   }

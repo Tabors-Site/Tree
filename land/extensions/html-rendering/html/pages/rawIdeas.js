@@ -732,7 +732,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
             const data = await res.json().catch(() => ({}));
             autoBtn.disabled = false;
             autoBtn.textContent = "\u2728 Auto-place";
-            alert(data.error || "Could not start orchestration");
+            alert((data.error && data.error.message) || data.error || "Could not start orchestration");
           }
         } catch (err) {
           autoBtn.disabled = false;

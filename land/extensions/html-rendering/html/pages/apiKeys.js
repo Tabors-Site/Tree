@@ -541,7 +541,7 @@ export function renderApiKeysList({ userId, user, apiKeys, token, errorParam }) 
         );
 
         const data = await res.json();
-        if (!data.message) throw new Error("Revoke failed");
+        if (data.status === "error") throw new Error((data.error && data.error.message) || "Revoke failed");
 
         location.reload();
       } catch (err) {

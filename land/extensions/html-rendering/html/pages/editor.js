@@ -1012,9 +1012,10 @@ async function doSave() {
     }
 
     var data = await res.json();
+    var inner = data.data || data;
 
     if (!currentNoteId) {
-      var newId = data._id || (data.note && data.note._id);
+      var newId = inner._id || (inner.note && inner.note._id);
       if (newId) {
         currentNoteId = newId;
         isNew = false;
@@ -1146,7 +1147,8 @@ async function loadNotes() {
     if (token) fetchUrl += "?token=" + encodeURIComponent(token);
     var res = await fetch(fetchUrl, { credentials: "include" });
     var data  = await res.json();
-    var notes = data.notes || data || [];
+    var inner = data.data || data;
+    var notes = inner.notes || inner || [];
     if (!Array.isArray(notes)) notes = [];
     if (!notes.length) { notesList.innerHTML = emptyMsg("No notes yet"); return; }
 
@@ -1276,7 +1278,8 @@ async function loadHistory() {
     if (token) fetchUrl += "?token=" + encodeURIComponent(token);
     var res = await fetch(fetchUrl, { credentials: "include" });
     var data = await res.json();
-    historyData = data.history || [];
+    var histInner = data.data || data;
+    historyData = histInner.history || [];
 
     if (!historyData.length) {
       historyListEl.innerHTML = '<div class="history-empty">No edit history available yet.<br>History is recorded on future saves.</div>';

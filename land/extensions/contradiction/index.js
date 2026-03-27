@@ -6,7 +6,10 @@ export async function init(core) {
   const { checkCascade } = await import("../../seed/tree/cascade.js");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setServices({
-    runChat: (opts) => core.llm.runChat({ ...opts, llmPriority: BG }),
+    runChat: async (opts) => {
+      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      return core.llm.runChat({ ...opts, llmPriority: BG });
+    },
     checkCascade,
   });
 
