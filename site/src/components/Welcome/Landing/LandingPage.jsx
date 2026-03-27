@@ -524,7 +524,7 @@ const LandingPage = () => {
               <span className="lp-term-title">Terminal</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npx create-treeos-land my-land</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npx create-treeos my-land</div>
               <div className="lp-term-line"><span className="lp-term-prompt">$</span> cd my-land</div>
               <div className="lp-term-line"><span className="lp-term-prompt">$</span> npm start</div>
               <div className="lp-term-line lp-term-output"></div>

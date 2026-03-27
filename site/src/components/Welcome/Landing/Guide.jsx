@@ -59,9 +59,9 @@ const Guide = () => {
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">Quick Start</h2>
           <P>Run a land (server):</P>
-          <Code>{`git clone https://github.com/taborgreat/TreeOS && cd Tree
-npm run install:all
-npm start`}</Code>
+          <Code>{`npx create-treeos my-land
+cd my-land
+node boot.js`}</Code>
           <P>First boot walks you through setup: domain, name, LLM connection, extension selection.</P>
           <P>Or connect to an existing land as a user:</P>
           <Code>{`npm install -g treeos

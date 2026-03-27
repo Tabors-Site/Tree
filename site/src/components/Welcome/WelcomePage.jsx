@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import Cookies from "js-cookie";
 import "./WelcomePage.css";
 
 const apiUrl = import.meta.env.VITE_TREE_API_URL;
-const URL = import.meta.env.VITE_LAND_URL;
 
 const LAND_NAME = import.meta.env.VITE_LAND_NAME || "TreeOS Land";
 
@@ -46,56 +44,10 @@ const WelcomePage = () => {
     return () => clearTimeout(timeout);
   }, [bannerPhase]);
 
-  const handleOpen = async (destination) => {
-    const token = Cookies.get("token");
-    const path = new window.URL(destination).pathname;
-    const loginUrl = `${URL}/login?redirect=${encodeURIComponent(path)}`;
-
-    if (!token) {
-      window.location.href = loginUrl;
-      return;
-    }
-
-    try {
-      const res = await fetch(`${apiUrl}/verify-token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        window.location.href = loginUrl;
-        return;
-      }
-
-      const data = await res.json();
-
-      Cookies.set("username", data.username, { expires: 7 });
-      Cookies.set("userId", data.userId, { expires: 7 });
-      Cookies.set("loggedIn", true, { expires: 7 });
-
-      if (!data.HTMLShareToken) {
-        window.location.href = `${apiUrl}/user/${data.userId}/shareToken?html`;
-        return;
-      }
-
-      if (!data.hasLlm) {
-        window.location.href = `${URL}/setup`;
-        return;
-      }
-
-      window.location.href = destination;
-    } catch (err) {
-      console.error("Open App error:", err);
-      window.location.href = loginUrl;
-    }
-  };
-
-  const handleOpenApp = () => handleOpen(`${URL}/dashboard`);
-  const handleOpenChat = () => handleOpen(`${URL}/chat`);
+  // Server-side auth check routes. No JavaScript cookie reading needed.
+  // The server reads the httpOnly cookie, verifies, and redirects.
+  const chatUrl = `${apiUrl}/auth-redirect?to=chat`;
+  const dashboardUrl = `${apiUrl}/auth-redirect?to=dashboard`;
 
   return (
     <div className="welcome-page">
@@ -115,18 +67,18 @@ const WelcomePage = () => {
           </a>
 
           <div className="hero-top-right">
-            <button
+            <a
+              href={chatUrl}
               className="back-to-site-btn open-app-btn start-chat-btn"
-              onClick={handleOpenChat}
             >
               Start Chat
-            </button>
-            <button
+            </a>
+            <a
+              href={dashboardUrl}
               className="back-to-site-btn open-app-btn dashboard-btn"
-              onClick={handleOpenApp}
             >
               Dashboard
-            </button>
+            </a>
           </div>
         </div>
 

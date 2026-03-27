@@ -99,7 +99,7 @@ const LandPage = () => {
             </div>
             <div className="lp-term-body">
               <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> npx create-treeos-land my-land
+                <span className="lp-term-prompt">$</span> npx create-treeos my-land
               </div>
               <div className="lp-term-line">
                 <span className="lp-term-prompt">$</span> cd my-land
@@ -122,7 +122,7 @@ const LandPage = () => {
       {/* ── CONNECT TO YOUR LAND ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Connect to your land</h2>
+          <h2 className="lp-section-title"><a href="/cli" style={{color: "inherit", textDecoration: "none"}}>Connect to your land</a></h2>
 
           <div className="lp-terminal">
             <div className="lp-term-header">
@@ -164,6 +164,10 @@ const LandPage = () => {
               <div className="lp-term-line"><span className="lp-term-green">Tree:</span> <span className="lp-term-output">Welcome to your land. You have no trees yet.</span></div>
               <div className="lp-term-line"><span className="lp-term-output">      Try: mkroot "My First Tree"</span></div>
             </div>
+          </div>
+
+          <div style={{textAlign: "center", marginTop: 32}}>
+            <a className="lp-btn lp-btn-secondary" href="/cli">CLI Reference</a>
           </div>
         </div>
       </section>

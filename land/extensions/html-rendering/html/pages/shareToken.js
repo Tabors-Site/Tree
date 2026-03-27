@@ -2,7 +2,7 @@ import { page } from "../layout.js";
 import { esc } from "../utils.js";
 import { getLandUrl } from "../../../../canopy/identity.js";
 
-export function renderShareToken({ userId, user, token, tokenQS }) {
+export function renderShareToken({ userId, user, token, tokenQS, savedShareToken }) {
   const css = `
 body {
   display: flex;
@@ -369,7 +369,7 @@ input:focus {
       </div>
 
       ${
-        token
+        savedShareToken
           ? `
           <!-- Existing Token View -->
           <div class="description">
@@ -379,7 +379,7 @@ input:focus {
           <div class="token-section">
             <div class="token-label">Your Token</div>
             <div class="token-display">
-              <div class="token-text" id="tokenText">${esc(token)}</div>
+              <div class="token-text" id="tokenText">${esc(savedShareToken)}</div>
               <button class="btn-copy" onclick="copyToken()">Copy</button>
             </div>
           </div>

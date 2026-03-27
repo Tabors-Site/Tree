@@ -30,7 +30,7 @@ router.get("/setup", authenticateLite, async (req, res) => {
       return res.redirect("/login?redirect=/setup");
     }
 
-    const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+    const { getUserMeta } = await import("../../../seed/tree/userMetadata.js");
     const nav = getUserMeta(user, "nav");
     const userRoots = Array.isArray(nav.roots) ? nav.roots : [];
 

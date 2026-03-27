@@ -9,7 +9,7 @@ export default {
     "AI revises and sends back for re-review. Loop until consensus or maxRounds.",
 
   needs: {
-    services: ["hooks", "llm"],
+    services: ["hooks", "llm", "metadata"],
     models: ["Node", "Note"],
     extensions: [],
   },
@@ -20,7 +20,7 @@ export default {
 
   provides: {
     models: {},
-    routes: true,
+    routes: "./routes.js",
     tools: true,
     jobs: false,
     energyActions: {},

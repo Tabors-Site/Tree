@@ -419,7 +419,8 @@
       "Bash(grep -E \"href=\"\"$\\\\{\" /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/treeOverview.js)",
       "Bash(grep -n \"fetch\\(\" /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)",
       "Bash(echo \"--- $file ---\" done)",
-      "Bash(grep -n '\\\\$\\\\{' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/apiKeys.js)"
+      "Bash(grep -n '\\\\$\\\\{' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/apiKeys.js)",
+      "Bash(grep -n 'fetch.*userId' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -17,7 +17,8 @@ export async function init(core) {
   const User = core.models.User;
 
   core.hooks.register("beforeRegister", async (data) => {
-    const { username, password, email, req, res } = data;
+    const { username, password, req, res } = data;
+    const email = req.body?.email;
 
     const requireEmail = getLandConfigValue("REQUIRE_EMAIL") !== "false";
 

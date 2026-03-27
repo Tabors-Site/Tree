@@ -1572,7 +1572,7 @@ async function handleCheckout() {
         window.location.href = inner.url;
       }
     } else if (data.error || inner.error) {
-      alert(data.error);
+      alert((data.error && data.error.message) || data.error || inner.error || "Payment failed");
       btn.disabled = false;
       btn.textContent = "Pay with Stripe";
     }

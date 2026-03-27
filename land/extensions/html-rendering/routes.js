@@ -76,8 +76,29 @@ router.post("/verify-token", authenticate, async (req, res) => {
   }
 });
 
-// Share token management page
-router.get("/user/:userId/shareToken", urlAuth, async (req, res) => {
+// Server-side auth redirect. Checks httpOnly cookie, redirects to app or login.
+// No client-side JavaScript needed. Whitelist prevents open redirect.
+router.get("/auth-redirect", async (req, res) => {
+  const { to } = req.query;
+  const allowed = { chat: "/chat", dashboard: "/dashboard", setup: "/setup" };
+  const destination = allowed[to] || "/";
+
+  try {
+    const jwt = (await import("jsonwebtoken")).default;
+    const token = req.cookies?.token;
+    if (!token) return res.redirect(`/login?redirect=${encodeURIComponent(destination)}`);
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded?.userId) return res.redirect(`/login?redirect=${encodeURIComponent(destination)}`);
+
+    return res.redirect(destination);
+  } catch {
+    return res.redirect(`/login?redirect=${encodeURIComponent(destination)}`);
+  }
+});
+
+// Share token management page (JWT only, never share token auth)
+router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
   try {
     const { userId } = req.params;
     const user = await User.findById(userId).select("username metadata").lean();
@@ -96,15 +117,17 @@ router.get("/user/:userId/shareToken", urlAuth, async (req, res) => {
     const render = getExtension("html-rendering")?.exports?.renderShareToken;
     if (!render) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "HTML rendering not available");
 
-    return res.send(render({ userId, user, token, tokenQS }));
+    const htmlMeta = getUserMeta(user, "html");
+    const savedShareToken = htmlMeta?.shareToken || null;
+    return res.send(render({ userId, user, token, tokenQS, savedShareToken }));
   } catch (err) {
     log.error("HTML", "Share token page error:", err.message);
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-// POST share token update
-router.post("/user/:userId/shareToken", urlAuth, async (req, res) => {
+// POST share token update (JWT only, never share token auth)
+router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");

@@ -381,4 +381,37 @@ module.exports = (program) => {
       console.log(`Tree:  ${chalk.cyan(cfg.activeRootName || chalk.dim("(none)"))}  ${chalk.dim(cfg.activeRootId || "")}`);
       console.log(`Path:  ${chalk.cyan(currentPath(cfg))}`);
     });
+
+  program
+    .command("passwd")
+    .description("Change your password")
+    .action(async () => {
+      const cfg = requireAuth();
+      try {
+        const oldPassword = await readPassword("Current password: ");
+        if (!oldPassword) return console.log(chalk.yellow("Cancelled."));
+
+        const newPassword = await readPassword("New password (min 8 chars): ");
+        if (!newPassword || newPassword.length < 8) {
+          return console.log(chalk.yellow("Password must be at least 8 characters."));
+        }
+
+        const confirmPassword = await readPassword("Confirm new password: ");
+        if (newPassword !== confirmPassword) {
+          return console.log(chalk.red("Passwords do not match."));
+        }
+
+        const api = new TreeAPI(cfg.apiKey, cfg.jwtToken);
+        const data = await api.post("/user/change-password", { oldPassword, newPassword });
+
+        if (data.token) {
+          cfg.jwtToken = data.token;
+          save(cfg);
+        }
+
+        console.log(chalk.green("Password changed."));
+      } catch (err) {
+        console.error(chalk.red(err.message));
+      }
+    });
 };

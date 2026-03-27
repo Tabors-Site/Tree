@@ -11,6 +11,7 @@ import { getLandUrl } from "../../canopy/identity.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 import { getExtension } from "../loader.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import rateLimit from "express-rate-limit";
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -161,9 +162,9 @@ router.get("/user/verify/:token", async (req, res) => {
     );
 
     res.cookie("token", authToken, {
-      httpOnly: false,
+      httpOnly: true,
       secure: true,
-      sameSite: "None",
+      sameSite: "Lax",
       domain: cookieDomain(req),
       maxAge: 604800000,
       path: "/",
@@ -174,6 +175,55 @@ router.get("/user/verify/:token", async (req, res) => {
   } catch (err) {
     log.error("Email", "[email:verifyEmail]", err);
     sendError(res, 500, ERR.INTERNAL, "Verification failed");
+  }
+});
+
+router.post("/user/change-password", authenticate, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || typeof oldPassword !== "string") {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Current password is required");
+    }
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "New password must be at least 8 characters");
+    }
+
+    const user = await User.findById(req.userId).select("+password metadata");
+    if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
+
+    const bcrypt = (await import("bcrypt")).default;
+    const valid = await bcrypt.compare(oldPassword, user.password);
+    if (!valid) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Current password is incorrect");
+    }
+
+    // Set new password. User pre-save hook rehashes it.
+    user.password = newPassword;
+
+    // Invalidate all existing tokens
+    const authMeta = (user.metadata instanceof Map ? user.metadata.get("auth") : user.metadata?.auth) || {};
+    authMeta.tokensInvalidBefore = new Date().toISOString();
+    if (user.metadata instanceof Map) {
+      user.metadata.set("auth", authMeta);
+    } else {
+      if (!user.metadata) user.metadata = {};
+      user.metadata.auth = authMeta;
+    }
+
+    if (user.markModified) user.markModified("metadata");
+    await user.save();
+
+    // Issue new token so user stays logged in
+    const newToken = jwt.sign(
+      { userId: user._id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: "365d" },
+    );
+
+    sendOk(res, { message: "Password changed successfully", token: newToken });
+  } catch (err) {
+    log.error("Email", "Change password error:", err.message);
+    sendError(res, 500, ERR.INTERNAL, "Failed to change password");
   }
 });
 
