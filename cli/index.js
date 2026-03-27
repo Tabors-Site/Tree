@@ -3,7 +3,7 @@
 const { Command } = require("commander");
 const chalk = require("chalk");
 const { version } = require("./package.json");
-const { load, currentPath, currentLand, getProtocolCli } = require("./config");
+const { load, currentPath, currentLand, getProtocolCli, currentZone } = require("./config");
 
 const program = new Command();
 
@@ -239,7 +239,7 @@ const startShell = module.exports.startShell = async () => {
     // Two sources: hardcoded Commander commands + dynamic protocol commands.
     const cmdMeta = new Map();
     for (const cmd of program.commands) {
-      const entry = { description: cmd.description() || "", subcommands: null, options: [] };
+      const entry = { description: cmd.description() || "", subcommands: null, options: [], scope: cmd._scope || null };
       // Collect option names (--flag style)
       for (const opt of cmd.options || []) {
         if (opt.long) entry.options.push(opt.long);
@@ -270,6 +270,16 @@ const startShell = module.exports.startShell = async () => {
       }
     }
 
+    // Filtered command list based on current zone. Recomputed on each tab press.
+    function getCmdNamesForZone() {
+      const zone = currentZone(load());
+      const names = [];
+      for (const [name, meta] of cmdMeta) {
+        if (!meta.scope || meta.scope.includes(zone)) names.push(name);
+      }
+      return names.sort();
+    }
+    // Static list for fallback
     const allCmdNames = [...cmdMeta.keys()].sort();
 
     // ── Tab cycling engine ──

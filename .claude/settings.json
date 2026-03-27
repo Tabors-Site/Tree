@@ -347,7 +347,9 @@
       "Bash(find /home/tabor/github/Tree/land/extensions -name \"*.js\" -exec grep -l \"afterNote\\\\|afterNavigate\\\\|afterToolCall\" {})",
       "Bash(echo \"$ext OK\")",
       "Bash(echo \"$ext FAIL\")",
-      "Bash(find /home/tabor/github/Tree/land/seed -name \"*.js\" -type f -exec grep -l \"\\\\.handler\\\\|resolveTools\" {})"
+      "Bash(find /home/tabor/github/Tree/land/seed -name \"*.js\" -type f -exec grep -l \"\\\\.handler\\\\|resolveTools\" {})",
+      "Bash(wc -l /home/tabor/github/Tree/land/extensions/html-rendering/*.js)",
+      "Bash(grep -r \"innerHTML\\\\|insertAdjacentHTML\\\\|<.*$\\\\|esc\\\\|escape\" /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/ --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

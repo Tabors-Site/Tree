@@ -146,8 +146,14 @@ function resolveSessionTarget(cfg, handle) {
   return { rootId: cfg.activeRootId, nodeId: currentNodeId(cfg), handle: null };
 }
 
+function currentZone(cfg) {
+  if (cfg.activeRootId) return "tree";
+  if (cfg.atHome) return "home";
+  return "land";
+}
+
 module.exports = {
-  load, save, requireAuth, currentNodeId, currentPath, currentLand,
+  load, save, requireAuth, currentNodeId, currentPath, currentLand, currentZone,
   isRemoteSession, hasExtension, getProtocolCli,
   getSession, createSession: createSession, switchSession, killSession,
   listSessions, resolveSessionTarget,

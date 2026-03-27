@@ -139,7 +139,7 @@ const WelcomePage = () => {
 
             <h1 data-text={LAND_NAME + " Land"} Land>{LAND_NAME} Land</h1>
           </a>
-          <h2>First ever vision built off TreeOS</h2>
+          <h2>First ever OS built off The Seed</h2>
 
         </div>
         <footer className="hero-footer">

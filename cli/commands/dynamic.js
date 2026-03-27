@@ -4,7 +4,7 @@
 
 const chalk = require("chalk");
 const TreeAPI = require("../api");
-const { load, requireAuth, currentNodeId, getProtocolCli } = require("../config");
+const { load, requireAuth, currentNodeId, getProtocolCli, currentZone } = require("../config");
 
 function getApi() {
   const cfg = requireAuth();
@@ -144,13 +144,22 @@ function registerDynamic(program, cfgOverride) {
       const argMatches = decl.command.match(/[<\[][^>\]]+[>\]]/g) || [];
       const argNames = argMatches.map((a) => a.replace(/[<>\[\]\.]/g, ""));
 
-      program
+      const cmd = program
         .command(decl.command)
         .description(`${decl.description} ${chalk.dim(`[${extName}]`)}`)
         .action(async (...actionArgs) => {
           try {
             const api = getApi();
             const cfg = load();
+
+            // Scope enforcement: reject if current zone doesn't match declared scope
+            if (cmd._scope) {
+              const zone = currentZone(cfg);
+              if (!cmd._scope.includes(zone)) {
+                console.log(chalk.yellow(`${cmdName} is only available in ${cmd._scope.join(" or ")} mode. You are at ${zone}.`));
+                return;
+              }
+            }
 
             // Commander passes args then the Command object
             const args = actionArgs.slice(0, argNames.length);
@@ -248,6 +257,11 @@ function registerDynamic(program, cfgOverride) {
             console.error(chalk.red("Error:"), err.message);
           }
         });
+
+      // Store scope from manifest declaration
+      if (decl.scope && Array.isArray(decl.scope)) {
+        cmd._scope = decl.scope;
+      }
 
       existing.add(cmdName);
     }
