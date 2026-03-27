@@ -46,7 +46,7 @@ export default {
 
     cli: [
       {
-        command: "explore [action] [args...]",
+        command: "explore [action] [args...]", scope: ["tree"],
         description: "Explore branch below current position. Actions: map, gaps. No action starts exploration.",
         method: "POST",
         endpoint: "/node/:nodeId/explore",

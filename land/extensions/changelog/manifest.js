@@ -32,7 +32,7 @@ export default {
 
     cli: [
       {
-        command: "changelog [args...]",
+        command: "changelog [args...]", scope: ["tree"],
         description: "What changed at this branch. --since 7d, --user <name>, --land",
         method: "GET",
         endpoint: "/node/:nodeId/changelog",

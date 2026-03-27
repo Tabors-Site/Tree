@@ -31,7 +31,7 @@ export default {
     env: [],
     cli: [
       {
-        command: "learn-status",
+        command: "learn-status", scope: ["tree"],
         description: "Check progress of a learn operation at current node",
         method: "GET",
         endpoint: "/node/:nodeId/learn",

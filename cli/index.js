@@ -36,8 +36,12 @@ program
       const coreNames = new Set();
       for (const s of coreSections) for (const c of s.cmds) coreNames.add(c);
 
+      const zone = currentZone(cfg);
       const cmdMap = {};
       cmd.commands.forEach((c) => { cmdMap[c.name()] = c; });
+
+      // Zone filter: hide commands whose scope doesn't include the current zone
+      const inScope = (c) => !c._scope || c._scope.includes(zone);
 
       const landUrl = cfg.landUrl || cfg.remoteDomain || null;
       const username = cfg.username || null;
@@ -76,7 +80,7 @@ program
       // Core commands
       for (let si = 0; si < coreSections.length; si++) {
         const section = coreSections[si];
-        const available = section.cmds.filter(name => cmdMap[name]);
+        const available = section.cmds.filter(name => cmdMap[name] && inScope(cmdMap[name]));
         if (available.length === 0) continue;
 
         // Heavy rule before Getting Started
@@ -95,7 +99,7 @@ program
       // Extension commands grouped by extension name
       const extCmds = [];
       for (const [name, c] of Object.entries(cmdMap)) {
-        if (!coreNames.has(name)) extCmds.push(c);
+        if (!coreNames.has(name) && inScope(c)) extCmds.push(c);
       }
 
       if (extCmds.length > 0) {
@@ -146,6 +150,63 @@ require("./commands/flow")(program);
 
 // Dynamic commands from connected land's protocol (must be last)
 require("./commands/dynamic")(program);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMMAND ZONE SCOPING
+// Built-in commands get scope assigned here (after all modules registered).
+// Scope controls help display and tab completion visibility per zone.
+// Commands without scope are available everywhere.
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const TREE = ["tree"];
+  const HOME = ["home"];
+  const LAND = ["land"];
+  const TREE_HOME = ["tree", "home"];
+  const TREE_LAND = ["tree", "land"];
+  const HOME_LAND = ["home", "land"];
+
+  const scopes = {
+    // Home zone
+    roots: HOME, mkroot: HOME, use: HOME, root: HOME, recent: HOME, home: HOME,
+    ideas: HOME, idea: HOME, "idea-store": HOME, "idea-place": HOME,
+    "idea-transfer": HOME, "idea-auto": HOME, "rm-idea": HOME,
+    energy: HOME, tier: HOME, invites: HOME, deleted: HOME, revive: HOME,
+    "api-keys": HOME, backup: HOME, "backup-snapshot": HOME, "backup-restore": HOME, "backup-list": HOME,
+
+    // Land zone
+    config: LAND, peers: LAND, peer: LAND, search: LAND, browse: LAND,
+    "log-level": LAND,
+
+    // Tree zone
+    cd: TREE, ls: TREE, pwd: TREE, tree: TREE,
+    mkdir: TREE, rm: TREE, mv: TREE, rename: TREE, what: TREE, type: TREE,
+    complete: TREE, activate: TREE, trim: TREE,
+    note: TREE, cat: TREE, "rm-note": TREE, download: TREE, book: TREE,
+    chat: TREE, place: TREE, query: TREE, chats: TREE,
+    team: TREE, invite: TREE, kick: TREE, owner: TREE,
+    share: TREE, visibility: TREE, "share-token": TREE,
+    values: TREE, value: TREE, goal: TREE,
+    prestige: TREE, schedule: TREE, calendar: TREE, "dream-time": TREE,
+    holdings: TREE, "holdings-dismiss": TREE, "holdings-view": TREE,
+    understand: TREE, understandings: TREE, "understand-status": TREE, "understand-stop": TREE,
+    scripts: TREE, script: TREE, run: TREE,
+    flow: TREE,
+    "ext-scope": TREE, "ext-block": TREE, "ext-allow": TREE, "ext-unallow": TREE, "ext-restrict": TREE,
+    tools: TREE, "tools-allow": TREE, "tools-block": TREE, "tools-clear": TREE,
+    modes: TREE, "mode-set": TREE, "mode-clear": TREE,
+    retire: TREE,
+    "learn-status": TREE, "learn-resume": TREE, "learn-pause": TREE, "learn-stop": TREE,
+
+    // Two-zone
+    notes: TREE_HOME, contributions: TREE_HOME, tags: TREE_HOME,
+    activity: HOME_LAND,
+  };
+
+  for (const cmd of program.commands) {
+    const scope = scopes[cmd.name()];
+    if (scope && !cmd._scope) cmd._scope = scope;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ERROR HANDLING (catch unknown commands, missing args)
@@ -357,11 +418,12 @@ const startShell = module.exports.startShell = async () => {
           const parts = line.split(/\s+/);
 
           if (parts.length <= 1) {
-            // Completing command name
+            // Completing command name (filtered by current zone)
             const partial = parts[0] || "";
+            const zoneCmds = getCmdNamesForZone();
             const hits = partial.length > 0
-              ? allCmdNames.filter(c => c.startsWith(partial))
-              : allCmdNames;
+              ? zoneCmds.filter(c => c.startsWith(partial))
+              : zoneCmds;
             if (hits.length === 0) return;
             _tabMatches = hits;
             _tabIndex = -1;

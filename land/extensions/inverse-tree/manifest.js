@@ -39,7 +39,7 @@ export default {
 
     cli: [
       {
-        command: "inverse [action] [args...]",
+        command: "inverse [action] [args...]", scope: ["tree"],
         description: "Your profile as the AI sees it. Actions: correct, reset.",
         method: "GET",
         endpoint: "/user/:userId/inverse",

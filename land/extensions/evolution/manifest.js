@@ -39,7 +39,7 @@ export default {
 
     cli: [
       {
-        command: "evolution [action]",
+        command: "evolution [action]", scope: ["tree"],
         description: "Fitness metrics at current position. Actions: patterns, dormant.",
         method: "GET",
         endpoint: "/node/:nodeId/evolution",

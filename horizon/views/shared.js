@@ -72,6 +72,8 @@ export function baseStyles() {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100%;
       padding: 20px;
+      padding-top: calc(20px + env(safe-area-inset-top, 0px));
+      padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
       color: var(--text-primary);
       overflow-x: hidden;
       background-attachment: fixed;
@@ -489,6 +491,7 @@ export function baseStyles() {
       padding: 32px 16px;
       color: var(--text-muted);
       font-size: 14px;
+      grid-column: 1 / -1;
     }
 
     /* Footer */
@@ -739,8 +742,10 @@ export function pageShell(opts, bodyContent) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>${escapeHtml(title)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -754,7 +759,7 @@ export function pageShell(opts, bodyContent) {
     ${navBar(opts.activePage || "home", opts.breadcrumb)}
     ${bodyContent}
     <div class="footer">
-      <a href="https://treeos.ai/about/land" class="footer-cta">What is a Land? Start your own.</a>
+      <a href="/lands" class="footer-cta">What is a Land? Start your own.</a>
       <br><br>
       Canopy Horizon
       <span class="separator"></span>

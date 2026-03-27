@@ -59,7 +59,7 @@ export default {
 
     cli: [
       {
-        command: "reroot [action]",
+        command: "reroot [action]", scope: ["tree"],
         description: "Analyze and propose reorganization. Actions: preview, apply, reject.",
         method: "POST",
         endpoint: "/root/:rootId/reroot/analyze",

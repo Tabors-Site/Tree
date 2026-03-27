@@ -24,7 +24,7 @@ export default {
     env: [],
     cli: [
       {
-        command: "persona [action] [args...]",
+        command: "persona [action] [args...]", scope: ["tree"],
         description: "AI identity. No action shows persona. Actions: set, clear, tree.",
         method: "GET",
         endpoint: "/persona",

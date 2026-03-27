@@ -76,7 +76,7 @@ export default {
 
     cli: [
       {
-        command: "prune [action] [args...]",
+        command: "prune [action] [args...]", scope: ["tree"],
         description: "Pruning candidates for current tree. Actions: confirm, undo, history.",
         method: "GET",
         endpoint: "/root/:rootId/prune",

@@ -35,7 +35,7 @@ export default {
 
     cli: [
       {
-        command: "trace [concept...]",
+        command: "trace [concept...]", scope: ["tree"],
         description: "Follow a concept through the tree",
         method: "POST",
         endpoint: "/node/:nodeId/trace",

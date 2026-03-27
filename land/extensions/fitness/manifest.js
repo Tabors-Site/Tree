@@ -52,7 +52,7 @@ export default {
 
     cli: [
       {
-        command: "fitness [message...]",
+        command: "fitness [message...]", scope: ["tree"],
         description: "Talk to your fitness coach. Plans workouts, logs exercises, tracks progress.",
         method: "POST",
         endpoint: "/root/:rootId/fitness",

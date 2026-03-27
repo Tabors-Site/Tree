@@ -62,7 +62,7 @@ export default {
 
     cli: [
       {
-        command: "thesis",
+        command: "thesis", scope: ["tree"],
         description: "Show this tree's root thesis and coherence stats",
         method: "GET",
         endpoint: "/root/:rootId/thesis",

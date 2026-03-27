@@ -74,7 +74,7 @@ export default {
 
     cli: [
       {
-        command: "teach [action]",
+        command: "teach [action]", scope: ["tree"],
         description: "Tree wisdom transfer. Actions: import, share, lessons, dismiss.",
         method: "POST",
         endpoint: "/root/:rootId/teach/export",

@@ -1,6 +1,6 @@
 const chalk = require("chalk");
 const TreeAPI = require("../api");
-const { load, save, requireAuth, currentNodeId } = require("../config");
+const { load, save, requireAuth, currentNodeId, currentZone } = require("../config");
 const { registerDynamic } = require("./dynamic");
 
 function getApi() {
@@ -24,6 +24,49 @@ async function showConfig() {
     const val = config[key];
     const display = val === null ? chalk.dim("(not set)") : String(val);
     console.log(`  ${chalk.cyan(key)}  ${display}`);
+  }
+}
+
+function printAllByZone(program) {
+  const PAD = 30;
+  const RULE = chalk.dim("-".repeat(55));
+  const zone = currentZone(load());
+
+  const zoneLabel = { land: "Land", home: "Home", tree: "Tree" };
+  const zoneColor = { land: chalk.yellow, home: chalk.blue, tree: chalk.green };
+  const groups = { land: [], home: [], tree: [], all: [] };
+
+  for (const cmd of program.commands) {
+    const scope = cmd._scope;
+    if (!scope) {
+      groups.all.push(cmd);
+    } else {
+      for (const z of scope) {
+        if (groups[z]) groups[z].push(cmd);
+      }
+    }
+  }
+
+  const fmtLine = (c) => {
+    const usage = (c.name() + " " + c.usage()).replace(/ \[options\]/g, "").trim();
+    const desc = c.description().replace(/\s*\[.*?\]\s*$/, "").trim();
+    const padded = usage.length < PAD ? usage + " ".repeat(PAD - usage.length) : usage + "  ";
+    return `  ${padded}${chalk.dim(desc)}`;
+  };
+
+  console.log(chalk.bold("All commands by zone") + chalk.dim(`  (you are at ${zone})`));
+  console.log("");
+
+  for (const z of ["land", "home", "tree", "all"]) {
+    const cmds = groups[z];
+    if (cmds.length === 0) continue;
+    const color = zoneColor[z] || chalk.white;
+    const label = z === "all" ? "Everywhere" : `${zoneLabel[z]} (${z === "land" ? "/" : z === "home" ? "/~" : "/tree"})`;
+    const marker = z === zone ? " <-- you are here" : "";
+    console.log(color.bold(label) + chalk.dim(marker));
+    cmds.sort((a, b) => a.name().localeCompare(b.name()));
+    for (const c of cmds) console.log(fmtLine(c));
+    console.log(RULE);
   }
 }
 
@@ -93,14 +136,20 @@ module.exports = (program) => {
   }
 
   // help: silently refresh protocol, then show normal program help
+  // help --all: show every command grouped by zone
   program
     .command("help")
+    .option("-a, --all", "Show all commands grouped by zone")
     .description("Refresh available commands and show help.")
-    .action(async () => {
+    .action(async (opts) => {
       try {
         await refreshProtocol();
       } catch {}
-      program.outputHelp();
+      if (opts.all) {
+        printAllByZone(program);
+      } else {
+        program.outputHelp();
+      }
     });
 
   // protocol: full protocol details (capabilities, extensions, command count)

@@ -76,7 +76,7 @@ export default {
 
     cli: [
       {
-        command: "boundary [action]",
+        command: "boundary [action]", scope: ["tree"],
         description:
           "Structural cohesion analysis. Actions: status, branch.",
         method: "POST",

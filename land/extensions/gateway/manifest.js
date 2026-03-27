@@ -50,7 +50,7 @@ export default {
 
     cli: [
       {
-        command: "gateway [action] [args...]",
+        command: "gateway [action] [args...]", scope: ["land"],
         description: "Gateway channels. Actions: add, update, delete, test. No action lists channels.",
         method: "GET",
         endpoint: "/root/:rootId/gateway",

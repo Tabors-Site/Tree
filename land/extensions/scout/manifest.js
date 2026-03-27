@@ -46,7 +46,7 @@ export default {
 
     cli: [
       {
-        command: "scout [query...]",
+        command: "scout [query...]", scope: ["tree"],
         description: "Triangulate across the tree",
         method: "POST",
         endpoint: "/node/:nodeId/scout",

@@ -40,7 +40,7 @@ export default {
 
     cli: [
       {
-        command: "contradictions [action] [args...]",
+        command: "contradictions [action] [args...]", scope: ["tree"],
         description: "Active conflicts at this position. Actions: resolve, scan.",
         method: "GET",
         endpoint: "/node/:nodeId/contradictions",

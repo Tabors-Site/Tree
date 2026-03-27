@@ -37,7 +37,7 @@ export default {
 
     cli: [
       {
-        command: "related",
+        command: "related", scope: ["tree"],
         description: "Semantically similar notes at this position",
         method: "GET",
         endpoint: "/node/:nodeId/related",

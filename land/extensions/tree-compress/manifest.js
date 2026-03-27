@@ -40,7 +40,7 @@ export default {
 
     cli: [
       {
-        command: "compress [action] [args...]",
+        command: "compress [action] [args...]", scope: ["tree"],
         description: "Tree compression. Actions: branch, status, undo, budget. No action compresses full tree.",
         method: "POST",
         endpoint: "/root/:rootId/compress",

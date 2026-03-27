@@ -33,7 +33,7 @@ export default {
 
     cli: [
       {
-        command: "competence",
+        command: "competence", scope: ["tree"],
         description: "Knowledge boundaries at this position",
         method: "GET",
         endpoint: "/node/:nodeId/competence",

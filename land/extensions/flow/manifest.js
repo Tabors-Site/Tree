@@ -47,7 +47,7 @@ export default {
 
     cli: [
       {
-        command: "flow [action] [args...]",
+        command: "flow [action] [args...]", scope: ["tree"],
         description: "Cascade flow scoped to current position. Actions: signal, stats.",
         method: "GET",
         endpoint: "/node/:nodeId/flow",

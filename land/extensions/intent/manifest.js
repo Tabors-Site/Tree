@@ -93,7 +93,7 @@ export default {
 
     cli: [
       {
-        command: "intent [action] [args...]",
+        command: "intent [action] [args...]", scope: ["tree"],
         description: "Autonomous intent queue and recent executions. Actions: pause, resume, history, reject.",
         method: "GET",
         endpoint: "/root/:rootId/intent",

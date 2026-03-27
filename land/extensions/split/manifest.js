@@ -79,7 +79,7 @@ export default {
 
     cli: [
       {
-        command: "split [action]",
+        command: "split [action]", scope: ["tree"],
         description: "Branch mitosis. Actions: preview, execute, history.",
         method: "POST",
         endpoint: "/root/:rootId/split/analyze",

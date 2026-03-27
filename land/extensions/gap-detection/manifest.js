@@ -38,7 +38,7 @@ export default {
     env: [],
     cli: [
       {
-        command: "gaps [action]",
+        command: "gaps [action]", scope: ["tree"],
         description: "Extension gaps. No action shows gaps at this node. Actions: clear, land.",
         method: "GET",
         endpoint: "/node/:nodeId/gaps",

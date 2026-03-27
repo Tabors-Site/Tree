@@ -56,7 +56,7 @@ export default {
 
     cli: [
       {
-        command: "channels [action]",
+        command: "channels [action]", scope: ["tree"],
         description: "Direct signal paths. Actions: create, remove, status.",
         method: "GET",
         endpoint: "/node/:nodeId/channels",

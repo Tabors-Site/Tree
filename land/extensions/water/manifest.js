@@ -34,7 +34,7 @@ export default {
 
     cli: [
       {
-        command: "water [action]",
+        command: "water [action]", scope: ["tree"],
         description: "The full picture. No action shows node hydration. Actions: land.",
         method: "GET",
         endpoint: "/node/:nodeId/water",

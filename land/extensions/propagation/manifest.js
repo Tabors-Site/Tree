@@ -38,7 +38,7 @@ export default {
 
     cli: [
       {
-        command: "cascade [action] [args...]",
+        command: "cascade [action] [args...]", scope: ["tree"],
         description: "Cascade status and control. No action shows status. Actions: trigger, retry, config.",
         method: "GET",
         endpoint: "/node/:nodeId/cascade/status",

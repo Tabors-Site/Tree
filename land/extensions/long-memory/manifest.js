@@ -35,7 +35,7 @@ export default {
     env: [],
     cli: [
       {
-        command: "memory [action]",
+        command: "memory [action]", scope: ["tree"],
         description: "Cascade memory. No action shows trace at this node. Actions: clear, connections.",
         method: "GET",
         endpoint: "/node/:nodeId/memory",

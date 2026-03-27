@@ -35,7 +35,7 @@ export default {
     env: [],
     cli: [
       {
-        command: "seal [action]",
+        command: "seal [action]", scope: ["tree"],
         description: "Sealed transport. No action shows seal status. Actions: on, off.",
         method: "GET",
         endpoint: "/node/:nodeId/seal",

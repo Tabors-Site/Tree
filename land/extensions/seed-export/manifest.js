@@ -65,7 +65,7 @@ export default {
 
     cli: [
       {
-        command: "seed [action] [args...]",
+        command: "seed [action] [args...]", scope: ["tree"],
         description: "Tree skeleton export and import. Actions: export, plant, analyze.",
         method: "POST",
         endpoint: "/node/:nodeId/seed-export",

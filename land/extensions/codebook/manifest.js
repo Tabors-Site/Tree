@@ -41,7 +41,7 @@ export default {
     env: [],
     cli: [
       {
-        command: "codebook [action]",
+        command: "codebook [action]", scope: ["tree"],
         description: "Codebook dictionary. No action shows your dictionary. Actions: compress, clear, stats.",
         method: "GET",
         endpoint: "/node/:nodeId/codebook",

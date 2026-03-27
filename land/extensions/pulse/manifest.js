@@ -33,7 +33,7 @@ export default {
 
     cli: [
       {
-        command: "pulse [action]",
+        command: "pulse [action]", scope: ["tree","land"],
         description: "Land health. No action shows latest snapshot. Actions: history, peers.",
         method: "GET",
         endpoint: "/pulse",

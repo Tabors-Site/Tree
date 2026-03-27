@@ -68,7 +68,7 @@ export default {
 
     cli: [
       {
-        command: "phase [action]",
+        command: "phase [action]", scope: ["tree"],
         description: "Current phase and session stats. Actions: history, cycle.",
         method: "GET",
         endpoint: "/user/:userId/phase",

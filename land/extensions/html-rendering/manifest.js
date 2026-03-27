@@ -23,7 +23,7 @@ export default {
 
     cli: [
       {
-        command: "cc",
+        command: "cc", scope: ["tree"],
         description: "Command center. Tools, modes, extensions at this position.",
         method: "GET",
         endpoint: "/node/:nodeId/command-center",

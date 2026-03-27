@@ -37,7 +37,7 @@ export default {
 
     cli: [
       {
-        command: "review [action] [args...]",
+        command: "review [action] [args...]", scope: ["tree"],
         description: "Peer review status and control",
         method: "GET",
         endpoint: "/node/:nodeId/review/status",

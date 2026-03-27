@@ -35,7 +35,7 @@ export default {
 
     cli: [
       {
-        command: "perspective [action] [args...]",
+        command: "perspective [action] [args...]", scope: ["tree"],
         description: "Perspective filter. No action shows effective filter. Actions: set, clear, test.",
         method: "GET",
         endpoint: "/node/:nodeId/perspective",

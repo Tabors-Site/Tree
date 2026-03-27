@@ -46,7 +46,7 @@ export default {
 
     cli: [
       {
-        command: "activity [query...]",
+        command: "activity [query...]", scope: ["home","land"],
         description: "Ask about land activity. What happened today, which trees are busiest, AI usage stats.",
         method: "POST",
         endpoint: "/land/activity",

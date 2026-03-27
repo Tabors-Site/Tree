@@ -53,7 +53,7 @@ export default {
 
     cli: [
       {
-        command: "food [message...]",
+        command: "food [message...]", scope: ["tree"],
         description: "Talk to your food coach. Logs meals, tracks macros, plans nutrition.",
         method: "POST",
         endpoint: "/root/:rootId/food",
