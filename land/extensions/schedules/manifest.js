@@ -1,6 +1,7 @@
 export default {
   name: "schedules",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Nodes exist in time, not just in space. A task has a due date. A goal has a review " +
     "cadence. A project milestone has a target ship date. Schedules attaches a date and a " +

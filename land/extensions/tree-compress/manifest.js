@@ -1,6 +1,7 @@
 export default {
   name: "tree-compress",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "A tree outgrows its usefulness. Too many nodes. Too much metadata. The AI context window " +
     "cannot hold the summary. The circuit breaker is approaching threshold. The tree needs to " +

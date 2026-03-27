@@ -5,12 +5,16 @@
 // through the AI, then executes each intent as a real AI interaction
 // at the target node.
 //
+// Uses OrchestratorRuntime for session lifecycle, lock management,
+// abort support, and step tracking. Lock prevents two intent cycles
+// from racing on the same tree.
+//
 // The intent cycle:
 // 1. Find trees with metadata.intent.enabled = true
 // 2. For each tree, collect state from all installed signal sources
-// 3. Send the state to the AI with the intent generation prompt
+// 3. Send the state to the AI via rt.runStep with the intent generation prompt
 // 4. Parse the returned intents (JSON array)
-// 5. For each intent, call runChat at the target node
+// 5. For each intent, rt.runStep at the target node
 // 6. Log each execution as a contribution (action: "intent:executed")
 // 7. Write results to .intent node as notes
 
@@ -18,18 +22,24 @@ import log from "../../seed/log.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { collectTreeState, formatStateForPrompt } from "./stateCollector.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
+import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
+
+let LLM_PRIORITY;
+try {
+  ({ LLM_PRIORITY } = await import("../../seed/ws/conversation.js"));
+} catch {
+  LLM_PRIORITY = { BACKGROUND: 4 };
+}
 
 let Node = null;
 let User = null;
-let runChat = null;
 let logContribution = null;
 let useEnergy = async () => ({ energyUsed: 0 });
 
-export function setServices({ models, llm, contributions, energy }) {
+export function setServices({ models, contributions, energy }) {
   Node = models.Node;
   User = models.User;
-  runChat = llm.runChat;
   logContribution = contributions.logContribution;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
 }
@@ -138,76 +148,142 @@ async function processTree(root) {
   const user = await User.findById(userId).select("username").lean();
   if (!user) return;
 
-  // 1. Collect state
-  const state = await collectTreeState(rootId, root, { Node });
-  const stateText = formatStateForPrompt(state);
+  // Create runtime. Intent is a standalone background pipeline.
+  const rt = new OrchestratorRuntime({
+    rootId,
+    userId,
+    username: user.username,
+    visitorId: `intent:${rootId}:${Date.now()}`,
+    sessionType: "INTENT",
+    description: `Intent cycle for tree ${root.name}`,
+    modeKeyForLlm: "tree:respond",
+    lockNamespace: "intent",
+    lockKey: `intent:${rootId}`,
+    llmPriority: LLM_PRIORITY?.BACKGROUND || 4,
+  });
 
-  if (!stateText) {
-    log.debug("Intent", `No observable state for ${root.name}. Skipping.`);
+  const ok = await rt.init("Starting intent cycle");
+  if (!ok) {
+    log.debug("Intent", `Intent cycle already running for ${root.name}. Skipping.`);
     return;
   }
 
-  // 2. Energy check for generation
   try {
-    await useEnergy({ userId, action: "intentGenerate" });
-  } catch {
-    log.debug("Intent", `Insufficient energy for intent generation on ${root.name}`);
-    return;
-  }
+    // 1. Collect state
+    const state = await collectTreeState(rootId, root, { Node });
+    const stateText = formatStateForPrompt(state);
 
-  // 3. Generate intents via AI
-  const maxIntents = getMaxIntentsPerCycle();
-  const prompt = GENERATION_PROMPT
-    .replace("{maxIntents}", String(maxIntents))
-    .replace("{stateText}", stateText);
-
-  let answer;
-  try {
-    const result = await runChat({
-      userId,
-      username: user.username,
-      message: prompt,
-      mode: "tree:respond",
-      rootId,
-    });
-    answer = result?.answer;
-  } catch (err) {
-    log.warn("Intent", `Intent generation LLM call failed for ${root.name}: ${err.message}`);
-    return;
-  }
-
-  if (!answer) return;
-
-  // 4. Parse intents
-  const parsed = parseJsonSafe(answer);
-  if (!Array.isArray(parsed)) {
-    log.debug("Intent", `Intent generation returned non-array for ${root.name}`);
-    return;
-  }
-
-  const intents = parsed
-    .filter(i => i && typeof i === "object" && i.action && i.targetNodeId)
-    .slice(0, maxIntents);
-
-  if (intents.length === 0) {
-    log.debug("Intent", `No intents generated for ${root.name}. Tree is healthy.`);
-    return;
-  }
-
-  log.verbose("Intent", `Generated ${intents.length} intent(s) for ${root.name}`);
-
-  // 5. Ensure .intent node exists
-  const intentNodeId = await ensureIntentNode(rootId);
-
-  // 6. Execute each intent
-  for (const intent of intents) {
-    try {
-      await executeIntent(intent, rootId, userId, user.username, intentNodeId);
-    } catch (err) {
-      log.warn("Intent", `Intent execution failed: ${intent.action}: ${err.message}`);
-      // Log the failure on .intent
-      await writeIntentResult(intentNodeId, intent, null, err.message);
+    if (!stateText) {
+      log.debug("Intent", `No observable state for ${root.name}. Skipping.`);
+      rt.setResult("No observable state", "tree:respond");
+      return;
     }
+
+    rt.trackStep("tree:respond", {
+      input: { phase: "state-collection", rootId },
+      output: { sectionsCollected: stateText.split("\n").length },
+      startTime: Date.now(),
+      endTime: Date.now(),
+    });
+
+    if (rt.aborted) {
+      rt.setError("Intent cycle cancelled", "tree:respond");
+      return;
+    }
+
+    // 2. Energy check for generation
+    try {
+      await useEnergy({ userId, action: "intentGenerate" });
+    } catch {
+      log.debug("Intent", `Insufficient energy for intent generation on ${root.name}`);
+      rt.setResult("Insufficient energy", "tree:respond");
+      return;
+    }
+
+    // 3. Generate intents via AI (through runStep)
+    const maxIntents = getMaxIntentsPerCycle();
+    const prompt = GENERATION_PROMPT
+      .replace("{maxIntents}", String(maxIntents))
+      .replace("{stateText}", stateText);
+
+    let parsed = null;
+    try {
+      const result = await rt.runStep("tree:respond", {
+        prompt,
+      });
+      parsed = result?.parsed;
+    } catch (err) {
+      log.warn("Intent", `Intent generation LLM call failed for ${root.name}: ${err.message}`);
+      rt.setError(err.message, "tree:respond");
+      return;
+    }
+
+    if (!Array.isArray(parsed)) {
+      log.debug("Intent", `Intent generation returned non-array for ${root.name}`);
+      rt.setResult("No intents generated (non-array response)", "tree:respond");
+      return;
+    }
+
+    const intents = parsed
+      .filter(i => i && typeof i === "object" && i.action && i.targetNodeId)
+      .slice(0, maxIntents);
+
+    if (intents.length === 0) {
+      log.debug("Intent", `No intents generated for ${root.name}. Tree is healthy.`);
+      rt.setResult("No intents needed", "tree:respond");
+      return;
+    }
+
+    log.verbose("Intent", `Generated ${intents.length} intent(s) for ${root.name}`);
+
+    // 4. Ensure .intent node exists
+    const intentNodeId = await ensureIntentNode(rootId);
+
+    // 5. Execute each intent (each is a runStep at the target node)
+    const recentExecutions = [];
+
+    for (const intent of intents) {
+      if (rt.aborted) {
+        log.debug("Intent", "Intent cycle aborted between executions");
+        break;
+      }
+
+      try {
+        const execResult = await executeIntent(rt, intent, rootId, userId, user.username, intentNodeId);
+        recentExecutions.push({
+          action: intent.action,
+          reason: intent.reason,
+          result: execResult?.slice(0, 200) || "completed",
+          executedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        log.warn("Intent", `Intent execution failed: ${intent.action}: ${err.message}`);
+        await writeIntentResult(intentNodeId, intent, null, err.message);
+      }
+    }
+
+    // 6. Write recent executions to metadata for enrichContext
+    try {
+      const rootNode = await Node.findById(rootId);
+      if (rootNode) {
+        const meta = getExtMeta(rootNode, "intent") || {};
+        meta.recentExecutions = [
+          ...recentExecutions,
+          ...(meta.recentExecutions || []),
+        ].slice(0, 20);
+        await setExtMeta(rootNode, "intent", meta);
+        await rootNode.save();
+      }
+    } catch (err) {
+      log.debug("Intent", `Failed to write recent executions to metadata: ${err.message}`);
+    }
+
+    rt.setResult(`Executed ${recentExecutions.length} intent(s)`, "tree:respond");
+  } catch (err) {
+    rt.setError(err.message, "tree:respond");
+    throw err;
+  } finally {
+    await rt.cleanup();
   }
 }
 
@@ -215,23 +291,21 @@ async function processTree(root) {
 // EXECUTION
 // ─────────────────────────────────────────────────────────────────────────
 
-async function executeIntent(intent, rootId, userId, username, intentNodeId) {
+async function executeIntent(rt, intent, rootId, userId, username, intentNodeId) {
   // Energy check per execution
   try {
     await useEnergy({ userId, action: "intentExecute" });
   } catch {
     log.debug("Intent", `Insufficient energy for intent execution: ${intent.action}`);
-    return;
+    return null;
   }
 
   // Verify target node exists and is in this tree
   const targetNode = await Node.findById(intent.targetNodeId).select("_id name rootOwner").lean();
   if (!targetNode) {
     log.debug("Intent", `Intent target node not found: ${intent.targetNodeId}`);
-    return;
+    return null;
   }
-
-  const mode = intent.mode || "tree:respond";
 
   // Build the intent message. This becomes the AI's instruction.
   const message =
@@ -242,17 +316,16 @@ async function executeIntent(intent, rootId, userId, username, intentNodeId) {
 
   log.verbose("Intent", `Executing: "${intent.action}" at node ${targetNode.name || intent.targetNodeId}`);
 
-  // Execute as a real AI interaction at the target node
-  let result;
+  const mode = intent.mode || "tree:respond";
+
+  // Execute through the runtime's runStep
+  let resultText = null;
   try {
-    result = await runChat({
-      userId,
-      username,
-      message,
-      mode,
-      rootId,
-      nodeId: intent.targetNodeId,
+    const { raw } = await rt.runStep(mode, {
+      prompt: message,
+      treeContext: { nodeId: intent.targetNodeId },
     });
+    resultText = raw || "completed";
   } catch (err) {
     await writeIntentResult(intentNodeId, intent, null, err.message);
     throw err;
@@ -271,13 +344,14 @@ async function executeIntent(intent, rootId, userId, username, intentNodeId) {
         priority: intent.priority,
         targetNodeId: intent.targetNodeId,
         tools: intent.tools,
-        result: result?.answer?.slice(0, 500) || null,
+        result: resultText?.slice(0, 500) || null,
       },
     },
   });
 
   // Write result to .intent node
-  await writeIntentResult(intentNodeId, intent, result?.answer, null);
+  await writeIntentResult(intentNodeId, intent, resultText, null);
+  return resultText;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

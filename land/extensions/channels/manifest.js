@@ -1,6 +1,7 @@
 export default {
   name: "channels",
   version: "1.0.0",
+  builtFor: "kernel",
   description:
     "Direct named signal paths between two specific nodes. Bypass the propagation " +
     "tree walk entirely. When /Health/Fitness and /Health/Food need to exchange " +

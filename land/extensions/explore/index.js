@@ -1,10 +1,12 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
-import { setRunChat, runExplore, getExploreMap, getExploreGaps } from "./core.js";
+import exploreMode from "./modes/explore.js";
+import { runExplore, getExploreMap, getExploreGaps } from "./core.js";
 
 export async function init(core) {
-  const INT = core.llm.LLM_PRIORITY.INTERACTIVE;
-  setRunChat((opts) => core.llm.runChat({ ...opts, llmPriority: INT }));
+  // Register the explore mode. Hidden from mode bar. Used internally by the
+  // OrchestratorRuntime during the evaluation step of the exploration pipeline.
+  core.modes.registerMode("tree:explore", exploreMode, "explore");
 
   // Inject last explore map into AI context at positions that have been explored.
   // The AI sees not just the tree summary but also "last time someone explored

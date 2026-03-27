@@ -1,6 +1,7 @@
 export default {
   name: "notifications",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "The notification infrastructure for the entire extension ecosystem. Owns the Notification " +
     "model, a Mongoose schema with userId, rootId, type, title, content, dreamSessionIds, and " +

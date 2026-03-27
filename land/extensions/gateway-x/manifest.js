@@ -1,6 +1,7 @@
 export default {
   name: "gateway-x",
   version: "1.0.0",
+  builtFor: "treeos-connect",
   description:
     "X (Twitter) channel type for the gateway. Three modes: output-only post generation " +
     "(the tree becomes a content engine), input-output conversation (threaded replies on X), " +

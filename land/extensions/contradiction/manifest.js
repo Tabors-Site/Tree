@@ -1,6 +1,7 @@
 export default {
   name: "contradiction",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "The tree's immune system. Notes on different nodes might contradict each other. Both valid " +
     "in isolation. Together a conflict the user has not noticed. Listens to afterNote. On every " +

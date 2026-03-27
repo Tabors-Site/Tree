@@ -1,6 +1,7 @@
 export default {
   name: "evolution",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "The tree learns which structures work. A branch that grows, accumulates notes, generates " +
     "cascade signals, builds codebook entries, gets revisited frequently is a successful pattern. " +

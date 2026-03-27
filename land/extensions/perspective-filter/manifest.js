@@ -1,6 +1,7 @@
 export default {
   name: "perspective-filter",
   version: "1.0.0",
+  builtFor: "treeos-cascade",
   description:
     "What keeps cascade from being noise. Without it, every signal hits every node. With it, each " +
     "node and each tree declares what it wants to receive. Stores configuration in metadata.perspective " +

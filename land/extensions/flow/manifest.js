@@ -1,6 +1,7 @@
 export default {
   name: "flow",
   version: "1.0.0",
+  builtFor: "treeos-cascade",
   description:
     "Cascade is the kernel's nervous system. When content is written at a cascade-enabled " +
     "node, the kernel fires onCascade and stores the results in daily partition nodes under " +

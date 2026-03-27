@@ -1,6 +1,7 @@
 export default {
   name: "prune",
   version: "1.0.0",
+  builtFor: "treeos-maintenance",
   description:
     "The tree sheds dead weight. Not compression where meaning is preserved in " +
     "smaller form. Actual removal of content that has no value anymore. " +

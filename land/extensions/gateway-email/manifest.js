@@ -1,6 +1,7 @@
 export default {
   name: "gateway-email",
   version: "1.0.0",
+  builtFor: "treeos-connect",
   description:
     "Registers the email channel type with the gateway core, enabling trees to send and " +
     "receive messages over email. Output channels send notifications via SMTP using " +

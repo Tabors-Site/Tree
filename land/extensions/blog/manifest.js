@@ -1,6 +1,7 @@
 export default {
   name: "blog",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "A land-level blog for publishing long-form content outside the tree structure. Trees " +
     "are for structured knowledge. Blogs are for narrative. Announcements, changelogs, " +

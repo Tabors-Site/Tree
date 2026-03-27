@@ -1,6 +1,7 @@
 export default {
   name: "treeos",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "The reference implementation of how the AI thinks inside a tree. Ten modes, thirty-plus " +
     "MCP tools, and a navigation hook that keeps the frontend synchronized with every operation " +

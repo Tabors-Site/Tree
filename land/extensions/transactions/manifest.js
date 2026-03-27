@@ -1,6 +1,7 @@
 export default {
   name: "transactions",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Nodes can trade value with each other. A transaction is a two-sided exchange: node A sends " +
     "values to node B, and node B sends values back to node A. Or one side is OUTSIDE, " +

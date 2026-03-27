@@ -7,16 +7,23 @@
  * 3. Targeted note sampling: read only top candidates
  * 4. Iterative drill: deepen or backtrack based on confidence
  * 5. Map assembly: what's where, what was found, what wasn't
+ *
+ * Uses OrchestratorRuntime for abort support, locking, and step tracking.
+ * Follows understanding's pipeline pattern: init(), trackStep(), runStep(), cleanup().
  */
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
 import { CONTENT_TYPE, SYSTEM_ROLE } from "../../seed/protocol.js";
-import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
+import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 
-let _runChat = null;
-export function setRunChat(fn) { _runChat = fn; }
+let LLM_PRIORITY;
+try {
+  ({ LLM_PRIORITY } = await import("../../seed/ws/conversation.js"));
+} catch {
+  LLM_PRIORITY = { INTERACTIVE: 2 };
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -200,11 +207,14 @@ async function scoreCandidate(candidate, query, queryVector) {
 
 /**
  * Read recent notes from top candidates. Capped per node.
+ * explored map is checked to skip already-sampled nodes.
  */
-async function sampleNotes(candidates, maxPerNode) {
+async function sampleNotes(candidates, explored, maxPerNode) {
   const samples = [];
 
   for (const candidate of candidates) {
+    if (explored.has(candidate.nodeId)) continue;
+
     const notes = await Note.find({
       nodeId: candidate.nodeId,
       contentType: CONTENT_TYPE.TEXT,
@@ -233,52 +243,25 @@ async function sampleNotes(candidates, maxPerNode) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// PHASE 4: AI EVALUATION
+// EVAL PROMPT BUILDER
 // ─────────────────────────────────────────────────────────────────────────
 
-/**
- * Ask the AI to evaluate sampled notes against the query.
- * Returns findings, confidence, and drill recommendations.
- */
-async function evaluateSamples(query, samples, rootId, userId) {
-  if (!_runChat || samples.length === 0) return null;
-
-  const sampleText = samples.map(s =>
-    `Node: "${s.nodeName}" (path: ${s.path}, score: ${s.score})\n` +
-    `Signals: ${s.signals.join(", ")}\n` +
-    `Notes (${s.notes.length}):\n` +
-    s.notes.map((n, i) => `  [${i + 1}] ${n.content}`).join("\n")
-  ).join("\n\n");
-
-  const prompt =
-    `You are exploring a tree branch to find information.\n\n` +
-    `Query: "${query}"\n\n` +
-    `Sampled nodes:\n${sampleText}\n\n` +
-    `Evaluate these samples. Return JSON:\n` +
-    `{\n` +
-    `  "findings": [\n` +
-    `    { "nodeId": "...", "nodeName": "...", "relevance": 0.0-1.0, "summary": "what was found", "keyFindings": ["..."] }\n` +
-    `  ],\n` +
-    `  "confidence": 0.0-1.0,\n` +
-    `  "drillInto": ["nodeId to explore deeper"],\n` +
-    `  "gaps": ["what information is still missing"]\n` +
-    `}`;
-
-  try {
-    const { answer } = await _runChat({
-      userId,
-      username: "system",
-      message: prompt,
-      mode: "tree:respond",
-      rootId,
-    });
-
-    if (!answer) return null;
-    return parseJsonSafe(answer);
-  } catch (err) {
-    log.debug("Explore", `Evaluation failed: ${err.message}`);
-    return null;
+function buildEvalPrompt(query, samples, previousFindings) {
+  let prompt = `Query: "${query}"\n\nSampled notes:\n`;
+  for (const s of samples) {
+    prompt += `\n--- ${s.nodeName} (${s.nodeId}) ---\n`;
+    prompt += `Path: ${s.path}, Score: ${s.score}\n`;
+    prompt += `Signals: ${s.signals.join(", ")}\n`;
+    for (const note of s.notes) {
+      prompt += `${note.content}\n`;
+    }
   }
+  if (previousFindings.length > 0) {
+    prompt += `\nPrevious findings (do not repeat, build on these):\n`;
+    prompt += JSON.stringify(previousFindings.map(f => ({ nodeId: f.nodeId, summary: f.summary })), null, 2);
+  }
+  prompt += `\n\nEvaluate these notes against the query. Return JSON with findings, confidence, drillInto, gaps.`;
+  return prompt;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -287,150 +270,233 @@ async function evaluateSamples(query, samples, rootId, userId) {
 
 /**
  * Run a full exploration from a starting node.
+ * Creates its own OrchestratorRuntime for abort, locking, and step tracking.
  *
  * @param {string} nodeId - starting position
  * @param {string} query - what to find
  * @param {string} userId
- * @param {object} opts - { deep, signal }
+ * @param {string} username
+ * @param {object} opts - { deep, rootId }
  */
-export async function runExplore(nodeId, query, userId, opts = {}) {
+export async function runExplore(nodeId, query, userId, username, opts = {}) {
   const config = await getExploreConfig();
   const maxIterations = opts.deep ? config.maxIterations * 2 : config.maxIterations;
   const threshold = opts.deep ? config.confidenceThreshold * 0.7 : config.confidenceThreshold;
 
-  // Find root for runChat
-  let rootId = null;
-  try {
-    const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
-    const root = await resolveRootNode(nodeId);
-    rootId = root?._id;
-  } catch (err) {
-    log.debug("Explore", "Root resolution failed:", err.message);
-  }
-
-  // Get query vector if embed is available
-  let queryVector = null;
-  try {
-    const { getExtension } = await import("../loader.js");
-    const embedExt = getExtension("embed");
-    if (embedExt?.exports?.generateEmbedding) {
-      queryVector = await embedExt.exports.generateEmbedding(query, userId);
+  // Find root for the runtime
+  let rootId = opts.rootId || null;
+  if (!rootId) {
+    try {
+      const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
+      const root = await resolveRootNode(nodeId);
+      rootId = root?._id;
+    } catch (err) {
+      log.debug("Explore", "Root resolution failed:", err.message);
     }
-  } catch (err) {
-    log.debug("Explore", "Query vector generation failed:", err.message);
   }
 
-  // Phase 1: Structure scan
-  const allNodes = await structureScan(nodeId, config.structureScanDepth);
-  if (allNodes.length === 0) {
-    return emptyMap(nodeId, query);
+  // Create runtime. Explore is a standalone pipeline, not part of the user's session.
+  const rt = new OrchestratorRuntime({
+    rootId: rootId || nodeId,
+    userId,
+    username: username || "system",
+    visitorId: `explore:${userId}:${nodeId}:${Date.now()}`,
+    sessionType: "EXPLORE",
+    description: `Exploring: ${query}`,
+    modeKeyForLlm: "tree:explore",
+    lockNamespace: "explore",
+    lockKey: `explore:${nodeId}`,
+    llmPriority: LLM_PRIORITY?.INTERACTIVE || 2,
+  });
+
+  const ok = await rt.init("Starting exploration");
+  if (!ok) {
+    return { error: "Exploration already in progress at this node" };
   }
 
-  // Phase 2: Score all candidates
-  const scored = [];
-  for (const node of allNodes) {
-    if (node.depth === 0) continue; // skip the root itself
-    const result = await scoreCandidate(node, query, queryVector);
-    scored.push(result);
-  }
-  scored.sort((a, b) => b.score - a.score);
-
-  // Iterative exploration loop
-  const explored = new Map();
-  const allFindings = [];
-  let confidence = 0;
-  let totalNotesRead = 0;
-  let iteration = 0;
-  let candidates = scored.slice(0, config.maxCandidatesPerIteration);
-
-  while (iteration < maxIterations && confidence < threshold && candidates.length > 0) {
-    iteration++;
-
-    // Phase 3: Sample notes from candidates
-    const samples = await sampleNotes(
-      candidates.filter(c => !explored.has(c.nodeId)),
-      config.maxNotesPerSample,
-    );
-
-    for (const s of samples) {
-      explored.set(s.nodeId, true);
-      totalNotesRead += s.notes.length;
-    }
-
-    if (samples.length === 0) break;
-
-    // Phase 4: AI evaluation
-    const evaluation = await evaluateSamples(query, samples, rootId, userId);
-    if (!evaluation) break;
-
-    // Collect findings
-    if (Array.isArray(evaluation.findings)) {
-      for (const f of evaluation.findings) {
-        if (f && f.nodeId) allFindings.push(f);
+  try {
+    // Get query vector if embed is available
+    let queryVector = null;
+    try {
+      const { getExtension } = await import("../loader.js");
+      const embedExt = getExtension("embed");
+      if (embedExt?.exports?.generateEmbedding) {
+        queryVector = await embedExt.exports.generateEmbedding(query, userId);
       }
+    } catch (err) {
+      log.debug("Explore", "Query vector generation failed:", err.message);
     }
 
-    confidence = evaluation.confidence || 0;
+    // ── Phase 1: Structure scan (no LLM) ─────────────────────────────────
+    const startScan = Date.now();
+    const allNodes = await structureScan(nodeId, config.structureScanDepth);
+    rt.trackStep("tree:explore", {
+      input: { phase: "structure-scan", nodeId, depth: config.structureScanDepth },
+      output: { candidateCount: allNodes.length },
+      startTime: startScan,
+      endTime: Date.now(),
+    });
 
-    // Determine next candidates (drill recommendations)
-    if (Array.isArray(evaluation.drillInto) && confidence < threshold) {
-      candidates = [];
-      for (const drillId of evaluation.drillInto) {
-        // Find children of the drill target
-        const drillNode = await Node.findById(drillId).select("children").lean();
-        if (!drillNode?.children) continue;
-        for (const childId of drillNode.children) {
-          const childStr = childId.toString();
-          if (explored.has(childStr)) continue;
-          const child = scored.find(s => s.nodeId === childStr);
-          if (child) candidates.push(child);
-          else {
-            // Node not in initial scan, add with base score
-            const node = await Node.findById(childStr).select("_id name type status children").lean();
-            if (node) candidates.push({ nodeId: childStr, name: node.name, type: node.type, score: 0.3, signals: ["drill target"], path: "", childCount: (node.children || []).length, depth: 0 });
-          }
+    if (allNodes.length === 0) {
+      rt.setResult("No nodes found", "tree:explore");
+      return emptyMap(nodeId, query);
+    }
+
+    if (rt.aborted) {
+      rt.setError("Exploration cancelled", "tree:explore");
+      return { error: "Exploration cancelled" };
+    }
+
+    // ── Phase 2: Score all candidates (no LLM) ──────────────────────────
+    const startProbe = Date.now();
+    const scored = [];
+    for (const node of allNodes) {
+      if (node.depth === 0) continue; // skip the root itself
+      const result = await scoreCandidate(node, query, queryVector);
+      scored.push(result);
+    }
+    scored.sort((a, b) => b.score - a.score);
+
+    rt.trackStep("tree:explore", {
+      input: { phase: "metadata-probe", candidates: scored.length },
+      output: { topScore: scored[0]?.score || 0 },
+      startTime: startProbe,
+      endTime: Date.now(),
+    });
+
+    if (rt.aborted) {
+      rt.setError("Exploration cancelled", "tree:explore");
+      return { error: "Exploration cancelled" };
+    }
+
+    // ── Phase 3-4: Sample + Evaluate loop ────────────────────────────────
+    const explored = new Map();
+    const allFindings = [];
+    let allGaps = [];
+    let confidence = 0;
+    let totalNotesRead = 0;
+    let iteration = 0;
+    let candidates = scored.slice(0, config.maxCandidatesPerIteration);
+
+    while (iteration < maxIterations && confidence < threshold && candidates.length > 0) {
+      if (rt.aborted) {
+        rt.setError("Exploration cancelled", "tree:explore");
+        return { error: "Exploration cancelled" };
+      }
+      iteration++;
+
+      // Phase 3: Sample notes (no LLM)
+      const samples = await sampleNotes(candidates, explored, config.maxNotesPerSample);
+
+      for (const s of samples) {
+        explored.set(s.nodeId, true);
+        totalNotesRead += s.notes.length;
+      }
+
+      if (samples.length === 0) break;
+
+      // Phase 4: Evaluate (LLM call through runStep)
+      const evalPrompt = buildEvalPrompt(query, samples, allFindings);
+
+      let parsed = null;
+      try {
+        const result = await rt.runStep("tree:explore", {
+          prompt: evalPrompt,
+        });
+        parsed = result?.parsed || null;
+      } catch (err) {
+        log.debug("Explore", `Evaluation step failed: ${err.message}`);
+        break;
+      }
+
+      if (!parsed || !parsed.findings) {
+        // LLM returned unparseable response, use what we have
+        break;
+      }
+
+      // Collect findings
+      if (Array.isArray(parsed.findings)) {
+        for (const f of parsed.findings) {
+          if (f && f.nodeId) allFindings.push(f);
         }
       }
-    } else {
-      break;
+
+      confidence = parsed.confidence || 0;
+      if (Array.isArray(parsed.gaps)) {
+        allGaps = [...allGaps, ...parsed.gaps];
+      }
+
+      // Prepare next iteration candidates from drillInto
+      if (Array.isArray(parsed.drillInto) && parsed.drillInto.length > 0 && confidence < threshold) {
+        candidates = [];
+        for (const drillId of parsed.drillInto) {
+          const drillNode = await Node.findById(drillId).select("children").lean();
+          if (!drillNode?.children) continue;
+          for (const childId of drillNode.children) {
+            const childStr = childId.toString();
+            if (explored.has(childStr)) continue;
+            const child = scored.find(s => s.nodeId === childStr);
+            if (child) {
+              candidates.push(child);
+            } else {
+              // Node not in initial scan, add with base score
+              const node = await Node.findById(childStr).select("_id name type status children").lean();
+              if (node) {
+                candidates.push({
+                  nodeId: childStr, name: node.name, type: node.type,
+                  score: 0.3, signals: ["drill target"], path: "",
+                  childCount: (node.children || []).length, depth: 0,
+                });
+              }
+            }
+          }
+        }
+      } else {
+        break;
+      }
     }
+
+    // ── Phase 5: Assemble map ────────────────────────────────────────────
+    const totalNotes = await Note.countDocuments({
+      nodeId: { $in: allNodes.map(n => n.nodeId) },
+      contentType: CONTENT_TYPE.TEXT,
+    });
+
+    const map = {
+      query,
+      rootNode: allNodes[0]?.name || nodeId,
+      nodesExplored: explored.size,
+      notesRead: totalNotesRead,
+      totalNotesInBranch: totalNotes,
+      coverage: totalNotes > 0 ? `${((totalNotesRead / totalNotes) * 100).toFixed(2)}%` : "0%",
+      iterations: iteration,
+      map: allFindings.sort((a, b) => (b.relevance || 0) - (a.relevance || 0)),
+      unexplored: scored
+        .filter(s => !explored.has(s.nodeId) && s.score > 0.1)
+        .slice(0, 10)
+        .map(s => ({ nodeId: s.nodeId, name: s.name, score: s.score, reason: s.signals.join(", ") || "Low relevance" })),
+      gaps: allGaps.length > 0 ? allGaps : [],
+      confidence,
+    };
+
+    // Write map to metadata for working memory
+    await Node.findByIdAndUpdate(nodeId, {
+      $set: {
+        "metadata.explore.lastMap": map,
+        "metadata.explore.lastQuery": query,
+        "metadata.explore.lastExplored": new Date().toISOString(),
+      },
+    });
+
+    rt.setResult("Exploration complete", "tree:explore");
+    return map;
+
+  } catch (err) {
+    rt.setError(err.message, "tree:explore");
+    throw err;
+  } finally {
+    await rt.cleanup();
   }
-
-  // Phase 5: Assemble map
-  const totalNotes = await Note.countDocuments({
-    nodeId: { $in: allNodes.map(n => n.nodeId) },
-    contentType: CONTENT_TYPE.TEXT,
-  });
-
-  const map = {
-    query,
-    rootNode: allNodes[0]?.name || nodeId,
-    nodesExplored: explored.size,
-    notesRead: totalNotesRead,
-    totalNotesInBranch: totalNotes,
-    coverage: totalNotes > 0 ? `${((totalNotesRead / totalNotes) * 100).toFixed(2)}%` : "0%",
-    iterations: iteration,
-    map: allFindings.sort((a, b) => (b.relevance || 0) - (a.relevance || 0)),
-    unexplored: scored
-      .filter(s => !explored.has(s.nodeId) && s.score > 0.1)
-      .slice(0, 10)
-      .map(s => ({ nodeId: s.nodeId, name: s.name, score: s.score, reason: s.signals.join(", ") || "Low relevance" })),
-    gaps: allFindings.length > 0 && Array.isArray(allFindings[allFindings.length - 1]?.gaps)
-      ? allFindings[allFindings.length - 1].gaps
-      : [],
-    confidence,
-  };
-
-  // Write map to metadata for next explore
-  await Node.findByIdAndUpdate(nodeId, {
-    $set: {
-      "metadata.explore.lastMap": map,
-      "metadata.explore.lastQuery": query,
-      "metadata.explore.lastExplored": new Date().toISOString(),
-    },
-  });
-
-  return map;
 }
 
 function emptyMap(nodeId, query) {

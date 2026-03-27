@@ -1,6 +1,8 @@
 export default {
   name: "treeos-maintenance",
   version: "1.0.0",
+  type: "bundle",
+  builtFor: "kernel",
   description:
     "Hygiene and reorganization. Two extensions that keep the tree clean. " +
     "\n\n" +

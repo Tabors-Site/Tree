@@ -1,6 +1,7 @@
 export default {
   name: "governance",
   version: "1.0.0",
+  builtFor: "kernel",
   description:
     "Network governance visibility. Fetches governance policies from configured directories " +
     "and surfaces them to the land-manager AI. Shows current seed version, minimum required " +

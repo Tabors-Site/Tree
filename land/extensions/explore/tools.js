@@ -13,13 +13,17 @@ export default [
       query: z.string().describe("What to find. Natural language."),
       deep: z.boolean().optional().default(false).describe("More iterations, lower confidence threshold."),
       userId: z.string().describe("Injected by server. Ignore."),
+      username: z.string().optional().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ nodeId, query, deep, userId }) => {
+    handler: async ({ nodeId, query, deep, userId, username }) => {
       try {
-        const map = await runExplore(nodeId, query, userId, { deep });
+        const map = await runExplore(nodeId, query, userId, username || "system", { deep });
+        if (map.error) {
+          return { content: [{ type: "text", text: map.error }] };
+        }
         return {
           content: [{
             type: "text",
@@ -66,13 +70,17 @@ export default [
       nodeId: z.string().describe("The unexplored node to drill into."),
       query: z.string().describe("The same query or a refined one."),
       userId: z.string().describe("Injected by server. Ignore."),
+      username: z.string().optional().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ nodeId, query, userId }) => {
+    handler: async ({ nodeId, query, userId, username }) => {
       try {
-        const map = await runExplore(nodeId, query, userId, {});
+        const map = await runExplore(nodeId, query, userId, username || "system", {});
+        if (map.error) {
+          return { content: [{ type: "text", text: map.error }] };
+        }
         return {
           content: [{
             type: "text",

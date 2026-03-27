@@ -1,6 +1,7 @@
 export default {
   name: "email",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Without this extension, registration is instant: pick a username and password, you're " +
     "in. That simplicity is intentional for development and private lands. But public-facing " +

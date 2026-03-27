@@ -1,6 +1,7 @@
 export default {
   name: "learn",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Information intake and decomposition. Paste in 50,000 words. The extension scans through, " +
     "labels the main sections, cuts it up into nodes, repeats for each node, and keeps expanding " +

@@ -1,6 +1,7 @@
 export default {
   name: "trace",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "Follow a concept through the tree. Given a term or idea, trace finds every " +
     "node where it appears in notes, metadata, codebook entries, or contradiction " +

@@ -1,6 +1,7 @@
 export default {
   name: "explore",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "The AI navigates a tree branch the way Claude Code navigates a codebase. It does not read " +
     "everything. It reads the structure first. Names, types, child counts, depths. No note content. " +
@@ -16,7 +17,7 @@ export default {
     "move through the tree the way yours move through code.",
 
   needs: {
-    services: ["hooks", "llm"],
+    services: ["hooks", "llm", "session"],
     models: ["Node", "Note"],
   },
 

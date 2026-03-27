@@ -1,6 +1,7 @@
 export default {
   name: "understanding",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "A tree with 500 nodes cannot fit in an AI context window. The AI needs to know what the " +
     "tree contains without reading every note on every node. Understanding solves this by " +

@@ -40,7 +40,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       return notFoundPage(req, res, "This user doesn't exist.");
     }
 
-    const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+    const { getUserMeta } = await import("../../../seed/tree/userMetadata.js");
     const nav = getUserMeta(user, "nav");
     const userRoots = Array.isArray(nav.roots) ? nav.roots : [];
 

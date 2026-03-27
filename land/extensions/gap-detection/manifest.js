@@ -1,6 +1,7 @@
 export default {
   name: "gap-detection",
   version: "1.0.0",
+  builtFor: "treeos-cascade",
   description:
     "Makes the tree know what it does not know. When cascade delivers a signal to a node, the " +
     "signal metadata may reference extension namespaces that the local land does not have " +

@@ -1,6 +1,7 @@
 export default {
   name: "reroot",
   version: "1.0.0",
+  builtFor: "treeos-maintenance",
   description:
     "The tree reorganizes itself. Nodes end up in the wrong place over time. " +
     "A task that started under Work actually belongs under Side Projects. A note " +

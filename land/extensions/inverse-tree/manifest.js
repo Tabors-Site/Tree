@@ -1,6 +1,7 @@
 export default {
   name: "inverse-tree",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "The AI builds a tree OF the user. Not the trees the user built. A tree the AI constructs " +
     "from observing the user across every interaction on every tree on the land. Listens to " +
@@ -51,7 +52,7 @@ export default {
 
     hooks: {
       fires: [],
-      listens: ["afterNote", "afterLLMCall", "afterToolCall", "enrichContext"],
+      listens: ["afterNote", "afterLLMCall", "afterToolCall", "afterNavigate", "enrichContext"],
     },
   },
 };

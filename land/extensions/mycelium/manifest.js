@@ -1,6 +1,7 @@
 export default {
   name: "mycelium",
   version: "1.0.0",
+  builtFor: "kernel",
   scope: "confined",
   description:
     "The intelligent underground network. Routes cascade signals between peered lands based on " +

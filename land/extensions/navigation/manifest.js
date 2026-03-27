@@ -1,6 +1,7 @@
 export default {
   name: "navigation",
-  version: "2.0.0",
+  version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Owns the user's tree navigation state. Every user has two lists stored in metadata.nav: " +
     "roots (the complete list of trees they own or contribute to) and recentRoots (the last 5 " +

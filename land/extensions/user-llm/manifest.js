@@ -1,6 +1,7 @@
 export default {
   name: "user-llm",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Bring your own LLM. Users create named connections with a base URL, API key, and " +
     "model name. Any OpenAI-compatible endpoint works: OpenAI, Anthropic via proxy, " +

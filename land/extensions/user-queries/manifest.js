@@ -1,6 +1,7 @@
 export default {
   name: "user-queries",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Cross-tree queries scoped to a single user. The kernel stores notes, contributions, " +
     "and chats per node, but users need to see their own activity across all trees in one " +

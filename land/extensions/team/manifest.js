@@ -1,6 +1,7 @@
 export default {
   name: "team",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "How people work together on trees. Trees start with one owner. Team adds the ability " +
     "to invite contributors, transfer ownership, remove users, and retire trees. The invite " +

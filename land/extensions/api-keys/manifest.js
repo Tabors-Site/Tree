@@ -1,6 +1,7 @@
 export default {
   name: "api-keys",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Every interaction with TreeOS normally goes through a browser session or a WebSocket " +
     "connection authenticated by JWT. That works for humans sitting at a keyboard. It does not " +

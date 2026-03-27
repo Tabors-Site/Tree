@@ -1,6 +1,7 @@
 export default {
   name: "gateway-reddit",
   version: "1.0.0",
+  builtFor: "treeos-connect",
   description:
     "Registers the Reddit channel type with the gateway core, enabling trees to publish " +
     "content to subreddits, respond to comments, and monitor discussions across Reddit. " +

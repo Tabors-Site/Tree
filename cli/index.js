@@ -3,7 +3,7 @@
 const { Command } = require("commander");
 const chalk = require("chalk");
 const { version } = require("./package.json");
-const { load, currentPath, currentLand } = require("./config");
+const { load, currentPath, currentLand, getProtocolCli } = require("./config");
 
 const program = new Command();
 
@@ -235,52 +235,167 @@ const startShell = module.exports.startShell = async () => {
     );
     console.log("");
 
-    // Build command list for tab completion
-    const allCmdNames = program.commands.map(c => c.name()).sort();
+    // ── Build command metadata for tab completion ──
+    // Two sources: hardcoded Commander commands + dynamic protocol commands.
+    const cmdMeta = new Map();
+    for (const cmd of program.commands) {
+      const entry = { description: cmd.description() || "", subcommands: null, options: [] };
+      // Collect option names (--flag style)
+      for (const opt of cmd.options || []) {
+        if (opt.long) entry.options.push(opt.long);
+        if (opt.short) entry.options.push(opt.short);
+      }
+      // Collect subcommand names from nested Commander commands
+      if (cmd.commands && cmd.commands.length > 0) {
+        entry.subcommands = {};
+        for (const sub of cmd.commands) {
+          entry.subcommands[sub.name()] = sub.description() || "";
+        }
+      }
+      cmdMeta.set(cmd.name(), entry);
+    }
+    // Dynamic commands from protocol: add subcommand metadata
+    const protoCli = getProtocolCli(load());
+    for (const [extName, commands] of Object.entries(protoCli)) {
+      for (const decl of commands) {
+        const name = decl.command.split(/\s+/)[0];
+        if (!cmdMeta.has(name)) continue; // not registered (conflict)
+        const entry = cmdMeta.get(name);
+        if (decl.subcommands && !entry.subcommands) {
+          entry.subcommands = {};
+          for (const [sub, def] of Object.entries(decl.subcommands)) {
+            entry.subcommands[sub] = typeof def === "object" ? (def.description || "") : "";
+          }
+        }
+      }
+    }
+
+    const allCmdNames = [...cmdMeta.keys()].sort();
+
+    // ── Tab cycling engine ──
+    // We take full control of tab behavior. Readline's completer is a no-op.
+    // Tab fills the line with the current match and shows the description.
+    // Each tab press cycles to the next match. Any other key resets.
+    let _tabMatches = [];
+    let _tabIndex = -1;
+    let _tabPartial = "";   // what the user typed before first tab
+    let _tabPrefix = "";    // leading part of line before the word being completed
+    let _hintLine = "";
+
+    function clearHint() {
+      if (_hintLine) {
+        process.stdout.write("\x1b[s\x1b[A\x1b[2K\x1b[u");
+        _hintLine = "";
+      }
+    }
+
+    function showHint(text) {
+      clearHint();
+      if (!text) return;
+      _hintLine = text;
+      process.stdout.write("\x1b[s\x1b[A\x1b[2K\x1b[92m" + text + "\x1b[0m\x1b[u");
+    }
+
+    // Replace the current line content in readline
+    function setLine(text) {
+      // Move to start of line input, clear, write new content
+      rl.line = text;
+      rl.cursor = text.length;
+      // Clear the visible line and rewrite
+      process.stdout.write("\r");
+      // Rewrite prompt + new line
+      const cfg = load();
+      const user = cfg.username || cfg.userId || "?";
+      const land = currentLand(cfg);
+      const session = cfg.activeSession ? chalk.magenta(` @${cfg.activeSession}`) : "";
+      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + chalk.dim(currentPath(cfg)) + session + chalk.bold.cyan(" \u203a ");
+      process.stdout.write(p + text + "\x1b[0K");
+    }
+
+    function getMatchDescription(match, context) {
+      let desc = "";
+      if (context === "cmd") {
+        const meta = cmdMeta.get(match);
+        desc = meta?.description || "";
+      } else if (context.startsWith("sub:")) {
+        const parentCmd = context.slice(4);
+        const meta = cmdMeta.get(parentCmd);
+        desc = meta?.subcommands?.[match] || "";
+      }
+      return desc.replace(/\x1b\[[0-9;]*m/g, "").trim();
+    }
 
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
       terminal: true,
-      completer(line) {
-        const parts = line.split(/\s+/);
-        const partial = parts[0] || "";
-
-        if (parts.length <= 1) {
-          // Complete command name
-          const hits = allCmdNames.filter(c => c.startsWith(partial));
-          return [hits.length ? hits : allCmdNames, partial];
-        }
-
-        // For multi-word: no completion (let the command handle it)
-        return [[], line];
-      },
+      // No-op completer. We handle tab ourselves via keypress.
+      completer(line) { return [[], line]; },
     });
 
-    // Shadow hint: show ghost text of the best completion
-    let lastHint = "";
-    process.stdin.on("keypress", () => {
-      // Clear previous hint
-      if (lastHint) {
-        process.stdout.write("\x1b[0K"); // clear to end of line
-        lastHint = "";
-      }
+    // Intercept tab before readline processes it
+    process.stdin.on("keypress", (ch, key) => {
+      if (key && key.name === "tab") {
+        // First tab: compute matches from what the user has typed
+        if (_tabMatches.length === 0) {
+          const line = rl.line || "";
+          const parts = line.split(/\s+/);
 
-      // Show hint after a tick (so rl.line is updated)
-      setImmediate(() => {
-        const line = rl.line || "";
-        const parts = line.split(/\s+/);
-        if (parts.length === 1 && parts[0].length > 0) {
-          const partial = parts[0];
-          const match = allCmdNames.find(c => c.startsWith(partial) && c !== partial);
-          if (match) {
-            const rest = match.slice(partial.length);
-            lastHint = rest;
-            // Save cursor, write dim ghost text, restore cursor
-            process.stdout.write("\x1b[s\x1b[2m" + rest + "\x1b[0m\x1b[u");
+          if (parts.length <= 1) {
+            // Completing command name
+            const partial = parts[0] || "";
+            const hits = partial.length > 0
+              ? allCmdNames.filter(c => c.startsWith(partial))
+              : allCmdNames;
+            if (hits.length === 0) return;
+            _tabMatches = hits;
+            _tabIndex = -1;
+            _tabPartial = partial;
+            _tabPrefix = "";
+          } else {
+            // Completing subcommand
+            const cmd = parts[0];
+            const meta = cmdMeta.get(cmd);
+            if (!meta?.subcommands) return;
+            const subPartial = parts[1] || "";
+            const subNames = Object.keys(meta.subcommands).sort();
+            const hits = subPartial.length > 0
+              ? subNames.filter(s => s.startsWith(subPartial))
+              : subNames;
+            if (hits.length === 0) return;
+            _tabMatches = hits;
+            _tabIndex = -1;
+            _tabPartial = subPartial;
+            _tabPrefix = cmd + " ";
           }
         }
-      });
+
+        // Cycle to next match
+        _tabIndex = (_tabIndex + 1) % _tabMatches.length;
+        const match = _tabMatches[_tabIndex];
+        const context = _tabPrefix ? "sub:" + _tabPrefix.trim() : "cmd";
+
+        // Fill the line with this match
+        setLine(_tabPrefix + match);
+
+        // Show description hint
+        const desc = getMatchDescription(match, context);
+        if (desc) {
+          showHint(`  ${match} -- ${desc}`);
+        } else {
+          showHint(`  ${match}`);
+        }
+        return;
+      }
+
+      // Any non-tab key: reset tab state, clear hint
+      if (_tabMatches.length > 0) {
+        _tabMatches = [];
+        _tabIndex = -1;
+        _tabPartial = "";
+        _tabPrefix = "";
+        clearHint();
+      }
     });
 
     const prompt = () => {
@@ -294,6 +409,9 @@ const startShell = module.exports.startShell = async () => {
     };
 
     rl.on("line", async (line) => {
+      clearHint();
+      _tabMatches = [];
+      _tabIndex = -1;
       const input = line.trim();
       if (!input) return prompt();
       if (input === "exit" || input === "quit") {

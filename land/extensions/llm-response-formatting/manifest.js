@@ -1,6 +1,7 @@
 export default {
   name: "llm-response-formatting",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Post-processing layer between the LLM and the user. Hooks into two lifecycle events " +
     "(beforeResponse and beforeToolCall) to clean up the messy, inconsistent output that " +

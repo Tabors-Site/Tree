@@ -1,6 +1,7 @@
 export default {
   name: "intent",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "The tree acts without being asked. " +
     "\n\n" +
@@ -87,7 +88,7 @@ export default {
 
     hooks: {
       fires: [],
-      listens: ["afterBoot"],
+      listens: ["afterBoot", "enrichContext"],
     },
 
     cli: [

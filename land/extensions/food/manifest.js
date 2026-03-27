@@ -1,6 +1,7 @@
 export default {
   name: "food",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Nutrition tracking maps naturally onto a tree. The root is the program. Macro groups " +
     "(calories, protein, carbs, fat) are branches. Daily logs hold meal nodes (breakfast, " +

@@ -1,6 +1,7 @@
 export default {
   name: "gateway-slack",
   version: "1.0.0",
+  builtFor: "treeos-connect",
   description:
     "Registers the Slack channel type with the gateway core, enabling trees to send and " +
     "receive messages in Slack workspaces. Output channels post notifications to a Slack " +

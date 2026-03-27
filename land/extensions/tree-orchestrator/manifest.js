@@ -1,6 +1,7 @@
 export default {
   name: "tree-orchestrator",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "The brain that turns a sentence into tree operations. Every message that enters a tree " +
     "passes through this orchestrator. It does not talk to the user. It classifies, plans, " +

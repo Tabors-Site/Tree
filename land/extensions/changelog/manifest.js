@@ -1,6 +1,7 @@
 export default {
   name: "changelog",
   version: "1.0.0",
+  builtFor: "treeos-maintenance",
   description:
     "The tree remembers what changed and why. Every structural change, every compression, " +
     "every prune, every reroot move gets a human-readable entry. Not the contribution log. " +

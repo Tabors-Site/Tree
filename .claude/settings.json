@@ -332,7 +332,15 @@
       "Bash(find /home/tabor/github/Tree -name \"*.js\" -type f -exec grep -l \"minPeerSeedVersion\\\\|seedVersion\" {})",
       "Bash(grep -r \"5-phase pipeline\\\\|structure scan\\\\|metadata probe\" /home/tabor/github/Tree --include=*.md --include=*.js)",
       "Bash(git -C /home/tabor/github/Tree log --all --oneline --grep=explore)",
-      "Bash(git -C /home/tabor/github/Tree log --all -n 50 --oneline)"
+      "Bash(git -C /home/tabor/github/Tree log --all -n 50 --oneline)",
+      "Bash(find /home/tabor/github/Tree -type d -name *extension*)",
+      "Bash(grep -l \"builtFor\\\\|type:.*\"\"bundle\"\"\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep -rn \"builtFor\\\\|\"\"type\"\".*bundle\\\\|\"\"type\"\".*os\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep \"OrchestratorRuntime\\\\|import.*orchestrator\" /home/tabor/github/Tree/land/extensions/intent/*.js)",
+      "Bash(grep -h 'version:' /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(grep -rn GET.*/ /home/tabor/github/Tree/land/extensions/html-rendering/pages.js)",
+      "Bash(grep -n \"hooks\\\\|enrichContext\\\\|reads\\\\|writes\\\\|listens\\\\|fires\" /home/tabor/github/Tree/land/extensions/propagation/*.js)",
+      "Bash(find /home/tabor/github/Tree/land/extensions/sealed-transport -name *.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -355,7 +363,8 @@
       "/home/tabor/github/Tree/land/seed/middleware",
       "/tmp",
       "/home/tabor/github/Tree/land/extensions",
-      "/home/tabor/github/Tree/land/extensions/peer-review"
+      "/home/tabor/github/Tree/land/extensions/peer-review",
+      "/home/tabor/github/Tree/land/extensions/explore"
     ]
   }
 }

@@ -1,6 +1,7 @@
 export default {
   name: "boundary",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "The tree knows where one concern ends and another begins. Branches grow " +
     "organically. Over time the edges blur. Authentication code creeps into the " +

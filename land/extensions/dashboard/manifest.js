@@ -1,6 +1,7 @@
 export default {
   name: "dashboard",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "The real-time operations panel for TreeOS. Every active session, every tree, every " +
     "conversation happening on the land is visible in one place. The dashboard does not " +

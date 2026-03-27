@@ -49,7 +49,7 @@ const WelcomePage = () => {
   const handleOpen = async (destination) => {
     const token = Cookies.get("token");
     const path = new window.URL(destination).pathname;
-    const loginUrl = `/login?redirect=${encodeURIComponent(path)}`;
+    const loginUrl = `${URL}/login?redirect=${encodeURIComponent(path)}`;
 
     if (!token) {
       window.location.href = loginUrl;

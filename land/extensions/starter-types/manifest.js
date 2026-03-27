@@ -1,6 +1,7 @@
 export default {
   name: "starter-types",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "When the AI creates a node it needs to assign a type. Without guidance it guesses, and " +
     "every land ends up with a different vocabulary. One land calls them tasks, another calls " +

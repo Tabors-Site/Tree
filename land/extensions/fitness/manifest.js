@@ -1,6 +1,7 @@
 export default {
   name: "fitness",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "A tree is a natural structure for a training program. A push/pull/legs split is three " +
     "branches. Each branch holds workout days. Each day holds exercises. Each exercise is a " +

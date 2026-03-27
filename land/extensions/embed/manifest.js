@@ -1,6 +1,7 @@
 export default {
   name: "embed",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "Every note gets a vector embedding when written. The tree structure is the skeleton. The " +
     "embeddings are the magnetic field between bones. Two notes on opposite branches that are " +

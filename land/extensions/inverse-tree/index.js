@@ -99,6 +99,32 @@ export async function init(core) {
     }
   }, "inverse-tree");
 
+  // ── afterNavigate: track spatial patterns ─────────────────────────────
+  // Which trees the user spends time in vs passes through. Which branches
+  // they visit repeatedly. This is the data that lets the profile say
+  // "tabor is most active 10pm-2am in /Health/Fitness" rather than just
+  // "tabor writes notes about fitness."
+  core.hooks.register("afterNavigate", async ({ userId, rootId, nodeId }) => {
+    if (!userId || userId === "SYSTEM") return;
+    if (!rootId) return;
+
+    try {
+      const shouldCompress = await recordSignal(userId, {
+        type: "navigation",
+        rootId,
+        nodeId: nodeId || rootId,
+      }, config);
+
+      if (shouldCompress) {
+        compress(userId).catch((err) =>
+          log.debug("InverseTree", `Background compression failed: ${err.message}`),
+        );
+      }
+    } catch (err) {
+      log.debug("InverseTree", "afterNavigate signal recording failed:", err.message);
+    }
+  }, "inverse-tree");
+
   // ── enrichContext: inject profile scoped by zone ─────────────────────
   // Home and tree zones get the profile. Land zone does not. A land-manager
   // AI diagnosing federation issues doesn't need to know the user works out

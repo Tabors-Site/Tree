@@ -1,6 +1,7 @@
 export default {
   name: "user-tiers",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "The access control layer between users and features. Every user has a tier stored " +
     "in metadata.tiers.plan (defaults to 'basic' if unset). Extensions declare which " +

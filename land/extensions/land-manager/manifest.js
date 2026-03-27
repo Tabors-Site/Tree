@@ -1,6 +1,7 @@
 export default {
   name: "land-manager",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "The administrative AI for the entire land. Registers the land:manager mode, which is the " +
     "conversation mode activated when an admin navigates to the land root (/). The mode gives " +

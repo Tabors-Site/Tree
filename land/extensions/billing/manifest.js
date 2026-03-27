@@ -1,6 +1,7 @@
 export default {
   name: "billing",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Monetization for a TreeOS land. This extension connects Stripe Checkout to the " +
     "tier and energy systems so land operators can charge for access. Two subscription " +

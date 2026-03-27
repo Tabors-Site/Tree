@@ -1,6 +1,7 @@
 export default {
   name: "competence",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "The tree knows where its knowledge ends. Competence detects the edges of what " +
     "the tree contains. A question arrives and the tree can answer it from its notes. " +

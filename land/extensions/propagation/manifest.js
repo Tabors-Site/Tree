@@ -1,6 +1,7 @@
 export default {
   name: "propagation",
   version: "1.0.0",
+  builtFor: "treeos-cascade",
   description:
     "The foundation of the cascade network. Nothing else works without it. Listens to onCascade " +
     "and does the actual work of moving signals through the tree. When the kernel fires onCascade " +

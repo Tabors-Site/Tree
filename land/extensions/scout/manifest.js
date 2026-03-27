@@ -1,31 +1,68 @@
 export default {
   name: "scout",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
-    "The tree sends scouts ahead. Before explore reads deeply, scout runs a fast " +
-    "structural pass. It counts children, checks types, reads names, checks metadata " +
-    "density. Returns a heat map of where the interesting content is without reading " +
-    "any of it. Explore uses the scout map to decide where to drill. Scout is the " +
-    "peripheral vision. Explore is the focused gaze.",
+    "Triangulate across the tree. Five search strategies run in parallel: semantic, structural, " +
+    "memory, codebook, and profile. Findings that appear in multiple strategies score higher " +
+    "(convergence scoring). The AI synthesizes all results into an answer with citations. " +
+    "Scout is peripheral vision while explore is focused gaze. Scout asks 'what does the tree " +
+    "know about X' across the whole branch. Explore asks 'what's under this node about X' going " +
+    "downward. Scout gaps feed intent: the tree notices what it doesn't know and acts on it.",
 
   needs: {
-    services: ["hooks"],
-    models: ["Node"],
+    services: ["hooks", "llm", "metadata", "session"],
+    models: ["Node", "Note"],
   },
 
   optional: {
-    extensions: ["evolution", "pulse"],
+    extensions: [
+      "embed",
+      "long-memory",
+      "codebook",
+      "inverse-tree",
+      "contradiction",
+      "gap-detection",
+      "intent",
+      "explore",
+    ],
   },
 
   provides: {
     models: {},
-    routes: false,
-    tools: false,
+    routes: "./routes.js",
+    tools: true,
     jobs: false,
     orchestrator: false,
     energyActions: {},
-    sessionTypes: {},
-    cli: [],
-    hooks: { fires: [], listens: [] },
+    sessionTypes: {
+      SCOUT: "scout",
+    },
+
+    hooks: {
+      fires: [],
+      listens: ["enrichContext"],
+    },
+
+    cli: [
+      {
+        command: "scout [query...]",
+        description: "Triangulate across the tree",
+        method: "POST",
+        endpoint: "/node/:nodeId/scout",
+        subcommands: {
+          history: {
+            method: "GET",
+            endpoint: "/node/:nodeId/scout/history",
+            description: "Previous scout runs at this position",
+          },
+          gaps: {
+            method: "GET",
+            endpoint: "/node/:nodeId/scout/gaps",
+            description: "Accumulated knowledge gaps",
+          },
+        },
+      },
+    ],
   },
 };

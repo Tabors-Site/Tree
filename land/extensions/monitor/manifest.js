@@ -1,6 +1,7 @@
 export default {
   name: "monitor",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Activity monitoring for the land, accessible through both AI conversation and raw data " +
     "endpoints. Registers the land:monitor mode, a conversational AI that acts like a talking " +

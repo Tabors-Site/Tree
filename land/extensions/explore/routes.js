@@ -12,7 +12,7 @@ router.post("/node/:nodeId/explore", authenticate, async (req, res) => {
     if (!query || typeof query !== "string") {
       return sendError(res, 400, ERR.INVALID_INPUT, "query is required");
     }
-    const map = await runExplore(req.params.nodeId, query, req.userId, { deep: !!deep });
+    const map = await runExplore(req.params.nodeId, query, req.userId, req.username || "system", { deep: !!deep });
     sendOk(res, map);
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

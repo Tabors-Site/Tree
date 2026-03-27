@@ -1,6 +1,7 @@
 export default {
   name: "phase",
   version: "1.0.0",
+  builtFor: "treeos-intelligence",
   description:
     "The tree knows whether you are collecting or spending. Not from a toggle. Not from " +
     "a setting. From what you actually do. " +

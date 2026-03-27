@@ -1,6 +1,7 @@
 export default {
   name: "shell",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Gives the AI direct shell access to the land server. The execute-shell tool runs " +
     "any command through Node.js child_process with a 30 second timeout and 8KB output " +

@@ -1,6 +1,7 @@
 export default {
   name: "gateway-discord",
   version: "1.0.0",
+  builtFor: "treeos-connect",
   description:
     "Registers the Discord channel type with the gateway core, enabling trees to send and " +
     "receive messages through Discord servers. Output channels post notifications to a " +

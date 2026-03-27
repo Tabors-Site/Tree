@@ -1,6 +1,7 @@
 export default {
   name: "gateway-webhook",
   version: "1.0.0",
+  builtFor: "treeos-connect",
   description:
     "Web push channel type for the gateway extension. Registers the webapp channel type at boot, " +
     "enabling trees to push notifications to web browsers using the Web Push protocol (RFC 8030). " +

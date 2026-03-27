@@ -1,6 +1,7 @@
 export default {
   name: "long-memory",
   version: "1.0.0",
+  builtFor: "treeos-cascade",
   description:
     "The difference between a tree that forgets and a tree that remembers. .flow has resultTTL. " +
     "Active results expire. That is correct for working memory. But some information should survive " +

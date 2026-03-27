@@ -1,6 +1,7 @@
 export default {
   name: "purpose",
   version: "1.0.0",
+  builtFor: "treeos-maintenance",
   description:
     "Holds the root purpose of the tree and measures everything against it. Every other " +
     "extension makes the tree smarter, faster, more aware, more autonomous. None of them " +

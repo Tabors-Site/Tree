@@ -1,6 +1,7 @@
 export default {
   name: "prestige",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Nodes do not just accumulate forever. At some point the current phase of work is done. The " +
     "budget was met. The sprint shipped. The chapter was written. Prestige closes the book on the " +

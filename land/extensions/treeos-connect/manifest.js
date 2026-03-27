@@ -1,6 +1,8 @@
 export default {
   name: "treeos-connect",
   version: "1.0.0",
+  type: "bundle",
+  builtFor: "kernel",
   description:
     "The rain. Eight extensions that open the clouds. " +
     "\n\n" +

@@ -1,6 +1,7 @@
 export default {
   name: "raw-ideas",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Thoughts do not arrive organized. They arrive in the shower, on a walk, in the middle of " +
     "something else. The raw ideas inbox is a capture layer that sits outside the tree. Text " +

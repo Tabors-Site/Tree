@@ -1,6 +1,7 @@
 export default {
   name: "peer-review",
   version: "1.0.0",
+  builtFor: "kernel",
   description:
     "Structured AI-to-AI peer review between nodes. Set a review partner on any node. " +
     "When a note is written, the content cascades to the partner. The AI at the partner " +

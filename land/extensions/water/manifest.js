@@ -1,6 +1,7 @@
 export default {
   name: "water",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "The full picture at any position. Combines perspective, codebook stats, memory, gaps, " +
     "flow, and evolution into one view. What is flowing through this node right now? Perspective " +

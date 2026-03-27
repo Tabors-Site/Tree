@@ -1,6 +1,7 @@
 export default {
   name: "console",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Replaces the kernel's default log output with color-coded, timestamped, human-readable " +
     "server logs. Without this extension, log calls go to bare console output. With it, " +

@@ -1,6 +1,7 @@
 export default {
   name: "html-rendering",
-  version: "2.0.0",
+  version: "1.0.0",
+  builtFor: "TreeOS",
   description: "Server-rendered HTML pages, share token auth, and a page registration API for other extensions",
 
   needs: {

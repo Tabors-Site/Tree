@@ -1,6 +1,7 @@
 export default {
   name: "pulse",
   version: "1.0.0",
+  builtFor: "treeos-cascade",
   description:
     "How the land knows its own health. Reads .flow on a timer, counts results by status, " +
     "tracks rates over time, and writes a health summary to a .pulse node under the land root. " +

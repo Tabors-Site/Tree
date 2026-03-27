@@ -1,6 +1,8 @@
 export default {
   name: "treeos-cascade",
   version: "1.0.0",
+  type: "bundle",
+  builtFor: "kernel",
   description:
     "The nervous system. Eight extensions that make cascade real. " +
     "\n\n" +

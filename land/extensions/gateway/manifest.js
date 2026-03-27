@@ -1,6 +1,7 @@
 export default {
   name: "gateway",
-  version: "2.0.0",
+  version: "1.0.0",
+  builtFor: "treeos-connect",
   description:
     "A tree is not limited to the TreeOS interface. The gateway extension is the core " +
     "abstraction that connects trees to external platforms: Discord, Slack, Telegram, email, " +

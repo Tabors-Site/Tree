@@ -1,6 +1,7 @@
 export default {
   name: "book",
   version: "1.0.0",
+  builtFor: "TreeOS",
   description:
     "Trees store knowledge as scattered notes across dozens or hundreds of nodes. Reading " +
     "a tree means navigating branch by branch, node by node. That works for the AI and " +
