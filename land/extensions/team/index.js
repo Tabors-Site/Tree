@@ -56,11 +56,14 @@ export async function init(core) {
     });
   }
 
+  const canopyHandlers = await import("./canopyHandlers.js");
+
   return {
     router,
-    // Exported for other extensions (html-rendering, canopy routes) to use.
-    // Pre-bound: no need to pass model/service dependencies.
-    getPendingInvitesForUser,
-    respondToInvite: boundRespondToInvite,
+    exports: {
+      getPendingInvitesForUser,
+      respondToInvite: boundRespondToInvite,
+      canopyHandlers,
+    },
   };
 }

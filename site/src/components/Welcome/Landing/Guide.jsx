@@ -1,4 +1,4 @@
-import "../Landing/LandingPage.css";
+import "./LandingPage.css";
 
 const Guide = () => {
   return (
@@ -43,7 +43,7 @@ const Guide = () => {
             that everything builds on.
           </P>
           <P>
-            TreeOS is one operating system built on the seed. It ships with 77 extensions across
+            TreeOS is one operating system built on the seed. It ships with 90 extensions across
             four bundles: cascade network, intelligence, external channels, maintenance, plus
             the base OS, developer tools, data, content, and gateways. But TreeOS is just one interpretation. A medical
             platform, a code review pipeline, a research assistant could all be built on the same kernel.
@@ -280,12 +280,13 @@ treeos ext-scope                   # shows both global and confined status`}</Co
             resolves everything. Four bundles cover the major capabilities:
           </P>
           <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", lineHeight: 1.7}}>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>base TreeOS</strong> (18): treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-cascade</strong> (8): propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-intelligence</strong> (12): tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, phase.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-intelligence</strong> (13): tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-connect</strong> (8): gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-maintenance</strong> (4): prune, reroot, changelog, purpose.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>mycelium</strong> (standalone): intelligent cross-land signal routing.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>77 extensions total</strong> including base OS, developer tools, data, content, gateways, and user management.
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-maintenance</strong> (5): prune, reroot, changelog, digest, delegate.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>standalone</strong> (8): persona, mycelium, peer-review, seed-export, channels, governance, teach, split.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>90 extensions total</strong>. Eighteen base. Thirty-four in bundles. Eight standalone. The rest domain-specific.
           </P>
           <P>
             Install from the registry: <code>treeos ext install treeos-cascade</code>.
@@ -440,7 +441,7 @@ treeos config set llmTimeout 900
 treeos config set cascadeEnabled true
 treeos config set treeCircuitEnabled true`}</Code>
           <P>
-            <strong>77</strong> config keys. The kernel owns every one.
+            <strong>100+</strong> config keys. The kernel owns every one.
           </P>
           <P>
             Covering: LLM (timeout, retries, model), conversation (tool iterations,

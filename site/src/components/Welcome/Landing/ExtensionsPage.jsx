@@ -174,7 +174,7 @@ const ExtensionsPage = () => {
             </div>
 
             <div style={{marginBottom: 40}}>
-              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-intelligence <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>12 extensions</span></h3>
+              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-intelligence <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>13 extensions</span></h3>
               <p style={{color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontSize: "0.88rem"}}>
                 Self-awareness and autonomy. Tree-compress carries meaning upward and trims what has been
                 absorbed. Contradiction surfaces conflicting truths across branches. The inverse tree builds
@@ -182,26 +182,28 @@ const ExtensionsPage = () => {
                 the AI to recommend them. Embed gives every note a vector so semantically related content
                 finds each other. Scout runs fast structural passes. Explore navigates branches the way
                 Claude Code navigates a codebase. Trace follows concepts through the tree. Boundary detects
-                where the tree's knowledge ends. Phase detects whether the user is gathering or producing.
+                where the tree's knowledge ends. Competence tracks which queries found answers and which found
+                silence. Reflect notices how the conversation is going and adjusts the AI's approach.
+                Evolve watches what users do that no extension handles and proposes new ones.
                 Intent is the capstone. It reads from every other intelligence extension and synthesizes
                 autonomous actions the tree takes on its own.
               </p>
               <p style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", marginTop: 8}}>
-                tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, phase
+                tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve
               </p>
             </div>
 
             <div style={{marginBottom: 12}}>
-              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-maintenance <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>4 extensions</span></h3>
+              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-maintenance <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>5 extensions</span></h3>
               <p style={{color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontSize: "0.88rem"}}>
                 Hygiene and reorganization. Prune identifies dead nodes, absorbs essentials into parents,
                 and trims. Reroot builds a semantic similarity graph and proposes moves that minimize distance
-                between related nodes. Changelog narrates why the tree looks the way it does. Root-hold
-                monitors coherence between the tree's thesis and its actual content, surfacing drift before
-                branches grow away from purpose.
+                between related nodes. Changelog narrates why the tree looks the way it does.
+                Digest assembles the daily briefing from every extension and pushes to gateway if configured.
+                Delegate matches stuck work to available humans by reading team activity and competence maps.
               </p>
               <p style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", marginTop: 8}}>
-                prune, reroot, changelog, purpose
+                prune, reroot, changelog, digest, delegate
               </p>
             </div>
           </div>
@@ -342,7 +344,7 @@ const ExtensionsPage = () => {
             A coding OS with architect and review modes. A research OS with citation and synthesis modes.
           </p>
           <p className="lp-section-sub" style={{fontStyle: "italic", color: "rgba(255,255,255,0.3)"}}>
-            77 extensions across four bundles plus standalone. All growing from twelve schema
+            90 extensions across four bundles plus standalone. All growing from twelve schema
             fields and a metadata Map. Enough extensions built on a kernel form an operating system.
             Operating systems are good starting grounds for people to build off of.
           </p>

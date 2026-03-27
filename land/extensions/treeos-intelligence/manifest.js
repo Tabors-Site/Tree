@@ -15,9 +15,9 @@ export default {
     "parallel search strategies. Explore navigates downward through branches like " +
     "Claude Code navigates a codebase. Trace follows a single concept chronologically " +
     "through every node it touched. Boundary detects where branches blur into each other. " +
-    "Competence tracks which queries found answers and which found silence. Phase detects " +
-    "awareness vs attention from user behavior. Reflect notices how the conversation is " +
-    "going and adjusts the AI's approach. " +
+    "Competence tracks which queries found answers and which found silence. Reflect notices " +
+    "how the conversation is going and adjusts the AI's approach. Evolve watches what users " +
+    "do that no extension handles, proposes existing extensions or generates specs for new ones. " +
     "\n\n" +
     "Without this bundle, the tree holds data. With it, the tree understands its own data. " +
     "\n\n" +
@@ -36,8 +36,8 @@ export default {
       "trace",
       "boundary",
       "competence",
-      "phase",
       "reflect",
+      "evolve",
     ],
   },
 

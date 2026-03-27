@@ -47,9 +47,9 @@ const LandingPage = () => {
             <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
               <h3 style={{color: "#a78bfa"}}>Extensions</h3>
               <p style={{flex: 1}}>
-                Four bundles. Cascade (8, the nervous system). Intelligence (12, self-awareness).
-                Connect (8, external channels). Maintenance (4, hygiene). Plus base OS, developer tools,
-                data, content, gateways, and mycelium. 77 extensions total.
+                Eighteen base extensions ship with every land. Four bundles add depth:
+                Cascade (8, the nervous system). Intelligence (13, self-awareness).
+                Connect (8, external channels). Maintenance (5, hygiene). 90 extensions total.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/extensions" style={{color: "#a78bfa", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)", paddingBottom: 2}}>How extensions work</a>
@@ -84,7 +84,7 @@ const LandingPage = () => {
       <section className="lp-section">
         <div className="lp-container">
           <h2 className="lp-section-title">Go Deeper</h2>
-          <p className="lp-section-sub">Seven pages. Each one answers one question.</p>
+          <p className="lp-section-sub">Eight pages. Each one answers one question.</p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "repeat(4, 1fr)"}}>
             {[
               { href: "/seed", title: "The Seed", desc: "What is the contract?" },
@@ -267,9 +267,9 @@ const LandingPage = () => {
             <div className="lp-card" style={{borderLeft: "3px solid rgba(56, 189, 248, 0.5)"}}>
               <h3 style={{color: "#38bdf8", fontSize: "1rem"}}>treeos-intelligence</h3>
               <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
-                Self-awareness. 12 extensions. The tree compresses, detects contradictions, profiles users,
-                evolves structural patterns, embeds semantics, explores branches, traces threads,
-                finds boundaries, tracks cognitive phase, holds its own purpose.
+                Self-awareness. 13 extensions. The tree compresses knowledge, detects contradictions, profiles users,
+                tracks structural fitness, acts autonomously, searches semantically, explores branches, traces threads,
+                maps boundaries, tracks competence edges, notices conversational shifts, proposes new extensions.
               </p>
               <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-intelligence</code>
             </div>
@@ -284,8 +284,9 @@ const LandingPage = () => {
             <div className="lp-card" style={{borderLeft: "3px solid rgba(167, 139, 250, 0.5)"}}>
               <h3 style={{color: "#a78bfa", fontSize: "1rem"}}>treeos-maintenance</h3>
               <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
-                Hygiene. 4 extensions. Prune dead branches. Reroot misplaced nodes by semantic similarity.
-                Changelog tracks what changed. Purpose holds the thesis.
+                Hygiene. 5 extensions. Prune dead branches. Reroot misplaced nodes by semantic similarity.
+                Changelog tracks what changed. Digest briefs the operator each morning.
+                Delegate matches stuck work to available humans.
               </p>
               <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-maintenance</code>
             </div>
@@ -326,9 +327,10 @@ const LandingPage = () => {
               </div>
             ))}
             <p style={{color: "rgba(255,255,255,0.3)", marginTop: 12, fontSize: "0.8rem"}}>
-              And 40+ more: blog, book, schedules, transactions, user-llm, user-queries, api-keys, email,
-              deleted-revive, dashboard, navigation, team, notifications, console, monitor, and every
-              gateway channel (reddit, slack, sms, matrix, x, tree).
+              And 50+ more: blog, book, schedules, transactions, user-llm, user-queries, api-keys, email,
+              deleted-revive, dashboard, navigation, team, notifications, console, monitor, persona, channels,
+              governance, peer-review, seed-export, teach, split, and every gateway channel (reddit, slack,
+              sms, matrix, x, tree).
             </p>
           </div>
 

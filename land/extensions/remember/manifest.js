@@ -1,7 +1,7 @@
 export default {
   name: "remember",
   version: "1.0.0",
-  builtFor: "treeos-maintenance",
+  builtFor: "TreeOS",
   description:
     "The tree remembers what it lost. When a child is pruned, split off, or retired, " +
     "remember writes one line to the parent. Not the content. Not the structure. Just " +

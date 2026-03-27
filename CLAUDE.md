@@ -56,33 +56,46 @@ land/
 │   ├── contribution.js # Audit trail
 │   ├── chat.js        # AI conversation sessions
 │   └── llmConnection.js # LLM endpoint storage
-├── extensions/        # ALL optional functionality lives here
+├── extensions/        # 90 extensions. ALL optional functionality lives here.
 │   ├── _template/     # Scaffold for new extensions
-│   ├── tree-orchestrator/  # Built-in chat/place/query orchestrator (REPLACEABLE)
-│   ├── values/        # Numeric values and goals on nodes
-│   ├── understanding/ # Bottom-up tree compression
-│   ├── dreams/        # Background maintenance pipelines
-│   ├── energy/        # Usage metering
-│   ├── billing/       # Stripe subscriptions
-│   ├── prestige/      # Node versioning
-│   ├── schedules/     # Date scheduling
-│   ├── scripts/       # Sandboxed JS on nodes
-│   ├── solana/        # On-chain wallets
-│   ├── gateway/       # External channel integration (Telegram, Discord)
-│   ├── raw-ideas/     # Capture and auto-placement
-│   ├── blog/          # Land-level blog
-│   ├── book/          # Note compilation and sharing
-│   ├── api-keys/      # User API key management
-│   ├── user-llm/      # Custom LLM connection management
-│   ├── user-queries/  # User-level data access
-│   ├── deleted-revive/ # Soft delete and recovery
-│   ├── shell/         # Execute shell commands from AI (god-tier)
-│   ├── land-manager/  # Autonomous land management agent
-│   ├── transactions/  # Value trading between nodes
-│   ├── email/         # Email, forgot password
-│   ├── html-rendering/ # Server-rendered HTML pages
 │   ├── loader.js      # Scans manifests, validates deps, wires routes/tools/modes/hooks/jobs
-│   └── EXTENSION_FORMAT.md  # Full extension developer documentation
+│   ├── EXTENSION_FORMAT.md  # Full extension developer documentation
+│   │
+│   │  # Base TreeOS (18 extensions, ship with every land)
+│   ├── treeos/             # Home zone orchestrator
+│   ├── tree-orchestrator/  # Tree zone chat/place/query orchestrator (REPLACEABLE)
+│   ├── land-manager/       # Land zone management, extension install/config
+│   ├── navigation/         # cd, ls, path management, recent roots
+│   ├── starter-types/      # Default node types
+│   ├── console/            # Log formatting
+│   ├── dashboard/          # Real-time web dashboard
+│   ├── notifications/      # Push notifications
+│   ├── monitor/            # Activity tracking and AI narrative
+│   ├── llm-response-formatting/ # Response display cleanup
+│   ├── team/               # Collaboration, @mentions, invites
+│   ├── user-tiers/         # Tier system (basic/standard/premium/god)
+│   ├── html-rendering/     # Server-rendered HTML pages
+│   ├── water/              # Hydration view (read-only dashboard)
+│   ├── heartbeat/          # Presence detection (alive/quiet/dormant)
+│   ├── purpose/            # Root thesis and coherence checking
+│   ├── phase/              # Cognitive state detection (awareness/attention)
+│   ├── remember/           # Memorial for pruned/split/retired nodes
+│   │
+│   │  # Four bundles (34 extensions)
+│   ├── treeos-cascade/     # Bundle: nervous system (8)
+│   ├── treeos-connect/     # Bundle: rain layer (8)
+│   ├── treeos-intelligence/ # Bundle: self-awareness (13)
+│   ├── treeos-maintenance/ # Bundle: hygiene (5)
+│   │
+│   │  # Standalone (8)
+│   ├── persona/            # AI identity per node
+│   ├── mycelium/           # Intelligent inter-land routing
+│   ├── peer-review/        # AI revision loop on notes
+│   ├── seed-export/        # Tree export and planting
+│   ├── channels/           # Direct cascade signal paths
+│   ├── governance/         # Network governance visibility
+│   ├── teach/              # Meta-knowledge extraction
+│   └── split/              # Tree mitosis
 ├── orchestrators/     # Core: orchestrator utilities (ships with land, used by extensions)
 │   ├── runtime.js     # OrchestratorRuntime (init/attach/runStep/trackStep/cleanup)
 │   ├── locks.js       # Concurrency locks

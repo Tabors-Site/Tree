@@ -569,11 +569,4 @@ router.post(
   },
 );
 
-// Schedule routes moved to extensions/schedules
-// Script routes moved to extensions/scripts
-// Tool config routes moved above /node/:nodeId to avoid :version capture
-
-// Schedule routes moved to extensions/schedules
-// Script routes moved to extensions/scripts
-
 export default router;

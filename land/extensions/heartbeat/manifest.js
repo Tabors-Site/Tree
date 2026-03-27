@@ -1,7 +1,7 @@
 export default {
   name: "heartbeat",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "TreeOS",
   description:
     "The tree knows it's alive. Pure in-memory presence detection. No database writes. " +
     "No metadata. No LLM. Two hooks record when humans interact. enrichContext injects " +

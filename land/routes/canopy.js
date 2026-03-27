@@ -331,7 +331,9 @@ let _teamHandlersCache = undefined;
 async function loadTeamCanopyHandlers() {
   if (_teamHandlersCache !== undefined) return _teamHandlersCache;
   try {
-    _teamHandlersCache = await import("../extensions/team/canopyHandlers.js");
+    const { getExtension } = await import("../extensions/loader.js");
+    const team = getExtension("team");
+    _teamHandlersCache = team?.exports?.canopyHandlers || null;
   } catch {
     _teamHandlersCache = null;
   }

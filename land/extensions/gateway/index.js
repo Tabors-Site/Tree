@@ -2,7 +2,7 @@ import router from "./routes.js";
 import { dispatchNotifications, dispatchTestNotification } from "./dispatch.js";
 import { registerChannelType, getChannelType, getRegisteredTypes } from "./registry.js";
 import { processGatewayMessage } from "./input.js";
-import { getChannelWithSecrets, getChannelsForRoot } from "./core.js";
+import { getChannelWithSecrets, getChannelsForRoot, addGatewayChannel, updateGatewayChannel, deleteGatewayChannel } from "./core.js";
 
 export async function init(core) {
   const { setModels } = await import("./core.js");
@@ -19,6 +19,9 @@ export async function init(core) {
       processGatewayMessage,
       getChannelWithSecrets,
       getChannelsForRoot,
+      addGatewayChannel,
+      updateGatewayChannel,
+      deleteGatewayChannel,
     },
   };
 }

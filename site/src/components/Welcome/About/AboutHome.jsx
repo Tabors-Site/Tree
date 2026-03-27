@@ -117,7 +117,7 @@ const AboutHome = () => {
         <div className="ah-section">
           <div className="ah-section-title">What This Land Runs</div>
           <div className="ah-section-text">
-            25 extensions. Full AI orchestration. LLM failover. Per-node customization.
+            90 extensions. Full AI orchestration. LLM failover. Per-node customization.
             Daily dream cycles. Federation with the Canopy network.
           </div>
         </div>
@@ -150,7 +150,7 @@ const AboutHome = () => {
               across the network. Invite users from other lands. The Horizon
               at horizon.treeos.ai indexes everything.
             </div>
-            <a href="/decentralized" className="ah-arch-link">The network</a>
+            <a href="/network" className="ah-arch-link">The network</a>
           </div>
 
           <div className="ah-arch-item">

@@ -28,7 +28,7 @@ import PrivacySection from "./PrivacySection.jsx";
 import TermsSection from "./TermsSections.jsx";
 
 import AboutHome from "./About/AboutHome.jsx";
-import Guide from "./About/Guide.jsx";
+import Guide from "./Landing/Guide.jsx";
 import AboutLayout from "./About/AboutLayout.jsx";
 import BlogSection from "./Blog/BlogSection.jsx";
 import NotFound from "./NotFound.jsx";

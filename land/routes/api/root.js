@@ -7,7 +7,6 @@ import { getAllNodeData, getTreeStructure } from "../../seed/tree/treeData.js";
 import { getExtension } from "../../extensions/loader.js";
 
 import Node from "../../seed/models/node.js";
-import mongoose from "mongoose";
 import { isValidRootLlmSlot, getAllRootLlmSlots } from "../../seed/llm/connections.js";
 import { getNodeChats } from "../../seed/ws/chatHistory.js";
 
@@ -47,7 +46,7 @@ router.get("/root/:nodeId", authenticate, async (req, res) => {
       ...allData,
       rootOwner: rootMeta?.rootOwner || null,
       contributors: rootMeta?.contributors || [],
-      dreamsEnabled: !!mongoose.models.ShortMemory,
+      dreamsEnabled: !!getExtension("dreams"),
     };
 
     if (isPublicAccess) {
@@ -201,8 +200,10 @@ router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
     if (!isOwner)
       return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can manage the gateway");
 
-    const { getChannelsForRoot } =
-      await import("../../extensions/gateway/core.js");
+    const { getExtension } = await import("../../extensions/loader.js");
+    const gw = getExtension("gateway");
+    if (!gw?.exports?.getChannelsForRoot) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Gateway extension not installed");
+    const { getChannelsForRoot } = gw.exports;
     const channels = await getChannelsForRoot(rootId);
 
     return sendOk(res, { rootId, channels });
@@ -239,8 +240,10 @@ router.get("/root/:rootId/gateway/channels", authenticate, async (req, res) => {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
 
-    const { getChannelsForRoot } =
-      await import("../../extensions/gateway/core.js");
+    const { getExtension } = await import("../../extensions/loader.js");
+    const gw = getExtension("gateway");
+    if (!gw?.exports?.getChannelsForRoot) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Gateway extension not installed");
+    const { getChannelsForRoot } = gw.exports;
     const channels = await getChannelsForRoot(rootId);
     return sendOk(res, { channels });
   } catch (err) {
@@ -264,8 +267,10 @@ router.post(
         queueBehavior,
       } = req.body;
 
-      const { addGatewayChannel } =
-        await import("../../extensions/gateway/core.js");
+      const { getExtension } = await import("../../extensions/loader.js");
+      const gw = getExtension("gateway");
+      if (!gw?.exports?.addGatewayChannel) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Gateway extension not installed");
+      const { addGatewayChannel } = gw.exports;
       const channel = await addGatewayChannel(req.userId, rootId, {
         name,
         type,
@@ -298,8 +303,10 @@ router.put(
       const { channelId } = req.params;
       const { name, enabled, config, notificationTypes } = req.body;
 
-      const { updateGatewayChannel } =
-        await import("../../extensions/gateway/core.js");
+      const { getExtension } = await import("../../extensions/loader.js");
+      const gw = getExtension("gateway");
+      if (!gw?.exports?.updateGatewayChannel) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Gateway extension not installed");
+      const { updateGatewayChannel } = gw.exports;
       const channel = await updateGatewayChannel(req.userId, channelId, {
         name,
         enabled,
@@ -323,8 +330,10 @@ router.delete(
     try {
       const { channelId } = req.params;
 
-      const { deleteGatewayChannel } =
-        await import("../../extensions/gateway/core.js");
+      const { getExtension } = await import("../../extensions/loader.js");
+      const gw = getExtension("gateway");
+      if (!gw?.exports?.deleteGatewayChannel) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Gateway extension not installed");
+      const { deleteGatewayChannel } = gw.exports;
       await deleteGatewayChannel(req.userId, channelId);
 
       return sendOk(res, { removed: true });
@@ -358,8 +367,10 @@ router.post(
         return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
 
-      const { dispatchTestNotification } =
-        await import("../../extensions/gateway/dispatch.js");
+      const { getExtension } = await import("../../extensions/loader.js");
+      const gw = getExtension("gateway");
+      if (!gw?.exports?.dispatchTestNotification) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Gateway extension not installed");
+      const { dispatchTestNotification } = gw.exports;
       var result = await dispatchTestNotification(channelId);
 
       return sendOk(res, result);
@@ -450,8 +461,8 @@ router.post("/root/:rootId/extensions", authenticate, async (req, res) => {
 
 router.post("/root/:rootId/dream-time", authenticate, async (req, res) => {
   try {
-    if (!!!mongoose.models.ShortMemory) {
-      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Dreams extension is not enabled on this land");
+    if (!getExtension("dreams")) {
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Dreams extension is not installed on this land");
     }
 
     const { rootId } = req.params;

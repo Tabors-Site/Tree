@@ -620,7 +620,6 @@
 
 @media (max-width: 768px) {
   .lp-container { padding: 0 20px; }
-  .lp-section { padding: 64px 0; }
   .lp-title { font-size: 56px; }
   .lp-subtitle { font-size: 20px; }
   .lp-section { padding: 80px 0; }

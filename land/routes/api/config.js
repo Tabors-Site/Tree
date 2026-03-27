@@ -407,7 +407,6 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
       children: visible.map((c) => ({
         _id: c._id,
         name: c.name,
-        systemRole: isAnon ? false : (c.systemRole || false),
         systemRole: isAnon ? null : (c.systemRole || null),
         rootOwner: c.rootOwner || null,
         isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(userId),
